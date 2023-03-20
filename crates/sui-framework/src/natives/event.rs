@@ -14,7 +14,8 @@ use sui_types::error::VMMemoryLimitExceededSubStatusCode;
 
 #[derive(Clone, Debug)]
 pub struct EventEmitCostParams {
-    pub event_value_size_derivation_cost_per_byte: InternalGas,
+    pub event_emit_hash_type_and_key_cost_base: InternalGas,
+    pub event_emit_value_size_derivation_cost_per_byte: InternalGas,
     pub event_tag_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_cost_per_byte: InternalGas,
 }
@@ -22,7 +23,9 @@ pub struct EventEmitCostParams {
  * native fun emit
  * Implementation of the Move native function `event::emit<T: copy + drop>(event: T)`
  * Adds an event to the transaction's event log
- *   gas cost: event_value_size_derivation_cost_per_byte * event_size     | derivation of size
+ *   gas cost: event_emit_hash_type_and_key_cost_base              |
+ * 
+ * event_emit_value_size_derivation_cost_per_byte * event_size     | derivation of size
  *              + event_tag_size_derivation_cost_per_byte * tag_size      | converting type
  *              + event_emit_cost_per_byte * (tag_size + event_size)      | emitting the actual event
  **************************************************************************************************/
@@ -48,7 +51,7 @@ pub fn emit(
     native_charge_gas_early_exit!(
         context,
         event_emit_cost_params
-            .event_value_size_derivation_cost_per_byte
+            .event_emit_value_size_derivation_cost_per_byte
             .mul(u64::from(event_value_size).into())
     );
 

@@ -30,54 +30,101 @@ use sui_protocol_config::ProtocolConfig;
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
+    dynamic_field::{
+        DynamicFieldAddChildObjectCostParams, DynamicFieldBorrowChildObjectCostParams,
+        DynamicFieldHasChildObjectCostParams, DynamicFieldHasChildObjectWithTyCostParams,
+        DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
+    },
     event::EventEmitCostParams,
+    object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
 };
 
 #[derive(Tid)]
 pub struct NativesCostTable {
+    // Address natives
     pub address_from_bytes_cost_params: AddressFromBytesCostParams,
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
+
+    // Dynamic field natives
+    pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
+    pub dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams,
+    pub dynamic_field_borrow_child_object_cost_params: DynamicFieldBorrowChildObjectCostParams,
+    pub dynamic_field_remove_child_object_cost_params: DynamicFieldRemoveChildObjectCostParams,
+    pub dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams,
+    pub dynamic_field_has_child_object_with_ty_cost_params:
+        DynamicFieldHasChildObjectWithTyCostParams,
+
+    // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
+
+    // Object
+    pub borrow_uid_cost_params: BorrowUidCostParams,
+    pub delete_impl_cost_params: DeleteImplCostParams,
+    pub record_new_id_cost_params: RecordNewIdCostParams,
 }
 
 impl NativesCostTable {
     pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
         Self {
             address_from_bytes_cost_params: AddressFromBytesCostParams {
-                copy_bytes_to_address_cost_per_byte: protocol_config
-                    .copy_bytes_to_address_cost_per_byte()
-                    .into(),
+                address_from_bytes_cost_base: protocol_config.address_from_bytes_cost_base().into(),
             },
             address_to_u256_cost_params: AddressToU256CostParams {
-                address_to_vec_cost_per_byte: protocol_config.address_to_vec_cost_per_byte().into(),
-                address_vec_reverse_cost_per_byte: protocol_config
-                    .address_vec_reverse_cost_per_byte()
-                    .into(),
-                copy_convert_to_u256_cost_per_byte: protocol_config
-                    .copy_convert_to_u256_cost_per_byte()
-                    .into(),
+                address_to_u256_cost_base: protocol_config.address_to_u256_cost_base().into(),
             },
             address_from_u256_cost_params: AddressFromU256CostParams {
-                u256_to_bytes_to_vec_cost_per_byte: protocol_config
-                    .u256_to_bytes_to_vec_cost_per_byte()
-                    .into(),
-                u256_bytes_vec_reverse_cost_per_byte: protocol_config
-                    .u256_bytes_vec_reverse_cost_per_byte()
-                    .into(),
-                copy_convert_to_address_cost_per_byte: protocol_config
-                    .u256_bytes_vec_reverse_cost_per_byte()
-                    .into(),
+                address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
             },
+
+            dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
+                dynamic_field_hash_type_and_key_cost_base: todo!(),
+                dynamic_field_hash_type_and_key_type_cost_per_byte: todo!(),
+                dynamic_field_hash_type_and_key_value_cost_per_byte: todo!(),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: todo!(),
+            },
+            dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams {
+                dynamic_field_add_child_object_cost_base: (),
+                dynamic_field_add_child_object_type_cost_per_byte: (),
+                dynamic_field_add_child_object_value_cost_per_byte: (),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: (),
+            },
+            dynamic_field_borrow_child_object_cost_params:
+                DynamicFieldBorrowChildObjectCostParams {
+                    dynamic_field_borrow_child_object_cost_base: (),
+                    dynamic_field_borrow_child_object_child_ref_cost_per_byte: (),
+                    dynamic_field_borrow_child_object_type_cost_per_byte: (),
+                },
+            dynamic_field_remove_child_object_cost_params:
+                DynamicFieldRemoveChildObjectCostParams {
+                    dynamic_field_remove_child_object_cost_base: (),
+                    dynamic_field_remove_child_object_child_cost_per_byte: (),
+                    dynamic_field_remove_child_object_type_cost_per_byte: (),
+                },
+            dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams {
+                dynamic_field_has_child_object_cost_base: (),
+            },
+            dynamic_field_has_child_object_with_ty_cost_params:
+            DynamicFieldHasChildObjectWithTyCostParams { dynamic_field_has_child_object_with_ty_cost_base: todo!(), dynamic_field_has_child_object_with_ty_type_cost_per_byte: todo!(), dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: todo!() }
+
+
+
+
+
+
             event_emit_cost_params: EventEmitCostParams {
-                event_value_size_derivation_cost_per_byte: protocol_config
-                    .event_value_size_derivation_cost_per_byte()
+                event_emit_value_size_derivation_cost_per_byte: protocol_config
+                    .event_emit_value_size_derivation_cost_per_byte()
                     .into(),
                 event_tag_size_derivation_cost_per_byte: protocol_config
                     .event_tag_size_derivation_cost_per_byte()
                     .into(),
                 event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
             },
+
+            borrow_uid_cost_params: todo!(),
+            delete_impl_cost_params: todo!(),
+            record_new_id_cost_params: todo!(),
         }
     }
 }
