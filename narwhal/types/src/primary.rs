@@ -358,7 +358,7 @@ impl fmt::Debug for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{}: B{}({}, E{}, {}B)",
+            "{}: B{}({}, E{}, {}B) ({:#?}) ({:#?})",
             self.digest.get().cloned().unwrap_or_default(),
             self.round,
             self.author.encode_base64(),
@@ -367,6 +367,8 @@ impl fmt::Debug for Header {
                 .keys()
                 .map(|x| Digest::from(*x).size())
                 .sum::<usize>(),
+            self.parents,
+            self.ancestors,
         )
     }
 }
