@@ -426,7 +426,7 @@ if __name__ == "__main__":
     )
     parser.add_argument('--inspect', help='The measurement file to inspect')
     parser.add_argument(
-        '--precision', type=float, default=60.0,
+        '--precision', type=float, default=30.0,
         help='The granularity of the duration when aggregating results'
     )
     args = parser.parse_args()

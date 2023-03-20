@@ -75,6 +75,10 @@ pub enum Operation {
         #[clap(long, value_parser = parse_duration, default_value = "180", global = true)]
         duration: Duration,
 
+        /// The interval between measurements collection in seconds.
+        #[clap(long, value_parser = parse_duration, default_value = "15", global = true)]
+        scrape_interval: Duration,
+
         /// Whether to skip testbed updates before running benchmarks.
         #[clap(long, action, default_value = "false", global = true)]
         skip_testbed_update: bool,
@@ -248,6 +252,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             committee,
             faults,
             duration,
+            scrape_interval,
             skip_testbed_update,
             skip_testbed_configuration,
             skip_logs_processing,
@@ -295,6 +300,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                     .with_faults(faults);
 
             orchestrator
+                .with_scrape_interval(scrape_interval)
                 .skip_testbed_updates(skip_testbed_update)
                 .skip_testbed_configuration(skip_testbed_configuration)
                 .skip_logs_processing(skip_logs_processing)

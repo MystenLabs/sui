@@ -31,6 +31,8 @@ pub struct Orchestrator {
     instances: Vec<Instance>,
     /// Provider-specific commands to install on the instance.
     instance_setup_commands: Vec<String>,
+    /// The interval between measurements collection.
+    scrape_interval: Duration,
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
     /// Whether to skip testbed updates before running benchmarks.
@@ -45,7 +47,7 @@ impl Orchestrator {
     /// The port where the client exposes prometheus metrics.
     const CLIENT_METRIC_PORT: u16 = 8081;
     /// The default interval between measurements collection.
-    const SCRAPE_INTERVAL: Duration = Duration::from_secs(30);
+    const SCRAPE_INTERVAL: Duration = Duration::from_secs(15);
 
     /// Make a new orchestrator.
     pub fn new(
@@ -59,10 +61,17 @@ impl Orchestrator {
             instances,
             instance_setup_commands,
             ssh_manager,
+            scrape_interval: Self::SCRAPE_INTERVAL,
             skip_testbed_update: false,
             skip_testbed_configuration: false,
             skip_logs_processing: false,
         }
+    }
+
+    /// Set interval between measurements collection.
+    pub fn with_scrape_interval(mut self, scrape_interval: Duration) -> Self {
+        self.scrape_interval = scrape_interval;
+        self
     }
 
     /// Whether to skip testbed updates before running benchmarks.
@@ -387,7 +396,7 @@ impl Orchestrator {
         let ssh_command = SshCommand::new(move |_| command.clone());
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
-        let mut interval = time::interval(Self::SCRAPE_INTERVAL);
+        let mut interval = time::interval(self.scrape_interval);
         interval.tick().await; // The first tick returns immediately.
 
         let start = Instant::now();
@@ -407,7 +416,7 @@ impl Orchestrator {
 
             if aggregator.benchmark_duration() >= parameters.duration {
                 break;
-            } else if elapsed > (parameters.duration + Self::SCRAPE_INTERVAL).as_secs() {
+            } else if elapsed > (parameters.duration + self.scrape_interval).as_secs() {
                 display::warn("Maximum scraping duration exceeded");
                 break;
             }
