@@ -478,10 +478,12 @@ impl IndexerStore for PgIndexerStore {
             .read_only()
             .run(|conn| {
                 let mut boxed_query = transactions_dsl::transactions.into_boxed();
-                if is_descending {
-                    boxed_query = boxed_query.order(transactions_dsl::id.desc());
-                } else {
-                    boxed_query = boxed_query.order(transactions_dsl::id.asc());
+                if let Some(start_sequence) = start_sequence {
+                    if is_descending {
+                        boxed_query = boxed_query.filter(transactions_dsl::id.lt(start_sequence));
+                    } else {
+                        boxed_query = boxed_query.filter(transactions_dsl::id.gt(start_sequence));
+                    }
                 }
 
                 if is_descending {
