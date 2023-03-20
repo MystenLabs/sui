@@ -20,14 +20,19 @@ use move_binary_format::{
         StructDefinition, StructFieldInformation,
     },
 };
-use move_bytecode_verifier::absint::{
-    AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions,
+use move_bytecode_verifier::{
+    absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
+    meter::Meter,
 };
-use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
-use std::collections::BTreeMap;
+use move_core_types::{
+    account_address::AccountAddress, ident_str, identifier::IdentStr, vm_status::StatusCode,
+};
+use std::{collections::BTreeMap, error::Error};
 use sui_types::{
-    clock::CLOCK_MODULE_NAME, error::ExecutionError, id::OBJECT_MODULE_NAME,
-    messages::ExecutionFailureStatus, sui_system_state::SUI_SYSTEM_MODULE_NAME,
+    clock::CLOCK_MODULE_NAME,
+    error::{ExecutionError, VMMVerifierErrorSubStatusCode},
+    id::OBJECT_MODULE_NAME,
+    sui_system_state::SUI_SYSTEM_MODULE_NAME,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -78,11 +83,14 @@ impl AbstractValue {
     }
 }
 
-pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
-    verify_id_leak(module)
+pub fn verify_module(
+    module: &CompiledModule,
+    meter: &mut impl Meter,
+) -> Result<(), ExecutionError> {
+    verify_id_leak(module, meter)
 }
 
-fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
+fn verify_id_leak(module: &CompiledModule, meter: &mut impl Meter) -> Result<(), ExecutionError> {
     let binary_view = BinaryIndexedView::Module(module);
     for (index, func_def) in module.function_defs.iter().enumerate() {
         let code = match func_def.code.as_ref() {
@@ -102,7 +110,7 @@ fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
             continue;
         }
         verifier
-            .analyze_function(initial_state, &func_view)
+            .analyze_function(initial_state, &func_view, meter)
             .map_err(|err| {
                 if let Some(message) = err.source().as_ref() {
                     let function_name = binary_view
@@ -113,7 +121,7 @@ fn verify_id_leak(module: &CompiledModule) -> Result<(), ExecutionError> {
                         message
                     ))
                 } else {
-                    err
+                    verification_failure(err.to_string())
                 }
             })?;
     }
@@ -145,7 +153,11 @@ impl AbstractState {
 
 impl AbstractDomain for AbstractState {
     /// attempts to join state to self and returns the result
-    fn join(&mut self, state: &AbstractState) -> JoinResult {
+    fn join(
+        &mut self,
+        state: &AbstractState,
+        _meter: &mut impl Meter,
+    ) -> Result<JoinResult, PartialVMError> {
         let mut changed = false;
         for (local, value) in &state.locals {
             let old_value = *self.locals.get(local).unwrap_or(&AbstractValue::Other);
@@ -153,9 +165,9 @@ impl AbstractDomain for AbstractState {
             self.locals.insert(*local, value.join(&old_value));
         }
         if changed {
-            JoinResult::Changed
+            Ok(JoinResult::Changed)
         } else {
-            JoinResult::Unchanged
+            Ok(JoinResult::Unchanged)
         }
     }
 }
@@ -213,19 +225,19 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-    ) -> Result<(), ExecutionError> {
+        _meter: &mut impl Meter,
+    ) -> Result<(), PartialVMError> {
         execute_inner(self, state, bytecode, index)?;
         // invariant: the stack should be empty at the end of the block
         // If it is not, something is wrong with the implementation, so throw an invariant
         // violation
         if index == last_index && !self.stack.is_empty() {
-            debug_assert!(
-                false,
-                "Invalid stack transitions. Non-zero stack size at the end of the block",
+            let msg = "Invalid stack transitions. Non-zero stack size at the end of the block"
+                .to_string();
+            debug_assert!(false, "{msg}",);
+            return Err(
+                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(msg),
             );
-            return Err(ExecutionError::from_kind(
-                ExecutionFailureStatus::InvariantViolation,
-            ));
         }
         Ok(())
     }
@@ -236,7 +248,7 @@ impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 fn call(
     verifier: &mut IDLeakAnalysis,
     function_handle: &FunctionHandle,
-) -> Result<(), ExecutionError> {
+) -> Result<(), PartialVMError> {
     let parameters = verifier
         .binary_view
         .signature_at(function_handle.parameters);
@@ -250,9 +262,11 @@ fn call(
     {
         if return_.0.len() != 1 {
             debug_assert!(false, "{:?} should have a single return value", function);
-            return Err(ExecutionError::from_kind(
-                ExecutionFailureStatus::InvariantViolation,
-            ));
+            return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
+                .with_message("Should have a single return value".to_string())
+                .with_sub_status(
+                    VMMVerifierErrorSubStatusCode::MULTIPLE_RETURN_VALUES_NOT_ALLOWED as u64,
+                ));
         }
         verifier.stack.push(AbstractValue::Fresh);
     } else {
@@ -271,7 +285,7 @@ fn num_fields(struct_def: &StructDefinition) -> usize {
 fn pack(
     verifier: &mut IDLeakAnalysis,
     struct_def: &StructDefinition,
-) -> Result<(), ExecutionError> {
+) -> Result<(), PartialVMError> {
     // When packing, an object whose struct type has key ability must have the first field as
     // "id". That fields must come from one of the functions that creates a new UID.
     let handle = verifier
@@ -289,7 +303,10 @@ fn pack(
                 Or for tests, it can come from sui::{}::{}",
             OBJECT_NEW.1, OBJECT_NEW.2, TS_NEW_OBJECT.1, TS_NEW_OBJECT.2,
         );
-        return Err(verification_failure(msg));
+
+        return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
+            .with_message(msg)
+            .with_sub_status(VMMVerifierErrorSubStatusCode::INVALID_OBJECT_CREATION as u64));
     }
     verifier.stack.push(AbstractValue::Other);
     Ok(())
@@ -305,7 +322,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
-) -> Result<(), ExecutionError> {
+) -> Result<(), PartialVMError> {
     // TODO: Better diagnostics with location
     match bytecode {
         Bytecode::Pop => {
@@ -469,19 +486,17 @@ fn execute_inner(
     Ok(())
 }
 
-fn expect_ok<T>(res: Result<T, PartialVMError>) -> Result<T, ExecutionError> {
+fn expect_ok<T>(res: Result<T, PartialVMError>) -> Result<T, PartialVMError> {
     match res {
         Ok(x) => Ok(x),
         Err(partial_vm_error) => {
-            debug_assert!(
-                false,
+            let msg = format!(
                 "Should have been verified to be safe by the Move bytecode verifier, \
-                Got error: {partial_vm_error:?}"
+            Got error: {partial_vm_error:?}"
             );
+            debug_assert!(false, "{msg}");
             // This is an internal error, but we cannot accept the module as safe
-            Err(ExecutionError::from_kind(
-                ExecutionFailureStatus::InvariantViolation,
-            ))
+            Err(PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(msg))
         }
     }
 }
