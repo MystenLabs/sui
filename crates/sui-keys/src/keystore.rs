@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     enum_dispatch, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey, Signature,
-    SignatureScheme, Signer, SuiKeyPair,
+    SignatureScheme, SuiKeyPair,
 };
 
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
@@ -31,11 +31,11 @@ pub enum Keystore {
 }
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
-    #[warn(deprecated)]
-    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
     fn keys(&self) -> Vec<PublicKey>;
     fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
+
+    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
 
     fn sign_secure<T>(
         &self,
@@ -128,17 +128,14 @@ impl<'de> Deserialize<'de> for FileBasedKeystore {
 }
 
 impl AccountKeystore for FileBasedKeystore {
-    #[warn(deprecated)]
-    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        Ok(self
-            .keys
-            .get(address)
-            .ok_or_else(|| {
+    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        Ok(Signature::new_hashed(
+            msg,
+            self.keys.get(address).ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
-            })?
-            .sign(msg))
+            })?,
+        ))
     }
-
     fn sign_secure<T>(
         &self,
         address: &SuiAddress,
@@ -228,17 +225,14 @@ pub struct InMemKeystore {
 }
 
 impl AccountKeystore for InMemKeystore {
-    #[warn(deprecated)]
-    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        Ok(self
-            .keys
-            .get(address)
-            .ok_or_else(|| {
+    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        Ok(Signature::new_hashed(
+            msg,
+            self.keys.get(address).ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
-            })?
-            .sign(msg))
+            })?,
+        ))
     }
-
     fn sign_secure<T>(
         &self,
         address: &SuiAddress,
