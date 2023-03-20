@@ -14,12 +14,12 @@ module test::m1 {
     struct CoolMarker has key, store { id: UID }
 
     public entry fun purchase(coin: Coin<SUI>, ctx: &mut TxContext) {
-        transfer::transfer(purchase_(coin, ctx), tx_context::sender(ctx))
+        transfer::public_transfer(purchase_(coin, ctx), tx_context::sender(ctx))
     }
 
     public fun purchase_(coin: Coin<SUI>, ctx: &mut TxContext): CoolMarker {
         assert!(coin::value(&coin) >= 100, 0);
-        transfer::transfer(coin, @0x70DD);
+        transfer::public_transfer(coin, @0x70DD);
         CoolMarker { id: object::new(ctx) }
     }
 

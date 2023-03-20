@@ -53,7 +53,7 @@ module sui::devnet_nft {
             creator: sender,
             name: nft.name,
         });
-        transfer::transfer(nft, sender);
+        transfer::public_transfer(nft, sender);
     }
 
     /// Update the `description` of `nft` to `new_description`
@@ -106,7 +106,7 @@ module sui::devnet_nftTests {
         ts::next_tx(&mut scenario, addr1);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            transfer::transfer(nft, addr2);
+            transfer::public_transfer(nft, addr2);
         };
         // update its description
         ts::next_tx(&mut scenario, addr2);

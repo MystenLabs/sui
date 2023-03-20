@@ -172,7 +172,7 @@ module capy::capy_market {
         listing_id: ID,
         ctx: &TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             delist(market, listing_id, ctx),
             tx_context::sender(ctx)
         )
@@ -193,7 +193,7 @@ module capy::capy_market {
             amount: coin::value(&profit)
         });
 
-        transfer::transfer(profit, sender)
+        transfer::public_transfer(profit, sender)
     }
 
     /// Purchase an item using a known Listing. Payment is done in Coin<C>.
@@ -236,7 +236,7 @@ module capy::capy_market {
         paid: Coin<SUI>,
         ctx: &TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             purchase(market, listing_id, paid, ctx),
             tx_context::sender(ctx)
         )
@@ -267,7 +267,7 @@ module capy::capy_market {
         pay::join_vec(&mut coin, coins);
 
         let paid = coin::split(&mut coin, listing.price, ctx);
-        transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, tx_context::sender(ctx));
         purchase_and_take(market, listing_id, paid, ctx)
     }
 }

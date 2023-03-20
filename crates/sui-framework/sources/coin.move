@@ -350,7 +350,7 @@ module sui::coin {
     public entry fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(mint(c, amount, ctx), recipient)
+        transfer::public_transfer(mint(c, amount, ctx), recipient)
     }
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.

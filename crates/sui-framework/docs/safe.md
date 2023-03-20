@@ -48,7 +48,6 @@ Useful in situations like an NFT marketplace where you wish to buy the NFTs at a
 @ownership: Shared
 
 
-
 <pre><code><b>struct</b> <a href="safe.md#0x2_safe_Safe">Safe</a>&lt;T&gt; <b>has</b> key
 </code></pre>
 
@@ -374,7 +373,7 @@ a trusted party (or smart contract) to transfer the object out.
 <pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_create">create</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="coin.md#0x2_coin">coin</a>);
     <b>let</b> cap = <a href="safe.md#0x2_safe_create_">create_</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(cap, sender(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(cap, sender(ctx));
 }
 </code></pre>
 
@@ -400,7 +399,7 @@ a trusted party (or smart contract) to transfer the object out.
 <pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_create_empty">create_empty</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext) {
     <b>let</b> empty_balance = <a href="balance.md#0x2_balance_zero">balance::zero</a>&lt;T&gt;();
     <b>let</b> cap = <a href="safe.md#0x2_safe_create_">create_</a>(empty_balance, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(cap, sender(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(cap, sender(ctx));
 }
 </code></pre>
 
@@ -505,7 +504,7 @@ Withdraw coins from the safe as a <code><a href="safe.md#0x2_safe_OwnerCapabilit
 <pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_withdraw">withdraw</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">OwnerCapability</a>&lt;T&gt;, withdraw_amount: u64, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="safe.md#0x2_safe_withdraw_">withdraw_</a>(<a href="safe.md#0x2_safe">safe</a>, capability, withdraw_amount);
     <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin">coin</a>, sender(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin">coin</a>, sender(ctx));
 }
 </code></pre>
 

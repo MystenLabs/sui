@@ -170,7 +170,7 @@ to the sender.
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="epoch_time_lock.md#0x2_epoch_time_lock_destroy">epoch_time_lock::destroy</a>(locked_until_epoch, ctx);
     <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin">coin</a>, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin">coin</a>, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
 }
 </code></pre>
 

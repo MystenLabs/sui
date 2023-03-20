@@ -43,7 +43,7 @@ module sui::test_scenario {
     /// // addr1 sends an object to addr2
     /// {
     ///     let some_object: SomeObject = ... // construct an object
-    ///     transfer::transfer(some_object, copy addr2)
+    ///     transfer::public_transfer(some_object, copy addr2)
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
     /// // Starting a new transaction moves any objects transferred into their respective
@@ -248,7 +248,7 @@ module sui::test_scenario {
     public fun return_to_address<T: key>(account: address, t: T) {
         let id = object::id(&t);
         assert!(was_taken_from_address(account, id), ECantReturnObject);
-        sui::transfer::transfer(t, account)
+        sui::transfer::transfer_impl(t, account)
     }
 
     /// Returns true if the object with `ID` id was in the inventory for `account`
@@ -317,7 +317,7 @@ module sui::test_scenario {
     public fun return_immutable<T: key>(t: T) {
         let id = object::id(&t);
         assert!(was_taken_immutable(id), ECantReturnObject);
-        sui::transfer::freeze_object(t)
+        sui::transfer::freeze_object_impl(t)
     }
 
     /// Returns true if the object with `ID` id was an immutable object in the global inventory
@@ -349,7 +349,7 @@ module sui::test_scenario {
     public fun return_shared<T: key>(t: T) {
         let id = object::id(&t);
         assert!(was_taken_shared(id), ECantReturnObject);
-        sui::transfer::share_object(t)
+        sui::transfer::share_object_impl(t)
     }
 
     /// Returns true if the object with `ID` id was an shared object in the global inventory

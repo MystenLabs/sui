@@ -45,12 +45,12 @@ module basics::lock {
         let id = object::new(ctx);
         let for = object::uid_to_inner(&id);
 
-        transfer::share_object(Lock<T> {
+        transfer::public_share_object(Lock<T> {
             id,
             locked: option::some(obj),
         });
 
-        transfer::transfer(Key<T> {
+        transfer::public_transfer(Key<T> {
             for,
             id: object::new(ctx)
         }, tx_context::sender(ctx));
@@ -89,7 +89,7 @@ module basics::lock {
         key: &Key<T>,
         ctx: &mut TxContext,
     ) {
-        transfer::transfer(unlock(lock, key), tx_context::sender(ctx))
+        transfer::public_transfer(unlock(lock, key), tx_context::sender(ctx))
     }
 }
 
@@ -128,7 +128,7 @@ module basics::lockTest {
         {
             let key = test_scenario::take_from_sender<Key<Treasure>>(scenario);
 
-            transfer::transfer(key, user2);
+            transfer::public_transfer(key, user2);
         };
 
         // User2 is impatient and he decides to take the treasure.

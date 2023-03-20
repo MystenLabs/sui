@@ -53,8 +53,8 @@ module sui::coin_tests {
         assert!(*description_bytes == b"new_description", 0);
         assert!(*icon_url == b"new_icon_url", 0);
 
-        transfer::freeze_object(metadata);
-        transfer::transfer(treasury, tx_context::sender(ctx));
+        transfer::public_freeze_object(metadata);
+        transfer::public_transfer(treasury, tx_context::sender(ctx));
         test_scenario::end(scenario);
     }
 
@@ -78,8 +78,8 @@ module sui::coin_tests {
         assert!(value == 42, 0);
         pay::keep(coin, test_scenario::ctx(test));
 
-        transfer::freeze_object(metadata);
-        transfer::transfer(treasury, tx_context::sender(test_scenario::ctx(test)));
+        transfer::public_freeze_object(metadata);
+        transfer::public_transfer(treasury, tx_context::sender(test_scenario::ctx(test)));
         test_scenario::end(scenario);
     }
 }

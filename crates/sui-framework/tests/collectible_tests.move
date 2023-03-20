@@ -5,7 +5,7 @@
 /// Initializes a simple collection.
 module sui::boars {
     use sui::tx_context::{TxContext, sender};
-    use sui::transfer::{transfer, /* share_object */};
+    use sui::transfer;
     use sui::collectible;
     use sui::display;
     // use sui::royalty;
@@ -52,10 +52,10 @@ module sui::boars {
 
         // let (policy, royalty_cap) = royalty::new_royalty_policy(type_owner_cap, 500, ctx);
 
-        transfer(type_owner_cap, sender);
-        transfer(creator_cap, sender);
-        transfer(publisher, sender);
-        // share_object(policy)
+        transfer::public_transfer(type_owner_cap, sender);
+        transfer::public_transfer(creator_cap, sender);
+        transfer::public_transfer(publisher, sender);
+        // transfer::share_object(policy)
     }
 
     #[test_only]
@@ -69,7 +69,7 @@ module sui::collectible_tests {
     use sui::test_scenario::{Self as ts};
     use sui::collectible::{Self, CollectionCreatorCap};
     use sui::boars::{Self, Boar};
-    use sui::transfer::transfer;
+    use sui::transfer;
     use std::option::{some, none};
     use std::string::utf8;
     use std::vector as vec;
@@ -97,8 +97,8 @@ module sui::collectible_tests {
                 ts::ctx(&mut test)
             );
 
-            transfer(creator_cap, creator);
-            transfer(boar, creator)
+            transfer::public_transfer(creator_cap, creator);
+            transfer::public_transfer(boar, creator)
         };
 
         ts::next_tx(&mut test, creator); {
@@ -114,10 +114,10 @@ module sui::collectible_tests {
             );
 
             while (vec::length(&boars) > 0) {
-                transfer(vec::pop_back(&mut boars), creator);
+                transfer::public_transfer(vec::pop_back(&mut boars), creator);
             };
 
-            transfer(creator_cap, creator);
+            transfer::public_transfer(creator_cap, creator);
             vec::destroy_empty(boars);
         };
 

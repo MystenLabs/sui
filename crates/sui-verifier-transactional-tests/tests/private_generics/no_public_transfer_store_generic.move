@@ -9,21 +9,21 @@
 
 //# publish
 module test::m {
-    fun t<T: key>(s: T) {
+    fun t<T: key + store>(s: T) {
         sui::transfer::transfer(s, @100)
     }
 }
 
 //# publish
 module test::m {
-    fun t<T: key>(s: T) {
+    fun t<T: key + store>(s: T) {
         sui::transfer::freeze_object(s)
     }
 }
 
 //# publish
 module test::m {
-    fun t<T: key>(s: T) {
+    fun t<T: key + store>(s: T) {
         sui::transfer::share_object(s)
     }
 }

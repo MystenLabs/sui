@@ -174,7 +174,7 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
         authorizer_validator_address: validator_address,
     };
     <b>let</b> operation_cap_id = <a href="object.md#0x2_object_id">object::id</a>(&operation_cap);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(operation_cap, validator_address);
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(operation_cap, validator_address);
     operation_cap_id
 }
 </code></pre>

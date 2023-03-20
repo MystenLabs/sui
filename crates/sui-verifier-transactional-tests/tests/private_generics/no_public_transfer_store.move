@@ -2,28 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // tests modules cannot use transfer internal functions outside of the defining module
-// Note: it is not possible to make a generic type `T<...> has key, store`
-// where a given instantiation`T<...>` has key but does _not_ have store
 
-//# init --addresses test=0x0
+//# init --addresses a=0x0 test=0x0
+
+//# publish
+module a::m {
+    struct S has key, store { id: sui::object::UID }
+}
 
 //# publish
 module test::m {
-    fun t<T: key>(s: T) {
+    fun t(s: a::m::S) {
         sui::transfer::transfer(s, @100)
     }
 }
 
 //# publish
 module test::m {
-    fun t<T: key>(s: T) {
+    fun t(s: a::m::S) {
         sui::transfer::freeze_object(s)
     }
 }
 
 //# publish
 module test::m {
-    fun t<T: key>(s: T) {
+    fun t(s: a::m::S) {
         sui::transfer::share_object(s)
     }
 }

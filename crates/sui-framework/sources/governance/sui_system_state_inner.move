@@ -852,7 +852,7 @@ module sui::sui_system_state_inner {
             let balance = balance::split(&mut total_balance, amount);
             // transfer back the remainder if non zero.
             if (balance::value(&total_balance) > 0) {
-                transfer::transfer(coin::from_balance(total_balance, ctx), tx_context::sender(ctx));
+                transfer::public_transfer(coin::from_balance(total_balance, ctx), tx_context::sender(ctx));
             } else {
                 balance::destroy_zero(total_balance);
             };

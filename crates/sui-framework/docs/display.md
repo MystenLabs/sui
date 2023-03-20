@@ -313,7 +313,7 @@ Create a new empty Display<T> object and keep it.
 
 
 <pre><code>entry <b>public</b> <b>fun</b> <a href="display.md#0x2_display_create_and_keep">create_and_keep</a>&lt;T: key&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer">transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), sender(ctx))
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="display.md#0x2_display_new">new</a>&lt;T&gt;(pub, ctx), sender(ctx))
 }
 </code></pre>
 

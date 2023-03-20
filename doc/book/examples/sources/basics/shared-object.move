@@ -77,6 +77,6 @@ module examples::donuts {
         let amount = balance::value(&shop.balance);
         let profits = coin::take(&mut shop.balance, amount, ctx);
 
-        transfer::transfer(profits, tx_context::sender(ctx))
+        transfer::public_transfer(profits, tx_context::sender(ctx))
     }
 }
