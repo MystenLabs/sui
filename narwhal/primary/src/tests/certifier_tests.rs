@@ -109,7 +109,7 @@ async fn propose_header() {
         None,
         metrics.clone(),
     ));
-    let _core_handle = Core::spawn(
+    let _handle = Certifier::spawn(
         name,
         committee.clone(),
         header_store.clone(),
@@ -206,7 +206,7 @@ async fn propose_header_failure() {
         None,
         metrics.clone(),
     ));
-    let _core_handle = Core::spawn(
+    let _handle = Certifier::spawn(
         name,
         committee.clone(),
         header_store.clone(),
@@ -282,7 +282,7 @@ async fn shutdown_core() {
         .unwrap();
 
     // Spawn the core.
-    let handle = Core::spawn(
+    let handle = Certifier::spawn(
         name.clone(),
         committee.clone(),
         header_store.clone(),

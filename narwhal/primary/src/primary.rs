@@ -5,7 +5,7 @@ use crate::{
     block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::BlockWaiter,
     certificate_fetcher::CertificateFetcher,
-    core::Core,
+    certifier::Certifier,
     grpc_server::ConsensusAPIGrpc,
     metrics::{initialise_metrics, PrimaryMetrics},
     proposer::{OurDigestMessage, Proposer},
@@ -461,7 +461,7 @@ impl Primary {
             }
         }
 
-        let core_handle = Core::spawn(
+        let core_handle = Certifier::spawn(
             name.clone(),
             committee.clone(),
             header_store.clone(),
