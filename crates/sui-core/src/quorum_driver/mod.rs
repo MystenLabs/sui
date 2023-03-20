@@ -24,12 +24,12 @@ use tokio::task::JoinHandle;
 use tracing::Instrument;
 use tracing::{debug, info, warn};
 
-use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority_aggregator::{
     AggregatorProcessCertificateError, AggregatorProcessTransactionError, AuthorityAggregator,
     ProcessTransactionResult,
 };
 use crate::authority_client::AuthorityAPI;
+use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Write;
 use sui_types::error::{SuiError, SuiResult};

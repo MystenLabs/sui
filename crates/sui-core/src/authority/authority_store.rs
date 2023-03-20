@@ -38,8 +38,8 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 
-use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
+use mysten_common::sync::notify_read::NotifyRead;
 
 const NUM_SHARDS: usize = 4096;
 
