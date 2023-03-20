@@ -29,8 +29,10 @@ use move_core_types::{
 };
 use std::{collections::BTreeMap, error::Error};
 use sui_types::{
-    clock::CLOCK_MODULE_NAME, error::ExecutionError, id::OBJECT_MODULE_NAME,
-    messages::ExecutionFailureStatus, sui_system_state::SUI_SYSTEM_MODULE_NAME,
+    clock::CLOCK_MODULE_NAME,
+    error::{ExecutionError, VMMVerifierErrorSubStatusCode},
+    id::OBJECT_MODULE_NAME,
+    sui_system_state::SUI_SYSTEM_MODULE_NAME,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -225,12 +227,7 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
         last_index: CodeOffset,
         _meter: &mut impl Meter,
     ) -> Result<(), PartialVMError> {
-        if let Err(e) = execute_inner(self, state, bytecode, index) {
-            return Err(
-                PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
-                    .with_message(e.to_string()),
-            );
-        };
+        execute_inner(self, state, bytecode, index)?;
         // invariant: the stack should be empty at the end of the block
         // If it is not, something is wrong with the implementation, so throw an invariant
         // violation
@@ -251,7 +248,7 @@ impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 fn call(
     verifier: &mut IDLeakAnalysis,
     function_handle: &FunctionHandle,
-) -> Result<(), ExecutionError> {
+) -> Result<(), PartialVMError> {
     let parameters = verifier
         .binary_view
         .signature_at(function_handle.parameters);
@@ -265,9 +262,11 @@ fn call(
     {
         if return_.0.len() != 1 {
             debug_assert!(false, "{:?} should have a single return value", function);
-            return Err(ExecutionError::from_kind(
-                ExecutionFailureStatus::InvariantViolation,
-            ));
+            return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
+                .with_message("Should have a single return value".to_string())
+                .with_sub_status(
+                    VMMVerifierErrorSubStatusCode::MULTIPLE_RETURN_VALUES_NOT_ALLOWED as u64,
+                ));
         }
         verifier.stack.push(AbstractValue::Fresh);
     } else {
@@ -286,7 +285,7 @@ fn num_fields(struct_def: &StructDefinition) -> usize {
 fn pack(
     verifier: &mut IDLeakAnalysis,
     struct_def: &StructDefinition,
-) -> Result<(), ExecutionError> {
+) -> Result<(), PartialVMError> {
     // When packing, an object whose struct type has key ability must have the first field as
     // "id". That fields must come from one of the functions that creates a new UID.
     let handle = verifier
@@ -304,7 +303,10 @@ fn pack(
                 Or for tests, it can come from sui::{}::{}",
             OBJECT_NEW.1, OBJECT_NEW.2, TS_NEW_OBJECT.1, TS_NEW_OBJECT.2,
         );
-        return Err(verification_failure(msg));
+
+        return Err(PartialVMError::new(StatusCode::UNKNOWN_VERIFICATION_ERROR)
+            .with_message(msg)
+            .with_sub_status(VMMVerifierErrorSubStatusCode::INVALID_OBJECT_CREATION as u64));
     }
     verifier.stack.push(AbstractValue::Other);
     Ok(())
@@ -320,7 +322,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
-) -> Result<(), ExecutionError> {
+) -> Result<(), PartialVMError> {
     // TODO: Better diagnostics with location
     match bytecode {
         Bytecode::Pop => {
@@ -484,19 +486,17 @@ fn execute_inner(
     Ok(())
 }
 
-fn expect_ok<T>(res: Result<T, PartialVMError>) -> Result<T, ExecutionError> {
+fn expect_ok<T>(res: Result<T, PartialVMError>) -> Result<T, PartialVMError> {
     match res {
         Ok(x) => Ok(x),
         Err(partial_vm_error) => {
-            debug_assert!(
-                false,
+            let msg = format!(
                 "Should have been verified to be safe by the Move bytecode verifier, \
-                Got error: {partial_vm_error:?}"
+            Got error: {partial_vm_error:?}"
             );
+            debug_assert!(false, "{msg}");
             // This is an internal error, but we cannot accept the module as safe
-            Err(ExecutionError::from_kind(
-                ExecutionFailureStatus::InvariantViolation,
-            ))
+            Err(PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(msg))
         }
     }
 }
