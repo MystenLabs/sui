@@ -18,6 +18,7 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
+use sui_types::error::SuiError;
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
 use sui_types::sui_system_state::PoolTokenExchangeRate;
@@ -147,7 +148,6 @@ impl GovernanceReadApi {
         } else {
             // try find from inactive pool
             let validator = get_validator_from_table(
-                system_state.system_state_version,
                 self.state.db().as_ref(),
                 system_state.inactive_pools_id,
                 &ID::new(*pool_id),
@@ -162,8 +162,14 @@ impl GovernanceReadApi {
         table: ObjectID,
         epoch: EpochId,
     ) -> Result<PoolTokenExchangeRate, Error> {
-        let exchange_rate: PoolTokenExchangeRate =
-            get_dynamic_field_from_store(self.state.db().as_ref(), table, &epoch)?;
+        let exchange_rate: PoolTokenExchangeRate = get_dynamic_field_from_store(
+            self.state.db().as_ref(),
+            table,
+            &epoch,
+        )
+        .map_err(|err| {
+            SuiError::SuiSystemStateReadError(format!("Failed to get exchange rate: {:?}", err))
+        })?;
         Ok(exchange_rate)
     }
 }
