@@ -55,7 +55,7 @@ pub mod consensus_tests;
 
 // Assuming 4000 txn tps * 10 sec consensus latency = 40000 inflight consensus txns.
 // Leaving a bit more headroom to cap the max inflight consensus txns to 80000.
-pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 80000;
+pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 120_000;
 
 // Assuming 100 nodes cluster
 const MAX_PENDING_LOCAL_SUBMISSIONS: usize =
@@ -293,10 +293,7 @@ impl ConsensusAdapter {
                 let tx_digest = certificate.digest();
                 let position = self.submission_position(committee, tx_digest);
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
-                let latency = self
-                    .latency_observer
-                    .latency()
-                    .unwrap_or(DEFAULT_LATENCY);
+                let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 self.metrics
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
