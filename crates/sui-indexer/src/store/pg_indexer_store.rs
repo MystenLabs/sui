@@ -852,10 +852,15 @@ impl IndexerStore for PgIndexerStore {
                                 objects::checkpoint.eq(excluded(objects::checkpoint)),
                                 objects::version.eq(excluded(objects::version)),
                                 objects::object_digest.eq(excluded(objects::object_digest)),
+                                objects::owner_type.eq(excluded(objects::owner_type)),
                                 objects::owner_address.eq(excluded(objects::owner_address)),
-                                objects::previous_transaction
-                                    .eq(excluded(objects::previous_transaction)),
+                                objects::initial_shared_version.eq(excluded(objects::initial_shared_version)),
+                                objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                                objects::object_type.eq(excluded(objects::object_type)),
                                 objects::object_status.eq(excluded(objects::object_status)),
+                                objects::has_public_transfer.eq(excluded(objects::has_public_transfer)),
+                                objects::storage_rebate.eq(excluded(objects::storage_rebate)),
+                                objects::bcs.eq(excluded(objects::bcs)),
                             ))
                             .execute(conn)
                     })
