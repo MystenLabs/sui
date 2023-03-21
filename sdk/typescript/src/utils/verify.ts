@@ -15,14 +15,15 @@ import { blake2b } from '@noble/hashes/blake2b';
 // it could allow the Sui.js to be tree-shaken a little better, possibly allowing keypairs that are
 // not used (and their deps) to be entirely removed from the bundle.
 
-/** Verify data that is signed with `signer.signMessage`. */
+/** Verify data that is signed with the expected scope. */
 export async function verifyMessage(
   message: Uint8Array | string,
   serializedSignature: SerializedSignature,
+  scope: IntentScope,
 ) {
   const signature = fromSerializedSignature(serializedSignature);
   const messageBytes = messageWithIntent(
-    IntentScope.PersonalMessage,
+    scope,
     typeof message === 'string' ? fromB64(message) : message,
   );
   const digest = blake2b(messageBytes, { dkLen: 32 });
