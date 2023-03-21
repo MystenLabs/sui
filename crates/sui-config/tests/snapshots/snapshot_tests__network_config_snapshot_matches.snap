@@ -20,7 +20,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -91,7 +91,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -162,7 +162,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -233,7 +233,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -304,7 +304,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -375,7 +375,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
@@ -446,7 +446,7 @@ validator_configs:
       address: ""
       db-path: /tmp/foo/
       internal-worker-address: ""
-      timeout-secs: 60
+      max-pending-transactions: ~
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
