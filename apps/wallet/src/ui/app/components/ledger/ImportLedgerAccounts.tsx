@@ -96,7 +96,7 @@ export function ImportLedgerAccounts() {
     let summaryCardBody: JSX.Element | null = null;
     if (areLedgerAccountsLoading) {
         summaryCardBody = (
-            <div className="w-full h-full flex flex-col justify-center items-center gap-3">
+            <div className="w-full h-full flex flex-col justify-center items-center gap-2">
                 <SpinnerIcon className="animate-spin text-steel w-4 h-4" />
                 <Text variant="p2" color="steel-darker">
                     Looking for accounts
@@ -158,18 +158,21 @@ export function ImportLedgerAccounts() {
                         </div>
                     </div>
                 </div>
-                <Button
-                    variant="primary"
-                    before={<UnlockedLockIcon />}
-                    text="Unlock"
-                    loading={importLedgerAccountsMutation.isLoading}
-                    onClick={() =>
-                        importLedgerAccountsMutation.mutate(
-                            selectedLedgerAccounts
-                        )
-                    }
-                    disabled={areNoAccountsSelected}
-                />
+                <div>
+                    <Button
+                        variant="primary"
+                        size="tall"
+                        before={<UnlockedLockIcon />}
+                        text="Unlock"
+                        loading={importLedgerAccountsMutation.isLoading}
+                        onClick={() =>
+                            importLedgerAccountsMutation.mutate(
+                                selectedLedgerAccounts
+                            )
+                        }
+                        disabled={areNoAccountsSelected}
+                    />
+                </div>
             </div>
         </Overlay>
     );
