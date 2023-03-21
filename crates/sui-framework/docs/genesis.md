@@ -163,12 +163,6 @@
 
 </dd>
 <dt>
-<code>stake_subsidy_start_epoch: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
 <code>chain_start_timestamp_ms: u64</code>
 </dt>
 <dd>
@@ -176,6 +170,12 @@
 </dd>
 <dt>
 <code>epoch_duration_ms: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_subsidy_start_epoch: u64</code>
 </dt>
 <dd>
 
@@ -430,12 +430,16 @@ all the information we need in the system.
         subsidy_fund,
         storage_fund,
         genesis_chain_parameters.protocol_version,
-        genesis_chain_parameters.stake_subsidy_start_epoch,
         genesis_chain_parameters.chain_start_timestamp_ms,
         genesis_chain_parameters.epoch_duration_ms,
+
+        // Stake Subsidy parameters
+        genesis_chain_parameters.stake_subsidy_start_epoch,
         genesis_chain_parameters.stake_subsidy_initial_distribution_amount,
         genesis_chain_parameters.stake_subsidy_period_length,
         genesis_chain_parameters.stake_subsidy_decrease_rate,
+
+        // Validator committee parameters
         genesis_chain_parameters.max_validator_count,
         genesis_chain_parameters.min_validator_joining_stake,
         genesis_chain_parameters.validator_low_stake_threshold,

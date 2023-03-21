@@ -65,10 +65,10 @@ module sui_system::governance_test_utils {
             balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
             1,   // protocol version
-            0,   // stake_subsidy_start_epoch
             0,   // epoch_start_timestamp_ms
             42,  // epoch_duration_ms, doesn't matter what number we put here
-            0,   // stake subsidy
+            0,   // stake_subsidy_start_epoch
+            0,   // stake subsidy initial distribution amount
             10,  // stake_subsidy_period_length
             0,   // stake_subsidy_decrease_rate
             150, // max_validator_count
