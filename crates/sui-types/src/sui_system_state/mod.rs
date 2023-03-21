@@ -85,10 +85,6 @@ pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
 pub type SuiValidatorGenesis = ValidatorV1;
 
 impl SuiSystemState {
-    pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
-        Self::V1(inner)
-    }
-
     /// Always return the version that we will be using for genesis.
     /// Genesis always uses this version regardless of the current version.
     pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {

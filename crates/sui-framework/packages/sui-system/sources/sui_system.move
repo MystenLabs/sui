@@ -45,7 +45,6 @@ module sui_system::sui_system {
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
-        system_state_version: u64,
         governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
@@ -59,7 +58,6 @@ module sui_system::sui_system {
             stake_subsidy_fund,
             storage_fund,
             protocol_version,
-            system_state_version,
             governance_start_epoch,
             epoch_start_timestamp_ms,
             epoch_duration_ms,
@@ -68,11 +66,12 @@ module sui_system::sui_system {
             stake_subsidy_decrease_rate,
             ctx,
         );
+        let version = sui_system_state_inner::system_state_version(&system_state);
         let self = SuiSystemState {
             id,
-            version: system_state_version,
+            version,
         };
-        dynamic_field::add(&mut self.id, system_state_version, system_state);
+        dynamic_field::add(&mut self.id, version, system_state);
         transfer::share_object(self);
     }
 

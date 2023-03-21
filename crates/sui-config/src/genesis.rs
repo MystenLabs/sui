@@ -44,8 +44,8 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
-    SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
+    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemStateInnerGenesis,
+    SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::{
@@ -395,7 +395,6 @@ pub struct GenesisValidatorMetadata {
 #[serde(rename_all = "kebab-case")]
 pub struct GenesisChainParameters {
     pub protocol_version: u64,
-    pub system_state_version: u64,
     pub governance_start_epoch: u64,
     pub chain_start_timestamp_ms: u64,
     pub epoch_duration_ms: u64,
@@ -495,7 +494,6 @@ impl GenesisCeremonyParameters {
     fn to_genesis_chain_parameters(&self) -> GenesisChainParameters {
         GenesisChainParameters {
             protocol_version: self.protocol_version.as_u64(),
-            system_state_version: get_sui_system_state_version(self.protocol_version),
             governance_start_epoch: self.governance_start_epoch,
             chain_start_timestamp_ms: self.timestamp_ms,
             epoch_duration_ms: self.epoch_duration_ms,
