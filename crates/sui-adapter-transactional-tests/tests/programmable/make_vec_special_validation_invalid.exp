@@ -1,7 +1,7 @@
 processed 4 tasks
 
 init:
-A: object(100)
+A: object(103)
 
 task 1 'publish'. lines 8-31:
 created: object(105)

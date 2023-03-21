@@ -67,8 +67,11 @@ use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransa
 
 pub(crate) type FakeID = u64;
 
-// initial value for fake object ID mapping
-const INIT_NEXT_FAKE: FakeID = 100;
+// initial value for fake object ID mapping. If the object ID is less than this value, it will not
+// be remapped.
+// This used to be set to 100, but when the system objects were excluded, this got bumped to avoid
+// breaking tests
+const INIT_NEXT_FAKE: FakeID = 103;
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
     21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
@@ -795,6 +798,30 @@ impl<'a> SuiTestAdapter<'a> {
     }
 
     fn enumerate_fake(&mut self, id: ObjectID) -> FakeID {
+        // Check if the object ID as a u64 is less than INIT_NEXT_FAKE. If it is, use that value
+        // as the "fake" ID. This essentially excludes the Sui System objects from the fake ID
+        // mapping.
+        let id_addr: SuiAddress = id.into();
+        let id_bytes: [u8; SUI_ADDRESS_LENGTH] = id_addr.to_inner();
+        let high = &id_bytes[0..(SUI_ADDRESS_LENGTH - 8)];
+        let low = [
+            id_bytes[SUI_ADDRESS_LENGTH - 8],
+            id_bytes[SUI_ADDRESS_LENGTH - 7],
+            id_bytes[SUI_ADDRESS_LENGTH - 6],
+            id_bytes[SUI_ADDRESS_LENGTH - 5],
+            id_bytes[SUI_ADDRESS_LENGTH - 4],
+            id_bytes[SUI_ADDRESS_LENGTH - 3],
+            id_bytes[SUI_ADDRESS_LENGTH - 2],
+            id_bytes[SUI_ADDRESS_LENGTH - 1],
+        ];
+        assert!(high.len() + low.len() == SUI_ADDRESS_LENGTH);
+        let id_u64 = u64::from_be_bytes(low);
+        // to check if `id < INIT_NEXT_FAKE`, we check that the "high" value bytes are all 0
+        // and that the "low" value bytes are less than `INIT_NEXT_FAKE` when converted to `u64`
+        if id_u64 < INIT_NEXT_FAKE && high.iter().copied().all(|u| u == 0) {
+            self.object_enumeration.insert(id, id_u64);
+            return id_u64;
+        }
         if let Some(fake) = self.object_enumeration.get_by_left(&id) {
             return *fake;
         }
@@ -866,6 +893,7 @@ impl<'a> SuiTestAdapter<'a> {
         objs.iter()
             .map(|id| match self.real_to_fake_object_id(id) {
                 None => "object(_)".to_string(),
+                Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
                 Some(fake) => format!("object({})", fake),
             })
             .collect::<Vec<_>>()
@@ -930,6 +958,7 @@ impl<'a> SuiTestAdapter<'a> {
         }
         match self.real_to_fake_object_id(&parsed.into()) {
             None => "_".to_string(),
+            Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
             Some(fake) => format!("fake({})", fake),
         }
     }
