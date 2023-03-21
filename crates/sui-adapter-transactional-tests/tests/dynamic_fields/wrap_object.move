@@ -58,6 +58,6 @@ entry fun take_and_take(obj: &mut Obj, ctx: &mut TxContext) {
 
 //# view-object 119
 
-//# run a::m::take_and_take --sender A --args object(118)
+//# run a::m::take_and_take --sender A --args object(117)
 
 //# view-object 119
