@@ -179,8 +179,8 @@ Return the epoch start time as a unix timestamp in milliseconds.
 
 ## Function `fresh_object_address`
 
-Create an <code><b>address</b></code> that has not been used. As it is an object address, it should never
-occurr as the address for a user.
+Create an <code><b>address</b></code> that has not been used. As it is an object address, it will never
+occur as the address for a user.
 In other words, the generated address is a globally unique object ID.
 
 

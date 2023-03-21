@@ -50,12 +50,6 @@ module sui::object {
 
     // === id ===
 
-    /// Create an `ID` from an unused object address. Not to be mistaken for `object::new` which
-    /// generates a new UID.
-    public fun fresh_id(ctx: &mut TxContext): ID {
-        ID { bytes: tx_context::fresh_object_address(ctx) }
-    }
-
     /// Get the raw bytes of a `ID`
     public fun id_to_bytes(id: &ID): vector<u8> {
         bcs::to_bytes(&id.bytes)
