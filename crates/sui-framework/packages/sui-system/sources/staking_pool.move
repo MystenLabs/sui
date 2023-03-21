@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::staking_pool {
+module sui_system::staking_pool {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use std::option::{Self, Option};
@@ -14,8 +14,8 @@ module sui::staking_pool {
     use sui::bag::Bag;
     use sui::bag;
 
-    friend sui::validator;
-    friend sui::validator_set;
+    friend sui_system::validator;
+    friend sui_system::validator_set;
 
     const EInsufficientPoolTokenBalance: u64 = 0;
     const EWrongPool: u64 = 1;

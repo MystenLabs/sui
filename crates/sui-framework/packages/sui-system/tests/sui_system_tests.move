@@ -6,15 +6,15 @@
 // `rewards_distribution_tests`.
 
 #[test_only]
-module sui::sui_system_tests {
+module sui_system::sui_system_tests {
     use sui::test_scenario::{Self, Scenario};
     use sui::sui::SUI;
-    use sui::governance_test_utils::{add_validator_full_flow, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing};
-    use sui::sui_system::{Self, SuiSystemState};
-    use sui::sui_system_state_inner;
-    use sui::validator::{Self, Validator};
-    use sui::validator_set;
-    use sui::validator_cap::UnverifiedValidatorOperationCap;
+    use sui_system::governance_test_utils::{add_validator_full_flow, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing};
+    use sui_system::sui_system::{Self, SuiSystemState};
+    use sui_system::sui_system_state_inner;
+    use sui_system::validator::{Self, Validator};
+    use sui_system::validator_set;
+    use sui_system::validator_cap::UnverifiedValidatorOperationCap;
     use sui::transfer;
     use sui::vec_set;
     use sui::table;
@@ -126,7 +126,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
+    #[expected_failure(abort_code = sui_system::validator_set::EInvalidCap)]
     fun test_report_validator_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
@@ -152,7 +152,7 @@ module sui::sui_system_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::validator_set::EInvalidCap)]
+    #[expected_failure(abort_code = sui_system::validator_set::EInvalidCap)]
     fun test_set_reference_gas_price_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;

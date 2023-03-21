@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::genesis {
+module sui_system::genesis {
     use std::vector;
 
     use sui::balance::{Self, Balance};
     use sui::coin;
     use sui::object::UID;
     use sui::sui::{Self, SUI};
-    use sui::sui_system;
+    use sui_system::sui_system;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::{Self, Validator};
-    use sui::validator_set;
+    use sui_system::validator::{Self, Validator};
+    use sui_system::validator_set;
     use std::option::{Option, Self};
 
     /// Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).

@@ -5,7 +5,7 @@ published-at = "0x3"
 
 [dependencies]
 MoveStdlib = { local = "../move-stdlib" }
-SuiFramework = { local = "../sui-framework" }
+Sui = { local = "../sui-framework" }
 
 [addresses]
 sui_system = "0x3"

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::voting_power {
-    use sui::validator::Validator;
+module sui_system::voting_power {
+    use sui_system::validator::Validator;
     use std::vector;
-    use sui::validator;
+    use sui_system::validator;
     use sui::math;
     use sui::math::divide_and_round_up;
 

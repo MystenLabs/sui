@@ -1,35 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::sui_system {
+module sui_system::sui_system {
     use sui::balance::Balance;
     #[test_only]
     use sui::balance;
     use sui::coin::Coin;
     use sui::object::{ID, UID};
-    use sui::staking_pool::StakedSui;
+    use sui_system::staking_pool::StakedSui;
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::Validator;
-    use sui::validator_cap::UnverifiedValidatorOperationCap;
-    use sui::sui_system_state_inner::SuiSystemStateInner;
+    use sui_system::validator::Validator;
+    use sui_system::validator_cap::UnverifiedValidatorOperationCap;
+    use sui_system::sui_system_state_inner::{Self, SuiSystemStateInner};
     use sui::vec_set::VecSet;
     use std::option;
     use sui::table::Table;
     use sui::dynamic_field;
-    use sui::sui_system_state_inner;
     #[test_only]
-    use sui::validator_set::ValidatorSet;
+    use sui_system::validator_set::ValidatorSet;
     #[test_only]
-    use sui::validator_set;
+    use sui_system::validator_set;
 
-    friend sui::genesis;
+    friend sui_system::genesis;
 
     #[test_only]
     use sui::test_utils;
     #[test_only]
-    friend sui::governance_test_utils;
+    friend sui_system::governance_test_utils;
 
     struct SuiSystemState has key {
         id: UID,

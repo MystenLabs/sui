@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::validator_cap {
+module sui_system::validator_cap {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
-    friend sui::sui_system_state_inner;
-    friend sui::validator;
-    friend sui::validator_set;
+    friend sui_system::sui_system_state_inner;
+    friend sui_system::validator;
+    friend sui_system::validator_set;
 
     #[test_only]
-    friend sui::sui_system_tests;
+    friend sui_system::sui_system_tests;
     #[test_only]
-    friend sui::rewards_distribution_tests;
+    friend sui_system::rewards_distribution_tests;
 
     /// The capability object is created when creating a new `Validator` or when the
     /// validator explicitly creates a new capability object for rotation/revocation.

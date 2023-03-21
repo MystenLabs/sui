@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::validator {
+module sui_system::validator {
     use std::ascii;
     use std::vector;
     use std::bcs;
@@ -9,30 +9,30 @@ module sui::validator {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator_cap::{Self, ValidatorOperationCap};
+    use sui_system::validator_cap::{Self, ValidatorOperationCap};
     use sui::object::{Self, ID};
     use std::option::{Option, Self};
-    use sui::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
+    use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
     use std::string::{Self, String};
     use sui::url::Url;
     use sui::url;
     use sui::event;
     use sui::bag::Bag;
     use sui::bag;
-    friend sui::genesis;
-    friend sui::sui_system_state_inner;
-    friend sui::validator_wrapper;
-    friend sui::validator_set;
-    friend sui::voting_power;
+    friend sui_system::genesis;
+    friend sui_system::sui_system_state_inner;
+    friend sui_system::validator_wrapper;
+    friend sui_system::validator_set;
+    friend sui_system::voting_power;
 
     #[test_only]
-    friend sui::validator_tests;
+    friend sui_system::validator_tests;
     #[test_only]
-    friend sui::validator_set_tests;
+    friend sui_system::validator_set_tests;
     #[test_only]
-    friend sui::sui_system_tests;
+    friend sui_system::sui_system_tests;
     #[test_only]
-    friend sui::governance_test_utils;
+    friend sui_system::governance_test_utils;
 
     /// Invalid proof_of_possession field in ValidatorMetadata
     const EInvalidProofOfPossession: u64 = 0;

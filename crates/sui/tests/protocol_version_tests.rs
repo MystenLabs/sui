@@ -60,8 +60,8 @@ mod sim_only_tests {
     use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_core::authority::sui_framework_injection;
-    use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
+    use sui_core::authority::sui_system_injection;
+    use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
@@ -368,7 +368,7 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_framework_injection::set_override(sui_framework(to));
+        sui_system_injection::set_override(sui_framework(to));
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_framework_object(from)])
@@ -388,7 +388,7 @@ mod sim_only_tests {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder
                 .move_call(
-                    SuiFramework::ID,
+                    SuiSystem::ID,
                     ident_str!("msim_extra_1").to_owned(),
                     ident_str!("canary").to_owned(),
                     vec![],
@@ -437,7 +437,7 @@ mod sim_only_tests {
         let effects = node_handle
             .with_async(|node| async {
                 let db = node.state().db();
-                let framework = db.get_object(&SuiFramework::ID);
+                let framework = db.get_object(&SuiSystem::ID);
                 let digest = framework.unwrap().unwrap().previous_transaction;
                 let effects = db.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
@@ -447,12 +447,12 @@ mod sim_only_tests {
         let modified_at = effects
             .modified_at_versions()
             .iter()
-            .find_map(|(id, v)| (id == &SuiFramework::ID).then_some(*v));
+            .find_map(|(id, v)| (id == &SuiSystem::ID).then_some(*v));
 
         let mutated_to = effects
             .mutated()
             .iter()
-            .find_map(|((id, v, _), _)| (id == &SuiFramework::ID).then_some(*v));
+            .find_map(|((id, v, _), _)| (id == &SuiSystem::ID).then_some(*v));
 
         (modified_at, mutated_to)
     }
@@ -462,7 +462,7 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        sui_framework_injection::set_override(sui_framework("compatible"));
+        sui_system_injection::set_override(sui_framework("compatible"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_objects([sui_framework_object("base")])
@@ -495,7 +495,7 @@ mod sim_only_tests {
 
         let first = test_cluster.swarm.validators().next().unwrap();
         let first_name = first.name();
-        sui_framework_injection::set_override_cb(Box::new(move |name| {
+        sui_system_injection::set_override_cb(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
                 Some(sui_framework("base"))
@@ -544,7 +544,7 @@ mod sim_only_tests {
         let mut validators = test_cluster.swarm.validators();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
-        sui_framework_injection::set_override_cb(Box::new(move |name| {
+        sui_system_injection::set_override_cb(Box::new(move |name| {
             if name == first || name == second {
                 Some(sui_framework("compatible"))
             } else {
@@ -590,7 +590,7 @@ mod sim_only_tests {
         config.run_bytecode_verifier = true;
 
         let pkg = config.build(package).unwrap();
-        pkg.get_framework_modules().cloned().collect()
+        pkg.get_system_modules().cloned().collect()
     }
 
     /// Like `sui_framework`, but package the modules in an `Object`.
@@ -600,7 +600,7 @@ mod sim_only_tests {
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
-            &[MoveStdlib::as_package()],
+            &[MoveStdlib::as_package(), SuiFramework::as_package()],
         )
         .unwrap()
     }

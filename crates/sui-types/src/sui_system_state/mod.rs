@@ -8,7 +8,7 @@ use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use crate::versioned::Versioned;
-use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
+use crate::{id::UID, MoveTypeTagTrait, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
@@ -47,7 +47,7 @@ pub struct SuiSystemStateWrapper {
 impl SuiSystemStateWrapper {
     pub fn type_() -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: SUI_SYSTEM_ADDRESS,
             name: SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME.to_owned(),
             module: SUI_SYSTEM_MODULE_NAME.to_owned(),
             type_params: vec![],

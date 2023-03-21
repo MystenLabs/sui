@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::msim_extra_1 {
+module sui_system::msim_extra_1 {
     struct Type has drop {
         x: u64,
     }
