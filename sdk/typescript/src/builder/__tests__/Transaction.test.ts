@@ -54,7 +54,7 @@ describe('offline build', () => {
 
   it('builds a split command', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
     await tx.build();
   });
 
@@ -68,9 +68,9 @@ describe('offline build', () => {
     const tx = setup();
     const inputBytes = builder.ser('u64', 100n).toBytes();
     // Use bytes directly in pure value:
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(inputBytes)));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
     // Use bytes in input helper:
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure(inputBytes))));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(inputBytes))]));
     await tx.build();
   });
 
