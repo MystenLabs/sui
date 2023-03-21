@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LockedDeviceError } from '@ledgerhq/errors';
-
 export class LedgerConnectionFailedError extends Error {
     constructor(message: string) {
         super(message);
