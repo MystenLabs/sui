@@ -385,10 +385,10 @@ fn batch_verify_certificates_impl(
     obligation.verify_all()
 }
 
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
+// Cache up to 200000 verified certs. We will need to tune this number in the future - a decent
 // guess to start with is that it should be 10-20 times larger than peak transactions per second,
 // on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
+const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 200_000;
 
 pub struct VerifiedCertificateCache {
     inner: RwLock<LruCache<CertificateDigest, ()>>,
