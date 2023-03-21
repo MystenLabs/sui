@@ -19,7 +19,7 @@ module test::m1 {
     public fun transfer(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
         while (!vector::is_empty(&v)) {
             let c = vector::pop_back(&mut v);
-            transfer::transfer(c, r);
+            transfer::public_transfer(c, r);
         };
         vector::destroy_empty(v);
     }
@@ -49,6 +49,11 @@ module test::m1 {
 // use incorrect arg type for split coming from a Move function
 //# programmable --sender A --inputs object(109)
 //> 0: test::m1::ret_one_amount();
+//> 1: SplitCoins(Input(0), [Result(0)]);
+
+// use incorrect arg type for split by creating a vector of u64s
+//# programmable --sender A --inputs object(109) 100
+//> 0: MakeMoveVec<u64>([Input(1), Input(1), Input(1)]);
 //> 1: SplitCoins(Input(0), [Result(0)]);
 
 // pass result of SplitCoins directly as another function argument without creating and intermediate

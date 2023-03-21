@@ -19,7 +19,7 @@ module test::m1 {
     public fun transfer(v: vector<coin::Coin<sui::sui::SUI>>, r: address) {
         while (!vector::is_empty(&v)) {
             let c = vector::pop_back(&mut v);
-            transfer::transfer(c, r);
+            transfer::public_transfer(c, r);
         };
         vector::destroy_empty(v);
     }
