@@ -31,9 +31,9 @@ workspace-members = [ "sui-move" ]
 third-party = [
     ## Exclude the 'move-unit-test' crate in order to ensure that the 'testing'
     # feature isn't enabled in the workspace-hack
-    { name = "move-unit-test", git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" },
-    { name = "move-cli", git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" },
-    { name = "move-transactional-test-runner", git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" },
+    { name = "move-unit-test", git = "https://github.com/move-language/move", rev = "e9d056100f8c40039222bfbb800ed9c11a4ed922" },
+    { name = "move-cli", git = "https://github.com/move-language/move", rev = "e9d056100f8c40039222bfbb800ed9c11a4ed922" },
+    { name = "move-transactional-test-runner", git = "https://github.com/move-language/move", rev = "e9d056100f8c40039222bfbb800ed9c11a4ed922" },
     { name = "object_store" },
 ]
 
