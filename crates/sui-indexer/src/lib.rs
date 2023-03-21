@@ -31,10 +31,12 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 pub mod apis;
+pub mod balance_changes;
 pub mod errors;
 mod handlers;
 pub mod metrics;
 pub mod models;
+pub mod object_changes;
 pub mod processors;
 pub mod schema;
 pub mod store;

@@ -35,6 +35,7 @@ use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
+use sui_types::storage::{DeleteKind, WriteKind};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -360,6 +361,19 @@ pub trait SuiTransactionEffectsAPI {
 
     /// Return an iterator of mutated objects, but excluding the gas object.
     fn mutated_excluding_gas(&self) -> Vec<OwnedObjectRef>;
+    fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+    fn all_changed_objects(&self) -> Vec<(&OwnedObjectRef, WriteKind)>;
+    fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)>;
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename = "TransactionEffectsModifiedAtVersions",
+    rename_all = "camelCase"
+)]
+pub struct SuiTransactionEffectsModifiedAtVersions {
+    object_id: ObjectID,
+    sequence_number: SequenceNumber,
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -371,6 +385,10 @@ pub struct SuiTransactionEffectsV1 {
     /// The epoch when this transaction was executed.
     pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
+    /// The version that every modified (mutated or deleted) object had before it was modified by
+    /// this transaction.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modified_at_versions: Vec<SuiTransactionEffectsModifiedAtVersions>,
     /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shared_objects: Vec<SuiObjectRef>,
@@ -465,6 +483,43 @@ impl SuiTransactionEffectsAPI for SuiTransactionEffectsV1 {
             .cloned()
             .collect()
     }
+
+    fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
+        self.modified_at_versions
+            .iter()
+            .map(|v| (v.object_id, v.sequence_number))
+            .collect::<Vec<_>>()
+    }
+
+    fn all_changed_objects(&self) -> Vec<(&OwnedObjectRef, WriteKind)> {
+        self.mutated
+            .iter()
+            .map(|owner_ref| (owner_ref, WriteKind::Mutate))
+            .chain(
+                self.created
+                    .iter()
+                    .map(|owner_ref| (owner_ref, WriteKind::Create)),
+            )
+            .chain(
+                self.unwrapped
+                    .iter()
+                    .map(|owner_ref| (owner_ref, WriteKind::Unwrap)),
+            )
+            .collect()
+    }
+
+    fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)> {
+        self.deleted
+            .iter()
+            .map(|r| (r, DeleteKind::Normal))
+            .chain(
+                self.unwrapped_then_deleted
+                    .iter()
+                    .map(|r| (r, DeleteKind::UnwrapThenDelete)),
+            )
+            .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
+            .collect()
+    }
 }
 
 impl SuiTransactionEffects {}
@@ -481,6 +536,17 @@ impl TryFrom<TransactionEffects> for SuiTransactionEffects {
             1 => Ok(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: effect.status().clone().into(),
                 executed_epoch: effect.executed_epoch(),
+                modified_at_versions: effect
+                    .modified_at_versions()
+                    .iter()
+                    .copied()
+                    .map(
+                        |(object_id, sequence_number)| SuiTransactionEffectsModifiedAtVersions {
+                            object_id,
+                            sequence_number,
+                        },
+                    )
+                    .collect(),
                 gas_used: effect.gas_cost_summary().clone().into(),
                 shared_objects: to_sui_object_ref(effect.shared_objects().to_vec()),
                 transaction_digest: *effect.transaction_digest(),

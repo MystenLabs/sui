@@ -55,6 +55,11 @@ pub trait IndexerStore {
         txn_digests: &[String],
     ) -> Result<Vec<Transaction>, IndexerError>;
 
+    async fn compose_full_transaction_response(
+        &self,
+        tx: Transaction,
+    ) -> Result<SuiTransactionFullResponse, IndexerError>;
+
     fn get_all_transaction_digest_page(
         &self,
         start_sequence: Option<i64>,

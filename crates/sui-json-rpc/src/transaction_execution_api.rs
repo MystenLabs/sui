@@ -22,17 +22,18 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionKind,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionEffectsAPI,
+    TransactionKind,
 };
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::messages::{TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
 use crate::api::WriteApiServer;
-use crate::balance_changes::get_balance_change_from_effect;
+use crate::balance_changes::get_balance_changes_from_effect;
 use crate::error::Error;
 use crate::read_api::get_transaction_data_and_digest;
-use crate::{get_object_change_from_effect, ObjectProviderCache, SuiRpcModule};
+use crate::{get_object_changes, ObjectProviderCache, SuiRpcModule};
 
 pub struct TransactionExecutionApi {
     state: Arc<AuthorityState>,
@@ -114,14 +115,20 @@ impl TransactionExecutionApi {
 
                 let object_cache = ObjectProviderCache::new(self.state.clone());
                 let balance_changes = if opts.show_balance_changes {
-                    Some(get_balance_change_from_effect(&object_cache, &effects.effects).await?)
+                    Some(get_balance_changes_from_effect(&object_cache, &effects.effects).await?)
                 } else {
                     None
                 };
                 let object_changes = if opts.show_object_changes {
                     Some(
-                        get_object_change_from_effect(&object_cache, sender, &effects.effects)
-                            .await?,
+                        get_object_changes(
+                            &object_cache,
+                            sender,
+                            effects.effects.modified_at_versions(),
+                            effects.effects.all_changed_objects(),
+                            effects.effects.all_deleted(),
+                        )
+                        .await?,
                     )
                 } else {
                     None

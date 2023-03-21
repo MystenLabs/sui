@@ -9,16 +9,17 @@ use async_trait::async_trait;
 use move_core_types::language_storage::TypeTag;
 use tokio::sync::RwLock;
 
-use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::BalanceChange;
 use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::coin::Coin;
-use sui_types::error::SuiError;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
 use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
+
+use crate::errors::IndexerError;
+use crate::store::PgIndexerStore;
 
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
@@ -135,17 +136,14 @@ pub trait ObjectProvider {
 }
 
 #[async_trait]
-impl ObjectProvider for Arc<AuthorityState> {
-    type Error = SuiError;
+impl ObjectProvider for Arc<PgIndexerStore> {
+    type Error = IndexerError;
     async fn get_object(
         &self,
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Object, Self::Error> {
-        Ok(self
-            .get_past_object_read(id, *version)
-            .await?
-            .into_object()?)
+        self.get_sui_types_object(id, version).await
     }
 
     async fn find_object_lt_or_eq_version(
@@ -153,7 +151,8 @@ impl ObjectProvider for Arc<AuthorityState> {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<Object>, Self::Error> {
-        Ok(self.database.find_object_lt_or_eq_version(*id, *version))
+        self.find_sui_types_object_lt_or_eq_version(id, version)
+            .await
     }
 }
 

@@ -44,16 +44,20 @@ impl<S: IndexerStore> ReadApi<S> {
         self.state.get_total_transaction_number().map(|n| n as u64)
     }
 
-    fn get_transaction_with_options_internal(
+    async fn get_transaction_with_options_internal(
         &self,
         digest: &TransactionDigest,
         _options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
         // TODO(chris): support options in indexer
-        let txn_full_resp: SuiTransactionFullResponse = self
+        let txn_full_resp = self
             .state
-            .get_transaction_by_digest(&digest.base58_encode())?
-            .try_into()?;
+            .get_transaction_by_digest(&digest.base58_encode())?;
+        let txn_full_resp = self
+            .state
+            .compose_full_transaction_response(txn_full_resp)
+            .await?;
+
         Ok(txn_full_resp.into())
     }
 
@@ -340,7 +344,9 @@ where
                 .get_transaction_with_options(digest, options)
                 .await;
         }
-        Ok(self.get_transaction_with_options_internal(&digest, options)?)
+        Ok(self
+            .get_transaction_with_options_internal(&digest, options)
+            .await?)
     }
 
     async fn multi_get_transactions_with_options(

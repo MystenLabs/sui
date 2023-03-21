@@ -18,11 +18,13 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use tracing::info;
 
 use sui_json_rpc_types::{CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent};
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_json_rpc_types::{SuiTransaction, SuiTransactionEffects, SuiTransactionEffectsAPI};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::event::EventID;
 use sui_types::object::ObjectRead;
 
+use crate::balance_changes::{get_balance_changes, ObjectProviderCache};
 use crate::errors::{Context, IndexerError};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
@@ -30,6 +32,7 @@ use crate::models::events::Event;
 use crate::models::objects::Object;
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
+use crate::object_changes::get_object_changes;
 use crate::schema::{
     addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs, epochs::dsl as epochs_dsl,
     events, input_objects, input_objects::dsl as input_objects_dsl, move_calls,
@@ -41,6 +44,7 @@ use crate::store::diesel_marco::{read_only, transactional};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::{IndexerStore, TemporaryEpochStore};
+use crate::types::SuiTransactionFullResponse;
 use crate::{get_pg_pool_connection, PgConnectionPool};
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
@@ -78,6 +82,51 @@ impl PgIndexerStore {
             cp: cp.clone(),
             partition_manager: PartitionManager::new(cp).unwrap(),
             module_cache,
+        }
+    }
+
+    pub async fn get_sui_types_object(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError> {
+        let pg_object = read_only!(&self.cp, |conn| {
+            objects::dsl::objects
+                .filter(objects::object_id.eq(id.to_string()))
+                .filter(objects::version.eq(version.value() as i64))
+                .first::<Object>(conn)
+        })
+        .context("Failed reading Object from PostgresDB");
+        match pg_object {
+            Ok(pg_object) => {
+                let object = sui_types::object::Object::try_from(pg_object)?;
+                Ok(object)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn find_sui_types_object_lt_or_eq_version(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Option<sui_types::object::Object>, IndexerError> {
+        let pg_object = read_only!(&self.cp, |conn| {
+            objects::dsl::objects
+                .filter(objects::object_id.eq(id.to_string()))
+                .filter(objects::version.le(version.value() as i64))
+                .order_by(objects::version.desc())
+                .first::<Object>(conn)
+                .optional()
+        })
+        .context("Failed reading Object before version from PostgresDB");
+        match pg_object {
+            Ok(Some(pg_object)) => {
+                let object = sui_types::object::Object::try_from(pg_object)?;
+                Ok(Some(object))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 }
@@ -231,6 +280,68 @@ impl IndexerStore for PgIndexerStore {
         .context(&format!(
             "Failed reading transaction with digest {txn_digest}"
         ))
+    }
+
+    async fn compose_full_transaction_response(
+        &self,
+        tx: Transaction,
+    ) -> Result<SuiTransactionFullResponse, IndexerError> {
+        let transaction: SuiTransaction =
+            serde_json::from_str(&tx.transaction_content).map_err(|err| {
+                IndexerError::InsertableParsingError(format!(
+                    "Failed converting transaction JSON {:?} to SuiTransaction with error: {:?}",
+                    tx.transaction_content, err
+                ))
+            })?;
+        let effects: SuiTransactionEffects = serde_json::from_str(&tx.transaction_effects_content).map_err(|err| {
+        IndexerError::InsertableParsingError(format!(
+            "Failed converting transaction effect JSON {:?} to SuiTransactionEffects with error: {:?}",
+            tx.transaction_effects_content, err
+        ))
+        })?;
+
+        let object_cache = ObjectProviderCache::new(Arc::new(self.clone()));
+        let all_mutated: Vec<(ObjectID, SequenceNumber)> = effects
+            .all_changed_objects()
+            .into_iter()
+            .map(|(owner_obj_ref, _)| {
+                let obj_id = owner_obj_ref.reference.object_id;
+                let obj_seq = owner_obj_ref.reference.version;
+                (obj_id, obj_seq)
+            })
+            .collect();
+        let balance_changes =
+            get_balance_changes(&object_cache, &effects.modified_at_versions(), &all_mutated)
+                .await?;
+
+        let sender = SuiAddress::from_str(tx.sender.as_str())?;
+        let object_changes = get_object_changes(
+            &object_cache,
+            sender,
+            &effects.modified_at_versions(),
+            effects.all_changed_objects(),
+            effects.all_deleted_objects(),
+        )
+        .await?;
+
+        Ok(SuiTransactionFullResponse {
+            digest: tx.transaction_digest.parse().map_err(|e| {
+                IndexerError::InsertableParsingError(format!(
+                    "Failed to parse transaction digest {} : {:?}",
+                    tx.transaction_digest, e
+                ))
+            })?,
+            transaction,
+            raw_transaction: tx.raw_transaction,
+            effects,
+            confirmed_local_execution: tx.confirmed_local_execution,
+            timestamp_ms: tx.timestamp_ms as u64,
+            checkpoint: tx.checkpoint_sequence_number as u64,
+            // TODO: read events, object_changes and balance_changes from db
+            events: Default::default(),
+            object_changes: Some(object_changes),
+            balance_changes: Some(balance_changes),
+        })
     }
 
     fn multi_get_transactions_by_digests(
