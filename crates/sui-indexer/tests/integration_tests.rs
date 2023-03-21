@@ -38,9 +38,6 @@ pub mod pg_integration_test {
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, transfer_coin};
 
-    use sui_indexer::indexer_test_utils::start_test_indexer;
-    use tokio::task::JoinHandle;
-
     async fn get_owned_objects_for_address(
         indexer_rpc_client: &HttpClient,
         address: &SuiAddress,
@@ -451,7 +448,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_get_object_with_options() -> Result<(), anyhow::Error> {
-        let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         wait_until_next_checkpoint(&store).await;
         let address = test_cluster.get_address_0();
         let gas_objects = get_owned_objects_for_address(&indexer_rpc_client, &address).await?;
