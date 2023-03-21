@@ -6,22 +6,24 @@ import {
     Spinner16 as SpinnerIcon,
     ThumbUpStroke32 as ThumbUpIcon,
 } from '@mysten/icons';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { useAccounts } from '../../hooks/useAccounts';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
-import { LedgerAccountList } from './LedgerAccountList';
 import {
-    type SelectableLedgerAccount,
-    useDeriveLedgerAccounts,
-} from './useDeriveLedgerAccounts';
+    LedgerAccountList,
+    SelectableLedgerAccount,
+} from './LedgerAccountList';
+import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
+import { LockedDeviceError } from '@ledgerhq/errors';
+import { SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
+import { useAccounts } from '../../hooks/useAccounts';
 
 const numLedgerAccountsToDeriveByDefault = 10;
 
@@ -29,16 +31,34 @@ export function ImportLedgerAccounts() {
     const accountsUrl = useNextMenuUrl(true, `/accounts`);
     const navigate = useNavigate();
 
-    const onDeriveError = useCallback(() => {
-        navigate(accountsUrl, { replace: true });
-        toast.error('Make sure you have the Sui application open.');
-    }, [accountsUrl, navigate]);
+    const existingAccounts = useAccounts();
+    const [selectedLedgerAccounts, setSelectedLedgerAccounts] = useState<
+        SerializedLedgerAccount[]
+    >([]);
 
-    const [ledgerAccounts, setLedgerAccounts, areLedgerAccountsLoading] =
-        useDeriveLedgerAccounts({
-            numAccountsToDerive: numLedgerAccountsToDeriveByDefault,
-            onError: onDeriveError,
-        });
+    const {
+        data: ledgerAccounts,
+        isLoading: areLedgerAccountsLoading,
+        isError: encounteredDerviceAccountsError,
+    } = useDeriveLedgerAccounts({
+        numAccountsToDerive: numLedgerAccountsToDeriveByDefault,
+        select: (ledgerAccounts) => {
+            const existingAccountAddresses = existingAccounts.map(
+                (account) => account.address
+            );
+            return ledgerAccounts.filter(({ address }) => {
+                return !existingAccountAddresses.includes(address);
+            });
+        },
+        onError: (error) => {
+            if (error instanceof LockedDeviceError) {
+                toast.error('Your device is locked. Un-lock it and try again.');
+            } else {
+                toast.error('Make sure you have the Sui application open.');
+            }
+            navigate(accountsUrl, { replace: true });
+        },
+    });
 
     const importLedgerAccountsMutation = useImportLedgerAccountsMutation({
         onSuccess: () => navigate(accountsUrl),
@@ -47,51 +67,34 @@ export function ImportLedgerAccounts() {
         },
     });
 
-    const existingAccounts = useAccounts();
-    const existingAccountAddresses = existingAccounts.map(
-        (account) => account.address
-    );
-    const filteredLedgerAccounts = ledgerAccounts.filter(
-        (account) => !existingAccountAddresses.includes(account.address)
-    );
-    const selectedLedgerAccounts = filteredLedgerAccounts.filter(
-        (account) => account.isSelected
-    );
-
     const onAccountClick = useCallback(
         (targetAccount: SelectableLedgerAccount) => {
-            setLedgerAccounts((prevState) =>
-                prevState.map((account) => {
-                    if (account.address === targetAccount.address) {
-                        return {
-                            ...targetAccount,
-                            isSelected: !targetAccount.isSelected,
-                        };
-                    }
-                    return account;
-                })
-            );
+            if (targetAccount.isSelected) {
+                setSelectedLedgerAccounts((prevState) =>
+                    prevState.filter((ledgerAccount) => {
+                        return ledgerAccount.address !== targetAccount.address;
+                    })
+                );
+            } else {
+                setSelectedLedgerAccounts((prevState) => [
+                    ...prevState,
+                    targetAccount,
+                ]);
+            }
         },
-        [setLedgerAccounts]
+        [setSelectedLedgerAccounts]
     );
 
-    const onSelectAllAccountsClick = useCallback(() => {
-        setLedgerAccounts((prevState) =>
-            prevState.map((account) => ({
-                ...account,
-                isSelected: true,
-            }))
-        );
-    }, [setLedgerAccounts]);
-
-    const numAccounts = ledgerAccounts.length;
-    const numFilteredAccounts = filteredLedgerAccounts.length;
+    const numImportableAccounts = ledgerAccounts?.length;
     const numSelectedAccounts = selectedLedgerAccounts.length;
-    const areAllAccountsImported = numAccounts > 0 && numFilteredAccounts === 0;
-    const areNoAccountsSelected = numSelectedAccounts === 0;
-    const areAllAccountsSelected = numSelectedAccounts === numAccounts;
+
+    const areAllAccountsImported = numImportableAccounts === 0;
+    const areAllAccountsSelected =
+        numSelectedAccounts === numImportableAccounts;
+
+    const isUnlockButtonDisabled = numSelectedAccounts === 0;
     const isSelectAllButtonDisabled =
-        areAllAccountsSelected || areAllAccountsImported;
+        areAllAccountsImported || areAllAccountsSelected;
 
     let summaryCardBody: JSX.Element | null = null;
     if (areLedgerAccountsLoading) {
@@ -112,11 +115,15 @@ export function ImportLedgerAccounts() {
                 </Text>
             </div>
         );
-    } else {
+    } else if (!encounteredDerviceAccountsError) {
         summaryCardBody = (
             <div className="max-h-[272px] -mr-2 mt-1 pr-2 overflow-auto custom-scrollbar">
                 <LedgerAccountList
-                    accounts={filteredLedgerAccounts}
+                    accounts={ledgerAccounts.map((ledgerAccount) => ({
+                        ...ledgerAccount,
+                        isSelected:
+                            selectedLedgerAccounts.includes(ledgerAccount),
+                    }))}
                     onAccountClick={onAccountClick}
                 />
             </div>
@@ -152,7 +159,13 @@ export function ImportLedgerAccounts() {
                                 text="Select All Accounts"
                                 color="heroDark"
                                 weight="medium"
-                                onClick={onSelectAllAccountsClick}
+                                onClick={() => {
+                                    if (ledgerAccounts) {
+                                        setSelectedLedgerAccounts(
+                                            ledgerAccounts
+                                        );
+                                    }
+                                }}
                                 disabled={isSelectAllButtonDisabled}
                             />
                         </div>
@@ -165,12 +178,12 @@ export function ImportLedgerAccounts() {
                         before={<UnlockedLockIcon />}
                         text="Unlock"
                         loading={importLedgerAccountsMutation.isLoading}
+                        disabled={isUnlockButtonDisabled}
                         onClick={() =>
                             importLedgerAccountsMutation.mutate(
                                 selectedLedgerAccounts
                             )
                         }
-                        disabled={areNoAccountsSelected}
                     />
                 </div>
             </div>
