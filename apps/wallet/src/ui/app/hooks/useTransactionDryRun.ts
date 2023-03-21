@@ -13,7 +13,7 @@ export function useTransactionDryRun(
     const signer = useSigner(sender);
     const response = useQuery({
         queryKey: ['dryRunTransaction', transaction.serialize()],
-        queryFn:  () => {
+        queryFn: () => {
             return signer.dryRunTransaction({ transaction });
         },
     });

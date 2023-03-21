@@ -20,16 +20,17 @@ export type TransactionRequestProps = {
 };
 
 export function TransactionRequest({ txRequest }: TransactionRequestProps) {
-    const signer = useSigner(txRequest.tx.account);
+    const addressForTransaction = txRequest.tx.account;
+    const signer = useSigner(addressForTransaction);
     const dispatch = useAppDispatch();
     const transaction = useMemo(() => {
         const tx = Transaction.from(txRequest.tx.data);
-        if (accountForTransaction) {
-            tx.setSenderIfNotSet(accountForTransaction.address);
+        if (addressForTransaction) {
+            tx.setSenderIfNotSet(addressForTransaction);
         }
         return tx;
-    }, [txRequest.tx.data, accountForTransaction]);
-    const addressForTransaction = txRequest.tx.account;
+    }, [txRequest.tx.data, addressForTransaction]);
+
     const handleOnSubmit = useCallback(
         (approved: boolean) => {
             dispatch(
@@ -60,11 +61,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                     address={addressForTransaction}
                 /> */}
                 <GasFees
-                    sender={accountForTransaction?.address}
+                    sender={addressForTransaction}
                     transaction={transaction}
                 />
                 <TransactionDetails
-                    sender={accountForTransaction?.address}
+                    sender={addressForTransaction}
                     transaction={transaction}
                 />
             </section>
