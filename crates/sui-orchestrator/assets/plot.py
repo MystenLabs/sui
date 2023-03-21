@@ -135,7 +135,7 @@ class Plotter:
         elif plot_type == PlotType.SCALABILITY:
             return ('Committee size', 'Throughput (tx/s)')
         elif plot_type in [PlotType.INSPECT_TPS, PlotType.DURATION_TPS]:
-            return ('Duration (s)', 'Effect certificates')
+            return ('Duration (s)', 'Throughput (tx/s)')
         elif plot_type in [PlotType.INSPECT_LATENCY, PlotType.DURATION_LATENCY]:
             return ('Duration (s)', 'Latency (s)')
         else:
@@ -319,7 +319,6 @@ class Plotter:
 
                 tps = (count / duration) if duration != 0 else 0
                 avg_latency = total / count if count != 0 else 0
-                tps = count
 
                 x_values += [duration]
                 y_tps_values += [tps]
