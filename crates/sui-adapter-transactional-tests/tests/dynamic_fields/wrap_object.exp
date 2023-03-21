@@ -42,9 +42,8 @@ Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(118)}}
 
 task 10 'run'. lines 61-61:
-Error: Object 0xeee3950b4520d1b95dc25fd3bc0c50aa118d10369eec4a2d60476da5c1309f66 is owned by object 0x7ac9fc785d7ee8edae992ef836b7a02a7d2d132bc5756a7948f6fef0ca5f3203. Objects owned by other objects cannot be used as input arguments.
+written: object(117), object(118), object(120)
+deleted: object(119)
 
 task 11 'view-object'. lines 63-63:
-Owner: Object ID: ( fake(117) )
-Version: 2
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(118)}}
+No object at id 119
