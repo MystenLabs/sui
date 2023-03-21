@@ -368,10 +368,10 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_system_injection::set_override(sui_framework(to));
+        sui_system_injection::set_override(sui_system_modules(to));
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
-            .with_objects([sui_framework_object(from)])
+            .with_objects([sui_system_package_object(from)])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -462,10 +462,10 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        sui_system_injection::set_override(sui_framework("compatible"));
+        sui_system_injection::set_override(sui_system_modules("compatible"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
-            .with_objects([sui_framework_object("base")])
+            .with_objects([sui_system_package_object("base")])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, START,
             ))
@@ -498,9 +498,9 @@ mod sim_only_tests {
         sui_system_injection::set_override_cb(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
-                Some(sui_framework("base"))
+                Some(sui_system_modules("base"))
             } else {
-                Some(sui_framework("compatible"))
+                Some(sui_system_modules("compatible"))
             }
         }));
 
@@ -546,7 +546,7 @@ mod sim_only_tests {
         let second = validators.next().unwrap().name();
         sui_system_injection::set_override_cb(Box::new(move |name| {
             if name == first || name == second {
-                Some(sui_framework("compatible"))
+                Some(sui_system_modules("compatible"))
             } else {
                 None
             }
@@ -582,7 +582,7 @@ mod sim_only_tests {
 
     /// Get compiled modules for Sui Framework, built from fixture `fixture` in the
     /// `framework_upgrades` directory.
-    fn sui_framework(fixture: &str) -> Vec<CompiledModule> {
+    fn sui_system_modules(fixture: &str) -> Vec<CompiledModule> {
         let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         package.extend(["tests", "framework_upgrades", fixture]);
 
@@ -590,13 +590,13 @@ mod sim_only_tests {
         config.run_bytecode_verifier = true;
 
         let pkg = config.build(package).unwrap();
-        pkg.get_system_modules().cloned().collect()
+        pkg.get_sui_system_modules().cloned().collect()
     }
 
     /// Like `sui_framework`, but package the modules in an `Object`.
-    fn sui_framework_object(fixture: &str) -> Object {
+    fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
-            sui_framework(fixture),
+            sui_system_modules(fixture),
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,

@@ -1981,7 +1981,7 @@ impl AuthorityState {
         self.database.get_object(object_id)
     }
 
-    pub async fn get_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
+    pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
             .get_object(&SUI_SYSTEM_ADDRESS.into())
             .await?

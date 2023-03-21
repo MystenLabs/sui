@@ -1419,7 +1419,7 @@ async fn test_transfer_package() {
         .unwrap()
         .unwrap();
     let package_object_ref = authority_state
-        .get_system_package_object_ref()
+        .get_sui_system_package_object_ref()
         .await
         .unwrap();
     // We are trying to transfer the genesis package object, which is immutable.

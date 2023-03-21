@@ -129,7 +129,7 @@ pub fn make_system_packages() -> Vec<MovePackage> {
     vec![
         MoveStdlib::as_package(),
         SuiFramework::as_package(),
-        SuiFramework::as_package(),
+        SuiSystem::as_package(),
     ]
 }
 

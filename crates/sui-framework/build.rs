@@ -115,8 +115,8 @@ fn build_packages_with_move_config(
     .build(sui_framework_path)
     .unwrap();
 
-    let sui_system = system_pkg.get_system_modules();
-    let sui_framework = framework_pkg.get_framework_modules();
+    let sui_system = system_pkg.get_sui_system_modules();
+    let sui_framework = framework_pkg.get_sui_framework_modules();
     let move_stdlib = framework_pkg.get_stdlib_modules();
 
     serialize_modules_to_file(sui_system, &out_dir.join(system_dir)).unwrap();

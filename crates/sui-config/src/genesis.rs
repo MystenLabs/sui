@@ -877,6 +877,7 @@ fn create_genesis_context(
     token_distribution_schedule: &TokenDistributionSchedule,
     move_framework: Vec<Vec<u8>>,
     sui_framework: Vec<Vec<u8>>,
+    sui_system_package: Vec<Vec<u8>>,
 ) -> TxContext {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
@@ -885,6 +886,7 @@ fn create_genesis_context(
     hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
     hasher.update(&bcs::to_bytes(&move_framework).unwrap());
     hasher.update(&bcs::to_bytes(&sui_framework).unwrap());
+    hasher.update(&bcs::to_bytes(&sui_system_package).unwrap());
 
     let hash = hasher.finalize();
     let genesis_transaction_digest = TransactionDigest::new(hash.into());
@@ -927,6 +929,7 @@ fn build_unsigned_genesis_data(
         token_distribution_schedule,
         MoveStdlib::as_bytes(),
         SuiFramework::as_bytes(),
+        SuiSystem::as_bytes(),
     );
 
     // Get Move and Sui Framework
