@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import ExternalLink from '_components/external-link';
+import { Link } from '../../shared/Link';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
@@ -52,31 +52,38 @@ export function ConnectLedgerModal({
                             Connect your ledger to your computer, unlock it, and
                             launch the Sui app. Click Continue when done.
                         </Text>
-                        <div className="mt-2">
+                        <div className="flex items-center justify-center mt-2">
                             <Text
                                 variant="p2"
                                 color="steel-dark"
                                 weight="normal"
                             >
-                                <span>Need more help?</span>{' '}
-                                {/* TODO: Replace this link with the correct URL once the tutorial is ready */}
-                                <ExternalLink
-                                    href="https://mystenlabs.com"
-                                    className="text-hero-dark"
-                                    showIcon={false}
-                                >
-                                    View tutorial.
-                                </ExternalLink>
+                                Need more help?&nbsp;
                             </Text>
+                            {/* TODO: Replace this link with the correct URL once the tutorial is ready */}
+                            <span>
+                                <Link
+                                    underline="hover"
+                                    href="https://mystenlabs.com"
+                                    text="View tutorial."
+                                    color="heroDark"
+                                />
+                            </span>
                         </div>
                     </div>
                 </div>
             }
             footer={
                 <div className="w-full flex flex-row self-center gap-3">
-                    <Button variant="outline" text="Cancel" onClick={onClose} />
                     <Button
                         variant="outline"
+                        size="tall"
+                        text="Cancel"
+                        onClick={onClose}
+                    />
+                    <Button
+                        variant="outline"
+                        size="tall"
                         text="Continue"
                         onClick={onContinueClick}
                         loading={isConnectingToLedger}
