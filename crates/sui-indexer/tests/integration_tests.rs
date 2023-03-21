@@ -67,17 +67,12 @@ pub mod pg_integration_test {
         Ok(gas_objects)
     }
 
-    async fn sign_and_transfer_object(
+    async fn sign_and_execute_transaction(
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
-        sender: &SuiAddress,
-        recipient: &SuiAddress,
-        object_id: ObjectID,
-        gas: Option<ObjectID>,
+        transaction_bytes: TransactionBytes,
+        sender: &SuiAddress
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
-        let transaction_bytes: TransactionBytes = indexer_rpc_client
-            .transfer_object(*sender, object_id, gas, 2000, *recipient)
-            .await?;
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         let tx =
@@ -92,6 +87,27 @@ pub mod pg_integration_test {
             )
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(tx_response)
+    }
+
+    async fn sign_and_transfer_object(
+        test_cluster: &TestCluster,
+        indexer_rpc_client: &HttpClient,
+        sender: &SuiAddress,
+        recipient: &SuiAddress,
+        object_id: ObjectID,
+        gas: Option<ObjectID>,
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
+        let transaction_bytes: TransactionBytes = indexer_rpc_client
+            .transfer_object(*sender, object_id, gas, 2000, *recipient)
+            .await?;
+        let tx_response = sign_and_execute_transaction(
+            test_cluster,
+            indexer_rpc_client,
+            transaction_bytes,
+            sender
+        )
+            .await?;
         Ok(tx_response)
     }
 
@@ -136,8 +152,7 @@ pub mod pg_integration_test {
             *gas_objects.first().unwrap(),
             Some(*gas_objects.last().unwrap()),
         )
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
+        .await?;
 
         Ok((tx_response, *sender, *recipient, gas_objects))
     }
@@ -572,7 +587,10 @@ pub mod pg_integration_test {
             assert_eq!(data.object_id, initial_full_obj_data.object_id);
         }
 
+        // indexer_rpc_client
+            // .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
         // deleted(SuiObjectRef);
+        // we can try this with merging coins maybe
 
         // not exists
         let object_id = ObjectID::from([42; 32]);
