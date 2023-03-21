@@ -11,19 +11,20 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as tick
 from glob import glob
 from itertools import cycle
-from defaultlist import defaultlist
 
 # A simple python script to plot measurements results. This script requires
 # the following dependencies: `pip install matplotlib defaultlist`.
 
 
 def aggregate_tps(measurement, i=-1):
-    tps = []
     max_duration = 0
     for data in measurement['scrapers'].values():
-        count = float(data[i]['count'])
         duration = float(data[i]['timestamp']['secs'])
         max_duration = max(duration, max_duration)
+
+    tps = []
+    for data in measurement['scrapers'].values():
+        count = float(data[i]['count'])
         tps += [(count / max_duration) if max_duration != 0 else 0]
     return sum(tps)
 
@@ -134,7 +135,7 @@ class Plotter:
         elif plot_type == PlotType.SCALABILITY:
             return ('Committee size', 'Throughput (tx/s)')
         elif plot_type in [PlotType.INSPECT_TPS, PlotType.DURATION_TPS]:
-            return ('Duration (s)', 'Throughput (tx/s)')
+            return ('Duration (s)', 'Effect certificates')
         elif plot_type in [PlotType.INSPECT_LATENCY, PlotType.DURATION_LATENCY]:
             return ('Duration (s)', 'Latency (s)')
         else:
@@ -318,6 +319,7 @@ class Plotter:
 
                 tps = (count / duration) if duration != 0 else 0
                 avg_latency = total / count if count != 0 else 0
+                tps = count
 
                 x_values += [duration]
                 y_tps_values += [tps]
@@ -356,7 +358,7 @@ class Plotter:
                 tps = (count / duration) if duration != 0 else 0
                 avg_latency = total / count if count != 0 else 0
 
-                if duration <= total_duration:
+                if duration < total_duration:
                     i = int(duration / precision)
                     all_y_tps_values[i] += [tps]
                     all_y_lat_values[i] += [avg_latency]
