@@ -534,21 +534,26 @@ impl Proposer {
                             self.last_parents.clear();
                             self.last_parents.append(&mut self.pending_parents);
                         }
-                        advance = self.ready();
+
+                        // Reschedule the timer.
+                        let timer_start = Instant::now();
+                        max_delay_timer
+                            .as_mut()
+                            .reset(timer_start + self.max_delay());
+                        min_delay_timer
+                            .as_mut()
+                            .reset(timer_start + self.min_delay());
+
                         let _ = self.tx_narwhal_round_updates.send(self.round);
                         self.metrics.current_round.set(self.round as i64);
                         debug!("Dag moved to round {}", self.round);
+
+                        if !self.last_parents.is_empty() {
+                            advance = self.ready();
+                            continue;
+                        }
                     }
                 }
-
-                // Reschedule the timer.
-                let timer_start = Instant::now();
-                max_delay_timer
-                    .as_mut()
-                    .reset(timer_start + self.max_delay());
-                min_delay_timer
-                    .as_mut()
-                    .reset(timer_start + self.min_delay());
             }
 
             tokio::select! {
@@ -630,7 +635,7 @@ impl Proposer {
                     }
                 },
 
-                Some((parents, round, epoch)) = self.rx_parents.recv() => {
+                Some((mut parents, round, epoch)) = self.rx_parents.recv() => {
                     // Should not happen.
                     if epoch != self.committee.epoch() {
                         continue;
@@ -650,9 +655,10 @@ impl Proposer {
                                 // We accept round bigger than our current round to jump ahead in case we were
                                 // late (or just joined the network).
                                 self.round = round;
-                                let _ = self.tx_narwhal_round_updates.send(self.round);
+                                parents = self.certificate_store.read_round(round).unwrap();
                                 self.last_parents = parents;
                                 self.pending_parents.clear();
+                                let _ = self.tx_narwhal_round_updates.send(self.round);
 
                                 // we re-calculate the timeout to give the opportunity to the node
                                 // to propose earlier if it's a leader for the round
@@ -666,12 +672,14 @@ impl Proposer {
                                     .reset(timer_start + self.min_delay());
                             } else {
                                 if self.pending_parents.is_empty() {
+                                    parents = self.certificate_store.read_round(round).unwrap();
                                     self.pending_parents = parents;
                                 } else {
                                     let pending_round = self.pending_parents.first().as_ref().unwrap().round();
                                     let parent_round = parents.first().as_ref().unwrap().round();
                                     match pending_round.cmp(&parent_round) {
-                                        Ordering::Less => self.pending_parents = parents,
+                                        Ordering::Less => {
+                                            parents = self.certificate_store.read_round(round).unwrap();self.pending_parents = parents;},
                                         Ordering::Equal => self.pending_parents.extend(parents),
                                         Ordering::Greater => {},
                                     };

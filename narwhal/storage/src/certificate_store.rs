@@ -310,6 +310,48 @@ impl CertificateStore {
         batch.write()
     }
 
+    /// Retrieves all the certificates at the provided round.
+    pub fn read_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
+        // Skip to a row at or before the requested round.
+        // TODO: Add a more efficient seek method to typed store.
+        let mut iter = self.certificate_id_by_round.iter();
+        if round > 0 {
+            iter = iter.skip_to(&(
+                round - 1,
+                PublicKeyBytes::from(&PublicKey::insecure_default()),
+            ))?;
+        }
+
+        let mut digests = Vec::new();
+        for ((r, _), d) in iter {
+            match r.cmp(&round) {
+                Ordering::Equal => {
+                    digests.push(d);
+                }
+                Ordering::Less => {
+                    continue;
+                }
+                Ordering::Greater => {
+                    break;
+                }
+            }
+        }
+
+        // Fetch all those certificates from main storage, return an error if any one is missing.
+        self.certificates_by_id
+            .multi_get(digests.clone())?
+            .into_iter()
+            .map(|opt_cert| {
+                opt_cert.ok_or_else(|| {
+                    RocksDBError(format!(
+                        "Certificate with some digests not found, CertificateStore invariant violation: {:?}",
+                        digests
+                    ))
+                })
+            })
+            .collect()
+    }
+
     /// Retrieves all the certificates with round >= the provided round.
     /// The result is returned with certificates sorted in round asc order
     pub fn after_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
