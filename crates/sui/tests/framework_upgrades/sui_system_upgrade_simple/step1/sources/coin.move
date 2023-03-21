@@ -350,7 +350,7 @@ module sui::coin {
     public entry fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(mint(c, amount, ctx), recipient)
+        transfer::public_transfer(mint(c, amount, ctx), recipient)
     }
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
@@ -430,5 +430,13 @@ module sui::coin {
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
         Coin { id: object::new(ctx), balance: balance::create_for_testing(value) }
+    }
+
+    #[test_only]
+    /// Burn coins of any type for testing purposes only
+    public fun burn_for_testing<T>(coin: Coin<T>): u64 {
+        let Coin { id, balance } = coin;
+        object::delete(id);
+        balance::destroy_for_testing(balance)
     }
 }

@@ -2,61 +2,58 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::stake_subsidy {
-    use sui::balance::{Self, Balance};
-    use sui::math;
+    use sui::balance::Balance;
     use sui::sui::SUI;
+    use sui::bag::Bag;
+    use sui::bag;
+    use sui::tx_context::TxContext;
 
     friend sui::sui_system_state_inner;
 
     struct StakeSubsidy has store {
-        /// This counter may be different from the current epoch number if
-        /// in some epochs we decide to skip the subsidy.
-        epoch_counter: u64,
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
         balance: Balance<SUI>,
-        /// The amount of stake subsidy to be drawn down per epoch.
+
+        /// Count of the number of times stake subsidies have been distributed.
+        distribution_counter: u64,
+
+        /// The amount of stake subsidy to be drawn down per distribution.
         /// This amount decays and decreases over time.
-        current_epoch_amount: u64,
+        current_distribution_amount: u64,
+
+        /// Number of distributions to occur before the distribution amount decays.
+        stake_subsidy_period_length: u64,
+
+        /// The rate at which the distribution amount decays at the end of each
+        /// period. Expressed in basis points.
+        stake_subsidy_decrease_rate: u16,
+
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
-    // Placeholder numbers.
-    const STAKE_SUBSIDY_DECREASE_RATE: u128 = 1000; // in basis point
-    const STAKE_SUBSIDY_PERIOD_LENGTH: u64 = 10; // in number of epochs
+    public(friend) fun create(
+        balance: Balance<SUI>,
+        initial_stake_subsidy_amount: u64,
+        stake_subsidy_period_length: u64,
+        stake_subsidy_decrease_rate: u16,
+        ctx: &mut TxContext,
+    ): StakeSubsidy {
+        // Rate can't be higher than 100%.
+        assert!(
+            stake_subsidy_decrease_rate <= (BASIS_POINT_DENOMINATOR as u16),
+            0,
+        );
 
-    public(friend) fun create(balance: Balance<SUI>, initial_stake_subsidy_amount: u64): StakeSubsidy {
         StakeSubsidy {
-            epoch_counter: 0,
             balance,
-            current_epoch_amount: initial_stake_subsidy_amount,
+            distribution_counter: 0,
+            current_distribution_amount: initial_stake_subsidy_amount,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
+            extra_fields: bag::new(ctx),
         }
-    }
-
-    /// Advance the epoch counter and draw down the subsidy for the epoch.
-    public(friend) fun advance_epoch(subsidy: &mut StakeSubsidy): Balance<SUI> {
-        // Take the minimum of the reward amount and the remaining balance in
-        // order to ensure we don't overdraft the remaining stake subsidy
-        // balance
-        let to_withdraw = math::min(subsidy.current_epoch_amount, balance::value(&subsidy.balance));
-
-        // Drawn down the subsidy for this epoch.
-        let stake_subsidy = balance::split(&mut subsidy.balance, to_withdraw);
-
-        subsidy.epoch_counter = subsidy.epoch_counter + 1;
-
-        // Decrease the subsidy amount only when the current period ends.
-        if (subsidy.epoch_counter % STAKE_SUBSIDY_PERIOD_LENGTH == 0) {
-            let decrease_amount = (subsidy.current_epoch_amount as u128)
-                * STAKE_SUBSIDY_DECREASE_RATE / BASIS_POINT_DENOMINATOR;
-            subsidy.current_epoch_amount = subsidy.current_epoch_amount - (decrease_amount as u64)
-        };
-
-        stake_subsidy
-    }
-
-    /// Returns the amount of stake subsidy to be added at the end of the current epoch.
-    public fun current_epoch_subsidy_amount(subsidy: &StakeSubsidy): u64 {
-        subsidy.current_epoch_amount
     }
 }

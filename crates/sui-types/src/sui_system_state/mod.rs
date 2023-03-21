@@ -12,10 +12,10 @@ use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_O
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
-#[cfg(msim)]
-use msim_sui_system_state_inner_v2::v2::SimTestSuiSystemStateInnerV2;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+#[cfg(msim)]
+use simtest_sui_system_state_inner::v2::SimTestSuiSystemStateInnerV2;
 use std::fmt;
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorV1};
@@ -26,7 +26,7 @@ pub mod sui_system_state_inner_v1;
 pub mod sui_system_state_summary;
 
 #[cfg(msim)]
-pub mod msim_sui_system_state_inner_v2;
+pub mod simtest_sui_system_state_inner;
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 

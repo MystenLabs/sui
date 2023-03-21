@@ -515,7 +515,6 @@ This function will be called only once in genesis.
     ctx: &<b>mut</b> TxContext,
 ): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators, ctx);
-    <b>let</b> reference_gas_price = <a href="validator_set.md#0x2_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
     <b>let</b> system_state = <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
         epoch: 0,
         protocol_version,
@@ -527,7 +526,7 @@ This function will be called only once in genesis.
             epoch_duration_ms,
             extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
         },
-        reference_gas_price,
+        reference_gas_price: 1,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
         <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(
             stake_subsidy_fund,

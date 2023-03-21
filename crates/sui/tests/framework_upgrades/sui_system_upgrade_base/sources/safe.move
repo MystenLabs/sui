@@ -6,7 +6,7 @@
 module sui::safe {
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{TxContext, sender};
-    use sui::transfer::Self;
+    use sui::transfer;
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::vec_set::{Self, VecSet};
@@ -105,13 +105,13 @@ module sui::safe {
     public entry fun create<T>(coin: Coin<T>, ctx: &mut TxContext) {
         let balance = coin::into_balance(coin);
         let cap = create_<T>(balance, ctx);
-        transfer::transfer(cap, sender(ctx));
+        transfer::public_transfer(cap, sender(ctx));
     }
 
     public entry fun create_empty<T>(ctx: &mut TxContext) {
         let empty_balance = balance::zero<T>();
         let cap = create_(empty_balance, ctx);
-        transfer::transfer(cap, sender(ctx));
+        transfer::public_transfer(cap, sender(ctx));
     }
 
     /// Deposit funds to the safe
@@ -136,7 +136,7 @@ module sui::safe {
     public entry fun withdraw<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, withdraw_amount: u64, ctx: &mut TxContext) {
         let balance = withdraw_(safe, capability, withdraw_amount);
         let coin = coin::from_balance(balance, ctx);
-        transfer::transfer(coin, sender(ctx));
+        transfer::public_transfer(coin, sender(ctx));
     }
 
     /// Withdraw coins from the safe as a `TransferCapability` holder.

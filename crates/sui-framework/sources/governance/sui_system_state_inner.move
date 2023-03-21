@@ -160,7 +160,6 @@ module sui::sui_system_state_inner {
         ctx: &mut TxContext,
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
-        let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let system_state = SuiSystemStateInner {
             epoch: 0,
             protocol_version,
@@ -172,7 +171,7 @@ module sui::sui_system_state_inner {
                 epoch_duration_ms,
                 extra_fields: bag::new(ctx),
             },
-            reference_gas_price,
+            reference_gas_price: 1,
             validator_report_records: vec_map::empty(),
             stake_subsidy: stake_subsidy::create(
                 stake_subsidy_fund,

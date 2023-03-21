@@ -10,7 +10,6 @@ module sui::object {
     friend sui::clock;
     friend sui::dynamic_field;
     friend sui::dynamic_object_field;
-    friend sui::sui_system;
     friend sui::transfer;
 
     #[test_only]
@@ -21,6 +20,9 @@ module sui::object {
 
     /// The hardcoded ID for the singleton Clock Object.
     const SUI_CLOCK_OBJECT_ID: address = @0x6;
+
+    /// Sender is not @0x0 the system address.
+    const ENotSystemAddress: u64 = 0;
 
     /// An object ID. This is used to reference Sui Objects.
     /// This is *not* guaranteed to be globally unique--anyone can create an `ID` from a `UID` or
@@ -48,12 +50,6 @@ module sui::object {
 
     // === id ===
 
-    /// Create an `ID`. Not to be mistaken for `object::new` which
-    /// generates a new UID.
-    public fun new_id(ctx: &mut TxContext): ID {
-        ID { bytes: tx_context::new_object(ctx) }
-    }
-
     /// Get the raw bytes of a `ID`
     public fun id_to_bytes(id: &ID): vector<u8> {
         bcs::to_bytes(&id.bytes)
@@ -78,7 +74,8 @@ module sui::object {
 
     /// Create the `UID` for the singleton `SuiSystemState` object.
     /// This should only be called once from `sui_system`.
-    public(friend) fun sui_system_state(): UID {
+    fun sui_system_state(ctx: &TxContext): UID {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         UID {
             id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
         }
@@ -118,7 +115,7 @@ module sui::object {
     /// This is the only way to create `UID`s.
     public fun new(ctx: &mut TxContext): UID {
         UID {
-            id: ID { bytes: tx_context::new_object(ctx) },
+            id: ID { bytes: tx_context::fresh_object_address(ctx) },
         }
     }
 
