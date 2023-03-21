@@ -46,7 +46,7 @@ transfers.forEach((transfer) => {
 });
 ```
 
-Once you have the transaction defined, you can directly execute it with a signer using `signAndExecuteTransaction`.
+After you have the transaction defined, you can directly execute it with a signer using `signAndExecuteTransaction`.
 
 ```tsx
 signer.signAndExecuteTransaction({ transaction: tx });
@@ -108,9 +108,9 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
 
 ## Use the gas coin
 
-With Programmable Transactions, you’re able to use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. The gas coin in a transaction can be accessed using `tx.gas`, and is valid as input for any arguments.
+With Programmable Transactions, you’re able to use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a transaction, and is valid as input for any arguments.
 
-The gas coin can also be transferred using `transferObjects`, in the event that you wish to transfer all of your coin balance to another address.
+You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer all of your coin balance to another address.
 
 ## Get Transaction Bytes
 
@@ -137,7 +137,7 @@ const tx = Transaction.from(bytes);
 
 ## Building Offline
 
-In the event that you wish to build a transaction offline (i.e. with no `provider` required), you’ll need to fully-define all of your input values, and gas configuration (see below). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
+In the event that you want to build a transaction offline (i.e. with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```tsx
 import { Inputs } from '@mysten/sui.js';
