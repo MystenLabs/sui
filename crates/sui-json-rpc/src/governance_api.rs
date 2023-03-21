@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -101,7 +102,6 @@ impl GovernanceReadApi {
 
             let mut delegations = vec![];
             for stake in stakes {
-                // delegation will be active in next epoch
                 let status = if system_state.epoch >= stake.activation_epoch() {
                     let estimated_reward = if let (Some(rate_table), Some(current_rate)) =
                         (&rate_table, &current_rate)
@@ -112,11 +112,7 @@ impl GovernanceReadApi {
                             .unwrap_or_default();
                         let estimated_reward = ((stake_rate.rate() / current_rate.rate()) - 1.0)
                             * stake.principal() as f64;
-                        if estimated_reward < 0.0 {
-                            0
-                        } else {
-                            estimated_reward.round() as u64
-                        }
+                        max(0, estimated_reward.round() as u64)
                     } else {
                         0
                     };
