@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crypto::AggregateSignature;
+use fastcrypto::traits::ToFromBytes;
 use serde::{
     de::{Deserializer, Error},
     ser::{Error as SerError, Serializer},
@@ -51,5 +53,26 @@ impl<'de> DeserializeAs<'de, roaring::RoaringBitmap> for NarwhalBitmap {
     {
         let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
         roaring::RoaringBitmap::deserialize_from(&bytes[..]).map_err(to_custom_error::<'de, D, _>)
+    }
+}
+
+pub struct UncompressedAggregateSignature;
+
+impl SerializeAs<AggregateSignature> for UncompressedAggregateSignature {
+    fn serialize_as<S>(source: &AggregateSignature, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Bytes::serialize_as(&source.sig.serialize(), serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, AggregateSignature> for UncompressedAggregateSignature {
+    fn deserialize_as<D>(deserializer: D) -> Result<AggregateSignature, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bytes: Vec<u8> = Bytes::deserialize_as(deserializer)?;
+        AggregateSignature::from_bytes(&bytes).map_err(to_custom_error::<'de, D, _>)
     }
 }

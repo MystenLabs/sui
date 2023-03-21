@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{DagError, DagResult},
-    serde::NarwhalBitmap,
+    serde::{NarwhalBitmap, UncompressedAggregateSignature},
     CertificateDigestProto,
 };
 use bytes::Bytes;
@@ -499,6 +499,7 @@ impl PartialEq for Vote {
 #[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
 pub struct Certificate {
     pub header: Header,
+    #[serde_as(as = "UncompressedAggregateSignature")]
     aggregated_signature: AggregateSignature,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,

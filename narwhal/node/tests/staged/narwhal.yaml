@@ -15,10 +15,7 @@ Certificate:
   STRUCT:
     - header:
         TYPENAME: Header
-    - aggregated_signature:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
+    - aggregated_signature: BYTES
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
