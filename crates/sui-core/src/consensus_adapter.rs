@@ -53,14 +53,6 @@ use tracing::{debug, info, warn};
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
-// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
-// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
-pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
-
-// Assuming 100 nodes cluster
-const MAX_PENDING_LOCAL_SUBMISSIONS: usize =
-    (MAX_PENDING_CONSENSUS_TRANSACTIONS as usize) / 100 * 2;
-
 const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
     600.,
@@ -199,6 +191,8 @@ pub struct ConsensusAdapter {
     consensus_client: Box<dyn SubmitToConsensus>,
     /// Authority pubkey.
     authority: AuthorityName,
+    /// The limit to number of inflight transactions at this node.
+    max_pending_transactions: usize,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
@@ -236,6 +230,8 @@ impl ConsensusAdapter {
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+        max_pending_transactions: usize,
+        max_pending_local_submissions: usize,
         metrics: ConsensusAdapterMetrics,
     ) -> Self {
         let num_inflight_transactions = Default::default();
@@ -244,11 +240,12 @@ impl ConsensusAdapter {
         Self {
             consensus_client,
             authority,
+            max_pending_transactions,
             num_inflight_transactions,
             connection_monitor_status,
             low_scoring_authorities,
             metrics,
-            submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
+            submit_semaphore: Semaphore::new(max_pending_local_submissions),
             latency_observer: LatencyObserver::new(),
         }
     }
@@ -435,8 +432,8 @@ impl ConsensusAdapter {
     /// discard transactions if we are overloaded
     pub fn check_limits(&self) -> bool {
         // First check total transactions (waiting and in submission)
-        if self.num_inflight_transactions.load(Ordering::Relaxed)
-            > MAX_PENDING_CONSENSUS_TRANSACTIONS
+        if self.num_inflight_transactions.load(Ordering::Relaxed) as usize
+            > self.max_pending_transactions
         {
             return false;
         }
