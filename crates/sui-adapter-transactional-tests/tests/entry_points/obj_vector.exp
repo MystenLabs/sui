@@ -27,7 +27,7 @@ created: object(113), object(114)
 written: object(111), object(112)
 
 task 7 'run'. lines 132-136:
-Error: Object 0x643e4088c9f71f7637e1a3084ad0d4d8b2556f97e448c252b4da755dc5caf220 is owned by object 0x8a45165b87d2b63f05ca24326c378a858f946d7ff998168ab4d2b4e07ad44880. Objects owned by other objects cannot be used as input arguments.
+Error: Object 0x0be5d3a293145df4df78c1cc27d178316dcd339aae3659323edd58c2a61a0f2d is owned by object 0x8d88d7530876e57868adad601d3784ce8f7cf6c243a089229252fb84aa38ccc0. Objects owned by other objects cannot be used as input arguments.
 
 task 8 'run'. lines 138-138:
 created: object(117)
