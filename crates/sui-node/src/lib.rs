@@ -777,7 +777,7 @@ impl SuiNode {
             authority,
             Box::new(connection_monitor_status),
             consensus_config.max_pending_transactions(),
-            consensus_config.max_pending_transactions() * 2 / committee.num_members(),
+            consensus_config.max_pending_transactions() * 4 / committee.num_members(),
             ca_metrics,
         )
     }
