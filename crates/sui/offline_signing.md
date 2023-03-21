@@ -20,15 +20,17 @@ Raw tx_bytes to execute: $TX_BYTES
 ## Step 2: Sign the data
 This can be done elsewhere in your signing device or implemented in languages of your choice. Sui accepts signatures for pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1 and native multisig ([Read more](https://github.com/MystenLabs/sui/blob/d0aceaea613b33fc969f7ca2cdd84b8a35e87de3/crates/sui/multisig.md)).
 
-An accepted ECDSA Secp256k1 andd Secp256r1 signature follows:
-1. The signature must be committed to the SHA256 [SHA-2](https://en.wikipedia.org/wiki/SHA-2) hash of the transaction data. We use SHA256 because it is supported by [Apple](https://developer.apple.com/forums/thread/89619), HSMs, and [cloud](https://developer.apple.com/forums/thread/89619), and it is widely adopted by [Bitcoin](https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm).
+Before passing in to the signing API, the transaction data must be first hashed with Blake2b to 32-bytes. Depending on the signing scheme, an additional hashing is performed internally to the signing API. For ECDSA Secp256k1 and Secp256r1, SHA-2 SHA256 must be used as the internal hash function; for pure Ed25519, SHA-512 must be used. See below for additional signature requirements:
+
+An accepted ECDSA Secp256k1 and Secp256r1 signature must follow:
+1. The internal hash used by ECDSA must be SHA256 [SHA-2](https://en.wikipedia.org/wiki/SHA-2) hash of the transaction data. We use SHA256 because it is supported by [Apple](https://developer.apple.com/forums/thread/89619), HSMs, and [cloud](https://developer.apple.com/forums/thread/89619), and it is widely adopted by [Bitcoin](https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm).
 2. The signature must be of length 64 bytes in the form of `[r, s]` where the first 32 bytes are `r`, the second 32 bytes are `s`.
 3. The `r` value can be between 0x1 and 0xFFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364140 (inclusive).
 4. The `s` value must be in the lower half of the curve order, i.e. between 0x1 and 0x7FFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF 5D576E73 57A4501D DFE92F46 681B20A0 (inclusive). If the signature is not guranteed to have `s` in the lower range by the signing function, please convert it to a lower `s` according to [this guide](https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures).
 5. Ideally, the signature must be generated with deterministic nonce according to [RFC6979](https://www.rfc-editor.org/rfc/rfc6979).
 
 An accepted pure Ed25519 signature follows:
-1. The signature must be produced according to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html#section-5.1.6).
+1. The signature must be produced according to [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html#section-5.1.6). The internal hash used is SHA-512.
 2. The signature must be valid according to [ZIP215](https://github.com/zcash/zips/blob/main/zip-0215.rst).
 
 Here we use the keytool command to sign as an example, using the Ed25519 key corresponding to the provided address stored in `sui.keystore`. This commands outputs the signature, the public key and the flag encoded in Base64. This command is backed by [fastcrypto](https://crates.io/crates/fastcrypto).
@@ -39,12 +41,14 @@ target/debug/sui keytool sign --address 0xb59ce11ef3ad15b6c247dda9890dce1b781f99
 Signer address: 0xa5f022cce499749a54ba59bf377cdaea369e7457
 Raw tx_bytes to execute: $TX_BYTES
 Intent: Intent { scope: TransactionData, version: V0, app_id: Sui }
-Intent message to sign: "AAAAAAMYPuVHP/7PyVnQxUemGYuU48LJcQBnglR8A4kz7KFUQOOUum3/eljiCBUxwn6yBVIxn5CDBNkN0CJf0fI/AgAAAAAAAAAgytK3HSb0y/qcT5VC23nt187atosf3Te8NEJ2tNGQ11sBAAAAAAAAABAnAAAAAAAA"
+Raw intent message: "AAAAAAMYPuVHP/7PyVnQxUemGYuU48LJcQBnglR8A4kz7KFUQOOUum3/eljiCBUxwn6yBVIxn5CDBNkN0CJf0fI/AgAAAAAAAAAgytK3HSb0y/qcT5VC23nt187atosf3Te8NEJ2tNGQ11sBAAAAAAAAABAnAAAAAAAA"
+Digest to sign: "VMVv+/L/EG7/yhEbCQ1qiSt30JXV8yIm+4xO6yTkqeM="
 Serialized signature (`flag || sig || pk` in Base64): $SERIALIZED_SIG
 ```
 
-To verify a signature against the cryptography library backing Sui when debugging, see [sigs-cli](https://github.com/MystenLabs/fastcrypto/blob/4cf71bd8b3a373495beeb77ce81c27827516c218/fastcrypto-cli/src/sigs_cli.rs).
+To ensure the signature produced offline matches with Sui's validity rules for testing purpose, you can import the mnemonics to sui.keystore using `sui keytool import` and then sign with `sui keytool sign` and compare the signature results. Additionally, test vectors can be found at `~/sui/sdk/typescript/test/e2e/raw-signer.test.ts`. 
 
+To verify a signature against the cryptography library backing Sui when debugging, see [sigs-cli](https://github.com/MystenLabs/fastcrypto/blob/4cf71bd8b3a373495beeb77ce81c27827516c218/fastcrypto-cli/src/sigs_cli.rs).
 ## Step 3: Execute the signed transaction
 
 Now that you have obtained the serialized signature, you can submit using the execution transaction command. This command takes `--tx-bytes` as the raw transaction bytes to execute (see output of `sui client serialize-transfer-sui`) and the serialized signature (Base64 encoded `flag || sig || pk`, see output of `sui keytool sign`). This executes the signed transaction and returns the certificate and transaction effects if successful.
