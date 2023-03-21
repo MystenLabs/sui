@@ -16,7 +16,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use tracing::{debug, enabled, error, info};
+use tracing::{debug, enabled, error, info, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
@@ -477,16 +477,20 @@ impl Proposer {
             // (ii) we have enough digests (header_num_of_batches_threshold) and we are on the happy path (we can vote for
             // the leader or the leader has enough votes to enable a commit). The latter condition only matters
             // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
-            let has_last_certificate = self.proposing_header.is_none();
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
             let max_delay_timed_out = max_delay_timer.is_elapsed();
             let min_delay_timed_out = min_delay_timer.is_elapsed();
+            let should_make_header = (max_delay_timed_out
+                || ((enough_digests || min_delay_timed_out) && advance))
+                && enough_parents;
+            let has_last_certificate = self.proposing_header.is_none();
 
-            if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
-                && enough_parents
-                && has_last_certificate
-            {
+            if should_make_header && !has_last_certificate {
+                warn!("Ready to make header for parent round {}, but last certificate has not bee received!", self.round);
+            }
+
+            if should_make_header && has_last_certificate {
                 if max_delay_timed_out
                     && matches!(self.network_model, NetworkModel::PartiallySynchronous)
                 {
