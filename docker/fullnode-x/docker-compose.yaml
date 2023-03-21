@@ -14,8 +14,8 @@ services:
     environment:
       - LD_PRELOAD
       - RUST_JSON_LOG="true"
-      - RUST_LOG="debug"
-#      - RUST_LOG="sui_core=debug,narwhal=info,info"
+      - RUST_LOG="info"
+      # don't use debug, it generates volumes of data.
     image: sui-node:latest
     command: /opt/sui/entry.sh
     # populate your local ./fullnode/config/ directory with fullnode.yaml and genesis.blob for the network you want to use.
@@ -37,7 +37,7 @@ services:
     volumes:
       - ./indexer:/opt/sui
     environment:
-      - RUST_LOG="sui_core=debug,narwhal=info,info"
+      - RUST_LOG="info"
       - RUST_JSON_LOG="true"
       - DATABASE_URL=postgres://postgres:admin@postgres:5432/sui_indexer_testnet
       - RPC_CLIENT_URL=http://fullnode:9000
