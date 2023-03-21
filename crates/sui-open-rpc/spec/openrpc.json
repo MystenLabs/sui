@@ -5584,20 +5584,23 @@
             "additionalProperties": false
           },
           {
-            "description": "`(&mut Coin<T>, u64)` -> `Coin<T>` It splits off some amount into a new coin",
+            "description": "`(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>` It splits off some amounts into a new coins with those amounts",
             "type": "object",
             "required": [
-              "SplitCoin"
+              "SplitCoins"
             ],
             "properties": {
-              "SplitCoin": {
+              "SplitCoins": {
                 "type": "array",
                 "items": [
                   {
                     "$ref": "#/components/schemas/SuiArgument"
                   },
                   {
-                    "$ref": "#/components/schemas/SuiArgument"
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
                   }
                 ],
                 "maxItems": 2,

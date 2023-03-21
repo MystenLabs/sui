@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tessts various invalid vector instantions for types
+// tests various invalid operations involving TransferObjects of invalid objects
 
 //# init --addresses test=0x0 --accounts A B
 

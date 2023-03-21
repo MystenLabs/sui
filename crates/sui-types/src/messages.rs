@@ -360,9 +360,9 @@ pub enum Command {
     /// (public transfer) and either the previous owner must be an address or the object must
     /// be newly created.
     TransferObjects(Vec<Argument>, Argument),
-    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
-    /// It splits off some amount into a new coin
-    SplitCoin(Argument, Argument),
+    /// `(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>`
+    /// It splits off some amounts into a new coins with those amounts
+    SplitCoins(Argument, Vec<Argument>),
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
@@ -500,7 +500,7 @@ impl Command {
             }
             Command::MakeMoveVec(None, _)
             | Command::TransferObjects(_, _)
-            | Command::SplitCoin(_, _)
+            | Command::SplitCoins(_, _)
             | Command::MergeCoins(_, _) => vec![],
         }
     }
@@ -508,7 +508,9 @@ impl Command {
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => call.validity_check(config)?,
-            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) => {
+            Command::TransferObjects(args, _)
+            | Command::MergeCoins(_, args)
+            | Command::SplitCoins(_, args) => {
                 fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
@@ -555,7 +557,6 @@ impl Command {
                     }
                 );
             }
-            Command::SplitCoin(_, _) => (),
             Command::Upgrade(modules, _, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
@@ -715,7 +716,11 @@ impl Display for Command {
                 write_sep(f, objs, ",")?;
                 write!(f, "],{addr})")
             }
-            Command::SplitCoin(coin, amount) => write!(f, "SplitCoin({coin},{amount})"),
+            Command::SplitCoins(coin, amounts) => {
+                write!(f, "SplitCoins({coin}")?;
+                write_sep(f, amounts, ",")?;
+                write!(f, ")")
+            }
             Command::MergeCoins(target, coins) => {
                 write!(f, "MergeCoins({target},")?;
                 write_sep(f, coins, ",")?;

@@ -240,16 +240,39 @@ impl Operations {
                 .get(i as usize)
                 .and_then(|inner| inner.get(j as usize))
         }
-        fn split_coin(inputs: &[SuiCallArg], amount: SuiArgument) -> Option<Vec<KnownValue>> {
-            let amount: u64 = match amount {
-                SuiArgument::Input(i) => {
-                    u64::from_str(inputs[i as usize].pure()?.to_json_value().as_str()?).ok()?
+        fn split_coins(
+            inputs: &[SuiCallArg],
+            known_results: &[Vec<KnownValue>],
+            coin: SuiArgument,
+            amounts: &[SuiArgument],
+        ) -> Option<Vec<KnownValue>> {
+            match coin {
+                SuiArgument::Result(i) => {
+                    let KnownValue::GasCoin(_) = resolve_result(known_results, i, 0)?;
                 }
-                SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
-                    return None
+                SuiArgument::NestedResult(i, j) => {
+                    let KnownValue::GasCoin(_) = resolve_result(known_results, i, j)?;
                 }
+                SuiArgument::GasCoin => (),
+                // Might not be a SUI coin
+                SuiArgument::Input(_) => return None,
             };
-            Some(vec![KnownValue::GasCoin(amount)])
+            let amounts = amounts
+                .iter()
+                .map(|amount| {
+                    let value: u64 = match *amount {
+                        SuiArgument::Input(i) => {
+                            u64::from_str(inputs[i as usize].pure()?.to_json_value().as_str()?)
+                                .ok()?
+                        }
+                        SuiArgument::GasCoin
+                        | SuiArgument::Result(_)
+                        | SuiArgument::NestedResult(_, _) => return None,
+                    };
+                    Some(KnownValue::GasCoin(value))
+                })
+                .collect::<Option<_>>()?;
+            Some(amounts)
         }
         fn transfer_object(
             aggregated_recipients: &mut HashMap<SuiAddress, u64>,
@@ -299,7 +322,7 @@ impl Operations {
                     let (some_amount, validator) = match validator {
                         // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
                         // We use the position of the validator arg as a indicator of if the rosetta stake
-                        // transaction is staking the whole wallet or not, if staking whole wallet, 
+                        // transaction is staking the whole wallet or not, if staking whole wallet,
                         // we have to omit the amount value in the final operation output.
                         SuiArgument::Input(i) => (*i==1, inputs[*i as usize].pure().map(|v|v.to_sui_address()).transpose()),
                         _=> return Ok(None),
@@ -341,7 +364,9 @@ impl Operations {
         let mut stake_ids = vec![];
         for command in commands {
             let result = match command {
-                SuiCommand::SplitCoin(_, amount) => split_coin(inputs, *amount),
+                SuiCommand::SplitCoins(coin, amounts) => {
+                    split_coins(inputs, &known_results, *coin, amounts)
+                }
                 SuiCommand::TransferObjects(objs, addr) => transfer_object(
                     &mut aggregated_recipients,
                     inputs,

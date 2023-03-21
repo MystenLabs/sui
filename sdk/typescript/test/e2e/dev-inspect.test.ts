@@ -17,7 +17,7 @@ describe('Test dev inspect', () => {
 
   it('Dev inspect split + transfer', async () => {
     const tx = new Transaction();
-    const coin = tx.splitCoin(tx.gas, tx.pure(10));
+    const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
     tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
   });
