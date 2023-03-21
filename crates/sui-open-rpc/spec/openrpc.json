@@ -6822,6 +6822,13 @@
                   "v1"
                 ]
               },
+              "modifiedAtVersions": {
+                "description": "The version that every modified (mutated or deleted) object had before it was modified by this transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionEffectsModifiedAtVersions"
+                }
+              },
               "mutated": {
                 "description": "ObjectRef and owner of mutated objects, including gas object.",
                 "type": "array",
@@ -6876,6 +6883,21 @@
             }
           }
         ]
+      },
+      "TransactionEffectsModifiedAtVersions": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "sequenceNumber"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "sequenceNumber": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
       },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Digest"
