@@ -26,7 +26,6 @@ const option = <T extends Struct<any, any>>(some: T) =>
 export const TransactionInput = object({
   kind: literal('Input'),
   index: integer(),
-  name: optional(string()),
   value: optional(any()),
   type: optional(union([literal('pure'), literal('object')])),
 });
