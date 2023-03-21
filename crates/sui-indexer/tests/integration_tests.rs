@@ -583,7 +583,7 @@ pub mod pg_integration_test {
         for (received, expected) in results.iter().zip(expected_results.iter()) {
             let data = received.object()?;
             assert_eq!(data, expected);
-            assert_ne!(data.version, initial_full_obj_data.version);
+            assert_eq!(data.version.value(), 2);
             assert_eq!(data.object_id, initial_full_obj_data.object_id);
         }
 
@@ -591,15 +591,16 @@ pub mod pg_integration_test {
         let gas_objects =
             get_owned_objects_for_address(&indexer_rpc_client, &test_cluster.get_address_1())
                 .await?;
-        assert_ne!(
-            *gas_objects.first().unwrap(),
-            post_transfer_full_obj_data.object_id
-        );
+        let primary_coin = gas_objects
+            .iter()
+            .find(|&id| *id != post_transfer_full_obj_data.object_id)
+            .unwrap();
+        assert_ne!(*primary_coin, post_transfer_full_obj_data.object_id);
 
         let transaction_bytes = indexer_rpc_client
             .merge_coin(
                 test_cluster.get_address_1(),
-                *gas_objects.first().unwrap(), // coin to merge into
+                *primary_coin,                         // coin to merge into
                 post_transfer_full_obj_data.object_id, // coin to merge and delete
                 None,
                 2000,
@@ -622,7 +623,7 @@ pub mod pg_integration_test {
             SuiObjectResponse::Deleted(obj) => {
                 assert_eq!(obj.object_id, post_transfer_full_obj_data.object_id);
                 assert_eq!(obj.digest, post_transfer_full_obj_data.digest);
-                assert_ne!(obj.version, post_transfer_full_obj_data.version);
+                assert_eq!(obj.version.value(), 3);
             }
             _ => {
                 panic!("Expected SuiObjectResponse::Deleted, but got {:?}", resp);
