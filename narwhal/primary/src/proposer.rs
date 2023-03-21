@@ -252,10 +252,7 @@ impl Proposer {
             let Some((round, digest)) = self.certificate_store.prev_round_and_digest(&name, this_round)? else {
                 continue;
             };
-            // TODO: pass in GC depth.
-            if round + 50 > this_round {
-                *entry = Some((round, digest));
-            }
+            *entry = Some((round, digest));
         }
 
         let header = Header::new(
@@ -571,7 +568,7 @@ impl Proposer {
                 Some((commit_round, commit_headers)) = self.rx_committed_own_headers.recv() => {
                     // Remove committed headers from the list of pending
                     let mut max_committed_round = 0;
-                    let all_headers: BTreeMap<_, _> = self.proposed_headers.iter().map(|(r, (h, _m))| (*r, h.clone())).collect();
+                    // let all_headers: BTreeMap<_, _> = self.proposed_headers.iter().map(|(r, (h, _m))| (*r, h.clone())).collect();
                     for round in &commit_headers {
                         max_committed_round = max_committed_round.max(*round);
                         let Some(_) = self.proposed_headers.remove(round) else {
@@ -602,10 +599,10 @@ impl Proposer {
 
                     if !retransmit_rounds.is_empty() {
                         let num_to_resend = digests_to_resend.len();
-                        if retransmit_rounds.iter().any(|r| r + 50 > commit_round) {
-                            panic!("After commit round {}, commit headers {:?}, resending batches from round {:?}, all headers: {:#?}",
-                                    commit_round, commit_headers, retransmit_rounds, all_headers);
-                        }
+                        // if retransmit_rounds.iter().any(|r| r + 50 > commit_round) {
+                        //     panic!("After commit round {}, commit headers {:?}, resending batches from round {:?}, all headers: {:#?}",
+                        //             commit_round, commit_headers, retransmit_rounds, all_headers);
+                        // }
                         // Since all of digests_to_resend are roughly newer than self.digests,
                         // prepend digests_to_resend to the digests for the next header.
                         digests_to_resend.append(&mut self.digests);
