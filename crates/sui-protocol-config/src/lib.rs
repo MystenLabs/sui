@@ -10,14 +10,13 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 3;
+const MAX_PROTOCOL_VERSION: u64 = 2;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
 // Version 2: Add FeatureFlag to change gas buckets computation and remove gas computation for
 //            storage
-// Version 3: Intentionally broken attempt to upgrade the framework with an incompatible change.
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
 )]
@@ -817,7 +816,7 @@ impl ProtocolConfig {
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
-            2 | 3 => {
+            2 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.gas_buckets_sub_and_storage_computation = true;
                 cfg
