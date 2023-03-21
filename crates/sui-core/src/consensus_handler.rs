@@ -143,8 +143,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             &self.metrics,
         );
 
+        self.metrics
+            .consensus_committed_subdags
+            .with_label_values(&[&consensus_output.sub_dag.leader.header.author.to_string()])
+            .inc();
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();
+            self.metrics
+                .consensus_committed_certificates
+                .with_label_values(&[&author.to_string()])
+                .inc();
             let output_cert = Arc::new(cert);
             for batch in batches {
                 self.metrics.consensus_handler_processed_batches.inc();
