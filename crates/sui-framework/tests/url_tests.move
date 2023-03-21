@@ -6,7 +6,7 @@ module sui::url_tests {
     use sui::url;
     use std::ascii::Self;
     use std::option::Self;
-    // use sui::vec_map::Self;
+    use sui::vec_map::Self;
 
     const EUrlStringMismatch: u64 = 1;
 
@@ -44,6 +44,12 @@ module sui::url_tests {
         assert!(url::parsed_host(&parsed_url) == option::some(ascii::string(b"validurl.com")), 0);
         assert!(url::parsed_path(&parsed_url) == ascii::string(b"/move"), 0);
         assert!(url::parsed_port(&parsed_url) == option::some(9000), 0);
+
+        let params = vec_map::empty();
+        vec_map::insert(&mut params, ascii::string(b"type"), ascii::string(b"valid"));
+        vec_map::insert(&mut params, ascii::string(b"isConfirmed"), ascii::string(b"true"));
+
+        assert!(url::parsed_params(&parsed_url) == params, 0);
     }
 
     #[test]
