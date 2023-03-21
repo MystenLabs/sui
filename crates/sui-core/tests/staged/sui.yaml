@@ -69,10 +69,11 @@ Command:
               TYPENAME: Argument
           - TYPENAME: Argument
     2:
-      SplitCoin:
+      SplitCoins:
         TUPLE:
           - TYPENAME: Argument
-          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: Argument
     3:
       MergeCoins:
         TUPLE:

@@ -77,7 +77,7 @@ export const SuiCommand = union([
     }),
   }),
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
-  object({ SplitCoin: tuple([SuiArgument, SuiAddress]) }),
+  object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ Publish: SuiMovePackage }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
