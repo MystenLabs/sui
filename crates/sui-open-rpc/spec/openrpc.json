@@ -6471,7 +6471,7 @@
             "type": "string"
           },
           "networkPubkeyBytes": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           },
           "nextEpochCommissionRate": {
             "type": "integer",
@@ -6493,7 +6493,7 @@
             "default": null,
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               },
               {
                 "type": "null"
@@ -6516,7 +6516,7 @@
             "default": null,
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               },
               {
                 "type": "null"
@@ -6527,7 +6527,7 @@
             "default": null,
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               },
               {
                 "type": "null"
@@ -6549,7 +6549,7 @@
             "default": null,
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Base58"
+                "$ref": "#/components/schemas/Base64"
               },
               {
                 "type": "null"
@@ -6593,10 +6593,10 @@
             "type": "string"
           },
           "proofOfPossessionBytes": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           },
           "protocolPubkeyBytes": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           },
           "rewardsPool": {
             "description": "The epoch stake rewards will be added here at the end of each epoch.",
@@ -6648,7 +6648,7 @@
             "type": "string"
           },
           "workerPubkeyBytes": {
-            "$ref": "#/components/schemas/Base58"
+            "$ref": "#/components/schemas/Base64"
           }
         }
       },
