@@ -43,10 +43,7 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        accountForTransaction: SerializedAccount;
-        initializeLedgerSignerInstance: (
-            derivationPath: string
-        ) => Promise<LedgerSigner>;
+        signer: SignerWithProvider;
     },
     AppThunkConfig
 >(
@@ -55,10 +52,9 @@ export const respondToTransactionRequest = createAsyncThunk<
         {
             txRequestID,
             approved,
-            accountForTransaction,
-            initializeLedgerSignerInstance,
+            signer,
         },
-        { extra: { background, api }, getState }
+        { extra: { background, }, getState }
     ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
@@ -70,18 +66,6 @@ export const respondToTransactionRequest = createAsyncThunk<
             undefined;
         let txResultError: string | undefined;
         if (approved) {
-            let signer: SignerWithProvider | undefined;
-            if (accountForTransaction.type === AccountType.LEDGER) {
-                signer = await initializeLedgerSignerInstance(
-                    accountForTransaction.derivationPath
-                );
-            } else {
-                signer = api.getSignerInstance(
-                    accountForTransaction,
-                    background
-                );
-            }
-
             try {
                 if (txRequest.tx.type === 'sign-message') {
                     txResult = await signer.signMessage({

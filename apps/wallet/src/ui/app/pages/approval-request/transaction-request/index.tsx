@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { GasFees } from './GasFees';
 import { TransactionDetails } from './TransactionDetails';
 import { UserApproveContainer } from '_components/user-approve-container';
-import { useAppDispatch } from '_hooks';
+import { useAppDispatch, useSigner } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
@@ -23,11 +23,7 @@ export type TransactionRequestProps = {
 };
 
 export function TransactionRequest({ txRequest }: TransactionRequestProps) {
-    const accounts = useAccounts();
-    const accountForTransaction = accounts.find(
-        (account) => account.address === txRequest.tx.account
-    );
-    const { initializeLedgerSignerInstance } = useSuiLedgerClient();
+    const signer = useSigner(txRequest.tx.account);
     const dispatch = useAppDispatch();
     const transaction = useMemo(() => {
         const tx = Transaction.from(txRequest.tx.data);
@@ -38,29 +34,16 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     }, [txRequest.tx.data, accountForTransaction]);
     const addressForTransaction = txRequest.tx.account;
     const handleOnSubmit = useCallback(
-        async (approved: boolean) => {
-            if (accountForTransaction) {
-                await dispatch(
-                    respondToTransactionRequest({
-                        approved,
-                        txRequestID: txRequest.id,
-                        accountForTransaction,
-                        initializeLedgerSignerInstance,
-                    })
-                );
-            } else {
-                toast.error(
-                    `Account for address ${txRequest.tx.account} not found`
-                );
-            }
+        (approved: boolean) => {
+            dispatch(
+                respondToTransactionRequest({
+                    approved,
+                    txRequestID: txRequest.id,
+                    signer,
+                })
+            );
         },
-        [
-            accountForTransaction,
-            dispatch,
-            txRequest.id,
-            txRequest.tx.account,
-            initializeLedgerSignerInstance,
-        ]
+        [dispatch, txRequest.id, txRequest.tx.account]
     );
 
     return (

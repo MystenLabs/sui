@@ -13,8 +13,6 @@ import {
     useState,
 } from 'react';
 
-import { LedgerSigner } from '../../LedgerSigner';
-import { api } from '../../redux/store/thunk-extras';
 import {
     LedgerConnectionFailedError,
     LedgerDeviceNotFoundError,
@@ -28,9 +26,6 @@ type SuiLedgerClientProviderProps = {
 type SuiLedgerClientContextValue = {
     suiLedgerClient: SuiLedgerClient | undefined;
     connectToLedger: () => Promise<SuiLedgerClient>;
-    initializeLedgerSignerInstance: (
-        derivationPath: string
-    ) => Promise<LedgerSigner>;
 };
 
 const SuiLedgerClientContext = createContext<
@@ -51,33 +46,6 @@ export function SuiLedgerClientProvider({
         return () => suiLedgerClient?.transport.off('disconnect', onDisconnect);
     }, [suiLedgerClient?.transport]);
 
-    const initializeLedgerSignerInstance = useCallback(
-        async (derivationPath: string) => {
-            if (!suiLedgerClient) {
-                try {
-                    const transport = await forceConnectionToLedger();
-                    const newClient = new SuiLedgerClient(transport);
-                    setSuiLedgerClient(newClient);
-
-                    return new LedgerSigner(
-                        newClient,
-                        derivationPath,
-                        api.instance.fullNode
-                    );
-                } catch (error) {
-                    throw new Error('Failed to connect');
-                }
-            }
-
-            return new LedgerSigner(
-                suiLedgerClient,
-                derivationPath,
-                api.instance.fullNode
-            );
-        },
-        [suiLedgerClient]
-    );
-
     const connectToLedger = useCallback(async () => {
         if (suiLedgerClient?.transport) {
             // If we've already connected to a Ledger device, we need
@@ -95,9 +63,8 @@ export function SuiLedgerClientProvider({
         return {
             suiLedgerClient,
             connectToLedger,
-            initializeLedgerSignerInstance,
         };
-    }, [connectToLedger, suiLedgerClient, initializeLedgerSignerInstance]);
+    }, [connectToLedger, suiLedgerClient]);
 
     return (
         <SuiLedgerClientContext.Provider value={contextValue}>

@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 import { useSuiLedgerClient } from '../../components/ledger/SuiLedgerClientProvider';
 import { UserApproveContainer } from '../../components/user-approve-container';
-import { useAppDispatch } from '../../hooks';
+import { useAppDispatch, useSigner } from '../../hooks';
 import { useAccounts } from '../../hooks/useAccounts';
 import { respondToTransactionRequest } from '../../redux/slices/transaction-requests';
 import { Heading } from '../../shared/heading';
@@ -38,12 +38,8 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
         };
     }, [request.tx.message]);
 
-    const accounts = useAccounts();
-    const accountForTransaction = accounts.find(
-        (account) => account.address === request.tx.accountAddress
-    );
+    const signer = useSigner(request.tx.accountAddress);
     const dispatch = useAppDispatch();
-    const { initializeLedgerSignerInstance } = useSuiLedgerClient();
 
     return (
         <UserApproveContainer
@@ -52,20 +48,13 @@ export function SignMessageRequest({ request }: SignMessageRequestProps) {
             approveTitle="Sign"
             rejectTitle="Reject"
             onSubmit={(approved) => {
-                if (accountForTransaction) {
-                    dispatch(
-                        respondToTransactionRequest({
-                            txRequestID: request.id,
-                            approved,
-                            accountForTransaction,
-                            initializeLedgerSignerInstance,
-                        })
-                    );
-                } else {
-                    toast.error(
-                        `Account for address ${request.tx.accountAddress} not found`
-                    );
-                }
+                dispatch(
+                    respondToTransactionRequest({
+                        txRequestID: request.id,
+                        approved,
+                        signer,
+                    })
+                );
             }}
             address={request.tx.accountAddress}
             scrollable

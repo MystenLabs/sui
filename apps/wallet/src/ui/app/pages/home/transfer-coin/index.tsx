@@ -20,11 +20,11 @@ import BottomMenuLayout, {
 } from '_app/shared/bottom-menu-layout';
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
-import { useSigner } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 import type { SubmitProps } from './SendTokenForm';
+import { useSigner } from '_src/ui/app/hooks';
 
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
@@ -62,8 +62,7 @@ function TransferCoinPage() {
                     props: { coinType: coinType! },
                 });
 
-                const initializedSigner = await signer();
-                return initializedSigner.signAndExecuteTransaction({
+                return signer.signAndExecuteTransaction({
                     transaction,
                     options: {
                         showInput: true,
