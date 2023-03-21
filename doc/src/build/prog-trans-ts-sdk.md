@@ -46,7 +46,7 @@ transfers.forEach((transfer) => {
 });
 ```
 
-Once you have the transaction defined, you can directly execute it with a signer using `signAndExecuteTransaction`.
+After you have the transaction defined, you can directly execute it with a signer using `signAndExecuteTransaction`.
 
 ```tsx
 signer.signAndExecuteTransaction({ transaction: tx });
