@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-// #[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 pub mod pg_integration_test {
     use std::env;
     use std::str::FromStr;
@@ -994,7 +994,7 @@ pub mod pg_integration_test {
             .get_transaction_with_options(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
-            )
+            )            
             .await?;
         let sui_transaction_response_options = vec![
             SuiTransactionResponseOptions::new().with_input(),
