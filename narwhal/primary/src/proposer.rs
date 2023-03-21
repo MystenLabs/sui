@@ -655,7 +655,9 @@ impl Proposer {
                                 // We accept round bigger than our current round to jump ahead in case we were
                                 // late (or just joined the network).
                                 self.round = round;
-                                parents = self.certificate_store.read_round(round).unwrap();
+                                if parents.len() <= 1 {
+                                    parents = self.certificate_store.read_round(round).unwrap();
+                                }
                                 self.last_parents = parents;
                                 self.pending_parents.clear();
                                 let _ = self.tx_narwhal_round_updates.send(self.round);
@@ -672,14 +674,20 @@ impl Proposer {
                                     .reset(timer_start + self.min_delay());
                             } else {
                                 if self.pending_parents.is_empty() {
-                                    parents = self.certificate_store.read_round(round).unwrap();
+                                    if parents.len() <= 1 {
+                                        parents = self.certificate_store.read_round(round).unwrap();
+                                    }
                                     self.pending_parents = parents;
                                 } else {
                                     let pending_round = self.pending_parents.first().as_ref().unwrap().round();
                                     let parent_round = parents.first().as_ref().unwrap().round();
                                     match pending_round.cmp(&parent_round) {
                                         Ordering::Less => {
-                                            parents = self.certificate_store.read_round(round).unwrap();self.pending_parents = parents;},
+                                            if parents.len() <= 1 {
+                                                parents = self.certificate_store.read_round(round).unwrap();
+                                            }
+                                            self.pending_parents = parents;
+                                        },
                                         Ordering::Equal => self.pending_parents.extend(parents),
                                         Ordering::Greater => {},
                                     };
