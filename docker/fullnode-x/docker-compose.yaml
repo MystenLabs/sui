@@ -42,8 +42,8 @@ services:
       - DATABASE_URL=postgres://postgres:admin@postgres:5432/sui_indexer_testnet
       - RPC_CLIENT_URL=http://fullnode:9000
     ports:
-      - target: 3030
-        published: 3030
+      - target: 9000
+        published: 9000
         protocol: tcp
       - 9184
 
