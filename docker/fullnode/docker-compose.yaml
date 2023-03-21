@@ -1,8 +1,8 @@
 ---
-version: "3.9"
+version: "3.10"
 services:
   fullnode:
-    image: mysten/sui-node:stable
+    image: mysten/sui-node:db24658bc9d0bbab6a6a664c5f4f607799db51ab
     ports:
     - "8084:8084/udp"
     - "9000:9000"
