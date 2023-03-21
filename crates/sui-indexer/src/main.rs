@@ -9,6 +9,7 @@ use sui_node::metrics::start_prometheus_server;
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
+    // NOTE: this is to print out tracing like info, warn & error.
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
