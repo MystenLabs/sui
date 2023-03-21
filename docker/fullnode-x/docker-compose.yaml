@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+
+  fullnode:
+    build:
+      context: ../..
+      dockerfile: ./docker/sui-node/Dockerfile
+      args:
+        # update with git sha of whichever branch you're building on.
+        GIT_REVISION: db24658bc9
+        BUILD_DATE: today
+
+    environment:
+      - LD_PRELOAD
+      - RUST_JSON_LOG="true"
+      - RUST_LOG="debug"
+#      - RUST_LOG="sui_core=debug,narwhal=info,info"
+    image: sui-node:latest
+    command: /opt/sui/entry.sh
+    # populate your local ./fullnode/config/ directory with fullnode.yaml and genesis.blob for the network you want to use.
+    volumes:
+      - ./fullnode:/opt/sui
+    ports:
+      - 9000
+      - 9184
+      - target: 8084
+        published: 8084
+        protocol: udp
+
+  indexer:
+    build:
+      context: ../..
+      dockerfile: ./docker/sui-indexer/Dockerfile
+    image: sui-indexer:latest
+    command: /opt/sui/indexer.sh
+    volumes:
+      - ./indexer:/opt/sui
+    environment:
+      - RUST_LOG="sui_core=debug,narwhal=info,info"
+      - RUST_JSON_LOG="true"
+      - DATABASE_URL=postgres://postgres:admin@postgres:5432/sui_indexer_testnet
+      - RPC_CLIENT_URL=http://fullnode:9000
+    ports:
+      - target: 3030
+        published: 3030
+        protocol: tcp
+      - 9184
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - target: 5432
+        published: 5432
+    volumes:
+      - db-data:/var/lib/postgres/data
+
+volumes:
+  db-data:
