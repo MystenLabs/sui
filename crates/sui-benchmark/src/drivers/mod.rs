@@ -39,6 +39,7 @@ impl FromStr for Interval {
 
 // wrapper which implements serde
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct HistogramWrapper {
     histogram: Histogram<u64>,
 }
@@ -63,20 +64,55 @@ impl<'de> serde::Deserialize<'de> for HistogramWrapper {
     }
 }
 
-/// Stores the final statistics of the test run.
+// Stores the final stress statisicts of the test run.
 #[derive(serde::Serialize, serde::Deserialize)]
+pub struct StressStats {
+    pub cpu_usage: HistogramWrapper,
+}
+
+impl StressStats {
+    pub fn update(&mut self, sample_stat: &StressStats) {
+        self.cpu_usage
+            .histogram
+            .add(&sample_stat.cpu_usage.histogram)
+            .unwrap();
+    }
+
+    pub fn to_table(&self) -> Table {
+        let mut table = Table::new();
+        table
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_width(200)
+            .set_header(vec!["metric", "p50", "p99"]);
+
+        let mut row = Row::new();
+        row.add_cell(Cell::new("cpu usage"));
+        row.add_cell(Cell::new(self.cpu_usage.histogram.value_at_quantile(0.5)));
+        row.add_cell(Cell::new(self.cpu_usage.histogram.value_at_quantile(0.99)));
+        table.add_row(row);
+        table
+    }
+}
+
+/// Stores the final statistics of the test run.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct BenchmarkStats {
     pub duration: Duration,
-    pub num_error: u64,
-    pub num_success: u64,
+    /// Number of transactions that ended in an error
+    pub num_error_txes: u64,
+    /// Number of transactions that were executed successfully
+    pub num_success_txes: u64,
+    /// Total number of commands in transactions that executed successfully
+    pub num_success_cmds: u64,
     pub latency_ms: HistogramWrapper,
 }
 
 impl BenchmarkStats {
     pub fn update(&mut self, duration: Duration, sample_stat: &BenchmarkStats) {
         self.duration = duration;
-        self.num_error += sample_stat.num_error;
-        self.num_success += sample_stat.num_success;
+        self.num_error_txes += sample_stat.num_error_txes;
+        self.num_success_txes += sample_stat.num_success_txes;
+        self.num_success_cmds += sample_stat.num_success_cmds;
         self.latency_ms
             .histogram
             .add(&sample_stat.latency_ms.histogram)
@@ -90,32 +126,23 @@ impl BenchmarkStats {
             .set_header(vec![
                 "duration(s)",
                 "tps",
+                "cps",
                 "error%",
-                "min",
-                "p25",
-                "p50",
-                "p75",
-                "p90",
-                "p99",
-                "p99.9",
-                "max",
+                "latency (min)",
+                "latency (p50)",
+                "latency (p99)",
             ]);
         let mut row = Row::new();
         row.add_cell(Cell::new(self.duration.as_secs()));
-        row.add_cell(Cell::new(self.num_success / self.duration.as_secs()));
+        row.add_cell(Cell::new(self.num_success_txes / self.duration.as_secs()));
+        row.add_cell(Cell::new(self.num_success_cmds / self.duration.as_secs()));
         row.add_cell(Cell::new(
-            (100 * self.num_error) as f32 / (self.num_error + self.num_success) as f32,
+            (100 * self.num_error_txes) as f32
+                / (self.num_error_txes + self.num_success_txes) as f32,
         ));
         row.add_cell(Cell::new(self.latency_ms.histogram.min()));
-        row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.25)));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.5)));
-        row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.75)));
-        row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.9)));
         row.add_cell(Cell::new(self.latency_ms.histogram.value_at_quantile(0.99)));
-        row.add_cell(Cell::new(
-            self.latency_ms.histogram.value_at_quantile(0.999),
-        ));
-        row.add_cell(Cell::new(self.latency_ms.histogram.max()));
         table.add_row(row);
         table
     }
@@ -182,8 +209,8 @@ impl BenchmarkCmp<'_> {
         ]
     }
     pub fn cmp_tps(&self) -> Comparison {
-        let old_tps = self.old.num_success / self.old.duration.as_secs();
-        let new_tps = self.new.num_success / self.new.duration.as_secs();
+        let old_tps = self.old.num_success_txes / self.old.duration.as_secs();
+        let new_tps = self.new.num_success_txes / self.new.duration.as_secs();
         let diff = new_tps as i64 - old_tps as i64;
         let diff_ratio = diff as f64 / old_tps as f64;
         let speedup = 1.0 + diff_ratio;
@@ -197,8 +224,10 @@ impl BenchmarkCmp<'_> {
         }
     }
     pub fn cmp_error_rate(&self) -> Comparison {
-        let old_error_rate = self.old.num_error / (self.old.num_error + self.old.num_success);
-        let new_error_rate = self.new.num_error / (self.new.num_error + self.new.num_success);
+        let old_error_rate =
+            self.old.num_error_txes / (self.old.num_error_txes + self.old.num_success_txes);
+        let new_error_rate =
+            self.new.num_error_txes / (self.new.num_error_txes + self.new.num_success_txes);
         let diff = new_error_rate as i64 - old_error_rate as i64;
         let diff_ratio = diff as f64 / old_error_rate as f64;
         let speedup = 1.0 / (1.0 + diff_ratio);

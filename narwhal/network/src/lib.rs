@@ -12,6 +12,7 @@
 pub mod admin;
 pub mod anemo_ext;
 pub mod connectivity;
+pub mod epoch_filter;
 pub mod failpoints;
 pub mod metrics;
 mod p2p;
@@ -46,26 +47,5 @@ impl<T> std::future::Future for CancelOnDropHandler<T> {
         use futures::future::FutureExt;
         // If the task panics just propagate it up
         self.0.poll_unpin(cx).map(Result::unwrap)
-    }
-}
-
-/// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into an anemo address
-pub fn multiaddr_to_address(
-    multiaddr: &multiaddr::Multiaddr,
-) -> anyhow::Result<anemo::types::Address> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Ok((ipaddr, port).into()),
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Ok((ipaddr, port).into()),
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
-            Ok((hostname.as_ref(), port).into())
-        }
-
-        _ => {
-            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
-            Err(anyhow::anyhow!("invalid address"))
-        }
     }
 }

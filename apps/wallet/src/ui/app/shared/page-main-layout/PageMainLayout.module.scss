@@ -9,24 +9,12 @@
     flex-grow: 1;
     width: 100%;
     max-height: 100%;
-    background-color: colors.$gray-40;
+    background-color: v.use(v.$colors-background-color);
 }
 
-.header {
-    display: flex;
-    flex-flow: row nowrap;
-    align-items: center;
-    padding: 0 15px;
-    justify-content: space-between;
-    min-height: 52px;
-
-    &.center {
-        justify-content: center;
-    }
-}
-
-.menu-button {
-    justify-self: flex-end;
+.full-screen-container {
+    border-radius: 12px;
+    box-shadow: 0 -5px 20px 5px rgb(111 188 240 / 11%);
 }
 
 .content {
@@ -39,6 +27,11 @@
     box-shadow: v.use(v.$shadows-main-content);
     overflow: hidden;
     position: relative;
+    z-index: 1;
+}
+
+.full-screen-content {
+    border-radius: 20px 20px 12px 12px;
 }
 
 .main {
@@ -52,13 +45,4 @@
 .with-nav {
     padding: 25px sizing.$main-sides-space;
     @include utils.main-extra-space-for-nav;
-}
-
-.logo {
-    color: v.use(v.$colors-text-on-background);
-}
-
-.logo-link {
-    text-decoration: none;
-    color: inherit;
 }

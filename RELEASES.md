@@ -1,11 +1,20 @@
 # Sui Releases
 
-DevNet releases can be found in the `devnet` branch.
+Releases for the Sui Devnet network are based on the `devnet` branch.
 
 ## Current Release
-* 22-12-08: [0.18.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.18.0)
+* 23-02-22: [0.27.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.27.0)
 
 ## Past Releases
+* 23-02-15: [0.26.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.26.0)
+* 23-02-08: [0.25.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.25.0)
+* 23-02-01: [0.24.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.24.0)
+* 23-01-25: [0.23.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.23.0)
+* 23-01-19: [0.22.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.22.0)
+* 23-01-12: [0.21.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.21.0)
+* 23-01-04: [0.20.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.20.0)
+* 22-12-16: [0.19.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.19.0)
+* 22-12-08: [0.18.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.18.0)
 * 22-12-01: [0.17.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.17.0)
 * 22-11-17: [0.16.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.16.0)
 * 22-11-08: [0.15.1](https://github.com/MystenLabs/sui/releases/tag/devnet-0.15.1)
@@ -24,4 +33,4 @@ DevNet releases can be found in the `devnet` branch.
 * 22-06-07: [0.4.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.4.0-rc)
 * 22-05-24: [0.3.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.3.0-rc)
 * 22-05-12: [0.2.0](https://medium.com/mysten-labs/sui-release-notes-v0-2-0-7b377e2bf01)
-* 22-05-05: [0.1.0 (Sui DevNet launch)](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b)
+* 22-05-05: [0.1.0 (Sui Devnet launch)](https://medium.com/mysten-labs/sui-devnet-public-release-a2be304ff36b)

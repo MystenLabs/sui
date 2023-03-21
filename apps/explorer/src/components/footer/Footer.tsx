@@ -2,81 +2,59 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as SuiLogoIcon } from '../../assets/Sui Logo.svg';
-
-import styles from './Footer.module.css';
+import { type FooterItems, footerLinks } from './footerLinks';
 
 import { Link } from '~/ui/Link';
+import { Text } from '~/ui/Text';
+
+function FooterLinks({ links }: { links: FooterItems }) {
+    return (
+        <>
+            {links.map(({ category, items }) => (
+                <div
+                    key={category}
+                    className="flex flex-col gap-y-3.5 text-left"
+                >
+                    <Text variant="captionSmall/bold" color="gray-60">
+                        {category}
+                    </Text>
+                    <ul className="flex flex-col gap-y-3.5">
+                        {items.map(({ title, href }) => (
+                            <li key={href}>
+                                <Link variant="text" href={href}>
+                                    <Text variant="body/medium" color="white">
+                                        {title}
+                                    </Text>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ))}
+        </>
+    );
+}
 
 function Footer() {
     return (
-        <footer>
-            <nav className={styles.links}>
-                <div className={styles.logodesktop}>
-                    <SuiLogoIcon />
-                    <div className={styles.copyright}>
-                        <div>&copy;2022 Sui</div>
-                        <div>All rights reserved</div>
+        <footer className="bg-gray-75 py-10 px-5 md:px-10 md:py-14">
+            <nav className="mx-auto grid grid-cols-1 gap-8 md:mx-0 md:grid-cols-4 md:gap-10 xl:w-1/2">
+                <div className="order-last mx-auto md:order-first md:mt-0">
+                    <div className="h-full space-y-2 md:flex md:flex-col md:justify-between">
+                        <SuiLogoIcon className="mx-auto md:mx-0" />
+                        <div className="mt-auto">
+                            <Text color="white" variant="p4/semibold">
+                                &copy;
+                                {`${new Date().getFullYear()} Sui. All
+                                rights reserved.`}
+                            </Text>
+                        </div>
                     </div>
                 </div>
-
-                <div>
-                    <h6>Read</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://medium.com/mysten-labs">
-                                Blog
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf">
-                                Whitepaper
-                            </Link>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <h6>Build</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://docs.sui.io/">Docs</Link>
-                        </li>
-                        <li>
-                            <Link href="https://github.com/MystenLabs">
-                                GitHub
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://discord.gg/sui">Discord</Link>
-                        </li>
-                    </ul>
-                </div>
-                <div>
-                    <h6>Follow</h6>
-                    <ul>
-                        <li>
-                            <Link href="https://mystenlabs.com/#community">
-                                Press
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://twitter.com/SuiNetwork">
-                                Twitter
-                            </Link>
-                        </li>
-                        <li>
-                            <Link href="https://www.linkedin.com/company/mysten-labs/">
-                                LinkedIn
-                            </Link>
-                        </li>
-                    </ul>
+                <div className="col-span-1 grid grid-cols-4 md:col-span-3">
+                    <FooterLinks links={footerLinks} />
                 </div>
             </nav>
-            <div className={styles.logomobile}>
-                <SuiLogoIcon />
-                <div className={styles.copyright}>
-                    <div>&copy;2022 Sui. All rights reserved.</div>
-                </div>
-            </div>
         </footer>
     );
 }

@@ -120,6 +120,20 @@ module sui::vec_map {
         (keys, values)
     }
 
+    /// Returns a list of keys in the map.
+    /// Do not assume any particular ordering.
+    public fun keys<K: copy, V>(self: &VecMap<K, V>): vector<K> {
+        let i = 0;
+        let n = vector::length(&self.contents);
+        let keys = vector::empty();
+        while (i < n) {
+            let entry = vector::borrow(&self.contents, i);
+            vector::push_back(&mut keys, entry.key);
+            i = i + 1;
+        };
+        keys
+    }
+
     /// Find the index of `key` in `self`. Return `None` if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
     public fun get_idx_opt<K: copy, V>(self: &VecMap<K,V>, key: &K): Option<u64> {

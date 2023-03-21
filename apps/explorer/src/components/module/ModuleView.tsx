@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import {
+    normalizeSuiAddress,
+    type SuiMoveNormalizedType,
+} from '@mysten/sui.js';
 import cl from 'clsx';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
 import { useMemo } from 'react';
 
-import codestyle from '../../styles/bytecode.module.css';
-import { normalizeSuiAddress } from '../../utils/stringUtils';
-
-import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
@@ -21,7 +22,7 @@ import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 // @ts-expect-error: Defining global prism object:
 globalThis.Prism = Prism;
 // @ts-expect-error: This file is untyped:
-import('prismjs/components/prism-rust');
+import('prismjs/components/prism-rust').catch(() => {});
 
 interface Props {
     id?: string;
@@ -33,7 +34,7 @@ interface TypeReference {
     address: string;
     module: string;
     name: string;
-    type_arguments: SuiMoveNormalizedType[];
+    typeArguments: SuiMoveNormalizedType[];
 }
 
 /** Takes a normalized move type and returns the address information contained within it */
@@ -64,14 +65,14 @@ function ModuleView({ id, name, code }: Props) {
         if (!normalizedModule) {
             return typeReferences;
         }
-        Object.values(normalizedModule.exposed_functions).forEach(
+        Object.values(normalizedModule.exposedFunctions).forEach(
             (exposedFunction) => {
                 exposedFunction.parameters.forEach((param) => {
                     const unwrappedType = unwrapTypeReference(param);
                     if (!unwrappedType) return;
                     typeReferences[unwrappedType.name] = unwrappedType;
 
-                    unwrappedType.type_arguments.forEach((typeArg) => {
+                    unwrappedType.typeArguments.forEach((typeArg) => {
                         const unwrappedTypeArg = unwrapTypeReference(typeArg);
                         if (!unwrappedTypeArg) return;
                         typeReferences[unwrappedTypeArg.name] =
@@ -85,7 +86,7 @@ function ModuleView({ id, name, code }: Props) {
 
     return (
         <section className={styles.modulewrapper}>
-            <div className={cl(codestyle.code, styles.codeview)}>
+            <div className={cl(styles.code, styles.codeview)}>
                 <Highlight
                     {...defaultProps}
                     code={code}

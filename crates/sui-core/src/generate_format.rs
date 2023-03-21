@@ -9,18 +9,19 @@ use move_core_types::{
 };
 use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
-use signature::Signer;
 use std::{fs::File, io::Write};
+use sui_types::crypto::Signer;
 use sui_types::{
-    base_types::{self, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest},
-    batch::UpdateItem,
+    base_types::{
+        self, MoveObjectType, ObjectDigest, ObjectID, TransactionDigest, TransactionEffectsDigest,
+    },
     crypto::{
         get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
         AuthoritySignature, KeypairTraits, Signature,
     },
     messages::{
-        CallArg, EntryArgumentErrorKind, EntryTypeArgumentErrorKind, ExecutionFailureStatus,
-        ExecutionStatus, ObjectArg, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+        Argument, CallArg, Command, CommandArgumentError, ExecutionFailureStatus, ExecutionStatus,
+        ObjectArg, ObjectInfoRequestKind, PackageUpgradeError, TransactionKind, TypeArgumentError,
     },
     object::{Data, Owner},
     storage::DeleteKind,
@@ -50,11 +51,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &s_kp)?;
 
     // We have two signature types: one for Authority Signatures, which don't include the PubKey ...
-    let sig: AuthoritySignature = kp.sign(b"hello world");
+    let sig: AuthoritySignature = Signer::sign(&kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
     // ... and the user signature which does
 
-    let sig: Signature = s_kp.sign(b"hello world");
+    let sig: Signature = Signer::sign(&s_kp, b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
 
     // ObjectID and SuiAddress are the same length
@@ -76,21 +77,23 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ExecutionStatus>(&samples)?;
     tracer.trace_type::<ExecutionFailureStatus>(&samples)?;
     tracer.trace_type::<AbortLocation>(&samples)?;
-    tracer.trace_type::<EntryArgumentErrorKind>(&samples)?;
-    tracer.trace_type::<EntryTypeArgumentErrorKind>(&samples)?;
     tracer.trace_type::<CallArg>(&samples)?;
     tracer.trace_type::<ObjectArg>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;
     tracer.trace_type::<TypeTag>(&samples)?;
     tracer.trace_type::<TypedStoreError>(&samples)?;
     tracer.trace_type::<ObjectInfoRequestKind>(&samples)?;
-    tracer.trace_type::<SingleTransactionKind>(&samples)?;
     tracer.trace_type::<TransactionKind>(&samples)?;
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
+    tracer.trace_type::<MoveObjectType>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
-    tracer.trace_type::<UpdateItem>(&samples)?;
     tracer.trace_type::<DeleteKind>(&samples)?;
+    tracer.trace_type::<Argument>(&samples)?;
+    tracer.trace_type::<Command>(&samples)?;
+    tracer.trace_type::<CommandArgumentError>(&samples)?;
+    tracer.trace_type::<TypeArgumentError>(&samples)?;
+    tracer.trace_type::<PackageUpgradeError>(&samples)?;
 
     tracer.registry()
 }

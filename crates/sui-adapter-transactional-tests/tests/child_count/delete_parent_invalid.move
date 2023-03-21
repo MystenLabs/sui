@@ -18,7 +18,7 @@ module test::m {
 
     public entry fun mint(ctx: &mut TxContext) {
         let id = sui::object::new(ctx);
-        sui::transfer::transfer(S { id }, tx_context::sender(ctx))
+        sui::transfer::public_transfer(S { id }, tx_context::sender(ctx))
     }
 
     public entry fun add(parent: &mut S, idx: u64, ctx: &mut TxContext) {
@@ -34,8 +34,8 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# run test::m::add --sender A --args object(107) 0
+//# run test::m::add --sender A --args object(108) 0
 
-//# view-object 107
+//# view-object 108
 
-//# run test::m::delete --sender A --args object(107)
+//# run test::m::delete --sender A --args object(108)

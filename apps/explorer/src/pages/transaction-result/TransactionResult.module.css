@@ -32,7 +32,7 @@
 .txeventsright {
     @apply col-span-5 overflow-y-scroll md:col-span-4;
 
-    max-height: 100vh; /* enables scrolling list independtly of page */
+    max-height: 100vh; /* enables scrolling list independently of page */
 }
 
 .txcomponent {
@@ -42,7 +42,7 @@
 .txgridcolspan2 {
     grid-column: span 2;
     border-right: 1px solid #f0f1f2;
-    @apply border-0 md:border-r-[1px] md:border-[#f0f1f2];
+    @apply md:border-r-[1px] md:border-[#f0f1f2];
 }
 
 .txgridcolspan3 {
@@ -73,8 +73,6 @@
 
 .itemviewcontent {
     @apply mb-2 mt-2;
-
-    box-sizing: border-box;
 }
 
 .itemviewcontent .itemviewcontentitem {
@@ -87,7 +85,6 @@
     @apply inline-flex content-center items-baseline text-sm text-gray-90 md:block;
 
     line-break: anywhere;
-    box-sizing: border-box;
 }
 
 .itemviewcontent .itemviewcontentitem a,

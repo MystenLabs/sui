@@ -7,6 +7,8 @@ import '@fontsource/red-hat-mono/variable.css';
 import '_font-icons/output/sui-icons.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
+import { MemoryRouter } from 'react-router-dom';
+
 export const parameters = {
     actions: { argTypesRegex: '^on[A-Z].*' },
     controls: {
@@ -29,3 +31,11 @@ export const parameters = {
         defaultViewport: 'extension',
     },
 };
+
+export const decorators = [
+    (Story) => (
+        <MemoryRouter>
+            <Story />
+        </MemoryRouter>
+    ),
+];

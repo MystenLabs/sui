@@ -16,7 +16,7 @@ You also need to install [Clang](https://clang.llvm.org/) (required by RocksDB) 
 ```
 $ fab local
 ```
-This command may take a long time the first time you run it (compiling rust code in `release` mode may be slow), and you can customize a number of benchmark parameters in [fabfile.py](https://github.com/mystenlabs/narwhal/blob/main/benchmark/fabfile.py). When the benchmark terminates, it displays a summary of the execution similarly to the one below.
+This command may take a long time the first time you run it (compiling rust code in `release` mode may be slow), and you can customize a number of benchmark parameters in [fabfile.py](https://github.com/MystenLabs/sui/blob/main/narwhal/benchmark/fabfile.py). When the benchmark terminates, it displays a summary of the execution similarly to the one below.
 ```
 -----------------------------------------
  SUMMARY:

@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/component",
+    "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-util-mem",
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
-    "crates/rccheck",
+    "crates/shared-crypto",
     "crates/sui",
     "crates/sui-adapter",
     "crates/sui-adapter-transactional-tests",
@@ -20,17 +20,21 @@ members = [
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
+    "crates/sui-framework-test",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-types",
     "crates/sui-keys",
     "crates/sui-macros",
+    "crates/sui-move",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
-    "crates/sui-protocol-constants",
+    "crates/sui-proc-macros",
+    "crates/sui-protocol-config",
+    "crates/sui-proxy",
     "crates/sui-rosetta",
     "crates/sui-sdk",
     "crates/sui-simulator",
@@ -39,6 +43,7 @@ members = [
     "crates/sui-swarm",
     "crates/sui-telemetry",
     "crates/sui-test-validator",
+    "crates/sui-tls",
     "crates/sui-tool",
     "crates/sui-transaction-builder",
     "crates/sui-transactional-test-runner",
@@ -68,7 +73,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates
-version = "0.19.0"
+version = "0.29.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -101,43 +106,45 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 
-tokio = "1.22.0"
+tokio = "1.24.1"
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-cli = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-package = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-prover = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "265e8792ff2935db8246ddb308b36b893d507851" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-cli = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe", features = ["address32"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-package = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-prover = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "19ba60e7fa20afb22541dc25988e08a11cb3bbbe" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d4e9173985adeae9c2cb65132064949ca0824a0b" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "d4e9173985adeae9c2cb65132064949ca0824a0b", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b42ed07f24ac2b98afdb80b1d9cceb6e75d36a42" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "b42ed07f24ac2b98afdb80b1d9cceb6e75d36a42", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "7ebdcf82b5cccce71e9483d5b028329475a41a20" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9" }
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }
 
+mysten-common = { path = "crates/mysten-common" }
 mysten-network = { path = "crates/mysten-network" }
-telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }
+telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }

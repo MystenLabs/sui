@@ -5,6 +5,7 @@
 /// on Sui. The user should be able to use the wallet command line tool
 /// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
+/// MUSTFIX: Remove this module from framework.
 module sui::devnet_nft {
     use sui::url::{Self, Url};
     use std::string;
@@ -53,20 +54,19 @@ module sui::devnet_nft {
             creator: sender,
             name: nft.name,
         });
-        transfer::transfer(nft, sender);
+        transfer::public_transfer(nft, sender);
     }
 
     /// Update the `description` of `nft` to `new_description`
     public entry fun update_description(
         nft: &mut DevNetNFT,
         new_description: vector<u8>,
-        _: &mut TxContext
     ) {
         nft.description = string::utf8(new_description)
     }
 
     /// Permanently delete `nft`
-    public entry fun burn(nft: DevNetNFT, _: &mut TxContext) {
+    public entry fun burn(nft: DevNetNFT) {
         let DevNetNFT { id, name: _, description: _, url: _ } = nft;
         object::delete(id)
     }
@@ -107,13 +107,13 @@ module sui::devnet_nftTests {
         ts::next_tx(&mut scenario, addr1);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            transfer::transfer(nft, addr2);
+            transfer::public_transfer(nft, addr2);
         };
         // update its description
         ts::next_tx(&mut scenario, addr2);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            devnet_nft::update_description(&mut nft, b"a new description", ts::ctx(&mut scenario)) ;
+            devnet_nft::update_description(&mut nft, b"a new description") ;
             assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
             ts::return_to_sender(&mut scenario, nft);
         };
@@ -121,7 +121,7 @@ module sui::devnet_nftTests {
         ts::next_tx(&mut scenario, addr2);
         {
             let nft = ts::take_from_sender<DevNetNFT>(&mut scenario);
-            devnet_nft::burn(nft, ts::ctx(&mut scenario))
+            devnet_nft::burn(nft)
         };
         ts::end(scenario);
     }

@@ -1,93 +1,149 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
-import { useEffect, useRef, memo } from 'react';
+import { useCoinDecimals, useFormatCoin } from '@mysten/core';
+import { Field, Form, useFormikContext } from 'formik';
+import { memo, useCallback, useMemo } from 'react';
 
-import Alert from '_components/alert';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { parseAmount } from '../../helpers';
+import { useTransactionGasBudget } from '../../hooks';
+import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
+import { type FormValues } from './StakingCard';
+import { createStakeTransaction } from './utils/transaction';
+import { Card } from '_app/shared/card';
+import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
-import { useFormatCoin } from '_hooks';
-import {
-    DEFAULT_GAS_BUDGET_FOR_STAKE,
-    GAS_SYMBOL,
-} from '_redux/slices/sui-objects/Coin';
+import { NUM_OF_EPOCH_BEFORE_EARNING } from '_src/shared/constants';
+import { CountDownTimer } from '_src/ui/app/shared/countdown-timer';
 
-import type { FormValues } from '.';
-
-import st from './StakeForm.module.scss';
+const HIDE_MAX = true;
 
 export type StakeFromProps = {
-    submitError: string | null;
-    // TODO(ggao): remove this if needed
-    coinBalance: string;
+    validatorAddress: string;
+    coinBalance: bigint;
     coinType: string;
-    onClearSubmitError: () => void;
+    epoch?: string | number;
 };
 
 function StakeForm({
-    submitError,
-    // TODO(ggao): remove this if needed
+    validatorAddress,
     coinBalance,
     coinType,
-    onClearSubmitError,
+    epoch,
 }: StakeFromProps) {
-    const {
-        isSubmitting,
-        isValid,
-        values: { amount },
-    } = useFormikContext<FormValues>();
+    const { values, setFieldValue } = useFormikContext<FormValues>();
 
-    const onClearRef = useRef(onClearSubmitError);
-    onClearRef.current = onClearSubmitError;
-    useEffect(() => {
-        onClearRef.current();
-    }, [amount]);
+    const [decimals] = useCoinDecimals(coinType);
+    const [maxToken, symbol, queryResult] = useFormatCoin(
+        coinBalance,
+        coinType
+    );
 
-    const [formatted, symbol] = useFormatCoin(coinBalance, coinType);
+    const transaction = useMemo(() => {
+        if (!values.amount || !decimals) return null;
+        const amountWithoutDecimals = parseAmount(values.amount, decimals);
+        return createStakeTransaction(amountWithoutDecimals, validatorAddress);
+    }, [values.amount, validatorAddress, decimals]);
+
+    const { data: gasBudget } = useTransactionGasBudget(transaction);
+
+    const setMaxToken = useCallback(() => {
+        if (!maxToken) return;
+        setFieldValue('amount', maxToken);
+    }, [maxToken, setFieldValue]);
+
+    // Reward will be available after 2 epochs
+    const startEarningRewardsEpoch =
+        Number(epoch || 0) + NUM_OF_EPOCH_BEFORE_EARNING;
+
+    const { data: timeToEarnStakeRewards } = useGetTimeBeforeEpochNumber(
+        startEarningRewardsEpoch
+    );
 
     return (
-        <Form className={st.container} autoComplete="off" noValidate={true}>
-            <div className={st.group}>
-                <label className={st.label}>Amount:</label>
-                <Field
-                    component={NumberInput}
-                    allowNegative={false}
-                    name="amount"
-                    placeholder={`Total ${symbol} to stake`}
-                    className={st.input}
-                    decimals
-                />
-                <div className={st.muted}>
-                    Available balance: {formatted} {symbol}
+        <Form
+            className="flex flex-1 flex-col flex-nowrap items-center"
+            autoComplete="off"
+        >
+            <div className="flex flex-col justify-between items-center mb-3 mt-3.5 w-full gap-1.5">
+                <Text variant="caption" color="gray-85" weight="semibold">
+                    Enter the amount of SUI to stake
+                </Text>
+                <Text variant="bodySmall" color="steel" weight="medium">
+                    Available - {maxToken} {symbol}
+                </Text>
+            </div>
+            <Card
+                variant="gray"
+                titleDivider
+                header={
+                    <div className="p-2.5 w-full flex bg-white">
+                        <Field
+                            component={NumberInput}
+                            allowNegative={false}
+                            name="amount"
+                            className="w-full border-none text-hero-dark text-heading4 font-semibold bg-white placeholder:text-gray-70 placeholder:font-semibold"
+                            decimals
+                            suffix={` ${symbol}`}
+                            autoFocus
+                        />
+                        {!HIDE_MAX ? (
+                            <button
+                                className="bg-white border border-solid border-gray-60 hover:border-steel-dark rounded-2xl h-6 w-11 flex justify-center items-center cursor-pointer text-steel-darker hover:text-steel-darker text-bodySmall font-medium disabled:opacity-50 disabled:cursor-auto"
+                                onClick={setMaxToken}
+                                disabled={queryResult.isLoading}
+                                type="button"
+                            >
+                                Max
+                            </button>
+                        ) : null}
+                    </div>
+                }
+                footer={
+                    <div className="py-px flex justify-between w-full">
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            Gas Fees
+                        </Text>
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            {gasBudget} {symbol}
+                        </Text>
+                    </div>
+                }
+            >
+                <div className="pb-3.75 flex justify-between w-full">
+                    <Text variant="body" weight="medium" color="steel-darker">
+                        Staking Rewards Start
+                    </Text>
+                    {timeToEarnStakeRewards > 0 ? (
+                        <CountDownTimer
+                            timestamp={timeToEarnStakeRewards}
+                            variant="body"
+                            color="steel-darker"
+                            weight="semibold"
+                            label="in"
+                            endLabel="--"
+                        />
+                    ) : (
+                        <Text
+                            variant="body"
+                            weight="medium"
+                            color="steel-darker"
+                        >
+                            {epoch
+                                ? `Epoch #${+startEarningRewardsEpoch}`
+                                : '--'}
+                        </Text>
+                    )}
                 </div>
-                <ErrorMessage
-                    className={st.error}
-                    name="amount"
-                    component="div"
-                />
-            </div>
-            <div className={st.group}>
-                * Total transaction fee estimate (gas cost):{' '}
-                {DEFAULT_GAS_BUDGET_FOR_STAKE} {GAS_SYMBOL}
-            </div>
-            {submitError ? (
-                <div className={st.group}>
-                    <Alert>
-                        <strong>Stake failed.</strong>{' '}
-                        <small>{submitError}</small>
-                    </Alert>
-                </div>
-            ) : null}
-            <div className={st.group}>
-                <button
-                    type="submit"
-                    disabled={!isValid || isSubmitting}
-                    className="btn"
-                >
-                    {isSubmitting ? <LoadingIndicator /> : 'Stake'}
-                </button>
-            </div>
+            </Card>
         </Form>
     );
 }

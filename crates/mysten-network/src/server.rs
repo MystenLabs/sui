@@ -6,11 +6,10 @@ use crate::metrics::{
 };
 use crate::{
     config::Config,
-    multiaddr::{parse_dns, parse_ip4, parse_ip6},
+    multiaddr::{parse_dns, parse_ip4, parse_ip6, Multiaddr, Protocol},
 };
 use eyre::{eyre, Result};
 use futures::FutureExt;
-use multiaddr::{Multiaddr, Protocol};
 use std::task::{Context, Poll};
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -274,8 +273,7 @@ fn update_tcp_port_in_multiaddr(addr: &Multiaddr, port: u16) -> Multiaddr {
 mod test {
     use crate::config::Config;
     use crate::metrics::MetricsCallbackProvider;
-    use multiaddr::multiaddr;
-    use multiaddr::Multiaddr;
+    use crate::Multiaddr;
     use std::ops::Deref;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -287,7 +285,7 @@ mod test {
     fn document_multiaddr_limitation_for_unix_protocol() {
         // You can construct a multiaddr by hand (ie binary format) just fine
         let path = "/tmp/foo";
-        let addr = multiaddr!(Unix(path), Http);
+        let addr = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
 
         // But it doesn't round-trip in the human readable format
         let s = addr.to_string();
@@ -464,7 +462,7 @@ mod test {
         // Note that this only works when constructing a multiaddr by hand and not via the
         // human-readable format
         let path = "unix-domain-socket";
-        let address = multiaddr!(Unix(path), Http);
+        let address = Multiaddr::new_internal(multiaddr::multiaddr!(Unix(path), Http));
         test_multiaddr(address).await;
         std::fs::remove_file(path).unwrap();
     }

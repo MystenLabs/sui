@@ -4,11 +4,14 @@ use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use clap::*;
 use std::net::SocketAddr;
+use std::path::Path;
 use sui::client_commands::WalletContext;
 use sui::config::{SuiClientConfig, SuiEnv};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::Config;
 use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_indexer::indexer_test_utils::start_test_indexer;
+use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
@@ -23,7 +26,7 @@ const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
 const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FAUCET_ADDR: &str = "https://faucet.nomad.ci.sui.io:443";
 const TESTNET_FAUCET_ADDR: &str = "https://faucet.testnet.sui.io:443";
-const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
+const DEVNET_FULLNODE_ADDR: &str = "https://rpc.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
 const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 const CONTINUOUS_NOMAD_FULLNODE_ADDR: &str = "https://fullnode.nomad.ci.sui.io:443";
@@ -51,18 +54,23 @@ pub trait Cluster {
 
     fn fullnode_url(&self) -> &str;
     fn user_key(&self) -> AccountKeyPair;
+    fn indexer_url(&self) -> &Option<String>;
 
     /// Returns faucet url in a remote cluster.
     fn remote_faucet_url(&self) -> Option<&str>;
 
     /// Returns faucet key in a local cluster.
     fn local_faucet_key(&self) -> Option<&AccountKeyPair>;
+
+    /// Place to put config for the wallet, and any locally running services.
+    fn config_directory(&self) -> &Path;
 }
 
 /// Represents an up and running cluster deployed remotely.
 pub struct RemoteRunningCluster {
     fullnode_url: String,
     faucet_url: String,
+    config_directory: tempfile::TempDir,
 }
 
 #[async_trait]
@@ -107,20 +115,32 @@ impl Cluster for RemoteRunningCluster {
         Ok(Self {
             fullnode_url,
             faucet_url,
+            config_directory: tempfile::tempdir()?,
         })
     }
+
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
+    }
+
+    fn indexer_url(&self) -> &Option<String> {
+        &None
     }
 
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
+
     fn remote_faucet_url(&self) -> Option<&str> {
         Some(&self.faucet_url)
     }
+
     fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
         None
+    }
+
+    fn config_directory(&self) -> &Path {
+        self.config_directory.path()
     }
 }
 
@@ -128,7 +148,9 @@ impl Cluster for RemoteRunningCluster {
 pub struct LocalNewCluster {
     test_cluster: TestCluster,
     fullnode_url: String,
+    indexer_url: Option<String>,
     faucet_key: AccountKeyPair,
+    config_directory: tempfile::TempDir,
 }
 
 impl LocalNewCluster {
@@ -151,10 +173,18 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
+        let indexer_address = options.indexer_address.as_ref().map(|addr| {
+            addr.parse::<SocketAddr>()
+                .expect("Unable to parse indexer address")
+        });
+
         let mut cluster_builder = TestClusterBuilder::new()
             .set_genesis_config(genesis_config)
             .enable_fullnode_events();
 
+        if let Some(epoch_duration_ms) = options.epoch_duration_ms {
+            cluster_builder = cluster_builder.with_epoch_duration_ms(epoch_duration_ms);
+        }
         if let Some(rpc_port) = fullnode_port {
             cluster_builder = cluster_builder.set_fullnode_rpc_port(rpc_port);
         }
@@ -169,6 +199,20 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
+        if options.pg_address.is_some() && indexer_address.is_some() {
+            let config = IndexerConfig {
+                db_url: options.pg_address.clone().unwrap(),
+                rpc_client_url: fullnode_url.clone(),
+                rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
+                rpc_server_port: indexer_address.as_ref().unwrap().port(),
+                migrated_methods: IndexerConfig::all_migrated_methods(),
+                ..Default::default()
+            };
+            start_test_indexer(config, /* reset_db */ true)
+                .await
+                .unwrap();
+        }
+
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -177,11 +221,17 @@ impl Cluster for LocalNewCluster {
             test_cluster,
             fullnode_url,
             faucet_key,
+            config_directory: tempfile::tempdir()?,
+            indexer_url: options.indexer_address.clone(),
         })
     }
 
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
+    }
+
+    fn indexer_url(&self) -> &Option<String> {
+        &self.indexer_url
     }
 
     fn user_key(&self) -> AccountKeyPair {
@@ -194,6 +244,10 @@ impl Cluster for LocalNewCluster {
 
     fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
         Some(&self.faucet_key)
+    }
+
+    fn config_directory(&self) -> &Path {
+        self.config_directory.path()
     }
 }
 
@@ -208,6 +262,9 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     fn fullnode_url(&self) -> &str {
         (**self).fullnode_url()
     }
+    fn indexer_url(&self) -> &Option<String> {
+        (**self).indexer_url()
+    }
 
     fn user_key(&self) -> AccountKeyPair {
         (**self).user_key()
@@ -220,22 +277,24 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
         (**self).local_faucet_key()
     }
+
+    fn config_directory(&self) -> &Path {
+        (**self).config_directory()
+    }
 }
 
 pub async fn new_wallet_context_from_cluster(
     cluster: &(dyn Cluster + Sync + Send),
     key_pair: AccountKeyPair,
 ) -> WalletContext {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let wallet_config_path = temp_dir.path().join("client.yaml");
+    let config_dir = cluster.config_directory();
+    let wallet_config_path = config_dir.join("client.yaml");
     let fullnode_url = cluster.fullnode_url();
     info!("Use RPC: {}", &fullnode_url);
-    let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
+    let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
-    keystore
-        .add_key(SuiKeyPair::Ed25519SuiKeyPair(key_pair))
-        .unwrap();
+    keystore.add_key(SuiKeyPair::Ed25519(key_pair)).unwrap();
     SuiClientConfig {
         keystore,
         envs: vec![SuiEnv {

@@ -1,567 +1,1136 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter;
-use std::time::Duration;
-use sui_core::authority_client::AuthorityAPI;
-use sui_types::error::SuiError;
+use futures::future::join_all;
+use move_core_types::ident_str;
+use mysten_metrics::RegistryService;
+use prometheus::Registry;
+use rand::{rngs::StdRng, SeedableRng};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use sui_config::builder::ConfigBuilder;
+use sui_config::NodeConfig;
+use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
+use sui_core::consensus_adapter::position_submit_certificate;
+use sui_core::safe_client::SafeClientMetricsBase;
+use sui_core::test_utils::make_transfer_sui_transaction;
+use sui_framework::{SuiFramework, SystemPackage};
+use sui_macros::sim_test;
+use sui_node::SuiNodeHandle;
+use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress};
+use sui_types::crypto::{
+    generate_proof_of_possession, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
+    KeypairTraits, ToFromBytes,
+};
 use sui_types::gas::GasCostSummary;
-use sui_types::messages::VerifiedTransaction;
-use test_utils::authority::{get_client, spawn_test_authorities, test_authority_configs};
+use sui_types::id::ID;
+use sui_types::message_envelope::Message;
+use sui_types::messages::{
+    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
+    VerifiedTransaction,
+};
+use sui_types::object::{generate_test_gas_objects_with_owner, Object};
+use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
+use sui_types::sui_system_state::{get_validator_from_table, SuiSystemStateTrait};
+use sui_types::utils::to_sender_signed_transaction;
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
+use test_utils::authority::start_node;
+use test_utils::{
+    authority::{
+        spawn_test_authorities, test_authority_configs, test_authority_configs_with_objects,
+    },
+    network::TestClusterBuilder,
+};
+use tokio::time::{sleep, timeout};
+use tracing::{info, warn};
 
-#[tokio::test]
+#[sim_test]
 async fn advance_epoch_tx_test() {
-    // This test checks the following functionalities related to advance epoch transaction:
-    // 1. The create_advance_epoch_tx_cert API in AuthorityState can properly sign an advance
-    //    epoch transaction locally and exchange with other validators to obtain a cert.
-    // 2. The timeout in the API works as expected.
-    // 3. The certificate can be executed by each validator.
-    let configs = test_authority_configs();
-    let handles = spawn_test_authorities(iter::empty(), &configs).await;
-
-    let tx = VerifiedTransaction::new_change_epoch(1, 0, 0, 0);
-    let client0 = get_client(&configs.validator_set()[0]);
-    // Make sure that validators do not accept advance epoch sent externally.
-    assert!(matches!(
-        client0.handle_transaction(tx.into_inner()).await,
-        Err(SuiError::InvalidSystemTransaction)
-    ));
-
-    let failing_task = handles
-        .first()
-        .unwrap()
-        .with_async(|node| async move {
-            node.state()
-                .create_advance_epoch_tx_cert(
-                    1,
+    let authorities = spawn_test_authorities(&test_authority_configs()).await;
+    let states: Vec<_> = authorities
+        .iter()
+        .map(|authority| authority.with(|node| node.state()))
+        .collect();
+    let tasks: Vec<_> = states
+        .iter()
+        .map(|state| async {
+            let (_system_state, effects) = state
+                .create_and_execute_advance_epoch_tx(
+                    &state.epoch_store_for_testing(),
                     &GasCostSummary::new(0, 0, 0),
-                    Duration::from_secs(15),
+                    0, // checkpoint
+                    0, // epoch_start_timestamp_ms
                 )
                 .await
+                .unwrap();
+            // Check that the validator didn't commit the transaction yet.
+            assert!(state
+                .get_signed_effects_and_maybe_resign(
+                    effects.transaction_digest(),
+                    &state.epoch_store_for_testing()
+                )
+                .unwrap()
+                .is_none());
+            effects
+        })
+        .collect();
+    let results: HashSet<_> = join_all(tasks)
+        .await
+        .into_iter()
+        .map(|result| result.digest())
+        .collect();
+    // Check that all validators have the same result.
+    assert_eq!(results.len(), 1);
+}
+
+#[sim_test]
+async fn basic_reconfig_end_to_end_test() {
+    // TODO remove this sleep when this test passes consistently
+    sleep(Duration::from_secs(1)).await;
+    let authorities = spawn_test_authorities(&test_authority_configs()).await;
+    trigger_reconfiguration(&authorities).await;
+}
+
+#[sim_test]
+async fn reconfig_with_revert_end_to_end_test() {
+    let (sender, keypair) = get_account_key_pair();
+    let gas1 = Object::with_owner_for_testing(sender); // committed
+    let gas2 = Object::with_owner_for_testing(sender); // (most likely) reverted
+    let (configs, objects) = test_authority_configs_with_objects([gas1, gas2]);
+    let gas1 = &objects[0];
+    let gas2 = &objects[1];
+    let authorities = spawn_test_authorities(&configs).await;
+    let registry = Registry::new();
+
+    // gas1 transaction is committed
+    let tx = make_transfer_sui_transaction(
+        gas1.compute_object_reference(),
+        sender,
+        None,
+        sender,
+        &keypair,
+        None,
+    );
+    let net = AuthorityAggregator::new_from_local_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+    let (effects1, _) = net
+        .process_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+    assert_eq!(0, effects1.epoch());
+
+    // gas2 transaction is (most likely) reverted
+    let tx = make_transfer_sui_transaction(
+        gas2.compute_object_reference(),
+        sender,
+        None,
+        sender,
+        &keypair,
+        None,
+    );
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    // Close epoch on 3 (2f+1) validators.
+    let mut reverting_authority_idx = None;
+    for (i, handle) in authorities.iter().enumerate() {
+        handle
+            .with_async(|node| async {
+                if position_submit_certificate(&net.committee, &node.state().name, tx.digest())
+                    < (authorities.len() - 1)
+                {
+                    node.close_epoch_for_testing().await.unwrap();
+                } else {
+                    // remember the authority that wouild submit it to consensus last.
+                    reverting_authority_idx = Some(i);
+                }
+            })
+            .await;
+    }
+
+    let reverting_authority_idx = reverting_authority_idx.unwrap();
+    let client = net
+        .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
+        .unwrap();
+    client
+        .handle_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+
+    authorities[reverting_authority_idx]
+        .with_async(|node| async {
+            let object = node
+                .state()
+                .get_objects(&[gas2.id()])
+                .await
+                .unwrap()
+                .into_iter()
+                .next()
+                .unwrap()
+                .unwrap();
+            // verify that authority 0 advanced object version
+            assert_eq!(2, object.version().value());
         })
         .await;
-    // Since we are only running the task on one validator, it will never get a quorum and hence
-    // never succeed.
-    assert!(failing_task.is_err());
 
-    let tasks: Vec<_> = handles
+    // Wait for all nodes to reach the next epoch.
+    let handles: Vec<_> = authorities
         .iter()
         .map(|handle| {
-            handle.with_async(|node| async move {
-                node.state()
-                    .create_advance_epoch_tx_cert(
-                        1,
-                        &GasCostSummary::new(0, 0, 0),
-                        Duration::from_secs(1000), // A very very long time
-                    )
-                    .await
+            handle.with_async(|node| async {
+                loop {
+                    if node.state().current_epoch_for_testing() == 1 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
             })
         })
         .collect();
-    let results = futures::future::join_all(tasks)
-        .await
-        .into_iter()
-        .collect::<anyhow::Result<Vec<_>>>()
-        .unwrap();
-    for (handle, cert) in handles.iter().zip(results) {
+    join_all(handles).await;
+
+    let mut epoch = None;
+    for handle in authorities.iter() {
         handle
-            .with_async(|node| async move {
-                // Check that every validator is able to execute such a cert.
-                node.state()
-                    .execute_certificate_internal(&cert)
+            .with_async(|node| async {
+                let object = node
+                    .state()
+                    .get_objects(&[gas1.id()])
                     .await
+                    .unwrap()
+                    .into_iter()
+                    .next()
+                    .unwrap()
                     .unwrap();
+                assert_eq!(2, object.version().value());
+                // Due to race conditions, it's possible that tx2 went in
+                // before 2f+1 validators sent EndOfPublish messages and close
+                // the curtain of epoch 0. So, we are asserting that
+                // the object version is either 1 or 2, but needs to be
+                // consistent in all validators.
+                // Note that previously test checked that object version == 2 on authority 0
+                let object = node
+                    .state()
+                    .get_objects(&[gas2.id()])
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .unwrap();
+                let object_version = object.version().value();
+                if epoch.is_none() {
+                    assert!(object_version == 1 || object_version == 2);
+                    epoch.replace(object_version);
+                } else {
+                    assert_eq!(epoch, Some(object_version));
+                }
             })
             .await;
     }
 }
 
-/*
+// This test just starts up a cluster that reconfigures itself under 0 load.
+#[sim_test]
+async fn test_passive_reconfig() {
+    telemetry_subscribers::init_for_testing();
+    sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-use futures::future::join_all;
-use multiaddr::Multiaddr;
-use prometheus::Registry;
-use std::sync::Arc;
-use std::time::Duration;
-use sui_config::{NetworkConfig, ValidatorInfo};
-use sui_core::authority_active::checkpoint_driver::{
-    checkpoint_process_step, CheckpointProcessControl,
-};
-use sui_node::SuiNodeHandle;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::committee::Committee;
-use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AuthorityKeyPair, AuthoritySignature,
-    KeypairTraits, NetworkKeyPair,
-};
-use sui_types::error::SuiResult;
-use sui_types::messages::{CallArg, ExecutionStatus, ObjectArg, TransactionEffects};
-use sui_types::messages_checkpoint::AuthenticatedCheckpoint;
-use sui_types::object::Object;
-use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
-use test_utils::authority::{get_object, start_node, test_authority_configs};
-use test_utils::messages::{make_transfer_sui_transaction, move_transaction};
-use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
-use test_utils::test_account_keys;
-use test_utils::transaction::{
-    publish_counter_package, submit_shared_object_transaction,
-    submit_shared_object_transaction_with_committee, submit_single_owner_transaction,
-};
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(1000)
+        .build()
+        .await
+        .unwrap();
 
-use sui_macros::sim_test;
+    let mut epoch_rx = test_cluster
+        .fullnode_handle
+        .sui_node
+        .subscribe_to_epoch_change();
+
+    let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
+        .ok()
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(4);
+
+    timeout(Duration::from_secs(60), async move {
+        while let Ok((committee, _)) = epoch_rx.recv().await {
+            info!("received epoch {}", committee.epoch());
+            if committee.epoch() >= target_epoch {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("Timed out waiting for cluster to target epoch");
+}
+
+// This test just starts up a cluster that reconfigures itself under 0 load.
+#[cfg(msim)]
+#[sim_test]
+async fn test_create_advance_epoch_tx_race() {
+    use std::sync::Arc;
+    use sui_macros::{register_fail_point, register_fail_point_async};
+    use tokio::sync::broadcast;
+
+    telemetry_subscribers::init_for_testing();
+    sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+    // panic if we enter safe mode. If you remove the check for `is_tx_already_executed` in
+    // AuthorityState::create_and_execute_advance_epoch_tx, this test should fail.
+    register_fail_point("record_checkpoint_builder_is_safe_mode_metric", || {
+        panic!("safe mode recorded");
+    });
+
+    // Intercept the specified async wait point on a given node, and wait there until a message
+    // is sent from the given tx.
+    let register_wait = |failpoint, node_id, tx: Arc<broadcast::Sender<()>>| {
+        let node = sui_simulator::task::NodeId(node_id);
+        register_fail_point_async(failpoint, move || {
+            let cur_node = sui_simulator::current_simnode_id();
+            let tx = tx.clone();
+            async move {
+                if cur_node == node {
+                    let mut rx = tx.subscribe();
+
+                    info!(
+                        "waiting for test to send continuation signal for {}",
+                        failpoint
+                    );
+                    rx.recv().await.unwrap();
+                    info!("continuing {}", failpoint);
+                }
+            }
+        });
+    };
+
+    // Set up wait points.
+    let (change_epoch_delay_tx, _) = broadcast::channel(1);
+    let change_epoch_delay_tx = Arc::new(change_epoch_delay_tx);
+    let (reconfig_delay_tx, _) = broadcast::channel(1);
+    let reconfig_delay_tx = Arc::new(reconfig_delay_tx);
+
+    // Test code runs in node 1 - node 2 is always a validator.
+    let target_node = 2;
+    register_wait(
+        "change_epoch_tx_delay",
+        target_node,
+        change_epoch_delay_tx.clone(),
+    );
+    register_wait("reconfig_delay", target_node, reconfig_delay_tx.clone());
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(1000)
+        .build()
+        .await
+        .unwrap();
+
+    let mut epoch_rx = test_cluster
+        .fullnode_handle
+        .sui_node
+        .subscribe_to_epoch_change();
+
+    // wait for cluster to reconfigure.
+    timeout(Duration::from_secs(30), epoch_rx.recv())
+        .await
+        .expect("Timed out waiting for cluster to reconfigure")
+        .unwrap();
+
+    // Allow time for paused node to execute change epoch tx via state sync.
+    sleep(Duration::from_secs(5)).await;
+
+    // now release the pause, node will find that change epoch tx has already been executed.
+    info!("releasing change epoch delay tx");
+    change_epoch_delay_tx.send(()).unwrap();
+
+    // proceeded with reconfiguration.
+    sleep(Duration::from_secs(1)).await;
+    reconfig_delay_tx.send(()).unwrap();
+}
 
 #[sim_test]
-async fn reconfig_end_to_end_tests() {
-    let mut configs = test_authority_configs();
-    for c in configs.validator_configs.iter_mut() {
-        // Turn off checkpoint process so that we can have fine control over it in the test.
-        c.enable_checkpoint = false;
-        c.enable_reconfig = true;
-    }
+#[ignore]
+async fn test_reconfig_with_failing_validator() {
+    telemetry_subscribers::init_for_testing();
+    sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
-    let configs = Arc::new(configs);
-    let validator_info = configs.validator_set();
-    let mut gas_objects = test_gas_objects();
-    let validator_stake = generate_gas_object_with_balance(100000000000000);
+    let test_cluster = Arc::new(
+        TestClusterBuilder::new()
+            .with_epoch_duration_ms(5000)
+            .build()
+            .await
+            .unwrap(),
+    );
 
-    let handles = init_validators(&configs, gas_objects.clone(), &validator_stake).await;
-    let orig_committee = handles[0].with(|node| node.state().committee.load().clone());
+    let _restarter_handle = test_cluster
+        .random_node_restarter()
+        .with_kill_interval_secs(2, 4)
+        .with_restart_delay_secs(2, 4)
+        .run();
 
-    // get sui system state and confirm it matches network info
-    let configs = configs.clone();
-    let (framework_object_ref, old_committee_size) = handles[0]
-        .with_async(|node| async move {
-            let state = node.state();
+    let mut epoch_rx = test_cluster
+        .fullnode_handle
+        .sui_node
+        .subscribe_to_epoch_change();
 
-            let sui_system_state = state.get_sui_system_state_object().await.unwrap();
-            let mut net_addrs_from_chain: Vec<Multiaddr> = Vec::new();
-            let old_committee_size = sui_system_state.validators.next_epoch_validators.len();
-            for validator in sui_system_state.validators.active_validators {
-                let address = Multiaddr::try_from(validator.metadata.net_address);
-                net_addrs_from_chain.push(address.unwrap());
+    let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
+        .ok()
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(4);
+
+    timeout(Duration::from_secs(60), async move {
+        while let Ok((committee, _)) = epoch_rx.recv().await {
+            info!("received epoch {}", committee.epoch());
+            if committee.epoch() >= target_epoch {
+                break;
             }
-            let mut net_addrs_from_config = Vec::new();
-            for validator in configs.validator_configs() {
-                net_addrs_from_config.push(validator.network_address.clone());
-            }
-            assert_eq!(net_addrs_from_config.len(), net_addrs_from_chain.len());
-            net_addrs_from_config.sort();
-            net_addrs_from_chain.sort();
-            for (conf, chain) in net_addrs_from_config.iter().zip(&net_addrs_from_chain) {
-                assert_eq!(conf, chain);
-            }
-
-            (
-                state.get_framework_object_ref().await.unwrap(),
-                old_committee_size,
-            )
-        })
-        .await;
-
-    let effects = create_and_register_new_validator(
-        framework_object_ref,
-        &mut gas_objects,
-        validator_stake.compute_object_reference(),
-        validator_info,
-    )
+        }
+    })
     .await
-    .unwrap();
-    assert!(effects.status.is_ok());
+    .expect("Timed out waiting for cluster to target epoch");
+}
 
-    let expected_committee = handles[0]
-        .with_async(|node| async move {
-            let state = node.state();
-            let sui_system_state = state.get_sui_system_state_object().await.unwrap();
-            let new_committee_size = sui_system_state.validators.next_epoch_validators.len();
-            assert_eq!(old_committee_size + 1, new_committee_size);
-            sui_system_state.get_next_epoch_committee().voting_rights
-        })
-        .await;
-
-    let (sender, key_pair) = test_account_keys().pop().unwrap();
-    let object_ref = gas_objects.pop().unwrap().compute_object_reference();
-    let transaction = make_transfer_sui_transaction(
-        object_ref,
-        SuiAddress::random_for_testing_only(),
+#[sim_test]
+async fn test_validator_resign_effects() {
+    // This test checks that validators are able to re-sign transaction effects that were finalized
+    // in previous epochs. This allows authority aggregator to form a new effects certificate
+    // in the new epoch.
+    let (sender, keypair) = get_account_key_pair();
+    let gas = Object::with_owner_for_testing(sender);
+    let (configs, mut objects) = test_authority_configs_with_objects([gas]);
+    let gas = objects.pop().unwrap();
+    let authorities = spawn_test_authorities(&configs).await;
+    let tx = make_transfer_sui_transaction(
+        gas.compute_object_reference(),
+        sender,
         None,
         sender,
-        &key_pair,
+        &keypair,
+        None,
     );
-    let owned_tx_digest = *transaction.digest();
+    let registry = Registry::new();
+    let mut net = AuthorityAggregator::new_from_local_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    let cert = net
+        .process_transaction(tx.clone())
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+    let (effects0, _) = net
+        .process_certificate(cert.clone().into_inner())
+        .await
+        .unwrap();
+    assert_eq!(effects0.epoch(), 0);
+    // Give it enough time for the transaction to be checkpointed and hence finalized.
+    sleep(Duration::from_secs(10)).await;
+    trigger_reconfiguration(&authorities).await;
+    // Manually reconfigure the aggregator.
+    net.committee.epoch = 1;
+    let (effects1, _) = net.process_certificate(cert.into_inner()).await.unwrap();
+    // Ensure that we are able to form a new effects cert in the new epoch.
+    assert_eq!(effects1.epoch(), 1);
+    assert_eq!(effects0.into_message(), effects1.into_message());
+}
 
-    let package_ref = publish_counter_package(gas_objects.pop().unwrap(), validator_info).await;
+#[sim_test]
+async fn test_inactive_validator_pool_read() {
+    let leaving_validator_account_key = gen_keys(5).pop().unwrap();
+    let address: SuiAddress = leaving_validator_account_key.public().into();
 
-    let publish_tx = move_transaction(
-        gas_objects.pop().unwrap(),
-        "counter",
-        "create",
-        package_ref,
-        /* arguments */ Vec::default(),
+    let gas_objects = generate_test_gas_objects_with_owner(1, address);
+    let stake = Object::new_gas_with_balance_and_owner_for_testing(25_000_000_000_000_000, address);
+    let mut genesis_objects = vec![stake];
+    genesis_objects.extend(gas_objects.clone());
+
+    let init_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(genesis_objects.clone())
+        .build();
+
+    let gas_objects: Vec<_> = gas_objects
+        .into_iter()
+        .map(|o| init_configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    let authorities = spawn_test_authorities(&init_configs).await;
+
+    let staking_pool_id = authorities[0].with(|node| {
+        node.state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .active_validators
+            .iter()
+            .find(|v| v.sui_address == address)
+            .unwrap()
+            .staking_pool_id
+    });
+
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        address,
+        SuiFramework::ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_remove_validator").to_owned(),
+        vec![],
+        gas_objects[0].compute_object_reference(),
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_SYSTEM_STATE_OBJECT_ID,
+            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            mutable: true,
+        })],
+        10000,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
+    let effects = execute_transaction(&authorities, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    trigger_reconfiguration(&authorities).await;
+
+    // Check that the validator that just left now shows up in the inactive_validators,
+    // and we can still deserialize it and get the inactive staking pool.
+    authorities[0].with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap();
+        let inactive_pool_id = system_state
+            .into_sui_system_state_summary()
+            .inactive_pools_id;
+        let validator = get_validator_from_table(
+            node.state().db().as_ref(),
+            inactive_pool_id,
+            &ID::new(staking_pool_id),
+        )
+        .unwrap();
+        assert_eq!(validator.sui_address, address);
+    })
+}
+
+// generate N keys - use a fixed RNG so we can regenerate the same set again later (keypairs
+// are not Clone)
+fn gen_keys(count: usize) -> Vec<AccountKeyPair> {
+    let mut rng = StdRng::from_seed([0; 32]);
+    (0..count)
+        .into_iter()
+        .map(|_| get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng).1)
+        .collect()
+}
+
+#[sim_test]
+async fn test_reconfig_with_committee_change_basic() {
+    // This test exercise the full flow of a validator joining the network, catch up and then leave.
+
+    let new_validator_key = gen_keys(5).pop().unwrap();
+    let new_validator_address: SuiAddress = new_validator_key.public().into();
+
+    // TODO: In order to better "test" this flow we probably want to set the validators to ignore
+    // all p2p peer connections so that we can verify that new nodes joining can really "talk" with the
+    // other validators in the set.
+    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
+    let stake = Object::new_gas_with_balance_and_owner_for_testing(
+        30_000_000_000_000_000,
+        new_validator_address,
     );
-    let effects = submit_single_owner_transaction(publish_tx, validator_info).await;
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created[0];
-    increment_counter(
-        gas_objects.pop().unwrap(),
-        package_ref,
-        counter_id,
-        counter_initial_shared_version,
-        validator_info,
-        &orig_committee,
+    let mut objects = vec![stake.clone()];
+    objects.extend(gas_objects.clone());
+
+    let init_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(4))
+        .with_objects(objects.clone())
+        .build();
+
+    let new_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(objects.clone())
+        .build();
+
+    let gas_objects: Vec<_> = gas_objects
+        .into_iter()
+        .map(|o| init_configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    let stake = init_configs.genesis.object(stake.id()).unwrap();
+
+    // Generate a new validator config.
+    // Our committee generation uses a fixed seed, so we need to generate a new committee
+    // with one extra validator.
+    // Furthermore, since the order is not fixed, we need to find the new validator
+    // that doesn't exist in the previous committee manually.
+    // The order of validator_set() and validator_configs() is also different.
+    // TODO: We should really fix the above inconveniences.
+    let public_keys: HashSet<_> = init_configs
+        .validator_configs
+        .iter()
+        .map(|config| config.protocol_public_key())
+        .collect();
+    // Node configs contain things such as private keys, which we need to send transactions.
+    let new_node_config = new_configs
+        .validator_configs
+        .iter()
+        .find(|v| !public_keys.contains(&v.protocol_public_key()))
+        .unwrap();
+    // Validator information from genesis contains public network addresses that we need to commit on-chain.
+    let new_validator = new_configs
+        .genesis
+        .validator_set()
+        .into_iter()
+        .find(|v| {
+            let name: AuthorityName = v.verified_metadata().sui_pubkey_bytes();
+            !public_keys.contains(&name)
+        })
+        .unwrap();
+    info!(
+        "New validator is: {:?}",
+        new_validator
+            .verified_metadata()
+            .sui_pubkey_bytes()
+            .concise()
+    );
+
+    let mut authorities = spawn_test_authorities(&init_configs).await;
+
+    let _effects = execute_join_committee_txes(
+        &authorities,
+        gas_objects
+            .clone()
+            .into_iter()
+            .map(|obj| obj.compute_object_reference())
+            .collect::<Vec<_>>(),
+        stake.compute_object_reference(),
+        new_node_config,
+        new_validator.verified_metadata(),
     )
     .await;
 
-    // lock a transaction on one validator.
-    handles[0]
-        .with_async(|node| async move {
-            node.state().handle_transaction(transaction).await.unwrap();
+    trigger_reconfiguration(&authorities).await;
+    // Check that a new validator has joined the committee.
+    authorities[0].with(|node| {
+        assert_eq!(
             node.state()
-                .handle_transaction_info_request(owned_tx_digest.into())
-                .await
-                .unwrap()
-                .signed_transaction
-                .unwrap();
-        })
-        .await;
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            5
+        );
+    });
 
-    fast_forward_to_ready_for_reconfig_start(&handles).await;
-    // Start epoch change and halt all validators.
-    start_epoch_change(&handles).await;
+    let mut new_node_config_clone = new_node_config.clone();
+    // Make sure that the new validator config shares the same genesis as the initial one.
+    new_node_config_clone.genesis = init_configs.validator_configs[0].genesis.clone();
+    let handle = start_node(
+        &new_node_config_clone,
+        RegistryService::new(Registry::new()),
+    )
+    .await;
+    // Give the new validator enough time to catch up and sync.
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    handle.with(|node| {
+        // Eventually the validator will catch up to the new epoch and become part of the committee.
+        assert!(node
+            .state()
+            .is_validator(&node.state().epoch_store_for_testing()));
+    });
 
-    fast_forward_to_ready_for_reconfig_finish(&handles).await;
+    let _effects = execute_leave_committee_txes(
+        &authorities,
+        gas_objects[3].compute_object_reference(),
+        new_node_config,
+    )
+    .await;
 
-    for handle in &handles {
-        handle.with(|node| {
-            // Check that the last checkpoint contains the committee of the next epoch.
-            if let AuthenticatedCheckpoint::Certified(cert) = node
-                .active()
-                .state
-                .checkpoints
-                .lock()
-                .latest_stored_checkpoint()
-                .unwrap()
-            {
-                assert_eq!(
-                    cert.summary.next_epoch_committee.unwrap(),
-                    expected_committee
-                );
-            } else {
-                unreachable!("Expecting checkpoint cert");
-            }
-        });
-    }
+    authorities.push(handle);
+    trigger_reconfiguration(&authorities).await;
 
-    let results: Vec<_> = handles
+    // Check that this validator has left the committee, and is no longer a validator.
+    authorities[4].with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            4
+        );
+        assert!(node
+            .state()
+            .is_fullnode(&node.state().epoch_store_for_testing()));
+    })
+}
+
+#[sim_test]
+async fn test_reconfig_with_committee_change_stress() {
+    // This needs to be written to genesis for all validators, present and future
+    // (either that or we create these objects via Transaction later, but that's more work)
+    let all_validator_keys = gen_keys(11);
+
+    let object_set: HashMap<SuiAddress, (Vec<Object>, Object)> = all_validator_keys
         .iter()
-        .map(|handle| {
-            handle.with_async(|node| async {
-                node.active().finish_epoch_change().await.unwrap();
-            })
+        .map(|key| {
+            let sender: SuiAddress = key.public().into();
+            let gas_objects = generate_test_gas_objects_with_owner(4, sender);
+            let stake =
+                Object::new_gas_with_balance_and_owner_for_testing(30_000_000_000_000_000, sender);
+            (sender, (gas_objects, stake))
         })
         .collect();
 
-    futures::future::join_all(results).await;
-
-    // refresh the system state and network addresses
-    handles[0]
-        .with_async(|node| async move {
-            let sui_system_state = node.state().get_sui_system_state_object().await.unwrap();
-            assert_eq!(sui_system_state.epoch, 1);
-            // We should now have one more active validator.
-            assert_eq!(sui_system_state.validators.active_validators.len(), 5);
+    let genesis_objects: Vec<_> = object_set
+        .values()
+        .flat_map(|(g, s)| {
+            let mut objs = g.clone();
+            objs.push(s.clone());
+            objs
         })
-        .await;
+        .collect();
 
-    handles[0]
-        .with_async(|node| async move {
-            // verify validator has forgotten about locked tx.
+    let initial_network = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(genesis_objects.clone())
+        .build();
+
+    let mut object_map: HashMap<SuiAddress, (Vec<ObjectRef>, ObjectRef)> = object_set
+        .into_iter()
+        .map(|(sender, (gas, stake))| {
+            (
+                sender,
+                (
+                    gas.into_iter()
+                        .map(|obj| {
+                            initial_network
+                                .genesis
+                                .object(obj.id())
+                                .unwrap()
+                                .compute_object_reference()
+                        })
+                        .collect::<Vec<_>>(),
+                    initial_network
+                        .genesis
+                        .object(stake.id())
+                        .unwrap()
+                        .compute_object_reference(),
+                ),
+            )
+        })
+        .collect();
+
+    // Network config composed of the join of all committees that will
+    // exist at any point during this test. Each NetworkConfig epoch committee
+    // will be a subset of this
+    let validator_superset = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(all_validator_keys)
+        .with_objects(genesis_objects.clone())
+        .build();
+
+    let mut validator_handles = spawn_test_authorities(&initial_network).await;
+    assert_eq!(validator_handles.len(), 5);
+
+    let initial_keys: HashSet<_> = initial_network
+        .validator_configs()
+        .iter()
+        .map(|config| config.protocol_public_key())
+        .collect();
+
+    // start all the other nodes (they should start as fullnodes as they are not
+    // yet in the committee)
+    let fullnode_futures: Vec<_> = validator_superset
+        .validator_configs()
+        .iter()
+        .filter(|config| !initial_keys.contains(&config.protocol_public_key()))
+        .map(|config| async {
+            // Make sure that the new validator config shares the same genesis as the initial one.
+            let mut new_config = config.clone();
+            new_config.genesis = initial_network.validator_configs()[0].genesis.clone();
+            start_node(&new_config, RegistryService::new(Registry::new())).await
+        })
+        .collect();
+    let mut fullnode_handles = futures::future::join_all(fullnode_futures).await;
+    for handle in &fullnode_handles {
+        handle.with(|node| {
             assert!(node
                 .state()
-                .handle_transaction_info_request(owned_tx_digest.into())
-                .await
-                .unwrap()
-                .signed_transaction
-                .is_none());
-        })
-        .await;
-
-    let new_committee = handles[0].with(|node| node.state().committee.load().clone());
-    increment_counter(
-        gas_objects.pop().unwrap(),
-        package_ref,
-        counter_id,
-        counter_initial_shared_version,
-        validator_info,
-        &new_committee,
-    )
-    .await;
-
-    for h in &handles {
-        h.with_async(|node| async move {
-            let objref = node
-                .state()
-                .get_latest_parent_entry(counter_id)
-                .await
-                .unwrap()
-                .unwrap()
-                .0;
-            // counter was:
-            // - v1 at creation
-            // - v2 after first increment.
-            // - should now be v3 after increment in new epoch.
-            assert_eq!(objref.1.value(), 3);
-        })
-        .await;
-    }
-}
-
-#[sim_test]
-async fn reconfig_last_checkpoint_sync_missing_tx() {
-    let mut configs = test_authority_configs();
-    for c in configs.validator_configs.iter_mut() {
-        // Turn off checkpoint process so that we can have fine control over it in the test.
-        c.enable_checkpoint = false;
-        c.enable_reconfig = true;
-    }
-    let validator_info = configs.validator_set();
-    let mut gas_objects = test_gas_objects();
-    let validator_stake = generate_gas_object_with_balance(100000000000000);
-
-    let handles = init_validators(&configs, gas_objects.clone(), &validator_stake).await;
-
-    fast_forward_to_ready_for_reconfig_start(&handles).await;
-
-    let (sender, key_pair) = test_account_keys().pop().unwrap();
-    let object_ref = gas_objects.pop().unwrap().compute_object_reference();
-    let transaction = make_transfer_sui_transaction(
-        object_ref,
-        SuiAddress::random_for_testing_only(),
-        None,
-        sender,
-        &key_pair,
-    );
-    // Only send the transaction to validator 0, but not other validators.
-    // Since gossip is disabled by default, validator 1-3 will not see it.
-    submit_single_owner_transaction(transaction, &validator_info[0..1]).await;
-    tokio::time::sleep(Duration::from_secs(10)).await;
-    for (idx, validator) in validator_info.iter().enumerate() {
-        // Check that the object is mutated on validator 0 only.
-        assert_eq!(
-            get_object(validator, object_ref.0).await.version(),
-            SequenceNumber::from(u64::from(idx == 0))
-        );
+                .is_fullnode(&node.state().epoch_store_for_testing()));
+        });
     }
 
-    // Start epoch change and halt all validators.
-    start_epoch_change(&handles).await;
+    assert_eq!(validator_handles.len(), 5);
+    assert_eq!(fullnode_handles.len(), 6);
 
-    // Create a proposal on validator 0, which ensures that the transaction above will be included
-    // in the checkpoint.
-    handles[0].with(|node| node.state().checkpoints.lock().set_proposal(0).unwrap());
+    // give time for authorities to startup and genesis
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
-    // Only validator 1 and 2 will participate the checkpoint progress, which will use fragments
-    // involving validator 0, 1, 2. Since validator 1 and 2 don't have the above transaction
-    // executed, they will actively sync and execute it. This exercises the code path where we can
-    // execute a transaction from a pending checkpoint even when validator is halted.
-    let futures = handles[1..3].iter().map(|handle| {
-        handle.with_async(|node| async move {
-            let active = node.active().clone();
-            while !active
-                .state
-                .checkpoints
-                .lock()
-                .is_ready_to_finish_epoch_change()
-            {
-                let _ =
-                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
-                        .await;
-            }
+    let initial_pubkeys: Vec<_> = initial_network
+        .genesis
+        .validator_set()
+        .iter()
+        .map(|v| v.verified_metadata().sui_pubkey_bytes())
+        .collect();
+    let mut standby_nodes: Vec<_> = validator_superset
+        .genesis
+        .validator_set()
+        .into_iter()
+        .map(|val| {
+            let node_config = validator_superset
+                .validator_configs()
+                .iter()
+                .find(|config| {
+                    config.protocol_public_key() == val.verified_metadata().sui_pubkey_bytes()
+                })
+                .unwrap();
+            (val, node_config)
         })
-    });
-    // Wait for all validators to be ready for epoch change.
-    join_all(futures).await;
+        .filter(|(val, _node)| {
+            !initial_pubkeys.contains(&val.verified_metadata().sui_pubkey_bytes())
+        })
+        .collect();
+    assert_eq!(standby_nodes.len(), 6);
 
-    // Now that we have a new checkpoint cert formed for the last checkpoint, check that
-    // validator 3 is able to also sync and execute the above transaction and finish epoch change.
-    // This exercises the code path where a validator can execute transactions from a checkpoint
-    // cert even when the validator is halted.
-    handles[3]
-        .with_async(|node| async move {
-            while !node
-                .state()
-                .checkpoints
-                .lock()
-                .is_ready_to_finish_epoch_change()
-            {
-                let _ = checkpoint_process_step(
-                    node.active().clone(),
-                    &CheckpointProcessControl::default(),
-                )
+    let mut epoch = 0;
+
+    while !standby_nodes.is_empty() {
+        // Add 2 validators and remove 2 validators to/from the committee
+        // per iteration (epoch)
+
+        let joining_validators = standby_nodes.split_off(standby_nodes.len() - 2);
+        assert_eq!(joining_validators.len(), 2);
+
+        // request to add new validators
+        for (validator, node_config) in joining_validators.clone() {
+            let sender = node_config.sui_address();
+            let (gas_objects, stake) = object_map.get(&sender).unwrap();
+            let effects = execute_join_committee_txes(
+                &validator_handles,
+                gas_objects.clone(),
+                *stake,
+                node_config,
+                validator.verified_metadata(),
+            )
+            .await;
+
+            let gas_objects = vec![
+                effects[0].gas_object().0,
+                effects[1].gas_object().0,
+                effects[2].gas_object().0,
+                gas_objects[3],
+            ];
+            object_map.insert(sender, (gas_objects, *stake));
+        }
+
+        // last 2 validators request to leave
+        let auth_len = validator_handles.len();
+        for auth in &validator_handles[auth_len - 2..] {
+            let node_config = validator_superset
+                .validator_configs()
+                .iter()
+                .find(|config| config.protocol_public_key() == auth.with(|node| node.state().name))
+                .unwrap();
+
+            let sender = node_config.sui_address();
+            let (gas_objects, stake) = object_map.get(&sender).unwrap();
+            let effects =
+                execute_leave_committee_txes(&validator_handles, gas_objects[3], node_config).await;
+
+            let gas_objects = vec![
+                gas_objects[0],
+                gas_objects[1],
+                gas_objects[2],
+                effects.gas_object().0,
+            ];
+            object_map.insert(sender, (gas_objects, *stake));
+        }
+
+        trigger_reconfiguration(&validator_handles).await;
+        epoch += 1;
+
+        // allow time for reconfig
+        tokio::time::sleep(Duration::from_secs(30)).await;
+
+        // bookkeeping and verification for joined validators
+        let joined_auths: Vec<_> = joining_validators
+            .iter()
+            .map(|(val, _node)| val.verified_metadata().sui_pubkey_bytes())
+            .collect();
+
+        assert_eq!(joined_auths.len(), 2);
+
+        // find handles for nodes that joined, check that they are now
+        // fullnodes, and if so, remove them from the fullnodes list
+        // and add to the validator list
+        for name in joined_auths.into_iter() {
+            let pos = fullnode_handles
+                .iter()
+                .position(|handle| handle.with(|node| node.state().name == name))
+                .unwrap();
+            let handle = fullnode_handles.remove(pos);
+            handle
+                .with_async(|node| async {
+                    assert_eq!(node.state().epoch_store_for_testing().epoch(), epoch);
+                    assert!(node
+                        .state()
+                        .is_validator(&node.state().epoch_store_for_testing()));
+                })
                 .await;
+
+            // insert to the beginning, as the end currently contains the validators
+            // that requested to leave
+            validator_handles.insert(0, handle);
+        }
+
+        // Bookkeeping and verification for left validators
+
+        // The last two validator_handles were the ones that left the committee
+        let mut left_auth_handles = validator_handles.split_off(validator_handles.len() - 2);
+        assert_eq!(left_auth_handles.len(), 2);
+
+        for handle in &left_auth_handles {
+            handle.with(|node| {
+                assert!(node
+                    .state()
+                    .is_fullnode(&node.state().epoch_store_for_testing()));
+            });
+        }
+        fullnode_handles.push(left_auth_handles.pop().unwrap());
+        fullnode_handles.push(left_auth_handles.pop().unwrap());
+
+        // Check that new validators have joined the committee.
+        let valdator_pubkeys: Vec<_> = validator_handles
+            .iter()
+            .map(|auth| auth.with(|node| node.state().name))
+            .collect();
+        validator_handles.last().unwrap().with(|node| {
+            assert_eq!(
+                node.state()
+                    .epoch_store_for_testing()
+                    .committee()
+                    .num_members(),
+                5
+            );
+            for key in valdator_pubkeys.iter() {
+                assert!(node
+                    .state()
+                    .epoch_store_for_testing()
+                    .committee()
+                    .authority_exists(key));
             }
-        })
-        .await;
+        });
+    }
+    assert_eq!(epoch, 3);
 }
 
-async fn create_and_register_new_validator(
-    framework_pkg: ObjectRef,
-    gas_objects: &mut Vec<Object>,
-    validator_stake: ObjectRef,
-    validator_info: &[ValidatorInfo],
-) -> SuiResult<TransactionEffects> {
-    let (new_validator, new_validator_pop) = get_new_validator();
+async fn execute_join_committee_txes(
+    authorities: &[SuiNodeHandle],
+    gas_objects: Vec<ObjectRef>,
+    stake: ObjectRef,
+    node_config: &NodeConfig,
+    val: &VerifiedValidatorMetadataV1,
+) -> Vec<CertifiedTransactionEffects> {
+    assert_eq!(node_config.protocol_public_key(), val.sui_pubkey_bytes());
+    let mut effects_ret = vec![];
+    let sender = val.sui_address;
+    let proof_of_possession = generate_proof_of_possession(node_config.protocol_key_pair(), sender);
 
-    let validator_tx = move_transaction(
-        gas_objects.pop().unwrap(),
-        "sui_system",
-        "request_add_validator",
-        framework_pkg,
+    // Step 1: Add the new node as a validator candidate.
+    let candidate_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        SuiFramework::ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_add_validator_candidate").to_owned(),
+        vec![],
+        gas_objects[0],
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
             }),
-            CallArg::Pure(bcs::to_bytes(&new_validator.protocol_key()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&new_validator.network_key()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&new_validator_pop.as_ref()).unwrap()),
-            CallArg::Pure(
-                bcs::to_bytes(format!("Validator{}", new_validator.sui_address()).as_bytes())
-                    .unwrap(),
-            ),
-            CallArg::Pure(bcs::to_bytes(&new_validator.network_address).unwrap()),
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(validator_stake)),
-            CallArg::Pure(bcs::to_bytes(&new_validator.gas_price()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&new_validator.commission_rate()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.protocol_pubkey.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.network_pubkey.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.worker_pubkey.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(proof_of_possession.as_ref()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.name.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.description.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.image_url.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.project_url.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.net_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.p2p_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.primary_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.worker_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
+            CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
-    );
-    submit_shared_object_transaction(validator_tx, validator_info).await
-}
-
-pub fn get_new_validator() -> (ValidatorInfo, AuthoritySignature) {
-    let keypair: AuthorityKeyPair = get_key_pair().1;
-    let worker_keypair: NetworkKeyPair = get_key_pair().1;
-    let network_keypair: NetworkKeyPair = get_key_pair().1;
-    let account_keypair = test_account_keys().pop().unwrap().1;
-    let pop = generate_proof_of_possession(&keypair, account_keypair.public().into());
-    (
-        ValidatorInfo {
-            name: "".to_string(),
-            protocol_key: keypair.public().into(),
-            worker_key: worker_keypair.public().clone(),
-            account_key: account_keypair.public().clone().into(),
-            network_key: network_keypair.public().clone(),
-            stake: 1,
-            delegation: 0,
-            gas_price: 1,
-            commission_rate: 0,
-            network_address: sui_config::utils::new_network_address(),
-            narwhal_primary_address: sui_config::utils::new_network_address(),
-            narwhal_worker_address: sui_config::utils::new_network_address(),
-            narwhal_consensus_address: sui_config::utils::new_network_address(),
-        },
-        pop,
+        10000,
     )
-}
+    .unwrap();
+    let transaction =
+        to_sender_signed_transaction(candidate_tx_data, node_config.account_key_pair());
+    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    assert!(effects.status().is_ok());
 
-async fn init_validators(
-    configs: &NetworkConfig,
-    gas_objects: Vec<Object>,
-    validator_stake: &Object,
-) -> Vec<SuiNodeHandle> {
-    let mut handles = Vec::new();
-    for validator in configs.validator_configs() {
-        let handle = start_node(validator, Registry::new()).await;
-        let gas_objects = gas_objects.clone();
-        let validator_stake = validator_stake.clone();
-        handle
-            .with_async(|node| async move {
-                let state = node.state();
+    effects_ret.push(effects);
 
-                for gas in gas_objects {
-                    state.insert_genesis_object(gas).await;
-                }
-                state.insert_genesis_object(validator_stake).await;
-            })
-            .await;
-        handles.push(handle);
-    }
-    handles
-}
+    // Step 2: Give the candidate enough stake.
+    let stake_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        SuiFramework::ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_add_stake").to_owned(),
+        vec![],
+        gas_objects[1],
+        vec![
+            CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_SYSTEM_STATE_OBJECT_ID,
+                initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                mutable: true,
+            }),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(stake)),
+            CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+        ],
+        10000,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
+    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    assert!(effects.status().is_ok());
 
-async fn start_epoch_change(handles: &[SuiNodeHandle]) {
-    for handle in handles {
-        handle
-            .with_async(|node| async move {
-                node.active().start_epoch_change().await.unwrap();
-            })
-            .await;
-    }
-}
+    effects_ret.push(effects);
 
-async fn fast_forward_to_ready_for_reconfig_start(handles: &[SuiNodeHandle]) {
-    let futures = handles.iter().map(|handle| {
-        handle.with_async(|node| async move {
-            let active = node.active().clone();
-            while !active
-                .state
-                .checkpoints
-                .lock()
-                .is_ready_to_start_epoch_change()
-            {
-                let _ =
-                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
-                        .await;
-            }
-        })
-    });
-    // Wait for all validators to be ready for epoch change.
-    join_all(futures).await;
-}
-
-async fn fast_forward_to_ready_for_reconfig_finish(handles: &[SuiNodeHandle]) {
-    let futures = handles.iter().map(|handle| {
-        handle.with_async(|node| async move {
-            let active = node.active().clone();
-            while !active
-                .state
-                .checkpoints
-                .lock()
-                .is_ready_to_finish_epoch_change()
-            {
-                let _ =
-                    checkpoint_process_step(active.clone(), &CheckpointProcessControl::default())
-                        .await;
-            }
-        })
-    });
-
-    // Wait for all validators to be ready for epoch change.
-    join_all(futures).await;
-}
-
-async fn increment_counter(
-    gas_object: Object,
-    package_ref: ObjectRef,
-    counter_id: ObjectID,
-    initial_shared_version: SequenceNumber,
-    validator_info: &[ValidatorInfo],
-    committee: &Committee,
-) {
-    // Make a transaction to increment the counter.
-    let transaction = move_transaction(
-        gas_object,
-        "counter",
-        "increment",
-        package_ref,
+    // Step 3: Convert the candidate to an active valdiator.
+    let activation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        sender,
+        SuiFramework::ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_add_validator").to_owned(),
+        vec![],
+        gas_objects[2],
         vec![CallArg::Object(ObjectArg::SharedObject {
-            id: counter_id,
-            initial_shared_version,
+            id: SUI_SYSTEM_STATE_OBJECT_ID,
+            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            mutable: true,
         })],
-    );
-    let effects =
-        submit_shared_object_transaction_with_committee(transaction, validator_info, committee)
-            .await
-            .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+        10000,
+    )
+    .unwrap();
+    let transaction =
+        to_sender_signed_transaction(activation_tx_data, node_config.account_key_pair());
+    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    assert!(effects.status().is_ok());
+    effects_ret.push(effects);
+
+    effects_ret
 }
-*/
+
+async fn execute_leave_committee_txes(
+    authorities: &[SuiNodeHandle],
+    gas: ObjectRef,
+    node_config: &NodeConfig,
+) -> CertifiedTransactionEffects {
+    let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
+        node_config.sui_address(),
+        SuiFramework::ID,
+        ident_str!("sui_system").to_owned(),
+        ident_str!("request_remove_validator").to_owned(),
+        vec![],
+        gas,
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_SYSTEM_STATE_OBJECT_ID,
+            initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+            mutable: true,
+        })],
+        10000,
+    )
+    .unwrap();
+
+    let transaction = to_sender_signed_transaction(tx_data, node_config.account_key_pair());
+    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    assert!(effects.status().is_ok());
+    effects
+}
+
+async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
+    info!("Starting reconfiguration");
+    let start = Instant::now();
+
+    // Close epoch on 2f+1 validators.
+    let cur_committee =
+        authorities[0].with(|node| node.state().epoch_store_for_testing().committee().clone());
+    let mut cur_stake = 0;
+    for handle in authorities {
+        handle
+            .with_async(|node| async {
+                node.close_epoch_for_testing().await.unwrap();
+                cur_stake += cur_committee.weight(&node.state().name);
+            })
+            .await;
+        if cur_stake >= cur_committee.quorum_threshold() {
+            break;
+        }
+    }
+    info!("close_epoch complete after {:?}", start.elapsed());
+
+    // Wait for all nodes to reach the next epoch.
+    let handles: Vec<_> = authorities
+        .iter()
+        .map(|handle| {
+            handle.with_async(|node| async {
+                let mut retries = 0;
+                loop {
+                    if node.state().epoch_store_for_testing().epoch() == cur_committee.epoch + 1 {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    retries += 1;
+                    if retries % 5 == 0 {
+                        warn!(validator=?node.state().name.concise(), "Waiting for {:?} seconds for epoch change", retries);
+                    }
+                }
+            })
+        })
+        .collect();
+
+    timeout(Duration::from_secs(40), join_all(handles))
+        .await
+        .expect("timed out waiting for reconfiguration to complete");
+
+    info!("reconfiguration complete after {:?}", start.elapsed());
+}
+
+async fn execute_transaction(
+    authorities: &[SuiNodeHandle],
+    transaction: VerifiedTransaction,
+) -> anyhow::Result<CertifiedTransactionEffects> {
+    let registry = Registry::new();
+    let net = AuthorityAggregator::new_from_local_system_state(
+        &authorities[0].with(|node| node.state().db()),
+        &authorities[0].with(|node| node.state().committee_store().clone()),
+        SafeClientMetricsBase::new(&registry),
+        AuthAggMetrics::new(&registry),
+    )
+    .unwrap();
+    net.execute_transaction(&transaction)
+        .await
+        .map(|e| e.into_inner())
+}

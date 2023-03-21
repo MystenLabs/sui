@@ -4,71 +4,71 @@ init:
 A: object(100), B: object(101)
 
 task 1 'publish'. lines 9-52:
-created: object(105)
-written: object(104)
+created: object(106)
+written: object(105)
 
 task 2 'run'. lines 54-54:
-created: object(107)
-written: object(106)
+created: object(108)
+written: object(107)
 
 task 3 'view-object'. lines 56-56:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'run'. lines 58-58:
-created: object(109), object(110)
-written: object(107), object(108)
+created: object(110), object(111)
+written: object(108), object(109)
 
 task 5 'run'. lines 60-60:
-written: object(107), object(111)
-deleted: object(109), object(110)
+written: object(108), object(112)
+deleted: object(110), object(111)
 
 task 6 'view-object'. lines 62-66:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 7 'run'. lines 68-68:
-created: object(113)
-written: object(112)
+created: object(114)
+written: object(113)
 
 task 8 'view-object'. lines 70-70:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
 
 task 9 'run'. lines 72-72:
-created: object(115), object(116)
-written: object(113), object(114)
+created: object(116), object(117)
+written: object(114), object(115)
 
 task 10 'run'. lines 74-74:
-written: object(113), object(115), object(116), object(117)
+written: object(114), object(116), object(117), object(118)
 
 task 11 'view-object'. lines 76-80:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
 
 task 12 'run'. lines 82-82:
-created: object(119)
-written: object(118)
+created: object(120)
+written: object(119)
 
 task 13 'view-object'. lines 84-84:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}
 
 task 14 'run'. lines 86-86:
-created: object(121), object(122)
-written: object(119), object(120)
+created: object(122), object(123)
+written: object(120), object(121)
 
 task 15 'run'. lines 88-88:
-created: object(124)
-written: object(119), object(121), object(123)
-deleted: object(122)
+created: object(125)
+written: object(120), object(122), object(124)
+deleted: object(123)
 
 task 16 'view-object'. lines 90-90:
 Owner: Account Address ( A )
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}

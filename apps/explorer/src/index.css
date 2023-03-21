@@ -11,33 +11,10 @@
     --issue-light: theme('colors.issue.light');
     --issue-dark: theme('colors.issue.dark');
     --steel: theme('colors.steel.DEFAULT');
+    --steel-dark: theme('colors.steel.dark');
 }
 
 body {
-    @apply m-0 font-sans text-offblack antialiased;
-}
-
-/*
- * Reset the font-family for elements that override their font-family by default.
- * This will no longer be needed once we use the Tailwind CSS Reset.
- */
-button,
-input,
-optgroup,
-select,
-textarea {
-    font-family: inherit;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-    outline: none;
-}
-
-/* Fix inconsistent font size rendering on iphone */
-@media screen and (max-device-width: 480px) {
-    body {
-        text-size-adjust: none;
-    }
+    @apply antialiased;
+    @apply font-sans text-offblack;
 }

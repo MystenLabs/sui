@@ -20,18 +20,13 @@ export { LinkProps };
 /** Query params that we want to be preserved between all pages. */
 export const PRESERVE_QUERY = ['network'];
 
-// TODO: Once we have a new router configuration based on the new react router configuration,
-// we should just move these components there so that we import the link from the router.
-// This also will align closer to how TanStack Router works.
-
 export function useNavigateWithQuery() {
     const navigate = useNavigate();
     const { search } = useLocation();
 
     const navigateWithQuery = useCallback(
-        (url: string, options: NavigateOptions) => {
-            return navigate(`${url}${search}`, options);
-        },
+        (url: string, options: NavigateOptions) =>
+            navigate(`${url}${search}`, options),
         [navigate, search]
     );
 
@@ -61,7 +56,7 @@ export function useSearchParamsMerged() {
 }
 
 export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
-    ({ to, ...props }) => {
+    ({ to, ...props }, ref) => {
         const href = useHref(to);
         const [searchParams] = useSearchParams();
         const [toBaseURL, toSearchParamString] = href.split('?');
@@ -78,6 +73,7 @@ export const LinkWithQuery = forwardRef<HTMLAnchorElement, LinkProps>(
 
         return (
             <Link
+                ref={ref}
                 to={{
                     pathname: toBaseURL,
                     search: mergedSearchParams,

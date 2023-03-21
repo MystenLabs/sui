@@ -8,13 +8,14 @@ import {
     useDismiss,
     offset,
     arrow,
-} from '@floating-ui/react-dom-interactions';
-import cn from 'classnames';
+} from '@floating-ui/react';
+import { ChevronDown12, Dot12 } from '@mysten/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { ButtonConnectedTo } from '../ButtonConnectedTo';
 import { appDisconnect } from './actions';
-import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
@@ -42,9 +43,9 @@ function DappStatus() {
         [activeOriginUrl]
     );
     const isConnected = useAppSelector(dappStatusSelector);
+    const activeAddress = useActiveAddress();
     const [disconnecting, setDisconnecting] = useState(false);
     const [visible, setVisible] = useState(false);
-    const Component = isConnected ? 'button' : 'span';
     const onHandleClick = useCallback(
         (e: boolean) => {
             if (!disconnecting) {
@@ -75,14 +76,17 @@ function DappStatus() {
         }),
     ]);
     const onHandleDisconnect = useCallback(async () => {
-        if (!disconnecting && isConnected && activeOriginUrl) {
+        if (!disconnecting && isConnected && activeOriginUrl && activeAddress) {
             trackEvent('AppDisconnect', {
                 props: { source: 'Header' },
             });
             setDisconnecting(true);
             try {
                 await dispatch(
-                    appDisconnect({ origin: activeOriginUrl })
+                    appDisconnect({
+                        origin: activeOriginUrl,
+                        accounts: [activeAddress],
+                    })
                 ).unwrap();
                 setVisible(false);
             } catch (e) {
@@ -91,33 +95,19 @@ function DappStatus() {
                 setDisconnecting(false);
             }
         }
-    }, [disconnecting, isConnected, activeOriginUrl, dispatch]);
+    }, [disconnecting, isConnected, activeOriginUrl, activeAddress, dispatch]);
     if (!isConnected) {
         return null;
     }
     return (
         <>
-            <Component
-                type="button"
-                className={cn(st.container, {
-                    [st.connected]: isConnected,
-                    [st.active]: visible,
-                })}
-                disabled={!isConnected}
+            <ButtonConnectedTo
+                iconBefore={<Dot12 className="text-success" />}
+                text={activeOrigin || ''}
+                iconAfter={<ChevronDown12 />}
                 ref={reference}
                 {...getReferenceProps()}
-            >
-                <Icon
-                    icon="circle-fill"
-                    className={cn(st.icon, { [st.connected]: isConnected })}
-                />
-                <span className={st.label}>
-                    {(isConnected && activeOrigin) || 'Not connected'}
-                </span>
-                {isConnected ? (
-                    <Icon icon={SuiIcons.ChevronDown} className={st.chevron} />
-                ) : null}
-            </Component>
+            />
             <AnimatePresence>
                 {visible ? (
                     <motion.div

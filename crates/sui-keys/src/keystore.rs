@@ -3,10 +3,10 @@
 
 use anyhow::anyhow;
 use bip32::DerivationPath;
-use bip39::{Language, Mnemonic, MnemonicType, Seed};
+use bip39::{Language, Mnemonic, Seed};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use signature::Signer;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -14,7 +14,6 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use sui_types::intent::{Intent, IntentMessage};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -22,7 +21,7 @@ use sui_types::crypto::{
     SignatureScheme, SuiKeyPair,
 };
 
-use crate::key_derive::derive_key_pair_from_path;
+use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 
 #[derive(Serialize, Deserialize)]
 #[enum_dispatch(AccountKeystore)]
@@ -32,11 +31,11 @@ pub enum Keystore {
 }
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
-    #[warn(deprecated)]
-    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_key(&mut self, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
     fn keys(&self) -> Vec<PublicKey>;
     fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
+
+    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
 
     fn sign_secure<T>(
         &self,
@@ -50,23 +49,14 @@ pub trait AccountKeystore: Send + Sync {
         self.keys().iter().map(|k| k.into()).collect()
     }
 
-    fn generate_new_key(
+    fn generate_and_add_new_key(
         &mut self,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
-        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-        match derive_key_pair_from_path(
-            Seed::new(&mnemonic, "").as_bytes(),
-            derivation_path,
-            &key_scheme,
-        ) {
-            Ok((address, keypair)) => {
-                self.add_key(keypair)?;
-                Ok((address, mnemonic.phrase().to_string(), key_scheme))
-            }
-            Err(e) => Err(anyhow!("error generating key {:?}", e)),
-        }
+        let (address, kp, scheme, phrase) = generate_new_key(key_scheme, derivation_path)?;
+        self.add_key(kp)?;
+        Ok((address, phrase, scheme))
     }
 
     fn import_from_mnemonic(
@@ -138,16 +128,14 @@ impl<'de> Deserialize<'de> for FileBasedKeystore {
 }
 
 impl AccountKeystore for FileBasedKeystore {
-    #[warn(deprecated)]
-    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        self.keys
-            .get(address)
-            .ok_or_else(|| {
+    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        Ok(Signature::new_hashed(
+            msg,
+            self.keys.get(address).ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
-            })?
-            .try_sign(msg)
+            })?,
+        ))
     }
-
     fn sign_secure<T>(
         &self,
         address: &SuiAddress,
@@ -237,16 +225,14 @@ pub struct InMemKeystore {
 }
 
 impl AccountKeystore for InMemKeystore {
-    #[warn(deprecated)]
-    fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        self.keys
-            .get(address)
-            .ok_or_else(|| {
+    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        Ok(Signature::new_hashed(
+            msg,
+            self.keys.get(address).ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
-            })?
-            .try_sign(msg)
+            })?,
+        ))
     }
-
     fn sign_secure<T>(
         &self,
         address: &SuiAddress,
@@ -287,7 +273,7 @@ impl InMemKeystore {
         let mut rng = StdRng::from_seed([0; 32]);
         let keys = (0..initial_key_number)
             .map(|_| get_key_pair_from_rng(&mut rng))
-            .map(|(ad, k)| (ad, SuiKeyPair::Ed25519SuiKeyPair(k)))
+            .map(|(ad, k)| (ad, SuiKeyPair::Ed25519(k)))
             .collect::<BTreeMap<SuiAddress, SuiKeyPair>>();
 
         Self { keys }

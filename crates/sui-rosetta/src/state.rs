@@ -1,55 +1,47 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use anyhow::anyhow;
-use async_trait::async_trait;
-use tokio::sync::RwLock;
-use tracing::{debug, error};
-
-use mysten_metrics::spawn_monitored_task;
-use sui_config::genesis::Genesis;
-use sui_core::authority::AuthorityState;
-use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::quorum_driver::QuorumDriver;
-use sui_types::base_types::{
-    SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
-};
-use sui_types::gas_coin::GasCoin;
-use sui_types::query::TransactionQuery;
-
-use crate::operations::Operation;
+use crate::operations::Operations;
 use crate::types::{
-    AccountIdentifier, Amount, Block, BlockHash, BlockIdentifier, BlockResponse, CoinAction,
-    CoinChange, CoinID, CoinIdentifier, OperationStatus, OperationType, SignedValue, Transaction,
+    Block, BlockHash, BlockIdentifier, BlockResponse, OperationStatus, OperationType, Transaction,
     TransactionIdentifier,
 };
-use crate::ErrorType::{BlockNotFound, InternalError};
-use crate::{Error, ErrorType, SUI};
+use crate::Error;
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use mysten_metrics::spawn_monitored_task;
+use rocksdb::Options;
+use std::collections::HashMap;
+use std::path::Path;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::{Duration, UNIX_EPOCH};
+use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_sdk::rpc_types::Checkpoint;
+use sui_sdk::SuiClient;
+use sui_types::base_types::{EpochId, SuiAddress};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tracing::{debug, error, info, warn};
+use typed_store::rocks::{point_lookup_db_options, DBMap, DBOptions, MetricConf};
+use typed_store::traits::TableSummary;
+use typed_store::traits::TypedStoreDebug;
+use typed_store::Map;
+use typed_store_derive::DBMapUtils;
 
 #[cfg(test)]
 #[path = "unit_tests/balance_changing_tx_tests.rs"]
 mod balance_changing_tx_tests;
 
+#[derive(Clone)]
 pub struct OnlineServerContext {
-    pub state: Arc<AuthorityState>,
-    pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    pub client: SuiClient,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
 
 impl OnlineServerContext {
-    pub fn new(
-        state: Arc<AuthorityState>,
-        quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
-        block_provider: Arc<dyn BlockProvider + Send + Sync>,
-    ) -> Self {
+    pub fn new(client: SuiClient, block_provider: Arc<dyn BlockProvider + Send + Sync>) -> Self {
         Self {
-            state,
-            quorum_driver,
+            client,
             block_provider,
         }
     }
@@ -64,350 +56,296 @@ pub trait BlockProvider {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error>;
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error>;
     async fn current_block(&self) -> Result<BlockResponse, Error>;
-    fn genesis_block_identifier(&self) -> BlockIdentifier;
+    async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn get_balance_at_block(
         &self,
         addr: SuiAddress,
         block_height: u64,
-    ) -> Result<u128, Error>;
+    ) -> Result<i128, Error>;
 }
 
 #[derive(Clone)]
-pub struct PseudoBlockProvider {
-    blocks: Arc<RwLock<Vec<BlockResponse>>>,
-    balance: Arc<RwLock<BTreeMap<SuiAddress, Vec<HistoricBalance>>>>,
+pub struct CheckpointBlockProvider {
+    index_store: Arc<CheckpointIndexStore>,
+    client: SuiClient,
 }
 
 #[async_trait]
-impl BlockProvider for PseudoBlockProvider {
+impl BlockProvider for CheckpointBlockProvider {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error> {
-        self.blocks
-            .read()
-            .await
-            .iter()
-            .find(|b| b.block.block_identifier.index == index)
-            .cloned()
-            .ok_or_else(|| Error::new(BlockNotFound))
+        let checkpoint = self.client.read_api().get_checkpoint(index.into()).await?;
+        self.create_block_response(checkpoint).await
     }
 
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error> {
-        self.blocks
-            .read()
-            .await
-            .iter()
-            .find(|b| b.block.block_identifier.hash == hash)
-            .cloned()
-            .ok_or_else(|| Error::new(BlockNotFound))
+        let checkpoint = self.client.read_api().get_checkpoint(hash.into()).await?;
+        self.create_block_response(checkpoint).await
     }
 
     async fn current_block(&self) -> Result<BlockResponse, Error> {
-        self.blocks
-            .read()
+        self.get_block_by_index(self.last_indexed_checkpoint()?)
             .await
-            .last()
-            .ok_or_else(|| {
-                Error::new_with_msg(
-                    BlockNotFound,
-                    "Unexpected error, cannot find the latest block.",
-                )
-            })
-            .cloned()
     }
 
-    fn genesis_block_identifier(&self) -> BlockIdentifier {
-        BlockIdentifier {
-            index: 0,
-            hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
-        }
+    async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error> {
+        self.create_block_identifier(0).await
     }
 
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.blocks
-            .read()
-            .await
-            .first()
-            .map(|b| b.block.block_identifier.clone())
-            .ok_or_else(|| {
-                Error::new_with_msg(
-                    BlockNotFound,
-                    "Unexpected error, cannot find the oldest block.",
-                )
-            })
+        self.create_block_identifier(0).await
     }
 
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        self.current_block().await.map(|b| b.block.block_identifier)
+        self.create_block_identifier(self.last_indexed_checkpoint()?)
+            .await
     }
 
     async fn get_balance_at_block(
         &self,
         addr: SuiAddress,
         block_height: u64,
-    ) -> Result<u128, Error> {
-        if let Some(balances) = self.balance.read().await.get(&addr) {
-            for HistoricBalance {
-                block_height: blk_idx,
-                balance,
-            } in balances.iter().rev()
-            {
-                if blk_idx <= &block_height {
-                    return Ok(*balance);
-                }
-            }
-        };
-        Ok(0)
+    ) -> Result<i128, Error> {
+        Ok(self
+            .index_store
+            .balances
+            .iter()
+            .skip_prior_to(&(addr, block_height))?
+            .next()
+            .and_then(
+                |((address, _), balance)| {
+                    if address == addr {
+                        Some(balance)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .unwrap_or_default())
     }
 }
 
-impl PseudoBlockProvider {
-    pub fn spawn(state: Arc<AuthorityState>, genesis: &Genesis) -> Self {
-        let genesis = genesis_block(genesis);
-        let genesis_txs = genesis
-            .block
-            .transactions
-            .iter()
-            .flat_map(|tx| tx.operations.clone())
-            .collect();
+impl CheckpointBlockProvider {
+    pub fn spawn(client: SuiClient, db_path: &Path) -> Self {
         let blocks = Self {
-            blocks: Arc::new(RwLock::new(vec![genesis])),
-            balance: Arc::new(Default::default()),
+            index_store: Arc::new(CheckpointIndexStore::open(db_path, None)),
+            client,
         };
 
-        let block_interval = option_env!("SUI_BLOCK_INTERVAL")
+        let update_interval = option_env!("CHECKPOINT_UPDATE_INTERVAL")
             .map(|i| u64::from_str(i).ok())
             .flatten()
             .unwrap_or(2000);
-        let block_interval = Duration::from_millis(block_interval);
+        let update_interval = Duration::from_millis(update_interval);
 
         let f = blocks.clone();
         spawn_monitored_task!(async move {
-            if let Err(e) = f.update_balance(0, genesis_txs).await {
-                error!("Error updating balance, cause: {e:?}")
-            }
-            loop {
-                if let Err(e) = f.create_next_block(state.clone()).await {
-                    error!("Error creating block, cause: {e:?}")
+            if f.index_store.is_empty() {
+                info!("Index Store is empty, indexing genesis block.");
+                let mut checkpoint = None;
+                while checkpoint.is_none() {
+                    checkpoint = f.client.read_api().get_checkpoint(0.into()).await.ok();
+                    if checkpoint.is_none() {
+                        info!("Genesis checkpoint not available, retry in 10 seconds.");
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
                 }
-                tokio::time::sleep(block_interval).await;
+                let resp = f.create_block_response(checkpoint.unwrap()).await.unwrap();
+                f.update_balance(resp.block).await.unwrap();
+            } else {
+                let current_block = f.current_block_identifier().await.unwrap();
+                info!("Resuming from block {}", current_block.index);
+            };
+            loop {
+                if let Err(e) = f.index_checkpoints().await {
+                    error!("Error indexing checkpoint, cause: {e:?}")
+                }
+                tokio::time::sleep(update_interval).await;
             }
         });
 
         blocks
     }
 
-    async fn create_next_block(&self, state: Arc<AuthorityState>) -> Result<(), Error> {
-        let current_block = self.current_block_identifier().await?;
-        let total_tx = state.get_total_transaction_number()?;
-        if total_tx == 0 {
-            return Ok(());
-        }
-        if current_block.index < total_tx {
-            let tx_digests = if current_block.index == 0 {
-                state.get_transactions(TransactionQuery::All, None, None, false)?
-            } else {
-                let cursor = TransactionDigest::new(current_block.hash.0);
-                let mut tx_digests =
-                    state.get_transactions(TransactionQuery::All, Some(cursor), None, false)?;
-                if tx_digests.remove(0) != cursor {
-                    return Err(Error::new_with_msg(
-                        ErrorType::InternalError,
-                        "Incorrect data returned from state.",
-                    ));
-                }
-                tx_digests
-            };
-
-            let mut index = current_block.index;
-            let mut parent_block_identifier = current_block;
-
-            for digest in tx_digests {
-                index += 1;
-                let block_identifier = BlockIdentifier {
-                    index,
-                    hash: digest.as_ref().try_into()?,
-                };
-
-                // update balance
-                let (tx, effect) = state.get_transaction(digest).await?;
-
-                let operations = Operation::from_data_and_events(
-                    &tx.data().intent_message.value,
-                    &effect.status,
-                    &effect.events,
-                )?;
-
-                let transaction = Transaction {
-                    transaction_identifier: TransactionIdentifier { hash: digest },
-                    operations,
-                    related_transactions: vec![],
-                    metadata: None,
-                };
-
-                let new_block = BlockResponse {
-                    block: Block {
-                        block_identifier: block_identifier.clone(),
-                        parent_block_identifier: parent_block_identifier.clone(),
-                        timestamp: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .map_err(|e| Error::new_with_cause(InternalError, e))?
-                            .as_millis()
-                            .try_into()?,
-                        transactions: vec![transaction],
-                        metadata: None,
-                    },
-                    other_transactions: vec![],
-                };
-
-                let ops = Operation::from_data_and_events(
-                    &tx.data().intent_message.value,
-                    &effect.status,
-                    &effect.events,
-                )?;
-
-                self.blocks.write().await.push(new_block);
-                self.update_balance(index, ops).await.map_err(|e| {
-                    anyhow!("Failed to update balance, tx: {tx}, effect:{effect}, cause : {e}")
-                })?;
-                parent_block_identifier = block_identifier
+    async fn index_checkpoints(&self) -> Result<(), Error> {
+        let last_checkpoint = self.last_indexed_checkpoint()?;
+        let head = self
+            .client
+            .read_api()
+            .get_latest_checkpoint_sequence_number()
+            .await?;
+        if last_checkpoint < head {
+            for seq in last_checkpoint + 1..=head {
+                let checkpoint = self.client.read_api().get_checkpoint(seq.into()).await?;
+                let timestamp = UNIX_EPOCH + Duration::from_millis(checkpoint.timestamp_ms);
+                info!(
+                    "indexing checkpoint {seq} with {} txs, timestamp: {}",
+                    checkpoint.transactions.len(),
+                    DateTime::<Utc>::from(timestamp).format("%Y-%m-%d %H:%M:%S")
+                );
+                let resp = self.create_block_response(checkpoint).await?;
+                self.update_balance(resp.block).await?;
+                self.index_store.last_checkpoint.insert(&true, &seq)?;
             }
         } else {
-            debug!("No new transactions.")
+            debug!("No new checkpoints.")
         };
-
         Ok(())
     }
 
-    async fn update_balance(
-        &self,
-        block_height: u64,
-        ops: Vec<Operation>,
-    ) -> Result<(), anyhow::Error> {
-        let balance_changes = extract_balance_changes_from_ops(ops)?;
+    async fn update_balance(&self, block: Block) -> Result<(), anyhow::Error> {
+        let block_height = block.block_identifier.index;
+        let last_block_height = if block_height == 0 {
+            0
+        } else {
+            block_height - 1
+        };
+        let balances: HashMap<SuiAddress, i128> =
+            block
+                .transactions
+                .into_iter()
+                .fold(HashMap::new(), |mut changes, tx| {
+                    for (address, balance) in extract_balance_changes_from_ops(tx.operations) {
+                        *changes.entry(address).or_default() += balance;
+                    }
+                    changes
+                });
 
-        let mut balances = self.balance.write().await;
-
-        for (addr, value) in balance_changes {
-            let balance = balances.entry(addr).or_default();
-            let current_balance = balance
-                .iter()
-                .last()
-                .map(|HistoricBalance { balance, .. }| *balance)
-                .unwrap_or_default();
-            let new_balance = if value.is_negative() {
-                if current_balance < value.abs() {
-                    // This can happen due to missing transactions data due to unstable validators, causing balance to
-                    // fall below zero temporarily. The problem should go away when we start using checkpoints for event and indexing
-                    return Err(anyhow!(
-                        "Account gas value fall below 0 at block {}, address: [{}]",
-                        block_height,
-                        addr
-                    ));
-                }
-                current_balance - value.abs()
-            } else {
-                current_balance + value.abs()
-            };
-            balance.push(HistoricBalance {
-                block_height,
-                balance: new_balance,
-            });
-        }
-        Ok(())
-    }
-}
-
-struct HistoricBalance {
-    block_height: u64,
-    balance: u128,
-}
-
-fn extract_balance_changes_from_ops(
-    ops: Vec<Operation>,
-) -> Result<BTreeMap<SuiAddress, SignedValue>, anyhow::Error> {
-    let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
-    for op in ops {
-        match op.type_ {
-            OperationType::SuiBalanceChange
-            | OperationType::GasSpent
-            | OperationType::Genesis
-            | OperationType::PaySui => {
-                let addr = op
-                    .account
-                    .ok_or_else(|| anyhow!("Account address cannot be null for {:?}", op.type_))?
-                    .address;
-                let amount = op
-                    .amount
-                    .ok_or_else(|| anyhow!("Amount cannot be null for {:?}", op.type_))?;
-                changes.entry(addr).or_default().add(&amount.value)
+        for (addr, value) in balances {
+            let current_balance = self.get_balance_at_block(addr, last_block_height).await?;
+            let new_balance = current_balance + value;
+            if new_balance < 0 {
+                // This can happen due to missing transactions data due to unstable validators, causing balance to
+                // fall below zero temporarily. The problem should go away when we start using checkpoints for event and indexing
+                warn!("Account gas value fall below 0 at block {block_height}, address: [{addr}], current balance = {current_balance}, balance change = {value}.");
             }
-            _ => {}
+            self.index_store
+                .balances
+                .insert(&(addr, block_height), &new_balance)?;
         }
+        Ok(())
     }
-    Ok(changes)
+
+    async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
+        let index = checkpoint.sequence_number;
+        let hash = checkpoint.digest;
+        let mut transactions = vec![];
+        for digest in checkpoint.transactions.iter() {
+            let tx = self
+                .client
+                .read_api()
+                .get_transaction_with_options(
+                    *digest,
+                    SuiTransactionResponseOptions::new()
+                        .with_input()
+                        .with_effects()
+                        .with_balance_changes()
+                        .with_events(),
+                )
+                .await?;
+            transactions.push(Transaction {
+                transaction_identifier: TransactionIdentifier { hash: tx.digest },
+                operations: Operations::try_from(tx)?,
+                related_transactions: vec![],
+                metadata: None,
+            })
+        }
+
+        // previous digest should only be None for genesis block.
+        if checkpoint.previous_digest.is_none() && index != 0 {
+            return Err(Error::DataError(format!(
+                "Previous digest is None for checkpoint [{index}], digest: [{hash:?}]"
+            )));
+        }
+
+        let parent_block_identifier = checkpoint
+            .previous_digest
+            .map(|hash| BlockIdentifier {
+                index: index - 1,
+                hash,
+            })
+            .unwrap_or_else(|| BlockIdentifier { index, hash });
+
+        Ok(BlockResponse {
+            block: Block {
+                block_identifier: BlockIdentifier { index, hash },
+                parent_block_identifier,
+                timestamp: checkpoint.timestamp_ms,
+                transactions,
+                metadata: None,
+            },
+            other_transactions: vec![],
+        })
+    }
+
+    async fn create_block_identifier(
+        &self,
+        seq_number: CheckpointSequenceNumber,
+    ) -> Result<BlockIdentifier, Error> {
+        let checkpoint = self
+            .client
+            .read_api()
+            .get_checkpoint(seq_number.into())
+            .await?;
+        Ok(BlockIdentifier {
+            index: checkpoint.sequence_number,
+            hash: checkpoint.digest,
+        })
+    }
+
+    fn last_indexed_checkpoint(&self) -> Result<CheckpointSequenceNumber, Error> {
+        Ok(self
+            .index_store
+            .last_checkpoint
+            .get(&true)?
+            .unwrap_or_default())
+    }
 }
 
-fn genesis_block(genesis: &Genesis) -> BlockResponse {
-    let id = BlockIdentifier {
-        index: 0,
-        hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
-    };
-
-    let operations = genesis
-        .objects()
-        .iter()
-        .flat_map(|o| {
-            GasCoin::try_from(o)
-                .ok()
-                .and_then(|coin| o.owner.get_owner_address().ok().map(|addr| (addr, coin)))
+fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128> {
+    ops.into_iter()
+        .fold(HashMap::<SuiAddress, i128>::new(), |mut changes, op| {
+            if let Some(OperationStatus::Success) = op.status {
+                match op.type_ {
+                    OperationType::SuiBalanceChange
+                    | OperationType::Gas
+                    | OperationType::PaySui
+                    | OperationType::Stake => {
+                        if let (Some(addr), Some(amount)) = (op.account, op.amount) {
+                            *changes.entry(addr.address).or_default() += amount.value
+                        }
+                    }
+                    _ => {}
+                };
+            }
+            changes
         })
-        .enumerate()
-        .map(|(index, (address, coin))| Operation {
-            operation_identifier: u64::try_from(index).unwrap().into(),
-            related_operations: vec![],
-            type_: OperationType::Genesis,
-            status: Some(OperationStatus::Success),
-            account: Some(AccountIdentifier { address }),
-            amount: Some(Amount {
-                value: SignedValue::from(coin.value()),
-                currency: SUI.clone(),
-            }),
-            coin_change: Some(CoinChange {
-                coin_identifier: CoinIdentifier {
-                    identifier: CoinID {
-                        id: *coin.id(),
-                        version: SequenceNumber::new(),
-                    },
-                },
-                coin_action: CoinAction::CoinCreated,
-            }),
-            metadata: None,
-        })
-        .collect();
+}
 
-    let transaction = Transaction {
-        transaction_identifier: TransactionIdentifier {
-            hash: TransactionDigest::new([0; 32]),
-        },
-        operations,
-        related_transactions: vec![],
-        metadata: None,
-    };
+#[derive(DBMapUtils)]
+pub struct CheckpointIndexStore {
+    #[default_options_override_fn = "default_config"]
+    balances: DBMap<(SuiAddress, EpochId), i128>,
+    #[default_options_override_fn = "default_config"]
+    last_checkpoint: DBMap<bool, CheckpointSequenceNumber>,
+}
 
-    BlockResponse {
-        block: Block {
-            block_identifier: id.clone(),
-            parent_block_identifier: id,
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-                .try_into()
-                .unwrap(),
-            transactions: vec![transaction],
-            metadata: None,
-        },
-        other_transactions: vec![],
+impl CheckpointIndexStore {
+    pub fn open(db_dir: &Path, db_options: Option<Options>) -> Self {
+        Self::open_tables_read_write(
+            db_dir.to_path_buf(),
+            MetricConf::default(),
+            db_options,
+            None,
+        )
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.last_checkpoint.is_empty() && self.balances.is_empty()
+    }
+}
+
+fn default_config() -> DBOptions {
+    point_lookup_db_options()
 }

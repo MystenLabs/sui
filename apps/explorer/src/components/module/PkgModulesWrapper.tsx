@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
 import { Combobox } from '@headlessui/react';
 import clsx from 'clsx';
 import { useState, useCallback, useEffect } from 'react';
@@ -13,7 +12,6 @@ import { ReactComponent as SearchIcon } from '~/assets/SVGIcons/24px/Search.svg'
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 type ModuleType = [moduleName: string, code: string];
 
@@ -91,15 +89,11 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
         });
     };
 
-    const isModuleFnExecEnabled = useFeature(
-        GROWTHBOOK_FEATURES.MODULE_VIEW_INVOKE_FUNCTIONS
-    ).on;
-
     return (
-        <div className="flex flex-col gap-5 border-0 border-y border-solid border-gray-45 md:flex-row md:flex-nowrap">
+        <div className="flex flex-col gap-5 border-y border-gray-45 md:flex-row md:flex-nowrap">
             <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={onChangeModule}>
-                    <div className="mt-2.5 box-border flex w-full justify-between rounded-md border border-solid border-gray-50 py-1 pl-3 placeholder-gray-65 shadow-sm">
+                    <div className="mt-2.5 flex w-full justify-between rounded-md border border-gray-50 py-1 pl-3 placeholder-gray-65 shadow-sm">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => query}
@@ -114,7 +108,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             <SearchIcon className="h-4.5 w-4.5 cursor-pointer fill-steel align-middle" />
                         </button>
                     </div>
-                    <Combobox.Options className="absolute left-0 z-10 box-border flex h-fit max-h-verticalListLong w-full flex-col gap-1 overflow-auto overflow-auto rounded-md bg-white px-2 pb-5 pt-3 shadow-moduleOption md:left-auto md:w-1/6">
+                    <Combobox.Options className="absolute left-0 z-10 flex h-fit max-h-verticalListLong w-full flex-col gap-1 overflow-auto rounded-md bg-white px-2 pb-5 pt-3 shadow-moduleOption md:left-auto md:w-1/6">
                         {filteredModules.length > 0 ? (
                             <div className="ml-1.5 pb-2 text-caption font-semibold uppercase text-gray-75">
                                 {filteredModules.length}
@@ -168,12 +162,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </VerticalList>
                 </div>
             </div>
-            <div
-                className={clsx(
-                    'grow overflow-auto border-0 border-solid border-gray-45 pt-5 md:border-l md:pl-7',
-                    isModuleFnExecEnabled && 'md:w-2/5'
-                )}
-            >
+            <div className="grow overflow-auto border-gray-45 pt-5 md:w-2/5 md:border-l md:pl-7">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
@@ -191,29 +180,27 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </TabPanels>
                 </TabGroup>
             </div>
-            {isModuleFnExecEnabled ? (
-                <div className="grow overflow-auto border-0 border-solid border-gray-45 pt-5 md:w-3/5 md:border-l md:pl-7">
-                    <TabGroup size="md">
-                        <TabList>
-                            <Tab>Execute</Tab>
-                        </TabList>
-                        <TabPanels>
-                            <TabPanel>
-                                <div className="h-verticalListLong overflow-auto">
-                                    {id && selectedModule ? (
-                                        <ModuleFunctionsInteraction
-                                            // force recreating everything when we change modules
-                                            key={`${id}-${selectedModule}`}
-                                            packageId={id}
-                                            moduleName={selectedModule}
-                                        />
-                                    ) : null}
-                                </div>
-                            </TabPanel>
-                        </TabPanels>
-                    </TabGroup>
-                </div>
-            ) : null}
+            <div className="grow overflow-auto border-gray-45 pt-5 md:w-3/5 md:border-l md:pl-7">
+                <TabGroup size="md">
+                    <TabList>
+                        <Tab>Execute</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <div className="h-verticalListLong overflow-auto">
+                                {id && selectedModule ? (
+                                    <ModuleFunctionsInteraction
+                                        // force recreating everything when we change modules
+                                        key={`${id}-${selectedModule}`}
+                                        packageId={id}
+                                        moduleName={selectedModule}
+                                    />
+                                ) : null}
+                            </div>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
+            </div>
         </div>
     );
 }

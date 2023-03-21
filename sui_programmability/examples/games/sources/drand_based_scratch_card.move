@@ -8,7 +8,7 @@
 /// round. This creates two objects:
 /// - Game - an immutable object that includes all parameters to be used when buying tickets.
 /// - Reward - a shared object that holds the reward. It can be withdrawn by any winner ("first come, first served").
-///   If not withdrawn within a few epoches, can be returned to the game creator.
+///   If not withdrawn within a few epochs, can be returned to the game creator.
 ///
 /// A user who wishes to play game G should:
 /// - Check if G.epoch is the current epoch, and that G.base_drand_round + 24h is in the future.
@@ -24,17 +24,17 @@
 /// the winners is chosen at random. This part, however, will require using a shared object.
 ///
 module games::drand_based_scratch_card {
+    use games::drand_lib;
     use sui::balance::Balance;
     use sui::balance::{Self};
     use sui::coin::{Self, Coin};
     use sui::digest;
     use sui::hmac::hmac_sha3_256;
     use sui::object::{Self, ID, UID};
+
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-
-    use games::drand_lib;
 
     /// Error codes
     const EInvalidDeposit: u64 = 0;
@@ -116,8 +116,8 @@ module games::drand_based_scratch_card {
             id: object::new(ctx),
             game_id: object::id(game),
         };
-        transfer::transfer(coin, game.creator);
-        transfer::transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(coin, game.creator);
+        transfer::public_transfer(ticket, tx_context::sender(ctx));
     }
 
     public entry fun evaluate(
@@ -132,17 +132,17 @@ module games::drand_based_scratch_card {
         // The randomness for the current ticket is derived by HMAC(drand randomness, ticket id).
         // A solution like checking if (drand randomness % reward_factor) == (ticket id % reward_factor) is not secure
         // as the adversary can control the values of ticket id. (For this particular game this attack is not
-        // devestating, but for similar games it might be.)
+        // devastating, but for similar games it might be.)
         let random_key = drand_lib::derive_randomness(drand_sig);
         let randomness = hmac_sha3_256(&random_key, &object::id_to_bytes(&object::id(&ticket)));
-        let is_winner = (drand_lib::safe_selection(game.reward_factor, digest::sha3_256_digest_to_bytes(&randomness)) == 0);
+        let is_winner = (drand_lib::safe_selection(game.reward_factor, &digest::sha3_256_digest_to_bytes(&randomness)) == 0);
 
         if (is_winner) {
             let winner = Winner {
                 id: object::new(ctx),
                 game_id: object::id(game),
             };
-            transfer::transfer(winner, tx_context::sender(ctx));
+            transfer::public_transfer(winner, tx_context::sender(ctx));
         };
         // Delete the ticket.
         let Ticket { id, game_id:  _} = ticket;
@@ -153,7 +153,7 @@ module games::drand_based_scratch_card {
         assert!(winner.game_id == reward.game_id, EInvalidTicket);
         let full_balance = balance::value(&reward.balance);
         if (full_balance > 0) {
-            transfer::transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
+            transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
         };
         let Winner { id, game_id:  _} = winner;
         object::delete(id);
@@ -167,7 +167,7 @@ module games::drand_based_scratch_card {
         // x+2 or x+3.
         assert!(game.base_epoch + 3 < tx_context::epoch(ctx), ETooSoonToRedeem);
         let full_balance = balance::value(&reward.balance);
-        transfer::transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
+        transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
     }
 
     public entry fun delete_ticket(ticket: Ticket) {

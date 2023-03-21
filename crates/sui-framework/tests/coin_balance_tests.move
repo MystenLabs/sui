@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::test_coin {
+module sui::coin_balance_tests {
     use sui::test_scenario::{Self, ctx};
     use sui::pay;
     use sui::coin;
@@ -12,6 +12,7 @@ module sui::test_coin {
     use sui::tx_context;
     use sui::locked_coin;
     use sui::coin::Coin;
+    use sui::test_utils;
 
     #[test]
     fun type_morphing() {
@@ -68,7 +69,7 @@ module sui::test_coin {
         test_scenario::next_tx(scenario, TEST_RECIPIENT_ADDR);
         let unlocked_coin = test_scenario::take_from_sender<Coin<SUI>>(scenario);
         assert!(coin::value(&unlocked_coin) == 42, 2);
-        coin::destroy_for_testing(unlocked_coin);
+        test_utils::destroy(unlocked_coin);
         test_scenario::end(scenario_val);
     }
 

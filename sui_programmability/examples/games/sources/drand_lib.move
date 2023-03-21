@@ -56,13 +56,13 @@ module games::drand_lib {
 
     // Converts the first 16 bytes of rnd to a u128 number and outputs its modulo with input n.
     // Since n is u64, the output is at most 2^{-64} biased assuming rnd is uniformly random.
-    public fun safe_selection(n: u64, rnd: vector<u8>): u64 {
-        assert!(vector::length(&rnd) >= 16, EInvalidRndLength);
+    public fun safe_selection(n: u64, rnd: &vector<u8>): u64 {
+        assert!(vector::length(rnd) >= 16, EInvalidRndLength);
         let m: u128 = 0;
         let i = 0;
         while (i < 16) {
             m = m << 8;
-            let curr_byte = *vector::borrow(&rnd, i);
+            let curr_byte = *vector::borrow(rnd, i);
             m = m + (curr_byte as u128);
             i = i + 1;
         };

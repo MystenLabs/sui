@@ -8,7 +8,7 @@ import { IconButton } from './IconButton';
 import { ReactComponent as InfoIcon } from './icons/info.svg';
 
 const bannerStyles = cva(
-    'inline-flex text-p2 font-medium rounded-lg overflow-hidden box-border gap-2 items-center flex-nowrap relative',
+    'inline-flex text-p2 font-medium rounded-lg overflow-hidden gap-2 items-center flex-nowrap relative',
     {
         variants: {
             variant: {

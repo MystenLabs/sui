@@ -7,17 +7,20 @@ use std::fs::File;
 use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::anyhow;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
 use serde_json::{json, Value};
 use tracing::info;
+use tracing::log::warn;
 
 use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_node::{metrics, SuiNode};
-use sui_rosetta::types::{AccountIdentifier, CurveType, PrefundedAccount, SuiEnv};
+use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
 
@@ -34,6 +37,16 @@ pub enum RosettaServerCommand {
         #[clap(long, default_value = "http://rosetta-offline:9003")]
         offline_url: String,
     },
+    StartOnlineRemoteServer {
+        #[clap(long, default_value = "localnet")]
+        env: SuiEnv,
+        #[clap(long, default_value = "0.0.0.0:9002")]
+        addr: SocketAddr,
+        #[clap(long)]
+        full_node_url: String,
+        #[clap(long, default_value = "/data")]
+        data_path: PathBuf,
+    },
     StartOnlineServer {
         #[clap(long, default_value = "localnet")]
         env: SuiEnv,
@@ -41,6 +54,8 @@ pub enum RosettaServerCommand {
         addr: SocketAddr,
         #[clap(long)]
         node_config: Option<PathBuf>,
+        #[clap(long, default_value = "/data")]
+        data_path: PathBuf,
     },
     StartOfflineServer {
         #[clap(long, default_value = "localnet")]
@@ -112,38 +127,78 @@ impl RosettaServerCommand {
                 info!("Rosetta DSL file is stored in {:?}", dsl_path);
             }
             RosettaServerCommand::StartOfflineServer { env, addr } => {
+                info!("Starting Rosetta Offline Server.");
                 let server = RosettaOfflineServer::new(env);
                 server.serve(addr).await??;
             }
+            RosettaServerCommand::StartOnlineRemoteServer {
+                env,
+                addr,
+                full_node_url,
+                data_path,
+            } => {
+                info!(
+                    "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
+                );
+                let sui_client = wait_for_sui_client(full_node_url).await;
+                let rosetta_path = data_path.join("rosetta_db");
+                info!("Rosetta db path : {rosetta_path:?}");
+                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
+                rosetta.serve(addr).await??;
+            }
+
             RosettaServerCommand::StartOnlineServer {
                 env,
                 addr,
                 node_config,
+                data_path,
             } => {
+                info!("Starting Rosetta Online Server with embedded Sui full node.");
+                info!("Data directory path: {data_path:?}");
+
                 let node_config = node_config.unwrap_or_else(|| {
                     let path = sui_config_dir().unwrap().join(SUI_FULLNODE_CONFIG);
                     info!("Using default node config from {path:?}");
                     path
                 });
 
-                let config = NodeConfig::load(&node_config)?;
-                let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
-                // Staring a full node for the rosetta server.
-                let node = SuiNode::start(&config, prometheus_registry).await?;
-                let quorum_driver = node
-                    .transaction_orchestrator()
-                    .ok_or_else(|| anyhow!("Quorum driver is None"))?
-                    .quorum_driver()
-                    .clone();
+                let mut config = NodeConfig::load(&node_config)?;
+                config.db_path = data_path.join("sui_db");
+                info!("Overriding Sui db path to : {:?}", config.db_path);
 
-                let rosetta =
-                    RosettaOnlineServer::new(env, node.state(), quorum_driver, config.genesis()?);
+                let registry_service = metrics::start_prometheus_server(config.metrics_address);
+                // Staring a full node for the rosetta server.
+                let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
+                let _node = SuiNode::start(&config, registry_service).await?;
+
+                let sui_client = wait_for_sui_client(rpc_address).await;
+
+                let rosetta_path = data_path.join("rosetta_db");
+                info!("Rosetta db path : {rosetta_path:?}");
+                let rosetta = RosettaOnlineServer::new(env, sui_client, &rosetta_path);
                 rosetta.serve(addr).await??;
             }
         };
         Ok(())
     }
 }
+
+async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
+    loop {
+        match SuiClientBuilder::default()
+            .max_concurrent_requests(usize::MAX)
+            .build(&rpc_address)
+            .await
+        {
+            Ok(client) => return client,
+            Err(e) => {
+                warn!("Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
+                tokio::time::sleep(Duration::from_millis(5000)).await;
+            }
+        }
+    }
+}
+
 /// This method reads the keypairs from the Sui keystore to create the PrefundedAccount objects,
 /// PrefundedAccount will be written to the rosetta-cli config file for testing.
 ///
@@ -163,16 +218,19 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
         .into_iter()
         .map(|(address, key)| {
             let (privkey, curve_type) = match key {
-                SuiKeyPair::Ed25519SuiKeyPair(k) => {
+                SuiKeyPair::Ed25519(k) => {
                     (Hex::encode(k.private().as_bytes()), CurveType::Edwards25519)
                 }
-                SuiKeyPair::Secp256k1SuiKeyPair(k) => {
+                SuiKeyPair::Secp256k1(k) => {
                     (Hex::encode(k.private().as_bytes()), CurveType::Secp256k1)
+                }
+                SuiKeyPair::Secp256r1(k) => {
+                    (Hex::encode(k.private().as_bytes()), CurveType::Secp256r1)
                 }
             };
             PrefundedAccount {
                 privkey,
-                account_identifier: AccountIdentifier { address },
+                account_identifier: address.into(),
                 curve_type,
                 currency: SUI.clone(),
             }
@@ -188,9 +246,11 @@ fn test_read_keystore() {
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
     let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
-    let key1 = ks.generate_new_key(SignatureScheme::ED25519, None).unwrap();
+    let key1 = ks
+        .generate_and_add_new_key(SignatureScheme::ED25519, None)
+        .unwrap();
     let key2 = ks
-        .generate_new_key(SignatureScheme::Secp256k1, None)
+        .generate_and_add_new_key(SignatureScheme::Secp256k1, None)
         .unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();
@@ -216,7 +276,7 @@ fn test_read_keystore() {
 async fn main() -> Result<(), anyhow::Error> {
     let cmd: RosettaServerCommand = RosettaServerCommand::parse();
 
-    let (_guard, _) = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+    let (_guard, _) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 

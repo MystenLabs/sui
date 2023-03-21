@@ -6,11 +6,10 @@ use anemo::{rpc::Status, Request, Response, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use sui_types::{
-    base_types::ExecutionDigests,
-    messages::{CertifiedTransaction, TransactionEffects},
+    digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::{
-        CertifiedCheckpointSummary as Checkpoint, CheckpointContents, CheckpointContentsDigest,
-        CheckpointDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
+        CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber, FullCheckpointContents,
+        VerifiedCheckpoint,
     },
     storage::ReadStore,
     storage::WriteStore,
@@ -47,20 +46,24 @@ where
 
         let checkpoint = request.into_inner();
 
-        self.peer_heights
+        if !self
+            .peer_heights
             .write()
             .unwrap()
-            .update_peer_height(peer_id, Some(checkpoint.clone()));
+            .update_peer_info(peer_id, checkpoint.clone())
+        {
+            return Ok(Response::new(()));
+        }
 
-        let highest_verified_checkpoint = self
+        let highest_verified_checkpoint = *self
             .store
             .get_highest_verified_checkpoint()
             .map_err(|e| Status::internal(e.to_string()))?
-            .map(|x| x.sequence_number());
+            .sequence_number();
 
         // If this checkpoint is higher than our highest verified checkpoint notify the
         // event loop to potentially sync it
-        if Some(checkpoint.sequence_number()) > highest_verified_checkpoint {
+        if *checkpoint.sequence_number() > highest_verified_checkpoint {
             if let Some(sender) = self.sender.upgrade() {
                 sender.send(StateSyncMessage::StartSyncJob).await.unwrap();
             }
@@ -74,7 +77,9 @@ where
         request: Request<GetCheckpointSummaryRequest>,
     ) -> Result<Response<Option<Checkpoint>>, Status> {
         let checkpoint = match request.inner() {
-            GetCheckpointSummaryRequest::Latest => self.store.get_highest_synced_checkpoint(),
+            GetCheckpointSummaryRequest::Latest => {
+                self.store.get_highest_synced_checkpoint().map(Some)
+            }
             GetCheckpointSummaryRequest::ByDigest(digest) => {
                 self.store.get_checkpoint_by_digest(digest)
             }
@@ -91,44 +96,11 @@ where
     async fn get_checkpoint_contents(
         &self,
         request: Request<CheckpointContentsDigest>,
-    ) -> Result<Response<Option<CheckpointContents>>, Status> {
+    ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
         let contents = self
             .store
-            .get_checkpoint_contents(request.inner())
+            .get_full_checkpoint_contents(request.inner())
             .map_err(|e| Status::internal(e.to_string()))?;
-
         Ok(Response::new(contents))
-    }
-
-    async fn get_transaction_and_effects(
-        &self,
-        request: Request<ExecutionDigests>,
-    ) -> Result<Response<Option<(CertifiedTransaction, TransactionEffects)>>, Status> {
-        let ExecutionDigests {
-            transaction,
-            effects,
-        } = request.into_inner();
-
-        let transaction = if let Some(transaction) = self
-            .store
-            .get_transaction(&transaction)
-            .map_err(|e| Status::internal(e.to_string()))?
-        {
-            transaction
-        } else {
-            return Ok(Response::new(None));
-        };
-
-        let effects = if let Some(effects) = self
-            .store
-            .get_transaction_effects(&effects)
-            .map_err(|e| Status::internal(e.to_string()))?
-        {
-            effects
-        } else {
-            return Ok(Response::new(None));
-        };
-
-        Ok(Response::new(Some((transaction.into_inner(), effects))))
     }
 }

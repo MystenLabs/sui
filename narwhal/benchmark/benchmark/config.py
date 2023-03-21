@@ -9,20 +9,6 @@ from benchmark.utils import multiaddr_to_url_data
 class ConfigError(Exception):
     pass
 
-
-class Key:
-    def __init__(self, name, secret):
-        self.name = name
-        self.secret = secret
-
-    @classmethod
-    def from_file(cls, filename):
-        assert isinstance(filename, str)
-        with open(filename, 'r') as f:
-            data = load(f)
-        return cls(data['name'], data['secret'])
-
-
 class WorkerCache:
     ''' The worker cache looks as follows:
         "workers: {

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormikContext, Field } from 'formik';
+import { useFormikContext } from 'formik';
 
 import FieldLabel from '_app/shared/field-label';
-import PasswordInput from '_app/shared/input/password';
+import { PasswordInputField } from '_app/shared/input/password';
 import Alert from '_components/alert';
 
 export type PasswordFieldsValues = {
@@ -17,15 +17,15 @@ export default function PasswordFields() {
     return (
         <>
             <FieldLabel txt="Create Password">
-                <Field name="password" component={PasswordInput} />
-                {touched['password'] && errors['password'] ? (
-                    <Alert>{errors['password']}</Alert>
+                <PasswordInputField name="password" />
+                {touched.password && errors.password ? (
+                    <Alert>{errors.password}</Alert>
                 ) : null}
             </FieldLabel>
             <FieldLabel txt="Confirm Password">
-                <Field name="confirmPassword" component={PasswordInput} />
-                {touched['confirmPassword'] && errors['confirmPassword'] ? (
-                    <Alert>{errors['confirmPassword']}</Alert>
+                <PasswordInputField name="confirmPassword" />
+                {touched.confirmPassword && errors.confirmPassword ? (
+                    <Alert>{errors.confirmPassword}</Alert>
                 ) : null}
             </FieldLabel>
         </>

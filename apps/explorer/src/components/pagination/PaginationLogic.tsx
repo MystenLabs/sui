@@ -40,6 +40,7 @@ function PaginationLogic({
     return (
         <>
             {viewComponentFn(objectSample)}
+
             <Pagination
                 totalItems={count}
                 itemsPerPage={pageLength}

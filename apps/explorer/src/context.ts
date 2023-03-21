@@ -7,9 +7,12 @@ import { createContext, useLayoutEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Network } from './utils/api/DefaultRpcClient';
-import { DEFAULT_NETWORK } from './utils/envUtil';
 import { growthbook } from './utils/growthbook';
 import { queryClient } from './utils/queryClient';
+
+export const DEFAULT_NETWORK =
+    import.meta.env.VITE_NETWORK ||
+    (import.meta.env.DEV ? Network.LOCAL : Network.DEVNET);
 
 export const NetworkContext = createContext<
     [Network | string, (network: Network | string) => void]
@@ -37,12 +40,14 @@ export function useNetwork(): [string, (network: Network | string) => void] {
         // When resetting the network, we reset the query client at the same time:
         queryClient.cancelQueries();
         queryClient.clear();
+
         setSearchParams({ network: network.toLowerCase() });
     };
 
     useLayoutEffect(() => {
         growthbook.setAttributes({
             network,
+            environment: import.meta.env.VITE_VERCEL_ENV,
         });
 
         Sentry.setContext('network', {

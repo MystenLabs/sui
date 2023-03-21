@@ -83,7 +83,7 @@ module defi::flash_lender {
         let balance = coin::into_balance(to_lend);
         let admin_cap = new(balance, fee, ctx);
 
-        transfer::transfer(admin_cap, tx_context::sender(ctx))
+        transfer::public_transfer(admin_cap, tx_context::sender(ctx))
     }
 
     // === Core functionality: requesting a loan and repaying it ===

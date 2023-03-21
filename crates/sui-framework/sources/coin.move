@@ -350,7 +350,7 @@ module sui::coin {
     public entry fun mint_and_transfer<T>(
         c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(mint(c, amount, ctx), recipient)
+        transfer::public_transfer(mint(c, amount, ctx), recipient)
     }
 
     /// Burn a Coin and reduce the total_supply. Invokes `burn()`.
@@ -392,6 +392,38 @@ module sui::coin {
         metadata.icon_url = option::some(url::new_unsafe(url));
     }
 
+    // === Get coin metadata fields for on-chain consumption ===
+
+    public fun get_decimals<T>(
+        metadata: &CoinMetadata<T>
+    ): u8 {
+        metadata.decimals
+    }
+
+    public fun get_name<T>(
+        metadata: &CoinMetadata<T>
+    ): string::String {
+        metadata.name
+    }
+
+    public fun get_symbol<T>(
+        metadata: &CoinMetadata<T>
+    ): ascii::String {
+        metadata.symbol
+    }
+
+    public fun get_description<T>(
+        metadata: &CoinMetadata<T>
+    ): string::String {
+        metadata.description
+    }
+
+    public fun get_icon_url<T>(
+        metadata: &CoinMetadata<T>
+    ): Option<Url> {
+        metadata.icon_url
+    }
+
     // === Test-only code ===
 
     #[test_only]
@@ -401,9 +433,9 @@ module sui::coin {
     }
 
     #[test_only]
-    /// Destroy a `Coin` with any value in it for testing purposes.
-    public fun destroy_for_testing<T>(self: Coin<T>): u64 {
-        let Coin { id, balance } = self;
+    /// Burn coins of any type for testing purposes only
+    public fun burn_for_testing<T>(coin: Coin<T>): u64 {
+        let Coin { id, balance } = coin;
         object::delete(id);
         balance::destroy_for_testing(balance)
     }

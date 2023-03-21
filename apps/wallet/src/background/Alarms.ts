@@ -3,6 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
+import { getFromLocalStorage } from './storage-utils';
 import {
     AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
     AUTO_LOCK_TIMER_STORAGE_KEY,
@@ -12,12 +13,12 @@ export const LOCK_ALARM_NAME = 'lock-keyring-alarm';
 
 class Alarms {
     public async setLockAlarm() {
-        const delayInMinutes = (
-            await Browser.storage.local.get({
-                [AUTO_LOCK_TIMER_STORAGE_KEY]:
-                    AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES,
-            })
-        )[AUTO_LOCK_TIMER_STORAGE_KEY];
+        const delayInMinutes =
+            Number(
+                await getFromLocalStorage<number | string>(
+                    AUTO_LOCK_TIMER_STORAGE_KEY
+                )
+            ) || AUTO_LOCK_TIMER_DEFAULT_INTERVAL_MINUTES;
         Browser.alarms.create(LOCK_ALARM_NAME, { delayInMinutes });
     }
 

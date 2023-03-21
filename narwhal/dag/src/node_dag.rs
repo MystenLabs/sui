@@ -44,6 +44,7 @@ pub trait Affiliated: fastcrypto::hash::Hash<{ crypto::DIGEST_LENGTH }> {
 /// as this will transitively drop all the nodes they point to and may cause loss of data.
 ///
 #[derive(Debug)]
+#[doc(hidden)]
 pub struct NodeDag<T: Affiliated> {
     // Not that we should need to ever serialize this (we'd rather rebuild the Dag from a persistent store)
     // but the way to serialize this in key order is using serde_with and an annotation of:
@@ -437,7 +438,7 @@ mod tests {
             let mut digests = Vec::new();
             for node in dag.iter() {
                 digests.push(node.digest());
-                // the elements are generated in order & with no missing parents => no suprises
+                // the elements are generated in order & with no missing parents => no surprises
                 assert!(node_dag.try_insert(node.clone()).is_ok());
             }
             let mut heads = HashSet::new();
@@ -464,7 +465,7 @@ mod tests {
             let mut digests = Vec::new();
             for node in dag.iter() {
                 digests.push(node.digest());
-                // the elements are generated in order & with no missing parents => no suprises
+                // the elements are generated in order & with no missing parents => no surprises
                 assert!(node_dag.try_insert(node.clone()).is_ok());
             }
             let mut heads = HashSet::new();
@@ -494,7 +495,7 @@ mod tests {
                     if node.compressible(){
                         compressibles.push(node.digest());
                     }
-                    // the elements are generated in order & with no missing parents => no suprises
+                    // the elements are generated in order & with no missing parents => no surprises
                     assert!(node_dag.try_insert(node.clone()).is_ok());
                 }
             }
@@ -531,7 +532,7 @@ mod tests {
             {
                 for node in dag.iter() {
                     digests.push(node.digest());
-                    // the elements are generated in order & with no missing parents => no suprises
+                    // the elements are generated in order & with no missing parents => no surprises
                     assert!(node_dag.try_insert(node.clone()).is_ok());
                 }
             }

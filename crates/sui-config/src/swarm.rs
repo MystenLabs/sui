@@ -1,8 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::node::AuthorityStorePruningConfig;
+use crate::node::{
+    default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
+    KeyPairWithPath,
+};
 use crate::p2p::{P2pConfig, SeedPeer};
-use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo};
+use crate::{
+    builder::{self, ProtocolVersionsConfig, SupportedProtocolVersionsCallback},
+    genesis, utils, Config, NodeConfig,
+};
 use fastcrypto::traits::KeyPair;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -11,12 +19,13 @@ use serde_with::serde_as;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use sui_types::committee::Committee;
+use sui_protocol_config::SupportedProtocolVersions;
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::sui_serde::KeyPairBase64;
+use sui_types::multiaddr::Multiaddr;
+use sui_types::sui_system_state::SuiSystemStateInnerGenesis;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
@@ -24,7 +33,6 @@ use sui_types::sui_serde::KeyPairBase64;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
     pub validator_configs: Vec<NodeConfig>,
-    #[serde_as(as = "Vec<KeyPairBase64>")]
     pub account_keys: Vec<AccountKeyPair>,
     pub genesis: genesis::Genesis,
 }
@@ -36,12 +44,21 @@ impl NetworkConfig {
         &self.validator_configs
     }
 
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        self.genesis.validator_set()
+    pub fn net_addresses(&self) -> Vec<Multiaddr> {
+        self.genesis
+            .committee_with_network()
+            .network_metadata
+            .into_values()
+            .map(|n| n.network_address)
+            .collect()
     }
 
-    pub fn committee(&self) -> Committee {
-        self.genesis.committee().unwrap()
+    pub fn genesis_system_state(&self) -> SuiSystemStateInnerGenesis {
+        self.genesis.sui_system_object()
+    }
+
+    pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
+        self.genesis.committee_with_network()
     }
 
     pub fn into_validator_configs(self) -> Vec<NodeConfig> {
@@ -73,7 +90,16 @@ pub struct FullnodeConfigBuilder<'a> {
     dir: Option<PathBuf>,
     enable_event_store: bool,
     listen_ip: Option<IpAddr>,
+    // port for main network_address
+    port: Option<u16>,
+    // port for p2p data sync
+    p2p_port: Option<u16>,
+    // port for json rpc api
     rpc_port: Option<u16>,
+    // port for admin interface
+    admin_port: Option<u16>,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl<'a> FullnodeConfigBuilder<'a> {
@@ -83,7 +109,12 @@ impl<'a> FullnodeConfigBuilder<'a> {
             dir: None,
             enable_event_store: false,
             listen_ip: None,
+            port: None,
+            p2p_port: None,
             rpc_port: None,
+            admin_port: None,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 
@@ -102,6 +133,16 @@ impl<'a> FullnodeConfigBuilder<'a> {
         self
     }
 
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.port = Some(port);
+        self
+    }
+
+    pub fn with_p2p_port(mut self, port: u16) -> Self {
+        self.p2p_port = Some(port);
+        self
+    }
+
     pub fn with_rpc_port(mut self, port: u16) -> Self {
         self.rpc_port = Some(port);
         self
@@ -109,6 +150,11 @@ impl<'a> FullnodeConfigBuilder<'a> {
 
     pub fn set_rpc_port(mut self, port: Option<u16>) -> Self {
         self.rpc_port = port;
+        self
+    }
+
+    pub fn with_admin_port(mut self, port: u16) -> Self {
+        self.admin_port = Some(port);
         self
     }
 
@@ -127,16 +173,34 @@ impl<'a> FullnodeConfigBuilder<'a> {
         self
     }
 
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
+        self.supported_protocol_versions_config = c;
+        self
+    }
+
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
+        self
+    }
+
     pub fn build(self) -> Result<NodeConfig, anyhow::Error> {
-        let protocol_key_pair: Arc<AuthorityKeyPair> =
-            Arc::new(get_key_pair_from_rng(&mut OsRng).1);
-        let worker_key_pair: Arc<NetworkKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
-        let account_key_pair: Arc<SuiKeyPair> = Arc::new(
-            get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng)
-                .1
-                .into(),
-        );
-        let network_key_pair: Arc<NetworkKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
+        let protocol_key_pair = get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut OsRng).1;
+        let worker_key_pair = get_key_pair_from_rng::<NetworkKeyPair, _>(&mut OsRng).1;
+        let account_key_pair = get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng).1;
+        let network_key_pair = get_key_pair_from_rng::<NetworkKeyPair, _>(&mut OsRng).1;
         let validator_configs = &self.network_config.validator_configs;
         let validator_config = &validator_configs[0];
 
@@ -148,21 +212,35 @@ impl<'a> FullnodeConfigBuilder<'a> {
             .unwrap_or_else(|| OsRng.next_u32().to_string().into());
 
         let listen_ip = self.listen_ip.unwrap_or_else(utils::get_local_ip_for_tests);
+        let listen_ip_str = format!("{}", listen_ip);
+
+        let get_available_port = |public_port| {
+            if listen_ip.is_loopback() || listen_ip == utils::get_local_ip_for_tests() {
+                utils::get_available_port(&listen_ip_str)
+            } else {
+                public_port
+            }
+        };
 
         let network_address = format!(
             "/ip4/{}/tcp/{}/http",
             listen_ip,
-            utils::get_available_port()
+            self.port.unwrap_or_else(|| get_available_port(8080))
         )
         .parse()
         .unwrap();
 
         let p2p_config = {
-            let address = utils::available_local_socket_address();
+            let address = SocketAddr::new(
+                listen_ip,
+                self.p2p_port.unwrap_or_else(|| get_available_port(8084)),
+            );
             let seed_peers = validator_configs
                 .iter()
                 .map(|config| SeedPeer {
-                    peer_id: Some(anemo::PeerId(config.network_key_pair.public().0.to_bytes())),
+                    peer_id: Some(anemo::PeerId(
+                        config.network_key_pair().public().0.to_bytes(),
+                    )),
                     address: config.p2p_config.external_address.clone().unwrap(),
                 })
                 .collect();
@@ -175,28 +253,43 @@ impl<'a> FullnodeConfigBuilder<'a> {
             }
         };
 
-        let rpc_port = self.rpc_port.unwrap_or_else(utils::get_available_port);
+        let rpc_port = self.rpc_port.unwrap_or_else(|| get_available_port(9000));
         let jsonrpc_server_url = format!("{}:{}", listen_ip, rpc_port);
         let json_rpc_address: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
+        let supported_protocol_versions = match &self.supported_protocol_versions_config {
+            ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
+            ProtocolVersionsConfig::Global(v) => *v,
+            ProtocolVersionsConfig::PerValidator(func) => func(0, None),
+        };
+
         Ok(NodeConfig {
-            protocol_key_pair,
-            worker_key_pair,
-            account_key_pair,
-            network_key_pair,
+            protocol_key_pair: AuthorityKeyPairWithPath::new(protocol_key_pair),
+            account_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(account_key_pair)),
+            worker_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(worker_key_pair)),
+            network_key_pair: KeyPairWithPath::new(SuiKeyPair::Ed25519(network_key_pair)),
+
             db_path: db_path.join(dir_name),
             network_address,
             metrics_address: utils::available_local_socket_address(),
-            admin_interface_port: utils::get_available_port(),
+            // TODO: admin server is hard coded to start on 127.0.0.1 - we should probably
+            // provide the entire socket address here to avoid confusion.
+            admin_interface_port: self.admin_port.unwrap_or_else(|| get_available_port(8888)),
             json_rpc_address,
             consensus_config: None,
             enable_event_processing: self.enable_event_store,
-            enable_checkpoint: false,
-            enable_reconfig: false,
             genesis: validator_config.genesis.clone(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
             p2p_config,
+            authority_store_pruning_config: AuthorityStorePruningConfig::fullnode_config(),
+            end_of_epoch_broadcast_channel_capacity:
+                default_end_of_epoch_broadcast_channel_capacity(),
+            checkpoint_executor_config: Default::default(),
+            metrics: None,
+            supported_protocol_versions: Some(supported_protocol_versions),
+            db_checkpoint_config: self.db_checkpoint_config,
+            indirect_objects_threshold: usize::MAX,
         })
     }
 }

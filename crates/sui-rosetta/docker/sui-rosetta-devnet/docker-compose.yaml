@@ -5,10 +5,10 @@ services:
     image: mysten/sui-rosetta-devnet
     ports:
       - "9002:9002"
-      - "9000:9000"
     expose:
       - "9002"
-      - "9000"
+    volumes:
+      - data:/data:rw
     working_dir: /sui/devnet
     command:
       - /bin/bash
@@ -32,4 +32,5 @@ services:
         /usr/local/bin/sui-rosetta start-offline-server --env devnet
     stdin_open: true
     tty: true
-
+volumes:
+  data:

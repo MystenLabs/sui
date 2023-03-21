@@ -6,10 +6,6 @@ This page describes how to contribute to Sui, and provides additional informatio
 
 You can find answers to common questions in our [FAQ](../contribute/faq.md).
 
-## See our roadmap
-
-Sui is evolving quickly. See our [Developer Experience Roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) for the planned updates over the next 30 days.
-
 ## Join the community
 
 To connect with the Sui community, join our [Discord](https://discord.gg/sui).
@@ -17,13 +13,6 @@ To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 ## Open issues
 
 To report an issue with Sui, [create an issue](https://github.com/MystenLabs/sui/issues/new/choose) in the GitHub repo. Click **Get started** to open a template for the type of issue to create.
-
-
-## Updates to docs
-
-To request an update to a specific topic, click the **Source Code** link near the bottom of the page to open the source file in the GitHub repo. To submit a request, first choose the **Latest build** version of the doc site. This opens the main branch of the repo, which may contain a newer version of the topic than the one on **Devnet**.
-
-Click **Edit this file**, make your changes, and then click **Propose changes** to create a pull request that includes your changes in a new branch.
 
 ## Install Sui to contribute
 
@@ -59,7 +48,7 @@ Create a branch of your fork with following command (or follow the [GitHub topic
 
 `git checkout -b your-branch-name`
 
-Use the following command to set the [remote upstream repo](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/configuring-a-remote-for-a-fork):
+Use the following command to set the [remote upstream repo](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/configuring-a-remote-repository-for-a-fork):
 
 `git remote add upstream https://github.com/MystenLabs/sui.git`
 
@@ -67,7 +56,6 @@ You now have a fork of the Sui repo set up in your local workspace. You can make
 
 ## Further reading
 
-* Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
 * Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
 * Implementing [logging](../contribute/observability.md) in Sui to observe the behavior of your development.
 * Find related [research papers](../contribute/research-papers.md).

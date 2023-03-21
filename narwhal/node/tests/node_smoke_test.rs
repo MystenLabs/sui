@@ -16,7 +16,7 @@ fn test_primary_no_consensus() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary_keys_file_path = format!("{config_path}/smoke_test_primary_keys.json");
     fixture
         .authorities()
@@ -100,7 +100,7 @@ fn test_primary_with_consensus() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary_keys_file_path = format!("{config_path}/smoke_test_primary_keys.json");
     fixture
         .authorities()

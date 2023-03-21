@@ -10,8 +10,8 @@
 module test::m {}
 
 
-//# view-object 105
+//# view-object 106
 
-//# transfer-object 105 --sender A --recipient B
+//# transfer-object 106 --sender A --recipient B
 
-//# view-object 105
+//# view-object 106

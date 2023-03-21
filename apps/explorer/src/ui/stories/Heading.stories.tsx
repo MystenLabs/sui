@@ -9,59 +9,72 @@ export default {
     component: Heading,
 } as Meta;
 
-export const Heading1: StoryObj<HeadingProps> = {
-    render: (props) => {
-        return (
-            <div className="space-y-2">
-                <div>
-                    <Heading {...props} weight="bold">
+interface StoryProps {
+    as: HeadingProps['as'];
+    variants: HeadingProps['variant'][];
+}
+
+export const Heading1: StoryObj<StoryProps> = {
+    render: ({ as, variants }) => (
+        <div className="space-y-2">
+            <div>
+                {variants.map((variant) => (
+                    <Heading key={variant} as={as} variant={variant}>
                         This is a sample heading.
                     </Heading>
-                    <Heading {...props} weight="semibold">
-                        This is a sample heading.
-                    </Heading>
-                    <Heading {...props} weight="medium">
-                        This is a sample heading.
-                    </Heading>
-                </div>
-                <div>
-                    <Heading {...props} weight="bold" fixed>
-                        This is a sample heading. (fixed)
-                    </Heading>
-                    <Heading {...props} weight="semibold" fixed>
-                        This is a sample heading. (fixed)
-                    </Heading>
-                    <Heading {...props} weight="medium" fixed>
-                        This is a sample heading. (fixed)
-                    </Heading>
-                </div>
+                ))}
             </div>
-        );
+            <div>
+                {variants.map((variant) => (
+                    <Heading key={variant} as={as} variant={variant} fixed>
+                        This is a sample heading. (fixed)
+                    </Heading>
+                ))}
+            </div>
+        </div>
+    ),
+    args: {
+        as: 'h1',
+        variants: ['heading1/bold', 'heading1/semibold', 'heading1/medium'],
     },
-    args: { as: 'h1', variant: 'heading1' },
 };
 
-export const Heading2: StoryObj<HeadingProps> = {
+export const Heading2: StoryObj<StoryProps> = {
     ...Heading1,
-    args: { as: 'h2', variant: 'heading2' },
+    args: {
+        as: 'h2',
+        variants: ['heading2/bold', 'heading2/semibold', 'heading2/medium'],
+    },
 };
 
-export const Heading3: StoryObj<HeadingProps> = {
+export const Heading3: StoryObj<StoryProps> = {
     ...Heading1,
-    args: { as: 'h3', variant: 'heading3' },
+    args: {
+        as: 'h3',
+        variants: ['heading3/bold', 'heading3/semibold', 'heading3/medium'],
+    },
 };
 
-export const Heading4: StoryObj<HeadingProps> = {
+export const Heading4: StoryObj<StoryProps> = {
     ...Heading1,
-    args: { as: 'h4', variant: 'heading4' },
+    args: {
+        as: 'h4',
+        variants: ['heading4/bold', 'heading4/semibold', 'heading4/medium'],
+    },
 };
 
-export const Heading5: StoryObj<HeadingProps> = {
+export const Heading5: StoryObj<StoryProps> = {
     ...Heading1,
-    args: { as: 'h5', variant: 'heading5' },
+    args: {
+        as: 'h5',
+        variants: ['heading5/bold', 'heading5/semibold', 'heading5/medium'],
+    },
 };
 
-export const Heading6: StoryObj<HeadingProps> = {
+export const Heading6: StoryObj<StoryProps> = {
     ...Heading1,
-    args: { as: 'h6', variant: 'heading6' },
+    args: {
+        as: 'h6',
+        variants: ['heading6/bold', 'heading6/semibold', 'heading6/medium'],
+    },
 };

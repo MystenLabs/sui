@@ -5,121 +5,170 @@ use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::HashFunction;
+use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
-use move_core_types::language_storage::ModuleId;
-use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
-use sui_adapter::{adapter, execution_mode};
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::TransactionDigest;
-use sui_types::chain_id::ChainId;
-use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature, ToFromBytes};
+use sui_adapter::{adapter, execution_mode, programmable_transactions};
+use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
+use sui_protocol_config::ProtocolConfig;
+use sui_types::base_types::{ExecutionDigests, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::clock::Clock;
+use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::crypto::DefaultHash;
+use sui_types::crypto::{
+    AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
+    SuiAuthoritySignature, ToFromBytes,
+};
+use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
+use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::messages::CallArg;
-use sui_types::messages::InputObjects;
-use sui_types::messages::Transaction;
-use sui_types::sui_system_state::SuiSystemState;
+use sui_types::message_envelope::Message;
+use sui_types::messages::{
+    CallArg, Command, InputObjectKind, InputObjects, Transaction, TransactionEffects,
+    TransactionEvents,
+};
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
+};
+use sui_types::multiaddr::Multiaddr;
+use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::sui_system_state::{
+    get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
+    SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
+};
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
-    committee::{Committee, EpochId},
+    committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
-    sui_serde::AuthSignature,
 };
 use tracing::trace;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Genesis {
+    checkpoint: CertifiedCheckpointSummary,
+    checkpoint_contents: CheckpointContents,
+    transaction: Transaction,
+    effects: TransactionEffects,
+    events: TransactionEvents,
     objects: Vec<Object>,
-    validator_set: Vec<ValidatorInfo>,
 }
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct UnsignedGenesis {
+    pub checkpoint: CheckpointSummary,
+    pub checkpoint_contents: CheckpointContents,
+    pub transaction: Transaction,
+    pub effects: TransactionEffects,
+    pub events: TransactionEvents,
+    pub objects: Vec<Object>,
+}
+
+// Hand implement PartialEq in order to get around the fact that AuthSigs don't impl Eq
+impl PartialEq for Genesis {
+    fn eq(&self, other: &Self) -> bool {
+        self.checkpoint.data() == other.checkpoint.data()
+            && {
+                let this = self.checkpoint.auth_sig();
+                let other = other.checkpoint.auth_sig();
+
+                this.epoch == other.epoch
+                    && this.signature.as_ref() == other.signature.as_ref()
+                    && this.signers_map == other.signers_map
+            }
+            && self.checkpoint_contents == other.checkpoint_contents
+            && self.transaction == other.transaction
+            && self.effects == other.effects
+            && self.objects == other.objects
+    }
+}
+
+impl Eq for Genesis {}
 
 impl Genesis {
     pub fn objects(&self) -> &[Object] {
         &self.objects
     }
 
+    pub fn object(&self, id: ObjectID) -> Option<Object> {
+        self.objects.iter().find(|o| o.id() == id).cloned()
+    }
+
+    pub fn transaction(&self) -> &Transaction {
+        &self.transaction
+    }
+
+    pub fn effects(&self) -> &TransactionEffects {
+        &self.effects
+    }
+    pub fn events(&self) -> &TransactionEvents {
+        &self.events
+    }
+
+    pub fn checkpoint(&self) -> VerifiedCheckpoint {
+        self.checkpoint
+            .clone()
+            .verify(&self.committee().unwrap())
+            .unwrap()
+    }
+
+    pub fn checkpoint_contents(&self) -> &CheckpointContents {
+        &self.checkpoint_contents
+    }
+
     pub fn epoch(&self) -> EpochId {
         0
     }
 
-    pub fn validator_set(&self) -> &[ValidatorInfo] {
-        &self.validator_set
+    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
+        self.sui_system_object().validators.active_validators
     }
 
-    pub fn into_validator_set(self) -> Vec<ValidatorInfo> {
-        self.validator_set
+    pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
+        self.sui_system_object().get_current_epoch_committee()
     }
 
+    // TODO: No need to return SuiResult.
     pub fn committee(&self) -> SuiResult<Committee> {
-        Committee::new(
-            self.epoch(),
-            ValidatorInfo::voting_rights(self.validator_set()),
-        )
+        Ok(self.committee_with_network().committee)
     }
 
-    #[allow(clippy::mutable_key_type)]
-    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee {
-        let narwhal_committee = self
-            .validator_set
-            .iter()
-            .map(|validator| {
-                // Strong requirement here for narwhal and sui to be on the same version of fastcrypto
-                // for AuthorityPublicBytes to cast to type alias PublicKey defined in narwhal to
-                // construct narwhal Committee struct.
-                let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
-                    .expect("Can't get narwhal public key");
-                let network_key =
-                    narwhal_crypto::NetworkPublicKey::from_bytes(validator.network_key().as_ref())
-                        .expect("Can't get narwhal public key");
-                let primary_address = validator.narwhal_primary_address.clone();
-                let authority = narwhal_config::Authority {
-                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
-                    primary_address,
-                    network_key,
-                };
-
-                (name, authority)
-            })
-            .collect();
-        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch() as narwhal_config::Epoch,
-        }))
+    pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
+        get_sui_system_state_wrapper(&self.objects())
+            .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemState {
-        let sui_system_object = self
+    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
+        get_sui_system_state(&self.objects())
+            .expect("Sui System State object must always exist")
+            .into_genesis_version()
+    }
+
+    pub fn clock(&self) -> Clock {
+        let clock = self
             .objects()
             .iter()
-            .find(|o| o.id() == sui_types::SUI_SYSTEM_STATE_OBJECT_ID)
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
+            .find(|o| o.id() == sui_types::SUI_CLOCK_OBJECT_ID)
+            .expect("Clock must always exist")
             .data
             .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        result
-    }
-
-    pub fn chain_id(&self) -> ChainId {
-        self.sui_system_object().chain_id
-    }
-
-    pub fn get_default_genesis() -> Self {
-        Builder::new().build()
+            .expect("Clock must be a Move object");
+        bcs::from_bytes::<Clock>(clock.contents())
+            .expect("Clock object deserialization cannot fail")
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -144,10 +193,10 @@ impl Genesis {
         bcs::to_bytes(self).expect("failed to serialize genesis")
     }
 
-    pub fn sha3(&self) -> [u8; 32] {
+    pub fn hash(&self) -> [u8; 32] {
         use std::io::Write;
 
-        let mut digest = Sha3_256::default();
+        let mut digest = DefaultHash::default();
         digest.write_all(&self.to_bytes()).unwrap();
         let hash = digest.finalize();
         hash.into()
@@ -162,14 +211,22 @@ impl Serialize for Genesis {
         use serde::ser::Error;
 
         #[derive(Serialize)]
-        struct RawGeneis<'a> {
+        struct RawGenesis<'a> {
+            checkpoint: &'a CertifiedCheckpointSummary,
+            checkpoint_contents: &'a CheckpointContents,
+            transaction: &'a Transaction,
+            effects: &'a TransactionEffects,
+            events: &'a TransactionEvents,
             objects: &'a [Object],
-            validator_set: &'a [ValidatorInfo],
         }
 
-        let raw_genesis = RawGeneis {
+        let raw_genesis = RawGenesis {
+            checkpoint: &self.checkpoint,
+            checkpoint_contents: &self.checkpoint_contents,
+            transaction: &self.transaction,
+            effects: &self.effects,
+            events: &self.events,
             objects: &self.objects,
-            validator_set: &self.validator_set,
         };
 
         let bytes = bcs::to_bytes(&raw_genesis).map_err(|e| Error::custom(e.to_string()))?;
@@ -191,9 +248,13 @@ impl<'de> Deserialize<'de> for Genesis {
         use serde::de::Error;
 
         #[derive(Deserialize)]
-        struct RawGeneis {
+        struct RawGenesis {
+            checkpoint: CertifiedCheckpointSummary,
+            checkpoint_contents: CheckpointContents,
+            transaction: Transaction,
+            effects: TransactionEffects,
+            events: TransactionEvents,
             objects: Vec<Object>,
-            validator_set: Vec<ValidatorInfo>,
         }
 
         let bytes = if deserializer.is_human_readable() {
@@ -204,35 +265,263 @@ impl<'de> Deserialize<'de> for Genesis {
             data
         };
 
-        let raw_genesis: RawGeneis =
-            bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
+        let RawGenesis {
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
+            events,
+            objects,
+        } = bcs::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))?;
 
         Ok(Genesis {
-            objects: raw_genesis.objects,
-            validator_set: raw_genesis.validator_set,
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
+            events,
+            objects,
         })
     }
 }
 
+impl UnsignedGenesis {
+    pub fn objects(&self) -> &[Object] {
+        &self.objects
+    }
+
+    pub fn object(&self, id: ObjectID) -> Option<Object> {
+        self.objects.iter().find(|o| o.id() == id).cloned()
+    }
+
+    pub fn transaction(&self) -> &Transaction {
+        &self.transaction
+    }
+
+    pub fn effects(&self) -> &TransactionEffects {
+        &self.effects
+    }
+    pub fn events(&self) -> &TransactionEvents {
+        &self.events
+    }
+
+    pub fn checkpoint(&self) -> &CheckpointSummary {
+        &self.checkpoint
+    }
+
+    pub fn checkpoint_contents(&self) -> &CheckpointContents {
+        &self.checkpoint_contents
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        0
+    }
+
+    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
+        self.sui_system_object().validators.active_validators
+    }
+
+    pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
+        get_sui_system_state_wrapper(&self.objects())
+            .expect("Sui System State Wrapper object must always exist")
+    }
+
+    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
+        get_sui_system_state(&self.objects())
+            .expect("Sui System State object must always exist")
+            .into_genesis_version()
+    }
+}
+
 #[serde_as]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisValidatorInfo {
     pub info: ValidatorInfo,
-    #[serde_as(as = "AuthSignature")]
     pub proof_of_possession: AuthoritySignature,
 }
 
-/// Initial set of parameters for a chain.
-#[derive(Default, Serialize, Deserialize)]
+impl From<GenesisValidatorInfo> for GenesisValidatorMetadata {
+    fn from(
+        GenesisValidatorInfo {
+            info,
+            proof_of_possession,
+        }: GenesisValidatorInfo,
+    ) -> Self {
+        Self {
+            name: info.name,
+            description: info.description,
+            image_url: info.image_url,
+            project_url: info.project_url,
+            sui_address: info.account_address,
+            gas_price: info.gas_price,
+            commission_rate: info.commission_rate,
+            protocol_public_key: info.protocol_key.as_bytes().to_vec(),
+            proof_of_possession: proof_of_possession.as_ref().to_vec(),
+            network_public_key: info.network_key.as_bytes().to_vec(),
+            worker_public_key: info.worker_key.as_bytes().to_vec(),
+            network_address: info.network_address,
+            p2p_address: info.p2p_address,
+            primary_address: info.narwhal_primary_address,
+            worker_address: info.narwhal_worker_address,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct GenesisValidatorMetadata {
+    pub name: String,
+    pub description: String,
+    pub image_url: String,
+    pub project_url: String,
+
+    pub sui_address: SuiAddress,
+
+    pub gas_price: u64,
+    pub commission_rate: u64,
+
+    pub protocol_public_key: Vec<u8>, //AuthorityPublicKeyBytes,
+    pub proof_of_possession: Vec<u8>, // AuthoritySignature,
+
+    pub network_public_key: Vec<u8>, // NetworkPublicKey,
+    pub worker_public_key: Vec<u8>,  // NetworkPublicKey,
+
+    pub network_address: Multiaddr,
+    pub p2p_address: Multiaddr,
+    pub primary_address: Multiaddr,
+    pub worker_address: Multiaddr,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct GenesisChainParameters {
-    chain_id: ChainId,
-    // In the future we can add the initial gas schedule or other parameters here
+    pub protocol_version: u64,
+    pub system_state_version: u64,
+    pub governance_start_epoch: u64,
+    pub chain_start_timestamp_ms: u64,
+    pub epoch_duration_ms: u64,
+    pub initial_stake_subsidy_distribution_amount: u64,
+    pub stake_subsidy_period_length: u64,
+    pub stake_subsidy_decrease_rate: u16,
+}
+
+/// Initial set of parameters for a chain.
+#[derive(Serialize, Deserialize)]
+pub struct GenesisCeremonyParameters {
+    #[serde(default = "GenesisCeremonyParameters::default_timestamp_ms")]
+    pub timestamp_ms: u64,
+
+    /// protocol version that the chain starts at.
+    #[serde(default = "ProtocolVersion::max")]
+    pub protocol_version: ProtocolVersion,
+
+    #[serde(default = "GenesisCeremonyParameters::default_allow_insertion_of_extra_objects")]
+    pub allow_insertion_of_extra_objects: bool,
+
+    /// The starting epoch in which various on-chain governance features take effect. E.g.
+    /// - stake subsidies are paid out
+    /// - validators with stake less than a 'validator_stake_threshold' are
+    ///   kicked from the validator set
+    #[serde(default)]
+    pub governance_start_epoch: u64,
+
+    /// The duration of an epoch, in milliseconds.
+    #[serde(default = "GenesisCeremonyParameters::default_epoch_duration_ms")]
+    pub epoch_duration_ms: u64,
+
+    /// The amount of stake subsidy to be drawn down per distribution.
+    /// This amount decays and decreases over time.
+    #[serde(
+        default = "GenesisCeremonyParameters::default_initial_stake_subsidy_distribution_amount"
+    )]
+    pub initial_stake_subsidy_distribution_amount: u64,
+
+    /// Number of distributions to occur before the distribution amount decays.
+    #[serde(default = "GenesisCeremonyParameters::default_stake_subsidy_period_length")]
+    pub stake_subsidy_period_length: u64,
+
+    /// The rate at which the distribution amount decays at the end of each
+    /// period. Expressed in basis points.
+    #[serde(default = "GenesisCeremonyParameters::default_stake_subsidy_decrease_rate")]
+    pub stake_subsidy_decrease_rate: u16,
+    // Most other parameters (e.g. initial gas schedule) should be derived from protocol_version.
+}
+
+impl GenesisCeremonyParameters {
+    pub fn new() -> Self {
+        Self {
+            timestamp_ms: Self::default_timestamp_ms(),
+            protocol_version: ProtocolVersion::MAX,
+            allow_insertion_of_extra_objects: true,
+            governance_start_epoch: 0,
+            epoch_duration_ms: Self::default_epoch_duration_ms(),
+            initial_stake_subsidy_distribution_amount:
+                Self::default_initial_stake_subsidy_distribution_amount(),
+            stake_subsidy_period_length: Self::default_stake_subsidy_period_length(),
+            stake_subsidy_decrease_rate: Self::default_stake_subsidy_decrease_rate(),
+        }
+    }
+
+    fn default_timestamp_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    fn default_allow_insertion_of_extra_objects() -> bool {
+        true
+    }
+
+    fn default_epoch_duration_ms() -> u64 {
+        // 24 hrs
+        24 * 60 * 60 * 1000
+    }
+
+    fn default_initial_stake_subsidy_distribution_amount() -> u64 {
+        // 1M Sui
+        1_000_000 * sui_types::gas_coin::MIST_PER_SUI
+    }
+
+    fn default_stake_subsidy_period_length() -> u64 {
+        // 30 distributions or epochs
+        30
+    }
+
+    fn default_stake_subsidy_decrease_rate() -> u16 {
+        // 10% in basis points
+        10000
+    }
+
+    fn to_genesis_chain_parameters(&self) -> GenesisChainParameters {
+        GenesisChainParameters {
+            protocol_version: self.protocol_version.as_u64(),
+            system_state_version: get_sui_system_state_version(self.protocol_version),
+            governance_start_epoch: self.governance_start_epoch,
+            chain_start_timestamp_ms: self.timestamp_ms,
+            epoch_duration_ms: self.epoch_duration_ms,
+            initial_stake_subsidy_distribution_amount: self
+                .initial_stake_subsidy_distribution_amount,
+            stake_subsidy_period_length: self.stake_subsidy_period_length,
+            stake_subsidy_decrease_rate: self.stake_subsidy_decrease_rate,
+        }
+    }
+}
+
+impl Default for GenesisCeremonyParameters {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub struct Builder {
-    parameters: GenesisChainParameters,
+    parameters: GenesisCeremonyParameters,
+    token_distribution_schedule: Option<TokenDistributionSchedule>,
     objects: BTreeMap<ObjectID, Object>,
     validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
+    // Validator signatures over checkpoint
+    signatures: BTreeMap<AuthorityPublicKeyBytes, AuthoritySignInfo>,
+    built_genesis: Option<UnsignedGenesis>,
 }
 
 impl Default for Builder {
@@ -245,18 +534,21 @@ impl Builder {
     pub fn new() -> Self {
         Self {
             parameters: Default::default(),
+            token_distribution_schedule: None,
             objects: Default::default(),
             validators: Default::default(),
+            signatures: Default::default(),
+            built_genesis: None,
         }
     }
 
-    pub fn with_chain_id(mut self, chain_id: ChainId) -> Self {
-        self.parameters.chain_id = chain_id;
+    pub fn with_parameters(mut self, parameters: GenesisCeremonyParameters) -> Self {
+        self.parameters = parameters;
         self
     }
 
-    pub fn with_parameters(mut self, parameters: GenesisChainParameters) -> Self {
-        self.parameters = parameters;
+    pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
+        self.parameters.protocol_version = v;
         self
     }
 
@@ -287,60 +579,126 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> Genesis {
-        let mut genesis_ctx = sui_adapter::genesis::get_genesis_context();
+    pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
+        let UnsignedGenesis { checkpoint, .. } = self.build_unsigned_genesis_checkpoint();
 
-        // Get Move and Sui Framework
-        let modules = [
-            sui_framework::get_move_stdlib(),
-            sui_framework::get_sui_framework(),
-        ];
-
-        let objects = self.objects.into_iter().map(|(_, o)| o).collect::<Vec<_>>();
-        let validators = self
-            .validators
-            .into_iter()
-            .map(|(_, v)| v)
-            .collect::<Vec<_>>();
-        let objects = create_genesis_objects(
-            &mut genesis_ctx,
-            self.parameters.chain_id,
-            &modules,
-            &objects,
-            &validators,
+        let name = keypair.public().into();
+        assert!(
+            self.validators.contains_key(&name),
+            "provided keypair does not correspond to a validator in the validator set"
         );
+        let checkpoint_signature = {
+            let intent_msg = IntentMessage::new(
+                Intent::default().with_scope(IntentScope::CheckpointSummary),
+                checkpoint.clone(),
+            );
+            let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, keypair);
+            AuthoritySignInfo {
+                epoch: checkpoint.epoch,
+                authority: name,
+                signature,
+            }
+        };
+
+        self.signatures.insert(name, checkpoint_signature);
+
+        self
+    }
+
+    pub fn unsigned_genesis_checkpoint(&self) -> Option<UnsignedGenesis> {
+        self.built_genesis.clone()
+    }
+
+    pub fn build_unsigned_genesis_checkpoint(&mut self) -> UnsignedGenesis {
+        if let Some(built_genesis) = &self.built_genesis {
+            return built_genesis.clone();
+        }
+
+        let objects = self.objects.clone().into_values().collect::<Vec<_>>();
+        let validators = self.validators.clone().into_values().collect::<Vec<_>>();
+
+        let token_distribution_schedule =
+            if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
+                token_distribution_schedule.clone()
+            } else {
+                TokenDistributionSchedule::new_for_validators_with_default_allocation(
+                    validators.iter().map(|v| v.info.sui_address()),
+                )
+            };
+
+        self.built_genesis = Some(build_unsigned_genesis_data(
+            &self.parameters,
+            &token_distribution_schedule,
+            &validators,
+            &objects,
+        ));
+
+        self.token_distribution_schedule = Some(token_distribution_schedule);
+
+        self.built_genesis.clone().unwrap()
+    }
+
+    fn committee(objects: &[Object]) -> Committee {
+        let sui_system_object =
+            get_sui_system_state(&objects).expect("Sui System State object must always exist");
+        sui_system_object.get_current_epoch_committee().committee
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.parameters.protocol_version
+    }
+
+    pub fn build(mut self) -> Genesis {
+        let UnsignedGenesis {
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
+            events,
+            objects,
+        } = self.build_unsigned_genesis_checkpoint();
+
+        let committee = Self::committee(&objects);
+
+        let checkpoint = {
+            let signatures = self
+                .signatures
+                .clone()
+                .into_iter()
+                .map(|(_, s)| s)
+                .collect();
+
+            CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
+        };
+
+        let validators = self.validators.into_values().collect::<Vec<_>>();
+
+        // Ensure we have signatures from all validators
+        assert_eq!(checkpoint.auth_sig().len(), validators.len() as u64);
 
         let genesis = Genesis {
+            checkpoint,
+            checkpoint_contents,
+            transaction,
+            effects,
+            events,
             objects,
-            validator_set: validators
-                .into_iter()
-                .map(|genesis_info| genesis_info.info)
-                .collect::<Vec<_>>(),
         };
 
         // Verify that all the validators were properly created onchain
         let system_object = genesis.sui_system_object();
         assert_eq!(system_object.epoch, 0);
 
-        for (validator, onchain_validator) in genesis
-            .validator_set()
+        for (validator, onchain_validator) in validators
             .iter()
+            .map(|genesis_info| &genesis_info.info)
             .zip(system_object.validators.active_validators.iter())
         {
-            assert_eq!(validator.stake(), onchain_validator.stake_amount);
-            assert_eq!(
-                validator.sui_address().to_vec(),
-                onchain_validator.metadata.sui_address.to_vec(),
-            );
-            assert_eq!(
-                validator.protocol_key().as_ref().to_vec(),
-                onchain_validator.metadata.pubkey_bytes,
-            );
-            assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
-            assert_eq!(
-                validator.network_address().to_vec(),
-                onchain_validator.metadata.net_address
-            );
+            let metadata = onchain_validator.verified_metadata();
+            assert_eq!(validator.sui_address(), metadata.sui_address);
+            assert_eq!(validator.protocol_key(), metadata.sui_pubkey_bytes());
+            assert_eq!(validator.name(), &metadata.name);
+            assert_eq!(validator.network_address(), &metadata.net_address);
         }
 
         genesis
@@ -357,7 +715,20 @@ impl Builder {
 
         // Load parameters
         let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
-        let parameters = serde_yaml::from_slice(&fs::read(parameters_file)?)?;
+        let parameters = serde_yaml::from_slice(
+            &fs::read(parameters_file).context("unable to read genesis parameters file")?,
+        )
+        .context("unable to deserialize genesis parameters")?;
+
+        let token_distribution_schedule_file =
+            path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE);
+        let token_distribution_schedule = if token_distribution_schedule_file.exists() {
+            Some(TokenDistributionSchedule::from_csv(fs::File::open(
+                token_distribution_schedule_file,
+            )?)?)
+        } else {
+            None
+        };
 
         // Load Objects
         let mut objects = BTreeMap::new();
@@ -371,6 +742,20 @@ impl Builder {
             let object_bytes = fs::read(path)?;
             let object: Object = serde_yaml::from_slice(&object_bytes)?;
             objects.insert(object.id(), object);
+        }
+
+        // Load Signatures
+        let mut signatures = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let signature_bytes = fs::read(path)?;
+            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)?;
+            signatures.insert(sigs.authority, sigs);
         }
 
         // Load validator infos
@@ -388,11 +773,40 @@ impl Builder {
             committee.insert(validator_info.info.protocol_key(), validator_info);
         }
 
-        Ok(Self {
+        let mut builder = Self {
             parameters,
+            token_distribution_schedule,
             objects,
             validators: committee,
-        })
+            signatures,
+            built_genesis: None, // Leave this as none, will build and compare below
+        };
+
+        let unsigned_genesis_file = path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE);
+        if unsigned_genesis_file.exists() {
+            let unsigned_genesis_bytes = fs::read(unsigned_genesis_file)?;
+            let loaded_genesis: UnsignedGenesis = bcs::from_bytes(&unsigned_genesis_bytes)?;
+
+            // If we have a built genesis, then we must have a token_distribution_schedule present
+            // as well.
+            assert!(
+                builder.token_distribution_schedule.is_some(),
+                "If a built genesis is present, then there must also be a token-distribution-schedule present"
+            );
+
+            // Verify loaded genesis matches one build from the constituent parts
+            let built = builder.build_unsigned_genesis_checkpoint();
+            loaded_genesis.checkpoint_contents.digest(); // cache digest before compare
+            assert_eq!(
+                built, loaded_genesis,
+                "loaded genesis does not match built genesis"
+            );
+
+            // Just to double check that its set after building above
+            assert!(builder.unsigned_genesis_checkpoint().is_some());
+        }
+
+        Ok(builder)
     }
 
     pub fn save<P: AsRef<Path>>(self, path: P) -> Result<(), anyhow::Error> {
@@ -405,14 +819,29 @@ impl Builder {
         let parameters_file = path.join(GENESIS_BUILDER_PARAMETERS_FILE);
         fs::write(parameters_file, serde_yaml::to_vec(&self.parameters)?)?;
 
+        if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
+            token_distribution_schedule.to_csv(fs::File::create(
+                path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE),
+            )?)?;
+        }
+
         // Write Objects
         let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
         fs::create_dir_all(&object_dir)?;
 
         for (_id, object) in self.objects {
             let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = Hex::encode(object.digest());
+            let hex_digest = Hex::encode(object.id());
             fs::write(object_dir.join(hex_digest), object_bytes)?;
+        }
+
+        // Write Signatures
+        let signature_dir = path.join(GENESIS_BUILDER_SIGNATURE_DIR);
+        std::fs::create_dir_all(&signature_dir)?;
+        for (pubkey, sigs) in self.signatures {
+            let sig_bytes = bcs::to_bytes(&sigs)?;
+            let name = self.validators.get(&pubkey).unwrap().info.name();
+            fs::write(signature_dir.join(name), sig_bytes)?;
         }
 
         // Write validator infos
@@ -421,34 +850,267 @@ impl Builder {
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = Hex::encode(validator.info.protocol_key());
-            fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
+            fs::write(
+                committee_dir.join(validator.info.name()),
+                validator_info_bytes,
+            )?;
+        }
+
+        if let Some(genesis) = &self.built_genesis {
+            let genesis_bytes = bcs::to_bytes(&genesis)?;
+            fs::write(
+                path.join(GENESIS_BUILDER_UNSIGNED_GENESIS_FILE),
+                genesis_bytes,
+            )?;
         }
 
         Ok(())
     }
 }
 
+// Create a Genesis Txn Context to be used when generating genesis objects by hashing all of the
+// inputs into genesis ans using that as our "Txn Digest". This is done to ensure that coin objects
+// created between chains are unique
+fn create_genesis_context(
+    epoch_data: &EpochData,
+    genesis_chain_parameters: &GenesisChainParameters,
+    genesis_validators: &[GenesisValidatorMetadata],
+    token_distribution_schedule: &TokenDistributionSchedule,
+    move_framework: Vec<Vec<u8>>,
+    sui_framework: Vec<Vec<u8>>,
+) -> TxContext {
+    let mut hasher = DefaultHash::default();
+    hasher.update(b"sui-genesis");
+    hasher.update(&bcs::to_bytes(genesis_chain_parameters).unwrap());
+    hasher.update(&bcs::to_bytes(genesis_validators).unwrap());
+    hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
+    hasher.update(&bcs::to_bytes(&move_framework).unwrap());
+    hasher.update(&bcs::to_bytes(&sui_framework).unwrap());
+
+    let hash = hasher.finalize();
+    let genesis_transaction_digest = TransactionDigest::new(hash.into());
+
+    TxContext::new(
+        &SuiAddress::default(),
+        &genesis_transaction_digest,
+        epoch_data,
+    )
+}
+
+fn build_unsigned_genesis_data(
+    parameters: &GenesisCeremonyParameters,
+    token_distribution_schedule: &TokenDistributionSchedule,
+    validators: &[GenesisValidatorInfo],
+    objects: &[Object],
+) -> UnsignedGenesis {
+    if !parameters.allow_insertion_of_extra_objects && !objects.is_empty() {
+        panic!("insertion of extra objects at genesis time is prohibited due to 'allow_insertion_of_extra_objects' parameter");
+    }
+
+    let genesis_chain_parameters = parameters.to_genesis_chain_parameters();
+    let genesis_validators = validators
+        .iter()
+        .cloned()
+        .map(GenesisValidatorMetadata::from)
+        .collect::<Vec<_>>();
+
+    token_distribution_schedule.validate();
+    token_distribution_schedule.check_all_stake_operations_are_for_valid_validators(
+        genesis_validators.iter().map(|v| v.sui_address),
+    );
+
+    let epoch_data = EpochData::new_genesis(genesis_chain_parameters.chain_start_timestamp_ms);
+
+    let mut genesis_ctx = create_genesis_context(
+        &epoch_data,
+        &genesis_chain_parameters,
+        &genesis_validators,
+        token_distribution_schedule,
+        MoveStdlib::as_bytes(),
+        SuiFramework::as_bytes(),
+    );
+
+    // Get Move and Sui Framework
+    let modules = [
+        (
+            MoveStdlib::as_modules(),
+            MoveStdlib::transitive_dependencies(),
+        ),
+        (
+            SuiFramework::as_modules(),
+            SuiFramework::transitive_dependencies(),
+        ),
+    ];
+
+    let objects = create_genesis_objects(
+        &mut genesis_ctx,
+        &modules,
+        objects,
+        &genesis_validators,
+        &genesis_chain_parameters,
+        token_distribution_schedule,
+    );
+
+    let protocol_config = ProtocolConfig::get_for_version(parameters.protocol_version);
+
+    let (genesis_transaction, genesis_effects, genesis_events, objects) =
+        create_genesis_transaction(objects, &protocol_config, &epoch_data);
+    let (checkpoint, checkpoint_contents) =
+        create_genesis_checkpoint(parameters, &genesis_transaction, &genesis_effects);
+
+    UnsignedGenesis {
+        checkpoint,
+        checkpoint_contents,
+        transaction: genesis_transaction,
+        effects: genesis_effects,
+        events: genesis_events,
+        objects,
+    }
+}
+
+fn create_genesis_checkpoint(
+    parameters: &GenesisCeremonyParameters,
+    transaction: &Transaction,
+    effects: &TransactionEffects,
+) -> (CheckpointSummary, CheckpointContents) {
+    let execution_digests = ExecutionDigests {
+        transaction: *transaction.digest(),
+        effects: effects.digest(),
+    };
+    let contents = CheckpointContents::new_with_causally_ordered_transactions([execution_digests]);
+    let checkpoint = CheckpointSummary {
+        epoch: 0,
+        sequence_number: 0,
+        network_total_transactions: contents.size().try_into().unwrap(),
+        content_digest: *contents.digest(),
+        previous_digest: None,
+        epoch_rolling_gas_cost_summary: Default::default(),
+        end_of_epoch_data: None,
+        timestamp_ms: parameters.timestamp_ms,
+        version_specific_data: Vec::new(),
+        checkpoint_commitments: Default::default(),
+    };
+
+    (checkpoint, contents)
+}
+
+fn create_genesis_transaction(
+    objects: Vec<Object>,
+    protocol_config: &ProtocolConfig,
+    epoch_data: &EpochData,
+) -> (
+    Transaction,
+    TransactionEffects,
+    TransactionEvents,
+    Vec<Object>,
+) {
+    let genesis_transaction = {
+        let genesis_objects = objects
+            .into_iter()
+            .map(|mut object| {
+                if let Some(o) = object.data.try_as_move_mut() {
+                    o.decrement_version_to(SequenceNumber::MIN);
+                }
+
+                if let Owner::Shared {
+                    initial_shared_version,
+                } = &mut object.owner
+                {
+                    *initial_shared_version = SequenceNumber::MIN;
+                }
+
+                sui_types::messages::GenesisObject::RawObject {
+                    data: object.data,
+                    owner: object.owner,
+                }
+            })
+            .collect();
+
+        sui_types::messages::VerifiedTransaction::new_genesis_transaction(genesis_objects)
+            .into_inner()
+    };
+
+    // execute txn to effects
+    let (effects, events, objects) = {
+        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
+        let temporary_store = TemporaryStore::new(
+            &mut store,
+            InputObjects::new(vec![]),
+            *genesis_transaction.digest(),
+            protocol_config,
+        );
+
+        let native_functions = sui_framework::natives::all_natives(
+            sui_types::MOVE_STDLIB_ADDRESS,
+            sui_types::SUI_FRAMEWORK_ADDRESS,
+        );
+        let move_vm = std::sync::Arc::new(
+            adapter::new_move_vm(native_functions, protocol_config)
+                .expect("We defined natives to not fail here"),
+        );
+
+        let transaction_data = &genesis_transaction.data().intent_message().value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
+        let (inner_temp_store, effects, _execution_error) =
+            sui_adapter::execution_engine::execute_transaction_to_effects::<
+                execution_mode::Normal,
+                _,
+            >(
+                vec![],
+                temporary_store,
+                kind,
+                signer,
+                &gas,
+                *genesis_transaction.digest(),
+                Default::default(),
+                &move_vm,
+                SuiGasStatus::new_unmetered(),
+                epoch_data,
+                protocol_config,
+            );
+        assert!(inner_temp_store.objects.is_empty());
+        assert!(inner_temp_store.mutable_inputs.is_empty());
+        assert!(inner_temp_store.deleted.is_empty());
+
+        let objects = inner_temp_store
+            .written
+            .into_iter()
+            .map(|(_, (_, o, kind))| {
+                assert_eq!(kind, sui_types::storage::WriteKind::Create);
+                o
+            })
+            .collect();
+        (effects, inner_temp_store.events, objects)
+    };
+
+    (genesis_transaction, effects, events, objects)
+}
+
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
-    chain_id: ChainId,
-    modules: &[Vec<CompiledModule>],
+    modules: &[(Vec<CompiledModule>, Vec<ObjectID>)],
     input_objects: &[Object],
-    validators: &[GenesisValidatorInfo],
+    validators: &[GenesisValidatorMetadata],
+    parameters: &GenesisChainParameters,
+    token_distribution_schedule: &TokenDistributionSchedule,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
+    let protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let move_vm = adapter::new_move_vm(native_functions.clone())
+    let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
         .expect("We defined natives to not fail here");
 
-    for modules in modules {
+    for (modules, dependencies) in modules {
         process_package(
             &mut store,
-            &native_functions,
+            &move_vm,
             genesis_ctx,
             modules.to_owned(),
+            dependencies.to_owned(),
+            &protocol_config,
         )
         .unwrap();
     }
@@ -457,26 +1119,28 @@ fn create_genesis_objects(
         store.insert_object(object.to_owned());
     }
 
-    generate_genesis_system_object(&mut store, &move_vm, chain_id, validators, genesis_ctx)
-        .unwrap();
+    generate_genesis_system_object(
+        &mut store,
+        &move_vm,
+        validators,
+        genesis_ctx,
+        parameters,
+        token_distribution_schedule,
+    )
+    .unwrap();
 
-    store
-        .into_inner()
-        .into_iter()
-        .map(|(_id, object)| object)
-        .collect()
+    store.into_inner().into_values().collect()
 }
 
 fn process_package(
     store: &mut InMemoryStorage,
-    // mv: &MoveVM,
-    native_functions: &NativeFunctionTable,
+    vm: &MoveVM,
     ctx: &mut TxContext,
     modules: Vec<CompiledModule>,
+    dependencies: Vec<ObjectID>,
+    protocol_config: &ProtocolConfig,
 ) -> Result<()> {
-    let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-    let ids: Vec<_> = inputs.iter().map(|kind| kind.object_id()).collect();
-    let input_objects = store.get_objects(&ids[..]);
+    let dependency_objects = store.get_objects(&dependencies);
     // When publishing genesis packages, since the std framework packages all have
     // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
     // them as dependencies even though they are not. Hence input_objects contain objects
@@ -490,46 +1154,58 @@ fn process_package(
             .collect();
         assert!(
             // An object either exists on-chain, or is one of the packages to be published.
-            inputs
+            dependencies
                 .iter()
-                .zip(input_objects.iter())
-                .all(|(kind, obj_opt)| obj_opt.is_some()
-                    || to_be_published_addresses.contains(&kind.object_id()))
+                .zip(dependency_objects.iter())
+                .all(|(dependency, obj_opt)| obj_opt.is_some()
+                    || to_be_published_addresses.contains(dependency))
         );
     }
-    let filtered = inputs
-        .into_iter()
-        .zip(input_objects.into_iter())
-        .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object.to_owned())))
-        .collect::<Vec<_>>();
+    let loaded_dependencies: Vec<_> = dependencies
+        .iter()
+        .zip(dependency_objects.into_iter())
+        .filter_map(|(dependency, object)| {
+            Some((
+                InputObjectKind::MovePackage(*dependency),
+                object?.to_owned(),
+            ))
+        })
+        .collect();
 
-    debug_assert!(ctx.digest() == TransactionDigest::genesis());
-    let mut temporary_store =
-        TemporaryStore::new(&*store, InputObjects::new(filtered), ctx.digest());
-    let package_id = ObjectID::from(*modules[0].self_id().address());
-    let natives = native_functions.clone();
+    let mut temporary_store = TemporaryStore::new(
+        &*store,
+        InputObjects::new(loaded_dependencies),
+        ctx.digest(),
+        protocol_config,
+    );
     let mut gas_status = SuiGasStatus::new_unmetered();
-    let vm = adapter::verify_and_link(
-        &temporary_store,
-        &modules,
-        package_id,
-        natives,
-        gas_status.create_move_gas_status(),
-    )?;
-    adapter::store_package_and_init_modules(
+    let module_bytes = modules
+        .into_iter()
+        .map(|m| {
+            let mut buf = vec![];
+            m.serialize(&mut buf).unwrap();
+            buf
+        })
+        .collect();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // executing in Genesis mode does not create an `UpgradeCap`.
+        builder.command(Command::Publish(module_bytes, dependencies));
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+        protocol_config,
+        vm,
         &mut temporary_store,
-        &vm,
-        modules,
         ctx,
-        gas_status.create_move_gas_status(),
+        &mut gas_status,
+        None,
+        pt,
     )?;
 
-    let (
-        InnerTemporaryStore {
-            written, deleted, ..
-        },
-        _events,
-    ) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -539,68 +1215,86 @@ fn process_package(
 pub fn generate_genesis_system_object(
     store: &mut InMemoryStorage,
     move_vm: &MoveVM,
-    chain_id: ChainId,
-    committee: &[GenesisValidatorInfo],
+    genesis_validators: &[GenesisValidatorMetadata],
     genesis_ctx: &mut TxContext,
+    genesis_chain_parameters: &GenesisChainParameters,
+    token_distribution_schedule: &TokenDistributionSchedule,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
-    let mut temporary_store =
-        TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
+    let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::new(
+        genesis_chain_parameters.protocol_version,
+    ));
+    let mut temporary_store = TemporaryStore::new(
+        &*store,
+        InputObjects::new(vec![]),
+        genesis_digest,
+        &protocol_config,
+    );
 
-    let mut pubkeys = Vec::new();
-    let mut network_pubkeys = Vec::new();
-    let mut proof_of_possessions = Vec::new();
-    let mut sui_addresses = Vec::new();
-    let mut network_addresses = Vec::new();
-    let mut names = Vec::new();
-    let mut stakes = Vec::new();
-    let mut gas_prices = Vec::new();
-    let mut commission_rates = Vec::new();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Step 1: Create the SuiSystemState UID
+        let sui_system_state_uid = builder.programmable_move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("object").to_owned(),
+            ident_str!("sui_system_state").to_owned(),
+            vec![],
+            vec![],
+        );
 
-    for GenesisValidatorInfo {
-        info: validator,
-        proof_of_possession,
-    } in committee
-    {
-        pubkeys.push(validator.protocol_key());
-        network_pubkeys.push(validator.network_key());
-        proof_of_possessions.push(proof_of_possession.as_ref().to_vec());
-        sui_addresses.push(validator.sui_address());
-        network_addresses.push(validator.network_address());
-        names.push(validator.name().to_owned().into_bytes());
-        stakes.push(validator.stake());
-        gas_prices.push(validator.gas_price());
-        commission_rates.push(validator.commission_rate());
-    }
+        // Step 2: Create and share the Clock.
+        builder.move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("clock").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            vec![],
+        )?;
 
-    adapter::execute::<execution_mode::Normal, _, _>(
+        // Step 3: Mint the supply of SUI.
+        let sui_supply = builder.programmable_move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("sui").to_owned(),
+            ident_str!("new").to_owned(),
+            vec![],
+            vec![],
+        );
+
+        // Step 4: Run genesis.
+        // The first argument is the system state uid we got from step 1 and the second one is the SUI supply we
+        // got from step 3.
+        let mut arguments = vec![sui_system_state_uid, sui_supply];
+        let mut call_arg_arguments = vec![
+            CallArg::Pure(bcs::to_bytes(&genesis_chain_parameters).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&genesis_validators).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&token_distribution_schedule).unwrap()),
+        ]
+        .into_iter()
+        .map(|a| builder.input(a))
+        .collect::<Result<_, _>>()?;
+        arguments.append(&mut call_arg_arguments);
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_ADDRESS.into(),
+            ident_str!("genesis").to_owned(),
+            ident_str!("create").to_owned(),
+            vec![],
+            arguments,
+        );
+        builder.finish()
+    };
+    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+        &protocol_config,
         move_vm,
         &mut temporary_store,
-        ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("genesis").to_owned()),
-        &ident_str!("create").to_owned(),
-        vec![],
-        vec![
-            CallArg::Pure(bcs::to_bytes(&chain_id).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&names).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&commission_rates).unwrap()),
-        ],
-        SuiGasStatus::new_unmetered().create_move_gas_status(),
         genesis_ctx,
+        &mut SuiGasStatus::new_unmetered(),
+        None,
+        pt,
     )?;
 
-    let (
-        InnerTemporaryStore {
-            written, deleted, ..
-        },
-        _events,
-    ) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -610,11 +1304,158 @@ pub fn generate_genesis_system_object(
 const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
+const GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE: &str = "token-distribution-schedule";
+const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
+const GENESIS_BUILDER_UNSIGNED_GENESIS_FILE: &str = "unsigned-genesis";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TokenDistributionSchedule {
+    pub stake_subsidy_fund_mist: u64,
+    pub allocations: Vec<TokenAllocation>,
+}
+
+impl TokenDistributionSchedule {
+    pub fn validate(&self) {
+        let mut total_mist = self.stake_subsidy_fund_mist;
+
+        for allocation in &self.allocations {
+            total_mist += allocation.amount_mist;
+        }
+
+        if total_mist != TOTAL_SUPPLY_MIST {
+            panic!("TokenDistributionSchedule adds up to {total_mist} and not expected {TOTAL_SUPPLY_MIST}");
+        }
+    }
+
+    fn check_all_stake_operations_are_for_valid_validators<I: IntoIterator<Item = SuiAddress>>(
+        &self,
+        validators: I,
+    ) {
+        use std::collections::HashMap;
+
+        let mut validators: HashMap<SuiAddress, u64> =
+            validators.into_iter().map(|a| (a, 0)).collect();
+
+        // Check that all allocations are for valid validators, while summing up all allocations
+        // for each validator
+        for allocation in &self.allocations {
+            if let Some(staked_with_validator) = &allocation.staked_with_validator {
+                *validators
+                    .get_mut(staked_with_validator)
+                    .expect("allocation must be staked with valid validator") +=
+                    allocation.amount_mist;
+            }
+        }
+
+        // Check that all validators have sufficient stake allocated to ensure they meet the
+        // minimum stake threshold
+        let minimum_required_stake =
+            sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI;
+        for (validator, stake) in validators {
+            if stake < minimum_required_stake {
+                panic!("validator {validator} has '{stake}' stake and does not meet the minimum required stake threshold of '{minimum_required_stake}'");
+            }
+        }
+    }
+
+    fn new_for_validators_with_default_allocation<I: IntoIterator<Item = SuiAddress>>(
+        validators: I,
+    ) -> Self {
+        let mut supply = TOTAL_SUPPLY_MIST;
+        let default_allocation =
+            sui_types::governance::MINIMUM_VALIDATOR_STAKE_SUI * sui_types::gas_coin::MIST_PER_SUI;
+
+        let allocations = validators
+            .into_iter()
+            .map(|a| {
+                supply -= default_allocation;
+                TokenAllocation {
+                    recipient_address: a,
+                    amount_mist: default_allocation,
+                    staked_with_validator: Some(a),
+                }
+            })
+            .collect();
+
+        let schedule = Self {
+            stake_subsidy_fund_mist: supply,
+            allocations,
+        };
+
+        schedule.validate();
+        schedule
+    }
+
+    /// Helper to read a TokenDistributionSchedule from a csv file.
+    ///
+    /// The file is encoded such that the final entry in the CSV file is used to denote the
+    /// allocation to the stake subsidy fund. It must be in the following format:
+    /// '0x0000000000000000000000000000000000000000000000000000000000000000,<amount to stake subsidy fund>,'
+    ///
+    /// All entries in a token distribution schedule must add up to 10B Sui.
+    pub fn from_csv<R: std::io::Read>(reader: R) -> Result<Self> {
+        let mut reader = csv::Reader::from_reader(reader);
+        let mut allocations: Vec<TokenAllocation> =
+            reader.deserialize().collect::<Result<_, _>>()?;
+        assert_eq!(
+            TOTAL_SUPPLY_MIST,
+            allocations.iter().map(|a| a.amount_mist).sum::<u64>(),
+            "Token Distribution Schedule must add up to 10B Sui",
+        );
+        let stake_subsidy_fund_allocation = allocations.pop().unwrap();
+        assert_eq!(
+            SuiAddress::default(),
+            stake_subsidy_fund_allocation.recipient_address,
+            "Final allocation must be for stake subsidy fund",
+        );
+        assert!(
+            stake_subsidy_fund_allocation
+                .staked_with_validator
+                .is_none(),
+            "Can't stake the stake subsidy fund",
+        );
+
+        let schedule = Self {
+            stake_subsidy_fund_mist: stake_subsidy_fund_allocation.amount_mist,
+            allocations,
+        };
+
+        schedule.validate();
+        Ok(schedule)
+    }
+
+    pub fn to_csv<W: std::io::Write>(&self, writer: W) -> Result<()> {
+        let mut writer = csv::Writer::from_writer(writer);
+
+        for allocation in &self.allocations {
+            writer.serialize(allocation)?;
+        }
+
+        writer.serialize(TokenAllocation {
+            recipient_address: SuiAddress::default(),
+            amount_mist: self.stake_subsidy_fund_mist,
+            staked_with_validator: None,
+        })?;
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct TokenAllocation {
+    pub recipient_address: SuiAddress,
+    pub amount_mist: u64,
+
+    /// Indicates if this allocation should be staked at genesis and with which validator
+    pub staked_with_validator: Option<SuiAddress>,
+}
 
 #[cfg(test)]
 mod test {
-    use super::Builder;
-    use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use super::*;
+    use crate::{utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -622,20 +1463,39 @@ mod test {
     };
 
     #[test]
+    fn allocation_csv() {
+        let schedule = TokenDistributionSchedule::new_for_validators_with_default_allocation([
+            SuiAddress::random_for_testing_only(),
+            SuiAddress::random_for_testing_only(),
+        ]);
+        let mut output = Vec::new();
+
+        schedule.to_csv(&mut output).unwrap();
+
+        let parsed_schedule = TokenDistributionSchedule::from_csv(output.as_slice()).unwrap();
+
+        assert_eq!(schedule, parsed_schedule);
+
+        std::io::Write::write_all(&mut std::io::stdout(), &output).unwrap();
+    }
+
+    #[test]
     fn roundtrip() {
-        let genesis = Builder::new().build();
+        let dir = tempfile::TempDir::new().unwrap();
+        let network_config = crate::builder::ConfigBuilder::new(&dir).build();
+        let genesis = network_config.genesis;
 
         let s = serde_yaml::to_string(&genesis).unwrap();
-        let from_s = serde_yaml::from_str(&s).unwrap();
+        let from_s: Genesis = serde_yaml::from_str(&s).unwrap();
+        // cache the digest so that the comparison succeeds.
+        from_s.checkpoint_contents.digest();
         assert_eq!(genesis, from_s);
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn ceremony() {
         let dir = tempfile::TempDir::new().unwrap();
-
-        let genesis_config = GenesisConfig::for_local_testing();
-        let (_account_keys, objects) = genesis_config.generate_accounts(rand::rngs::OsRng).unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
@@ -645,22 +1505,77 @@ mod test {
             name: "0".into(),
             protocol_key: key.public().into(),
             worker_key: worker_key.public().clone(),
-            account_key: account_key.public().clone().into(),
+            account_address: SuiAddress::from(account_key.public()),
             network_key: network_key.public().clone(),
-            stake: 1,
-            delegation: 0,
             gas_price: 1,
             commission_rate: 0,
             network_address: utils::new_tcp_network_address(),
             p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
+            description: String::new(),
+            image_url: String::new(),
+            project_url: String::new(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());
-        let builder = Builder::new()
-            .add_objects(objects)
-            .add_validator(validator, pop);
+        let mut builder = Builder::new().add_validator(validator, pop);
+
+        let genesis = builder.build_unsigned_genesis_checkpoint();
+        for object in genesis.objects() {
+            println!("ObjectID: {} Type: {:?}", object.id(), object.type_());
+        }
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn genesis_transaction() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let builder = crate::builder::ConfigBuilder::new(&dir);
+        let protocol_version = builder.protocol_version;
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+        let network_config = builder.build();
+        let genesis = network_config.genesis;
+
+        let genesis_transaction = genesis.transaction.clone();
+
+        let mut store = sui_types::in_memory_storage::InMemoryStorage::new(Vec::new());
+        let temporary_store = TemporaryStore::new(
+            &mut store,
+            InputObjects::new(vec![]),
+            *genesis_transaction.digest(),
+            &protocol_config,
+        );
+
+        let native_functions = sui_framework::natives::all_natives(
+            sui_types::MOVE_STDLIB_ADDRESS,
+            sui_types::SUI_FRAMEWORK_ADDRESS,
+        );
+        let move_vm = std::sync::Arc::new(
+            adapter::new_move_vm(native_functions, &protocol_config)
+                .expect("We defined natives to not fail here"),
+        );
+
+        let transaction_data = &genesis_transaction.data().intent_message().value;
+        let (kind, signer, gas) = transaction_data.execution_parts();
+        let (_inner_temp_store, effects, _execution_error) =
+            sui_adapter::execution_engine::execute_transaction_to_effects::<
+                execution_mode::Normal,
+                _,
+            >(
+                vec![],
+                temporary_store,
+                kind,
+                signer,
+                &gas,
+                *genesis_transaction.digest(),
+                Default::default(),
+                &move_vm,
+                SuiGasStatus::new_unmetered(),
+                &EpochData::new_test(),
+                &protocol_config,
+            );
+
+        assert_eq!(effects, genesis.effects);
     }
 }

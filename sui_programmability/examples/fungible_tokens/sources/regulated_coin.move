@@ -138,8 +138,8 @@ module abc::abc {
             supply: balance::create_supply(Abc {})
         };
 
-        transfer::transfer(zero(sender, ctx), sender);
-        transfer::transfer(treasury_cap, sender);
+        transfer::public_transfer(zero(sender, ctx), sender);
+        transfer::public_transfer(treasury_cap, sender);
 
         transfer::share_object(Registry {
             id: object::new(ctx),
@@ -163,9 +163,9 @@ module abc::abc {
     // === Admin actions: creating balances, minting coins and banning addresses ===
 
     /// Create an empty `RCoin<Abc>` instance for account `for`. AbcTreasuryCap is passed for
-    /// authentification purposes - only admin can create new accounts.
+    /// authentication purposes - only admin can create new accounts.
     public entry fun create(_: &AbcTreasuryCap, for: address, ctx: &mut TxContext) {
-        transfer::transfer(zero(for, ctx), for)
+        transfer::public_transfer(zero(for, ctx), for)
     }
 
     /// Mint more Abc. Requires AbcTreasuryCap for authorization, so can only be done by admins.
@@ -214,7 +214,7 @@ module abc::abc {
     /// Fails if:
     /// 1. the `RegulatedCoin<Abc>.creator` does not match `Transfer.to`;
     /// 2. the address of the creator/recipient is banned;
-    public entry fun accept_transfer(r: &Registry, coin: &mut RCoin<Abc>, transfer: Transfer, _: &mut TxContext) {
+    public entry fun accept_transfer(r: &Registry, coin: &mut RCoin<Abc>, transfer: Transfer) {
         let Transfer { id, balance, to } = transfer;
 
         assert!(rcoin::creator(coin) == to, ENotOwner);
@@ -241,7 +241,7 @@ module abc::abc {
         // Update swapped amount for Registry to keep track of non-regulated amounts.
         r.swapped_amount = r.swapped_amount + value;
 
-        transfer::transfer(coin::take(borrow_mut(coin), value, ctx), tx_context::sender(ctx));
+        transfer::public_transfer(coin::take(borrow_mut(coin), value, ctx), sender);
     }
 
     /// Take `Coin` and put to the `RegulatedCoin`'s balance.
@@ -249,7 +249,7 @@ module abc::abc {
     /// Fails if:
     /// 1. `RegulatedCoin<Abc>.creator` was banned;
     /// 2. `RegulatedCoin<Abc>` is not owned by the tx sender;
-    public entry fun put_back(r: &mut Registry, rc_coin: &mut RCoin<Abc>, coin: Coin<Abc>, ctx: &mut TxContext) {
+    public entry fun put_back(r: &mut Registry, rc_coin: &mut RCoin<Abc>, coin: Coin<Abc>, ctx: &TxContext) {
         let balance = coin::into_balance(coin);
         let sender = tx_context::sender(ctx);
 
@@ -443,7 +443,7 @@ module abc::tests {
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = &mut reg;
 
-            abc::accept_transfer(reg_ref, &mut coin, transfer, ctx(test));
+            abc::accept_transfer(reg_ref, &mut coin, transfer);
 
             assert!(rcoin::value(&coin) == 500000, 3);
 
@@ -497,7 +497,7 @@ module abc::tests {
         next_tx(test, user1);
         {
             let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            sui::transfer::transfer(coin, user2);
+            sui::transfer::public_transfer(coin, user2);
         };
     }
 
@@ -511,7 +511,7 @@ module abc::tests {
         next_tx(test, user2);
         {
             let coin = test_scenario::take_from_sender<Coin<Abc>>(test);
-            sui::transfer::transfer(coin, admin);
+            sui::transfer::public_transfer(coin, admin);
         };
 
         next_tx(test, admin);
@@ -595,7 +595,7 @@ module abc::tests {
         next_tx(test, user1);
         {
             let coin = test_scenario::take_from_sender<RCoin<Abc>>(test);
-            sui::transfer::transfer(coin, user2);
+            sui::transfer::public_transfer(coin, user2);
         };
 
         next_tx(test, user2);

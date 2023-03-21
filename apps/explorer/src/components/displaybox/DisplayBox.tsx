@@ -183,7 +183,7 @@ function DisplayBoxWString({
                                         <ShowBrokenImage />
                                     ) : (
                                         <img
-                                            id="loadedImage"
+                                            data-testid="loadedImage"
                                             className={styles.largeimage}
                                             alt="NFT"
                                             src={transformURL(display)}
@@ -230,7 +230,7 @@ function DisplayBoxWString({
                     )}
                     {!hasFailedToLoad && (
                         <img
-                            id="loadedImage"
+                            data-testid="loadedImage"
                             className={styles.smallimage}
                             style={imageStyle}
                             alt="NFT"

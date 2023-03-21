@@ -2,11 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  MoveCallTransaction,
-  SignableTransaction,
-  SuiAddress,
+  SignedTransaction,
   SuiTransactionResponse,
+  SignedMessage,
 } from "@mysten/sui.js";
+import {
+  SuiSignTransactionInput,
+  SuiSignAndExecuteTransactionInput,
+  WalletAccount,
+  SuiSignMessageInput,
+} from "@mysten/wallet-standard";
+
+export interface WalletAdapterEvents {
+  change(changes: {
+    connected?: boolean;
+    accounts?: readonly WalletAccount[];
+  }): void;
+}
 
 export interface WalletAdapter {
   // Metadata
@@ -18,15 +30,22 @@ export interface WalletAdapter {
   // Connection Management
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-
+  on: <E extends keyof WalletAdapterEvents>(
+    event: E,
+    callback: WalletAdapterEvents[E]
+  ) => () => void;
+  signMessage(messageInput: SuiSignMessageInput): Promise<SignedMessage>;
+  signTransaction(
+    transactionInput: SuiSignTransactionInput
+  ): Promise<SignedTransaction>;
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */
   signAndExecuteTransaction(
-    transaction: SignableTransaction
+    transactionInput: SuiSignAndExecuteTransactionInput
   ): Promise<SuiTransactionResponse>;
 
-  getAccounts: () => Promise<SuiAddress[]>;
+  getAccounts: () => Promise<readonly WalletAccount[]>;
 }
 
 type WalletAdapterProviderUnsubscribe = () => void;

@@ -1,9 +1,11 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{HeaderDigest, Round, TimestampMs, VoteDigest};
+use crate::{CertificateDigest, HeaderDigest, Round, TimestampMs, VoteDigest};
 use config::Epoch;
 use fastcrypto::hash::Digest;
+use mysten_common::sync::notify_once::NotifyOnce;
+use std::sync::Arc;
 use store::StoreError;
 use thiserror::Error;
 
@@ -29,7 +31,10 @@ macro_rules! ensure {
 
 pub type DagResult<T> = Result<T, DagError>;
 
-#[derive(Debug, Error)]
+// Notification for certificate accepted.
+pub type AcceptNotification = Arc<NotifyOnce>;
+
+#[derive(Clone, Debug, Error)]
 pub enum DagError {
     #[error("Channel {0} has closed unexpectedly")]
     ClosedChannel(String),
@@ -38,19 +43,22 @@ pub enum DagError {
     InvalidBitmap(String),
 
     #[error("Invalid signature")]
-    InvalidSignature(#[from] signature::Error),
+    InvalidSignature,
 
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
 
-    #[error("Serialization error: {0}")]
-    SerializationError(#[from] Box<bincode::ErrorKind>),
-
     #[error("Invalid header digest")]
     InvalidHeaderDigest,
 
-    #[error("Malformed header {0}")]
-    MalformedHeader(HeaderDigest),
+    #[error("Header {0} has bad worker IDs")]
+    HeaderHasBadWorkerIds(HeaderDigest),
+
+    #[error("Header {0} has parents with invalid round numbers")]
+    HeaderHasInvalidParentRoundNumbers(HeaderDigest),
+
+    #[error("Header {0} has more than one parent certificate with the same authority")]
+    HeaderHasDuplicateParentAuthorities(HeaderDigest),
 
     #[error("Received message from unknown authority {0}")]
     UnknownAuthority(String),
@@ -97,14 +105,20 @@ pub enum DagError {
         local_time: TimestampMs,
     },
 
+    #[error("Invalid parent {0} (not found in genesis)")]
+    InvalidGenesisParent(CertificateDigest),
+
+    #[error("No peer can be reached for fetching certificates! Check if network is healthy.")]
+    NoCertificateFetched,
+
     #[error("Too many certificates in the FetchCertificatesResponse {0} > {1}")]
     TooManyFetchedCertificatesReturned(usize, usize),
 
     #[error("Network error: {0}")]
     NetworkError(String),
 
-    #[error("Processing was suspended to retrieve dependencies")]
-    Suspended,
+    #[error("Processing was suspended to retrieve parent certificates")]
+    Suspended(AcceptNotification),
 
     #[error("System shutting down")]
     ShuttingDown,

@@ -4,7 +4,7 @@ title: Build and Test the Sui Move Package
 
 ## Building a package
 
-Ensure you are in the `my_move_package` directory that contains your package, and then use the following command to build it:
+Ensure you are in the `my_first_package` directory that contains your package, and then use the following command to build it:
 
 ``` shell
 $ sui move build
@@ -13,8 +13,12 @@ $ sui move build
 A successful build returns a response similar to the following:
 
 ```shell
-Build Successful
-Artifacts path: "./build"
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING my_first_package
 ```
 
 If the build fails, you can use the verbose error messaging in output to troubleshoot and resolve root issues.
@@ -166,14 +170,17 @@ Running Move unit tests
 [ PASS    ] 0x0::my_module::test_sword_create
 Test result: OK. Total tests: 1; passed: 1; failed: 0
 ```
-
 ---
 **Tip:**
-If you want to run only a subset of the unit tests, you can filter by test name using the `--filter` option. Example:
+If you want to run only a subset of the unit tests, you can use a filter string. A unit
+test will be run only if it contains this string in its fully qualified (\<address>::<module_name>::<fn_name>) name.
+Example:
 ```
-$ sui move test --filter sword
+$ sui move test sword
 ```
 The above command will run all tests whose name contains "sword".
+
+
 You can discover more testing options through:
 ```
 $ sui move test -h
@@ -195,12 +202,12 @@ transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move)
+[test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test/test_scenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
 
-The main concept in the `test_scenario` is a scenario that emulates a
+The main concept in the `test_scenario` module is a scenario that emulates a
 series of Sui transactions, each executed by a (potentially) different
 user. At a high level, a developer writing a test starts the first
 transaction using the `test_scenario::begin` function that takes an
@@ -217,7 +224,7 @@ the `test_scenario::next_tx` function that takes an instance of the
 a (new) user as arguments.
 
 Let us extend our running example with a multi-transaction test that
-uses the `test_scenario` to test sword creation and transfer from the
+uses the `test_scenario` module to test sword creation and transfer from the
 point of view of a Sui developer. First, let us create
 [entry functions](index.md#entry-functions) callable from Sui that implement
 sword creation and transfer and put them into the `my_module.move` file:
@@ -247,19 +254,9 @@ The code of the new functions is self-explanatory and uses struct
 creation and Sui-internal modules (`TxContext` and `Transfer`) in a
 way similar to what we have seen in the previous sections. The
 important part is for the entry functions to have correct signatures
-as described [earlier](index.md#entry-functions). In order for this code to
-build, we need to add an additional import line at the module level
-(as the first line in the module's main code block right before the
-existing module-wide `ID` module import) to make the `TxContext`
-struct available for function definitions:
+as described [earlier](index.md#entry-functions).
 
-``` rust
-    use sui::tx_context::TxContext;
-```
-
-We can now build the module extended with the new functions but still
-have only one test defined. Let us change that by adding another test
-function.
+Let us now add another test function.
 
 ``` rust
     #[test]
@@ -280,10 +277,8 @@ function.
         // second transaction executed by admin to create the sword
         test_scenario::next_tx(scenario, admin);
         {
-            let forge = test_scenario::take_from_sender<Forge>(scenario);
             // create the sword and transfer it to the initial owner
-            sword_create(&mut forge, 42, 7, initial_owner, test_scenario::ctx(scenario));
-            test_scenario::return_to_sender(scenario, forge)
+            sword_create(42, 7, initial_owner, test_scenario::ctx(scenario));
         };
         // third transaction executed by the initial sword owner
         test_scenario::next_tx(scenario, initial_owner);
@@ -291,12 +286,11 @@ function.
             // extract the sword owned by the initial owner
             let sword = test_scenario::take_from_sender<Sword>(scenario);
             // transfer the sword to the final owner
-            transfer::transfer(sword, final_owner);
+            sword_transfer(sword, final_owner, test_scenario::ctx(scenario))
         };
         // fourth transaction executed by the final sword owner
         test_scenario::next_tx(scenario, final_owner);
         {
-
             // extract the sword owned by the final owner
             let sword = test_scenario::take_from_sender<Sword>(scenario);
             // verify that the sword has expected properties
@@ -309,14 +303,16 @@ function.
 ```
 
 Let us now dive into some details of the new testing function. The
-first thing we do is to create some addresses that represent users
-participating in the testing scenario. (We assume that we have one game
+first thing we do is create some addresses that represent users
+participating in the testing scenario. (We assume we have one game
 admin user and two regular users representing players.) We then create
 a scenario by starting the first transaction on behalf of the admin
-address that creates a sword and transfers its ownership to the
-initial owner.
+address.
 
-The second transaction is executed by the initial owner (passed as an
+The second transaction is executed by the admin. The transaction creates a 
+sword of which the initial_owner is the receiver.
+
+The third transaction is executed by the initial owner (passed as an
 argument to the `test_scenario::next_tx` function) who then transfers
 the sword it now owns to its final owner. Please note that in *pure
 Move* we do not have the notion of Sui storage and, consequently, no
@@ -334,7 +330,7 @@ from storage is transferred to another address.
 > from the admin's address (via `test_scenario`s `take_from_sender` or `take_from_address`
 > functions) only in the third transaction.
 
-The final transaction is executed by the final owner - it retrieves
+The fourth and final transaction is executed by the final owner - it retrieves
 the sword object from storage and checks if it has the expected
 properties. Remember, as described in
 [testing a package](build-test.md#testing-a-package), in the *pure Move* testing

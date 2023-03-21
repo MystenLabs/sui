@@ -2,7 +2,7 @@ FROM ubuntu:latest AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
-RUN apt-get update && apt-get install -y build-essential libssl-dev pkg-config curl cmake clang
+RUN apt-get update && apt-get install -y build-essential libssl-dev pkg-config curl cmake clang ca-certificates
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
@@ -45,6 +45,7 @@ RUN cargo build --release --bin sui --bin sui-rosetta
 # Production Image
 FROM ubuntu:latest AS runtime
 WORKDIR sui
+RUN apt-get update && apt-get install -y ca-certificates
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-rosetta /usr/local/bin
 COPY --from=builder /sui/bin/rosetta-cli /usr/local/bin

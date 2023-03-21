@@ -12,17 +12,13 @@ tempfile = "3.3.0"
 dashmap = "5.4.0"
 fastcrypto.workspace = true
 futures = "0.3.24"
-thiserror = "1.0.35"
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
-tokio-util = { version = "0.7.4", features = ["codec"] }
-tonic = { version = "0.8.2", features = ["tls"] }
 tracing = "0.1.36"
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 config = { path = "../config", package = "narwhal-config" }
-
-workspace-hack.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 fail = "0.5.1"
 
 [dev-dependencies]

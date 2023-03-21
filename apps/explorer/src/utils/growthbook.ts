@@ -9,6 +9,11 @@ const GROWTHBOOK_API_KEY = import.meta.env.PROD
 
 export const growthbook = new GrowthBook();
 
+let resolveFeaturesPromise: () => void;
+export const featuresPromise: Promise<void> = new Promise((resolve) => {
+    resolveFeaturesPromise = resolve;
+});
+
 export async function loadFeatures() {
     try {
         const res = await fetch(
@@ -24,10 +29,14 @@ export async function loadFeatures() {
         growthbook.setFeatures(data.features);
     } catch (e) {
         console.warn('Failed to fetch feature definitions from Growthbook', e);
+    } finally {
+        resolveFeaturesPromise();
     }
 }
 
 export enum GROWTHBOOK_FEATURES {
+    EXPLORER_METRICS = 'explorer-metrics',
     USE_TEST_NET_ENDPOINT = 'testnet-selection',
-    MODULE_VIEW_INVOKE_FUNCTIONS = 'explorer-module-view-invoke-functions',
+    VALIDATOR_PAGE_STAKING = 'validator-page-staking',
+    EPOCHS_CHECKPOINTS = 'explorer-epochs-checkpoints',
 }

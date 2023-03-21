@@ -3,6 +3,7 @@ title: Use Sui Move Library
 ---
 
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
+You can view source code for the implementation of the core Sui Move framework in the [Sui GitHub repo](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources).
 
 ## Object ownership
 Objects in Sui can have different ownership types. Specifically, they are:
@@ -40,12 +41,12 @@ ofield::add<u8, B>(&mut a.id, 0, b);
 let b: &B = ofield::borrow<u8, B>(&a.id, 0);
 ```
 
-If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing `b`, and `b` has a dynamic object field containing `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
+If the value of a dynamic object field is passed as an input to an entry function in a transaction, that transaction will fail. For instance, if we have a chain of ownership: address `Addr1` owns object `a`, object `a` has a dynamic object field containing object `b`, and `b` has a dynamic object field containing object `c` then in order to use object `c` in a Move call, the transaction must be signed by `Addr1`, and accept `a` as an input, and `b` and `c` must be accessed dynamically during transaction execution:
 
 ```
 use sui::dynamic_object_field as ofield;
 
-// signed of ctx is Addr1
+// signer of ctx is Addr1
 public entry fun entry_function(a: &A, ctx: &mut TxContext) {
   let b: &B = ofield::borrow<u8, B>(&a.id, 0);
   let c: &C = ofield::borrow<u8, C>(&b.id, 0);
@@ -60,7 +61,8 @@ To make an object `obj` immutable, one can call:
 ```
 transfer::freeze_object(obj);
 ```
-After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An immutable object can be used as reference by anyone in their Move call.
+
+After this call, `obj` becomes immutable, meaning you can't mutate or delete it. This process is also irreversible: once an object is frozen, it stays frozen forever. Anyone can use an immutable object as a reference in their Move call.
 
 ### Shared
 To make an object `obj` shared, one can call:
@@ -68,14 +70,14 @@ To make an object `obj` shared, one can call:
 transfer::share_object(obj);
 ```
 
-After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be transferred or embedded in another object as a field. For more details, see the [shared objects](../../learn/objects.md#shared) documentation.
+After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, a shared object cannot be transferred or embedded in another object as a field. For more details, see the [shared objects](../../learn/objects.md#shared) documentation.
 
 ## Transaction context
-`TxContext` module provides a few important APIs that operate based on the current transaction context.
+The `TxContext` module provides a few important APIs that operate based on the current transaction context.
 
 To create a new ID for a new object:
 ```
-// assmue `ctx` has type `&mut TxContext`.
+// assume `ctx` has type `&mut TxContext`.
 let info = sui::object::new(ctx);
 ```
 
@@ -89,6 +91,6 @@ Now that you are familiar with the Move language, as well as with how
 to develop and test Move code, you are ready to start looking at and
 playing with some larger
 [examples](../../explore/examples.md) of Move
-programs. The examples include implementation of the tic-tac-toe game, and a more
+programs. The examples include implementations of the tic-tac-toe game, and (Hero) a more
 developed variant of a fantasy game similar to the one we have been
 developing during this tutorial.

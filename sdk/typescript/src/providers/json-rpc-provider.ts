@@ -1,80 +1,80 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Provider } from './provider';
-import { HttpHeaders, JsonRpcClient } from '../rpc/client';
+import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
-  isGetObjectDataResponse,
-  isGetOwnedObjectsResponse,
-  isGetTxnDigestsResponse,
-  isPaginatedEvents,
-  isPaginatedTransactionDigests,
-  isSuiExecuteTransactionResponse,
-  isSuiMoveFunctionArgTypes,
-  isSuiMoveNormalizedFunction,
-  isSuiMoveNormalizedModule,
-  isSuiMoveNormalizedModules,
-  isSuiMoveNormalizedStruct,
-  isSuiTransactionResponse,
-  isTransactionEffects,
-  isCoinMetadata,
-  isSuiTransactionAuthSignersResponse,
-} from '../types/index.guard';
-import {
-  Coin,
   ExecuteTransactionRequestType,
   GatewayTxSeqNumber,
-  GetObjectDataResponse,
-  getObjectReference,
   GetTxnDigestsResponse,
   ObjectId,
-  PaginatedTransactionDigests,
+  PaginatedTransactionResponse,
   SubscriptionId,
   SuiAddress,
-  SuiEventEnvelope,
   SuiEventFilter,
-  SuiExecuteTransactionResponse,
   SuiMoveFunctionArgTypes,
   SuiMoveNormalizedFunction,
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
   SuiMoveNormalizedStruct,
-  SuiObjectInfo,
-  SuiObjectRef,
   SuiTransactionResponse,
   TransactionDigest,
-  TransactionQuery,
-  SUI_TYPE_ARG,
+  SuiTransactionResponseQuery,
   RpcApiVersion,
   parseVersionFromString,
-  EventQuery,
-  EventId,
   PaginatedEvents,
   FaucetResponse,
   Order,
-  TransactionEffects,
+  DevInspectResults,
   CoinMetadata,
-  versionToString,
   isValidTransactionDigest,
   isValidSuiAddress,
   isValidSuiObjectId,
   normalizeSuiAddress,
   normalizeSuiObjectId,
-  SuiTransactionAuthSignersResponse,
+  CoinMetadataStruct,
+  PaginatedCoins,
+  SuiObjectResponse,
+  DelegatedStake,
+  CoinBalance,
+  CoinSupply,
+  CheckpointDigest,
+  Checkpoint,
+  CommitteeInfo,
+  DryRunTransactionResponse,
+  SuiObjectDataOptions,
+  SuiSystemStateSummary,
+  SuiTransactionResponseOptions,
+  SuiEvent,
+  PaginatedObjectsResponse,
+  SuiObjectResponseQuery,
 } from '../types';
-import { PublicKey, SignatureScheme, SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/publickey';
+import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
   DEFAULT_CLIENT_OPTIONS,
   WebsocketClient,
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
-import { ApiEndpoints, Network, NETWORK_TO_API } from '../utils/api-endpoints';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { lt } from '@suchipi/femver';
-import { Base64DataBuffer } from '../serialization/base64';
+import { any, is, number, array } from 'superstruct';
+import { toB64 } from '@mysten/bcs';
+import { SerializedSignature } from '../cryptography/signature';
+import { Connection, devnetConnection } from '../rpc/connection';
+import { Transaction } from '../builder';
+import { CheckpointPage } from '../types/checkpoints';
+import { RPCError } from '../utils/errors';
 
-const isNumber = (val: any): val is number => typeof val === 'number';
-const isAny = (_val: any): _val is any => true;
+export const TARGETED_RPC_VERSION = '0.27.0';
+
+export interface PaginationArguments {
+  /** Optional paging cursor */
+  cursor?: ObjectId | null;
+  /** Maximum item returned per page */
+  limit?: number | null;
+}
+
+export interface OrderArguments {
+  order?: Order | null;
+}
 
 /**
  * Configuration options for the JsonRpcProvider. If the value of a field is not provided,
@@ -95,28 +95,29 @@ export type RpcProviderOptions = {
   skipDataValidation?: boolean;
   /**
    * Configuration options for the websocket connection
+   * TODO: Move to connection.
    */
   socketOptions?: WebsocketClientOptions;
   /**
    * Cache timeout in seconds for the RPC API Version
    */
-  versionCacheTimoutInSeconds?: number;
-  /**
-   * URL to a faucet(optional). If you initialize `JsonRpcProvider`
-   * with a known `Network` value, this will be populated with a default
-   * value
-   */
-  faucetURL?: string;
+  versionCacheTimeoutInSeconds?: number;
+
+  /** Allow defining a custom RPC client to use */
+  rpcClient?: JsonRpcClient;
+
+  /** Allow defining a custom websocket client to use */
+  websocketClient?: WebsocketClient;
 };
 
 const DEFAULT_OPTIONS: RpcProviderOptions = {
   skipDataValidation: true,
   socketOptions: DEFAULT_CLIENT_OPTIONS,
-  versionCacheTimoutInSeconds: 600,
+  versionCacheTimeoutInSeconds: 600,
 };
 
-export class JsonRpcProvider extends Provider {
-  public endpoints: ApiEndpoints;
+export class JsonRpcProvider {
+  public connection: Connection;
   protected client: JsonRpcClient;
   protected wsClient: WebsocketClient;
   private rpcApiVersion: RpcApiVersion | undefined;
@@ -124,32 +125,28 @@ export class JsonRpcProvider extends Provider {
   /**
    * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui RPC endpoint, or a `Network` enum
+   * @param connection The `Connection` object containing configuration for the network.
    * @param options configuration options for the provider
    */
   constructor(
-    endpoint: string | Network = Network.DEVNET,
-    public options: RpcProviderOptions = DEFAULT_OPTIONS
+    // TODO: Probably remove the default endpoint here:
+    connection: Connection = devnetConnection,
+    public options: RpcProviderOptions = DEFAULT_OPTIONS,
   ) {
-    super();
-
-    if ((Object.values(Network) as string[]).includes(endpoint)) {
-      this.endpoints = NETWORK_TO_API[endpoint as Network];
-    } else {
-      this.endpoints = {
-        fullNode: endpoint,
-        faucet: options.faucetURL,
-      };
-    }
+    this.connection = connection;
 
     const opts = { ...DEFAULT_OPTIONS, ...options };
+    this.options = opts;
+    // TODO: add header for websocket request
+    this.client = opts.rpcClient ?? new JsonRpcClient(this.connection.fullnode);
 
-    this.client = new JsonRpcClient(this.endpoints.fullNode);
-    this.wsClient = new WebsocketClient(
-      this.endpoints.fullNode,
-      opts.skipDataValidation!,
-      opts.socketOptions
-    );
+    this.wsClient =
+      opts.websocketClient ??
+      new WebsocketClient(
+        this.connection.websocket,
+        opts.skipDataValidation!,
+        opts.socketOptions,
+      );
   }
 
   async getRpcApiVersion(): Promise<RpcApiVersion | undefined> {
@@ -164,12 +161,13 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'rpc.discover',
         [],
-        isAny,
-        this.options.skipDataValidation
+        any(),
+        this.options.skipDataValidation,
       );
       this.rpcApiVersion = parseVersionFromString(resp.info.version);
       this.cacheExpiry =
-        Date.now() + (this.options.versionCacheTimoutInSeconds ?? 0);
+        // Date.now() is in milliseconds, but the timeout is in seconds
+        Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;
       return this.rpcApiVersion;
     } catch (err) {
       console.warn('Error fetching version number of the RPC API', err);
@@ -177,536 +175,691 @@ export class JsonRpcProvider extends Provider {
     return undefined;
   }
 
-  async getCoinMetadata(coinType: string): Promise<CoinMetadata> {
-    try {
-      const version = await this.getRpcApiVersion();
-      // TODO: clean up after 0.17.0 is deployed on both DevNet and TestNet
-      if (version && lt(versionToString(version), '0.17.0')) {
-        const [packageId, module, symbol] = coinType.split('::');
-        if (
-          normalizeSuiAddress(packageId) !== normalizeSuiAddress('0x2') ||
-          module != 'sui' ||
-          symbol !== 'SUI'
-        ) {
-          throw new Error(
-            'only SUI coin is supported in getCoinMetadata for RPC version priort to 0.17.0.'
-          );
-        }
-        return {
-          decimals: 9,
-          name: 'Sui',
-          symbol: 'SUI',
-          description: '',
-          iconUrl: null,
-          id: null,
-        };
-      }
-      return await this.client.requestWithType(
-        'sui_getCoinMetadata',
-        [coinType],
-        isCoinMetadata,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(`Error fetching CoinMetadata for ${coinType}: ${err}`);
-    }
-  }
-
   async requestSuiFromFaucet(
     recipient: SuiAddress,
-    httpHeaders?: HttpHeaders
+    httpHeaders?: HttpHeaders,
   ): Promise<FaucetResponse> {
-    if (!this.endpoints.faucet) {
+    if (!this.connection.faucet) {
       throw new Error('Faucet URL is not specified');
     }
-    return requestSuiFromFaucet(this.endpoints.faucet, recipient, httpHeaders);
+    return requestSuiFromFaucet(this.connection.faucet, recipient, httpHeaders);
   }
 
-  // Move info
-  async getMoveFunctionArgTypes(
-    packageId: string,
-    moduleName: string,
-    functionName: string
-  ): Promise<SuiMoveFunctionArgTypes> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getMoveFunctionArgTypes',
-        [packageId, moduleName, functionName],
-        isSuiMoveFunctionArgTypes,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching Move function arg types with package object ID: ${packageId}, module name: ${moduleName}, function name: ${functionName}`
-      );
+  /**
+   * Get all Coin<`coin_type`> objects owned by an address.
+   */
+  async getCoins(input: {
+    owner: SuiAddress;
+    coinType?: string | null;
+    cursor?: ObjectId | null;
+    limit?: number | null;
+  }): Promise<PaginatedCoins> {
+    if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
+      throw new Error('Invalid Sui address');
     }
+
+    return await this.client.requestWithType(
+      'sui_getCoins',
+      [input.owner, input.coinType, input.cursor, input.limit],
+      PaginatedCoins,
+      this.options.skipDataValidation,
+    );
   }
 
-  async getNormalizedMoveModulesByPackage(
-    packageId: string
-  ): Promise<SuiMoveNormalizedModules> {
-    // TODO: Add caching since package object does not change
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveModulesByPackage',
-        [packageId],
-        isSuiMoveNormalizedModules,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching package: ${err} for package ${packageId}`
-      );
+  /**
+   * Get all Coin objects owned by an address.
+   */
+  async getAllCoins(
+    input: {
+      owner: SuiAddress;
+    } & PaginationArguments,
+  ): Promise<PaginatedCoins> {
+    if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
+      throw new Error('Invalid Sui address');
     }
+
+    return await this.client.requestWithType(
+      'sui_getAllCoins',
+      [input.owner, input.cursor, input.limit],
+      PaginatedCoins,
+      this.options.skipDataValidation,
+    );
   }
 
-  async getNormalizedMoveModule(
-    packageId: string,
-    moduleName: string
-  ): Promise<SuiMoveNormalizedModule> {
-    // TODO: Add caching since package object does not change
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveModule',
-        [packageId, moduleName],
-        isSuiMoveNormalizedModule,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching module: ${err} for package ${packageId}, module ${moduleName}}`
-      );
+  /**
+   * Get the total coin balance for one coin type, owned by the address owner.
+   */
+  async getBalance(input: {
+    owner: SuiAddress;
+    /** optional fully qualified type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified. */
+    coinType?: string | null;
+  }): Promise<CoinBalance> {
+    if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
+      throw new Error('Invalid Sui address');
     }
+    return await this.client.requestWithType(
+      'sui_getBalance',
+      [input.owner, input.coinType],
+      CoinBalance,
+      this.options.skipDataValidation,
+    );
   }
 
-  async getNormalizedMoveFunction(
-    packageId: string,
-    moduleName: string,
-    functionName: string
-  ): Promise<SuiMoveNormalizedFunction> {
-    // TODO: Add caching since package object does not change
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveFunction',
-        [packageId, moduleName, functionName],
-        isSuiMoveNormalizedFunction,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching function: ${err} for package ${packageId}, module ${moduleName} and function ${functionName}}`
-      );
+  /**
+   * Get the total coin balance for all coin type, owned by the address owner.
+   */
+  async getAllBalances(input: { owner: SuiAddress }): Promise<CoinBalance[]> {
+    if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
+      throw new Error('Invalid Sui address');
     }
+    return await this.client.requestWithType(
+      'sui_getAllBalances',
+      [input.owner],
+      array(CoinBalance),
+      this.options.skipDataValidation,
+    );
   }
 
-  async getNormalizedMoveStruct(
-    packageId: string,
-    moduleName: string,
-    structName: string
-  ): Promise<SuiMoveNormalizedStruct> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getNormalizedMoveStruct',
-        [packageId, moduleName, structName],
-        isSuiMoveNormalizedStruct,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching struct: ${err} for package ${packageId}, module ${moduleName} and struct ${structName}}`
-      );
-    }
+  /**
+   * Fetch CoinMetadata for a given coin type
+   */
+  async getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata> {
+    return await this.client.requestWithType(
+      'sui_getCoinMetadata',
+      [input.coinType],
+      CoinMetadataStruct,
+      this.options.skipDataValidation,
+    );
   }
 
-  // Objects
-  async getObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
-    try {
-      if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
-        throw new Error('Invalid Sui address');
-      }
-      return await this.client.requestWithType(
-        'sui_getObjectsOwnedByAddress',
-        [address],
-        isGetOwnedObjectsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching owned object: ${err} for address ${address}`
-      );
-    }
+  /**
+   *  Fetch total supply for a coin
+   */
+  async getTotalSupply(input: { coinType: string }): Promise<CoinSupply> {
+    return await this.client.requestWithType(
+      'sui_getTotalSupply',
+      [input.coinType],
+      CoinSupply,
+      this.options.skipDataValidation,
+    );
   }
 
-  async getGasObjectsOwnedByAddress(address: SuiAddress): Promise<SuiObjectInfo[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
-  }
-
-  async getCoinBalancesOwnedByAddress(
-    address: SuiAddress,
-    typeArg?: string
-  ): Promise<GetObjectDataResponse[]> {
-    const objects = await this.getObjectsOwnedByAddress(address);
-    const coinIds = objects
-      .filter(
-        (obj: SuiObjectInfo) =>
-          Coin.isCoin(obj) &&
-          (typeArg === undefined || typeArg === Coin.getCoinTypeArg(obj))
-      )
-      .map((c) => c.objectId);
-
-    return await this.getObjectBatch(coinIds);
-  }
-
-  async selectCoinsWithBalanceGreaterThanOrEqual(
-    address: SuiAddress,
-    amount: bigint,
-    typeArg: string = SUI_TYPE_ARG,
-    exclude: ObjectId[] = []
-  ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
-    return (await Coin.selectCoinsWithBalanceGreaterThanOrEqual(
-      coins,
-      amount,
-      exclude
-    )) as GetObjectDataResponse[];
-  }
-
-  async selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-    address: SuiAddress,
-    amount: bigint,
-    typeArg: string = SUI_TYPE_ARG,
-    exclude: ObjectId[] = []
-  ): Promise<GetObjectDataResponse[]> {
-    const coins = await this.getCoinBalancesOwnedByAddress(address, typeArg);
-    return (await Coin.selectCoinSetWithCombinedBalanceGreaterThanOrEqual(
-      coins,
-      amount,
-      exclude
-    )) as GetObjectDataResponse[];
-  }
-
-  async getObjectsOwnedByObject(objectId: ObjectId): Promise<SuiObjectInfo[]> {
-    try {
-      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
-        throw new Error('Invalid Sui Object id');
-      }
-      return await this.client.requestWithType(
-        'sui_getObjectsOwnedByObject',
-        [objectId],
-        isGetOwnedObjectsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching owned object: ${err} for objectId ${objectId}`
-      );
-    }
-  }
-
-  async getObject(objectId: ObjectId): Promise<GetObjectDataResponse> {
-    try {
-      if (!objectId || !isValidSuiObjectId(normalizeSuiObjectId(objectId))) {
-        throw new Error('Invalid Sui Object id');
-      }
-      return await this.client.requestWithType(
-        'sui_getObject',
-        [objectId],
-        isGetObjectDataResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
-    }
-  }
-
-  async getObjectRef(objectId: ObjectId): Promise<SuiObjectRef | undefined> {
-    const resp = await this.getObject(objectId);
-    return getObjectReference(resp);
-  }
-
-  async getObjectBatch(objectIds: ObjectId[]): Promise<GetObjectDataResponse[]> {
-    try {
-      const requests = objectIds.map((id) => {
-        if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
-          throw new Error(`Invalid Sui Object id ${id}`);
-        }
-        return { 
-          method: 'sui_getObject',
-          args: [id],
-        };
+  /**
+   * Invoke any RPC method
+   * @param method the method to be invoked
+   * @param args the arguments to be passed to the RPC request
+   */
+  async call(method: string, args: Array<any>): Promise<any> {
+    const response = await this.client.request(method, args);
+    if (is(response, ErrorResponse)) {
+      throw new RPCError({
+        req: { method, args },
+        code: response.error.code,
+        data: response.error.data,
+        cause: new Error(response.error.message),
       });
-      return await this.client.batchRequestWithType(
-        requests,
-        isGetObjectDataResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(`Error fetching object info: ${err} for ids [${objectIds}]`);
     }
+    return response.result;
   }
 
-  // Transactions
-  async getTransactions(
-    query: TransactionQuery,
-    cursor: TransactionDigest | null = null,
-    limit: number | null = null,
-    order: Order = 'descending'
-  ): Promise<PaginatedTransactionDigests> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactions',
-        [query, cursor, limit, order === 'descending'],
-        isPaginatedTransactionDigests,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting transactions for query: ${err} for query ${query}`
-      );
-    }
+  /**
+   * Get Move function argument types like read, write and full access
+   */
+  async getMoveFunctionArgTypes(input: {
+    package: string;
+    module: string;
+    function: string;
+  }): Promise<SuiMoveFunctionArgTypes> {
+    return await this.client.requestWithType(
+      'sui_getMoveFunctionArgTypes',
+      [input.package, input.module, input.function],
+      SuiMoveFunctionArgTypes,
+      this.options.skipDataValidation,
+    );
   }
 
-  async getTransactionsForObject(
+  /**
+   * Get a map from module name to
+   * structured representations of Move modules
+   */
+  async getNormalizedMoveModulesByPackage(input: {
+    package: string;
+  }): Promise<SuiMoveNormalizedModules> {
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveModulesByPackage',
+      [input.package],
+      SuiMoveNormalizedModules,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get a structured representation of Move module
+   */
+  async getNormalizedMoveModule(input: {
+    package: string;
+    module: string;
+  }): Promise<SuiMoveNormalizedModule> {
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveModule',
+      [input.package, input.module],
+      SuiMoveNormalizedModule,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get a structured representation of Move function
+   */
+  async getNormalizedMoveFunction(input: {
+    package: string;
+    module: string;
+    function: string;
+  }): Promise<SuiMoveNormalizedFunction> {
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveFunction',
+      [input.package, input.module, input.function],
+      SuiMoveNormalizedFunction,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get a structured representation of Move struct
+   */
+  async getNormalizedMoveStruct(input: {
+    package: string;
+    module: string;
+    struct: string;
+  }): Promise<SuiMoveNormalizedStruct> {
+    return await this.client.requestWithType(
+      'sui_getNormalizedMoveStruct',
+      [input.package, input.module, input.struct],
+      SuiMoveNormalizedStruct,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get all objects owned by an address
+   */
+  async getOwnedObjects(
+    input: {
+      owner: SuiAddress;
+      checkpointId?: CheckpointDigest;
+    } & PaginationArguments &
+      SuiObjectResponseQuery,
+  ): Promise<PaginatedObjectsResponse> {
+    if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
+      throw new Error('Invalid Sui address');
+    }
+
+    return await this.client.requestWithType(
+      'sui_getOwnedObjects',
+      [
+        input.owner,
+        {
+          filter: input.filter,
+          options: input.options,
+        } as SuiObjectResponseQuery,
+        input.cursor,
+        input.limit,
+        input.checkpointId,
+      ],
+      PaginatedObjectsResponse,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get details about an object
+   */
+  async getObject(input: {
+    id: ObjectId;
+    options?: SuiObjectDataOptions;
+  }): Promise<SuiObjectResponse> {
+    if (!input.id || !isValidSuiObjectId(normalizeSuiObjectId(input.id))) {
+      throw new Error('Invalid Sui Object id');
+    }
+    return await this.client.requestWithType(
+      'sui_getObject',
+      [input.id, input.options],
+      SuiObjectResponse,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Batch get details about a list of objects. If any of the object ids are duplicates the call will fail
+   */
+  async multiGetObjects(input: {
+    ids: ObjectId[];
+    options?: SuiObjectDataOptions;
+  }): Promise<SuiObjectResponse[]> {
+    input.ids.forEach((id) => {
+      if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
+        throw new Error(`Invalid Sui Object id ${id}`);
+      }
+    });
+    const hasDuplicates = input.ids.length !== new Set(input.ids).size;
+    if (hasDuplicates) {
+      throw new Error(`Duplicate object ids in batch call ${input.ids}`);
+    }
+
+    return await this.client.requestWithType(
+      'sui_multiGetObjects',
+      [input.ids, input.options],
+      array(SuiObjectResponse),
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get transactions for a given query criteria
+   */
+  async queryTransactions(
+    input: SuiTransactionResponseQuery & PaginationArguments & OrderArguments,
+  ): Promise<PaginatedTransactionResponse> {
+    return await this.client.requestWithType(
+      'sui_queryTransactions',
+      [
+        {
+          filter: input.filter,
+          options: input.options,
+        } as SuiTransactionResponseQuery,
+        input.cursor,
+        input.limit,
+        (input.order || 'descending') === 'descending',
+      ],
+      PaginatedTransactionResponse,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * @deprecated this method will be removed by April 2023.
+   * Use `queryTransactions` instead
+   */
+  async queryTransactionsForObjectDeprecated(
     objectID: ObjectId,
-    descendingOrder: boolean = true
+    descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_getTransactions',
-        args: [{ InputObject: objectID }, null, null, descendingOrder],
-      },
-      {
-        method: 'sui_getTransactions',
-        args: [{ MutatedObject: objectID }, null, null, descendingOrder],
-      },
+    const filters = [
+      { filter: { InputObject: objectID } },
+      { filter: { MutatedObject: objectID } },
     ];
-
-    try {
-      if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
-        throw new Error('Invalid Sui Object id');
-      }
-      const results = await this.client.batchRequestWithType(
-        requests,
-        isPaginatedTransactionDigests,
-        this.options.skipDataValidation
-      );
-      return [...results[0].data, ...results[1].data];
-    } catch (err) {
-      throw new Error(
-        `Error getting transactions for object: ${err} for id ${objectID}`
-      );
+    if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
+      throw new Error('Invalid Sui Object id');
     }
+    const results = await Promise.all(
+      filters.map((filter) =>
+        this.client.requestWithType(
+          'sui_queryTransactions',
+          [{ filter }, null, null, descendingOrder],
+          PaginatedTransactionResponse,
+          this.options.skipDataValidation,
+        ),
+      ),
+    );
+    return [
+      ...results[0].data.map((r) => r.digest),
+      ...results[1].data.map((r) => r.digest),
+    ];
   }
 
-  async getTransactionsForAddress(
+  /**
+   * @deprecated this method will be removed by April 2023.
+   * Use `queryTransactions` instead
+   */
+  async queryTransactionsForAddressDeprecated(
     addressID: SuiAddress,
-    descendingOrder: boolean = true
+    descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const requests = [
-      {
-        method: 'sui_getTransactions',
-        args: [{ ToAddress: addressID }, null, null, descendingOrder],
-      },
-      {
-        method: 'sui_getTransactions',
-        args: [{ FromAddress: addressID }, null, null, descendingOrder],
-      },
+    const filters = [{ ToAddress: addressID }, { FromAddress: addressID }];
+    if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
+      throw new Error('Invalid Sui address');
+    }
+    const results = await Promise.all(
+      filters.map((filter) =>
+        this.client.requestWithType(
+          'sui_queryTransactions',
+          [{ filter }, null, null, descendingOrder],
+          PaginatedTransactionResponse,
+          this.options.skipDataValidation,
+        ),
+      ),
+    );
+    return [
+      ...results[0].data.map((r) => r.digest),
+      ...results[1].data.map((r) => r.digest),
     ];
-    try {
-      if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
-        throw new Error('Invalid Sui address');
+  }
+
+  async getTransaction(input: {
+    digest: TransactionDigest;
+    options?: SuiTransactionResponseOptions;
+  }): Promise<SuiTransactionResponse> {
+    if (!isValidTransactionDigest(input.digest)) {
+      throw new Error('Invalid Transaction digest');
+    }
+    return await this.client.requestWithType(
+      'sui_getTransaction',
+      [input.digest, input.options],
+      SuiTransactionResponse,
+      this.options.skipDataValidation,
+    );
+  }
+
+  async multiGetTransactions(input: {
+    digests: TransactionDigest[];
+    options?: SuiTransactionResponseOptions;
+  }): Promise<SuiTransactionResponse[]> {
+    input.digests.forEach((d) => {
+      if (!isValidTransactionDigest(d)) {
+        throw new Error(`Invalid Transaction digest ${d}`);
       }
-      const results = await this.client.batchRequestWithType(
-        requests,
-        isPaginatedTransactionDigests,
-        this.options.skipDataValidation
-      );
-      return [...results[0].data, ...results[1].data];
-    } catch (err) {
-      throw new Error(
-        `Error getting transactions for address: ${err} for id ${addressID}`
-      );
+    });
+
+    const hasDuplicates = input.digests.length !== new Set(input.digests).size;
+    if (hasDuplicates) {
+      throw new Error(`Duplicate digests in batch call ${input.digests}`);
     }
+
+    return await this.client.requestWithType(
+      'sui_multiGetTransactions',
+      [input.digests, input.options],
+      array(SuiTransactionResponse),
+      this.options.skipDataValidation,
+    );
   }
 
-  async getTransactionWithEffects(
-    digest: TransactionDigest
-  ): Promise<SuiTransactionResponse> {
-    try {
-      if (!isValidTransactionDigest(digest, "base58")) {
-        throw new Error('Invalid Transaction digest');
-      }
-      const resp = await this.client.requestWithType(
-        'sui_getTransaction',
-        [digest],
-        isSuiTransactionResponse,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error getting transaction with effects: ${err} for digest ${digest}`
-      );
-    }
-  }
- 
-  async getTransactionWithEffectsBatch(
-    digests: TransactionDigest[]
-  ): Promise<SuiTransactionResponse[]> {
-    try {
-      const requests = digests.map((d) => {
-        if (!isValidTransactionDigest(d, "base58")) {
-          throw new Error(`Invalid Transaction digest ${d}`);
-        }
-        return { 
-          method: 'sui_getTransaction',
-          args: [d],
-        };
-      });
-      return await this.client.batchRequestWithType(
-        requests,
-        isSuiTransactionResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error getting transaction effects: ${err} for digests [${digests}]`
-      );
-    }
+  async executeTransaction(input: {
+    transaction: Uint8Array | string;
+    signature: SerializedSignature | SerializedSignature[];
+    options?: SuiTransactionResponseOptions;
+    requestType?: ExecuteTransactionRequestType;
+  }): Promise<SuiTransactionResponse> {
+    return await this.client.requestWithType(
+      'sui_executeTransaction',
+      [
+        typeof input.transaction === 'string'
+          ? input.transaction
+          : toB64(input.transaction),
+        Array.isArray(input.signature) ? input.signature : [input.signature],
+        input.options,
+        input.requestType,
+      ],
+      SuiTransactionResponse,
+      this.options.skipDataValidation,
+    );
   }
 
-  async executeTransaction(
-    txnBytes: Base64DataBuffer,
-    signatureScheme: SignatureScheme,
-    signature: Base64DataBuffer,
-    pubkey: PublicKey,
-    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
-  ): Promise<SuiExecuteTransactionResponse> {
-    try {
-      let resp;
-      let version = await this.getRpcApiVersion();
-      if (version?.major === 0 && version?.minor < 18) {
-        resp = await this.client.requestWithType(
-          'sui_executeTransaction',
-          [txnBytes.toString(), signatureScheme, signature.toString(), pubkey.toString(), requestType],
-          isSuiExecuteTransactionResponse,
-          this.options.skipDataValidation
-        );
-      } else {
-        // Serialize sigature field as: `flag || signature || pubkey`
-        const serialized_sig = new Uint8Array(1 + signature.getLength() + pubkey.toBytes().length);
-        serialized_sig.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
-        serialized_sig.set(signature.getData(), 1);
-        serialized_sig.set(pubkey.toBytes(), 1 + signature.getLength());
-
-        resp = await this.client.requestWithType(
-          'sui_executeTransactionSerializedSig',
-          [txnBytes.toString(), new Base64DataBuffer(serialized_sig).toString(), requestType],
-          isSuiExecuteTransactionResponse,
-          this.options.skipDataValidation
-        );
-      };
-      return resp;
-    } catch (err) {
-      throw new Error(`Error executing transaction with request type: ${err}}`);
-    }
-  }
-
+  /**
+   * Get total number of transactions
+   */
   async getTotalTransactionNumber(): Promise<number> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_getTotalTransactionNumber',
-        [],
-        isNumber,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(`Error fetching total transaction number: ${err}`);
-    }
+    return await this.client.requestWithType(
+      'sui_getTotalTransactionNumber',
+      [],
+      number(),
+      this.options.skipDataValidation,
+    );
   }
 
-  async getTransactionDigestsInRange(
+  /** @deprecated */
+  async getTransactionDigestsInRangeDeprecated(
     start: GatewayTxSeqNumber,
-    end: GatewayTxSeqNumber
+    end: GatewayTxSeqNumber,
   ): Promise<GetTxnDigestsResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactionsInRange',
-        [start, end],
-        isGetTxnDigestsResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching transaction digests in range: ${err} for range ${start}-${end}`
-      );
-    }
+    return await this.client.requestWithType(
+      'sui_getTransactionsInRangeDeprecated',
+      [start, end],
+      GetTxnDigestsResponse,
+      this.options.skipDataValidation,
+    );
   }
 
-  async getTransactionAuthSigners(
-    digest: TransactionDigest
-  ): Promise<SuiTransactionAuthSignersResponse> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getTransactionAuthSigners',
-        [digest],
-        isSuiTransactionAuthSignersResponse,
-        this.options.skipDataValidation
-      );
-    } catch (err) {
-      throw new Error(
-        `Error fetching transaction auth signers: ${err}`
-      );
-    }
+  /**
+   * Getting the reference gas price for the network
+   */
+  async getReferenceGasPrice(): Promise<number> {
+    return await this.client.requestWithType(
+      'sui_getReferenceGasPrice',
+      [],
+      number(),
+      this.options.skipDataValidation,
+    );
   }
 
-  // Events
-  async getEvents(
-    query: EventQuery,
-    cursor: EventId | null,
-    limit: number | null,
-    order: Order = 'descending'
+  /**
+   * Return the delegated stakes for an address
+   */
+  async getStakes(input: { owner: SuiAddress }): Promise<DelegatedStake[]> {
+    if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
+      throw new Error('Invalid Sui address');
+    }
+    return await this.client.requestWithType(
+      'sui_getStakes',
+      [input.owner],
+      array(DelegatedStake),
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Return the latest system state content.
+   */
+  async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
+    return await this.client.requestWithType(
+      'sui_getLatestSuiSystemState',
+      [],
+      SuiSystemStateSummary,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get events for a given query criteria
+   */
+  async queryEvents(
+    input: {
+      /** the event query criteria. */
+      query: SuiEventFilter;
+    } & PaginationArguments &
+      OrderArguments,
   ): Promise<PaginatedEvents> {
-    try {
-      return await this.client.requestWithType(
-        'sui_getEvents',
-        [query, cursor, limit, order === 'descending'],
-        isPaginatedEvents,
-        this.options.skipDataValidation
+    return await this.client.requestWithType(
+      'sui_queryEvents',
+      [
+        input.query,
+        input.cursor,
+        input.limit,
+        (input.order || 'descending') === 'descending',
+      ],
+      PaginatedEvents,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Subscribe to get notifications whenever an event matching the filter occurs
+   */
+  async subscribeEvent(input: {
+    /** filter describing the subset of events to follow */
+    filter: SuiEventFilter;
+    /** function to run when we receive a notification of a new event matching the filter */
+    onMessage: (event: SuiEvent) => void;
+  }): Promise<SubscriptionId> {
+    return this.wsClient.subscribeEvent(input.filter, input.onMessage);
+  }
+
+  /**
+   * Unsubscribe from an event subscription
+   */
+  async unsubscribeEvent(input: {
+    /** subscription id to unsubscribe from (previously received from subscribeEvent)*/
+    id: SubscriptionId;
+  }): Promise<boolean> {
+    return this.wsClient.unsubscribeEvent(input.id);
+  }
+
+  /**
+   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
+   * transaction (or Move call) with any arguments. Detailed results are
+   * provided, including both the transaction effects and any return values.
+   */
+  async devInspectTransaction(input: {
+    transaction: Transaction | string | Uint8Array;
+    sender: SuiAddress;
+    /** Default to use the network reference gas price stored in the Sui System State object */
+    gasPrice?: number | null;
+    /** optional. Default to use the current epoch number stored in the Sui System State object */
+    epoch?: number | null;
+  }): Promise<DevInspectResults> {
+    let devInspectTxBytes;
+    if (Transaction.is(input.transaction)) {
+      input.transaction.setSenderIfNotSet(input.sender);
+      devInspectTxBytes = toB64(
+        await input.transaction.build({
+          provider: this,
+          onlyTransactionKind: true,
+        }),
       );
-    } catch (err) {
-      throw new Error(
-        `Error getting events for query: ${err} for query ${query}`
-      );
+    } else if (typeof input.transaction === 'string') {
+      devInspectTxBytes = input.transaction;
+    } else if (input.transaction instanceof Uint8Array) {
+      devInspectTxBytes = toB64(input.transaction);
+    } else {
+      throw new Error('Unknown transaction format.');
     }
+
+    return await this.client.requestWithType(
+      'sui_devInspectTransaction',
+      [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
+      DevInspectResults,
+      this.options.skipDataValidation,
+    );
   }
 
-  async subscribeEvent(
-    filter: SuiEventFilter,
-    onMessage: (event: SuiEventEnvelope) => void
-  ): Promise<SubscriptionId> {
-    return this.wsClient.subscribeEvent(filter, onMessage);
+  /**
+   * Dry run a transaction and return the result.
+   */
+  async dryRunTransaction(input: {
+    transaction: Uint8Array | string;
+  }): Promise<DryRunTransactionResponse> {
+    return await this.client.requestWithType(
+      'sui_dryRunTransaction',
+      [
+        typeof input.transaction === 'string'
+          ? input.transaction
+          : toB64(input.transaction),
+      ],
+      DryRunTransactionResponse,
+      this.options.skipDataValidation,
+    );
   }
 
-  async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
-    return this.wsClient.unsubscribeEvent(id);
-  }
-
-  async dryRunTransaction(txBytes: string): Promise<TransactionEffects> {
-    try {
-      const resp = await this.client.requestWithType(
-        'sui_dryRunTransaction',
-        [txBytes],
-        isTransactionEffects,
-        this.options.skipDataValidation
-      );
-      return resp;
-    } catch (err) {
-      throw new Error(
-        `Error dry running transaction with request type: ${err}`
-      );
+  /**
+   * Return the list of dynamic field objects owned by an object
+   */
+  async getDynamicFields(
+    input: {
+      /** The id of the parent object */
+      parentId: ObjectId;
+    } & PaginationArguments,
+  ): Promise<DynamicFieldPage> {
+    if (
+      !input.parentId ||
+      !isValidSuiObjectId(normalizeSuiObjectId(input.parentId))
+    ) {
+      throw new Error('Invalid Sui Object id');
     }
+    return await this.client.requestWithType(
+      'sui_getDynamicFields',
+      [input.parentId, input.cursor, input.limit],
+      DynamicFieldPage,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Return the dynamic field object information for a specified object
+   */
+  async getDynamicFieldObject(input: {
+    /** The ID of the quered parent object */
+    parentId: ObjectId;
+    /** The name of the dynamic field */
+    name: string | DynamicFieldName;
+  }): Promise<SuiObjectResponse> {
+    return await this.client.requestWithType(
+      'sui_getDynamicFieldObject',
+      [input.parentId, input.name],
+      SuiObjectResponse,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Get the sequence number of the latest checkpoint that has been executed
+   */
+  async getLatestCheckpointSequenceNumber(): Promise<number> {
+    return await this.client.requestWithType(
+      'sui_getLatestCheckpointSequenceNumber',
+      [],
+      number(),
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Returns information about a given checkpoint
+   */
+  async getCheckpoint(input: {
+    /** The checkpoint digest or sequence number */
+    id: CheckpointDigest | number;
+  }): Promise<Checkpoint> {
+    return await this.client.requestWithType(
+      'sui_getCheckpoint',
+      [input.id],
+      Checkpoint,
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Returns historical checkpoints paginated
+   */
+  async getCheckpoints(input: {
+    /**
+     * An optional paging cursor. If provided, the query will start from the next item after the specified cursor.
+     * Default to start from the first item if not specified.
+     */
+    cursor?: number;
+    /** Maximum item returned per page, default to 100 if not specified. */
+    limit?: number;
+    /** query result ordering, default to false (ascending order), oldest record first */
+    descendingOrder: boolean;
+  }): Promise<CheckpointPage> {
+    const resp = await this.client.requestWithType(
+      'sui_getCheckpoints',
+      [input.cursor, input.limit, input.descendingOrder],
+      CheckpointPage,
+      this.options.skipDataValidation,
+    );
+    return resp;
+  }
+
+  /**
+   * Return the committee information for the asked epoch
+   */
+  async getCommitteeInfo(input?: {
+    /** The epoch of interest. If null, default to the latest epoch */
+    epoch?: number;
+  }): Promise<CommitteeInfo> {
+    return await this.client.requestWithType(
+      'sui_getCommitteeInfo',
+      [input?.epoch],
+      CommitteeInfo,
+    );
   }
 }

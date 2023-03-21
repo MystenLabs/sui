@@ -1,37 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { normalizeSuiAddress } from '@mysten/sui.js';
 import { useState, useEffect, useCallback } from 'react';
 
 import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
-import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../../components/transaction-card/TxForID';
 import {
-    getOwnerStr,
     parseImageURL,
     checkIsPropertyType,
     extractName,
 } from '../../../utils/objectUtils';
-import {
-    trimStdLibPrefix,
-    genFileTypeMsg,
-    normalizeSuiAddress,
-} from '../../../utils/stringUtils';
+import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
+import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
+import { Link } from '~/ui/Link';
 
 function TokenView({ data }: { data: DataType }) {
     const viewedData = {
         ...data,
         objType: data.objType,
         tx_digest: data.data.tx_digest,
-        owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
     };
 
@@ -87,21 +82,21 @@ function TokenView({ data }: { data: DataType }) {
                             <tr>
                                 <td>Type</td>
                                 <td>
-                                    <LinkWithQuery
+                                    {/* TODO: Support module links on `ObjectLink` */}
+                                    <Link
                                         to={genhref(viewedData.objType)}
-                                        className={styles.objecttypelink}
+                                        variant="mono"
                                     >
                                         {trimStdLibPrefix(viewedData.objType)}
-                                    </LinkWithQuery>
+                                    </Link>
                                 </td>
                             </tr>
                             <tr>
                                 <td>Object ID</td>
                                 <td id="objectID" className={styles.objectid}>
-                                    <Longtext
-                                        text={viewedData.id}
-                                        category="object"
-                                        isLink={false}
+                                    <ObjectLink
+                                        objectId={viewedData.id}
+                                        noTruncate
                                     />
                                 </td>
                             </tr>
@@ -110,10 +105,9 @@ function TokenView({ data }: { data: DataType }) {
                                 <tr>
                                     <td>Last Transaction ID</td>
                                     <td>
-                                        <Longtext
-                                            text={viewedData.tx_digest}
-                                            category="transaction"
-                                            isLink
+                                        <TransactionLink
+                                            digest={viewedData.tx_digest}
+                                            noTruncate
                                         />
                                     </td>
                                 </tr>
@@ -126,29 +120,30 @@ function TokenView({ data }: { data: DataType }) {
 
                             <tr>
                                 <td>Owner</td>
-                                <td id="owner">
-                                    <Longtext
-                                        text={
-                                            typeof viewedData.owner === 'string'
-                                                ? viewedData.owner
-                                                : typeof viewedData.owner
-                                        }
-                                        category="unknown"
-                                        isLink={
-                                            viewedData.owner !== 'Immutable' &&
-                                            viewedData.owner !== 'Shared'
-                                        }
-                                    />
+                                <td data-testid="owner">
+                                    {data.owner === 'Immutable' ? (
+                                        'Immutable'
+                                    ) : 'Shared' in data.owner ? (
+                                        'Shared'
+                                    ) : 'ObjectOwner' in data.owner ? (
+                                        <ObjectLink
+                                            objectId={data.owner.ObjectOwner}
+                                        />
+                                    ) : (
+                                        <AddressLink
+                                            address={data.owner.AddressOwner}
+                                        />
+                                    )}
                                 </td>
                             </tr>
                             {viewedData.contract_id && (
                                 <tr>
                                     <td>Contract ID</td>
                                     <td>
-                                        <Longtext
-                                            text={viewedData.contract_id.bytes}
-                                            category="object"
-                                            isLink
+                                        <ObjectLink
+                                            objectId={
+                                                viewedData.contract_id.bytes
+                                            }
                                         />
                                     </td>
                                 </tr>
@@ -202,7 +197,22 @@ function TokenView({ data }: { data: DataType }) {
                             {properties.map(([key, value], index) => (
                                 <tr key={index}>
                                     <td>{key}</td>
-                                    <td>{value}</td>
+                                    <td>
+                                        {/* TODO: Use normalized module to determine this display. */}
+                                        {typeof value === 'string' &&
+                                        (value.startsWith('http://') ||
+                                            value.startsWith('https://')) ? (
+                                            <Link
+                                                href={value}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {value}
+                                            </Link>
+                                        ) : (
+                                            value
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

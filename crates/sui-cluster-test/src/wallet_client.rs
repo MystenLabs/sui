@@ -4,12 +4,12 @@
 use crate::cluster::new_wallet_context_from_cluster;
 
 use super::Cluster;
+use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui_keys::keystore::AccountKeystore;
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
-use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use tracing::{info, info_span, Instrument};
 
@@ -30,7 +30,7 @@ impl WalletClient {
 
         let rpc_url = String::from(cluster.fullnode_url());
         info!("Use fullnode rpc: {}", &rpc_url);
-        let fullnode_client = SuiClient::new(&rpc_url, None, None).await.unwrap();
+        let fullnode_client = SuiClientBuilder::default().build(rpc_url).await.unwrap();
 
         Self {
             wallet_context,

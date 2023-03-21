@@ -54,13 +54,13 @@ async fn test_new_network_info() {
     // give some time for nodes to bootstrap
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let committee = cluster.committee_shared.clone();
+    let committee = cluster.committee.clone();
     let authority = cluster.authority(0);
 
     // Test gRPC server with client call
     let mut client = authority.new_configuration_client().await;
 
-    let public_keys: Vec<_> = committee.load().authorities.keys().cloned().collect();
+    let public_keys: Vec<_> = committee.authorities.keys().cloned().collect();
 
     let mut validators = Vec::new();
     for public_key in public_keys.iter() {
@@ -108,7 +108,7 @@ async fn test_get_primary_address() {
     // give some time for nodes to bootstrap
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let committee = cluster.committee_shared.clone();
+    let committee = cluster.committee.clone();
     let authority = cluster.authority(0);
     let name = authority.name.clone();
 
@@ -123,7 +123,6 @@ async fn test_get_primary_address() {
     assert_eq!(
         actual_result.primary_address.unwrap().address,
         committee
-            .load()
             .primary(&name)
             .expect("Our public key or worker id is not in the committee")
             .to_string()

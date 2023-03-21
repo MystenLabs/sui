@@ -9,7 +9,6 @@
 )]
 
 use eyre::Result;
-use rocksdb::MultiThreaded;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     cmp::Eq,
@@ -26,6 +25,10 @@ pub mod traits;
 pub use traits::Map;
 pub mod metrics;
 pub mod rocks;
+use crate::rocks::RocksDB;
+pub use rocks::TypedStoreError;
+pub mod sally;
+pub mod test_db;
 pub use metrics::DBMetrics;
 
 #[cfg(test)]
@@ -55,7 +58,7 @@ pub enum StoreCommand<Key, Value> {
 #[derive(Clone)]
 pub struct Store<K, V> {
     channel: Sender<StoreCommand<K, V>>,
-    pub rocksdb: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
+    pub rocksdb: Arc<RocksDB>,
 }
 
 impl<Key, Value> Store<Key, Value>
@@ -238,7 +241,7 @@ where
             .expect("Failed to receive reply to RemoveAll command from store")
     }
 
-    /// Returns the read value in raw bincode bytes
+    /// Returns the read value in raw bytes
     pub async fn read_raw_bytes(&self, key: Key) -> StoreResult<Option<Vec<u8>>> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self

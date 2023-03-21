@@ -6,13 +6,13 @@ module coin_metadata::test {
     use sui::coin;
     use sui::transfer;
     use sui::url;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     struct TEST has drop {}
 
     fun init(witness: TEST, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency<TEST>(
-            witness, 
+            witness,
             2,
             b"TEST",
             b"Test Coin",
@@ -20,7 +20,11 @@ module coin_metadata::test {
             option::some(url::new_unsafe_from_bytes(b"http://sui.io")),
             ctx
         );
-        transfer::share_object(metadata);
-        transfer::share_object(treasury_cap)
+
+        coin::mint_and_transfer<TEST>(&mut treasury_cap, 5, tx_context::sender(ctx), ctx);
+        coin::mint_and_transfer<TEST>(&mut treasury_cap, 6, tx_context::sender(ctx), ctx);
+
+        transfer::public_share_object(metadata);
+        transfer::public_share_object(treasury_cap)
     }
 }

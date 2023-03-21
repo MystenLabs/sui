@@ -3,13 +3,13 @@
 
 import { useParams } from 'react-router-dom';
 
-import ErrorResult from '../../components/error-result/ErrorResult';
+import { Banner } from '~/ui/Banner';
 
 const addressErrEnd =
     'must be a hex string encoding 20 bytes, with or without the "0x" prefix.';
 
 function SearchError() {
-    const { category, id } = useParams();
+    const { category } = useParams();
 
     let msg = 'unknown';
     switch (category) {
@@ -31,7 +31,11 @@ function SearchError() {
             msg = 'Data on the following query could not be found';
     }
 
-    return <ErrorResult id={id} errorMsg={msg} />;
+    return (
+        <Banner variant="error" spacing="lg" fullWidth>
+            {msg}
+        </Banner>
+    );
 }
 
 export default SearchError;

@@ -2,102 +2,142 @@
 // SPDX-License-Identifier: Apache-2.0
 //! This module implements the [Rosetta Account API](https://www.rosetta-api.org/docs/AccountApi.html)
 
-use std::sync::Arc;
-
+use axum::extract::State;
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
+use futures::StreamExt;
 
-use sui_core::authority::AuthorityState;
+use sui_sdk::rpc_types::StakeStatus;
+use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
-use sui_types::gas_coin::GasCoin;
-use sui_types::object::Owner;
 
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, CoinID, CoinIdentifier, SignedValue,
+    Amount, Coin, SubAccount, SubAccountType,
 };
-use crate::{ErrorType, OnlineServerContext, SuiEnv, SUI};
+use crate::{OnlineServerContext, SuiEnv};
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
 /// at which the balance lookup was performed.
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountbalance)
 pub async fn balance(
-    Json(request): Json<AccountBalanceRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(ctx): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<AccountBalanceRequest>, Error>,
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-
-    let block_id = if let Some(index) = request.block_identifier.index {
-        context.blocks().get_block_by_index(index).await.ok()
-    } else if let Some(hash) = request.block_identifier.hash {
-        context.blocks().get_block_by_hash(hash).await.ok()
+    let address = request.account_identifier.address;
+    if let Some(SubAccount { account_type }) = request.account_identifier.sub_account {
+        let balances = get_sub_account_balances(account_type, &ctx.client, address).await?;
+        Ok(AccountBalanceResponse {
+            block_identifier: ctx.blocks().current_block_identifier().await?,
+            balances,
+        })
     } else {
-        None
-    }
-    .map(|b| b.block.block_identifier);
+        let block_identifier = if let Some(index) = request.block_identifier.index {
+            let response = ctx.blocks().get_block_by_index(index).await?;
+            response.block.block_identifier
+        } else if let Some(hash) = request.block_identifier.hash {
+            let response = ctx.blocks().get_block_by_hash(hash).await?;
+            response.block.block_identifier
+        } else {
+            ctx.blocks().current_block_identifier().await?
+        };
 
-    if let Some(block_identifier) = block_id {
-        context
-            .blocks()
-            .get_balance_at_block(request.account_identifier.address, block_identifier.index)
+        ctx.blocks()
+            .get_balance_at_block(address, block_identifier.index)
             .await
             .map(|balance| AccountBalanceResponse {
                 block_identifier,
-                balances: vec![Amount::new(balance.into())],
+                balances: vec![Amount::new(balance)],
             })
-    } else {
-        let gas_coins = get_coins(&context.state, request.account_identifier.address).await?;
-        let amount: u128 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
-        Ok(AccountBalanceResponse {
-            block_identifier: context.blocks().current_block_identifier().await?,
-            balances: vec![Amount::new(amount.into())],
-        })
     }
+}
+
+async fn get_sub_account_balances(
+    account_type: SubAccountType,
+    client: &SuiClient,
+    address: SuiAddress,
+) -> Result<Vec<Amount>, Error> {
+    let mut amounts = match account_type {
+        SubAccountType::Stake => {
+            let delegations = client.governance_api().get_stakes(address).await?;
+            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
+                for stake in &stakes.stakes {
+                    if let StakeStatus::Active { .. } = stake.status {
+                        amounts.push(Amount::new_stake(
+                            stake.principal as i128,
+                            stake.staked_sui_id,
+                            stakes.validator_address,
+                        ));
+                    }
+                }
+                amounts
+            })
+        }
+        SubAccountType::PendingStake => {
+            let delegations = client.governance_api().get_stakes(address).await?;
+            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
+                for stake in &stakes.stakes {
+                    if let StakeStatus::Pending = stake.status {
+                        amounts.push(Amount::new_stake(
+                            stake.principal as i128,
+                            stake.staked_sui_id,
+                            stakes.validator_address,
+                        ));
+                    }
+                }
+                amounts
+            })
+        }
+
+        SubAccountType::EstimatedReward => {
+            let delegations = client.governance_api().get_stakes(address).await?;
+            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
+                for stake in &stakes.stakes {
+                    if let StakeStatus::Active { estimated_reward } = stake.status {
+                        amounts.push(Amount::new_stake(
+                            estimated_reward as i128,
+                            stake.staked_sui_id,
+                            stakes.validator_address,
+                        ));
+                    }
+                }
+                amounts
+            })
+        }
+    };
+
+    // Make sure there are always one amount returned
+    if amounts.is_empty() {
+        amounts.push(Amount::new(0))
+    }
+
+    Ok(amounts)
 }
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
 /// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountcoins)
 pub async fn coins(
-    Json(request): Json<AccountCoinsRequest>,
-    Extension(context): Extension<Arc<OnlineServerContext>>,
+    State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
+    WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let coins = get_coins(&context.state, request.account_identifier.address).await?;
+    let coins = context
+        .client
+        .coin_read_api()
+        .get_coins_stream(
+            request.account_identifier.address,
+            Some(SUI_COIN_TYPE.to_string()),
+        )
+        .map(Coin::from)
+        .collect()
+        .await;
+
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,
         coins,
     })
-}
-
-async fn get_coins(state: &AuthorityState, address: SuiAddress) -> Result<Vec<Coin>, Error> {
-    let object_infos = state.get_owner_objects(Owner::AddressOwner(address))?;
-    let coin_infos = object_infos
-        .iter()
-        .filter(|o| o.type_.is_gas_coin())
-        .map(|info| info.object_id)
-        .collect::<Vec<_>>();
-
-    let objects = state.get_objects(&coin_infos).await?;
-    objects
-        .iter()
-        .flatten()
-        .map(|o| {
-            let coin = GasCoin::try_from(o)?;
-            Ok(Coin {
-                coin_identifier: CoinIdentifier {
-                    identifier: CoinID {
-                        id: o.id(),
-                        version: o.version(),
-                    },
-                },
-                amount: Amount {
-                    value: SignedValue::from(coin.value()),
-                    currency: SUI.clone(),
-                },
-            })
-        })
-        .collect::<Result<Vec<_>, anyhow::Error>>()
-        .map_err(|e| Error::new_with_cause(ErrorType::InternalError, e))
 }

@@ -1,13 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::histogram::Histogram;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::sync::Arc;
+use std::time::Duration;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::Pipe;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(super) struct Metrics(Option<Arc<Inner>>);
+
+impl std::fmt::Debug for Metrics {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.debug_struct("Metrics").finish()
+    }
+}
 
 impl Metrics {
     pub fn enabled(registry: &Registry) -> Self {
@@ -37,13 +45,21 @@ impl Metrics {
             inner.highest_synced_checkpoint.set(sequence_number as i64);
         }
     }
+
+    pub fn report_checkpoint_summary_age(&self, age: Duration) {
+        if let Some(inner) = &self.0 {
+            inner
+                .checkpoint_summary_age_ms
+                .report(age.as_millis() as u64);
+        }
+    }
 }
 
-#[derive(Debug)]
 struct Inner {
     highest_known_checkpoint: IntGauge,
     highest_verified_checkpoint: IntGauge,
     highest_synced_checkpoint: IntGauge,
+    checkpoint_summary_age_ms: Histogram,
 }
 
 impl Inner {
@@ -69,6 +85,12 @@ impl Inner {
                 registry
             )
             .unwrap(),
+
+            checkpoint_summary_age_ms: Histogram::new_in_registry(
+                "checkpoint_summary_age_ms",
+                "Age of checkpoints summaries when they arrive and are verified.",
+                registry,
+            ),
         }
         .pipe(Arc::new)
     }

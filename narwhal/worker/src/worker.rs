@@ -7,38 +7,36 @@ use crate::{
     metrics::WorkerChannelMetrics,
     primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
-    TransactionValidator,
+    TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
-use anemo::types::Address;
+use anemo::{codegen::InboundRequestLayer, types::Address};
 use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
-    trace::{DefaultMakeSpan, TraceLayer},
+    set_header::SetRequestHeaderLayer,
+    trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
-use async_trait::async_trait;
-use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
+use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
-use futures::StreamExt;
-use multiaddr::{Multiaddr, Protocol};
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::spawn_logged_monitored_task;
+use mysten_network::{multiaddr::Protocol, Multiaddr};
+use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
 use std::collections::HashMap;
-use std::{net::Ipv4Addr, sync::Arc};
-use store::Store;
+use std::time::Duration;
+use std::{net::Ipv4Addr, sync::Arc, thread::sleep};
+use store::rocks::DBMap;
 use tap::TapFallible;
-use tokio::sync::watch::Receiver;
-use tokio::{sync::watch, task::JoinHandle};
-use tonic::{Request, Response, Status};
+use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    error::DagError,
     metered_channel::{channel_with_total, Sender},
-    Batch, BatchDigest, Empty, PrimaryToWorkerServer, ReconfigureNotification, Transaction,
-    TransactionProto, Transactions, TransactionsServer, TxResponse, WorkerOurBatchMessage,
-    WorkerToWorkerServer,
+    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
+    PrimaryToWorkerServer, WorkerOurBatchMessage, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -48,10 +46,8 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-/// The maximum allowed size of transactions into Narwhal.
-pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
-
 use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
+use crate::transactions_server::TxServer;
 
 pub struct Worker {
     /// The public key of this authority.
@@ -61,13 +57,13 @@ pub struct Worker {
     /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
     /// The committee information.
-    committee: SharedCommittee,
+    committee: Committee,
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
-    store: Store<BatchDigest, Batch>,
+    store: DBMap<BatchDigest, Batch>,
 }
 
 impl Worker {
@@ -75,12 +71,13 @@ impl Worker {
         primary_name: PublicKey,
         keypair: NetworkKeyPair,
         id: WorkerId,
-        committee: SharedCommittee,
-        worker_cache: SharedWorkerCache,
+        committee: Committee,
+        worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
-        store: Store<BatchDigest, Batch>,
+        store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
+        tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
         info!(
             "Boot worker node with id {} peer id {}",
@@ -118,16 +115,32 @@ impl Worker {
             &channel_metrics.tx_others_batch_total,
         );
 
-        let initial_committee = (*(*(*committee).load()).clone()).clone();
-        let (tx_reconfigure, rx_reconfigure) =
-            watch::channel(ReconfigureNotification::NewEpoch(initial_committee));
+        let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
-        let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+        let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
             tx_others_batch,
             store: worker.store.clone(),
             validator: validator.clone(),
         });
+        // Apply rate limits from configuration as needed.
+        if let Some(limit) = parameters.anemo.report_batch_rate_limit {
+            worker_service = worker_service.add_layer_for_report_batch(InboundRequestLayer::new(
+                rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                ),
+            ));
+        }
+        if let Some(limit) = parameters.anemo.request_batch_rate_limit {
+            worker_service = worker_service.add_layer_for_request_batch(InboundRequestLayer::new(
+                rate_limit::RateLimitLayer::new(
+                    governor::Quota::per_second(limit),
+                    rate_limit::WaitMode::Block,
+                ),
+            ));
+        }
+
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             name: worker.primary_name.clone(),
             id: worker.id,
@@ -136,25 +149,24 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
-            tx_reconfigure,
             validator: validator.clone(),
         });
 
         // Receive incoming messages from other workers.
         let address = worker
             .worker_cache
-            .load()
             .worker(&primary_name, &id)
             .expect("Our public key or worker id is not in the worker cache")
             .worker_address;
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
+
+        let epoch_string: String = committee.epoch.to_string();
 
         // Set up anemo Network.
         let our_primary_peer_id = committee
-            .load()
             .network_key(&primary_name)
             .map(|public_key| PeerId(public_key.0.to_bytes()))
             .unwrap();
@@ -163,51 +175,109 @@ impl Worker {
             // Add an Authorization Layer to ensure that we only service requests from our primary
             .route_layer(RequireAuthorizationLayer::new(AllowedPeers::new([
                 our_primary_peer_id,
-            ])));
+            ])))
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )));
+
         let routes = anemo::Router::new()
             .add_rpc_service(worker_service)
+            .route_layer(RequireAuthorizationLayer::new(AllowedEpoch::new(
+                epoch_string.clone(),
+            )))
             .merge(primary_to_worker_router);
 
         let service = ServiceBuilder::new()
             .layer(
                 TraceLayer::new_for_server_errors()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetResponseHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string.clone(),
+            ))
             .service(routes);
 
         let outbound_layer = ServiceBuilder::new()
             .layer(
                 TraceLayer::new_for_client_and_server_errors()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
+                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
+                    .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
+                parameters.anemo.excessive_message_size(),
             )))
             .layer(CallbackLayer::new(FailpointsMakeCallbackHandler::new()))
+            .layer(SetRequestHeaderLayer::overriding(
+                EPOCH_HEADER_KEY.parse().unwrap(),
+                epoch_string,
+            ))
             .into_inner();
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
+            // Allow more concurrent streams for burst activity.
+            quic_config.max_concurrent_bidi_streams = Some(10_000);
+            // Increase send and receive buffer sizes on the worker, since the worker is
+            // responsible for broadcasting and fetching payloads.
+            // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB.
+            quic_config.stream_receive_window = Some(100 << 20);
+            quic_config.receive_window = Some(200 << 20);
+            quic_config.send_window = Some(200 << 20);
+            quic_config.crypto_buffer_size = Some(1 << 20);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
             config.quic = Some(quic_config);
-            // Set a default timeout of 30s for all outbound RPC requests
-            config.outbound_request_timeout_ms = Some(30_000);
+            // Set the max_frame_size to be 2 GB to work around the issue of there being too many
+            // delegation events in the epoch change txn.
+            config.max_frame_size = Some(2 << 30);
+            // Set a default timeout of 300s for all RPC requests
+            config.inbound_request_timeout_ms = Some(300_000);
+            config.outbound_request_timeout_ms = Some(300_000);
+            config.shutdown_idle_timeout_ms = Some(1_000);
+            config.connectivity_check_interval_ms = Some(2_000);
+            config.connection_backoff_ms = Some(1_000);
+            config.max_connection_backoff_ms = Some(20_000);
             config
         };
 
-        let network = Network::bind(addr)
-            .server_name("narwhal")
-            .private_key(worker.keypair.copy().private().0.to_bytes())
-            .config(anemo_config)
-            .outbound_request_layer(outbound_layer)
-            .start(service)
-            .unwrap();
+        let network;
+        let mut retries_left = 90;
+
+        loop {
+            let network_result = anemo::Network::bind(addr.clone())
+                .server_name("narwhal")
+                .private_key(worker.keypair.copy().private().0.to_bytes())
+                .config(anemo_config.clone())
+                .outbound_request_layer(outbound_layer.clone())
+                .start(service.clone());
+            match network_result {
+                Ok(n) => {
+                    network = n;
+                    break;
+                }
+                Err(_) => {
+                    retries_left -= 1;
+
+                    if retries_left <= 0 {
+                        panic!();
+                    }
+                    error!(
+                        "Address {} should be available for the primary Narwhal service, retrying in one second",
+                        addr
+                    );
+                    sleep(Duration::from_secs(1));
+                }
+            }
+        }
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
@@ -215,7 +285,6 @@ impl Worker {
 
         let other_workers = worker
             .worker_cache
-            .load()
             .others_workers_by_id(&primary_name, &id)
             .into_iter()
             .map(|(_, info)| (info.name, info.worker_address));
@@ -232,12 +301,10 @@ impl Worker {
 
         // Connect worker to its corresponding primary.
         let primary_address = committee
-            .load()
             .primary(&primary_name)
             .expect("Our primary is not in the committee");
 
         let primary_network_key = committee
-            .load()
             .network_key(&primary_name)
             .expect("Our primary is not in the committee");
 
@@ -252,7 +319,7 @@ impl Worker {
         // update the peer_types with the "other_primary". We do not add them in the Network
         // struct, otherwise the networking library will try to connect to it
         let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
-            committee.load().others_primaries(&primary_name);
+            committee.others_primaries(&primary_name);
         for (_, _, network_key) in other_primaries {
             peer_types.insert(
                 PeerId(network_key.0.to_bytes()),
@@ -260,7 +327,7 @@ impl Worker {
             );
         }
 
-        let connection_monitor_handle = network::connectivity::ConnectionMonitor::spawn(
+        let (connection_monitor_handle, _) = network::connectivity::ConnectionMonitor::spawn(
             network.downgrade(),
             network_connection_metrics,
             peer_types,
@@ -279,19 +346,22 @@ impl Worker {
         let admin_handles = network::admin::start_admin_server(
             network_admin_server_base_port,
             network.clone(),
-            rx_reconfigure.clone(),
-            None,
+            shutdown_receivers.pop().unwrap(),
         );
 
         let primary_connector_handle = PrimaryConnector::spawn(
             primary_network_key,
-            rx_reconfigure.clone(),
+            shutdown_receivers.pop().unwrap(),
             rx_our_batch,
             rx_others_batch,
             network.clone(),
         );
         let client_flow_handles = worker.handle_clients_transactions(
-            rx_reconfigure.clone(),
+            vec![
+                shutdown_receivers.pop().unwrap(),
+                shutdown_receivers.pop().unwrap(),
+                shutdown_receivers.pop().unwrap(),
+            ],
             tx_our_batch,
             node_metrics,
             channel_metrics,
@@ -300,7 +370,8 @@ impl Worker {
             network.clone(),
         );
 
-        let network_shutdown_handle = Self::shutdown_network_listener(rx_reconfigure, network);
+        let network_shutdown_handle =
+            Self::shutdown_network_listener(shutdown_receivers.pop().unwrap(), network);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -308,7 +379,6 @@ impl Worker {
             id,
             worker
                 .worker_cache
-                .load()
                 .worker(&worker.primary_name, &worker.id)
                 .expect("Our public key or worker id is not in the worker cache")
                 .transactions
@@ -327,22 +397,23 @@ impl Worker {
     // Spawns a task responsible for explicitly shutting down the network
     // when a shutdown signal has been sent to the node.
     fn shutdown_network_listener(
-        mut rx_reconfigure: Receiver<ReconfigureNotification>,
+        mut rx_shutdown: ConditionalBroadcastReceiver,
         network: Network,
     ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            while let Ok(_result) = rx_reconfigure.changed().await {
-                let message = rx_reconfigure.borrow().clone();
-                if let ReconfigureNotification::Shutdown = message {
-                    let _ = network
-                        .shutdown()
-                        .await
-                        .tap_err(|err| error!("Error while shutting down network: {err}"));
-                    info!("Worker network server shutdown");
-                    return;
+        spawn_logged_monitored_task!(
+            async move {
+                match rx_shutdown.receiver.recv().await {
+                    Ok(()) | Err(_) => {
+                        let _ = network
+                            .shutdown()
+                            .await
+                            .tap_err(|err| error!("Error while shutting down network: {err}"));
+                        info!("Worker network server shutdown");
+                    }
                 }
-            }
-        })
+            },
+            "WorkerShutdownNetworkListenerTask"
+        )
     }
 
     fn add_peer_in_network(
@@ -351,7 +422,7 @@ impl Worker {
         address: &Multiaddr,
     ) -> (PeerId, Address) {
         let peer_id = PeerId(peer_name.0.to_bytes());
-        let address = network::multiaddr_to_address(address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_info = PeerInfo {
             peer_id,
             affinity: anemo::types::PeerAffinity::High,
@@ -365,7 +436,7 @@ impl Worker {
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         tx_our_batch: Sender<(
             WorkerOurBatchMessage,
             Option<tokio::sync::oneshot::Sender<()>>,
@@ -390,28 +461,29 @@ impl Worker {
         // We first receive clients' transactions from the network.
         let address = self
             .worker_cache
-            .load()
             .worker(&self.primary_name, &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
-        let tx_receiver_handle = TxReceiverHandler {
+
+        let tx_server_handle = TxServer::spawn(
+            address.clone(),
+            shutdown_receivers.pop().unwrap(),
+            endpoint_metrics,
             tx_batch_maker,
             validator,
-        }
-        .spawn(address.clone(), rx_reconfigure.clone(), endpoint_metrics);
+        );
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
         // gathers the 'cancel handlers' of the messages and send them to the `QuorumWaiter`.
         let batch_maker_handle = BatchMaker::spawn(
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
             self.parameters.batch_size,
             self.parameters.max_batch_delay,
-            rx_reconfigure.clone(),
+            shutdown_receivers.pop().unwrap(),
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
@@ -424,10 +496,10 @@ impl Worker {
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
-            (*(*(*self.committee).load()).clone()).clone(),
+            self.committee.clone(),
             self.worker_cache.clone(),
-            rx_reconfigure,
-            /* rx_message */ rx_quorum_waiter,
+            shutdown_receivers.pop().unwrap(),
+            rx_quorum_waiter,
             network,
         );
 
@@ -436,118 +508,6 @@ impl Worker {
             self.id, address
         );
 
-        vec![batch_maker_handle, quorum_waiter_handle, tx_receiver_handle]
-    }
-}
-
-/// Defines how the network receiver handles incoming transactions.
-#[derive(Clone)]
-struct TxReceiverHandler<V> {
-    tx_batch_maker: Sender<(Transaction, TxResponse)>,
-    validator: V,
-}
-
-impl<V: TransactionValidator> TxReceiverHandler<V> {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
-        loop {
-            let result = rx_reconfigure.changed().await;
-            result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                break;
-            }
-        }
-    }
-
-    #[must_use]
-    fn spawn(
-        self,
-        address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        endpoint_metrics: WorkerEndpointMetrics,
-    ) -> JoinHandle<()> {
-        spawn_monitored_task!(async move {
-            tokio::select! {
-                _result =  mysten_network::config::Config::new()
-                    .server_builder_with_metrics(endpoint_metrics)
-                    .add_service(TransactionsServer::new(self))
-                    .bind(&address)
-                    .await
-                    .unwrap()
-                    .serve() => (),
-
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
-    }
-}
-
-#[async_trait]
-impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
-    async fn submit_transaction(
-        &self,
-        request: Request<TransactionProto>,
-    ) -> Result<Response<Empty>, Status> {
-        let message = request.into_inner().transaction;
-        if message.len() > MAX_ALLOWED_TRANSACTION_SIZE {
-            return Err(Status::resource_exhausted(format!(
-                "Transaction size is too large: {} > {}",
-                message.len(),
-                MAX_ALLOWED_TRANSACTION_SIZE
-            )));
-        }
-        if self.validator.validate(message.as_ref()).is_err() {
-            return Err(Status::invalid_argument("Invalid transaction"));
-        }
-        // Send the transaction to the batch maker.
-        let (notifier, when_done) = tokio::sync::oneshot::channel();
-        self.tx_batch_maker
-            .send((message.to_vec(), notifier))
-            .await
-            .map_err(|_| DagError::ShuttingDown)
-            .map_err(|e| Status::not_found(e.to_string()))?;
-
-        // TODO: distingush between a digest being returned vs the channel closing
-        // suggesting an error.
-        let _digest = when_done.await;
-
-        Ok(Response::new(Empty {}))
-    }
-
-    async fn submit_transaction_stream(
-        &self,
-        request: Request<tonic::Streaming<types::TransactionProto>>,
-    ) -> Result<Response<types::Empty>, Status> {
-        let mut transactions = request.into_inner();
-        let mut responses = Vec::new();
-
-        while let Some(Ok(txn)) = transactions.next().await {
-            if let Err(err) = self.validator.validate(txn.transaction.as_ref()) {
-                // If the transaction is invalid (often cryptographically), better to drop the client
-                return Err(Status::invalid_argument(format!(
-                    "Stream contains an invalid transaction {err}"
-                )));
-            }
-            // Send the transaction to the batch maker.
-            let (notifier, when_done) = tokio::sync::oneshot::channel();
-            self.tx_batch_maker
-                .send((txn.transaction.to_vec(), notifier))
-                .await
-                .expect("Failed to send transaction");
-
-            // Note that here we do not wait for a response because this would
-            // mean that we process only a single message from this stream at a
-            // time. Instead we gather them and resolve them once the stream is over.
-            responses.push(when_done);
-        }
-
-        // TODO: activate when we provide a meaningful guarantee, and
-        // distingush between a digest being returned vs the channel closing
-        // suggesting an error.
-        // for response in responses {
-        //     let _digest = response.await;
-        // }
-
-        Ok(Response::new(Empty {}))
+        vec![batch_maker_handle, quorum_waiter_handle, tx_server_handle]
     }
 }

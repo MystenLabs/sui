@@ -28,18 +28,18 @@ module test::object_basics {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             Object { id: object::new(ctx), value },
             recipient
         )
     }
 
     public entry fun transfer(o: Object, recipient: address) {
-        transfer::transfer(o, recipient)
+        transfer::public_transfer(o, recipient)
     }
 
     public entry fun freeze_object(o: Object) {
-        transfer::freeze_object(o)
+        transfer::public_freeze_object(o)
     }
 
     public entry fun set_value(o: &mut Object, value: u64) {
@@ -65,14 +65,14 @@ module test::object_basics {
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         object::delete(id);
-        transfer::transfer(o, tx_context::sender(ctx))
+        transfer::public_transfer(o, tx_context::sender(ctx))
     }
 }
 
-//# run test::object_basics::create --args 10 @A
+//# run test::object_basics::create --args 10 @A --sender A
 
-//# run test::object_basics::freeze_object --args object(106)
+//# run test::object_basics::freeze_object --args object(107) --sender A
 
-//# run test::object_basics::transfer --args object(106) @A
+//# run test::object_basics::transfer --args object(107) @A --sender A
 
-//# run test::object_basics::set_value --args object(106) 1
+//# run test::object_basics::set_value --args object(107) 1 --sender A

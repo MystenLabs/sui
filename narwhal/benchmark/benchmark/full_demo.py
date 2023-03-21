@@ -8,7 +8,7 @@ from time import sleep
 
 from benchmark.commands import CommandMaker
 from benchmark.logs import ParseError, LogGrpcParser
-from benchmark.config import Key, LocalCommittee, LocalWorkerCache, NodeParameters, BenchParameters, ConfigError
+from benchmark.config import LocalCommittee, LocalWorkerCache, NodeParameters, BenchParameters, ConfigError
 from benchmark.utils import Print, BenchError, PathMaker
 
 
@@ -74,35 +74,38 @@ class Demo:
             subprocess.run([cmd], shell=True)
 
             # Generate configuration files.
-            primary_keys = []
+            primary_names = []
             primary_key_files = [
                 PathMaker.primary_key_file(i) for i in range(nodes)]
             for filename in primary_key_files:
                 cmd = CommandMaker.generate_key(filename).split()
                 subprocess.run(cmd, check=True)
-                primary_keys += [Key.from_file(filename)]
-            primary_names = [x.name for x in primary_keys]
+                cmd_pk = CommandMaker.get_pub_key(filename)
+                pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
+                primary_names += [pk]
 
-            primary_network_keys = []
+            primary_network_names = []
             primary_network_key_files = [
                 PathMaker.primary_network_key_file(i) for i in range(nodes)]
             for filename in primary_network_key_files:
                 cmd = CommandMaker.generate_network_key(filename).split()
                 subprocess.run(cmd, check=True)
-                primary_network_keys += [Key.from_file(filename)]
-            primary_network_names = [x.name for x in primary_network_keys]
+                cmd_pk = CommandMaker.get_pub_key(filename).split()
+                pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
+                primary_network_names += [pk]
 
             committee = LocalCommittee(primary_names, primary_network_names, self.BASE_PORT)
             committee.print(PathMaker.committee_file())
 
-            worker_keys = []
+            worker_names = []
             worker_key_files = [PathMaker.worker_key_file(
                 i) for i in range(self.workers*nodes)]
             for filename in worker_key_files:
                 cmd = CommandMaker.generate_network_key(filename).split()
                 subprocess.run(cmd, check=True)
-                worker_keys += [Key.from_file(filename)]
-            worker_names = [x.name for x in worker_keys]
+                cmd_pk = CommandMaker.get_pub_key(filename).split()
+                pk = subprocess.check_output(cmd_pk, encoding='utf-8').strip()
+                worker_names += [pk]
 
             # 2 ports used per authority so add 2 * num authorities to base port
             worker_cache = LocalWorkerCache(

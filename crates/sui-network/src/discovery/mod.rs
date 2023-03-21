@@ -1,18 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo::types::PeerInfo;
 use anemo::{types::PeerEvent, Network, Peer, PeerId, Request, Response};
 use futures::StreamExt;
-use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    net::SocketAddr,
     sync::{Arc, RwLock},
     time::Duration,
 };
-use sui_config::p2p::{P2pConfig, SeedPeer};
+use sui_config::p2p::{DiscoveryConfig, P2pConfig, SeedPeer};
+use sui_types::multiaddr::Multiaddr;
 use tap::{Pipe, TapFallible};
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::watch;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},
@@ -20,10 +22,7 @@ use tokio::{
 use tracing::{debug, info, trace};
 
 const TIMEOUT: Duration = Duration::from_secs(1);
-const MAX_NUMBER_OF_CONNECTIONS: usize = 20;
-const DISCOVERY_INTERVAL_PERIOD: Duration = Duration::from_millis(5_000);
 const ONE_DAY_MILLISECONDS: u64 = 24 * 60 * 60 * 1_000;
-const NUMBER_OF_CONCURRENT_REQUESTS: usize = 20;
 
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Discovery.rs"));
@@ -55,7 +54,6 @@ struct State {
 pub struct NodeInfo {
     pub peer_id: PeerId,
     pub addresses: Vec<Multiaddr>,
-    pub external_socket_address: Option<SocketAddr>,
 
     /// Creation time.
     ///
@@ -63,14 +61,21 @@ pub struct NodeInfo {
     pub timestamp_ms: u64,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TrustedPeerChangeEvent {
+    pub new_peers: Vec<PeerInfo>,
+}
+
 struct DiscoveryEventLoop {
     config: P2pConfig,
+    discovery_config: DiscoveryConfig,
     network: Network,
     tasks: JoinSet<()>,
     pending_dials: HashMap<PeerId, AbortHandle>,
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
+    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl DiscoveryEventLoop {
@@ -80,7 +85,7 @@ impl DiscoveryEventLoop {
         self.construct_our_info();
         self.configure_preferred_peers();
 
-        let mut interval = tokio::time::interval(DISCOVERY_INTERVAL_PERIOD);
+        let mut interval = tokio::time::interval(self.discovery_config.interval_period());
         let mut peer_events = {
             let (subscriber, _peers) = self.network.subscribe().unwrap();
             subscriber
@@ -95,10 +100,13 @@ impl DiscoveryEventLoop {
                 peer_event = peer_events.recv() => {
                     self.handle_peer_event(peer_event);
                 },
+                Ok(()) = self.trusted_peer_change_rx.changed() => {
+                    let event: TrustedPeerChangeEvent = self.trusted_peer_change_rx.borrow_and_update().clone();
+                    self.handle_trusted_peer_change_event(event);
+                }
                 Some(task_result) = self.tasks.join_next() => {
                     task_result.unwrap();
                 },
-
                 // Once the shutdown notification resolves we can terminate the event loop
                 _ = &mut self.shutdown_handle => {
                     break;
@@ -118,13 +126,12 @@ impl DiscoveryEventLoop {
             .config
             .external_address
             .clone()
-            .and_then(|addr| multiaddr_to_anemo_address(&addr).map(|_| addr))
+            .and_then(|addr| addr.to_anemo_address().ok().map(|_| addr))
             .into_iter()
             .collect();
         let our_info = NodeInfo {
             peer_id: self.network.peer_id(),
             addresses: address,
-            external_socket_address: None,
             timestamp_ms: now_unix(),
         };
 
@@ -137,7 +144,8 @@ impl DiscoveryEventLoop {
                 continue;
             };
 
-            let Some(address) = multiaddr_to_anemo_address(address) else {
+            let Ok(address) = address.to_anemo_address() else {
+                debug!(p2p_address=?address, "Can't convert p2p address to anemo address");
                 continue;
             };
 
@@ -157,12 +165,19 @@ impl DiscoveryEventLoop {
         }
     }
 
-    fn handle_peer_event(
+    // TODO: we don't boot out old committee member yets, however we may want to do this
+    // in the future along with other network management work.
+    fn handle_trusted_peer_change_event(
         &mut self,
-        peer_event: Result<PeerEvent, tokio::sync::broadcast::error::RecvError>,
+        trusted_peer_change_event: TrustedPeerChangeEvent,
     ) {
-        use tokio::sync::broadcast::error::RecvError;
+        for peer_info in trusted_peer_change_event.new_peers {
+            debug!(?peer_info, "Add committee member as preferred peer.");
+            self.network.known_peers().insert(peer_info);
+        }
+    }
 
+    fn handle_peer_event(&mut self, peer_event: Result<PeerEvent, RecvError>) {
         match peer_event {
             Ok(PeerEvent::NewPeer(peer_id)) => {
                 if let Some(peer) = self.network.peer(peer_id) {
@@ -171,16 +186,6 @@ impl DiscoveryEventLoop {
                         .unwrap()
                         .connected_peers
                         .insert(peer_id, ());
-
-                    // If we haven't figured out what our external address is, ask this peer
-                    if let Some(our_info) = &self.state.read().unwrap().our_info {
-                        if our_info.external_socket_address.is_none() {
-                            self.tasks.spawn(query_our_external_socket_address(
-                                peer.clone(),
-                                self.state.clone(),
-                            ));
-                        }
-                    }
 
                     // Query the new node for any peers
                     self.tasks
@@ -207,6 +212,7 @@ impl DiscoveryEventLoop {
         self.tasks
             .spawn(query_connected_peers_for_their_known_peers(
                 self.network.clone(),
+                self.discovery_config.clone(),
                 self.state.clone(),
             ));
 
@@ -233,17 +239,19 @@ impl DiscoveryEventLoop {
             .into_iter()
             .filter(|(peer_id, info)| {
                 peer_id != &self.network.peer_id() &&
-                (!info.addresses.is_empty() || info.external_socket_address.is_some()) // Peer has addresses we can dial
+                !info.addresses.is_empty() // Peer has addresses we can dial
                 && !state.connected_peers.contains_key(peer_id) // We're not already connected
                 && !self.pending_dials.contains_key(peer_id) // There is no pending dial to this node
             })
             .collect::<Vec<_>>();
 
         // No need to connect to any more peers if we're already connected to a bunch
-        let number_of_connections = self.state.read().unwrap().connected_peers.len();
+        let number_of_connections = state.connected_peers.len();
         let number_to_dial = std::cmp::min(
             eligible.len(),
-            MAX_NUMBER_OF_CONNECTIONS.saturating_sub(number_of_connections),
+            self.discovery_config
+                .target_concurrent_connections()
+                .saturating_sub(number_of_connections),
         );
 
         // randomize the order
@@ -268,6 +276,7 @@ impl DiscoveryEventLoop {
         {
             let abort_handle = self.tasks.spawn(try_to_connect_to_seed_peers(
                 self.network.clone(),
+                self.discovery_config.clone(),
                 self.config.seed_peers.clone(),
             ));
 
@@ -276,20 +285,9 @@ impl DiscoveryEventLoop {
     }
 }
 
-async fn query_our_external_socket_address(peer: Peer, state: Arc<RwLock<State>>) {
-    let mut client = DiscoveryClient::new(peer);
-    let request = Request::new(()).with_timeout(TIMEOUT);
-    if let Ok(response) = client.get_external_address(request).await {
-        let addr = response.into_inner();
-        if let Some(our_info) = &mut state.write().unwrap().our_info {
-            our_info.external_socket_address = Some(addr);
-        }
-    }
-}
-
 async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
     for multiaddr in &info.addresses {
-        if let Some(address) = multiaddr_to_anemo_address(multiaddr) {
+        if let Ok(address) = multiaddr.to_anemo_address() {
             // Ignore the result and just log the error if there is one
             if network
                 .connect_with_peer_id(address, info.peer_id)
@@ -307,30 +305,23 @@ async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
             }
         }
     }
-
-    if let Some(socket_addr) = info.external_socket_address {
-        // Ignore the result and just log the error if there is one
-        let _ = network
-            .connect_with_peer_id(socket_addr, info.peer_id)
-            .await
-            .tap_err(|e| {
-                debug!(
-                    "error dialing {} at address '{}': {e}",
-                    info.peer_id.short_display(4),
-                    socket_addr
-                )
-            });
-    }
 }
 
-async fn try_to_connect_to_seed_peers(network: Network, seed_peers: Vec<SeedPeer>) {
+async fn try_to_connect_to_seed_peers(
+    network: Network,
+    config: DiscoveryConfig,
+    seed_peers: Vec<SeedPeer>,
+) {
     let network = &network;
 
     futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
-        multiaddr_to_anemo_address(&seed.address).map(|address| (seed, address))
+        seed.address
+            .to_anemo_address()
+            .ok()
+            .map(|address| (seed, address))
     }))
     .for_each_concurrent(
-        NUMBER_OF_CONCURRENT_REQUESTS,
+        config.target_concurrent_connections(),
         |(seed, address)| async move {
             // Ignore the result and just log the error  if there is one
             let _ = if let Some(peer_id) = seed.peer_id {
@@ -358,7 +349,9 @@ async fn query_peer_for_their_known_peers(peer: Peer, state: Arc<RwLock<State>>)
                  own_info,
                  mut known_peers,
              }| {
-                known_peers.push(own_info);
+                if !own_info.addresses.is_empty() {
+                    known_peers.push(own_info)
+                }
                 known_peers
             },
         )
@@ -367,11 +360,21 @@ async fn query_peer_for_their_known_peers(peer: Peer, state: Arc<RwLock<State>>)
     }
 }
 
-async fn query_connected_peers_for_their_known_peers(network: Network, state: Arc<RwLock<State>>) {
-    let found_peers = network
+async fn query_connected_peers_for_their_known_peers(
+    network: Network,
+    config: DiscoveryConfig,
+    state: Arc<RwLock<State>>,
+) {
+    use rand::seq::IteratorRandom;
+
+    let peers_to_query = network
         .peers()
         .into_iter()
         .flat_map(|id| network.peer(id))
+        .choose_multiple(&mut rand::thread_rng(), config.peers_to_query());
+
+    let found_peers = peers_to_query
+        .into_iter()
         .map(DiscoveryClient::new)
         .map(|mut client| async move {
             let request = Request::new(()).with_timeout(TIMEOUT);
@@ -391,7 +394,7 @@ async fn query_connected_peers_for_their_known_peers(network: Network, state: Ar
                 )
         })
         .pipe(futures::stream::iter)
-        .buffer_unordered(NUMBER_OF_CONCURRENT_REQUESTS)
+        .buffer_unordered(config.peers_to_query())
         .filter_map(std::future::ready)
         .flat_map(futures::stream::iter)
         .collect::<Vec<_>>()
@@ -407,7 +410,7 @@ fn update_known_peers(state: Arc<RwLock<State>>, found_peers: Vec<NodeInfo>) {
     let our_peer_id = state.read().unwrap().our_info.clone().unwrap().peer_id;
     let known_peers = &mut state.write().unwrap().known_peers;
     for peer in found_peers {
-        // Skip peers who's timestamp is too far in the future from our clock
+        // Skip peers whose timestamp is too far in the future from our clock
         // or that are too old
         if peer.timestamp_ms > now_unix.saturating_add(30 * 1_000) // 30 seconds
             || now_unix.saturating_sub(peer.timestamp_ms) > ONE_DAY_MILLISECONDS
@@ -428,27 +431,6 @@ fn update_known_peers(state: Arc<RwLock<State>>, found_peers: Vec<NodeInfo>) {
             Entry::Vacant(v) => {
                 v.insert(peer);
             }
-        }
-    }
-}
-
-pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
-            Some((hostname.as_ref(), port).into())
-        }
-        _ => {
-            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
-            None
         }
     }
 }

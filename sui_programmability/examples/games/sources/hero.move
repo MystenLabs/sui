@@ -151,7 +151,7 @@ module games::hero {
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
     public entry fun slay(
-        game: &GameInfo, hero: &mut Hero, boar: Boar, ctx: &mut TxContext
+        game: &GameInfo, hero: &mut Hero, boar: Boar, ctx: &TxContext
     ) {
         check_id(game, hero.game_id);
         check_id(game, boar.game_id);
@@ -252,7 +252,7 @@ module games::hero {
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
-        transfer::transfer(payment, game.admin);
+        transfer::public_transfer(payment, game.admin);
 
         // magic of the sword is proportional to the amount you paid, up to
         // a max. one can only imbue a sword with so much magic
@@ -270,7 +270,7 @@ module games::hero {
     ) {
         let sword = create_sword(game, payment, ctx);
         let hero = create_hero(game, sword, ctx);
-        transfer::transfer(hero, tx_context::sender(ctx))
+        transfer::public_transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -299,7 +299,7 @@ module games::hero {
         check_id(game, admin.game_id);
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
-        transfer::transfer(
+        transfer::public_transfer(
             Potion { id: object::new(ctx), potency, game_id: id(game) },
             player
         )
@@ -334,7 +334,7 @@ module games::hero {
     }
 
     // --- Testing functions ---
-    public fun assert_hero_strength(hero: &Hero, strength: u64, _: &mut TxContext) {
+    public fun assert_hero_strength(hero: &Hero, strength: u64) {
         assert!(hero_strength(hero) == strength, ASSERT_ERR);
     }
 

@@ -14,7 +14,7 @@ pub use sui_config::PersistedConfig;
 use sui_config::SUI_DEV_NET_URL;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
-use sui_sdk::SuiClient;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::*;
 
 #[serde_as]
@@ -76,7 +76,14 @@ impl SuiEnv {
         &self,
         request_timeout: Option<std::time::Duration>,
     ) -> Result<SuiClient, anyhow::Error> {
-        Ok(SuiClient::new(&self.rpc, self.ws.as_deref(), request_timeout).await?)
+        let mut builder = SuiClientBuilder::default();
+        if let Some(request_timeout) = request_timeout {
+            builder = builder.request_timeout(request_timeout);
+        }
+        if let Some(ws_url) = &self.ws {
+            builder = builder.ws_url(ws_url);
+        }
+        Ok(builder.build(&self.rpc).await?)
     }
 
     pub fn devnet() -> Self {

@@ -1,37 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// This is an implementation of an English auction
-/// (https://en.wikipedia.org/wiki/English_auction) using single-owner
-/// objects only. There are 3 types of parties participating in an
-/// auction:
-/// - auctioneer - this is a trusted party that runs the auction
-/// - owner - this is the original owner of an item that is sold at an
-/// auction; the owner submits a request to an auctioneer that runs
-/// the auction
-/// - bidders - these are parties interested in purchasing items sold
-/// at an auction; they submit bids to an auctioneer to affect the
-/// state of an auction
+///  This module is an implementation of an English auction
+///  (https://en.wikipedia.org/wiki/English_auction) using single-owner
+///  objects only. There are three types of parties participating in an
+///  auction:
+///  - auctioneer - a trusted party that runs the auction
+///  - owner - the original owner of an item that is sold at an
+///    auction; the owner submits a request to an auctioneer which runs
+///    the auction
+///  - bidders - parties interested in purchasing items sold
+///    at an auction; they submit bids to an auctioneer to affect the
+///    state of an auction
 ///
-/// A typical lifetime of an auction looks as follows:
-/// - auction starts by the owner sending an item to be sold along with
-/// its own address to the auctioneer who creates and initializes an
-/// auction
-/// - bidders send bid to the auctioneer for a given auction
-/// consisting of the funds they intend to use for the item's purchase
-/// and their addresses
-/// - the auctioneer periodically inspects the bids:
-///   - if the inspected bid is higher than the current bid (initially
-///   there is no bid), the auction is updated with the current bid
-///   and funds representing previous highest bid are sent to the
-///   original owner
-///   - otherwise (bid is too low) the bidder's funds are sent back to
-///   the bidder and the auction remains unchanged
-/// - the auctioneer eventually ends the auction
-///   - if no bids were received, the item goes back to the original owner
-///   - otherwise the funds accumulated in the auction go to the
-///   original owner and the item goes to the bidder that won the
-///   auction
+///  A typical lifetime of an auction looks as follows:
+///  - The auction starts with the owner sending an item to be sold along with
+///    its own address to the auctioneer who creates and initializes an
+///    auction.
+///  - Bidders send their bid to the auctioneer.
+///    A bid consists of the funds offered for the item and the bidder's address.
+///  - The auctioneer periodically inspects the bids:
+///    - (inspected bid > current best bid (initially there is no bid)):
+///      The auctioneer updates the auction with the current bid
+///      and the funds of the previous highest bid are sent back to their owner.
+///    - (inspected bid <= current best bid):
+///      The auctioneer sents the inspected bid's funds back to the new bidder,
+///      and the auction remains unchanged.
+///  - The auctioneer eventually ends the auction:
+///    - if no bids were received, the item goes back to the original owner
+///    - otherwise the funds accumulated in the auction go to the
+///      original owner and the item goes to the bidder that won the auction
+
 module nfts::auction {
     use sui::coin::{Self, Coin};
     use sui::balance::Balance;
@@ -61,15 +60,17 @@ module nfts::auction {
     // Entry functions.
 
     /// Creates an auction. It would be more natural to generate
-    /// auction_id in crate_auction and be able to return it so that
+    /// auction_id in create_auction and be able to return it so that
     /// it can be shared with bidders but we cannot do this at the
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
     public fun create_auction<T: key + store>(
-        to_sell: T, id: UID, auctioneer: address, ctx: &mut TxContext
-    ) {
-        let auction = auction_lib::create_auction(id, to_sell, ctx);
+        to_sell: T, auctioneer: address, ctx: &mut TxContext
+    ): ID {
+        let auction = auction_lib::create_auction(to_sell, ctx);
+        let id = object::id(&auction);
         auction_lib::transfer(auction, auctioneer);
+        id
     }
 
     /// Creates a bid a and send it to the auctioneer along with the

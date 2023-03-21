@@ -1,28 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getObjectType,
-    getMoveObjectType,
-    type ObjectOwner,
-} from '@mysten/sui.js';
+import { getObjectType, type ObjectOwner } from '@mysten/sui.js';
 
 import { findIPFSvalue } from './stringUtils';
 
-import type { GetObjectDataResponse } from '@mysten/sui.js';
+import type { SuiObjectResponse } from '@mysten/sui.js';
 
 export function parseImageURL(data: any): string {
-    const url =
-        data?.url ||
-        // TODO: Remove Legacy format
-        data?.display ||
-        data?.contents?.display;
+    const url = data?.url;
 
     if (!url) return '';
 
     if (findIPFSvalue(url)) return url;
 
-    // String respresenting true http/https URLs are valid:
+    // String representing true http/https URLs are valid:
     try {
         new URL(url);
         return url;
@@ -31,16 +23,13 @@ export function parseImageURL(data: any): string {
     }
 }
 
-export function parseObjectType(data: GetObjectDataResponse): string {
+export function parseObjectType(data: SuiObjectResponse): string {
     // TODO: define better naming and typing here
     const dataType = getObjectType(data);
     if (dataType === 'package') {
         return 'Move Package';
     }
-    if (dataType === 'moveObject') {
-        return getMoveObjectType(data)!;
-    }
-    return 'unknown';
+    return dataType ?? 'unknown';
 }
 
 export function getOwnerStr(owner: ObjectOwner | string): string {

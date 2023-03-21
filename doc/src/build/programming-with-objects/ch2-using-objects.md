@@ -83,6 +83,8 @@ Objects can also be passed by value into an entry function. By doing so, the obj
 > :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `UID` as its first field, and the [UID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) does not have the `drop` ability, the Sui object struct type [cannot](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have the `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
 
 There are two ways we can deal with a pass-by-value Sui object in Move:
+- delete the object
+- transfer the object
 
 #### Option 1. Delete the object
 If the intention is to actually delete the object, we can unpack the object. This can be done only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). Upon unpacking, if any field is also of struct type, recursive unpacking and deletion will be required.
@@ -209,4 +211,7 @@ $ sui client objects $RECIPIENT
 ```
 We will see that this object is no longer there in the address.
 
-Now you know how to pass objects by reference and value and transfer them on-chain.
+In this chapter you learned:
+- to pass objects by reference
+- to pass objects by value (deleting or transferring them)
+- to transfer and interact with objects on-chain

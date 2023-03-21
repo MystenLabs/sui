@@ -1,0 +1,10 @@
+[package]
+name = "DependsOnBasics"
+version = "0.0.0"
+
+[dependencies]
+Examples = { local = "../object_basics" }
+Sui = { local = "../../../../../sui-framework" }
+
+[addresses]
+depends = "0x0"

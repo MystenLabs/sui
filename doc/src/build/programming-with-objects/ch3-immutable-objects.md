@@ -107,7 +107,7 @@ $ sui client objects $ADDR
 
 Let's publish the `ColorObject` code on-chain using the Sui CLI client:
 ```
-$ sui client publish --path $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
+$ sui client publish $ROOT/sui_programmability/examples/objects_tutorial --gas-budget 10000
 ```
 Set the package object ID to the `$PACKAGE` environment variable as we did in previous chapters.
 

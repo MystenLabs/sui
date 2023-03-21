@@ -7,14 +7,17 @@ use crate::{
     CertificateDigestProto,
 };
 use bytes::Bytes;
-use config::{Committee, Epoch, SharedWorkerCache, Stake, WorkerId, WorkerInfo};
-use crypto::{AggregateSignature, PublicKey, Signature};
+use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
+use crypto::{
+    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
+    NarwhalAuthoritySignature, PublicKey, PublicKeyBytes, Signature,
+};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
-    SignatureService, Verifier,
+    signature_service::SignatureService,
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, InsecureDefault, Signer, VerifyingKey},
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -29,10 +32,6 @@ use std::{
     fmt,
 };
 use tracing::warn;
-
-#[cfg(test)]
-#[path = "./tests/primary_type_tests.rs"]
-mod primary_type_tests;
 
 /// The round number.
 pub type Round = u64;
@@ -151,26 +150,24 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     }
 }
 
-#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
+    // Primary that created the header. Must be the same primary that broadcasted the header.
+    // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
     pub created_at: TimestampMs,
     #[serde(with = "indexmap::serde_seq")]
-    pub payload: IndexMap<BatchDigest, WorkerId>,
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
     #[serde(skip)]
     digest: OnceCell<HeaderDigest>,
-    pub signature: Signature,
 }
 
 impl HeaderBuilder {
-    pub fn build<F>(self, signer: &F) -> Result<Header, fastcrypto::error::FastCryptoError>
-    where
-        F: Signer<Signature>,
-    {
+    pub fn build(self) -> Result<Header, fastcrypto::error::FastCryptoError> {
         let h = Header {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
@@ -179,26 +176,25 @@ impl HeaderBuilder {
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             digest: OnceCell::default(),
-            signature: Signature::default(),
         };
         h.digest.set(Hash::digest(&h)).unwrap();
 
-        Ok(Header {
-            signature: signer
-                .try_sign(Digest::from(Hash::digest(&h)).as_ref())
-                .map_err(|_| fastcrypto::error::FastCryptoError::GeneralError)?,
-            ..h
-        })
+        Ok(h)
     }
 
     // helper method to set directly values to the payload
-    pub fn with_payload_batch(mut self, batch: Batch, worker_id: WorkerId) -> Self {
+    pub fn with_payload_batch(
+        mut self,
+        batch: Batch,
+        worker_id: WorkerId,
+        created_at: TimestampMs,
+    ) -> Self {
         if self.payload.is_none() {
             self.payload = Some(Default::default());
         }
         let payload = self.payload.as_mut().unwrap();
 
-        payload.insert(batch.digest(), worker_id);
+        payload.insert(batch.digest(), (worker_id, created_at));
 
         self
     }
@@ -209,9 +205,8 @@ impl Header {
         author: PublicKey,
         round: Round,
         epoch: Epoch,
-        payload: IndexMap<BatchDigest, WorkerId>,
+        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     ) -> Self {
         let header = Self {
             author,
@@ -221,22 +216,17 @@ impl Header {
             payload,
             parents,
             digest: OnceCell::default(),
-            signature: Signature::default(),
         };
         let digest = Hash::digest(&header);
         header.digest.set(digest).unwrap();
-        let signature = signature_service.request_signature(digest.into()).await;
-        Self {
-            signature,
-            ..header
-        }
+        header
     }
 
     pub fn digest(&self) -> HeaderDigest {
         *self.digest.get_or_init(|| Hash::digest(self))
     }
 
-    pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -260,18 +250,27 @@ impl Header {
         );
 
         // Ensure all worker ids are correct.
-        for worker_id in self.payload.values() {
+        for (worker_id, _) in self.payload.values() {
             worker_cache
-                .load()
                 .worker(&self.author, worker_id)
-                .map_err(|_| DagError::MalformedHeader(self.digest()))?;
+                .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
-        // Check the signature.
-        let digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        self.author
-            .verify(digest.as_ref(), &self.signature)
-            .map_err(DagError::from)
+        Ok(())
+    }
+}
+
+impl Default for Header {
+    fn default() -> Self {
+        Self {
+            author: PublicKey::insecure_default(),
+            round: Round::default(),
+            epoch: Epoch::default(),
+            created_at: TimestampMs::default(),
+            payload: IndexMap::default(),
+            parents: BTreeSet::default(),
+            digest: OnceCell::default(),
+        }
     }
 }
 
@@ -318,17 +317,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
 
     fn digest(&self) -> HeaderDigest {
         let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(&self.author);
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(self.created_at.to_le_bytes());
-        for (x, y) in self.payload.iter() {
-            hasher.update(Digest::from(*x));
-            hasher.update(y.to_le_bytes());
-        }
-        for x in self.parents.iter() {
-            hasher.update(Digest::from(*x))
-        }
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
         HeaderDigest(hasher.finalize().into())
     }
 }
@@ -362,13 +351,18 @@ impl PartialEq for Header {
     }
 }
 
+/// A Vote on a Header is a claim by the voting authority that all payloads and the full history
+/// of Certificates included in the Header are available.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Vote {
-    pub digest: HeaderDigest,
+    // HeaderDigest, round, epoch and origin for the header being voted on.
+    pub header_digest: HeaderDigest,
     pub round: Round,
     pub epoch: Epoch,
     pub origin: PublicKey,
+    // Author of this vote.
     pub author: PublicKey,
+    // Signature of the HeaderDigest.
     pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
@@ -376,10 +370,10 @@ impl Vote {
     pub async fn new(
         header: &Header,
         author: &PublicKey,
-        signature_service: &SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
+        signature_service: &SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     ) -> Self {
         let vote = Self {
-            digest: header.digest(),
+            header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
             origin: header.author.clone(),
@@ -397,7 +391,7 @@ impl Vote {
         S: Signer<Signature>,
     {
         let vote = Self {
-            digest: header.digest(),
+            header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
             origin: header.author.clone(),
@@ -406,7 +400,7 @@ impl Vote {
         };
 
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = vote.digest().into();
-        let signature = signer.sign(vote_digest.as_ref());
+        let signature = Signature::new_secure(&to_intent_message(vote_digest), signer);
 
         Self { signature, ..vote }
     }
@@ -429,9 +423,9 @@ impl Vote {
 
         // Check the signature.
         let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
-        self.author
-            .verify(vote_digest.as_ref(), &self.signature)
-            .map_err(DagError::from)
+        self.signature
+            .verify_secure(&to_intent_message(vote_digest), &self.author)
+            .map_err(|_| DagError::InvalidSignature)
     }
 }
 #[derive(
@@ -442,6 +436,18 @@ pub struct VoteDigest([u8; crypto::DIGEST_LENGTH]);
 impl From<VoteDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
     fn from(hd: VoteDigest) -> Self {
         Digest::new(hd.0)
+    }
+}
+
+impl From<VoteDigest> for Digest<{ crypto::INTENT_MESSAGE_LENGTH }> {
+    fn from(digest: VoteDigest) -> Self {
+        let intent_message = to_intent_message(HeaderDigest(digest.0));
+        Digest {
+            digest: bcs::to_bytes(&intent_message)
+                .expect("Serialization message should not fail")
+                .try_into()
+                .expect("INTENT_MESSAGE_LENGTH is correct"),
+        }
     }
 }
 
@@ -465,12 +471,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        let mut hasher = crypto::DefaultHashFunction::default();
-        hasher.update(Digest::from(self.digest));
-        hasher.update(self.round.to_le_bytes());
-        hasher.update(self.epoch.to_le_bytes());
-        hasher.update(&self.origin);
-        VoteDigest(hasher.finalize().into())
+        VoteDigest(self.header_digest.0)
     }
 }
 
@@ -482,7 +483,7 @@ impl fmt::Debug for Vote {
             self.digest(),
             self.round,
             self.author.encode_base64(),
-            self.digest,
+            self.origin.encode_base64(),
             self.epoch
         )
     }
@@ -599,8 +600,7 @@ impl Certificate {
             AggregateSignature::aggregate::<Signature, Vec<&Signature>>(
                 sigs.iter().map(|(_, sig)| sig).collect(),
             )
-            .map_err(|_| signature::Error::new())
-            .map_err(DagError::InvalidSignature)?
+            .map_err(|_| DagError::InvalidSignature)?
         };
 
         Ok(Certificate {
@@ -640,7 +640,9 @@ impl Certificate {
         (weight, pks)
     }
 
-    pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
+    /// Verifies the validity of the certificate.
+    /// TODO: Output a different type, similar to Sui VerifiedCertificate.
+    pub fn verify(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -651,12 +653,12 @@ impl Certificate {
         );
 
         // Genesis certificates are always valid.
-        if Self::genesis(committee).contains(self) {
+        if self.round() == 0 && Self::genesis(committee).contains(self) {
             return Ok(());
         }
 
-        // Check the embedded header.
-        self.header.verify(committee, worker_cache)?;
+        // Save signature verifications when the header is invalid.
+        self.header.validate(committee, worker_cache)?;
 
         let (weight, pks) = self.signed_by(committee);
 
@@ -668,9 +670,8 @@ impl Certificate {
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
         self.aggregated_signature
-            .verify(&pks[..], certificate_digest.as_ref())
-            .map_err(|_| signature::Error::new())
-            .map_err(DagError::from)?;
+            .verify_secure(&to_intent_message(certificate_digest), &pks[..])
+            .map_err(|_| DagError::InvalidSignature)?;
 
         Ok(())
     }
@@ -750,12 +751,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
-        let mut hasher = crypto::DefaultHashFunction::new();
-        hasher.update(Digest::from(self.header.digest()));
-        hasher.update(self.round().to_le_bytes());
-        hasher.update(self.epoch().to_le_bytes());
-        hasher.update(&self.origin());
-        CertificateDigest(hasher.finalize().into())
+        CertificateDigest(self.header.digest().0)
     }
 }
 
@@ -796,9 +792,16 @@ impl Affiliated for Certificate {
     }
 }
 
+/// Request for broadcasting certificates to peers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PrimaryMessage {
-    Certificate(Certificate),
+pub struct SendCertificateRequest {
+    pub certificate: Certificate,
+}
+
+/// Response from peers after receiving a certificate.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendCertificateResponse {
+    pub accepted: bool,
 }
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.
@@ -842,15 +845,15 @@ pub struct FetchCertificatesRequest {
     /// - rounds of certificates to be skipped from the response and
     /// - the GC round.
     /// These rounds are skipped because the requestor already has them.
-    pub skip_rounds: Vec<(PublicKey, Vec<u8>)>,
+    pub skip_rounds: Vec<(PublicKeyBytes, Vec<u8>)>,
     /// Maximum number of certificates that should be returned.
     pub max_items: usize,
 }
 
 impl FetchCertificatesRequest {
     #[allow(clippy::mutable_key_type)]
-    pub fn get_bounds(&self) -> (Round, BTreeMap<PublicKey, BTreeSet<Round>>) {
-        let skip_rounds: BTreeMap<PublicKey, BTreeSet<Round>> = self
+    pub fn get_bounds(&self) -> (Round, BTreeMap<PublicKeyBytes, BTreeSet<Round>>) {
+        let skip_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>> = self
             .skip_rounds
             .iter()
             .filter_map(|(k, serialized)| {
@@ -876,7 +879,7 @@ impl FetchCertificatesRequest {
     pub fn set_bounds(
         mut self,
         gc_round: Round,
-        skip_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
+        skip_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>>,
     ) -> Self {
         self.exclusive_lower_bound = gc_round;
         self.skip_rounds = skip_rounds
@@ -927,28 +930,15 @@ impl PayloadAvailabilityResponse {
     }
 }
 
-/// Message to reconfigure worker tasks. This message must be sent by a trusted source.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub enum ReconfigureNotification {
-    /// Indicate the committee has changed. This happens at epoch change.
-    NewEpoch(Committee),
-    /// Update some network information of the committee.
-    UpdateCommittee(Committee),
-    /// Indicate a shutdown.
-    Shutdown,
-}
-
-/// Used by the primary to reconfigure the worker.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WorkerReconfigureMessage {
-    pub message: ReconfigureNotification,
-}
-
 /// Used by the primary to request that the worker sync the target missing batches.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {
     pub digests: Vec<BatchDigest>,
     pub target: PublicKey,
+    // Used to indicate to the worker that it does not need to fully validate
+    // the batch it receives because it is part of a certificate. Only digest
+    // verification is required.
+    pub is_certified: bool,
 }
 
 /// Used by the primary to request that the worker delete the specified batches.
@@ -1030,6 +1020,16 @@ pub struct VoteInfo {
     pub round: Round,
     /// The hash of the vote used to ensure equality
     pub vote_digest: VoteDigest,
+}
+
+impl From<&Vote> for VoteInfo {
+    fn from(vote: &Vote) -> Self {
+        VoteInfo {
+            epoch: vote.epoch,
+            round: vote.round,
+            vote_digest: vote.digest(),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -12,20 +12,17 @@ export default {
 
 interface StoryProps {
     variants: TextProps['variant'][];
-    weights?: TextProps['weight'][];
     italic?: boolean;
 }
 
 export const Body: StoryObj<StoryProps> = {
-    render: ({ variants, weights = ['medium', 'semibold'], italic }) => (
+    render: ({ variants, italic }) => (
         <div>
             {variants.map((variant) => (
                 <Fragment key={variant}>
-                    {weights.map((weight) => (
-                        <Text key={weight} variant={variant} weight={weight}>
-                            {variant} - {weight}
-                        </Text>
-                    ))}
+                    <Text key={variant} variant={variant}>
+                        {variant}
+                    </Text>
 
                     {italic && (
                         <Text variant={variant} italic>
@@ -37,7 +34,12 @@ export const Body: StoryObj<StoryProps> = {
         </div>
     ),
     args: {
-        variants: ['body', 'bodySmall'],
+        variants: [
+            'body/medium',
+            'body/semibold',
+            'bodySmall/medium',
+            'bodySmall/semibold',
+        ],
         italic: true,
     },
 };
@@ -45,14 +47,27 @@ export const Body: StoryObj<StoryProps> = {
 export const Subtitle: StoryObj<StoryProps> = {
     ...Body,
     args: {
-        variants: ['subtitle', 'subtitleSmall', 'subtitleSmallExtra'],
+        variants: [
+            'subtitle/medium',
+            'subtitle/semibold',
+            'subtitleSmall/medium',
+            'subtitleSmall/semibold',
+            'subtitleSmallExtra/medium',
+            'subtitleSmallExtra/semibold',
+        ],
     },
 };
 
 export const Caption: StoryObj<StoryProps> = {
     ...Body,
     args: {
-        variants: ['caption', 'captionSmall'],
-        weights: ['medium', 'semibold', 'bold'],
+        variants: [
+            'caption/medium',
+            'caption/semibold',
+            'caption/bold',
+            'captionSmall/medium',
+            'captionSmall/semibold',
+            'captionSmall/bold',
+        ],
     },
 };

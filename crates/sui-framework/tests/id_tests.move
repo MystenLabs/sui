@@ -6,7 +6,7 @@ module sui::id_tests {
     use sui::object;
     use sui::tx_context;
 
-    const ID_BYTES_MISMATCH: u64 = 0;
+    const EIdBytesMismatch: u64 = 0;
 
     struct Object has key {
         id: object::UID,
@@ -18,7 +18,7 @@ module sui::id_tests {
         let id = object::new(&mut ctx);
         let obj_id = object::uid_to_inner(&id);
         let obj = Object { id };
-        assert!(object::id(&obj) == obj_id, ID_BYTES_MISMATCH);
+        assert!(object::id(&obj) == obj_id, EIdBytesMismatch);
         let Object { id } = obj;
         object::delete(id);
     }

@@ -8,9 +8,9 @@ export const queryClient = new QueryClient({
         queries: {
             // Only retry once by default:
             retry: 1,
-            // TODO: Rather than disabling all automatic refetching, we should find sane defaults here:
-            refetchOnMount: false,
-            refetchOnWindowFocus: false,
+            // Default stale time to 30 seconds, which seems like a sensible tradeoff between network requests and stale data.
+            staleTime: 30 * 1000,
+            // Disable automatic interval fetching
             refetchInterval: 0,
             refetchIntervalInBackground: false,
         },

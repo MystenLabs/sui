@@ -12,10 +12,15 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::builder::{CommitteeConfig, ConfigBuilder};
+use sui_config::builder::{
+    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+};
 use sui_config::genesis_config::{GenesisConfig, ValidatorConfigInfo};
+use sui_config::node::DBCheckpointConfig;
 use sui_config::NetworkConfig;
-use sui_types::base_types::SuiAddress;
+use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_types::base_types::AuthorityName;
+use sui_types::object::Object;
 use tempfile::TempDir;
 
 pub struct SwarmBuilder<R = OsRng> {
@@ -24,9 +29,13 @@ pub struct SwarmBuilder<R = OsRng> {
     dir: Option<PathBuf>,
     committee: CommitteeConfig,
     initial_accounts_config: Option<GenesisConfig>,
+    additional_objects: Vec<Object>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
     with_event_store: bool,
+    initial_protocol_version: ProtocolVersion,
+    supported_protocol_versions_config: ProtocolVersionsConfig,
+    db_checkpoint_config: DBCheckpointConfig,
 }
 
 impl SwarmBuilder {
@@ -37,9 +46,13 @@ impl SwarmBuilder {
             dir: None,
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
             initial_accounts_config: None,
+            additional_objects: vec![],
             fullnode_count: 0,
             fullnode_rpc_addr: None,
             with_event_store: false,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 }
@@ -51,9 +64,13 @@ impl<R> SwarmBuilder<R> {
             dir: self.dir,
             committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
+            additional_objects: self.additional_objects,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             with_event_store: false,
+            initial_protocol_version: SupportedProtocolVersions::SYSTEM_DEFAULT.max,
+            supported_protocol_versions_config: ProtocolVersionsConfig::Default,
+            db_checkpoint_config: DBCheckpointConfig::default(),
         }
     }
 
@@ -85,6 +102,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
+        self.additional_objects.extend(objects);
+        self
+    }
+
     pub fn with_fullnode_count(mut self, fullnode_count: usize) -> Self {
         self.fullnode_count = fullnode_count;
         self
@@ -92,6 +114,43 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
         self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
+        self
+    }
+
+    pub fn with_epoch_duration_ms(mut self, epoch_duration_ms: u64) -> Self {
+        let mut initial_accounts_config = self
+            .initial_accounts_config
+            .unwrap_or_else(GenesisConfig::for_local_testing);
+        initial_accounts_config.parameters.epoch_duration_ms = epoch_duration_ms;
+        self.initial_accounts_config = Some(initial_accounts_config);
+        self
+    }
+
+    pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
+        self.initial_protocol_version = v;
+        self
+    }
+
+    pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_supported_protocol_version_callback(
+        mut self,
+        func: SupportedProtocolVersionsCallback,
+    ) -> Self {
+        self.supported_protocol_versions_config = ProtocolVersionsConfig::PerValidator(func);
+        self
+    }
+
+    pub fn with_supported_protocol_versions_config(mut self, c: ProtocolVersionsConfig) -> Self {
+        self.supported_protocol_versions_config = c;
+        self
+    }
+
+    pub fn with_db_checkpoint_config(mut self, db_checkpoint_config: DBCheckpointConfig) -> Self {
+        self.db_checkpoint_config = db_checkpoint_config;
         self
     }
 }
@@ -115,20 +174,29 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .committee(self.committee)
             .with_swarm()
             .rng(self.rng)
+            .with_objects(self.additional_objects)
+            .with_protocol_version(self.initial_protocol_version)
+            .with_supported_protocol_versions_config(
+                self.supported_protocol_versions_config.clone(),
+            )
             .build();
 
         let validators = network_config
             .validator_configs()
             .iter()
-            .map(|config| (config.sui_address(), Node::new(config.to_owned())))
+            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
             .collect();
 
         let mut fullnodes = HashMap::new();
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
+                let spvc = self.supported_protocol_versions_config.clone();
+                //let spvc = spvc.clone();
                 let mut config = network_config
                     .fullnode_config_builder()
+                    .with_supported_protocol_versions_config(spvc)
+                    .with_db_checkpoint_config(self.db_checkpoint_config.clone())
                     .with_random_dir()
                     .build()
                     .unwrap();
@@ -136,7 +204,7 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }
-                fullnodes.insert(config.sui_address(), Node::new(config));
+                fullnodes.insert(config.protocol_public_key(), Node::new(config));
             });
         }
         Swarm {
@@ -158,18 +226,19 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let validators = network_config
             .validator_configs()
             .iter()
-            .map(|config| (config.sui_address(), Node::new(config.to_owned())))
+            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
             .collect();
 
         let fullnodes = if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
             let mut config = network_config
                 .fullnode_config_builder()
+                .with_supported_protocol_versions_config(self.supported_protocol_versions_config)
                 .set_event_store(self.with_event_store)
                 .with_random_dir()
                 .build()
                 .unwrap();
             config.json_rpc_address = fullnode_rpc_addr;
-            HashMap::from([(config.sui_address(), Node::new(config))])
+            HashMap::from([(config.protocol_public_key(), Node::new(config))])
         } else {
             Default::default()
         };
@@ -188,8 +257,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 pub struct Swarm {
     dir: SwarmDirectory,
     network_config: NetworkConfig,
-    validators: HashMap<SuiAddress, Node>,
-    fullnodes: HashMap<SuiAddress, Node>,
+    validators: HashMap<AuthorityName, Node>,
+    fullnodes: HashMap<AuthorityName, Node>,
 }
 
 impl Drop for Swarm {
@@ -212,12 +281,7 @@ impl Swarm {
 
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
-        let start_handles = self
-            .nodes_iter_mut()
-            .map(|node| node.spawn())
-            .collect::<Result<Vec<_>>>()?;
-
-        try_join_all(start_handles).await?;
+        try_join_all(self.nodes_iter_mut().map(|node| node.start())).await?;
 
         Ok(())
     }
@@ -244,13 +308,8 @@ impl Swarm {
     }
 
     /// Attempt to lookup and return a shared reference to the Validator with the provided `name`.
-    pub fn validator(&self, name: SuiAddress) -> Option<&Node> {
+    pub fn validator(&self, name: AuthorityName) -> Option<&Node> {
         self.validators.get(&name)
-    }
-
-    /// Attempt to lookup and return a mutable reference to the Validator with the provided `name`.
-    pub fn validator_mut(&mut self, name: SuiAddress) -> Option<&mut Node> {
-        self.validators.get_mut(&name)
     }
 
     /// Return an iterator over shared references of all Validators.
@@ -258,29 +317,14 @@ impl Swarm {
         self.validators.values()
     }
 
-    /// Return an iterator over mutable references of all Validators.
-    pub fn validators_mut(&mut self) -> impl Iterator<Item = &mut Node> {
-        self.validators.values_mut()
-    }
-
     /// Attempt to lookup and return a shared reference to the Fullnode with the provided `name`.
-    pub fn fullnode(&self, name: SuiAddress) -> Option<&Node> {
+    pub fn fullnode(&self, name: AuthorityName) -> Option<&Node> {
         self.fullnodes.get(&name)
-    }
-
-    /// Attempt to lookup and return a mutable reference to the Fullnode with the provided `name`.
-    pub fn fullnode_mut(&mut self, name: SuiAddress) -> Option<&mut Node> {
-        self.fullnodes.get_mut(&name)
     }
 
     /// Return an iterator over shared references of all Fullnodes.
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
         self.fullnodes.values()
-    }
-
-    /// Return an iterator over mutable references of all Fullnodes.
-    pub fn fullnodes_mut(&mut self) -> impl Iterator<Item = &mut Node> {
-        self.fullnodes.values_mut()
     }
 }
 

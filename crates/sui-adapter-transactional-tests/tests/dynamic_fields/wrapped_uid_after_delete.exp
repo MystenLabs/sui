@@ -1,0 +1,41 @@
+processed 10 tasks
+
+init:
+A: object(100)
+
+task 1 'publish'. lines 10-84:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 86-86:
+created: object(107)
+written: object(106)
+
+task 3 'run'. lines 88-88:
+created: object(109)
+written: object(107), object(108)
+
+task 4 'run'. lines 90-90:
+written: object(107), object(109), object(110)
+
+task 5 'run'. lines 92-92:
+created: object(112)
+written: object(111)
+deleted: object(107)
+
+task 6 'view-object'. lines 94-94:
+Owner: Object ID: ( fake(107) )
+Version: 4
+Contents: sui::dynamic_field::Field<u64, a::m::Counter> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: 0u64, value: a::m::Counter {id: sui::object::UID {id: sui::object::ID {bytes: _}}, count: 1u64}}
+
+task 7 'run'. lines 96-96:
+written: object(112), object(113)
+
+task 8 'run'. lines 98-98:
+written: object(114)
+deleted: object(112)
+
+task 9 'view-object'. lines 100-100:
+Owner: Object ID: ( fake(107) )
+Version: 4
+Contents: sui::dynamic_field::Field<u64, a::m::Counter> {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}, name: 0u64, value: a::m::Counter {id: sui::object::UID {id: sui::object::ID {bytes: _}}, count: 1u64}}

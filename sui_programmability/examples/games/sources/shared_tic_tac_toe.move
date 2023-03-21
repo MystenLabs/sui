@@ -100,9 +100,9 @@ module games::shared_tic_tac_toe {
             // Notify the server that the game ended so that it can delete the game.
             event::emit(GameEndEvent { game_id: object::id(game) });
             if (game.game_status == X_WIN) {
-                transfer::transfer( Trophy { id: object::new(ctx) }, game.x_address);
+                transfer::transfer(Trophy { id: object::new(ctx) }, game.x_address);
             } else if (game.game_status == O_WIN) {
-                transfer::transfer( Trophy { id: object::new(ctx) }, game.o_address);
+                transfer::transfer(Trophy { id: object::new(ctx) }, game.o_address);
             }
         }
     }

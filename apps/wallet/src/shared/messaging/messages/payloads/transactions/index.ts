@@ -3,4 +3,4 @@
 
 export * from './ExecuteTransactionRequest';
 export * from './ExecuteTransactionResponse';
-export * from './TransactionRequest';
+export * from './Staking';

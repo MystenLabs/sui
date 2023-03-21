@@ -48,7 +48,6 @@ Useful in situations like an NFT marketplace where you wish to buy the NFTs at a
 @ownership: Shared
 
 
-
 <pre><code><b>struct</b> <a href="safe.md#0x2_safe_Safe">Safe</a>&lt;T&gt; <b>has</b> key
 </code></pre>
 
@@ -163,20 +162,38 @@ Allows the owner of the capability to take <code>amount</code> of coins from the
 ## Constants
 
 
-<a name="0x2_safe_INVALID_OWNER_CAPABILITY"></a>
+<a name="0x2_safe_EInvalidOwnerCapability"></a>
 
 
 
-<pre><code><b>const</b> <a href="safe.md#0x2_safe_INVALID_OWNER_CAPABILITY">INVALID_OWNER_CAPABILITY</a>: u64 = 1;
+<pre><code><b>const</b> <a href="safe.md#0x2_safe_EInvalidOwnerCapability">EInvalidOwnerCapability</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="0x2_safe_INVALID_TRANSFER_CAPABILITY"></a>
+<a name="0x2_safe_EInvalidTransferCapability"></a>
 
 
 
-<pre><code><b>const</b> <a href="safe.md#0x2_safe_INVALID_TRANSFER_CAPABILITY">INVALID_TRANSFER_CAPABILITY</a>: u64 = 0;
+<pre><code><b>const</b> <a href="safe.md#0x2_safe_EInvalidTransferCapability">EInvalidTransferCapability</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_safe_EOverdrawn"></a>
+
+
+
+<pre><code><b>const</b> <a href="safe.md#0x2_safe_EOverdrawn">EOverdrawn</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_safe_ETransferCapabilityRevoked"></a>
+
+
+
+<pre><code><b>const</b> <a href="safe.md#0x2_safe_ETransferCapabilityRevoked">ETransferCapabilityRevoked</a>: u64 = 2;
 </code></pre>
 
 
@@ -186,24 +203,6 @@ Allows the owner of the capability to take <code>amount</code> of coins from the
 
 
 <pre><code><b>const</b> <a href="safe.md#0x2_safe_MAX_CAPABILITY_ISSUABLE">MAX_CAPABILITY_ISSUABLE</a>: u64 = 1000;
-</code></pre>
-
-
-
-<a name="0x2_safe_OVERDRAWN"></a>
-
-
-
-<pre><code><b>const</b> <a href="safe.md#0x2_safe_OVERDRAWN">OVERDRAWN</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="0x2_safe_TRANSFER_CAPABILITY_REVOKED"></a>
-
-
-
-<pre><code><b>const</b> <a href="safe.md#0x2_safe_TRANSFER_CAPABILITY_REVOKED">TRANSFER_CAPABILITY_REVOKED</a>: u64 = 2;
 </code></pre>
 
 
@@ -227,9 +226,9 @@ Check that the capability has not yet been revoked by the owner.
 
 <pre><code><b>fun</b> <a href="safe.md#0x2_safe_check_capability_validity">check_capability_validity</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<a href="safe.md#0x2_safe_Safe">Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_TransferCapability">TransferCapability</a>&lt;T&gt;) {
     // Check that the ids match
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(<a href="safe.md#0x2_safe">safe</a>) == capability.safe_id, <a href="safe.md#0x2_safe_INVALID_TRANSFER_CAPABILITY">INVALID_TRANSFER_CAPABILITY</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(<a href="safe.md#0x2_safe">safe</a>) == capability.safe_id, <a href="safe.md#0x2_safe_EInvalidTransferCapability">EInvalidTransferCapability</a>);
     // Check that it <b>has</b> not been cancelled
-    <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(&<a href="safe.md#0x2_safe">safe</a>.allowed_safes, &<a href="object.md#0x2_object_id">object::id</a>(capability)), <a href="safe.md#0x2_safe_TRANSFER_CAPABILITY_REVOKED">TRANSFER_CAPABILITY_REVOKED</a>);
+    <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(&<a href="safe.md#0x2_safe">safe</a>.allowed_safes, &<a href="object.md#0x2_object_id">object::id</a>(capability)), <a href="safe.md#0x2_safe_ETransferCapabilityRevoked">ETransferCapabilityRevoked</a>);
 }
 </code></pre>
 
@@ -253,7 +252,7 @@ Check that the capability has not yet been revoked by the owner.
 
 
 <pre><code><b>fun</b> <a href="safe.md#0x2_safe_check_owner_capability_validity">check_owner_capability_validity</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<a href="safe.md#0x2_safe_Safe">Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">OwnerCapability</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(<a href="safe.md#0x2_safe">safe</a>) == capability.safe_id, <a href="safe.md#0x2_safe_INVALID_OWNER_CAPABILITY">INVALID_OWNER_CAPABILITY</a>);
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(<a href="safe.md#0x2_safe">safe</a>) == capability.safe_id, <a href="safe.md#0x2_safe_EInvalidOwnerCapability">EInvalidOwnerCapability</a>);
 }
 </code></pre>
 
@@ -374,7 +373,7 @@ a trusted party (or smart contract) to transfer the object out.
 <pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_create">create</a>&lt;T&gt;(<a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="coin.md#0x2_coin">coin</a>);
     <b>let</b> cap = <a href="safe.md#0x2_safe_create_">create_</a>&lt;T&gt;(<a href="balance.md#0x2_balance">balance</a>, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(cap, sender(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(cap, sender(ctx));
 }
 </code></pre>
 
@@ -400,7 +399,7 @@ a trusted party (or smart contract) to transfer the object out.
 <pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_create_empty">create_empty</a>&lt;T&gt;(ctx: &<b>mut</b> TxContext) {
     <b>let</b> empty_balance = <a href="balance.md#0x2_balance_zero">balance::zero</a>&lt;T&gt;();
     <b>let</b> cap = <a href="safe.md#0x2_safe_create_">create_</a>(empty_balance, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(cap, sender(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(cap, sender(ctx));
 }
 </code></pre>
 
@@ -505,7 +504,7 @@ Withdraw coins from the safe as a <code><a href="safe.md#0x2_safe_OwnerCapabilit
 <pre><code><b>public</b> entry <b>fun</b> <a href="safe.md#0x2_safe_withdraw">withdraw</a>&lt;T&gt;(<a href="safe.md#0x2_safe">safe</a>: &<b>mut</b> <a href="safe.md#0x2_safe_Safe">Safe</a>&lt;T&gt;, capability: &<a href="safe.md#0x2_safe_OwnerCapability">OwnerCapability</a>&lt;T&gt;, withdraw_amount: u64, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="safe.md#0x2_safe_withdraw_">withdraw_</a>(<a href="safe.md#0x2_safe">safe</a>, capability, withdraw_amount);
     <b>let</b> <a href="coin.md#0x2_coin">coin</a> = <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, ctx);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin">coin</a>, sender(ctx));
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin">coin</a>, sender(ctx));
 }
 </code></pre>
 
@@ -534,7 +533,7 @@ Withdraw coins from the safe as a <code><a href="safe.md#0x2_safe_TransferCapabi
     <a href="safe.md#0x2_safe_check_capability_validity">check_capability_validity</a>(<a href="safe.md#0x2_safe">safe</a>, capability);
 
     // Withdraw funds
-    <b>assert</b>!(capability.amount &gt;= withdraw_amount, <a href="safe.md#0x2_safe_OVERDRAWN">OVERDRAWN</a>);
+    <b>assert</b>!(capability.amount &gt;= withdraw_amount, <a href="safe.md#0x2_safe_EOverdrawn">EOverdrawn</a>);
     capability.amount = capability.amount - withdraw_amount;
     <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> <a href="safe.md#0x2_safe">safe</a>.<a href="balance.md#0x2_balance">balance</a>, withdraw_amount)
 }

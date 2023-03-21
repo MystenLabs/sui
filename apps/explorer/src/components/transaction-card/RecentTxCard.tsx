@@ -1,30 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type JsonRpcProvider,
-    type ExecutionStatusType,
-    type TransactionKindName,
-} from '@mysten/sui.js';
+import { useRpcClient } from '@mysten/core';
+import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
-import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import Pagination from '../pagination/Pagination';
 import {
-    type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
+    type TxnData,
 } from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
 
-import { useRpc } from '~/hooks/useRpc';
 import { Banner } from '~/ui/Banner';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -60,20 +54,6 @@ function generateStartEndRange(
     };
 }
 
-// Static data for development and testing
-const getRecentTransactionsStatic = (): Promise<TxnData[]> => {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const latestTx = getAllMockTransaction().map((tx) => ({
-                ...tx,
-                status: tx.status as ExecutionStatusType,
-                kind: tx.kind as TransactionKindName,
-            }));
-            resolve(latestTx as TxnData[]);
-        }, 500);
-    });
-};
-
 // TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
     rpc: JsonRpcProvider,
@@ -81,14 +61,10 @@ async function getRecentTransactions(
     txNum: number,
     pageNum?: number
 ): Promise<TxnData[]> {
-    // If static env, use static data
-    if (IS_STATIC_ENV) {
-        return getRecentTransactionsStatic();
-    }
     // Get the latest transactions
     // Instead of getRecentTransactions, use getTransactionCount
-    // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
-    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
+    // then use getTransactionDigestsInRangeDeprecated using the totalTx as the start totalTx sequence number - txNum as the end sequence number
+    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRangeDeprecated
     const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
         generateStartEndRange(totalTx, txNum, pageNum);
 
@@ -97,12 +73,13 @@ async function getRecentTransactions(
     if (endGatewayTxSeqNumber < 0) {
         throw new Error('Invalid transaction number');
     }
-    const transactionDigests = await rpc.getTransactionDigestsInRange(
+    // TODO: migrate this to `getTransactions`
+    const transactionDigests = await rpc.getTransactionDigestsInRangeDeprecated(
         startGatewayTxSeqNumber,
         endGatewayTxSeqNumber
     );
 
-    // result returned by getTransactionDigestsInRange is in ascending order
+    // result returned by getTransactionDigestsInRangeDeprecated is in ascending order
     const transactionData = await getDataOnTxDigests(
         rpc,
         [...transactionDigests].reverse()
@@ -135,7 +112,7 @@ export function LatestTxCard({
         initialTxPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const [searchParams, setSearchParams] = useSearchParamsMerged();
 
     const [pageIndex, setPageIndex] = useState(
@@ -154,9 +131,7 @@ export function LatestTxCard({
 
     const countQuery = useQuery(
         ['transactions', 'count'],
-        () => {
-            return rpc.getTotalTransactionNumber();
-        },
+        () => rpc.getTotalTransactionNumber(),
         {
             refetchInterval: paused ? false : TRANSACTION_POLL_TIME,
         }
@@ -186,9 +161,9 @@ export function LatestTxCard({
     const recentTx = useMemo(
         () =>
             transactionQuery.data
-                ? genTableDataFromTxData(transactionQuery.data, truncateLength)
+                ? genTableDataFromTxData(transactionQuery.data)
                 : null,
-        [transactionQuery.data, truncateLength]
+        [transactionQuery.data]
     );
 
     const stats = {
@@ -280,15 +255,13 @@ export function LatestTxCard({
                                 rowCount={15}
                                 rowHeight="16px"
                                 colHeadings={[
-                                    'Time',
-                                    'Type',
                                     'Transaction ID',
-                                    'Addresses',
+                                    'Sender',
                                     'Amount',
                                     'Gas',
+                                    'Time',
                                 ]}
                                 colWidths={[
-                                    '85px',
                                     '100px',
                                     '120px',
                                     '204px',

@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowLeft16 } from '@mysten/icons';
 import { Form, Formik } from 'formik';
 import { object } from 'yup';
 
-import Button from '_app/shared/button';
-import Icon, { SuiIcons } from '_components/icon';
-import Loading from '_components/loading';
+import { Button } from '_app/shared/ButtonUI';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { passwordFieldsValidation } from '_pages/initialize/shared/password-fields/validation';
 
 import type { StepProps } from '.';
-
-import st from './StepTwo.module.scss';
 
 const validationSchema = object(passwordFieldsValidation);
 
@@ -28,39 +25,27 @@ export default function StepTwo({ next, data, mode }: StepProps) {
             enableReinitialize={true}
         >
             {({ isSubmitting, isValid, values }) => (
-                <Form className={st.form}>
+                <Form className="flex flex-col flex-nowrap self-stretch flex-1">
                     <PasswordFields />
-                    <div className={st.fill} />
-                    <div className={st.actions}>
+                    <div className="flex-1" />
+                    <div className="flex flex-nowrap gap-2.5 mt-5">
                         <Button
                             type="button"
                             disabled={isSubmitting}
-                            className={st.btn}
-                            mode="neutral"
-                            size="large"
+                            size="tall"
+                            variant="outline"
                             onClick={() => next(values, -1)}
-                        >
-                            <Icon
-                                icon={SuiIcons.ArrowLeft}
-                                className={st.prev}
-                            />
-                            Back
-                        </Button>
+                            before={<ArrowLeft16 />}
+                            text="Back"
+                        />
                         <Button
                             type="submit"
                             disabled={isSubmitting || !isValid}
-                            mode="primary"
-                            className={st.btn}
-                            size="large"
-                        >
-                            <Loading loading={isSubmitting}>
-                                {mode === 'import' ? 'Import' : 'Reset'}
-                                <Icon
-                                    icon={SuiIcons.ArrowRight}
-                                    className={st.next}
-                                />
-                            </Loading>
-                        </Button>
+                            size="tall"
+                            variant="primary"
+                            loading={isSubmitting}
+                            text={mode === 'import' ? 'Import' : 'Reset'}
+                        />
                     </div>
                 </Form>
             )}

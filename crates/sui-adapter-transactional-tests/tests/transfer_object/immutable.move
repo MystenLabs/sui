@@ -17,14 +17,14 @@ module test::m {
 
     public entry fun mint_s(ctx: &mut TxContext) {
         let id = object::new(ctx);
-        transfer::freeze_object(S { id })
+        transfer::public_freeze_object(S { id })
     }
 }
 
 //# run test::m::mint_s --sender A
 
-//# view-object 107
+//# view-object 108
 
-//# transfer-object 107 --sender A --recipient B
+//# transfer-object 108 --sender A --recipient B
 
-//# view-object 107
+//# view-object 108

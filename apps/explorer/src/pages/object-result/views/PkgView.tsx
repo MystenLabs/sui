@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { getTransactionSender } from '@mysten/sui.js';
+
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
-import Longtext from '../../../components/longtext/Longtext';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
 import TxForID from '../../../components/transaction-card/TxForID';
+import { useGetTransaction } from '../../../hooks/useGetTransaction';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
@@ -11,19 +14,30 @@ import { type DataType } from '../ObjectResultType';
 import styles from './ObjectView.module.css';
 
 import { Heading } from '~/ui/Heading';
+import { AddressLink, ObjectLink } from '~/ui/InternalLink';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
+const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
 function PkgView({ data }: { data: DataType }) {
+    const { data: txnData, isLoading } = useGetTransaction(
+        data.data.tx_digest!
+    );
+
+    if (isLoading) {
+        return <LoadingSpinner text="Loading data" />;
+    }
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
+        publisherAddress:
+            data.data.tx_digest === GENESIS_TX_DIGEST
+                ? 'Genesis'
+                : getTransactionSender(txnData!),
     };
-
-    const isPublisherGenesis =
-        viewedData.objType === 'Move Package' &&
-        viewedData?.publisherAddress === 'Genesis';
 
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
@@ -52,10 +66,9 @@ function PkgView({ data }: { data: DataType }) {
                                             id="objectID"
                                             className={styles.objectid}
                                         >
-                                            <Longtext
-                                                text={viewedData.id}
-                                                category="object"
-                                                isLink={false}
+                                            <ObjectLink
+                                                objectId={viewedData.id}
+                                                noTruncate
                                             />
                                         </td>
                                     </tr>
@@ -69,12 +82,11 @@ function PkgView({ data }: { data: DataType }) {
                                         <tr>
                                             <td>Publisher</td>
                                             <td id="lasttxID">
-                                                <Longtext
-                                                    text={
+                                                <AddressLink
+                                                    address={
                                                         viewedData.publisherAddress
                                                     }
-                                                    category="address"
-                                                    isLink={!isPublisherGenesis}
+                                                    noTruncate
                                                 />
                                             </td>
                                         </tr>
@@ -86,7 +98,7 @@ function PkgView({ data }: { data: DataType }) {
                 </TabGroup>
 
                 <div className="mb-3">
-                    <Heading as="h2" variant="heading4" weight="semibold">
+                    <Heading as="h2" variant="heading4/semibold">
                         Modules
                     </Heading>
                 </div>

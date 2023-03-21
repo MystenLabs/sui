@@ -2,14 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isBasePayload } from '_payloads';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
-import type { ExportedKeypair } from '@mysten/sui.js';
+import type {
+    ExportedKeypair,
+    SerializedSignature,
+    SuiAddress,
+} from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
+import type { SerializedAccount } from '_src/background/keyring/Account';
 
 type MethodToPayloads = {
     create: {
         args: { password: string; importedEntropy?: string };
-        return: { keypair: ExportedKeypair };
+        return: void;
     };
     getEntropy: {
         args: string | undefined;
@@ -17,32 +23,60 @@ type MethodToPayloads = {
     };
     unlock: {
         args: { password: string };
-        return: never;
+        return: void;
     };
     walletStatusUpdate: {
-        args: never;
-        return: Partial<{
+        args: void;
+        return: {
             isLocked: boolean;
             isInitialized: boolean;
-            // we can replace keypair (once we stop signing from the UI) with the account address
-            activeAccount: ExportedKeypair;
-        }>;
+            accounts: SerializedAccount[];
+            activeAddress: string | null;
+        };
     };
     lock: {
-        args: never;
-        return: never;
+        args: void;
+        return: void;
     };
     clear: {
-        args: never;
-        return: never;
+        args: void;
+        return: void;
     };
     appStatusUpdate: {
         args: { active: boolean };
-        return: never;
+        return: void;
     };
     setLockTimeout: {
         args: { timeout: number };
-        return: never;
+        return: void;
+    };
+    signData: {
+        args: { data: string; address: SuiAddress };
+        return: SerializedSignature;
+    };
+    switchAccount: {
+        args: { address: SuiAddress };
+        return: void;
+    };
+    deriveNextAccount: {
+        args: void;
+        return: { accountAddress: SuiAddress };
+    };
+    importLedgerAccounts: {
+        args: { ledgerAccounts: SerializedLedgerAccount[] };
+        return: void;
+    };
+    verifyPassword: {
+        args: { password: string };
+        return: void;
+    };
+    exportAccount: {
+        args: { password: string; accountAddress: SuiAddress };
+        return: { keyPair: ExportedKeypair };
+    };
+    importPrivateKey: {
+        args: { password: string; keyPair: ExportedKeypair };
+        return: void;
     };
 };
 

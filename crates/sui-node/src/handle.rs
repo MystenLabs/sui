@@ -43,29 +43,20 @@
 //! We can't prevent this completely, but we can at least make the right way the easy way.
 
 use super::SuiNode;
-use anyhow::Result;
 use std::future::Future;
+use std::sync::Arc;
 
 /// Wrap SuiNode to allow correct access to SuiNode in simulator tests.
-pub struct SuiNodeHandle(SuiNode);
+pub struct SuiNodeHandle(Arc<SuiNode>);
 
 impl SuiNodeHandle {
-    pub fn new(node: SuiNode) -> Self {
+    pub fn new(node: Arc<SuiNode>) -> Self {
         Self(node)
     }
 
     pub fn with<T>(&self, cb: impl FnOnce(&SuiNode) -> T) -> T {
         let _guard = self.guard();
         cb(&self.0)
-    }
-
-    pub fn with_mut(&mut self, cb: impl FnOnce(&mut SuiNode)) {
-        let _guard = self.guard();
-        cb(&mut self.0);
-    }
-
-    pub async fn wait(self) -> Result<()> {
-        self.0.monitor_reconfiguration().await
     }
 }
 
@@ -83,14 +74,6 @@ impl SuiNodeHandle {
     {
         cb(&self.0).await
     }
-
-    pub async fn with_mut_async<'a, F, R, T>(&'a mut self, cb: F) -> T
-    where
-        F: FnOnce(&'a mut SuiNode) -> R,
-        R: Future<Output = T>,
-    {
-        cb(&mut self.0).await
-    }
 }
 
 #[cfg(msim)]
@@ -107,20 +90,10 @@ impl SuiNodeHandle {
         let fut = cb(&self.0);
         self.0.sim_node.await_future_in_node(fut).await
     }
-
-    pub async fn with_mut_async<'a, F, R, T>(&'a mut self, cb: F) -> T
-    where
-        F: FnOnce(&'a mut SuiNode) -> R,
-        R: Future<Output = T>,
-    {
-        let node_clone = self.0.sim_node.clone();
-        let fut = cb(&mut self.0);
-        node_clone.await_future_in_node(fut).await
-    }
 }
 
-impl From<SuiNode> for SuiNodeHandle {
-    fn from(node: SuiNode) -> Self {
+impl From<Arc<SuiNode>> for SuiNodeHandle {
+    fn from(node: Arc<SuiNode>) -> Self {
         SuiNodeHandle::new(node)
     }
 }

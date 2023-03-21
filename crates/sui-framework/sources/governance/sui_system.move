@@ -2,154 +2,148 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::sui_system {
-    use sui::balance::{Self, Balance, Supply};
-    use sui::coin::{Self, Coin};
-    use sui::staking_pool::{Delegation, StakedSui};
-    use sui::object::{Self, UID};
-    use sui::locked_coin::{Self, LockedCoin};
+    use sui::balance::Balance;
+    #[test_only]
+    use sui::balance;
+    use sui::coin::Coin;
+    use sui::object::{ID, UID};
+    use sui::staking_pool::StakedSui;
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::{Self, Validator};
-    use sui::validator_set::{Self, ValidatorSet};
-    use sui::stake::Stake;
-    use sui::vec_map::{Self, VecMap};
-    use sui::vec_set::{Self, VecSet};
+    use sui::validator::Validator;
+    use sui::validator_cap::UnverifiedValidatorOperationCap;
+    use sui::sui_system_state_inner::SuiSystemStateInner;
+    use sui::vec_set::VecSet;
     use std::option;
+    use sui::table::Table;
+    use sui::dynamic_field;
+    use sui::sui_system_state_inner;
+    #[test_only]
+    use sui::validator_set::ValidatorSet;
+    #[test_only]
+    use sui::validator_set;
 
     friend sui::genesis;
 
     #[test_only]
+    use sui::test_utils;
+    #[test_only]
     friend sui::governance_test_utils;
 
-    /// A list of system config parameters.
-    // TDOO: We will likely add more, a few potential ones:
-    // - the change in stake across epochs can be at most +/- x%
-    // - the change in the validator set across epochs can be at most x validators
-    //
-    // TODO: The stake threshold should be % threshold instead of amount threshold.
-    struct SystemParameters has store {
-        /// Lower-bound on the amount of stake required to become a validator.
-        min_validator_stake: u64,
-        /// Maximum number of validator candidates at any moment.
-        /// We do not allow the number of validators in any epoch to go above this.
-        max_validator_candidate_count: u64,
-        /// Storage gas price denominated in SUI
-        storage_gas_price: u64,
-    }
-
-    /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
         id: UID,
-        /// Id of the chain, value in the range [1, 127].
-        chain_id: u8,
-        /// The current epoch ID, starting from 0.
-        epoch: u64,
-        /// Contains all information about the validators.
-        validators: ValidatorSet,
-        /// The SUI treasury capability needed to mint SUI.
-        sui_supply: Supply<SUI>,
-        /// The storage fund.
-        storage_fund: Balance<SUI>,
-        /// A list of system config parameters.
-        parameters: SystemParameters,
-        /// The reference gas price for the current epoch.
-        reference_gas_price: u64,
-        /// A map storing the records of validator reporting each other during the current epoch. 
-        /// There is an entry in the map for each validator that has been reported
-        /// at least once. The entry VecSet contains all the validators that reported
-        /// them. If a validator has never been reported they don't have an entry in this map.
-        /// This map resets every epoch.
-        validator_report_records: VecMap<address, VecSet<address>>,
+        version: u64,
     }
-
-    // Errors
-    const ENOT_VALIDATOR: u64 = 0;
-    const ELIMIT_EXCEEDED: u64 = 1;
-    const EEPOCH_NUMBER_MISMATCH: u64 = 2;
-    const ECANNOT_REPORT_ONESELF: u64 = 3;
-    const EREPORT_RECORD_NOT_FOUND: u64 = 4;
-
-    const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
     // ==== functions that can only be called by genesis ====
 
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in genesis.
     public(friend) fun create(
-        chain_id: u8,
+        id: UID,
         validators: vector<Validator>,
-        sui_supply: Supply<SUI>,
+        stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
-        max_validator_candidate_count: u64,
-        min_validator_stake: u64,
-        storage_gas_price: u64,
+        protocol_version: u64,
+        system_state_version: u64,
+        governance_start_epoch: u64,
+        epoch_start_timestamp_ms: u64,
+        epoch_duration_ms: u64,
+        initial_stake_subsidy_distribution_amount: u64,
+        stake_subsidy_period_length: u64,
+        stake_subsidy_decrease_rate: u16,
+        ctx: &mut TxContext,
     ) {
-        assert!(chain_id >= 1 && chain_id <= 127, 1);
-        let validators = validator_set::new(validators);
-        let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
-        let state = SuiSystemState {
-            // Use a hardcoded ID.
-            id: object::sui_system_state(),
-            chain_id,
-            epoch: 0,
+        let system_state = sui_system_state_inner::create(
             validators,
-            sui_supply,
+            stake_subsidy_fund,
             storage_fund,
-            parameters: SystemParameters {
-                min_validator_stake,
-                max_validator_candidate_count,
-                storage_gas_price
-            },
-            reference_gas_price,
-            validator_report_records: vec_map::empty(),
+            protocol_version,
+            system_state_version,
+            governance_start_epoch,
+            epoch_start_timestamp_ms,
+            epoch_duration_ms,
+            initial_stake_subsidy_distribution_amount,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
+            ctx,
+        );
+        let self = SuiSystemState {
+            id,
+            version: system_state_version,
         };
-        transfer::share_object(state);
+        dynamic_field::add(&mut self.id, system_state_version, system_state);
+        transfer::share_object(self);
     }
 
     // ==== entry functions ====
 
-    /// Can be called by anyone who wishes to become a validator in the next epoch.
-    /// The `validator` object needs to be created before calling this.
-    /// The amount of stake in the `validator` object must meet the requirements.
-    // TODO: Does this need to go through a voting process? Any other criteria for
-    // someone to become a validator?
-    public entry fun request_add_validator(
-        self: &mut SuiSystemState,
+    /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
+    /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they
+    /// can call `request_add_validator` to officially become an active validator at the next epoch.
+    /// Aborts if the caller is already a pending or active validator, or a validator candidate.
+    /// Note: `proof_of_possession` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
+    /// To produce a valid PoP, run [fn test_proof_of_possession].
+    public entry fun request_add_validator_candidate(
+        wrapper: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
         network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
         proof_of_possession: vector<u8>,
         name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        project_url: vector<u8>,
         net_address: vector<u8>,
-        stake: Coin<SUI>,
+        p2p_address: vector<u8>,
+        primary_address: vector<u8>,
+        worker_address: vector<u8>,
         gas_price: u64,
         commission_rate: u64,
         ctx: &mut TxContext,
     ) {
-        assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
-            ELIMIT_EXCEEDED,
-        );
-        let stake_amount = coin::value(&stake);
-        assert!(
-            stake_amount >= self.parameters.min_validator_stake,
-            ELIMIT_EXCEEDED,
-        );
-        let validator = validator::new(
-            tx_context::sender(ctx),
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_add_validator_candidate(
+            self,
             pubkey_bytes,
             network_pubkey_bytes,
+            worker_pubkey_bytes,
             proof_of_possession,
             name,
+            description,
+            image_url,
+            project_url,
             net_address,
-            coin::into_balance(stake),
-            option::none(),
+            p2p_address,
+            primary_address,
+            worker_address,
             gas_price,
             commission_rate,
-            ctx
-        );
+            ctx,
+        )
+    }
 
-        validator_set::request_add_validator(&mut self.validators, validator);
+    /// Called by a validator candidate to remove themselves from the candidacy. After this call
+    /// their staking pool becomes deactivate.
+    public entry fun request_remove_validator_candidate(
+        wrapper: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_remove_validator_candidate(self, ctx)
+    }
+
+    /// Called by a validator candidate to add themselves to the active validator set beginning next epoch.
+    /// Aborts if the validator is a duplicate with one of the pending or active validators, or if the amount of
+    /// stake the validator has doesn't meet the min threshold, or if the number of new validators for the next
+    /// epoch has already reached the maximum.
+    public entry fun request_add_validator(
+        wrapper: &mut SuiSystemState,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_add_validator(self, ctx)
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -158,296 +152,554 @@ module sui::sui_system {
     /// At the end of the epoch, the `validator` object will be returned to the sui_address
     /// of the validator.
     public entry fun request_remove_validator(
-        self: &mut SuiSystemState,
+        wrapper: &mut SuiSystemState,
         ctx: &mut TxContext,
     ) {
-        validator_set::request_remove_validator(
-            &mut self.validators,
-            ctx,
-        )
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_remove_validator(self, ctx)
     }
 
     /// A validator can call this entry function to submit a new gas price quote, to be
     /// used for the reference gas price calculation at the end of the epoch.
     public entry fun request_set_gas_price(
-        self: &mut SuiSystemState,
+        wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
         new_gas_price: u64,
-        ctx: &mut TxContext,
     ) {
-        validator_set::request_set_gas_price(
-            &mut self.validators,
-            new_gas_price,
-            ctx
-        )
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_set_gas_price(self, cap, new_gas_price)
     }
 
-    /// A validator can call this entry function to set a new commission rate, updated at the end of the epoch.
+    /// This entry function is used to set new gas price for candidate validators
+    public entry fun set_candidate_validator_gas_price(
+        wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
+        new_gas_price: u64,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::set_candidate_validator_gas_price(self, cap, new_gas_price)
+    }
+
+    /// A validator can call this entry function to set a new commission rate, updated at the end of
+    /// the epoch.
     public entry fun request_set_commission_rate(
-        self: &mut SuiSystemState,
+        wrapper: &mut SuiSystemState,
         new_commission_rate: u64,
         ctx: &mut TxContext,
     ) {
-        validator_set::request_set_commission_rate(
-            &mut self.validators,
-            new_commission_rate,
-            ctx
-        )
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_set_commission_rate(self, new_commission_rate, ctx)
     }
 
-    /// A validator can request adding more stake. This will be processed at the end of epoch.
+    /// This entry function is used to set new commission rate for candidate validators
+    public entry fun set_candidate_validator_commission_rate(
+        wrapper: &mut SuiSystemState,
+        new_commission_rate: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::set_candidate_validator_commission_rate(self, new_commission_rate, ctx)
+    }
+
+    /// Add stake to a validator's staking pool.
     public entry fun request_add_stake(
-        self: &mut SuiSystemState,
-        new_stake: Coin<SUI>,
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
         ctx: &mut TxContext,
     ) {
-        validator_set::request_add_stake(
-            &mut self.validators,
-            coin::into_balance(new_stake),
-            option::none(),
-            ctx,
-        )
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_add_stake(self, stake, validator_address, ctx)
     }
 
-    /// A validator can request adding more stake using a locked coin. This will be processed at the end of epoch.
-    public entry fun request_add_stake_with_locked_coin(
-        self: &mut SuiSystemState,
-        new_stake: LockedCoin<SUI>,
+    /// Add stake to a validator's staking pool using multiple coins.
+    public entry fun request_add_stake_mul_coin(
+        wrapper: &mut SuiSystemState,
+        stakes: vector<Coin<SUI>>,
+        stake_amount: option::Option<u64>,
+        validator_address: address,
         ctx: &mut TxContext,
     ) {
-        let (balance, epoch_time_lock) = locked_coin::into_balance(new_stake);
-        validator_set::request_add_stake(
-            &mut self.validators,
-            balance,
-            option::some(epoch_time_lock),
-            ctx,
-        )
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_add_stake_mul_coin(self, stakes, stake_amount, validator_address, ctx)
     }
 
-    /// A validator can request to withdraw stake.
-    /// If the sender represents a pending validator (i.e. has just requested to become a validator
-    /// in the current epoch and hence is not active yet), the stake will be withdrawn immediately
-    /// and a coin with the withdraw amount will be sent to the validator's address.
-    /// If the sender represents an active validator, the request will be processed at the end of epoch.
+    /// Withdraw some portion of a stake from a validator's staking pool.
     public entry fun request_withdraw_stake(
-        self: &mut SuiSystemState,
-        stake: &mut Stake,
-        withdraw_amount: u64,
+        wrapper: &mut SuiSystemState,
+        staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
-        validator_set::request_withdraw_stake(
-            &mut self.validators,
-            stake,
-            withdraw_amount,
-            self.parameters.min_validator_stake,
-            ctx,
-        )
-    }
-
-    /// Add delegated stake to a validator's staking pool.
-    public entry fun request_add_delegation(
-        self: &mut SuiSystemState,
-        delegate_stake: Coin<SUI>,
-        validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        validator_set::request_add_delegation(
-            &mut self.validators, 
-            validator_address, 
-            coin::into_balance(delegate_stake),
-            option::none(),
-            ctx,
-        );
-    }
-
-    /// Add delegated stake to a validator's staking pool using a locked SUI coin.
-    public entry fun request_add_delegation_with_locked_coin(
-        self: &mut SuiSystemState,
-        delegate_stake: LockedCoin<SUI>,
-        validator_address: address,
-        ctx: &mut TxContext,
-    ) {
-        let (balance, lock) = locked_coin::into_balance(delegate_stake);
-        validator_set::request_add_delegation(&mut self.validators, validator_address, balance, option::some(lock), ctx);
-    }
-
-    /// Withdraw some portion of a delegation from a validator's staking pool.
-    public entry fun request_withdraw_delegation(
-        self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
-        principal_withdraw_amount: u64,
-        ctx: &mut TxContext,
-    ) {
-        validator_set::request_withdraw_delegation(
-            &mut self.validators,
-            delegation,
-            staked_sui,
-            principal_withdraw_amount,
-            ctx,
-        );
-    }
-
-    // Switch delegation from the current validator to a new one.
-    public entry fun request_switch_delegation(
-        self: &mut SuiSystemState,
-        delegation: &mut Delegation,
-        staked_sui: &mut StakedSui,
-        new_validator_address: address,
-        switch_pool_token_amount: u64,
-        ctx: &mut TxContext,
-    ) {
-        validator_set::request_switch_delegation(
-            &mut self.validators, delegation, staked_sui, new_validator_address, switch_pool_token_amount, ctx
-        );
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_withdraw_stake(self, staked_sui, ctx)
     }
 
     /// Report a validator as a bad or non-performant actor in the system.
-    /// Suceeds iff both the sender and the input `validator_addr` are active validators
-    /// and they are not the same address. This function is idempotent within an epoch.
+    /// Succeeds if all the following are satisfied:
+    /// 1. both the reporter in `cap` and the input `reportee_addr` are active validators.
+    /// 2. reporter and reportee not the same address.
+    /// 3. the cap object is still valid.
+    /// This function is idempotent.
     public entry fun report_validator(
-        self: &mut SuiSystemState,
-        validator_addr: address,
-        ctx: &mut TxContext,
+        wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
+        reportee_addr: address,
     ) {
-        let sender = tx_context::sender(ctx);
-        // Both the reporter and the reported have to be validators.
-        assert!(validator_set::is_active_validator(&self.validators, sender), ENOT_VALIDATOR);
-        assert!(validator_set::is_active_validator(&self.validators, validator_addr), ENOT_VALIDATOR);
-        assert!(sender != validator_addr, ECANNOT_REPORT_ONESELF); 
-
-        if (!vec_map::contains(&self.validator_report_records, &validator_addr)) {
-            vec_map::insert(&mut self.validator_report_records, validator_addr, vec_set::singleton(sender));
-        } else {
-            let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
-            if (!vec_set::contains(reporters, &sender)) {
-                vec_set::insert(reporters, sender);
-            }
-        }
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::report_validator(self, cap, reportee_addr)
     }
 
-    /// Undo a `report_validator` action. Aborts if the sender has not reported the
-    /// `validator_addr` within this epoch.
+
+    /// Undo a `report_validator` action. Aborts if
+    /// 1. the reportee is not a currently active validator or
+    /// 2. the sender has not previously reported the `reportee_addr`, or
+    /// 3. the cap is not valid
     public entry fun undo_report_validator(
+        wrapper: &mut SuiSystemState,
+        cap: &UnverifiedValidatorOperationCap,
+        reportee_addr: address,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::undo_report_validator(self, cap, reportee_addr)
+    }
+
+    // ==== validator metadata management functions ====
+
+    /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
+    /// validator and registers it. The original object is thus revoked.
+    public entry fun rotate_operation_cap(
         self: &mut SuiSystemState,
-        validator_addr: address,
         ctx: &mut TxContext,
     ) {
-        let sender = tx_context::sender(ctx);
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::rotate_operation_cap(self, ctx)
+    }
 
-        assert!(vec_map::contains(&self.validator_report_records, &validator_addr), EREPORT_RECORD_NOT_FOUND);
-        let reporters = vec_map::get_mut(&mut self.validator_report_records, &validator_addr);
-        assert!(vec_set::contains(reporters, &sender), EREPORT_RECORD_NOT_FOUND);
-        vec_set::remove(reporters, &sender);
+    /// Update a validator's name.
+    public entry fun update_validator_name(
+        self: &mut SuiSystemState,
+        name: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_name(self, name, ctx)
+    }
+
+    /// Update a validator's description
+    public entry fun update_validator_description(
+        self: &mut SuiSystemState,
+        description: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_description(self, description, ctx)
+    }
+
+    /// Update a validator's image url
+    public entry fun update_validator_image_url(
+        self: &mut SuiSystemState,
+        image_url: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_image_url(self, image_url, ctx)
+    }
+
+    /// Update a validator's project url
+    public entry fun update_validator_project_url(
+        self: &mut SuiSystemState,
+        project_url: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_project_url(self, project_url, ctx)
+    }
+
+    /// Update a validator's network address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_network_address(
+        self: &mut SuiSystemState,
+        network_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_network_address(self, network_address, ctx)
+    }
+
+    /// Update candidate validator's network address.
+    public entry fun update_candidate_validator_network_address(
+        self: &mut SuiSystemState,
+        network_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_network_address(self, network_address, ctx)
+    }
+
+    /// Update a validator's p2p address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_p2p_address(
+        self: &mut SuiSystemState,
+        p2p_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_p2p_address(self, p2p_address, ctx)
+    }
+
+    /// Update candidate validator's p2p address.
+    public entry fun update_candidate_validator_p2p_address(
+        self: &mut SuiSystemState,
+        p2p_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_p2p_address(self, p2p_address, ctx)
+    }
+
+    /// Update a validator's narwhal primary address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_primary_address(
+        self: &mut SuiSystemState,
+        primary_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_primary_address(self, primary_address, ctx)
+    }
+
+    /// Update candidate validator's narwhal primary address.
+    public entry fun update_candidate_validator_primary_address(
+        self: &mut SuiSystemState,
+        primary_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_primary_address(self, primary_address, ctx)
+    }
+
+    /// Update a validator's narwhal worker address.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_worker_address(
+        self: &mut SuiSystemState,
+        worker_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_worker_address(self, worker_address, ctx)
+    }
+
+    /// Update candidate validator's narwhal worker address.
+    public entry fun update_candidate_validator_worker_address(
+        self: &mut SuiSystemState,
+        worker_address: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_worker_address(self, worker_address, ctx)
+    }
+
+    /// Update a validator's public key of protocol key and proof of possession.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_protocol_pubkey(
+        self: &mut SuiSystemState,
+        protocol_pubkey: vector<u8>,
+        proof_of_possession: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_protocol_pubkey(self, protocol_pubkey, proof_of_possession, ctx)
+    }
+
+    /// Update candidate validator's public key of protocol key and proof of possession.
+    public entry fun update_candidate_validator_protocol_pubkey(
+        self: &mut SuiSystemState,
+        protocol_pubkey: vector<u8>,
+        proof_of_possession: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_protocol_pubkey(self, protocol_pubkey, proof_of_possession, ctx)
+    }
+
+    /// Update a validator's public key of worker key.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_worker_pubkey(
+        self: &mut SuiSystemState,
+        worker_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_worker_pubkey(self, worker_pubkey, ctx)
+    }
+
+    /// Update candidate validator's public key of worker key.
+    public entry fun update_candidate_validator_worker_pubkey(
+        self: &mut SuiSystemState,
+        worker_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_worker_pubkey(self, worker_pubkey, ctx)
+    }
+
+    /// Update a validator's public key of network key.
+    /// The change will only take effects starting from the next epoch.
+    public entry fun update_validator_next_epoch_network_pubkey(
+        self: &mut SuiSystemState,
+        network_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_validator_next_epoch_network_pubkey(self, network_pubkey, ctx)
+    }
+
+    /// Update candidate validator's public key of network key.
+    public entry fun update_candidate_validator_network_pubkey(
+        self: &mut SuiSystemState,
+        network_pubkey: vector<u8>,
+        ctx: &TxContext,
+    ) {
+        let self = load_system_state_mut(self);
+        sui_system_state_inner::update_candidate_validator_network_pubkey(self, network_pubkey, ctx)
     }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:
     /// 1. Add storage charge to the storage fund.
     /// 2. Burn the storage rebates from the storage fund. These are already refunded to transaction sender's
-    ///    gas coins. 
-    /// 3. Distribute computation charge to validator stake and delegation stake.
+    ///    gas coins.
+    /// 3. Distribute computation charge to validator stake.
     /// 4. Update all validators.
-    public entry fun advance_epoch(
-        self: &mut SuiSystemState,
+    fun advance_epoch(
+        storage_reward: Balance<SUI>,
+        computation_reward: Balance<SUI>,
+        wrapper: &mut SuiSystemState,
         new_epoch: u64,
-        storage_charge: u64,
-        computation_charge: u64,
+        next_protocol_version: u64,
         storage_rebate: u64,
-        storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested 
+        storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
+        reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
+        epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
+        new_system_state_version: u64,
         ctx: &mut TxContext,
-    ) {
+    ) : Balance<SUI> {
+        let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
-
-        let storage_reward = balance::create_staking_rewards(storage_charge);
-        let computation_reward = balance::create_staking_rewards(computation_charge);
-
-        let delegation_stake = validator_set::total_delegation_stake(&self.validators);
-        let validator_stake = validator_set::total_validator_stake(&self.validators);
-        let storage_fund_balance = balance::value(&self.storage_fund);
-        let total_stake = delegation_stake + validator_stake + storage_fund_balance;
-        let total_stake_u128 = (total_stake as u128);
-        let computation_charge_u128 = (computation_charge as u128);
-
-        let delegator_reward_amount = (delegation_stake as u128) * computation_charge_u128 / total_stake_u128;
-        let delegator_reward = balance::split(&mut computation_reward, (delegator_reward_amount as u64));
-        balance::join(&mut self.storage_fund, storage_reward);
-
-        let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
-        let storage_fund_reward = balance::split(&mut computation_reward, (storage_fund_reward_amount as u64));
-        let storage_fund_reinvestment_amount = 
-            storage_fund_reward_amount * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
-        let storage_fund_reinvestment = balance::split(
-            &mut storage_fund_reward,
-            (storage_fund_reinvestment_amount as u64),
-        );
-        balance::join(&mut self.storage_fund, storage_fund_reinvestment);
-
-        self.epoch = self.epoch + 1;
-        // Sanity check to make sure we are advancing to the right epoch.
-        assert!(new_epoch == self.epoch, 0);
-        validator_set::advance_epoch(
-            &mut self.validators,
-            &mut computation_reward,
-            &mut delegator_reward,
-            &mut storage_fund_reward,
-            &self.validator_report_records,
+        let old_protocol_version = sui_system_state_inner::protocol_version(self);
+        let storage_rebate = sui_system_state_inner::advance_epoch(
+            self,
+            new_epoch,
+            next_protocol_version,
+            storage_reward,
+            computation_reward,
+            storage_rebate,
+            storage_fund_reinvest_rate,
+            reward_slashing_rate,
+            epoch_start_timestamp_ms,
             ctx,
         );
-        // Derive the reference gas price for the new epoch
-        self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
-        // Because of precision issues with integer divisions, we expect that there will be some
-        // remaining balance in `delegator_reward`, `storage_fund_reward` and `computation_reward`. 
-        // All of these go to the storage fund.
-        balance::join(&mut self.storage_fund, delegator_reward);
-        balance::join(&mut self.storage_fund, storage_fund_reward);
-        balance::join(&mut self.storage_fund, computation_reward);
 
-        // Destroy the storage rebate.
-        assert!(balance::value(&self.storage_fund) >= storage_rebate, 0);
-        balance::destroy_storage_rebates(balance::split(&mut self.storage_fund, storage_rebate));
-        
-        // Validator reports are only valid for the epoch.
-        // TODO: or do we want to make it persistent and validators have to explicitly change their scores?
-        self.validator_report_records = vec_map::empty();
+        if (new_system_state_version != wrapper.version) {
+            // If we are upgrading the system state, we need to make sure that the protocol version
+            // is also upgraded.
+            assert!(old_protocol_version != next_protocol_version, 0);
+            let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
+            let new_state = sui_system_state_inner::upgrade_system_state(cur_state, new_system_state_version, ctx);
+            wrapper.version = new_system_state_version;
+            dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
+        };
+        storage_rebate
     }
 
-    spec advance_epoch {
-        /// Total supply of SUI shouldn't change.
-        ensures balance::supply_value(self.sui_supply) 
-            == old(balance::supply_value(self.sui_supply));
+    // TODO: Make this a private fun.
+    /// An extremely simple version of advance_epoch.
+    /// This is called in two situations:
+    ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
+    ///     system running and continue making epoch changes.
+    ///   - When advancing to a new protocol version, we want to be able to change the protocol
+    ///     version
+    public(friend) fun advance_epoch_safe_mode(
+        wrapper: &mut SuiSystemState,
+        new_epoch: u64,
+        next_protocol_version: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        // Validator will make a special system call with sender set as 0x0.
+        assert!(tx_context::sender(ctx) == @0x0, 0);
+        sui_system_state_inner::advance_epoch_safe_mode(self, new_epoch, next_protocol_version, ctx)
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
-    public fun epoch(self: &SuiSystemState): u64 {
-        self.epoch
+    public fun epoch(wrapper: &SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::epoch(self)
     }
 
-    /// Returns the amount of stake delegated to `validator_addr`.
+    /// Returns unix timestamp of the start of current epoch
+    public fun epoch_start_timestamp_ms(wrapper: &SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::epoch_start_timestamp_ms(self)
+    }
+
+    /// Returns the total amount staked with `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
-        validator_set::validator_delegate_amount(&self.validators, validator_addr)
+    public fun validator_stake_amount(wrapper: &SuiSystemState, validator_addr: address): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_stake_amount(self, validator_addr)
     }
 
-    /// Returns the amount of stake `validator_addr` has.
+    /// Returns the staking pool id of a given validator.
     /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_stake_amount(self: &SuiSystemState, validator_addr: address): u64 {
-        validator_set::validator_stake_amount(&self.validators, validator_addr)
+    public fun validator_staking_pool_id(wrapper: &SuiSystemState, validator_addr: address): ID {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_staking_pool_id(self, validator_addr)
     }
 
-    /// Returns all the validators who have reported `addr` this epoch.
-    public fun get_reporters_of(self: &SuiSystemState, addr: address): VecSet<address> {
-        if (vec_map::contains(&self.validator_report_records, &addr)) {
-            *vec_map::get(&self.validator_report_records, &addr)
-        } else {
-            vec_set::empty()
-        }
+    /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
+    public fun validator_staking_pool_mappings(wrapper: &SuiSystemState): &Table<ID, address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_staking_pool_mappings(self)
+    }
+
+    /// Returns all the validators who are currently reporting `addr`
+    public fun get_reporters_of(wrapper: &SuiSystemState, addr: address): VecSet<address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_reporters_of(self, addr)
+    }
+
+    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
+        let version = self.version;
+        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, version);
+        assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
+        inner
+    }
+
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+        let version = self.version;
+        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
+        assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
+        inner
     }
 
     #[test_only]
-    public fun set_epoch_for_testing(self: &mut SuiSystemState, epoch_num: u64) {
-        self.epoch = epoch_num
+    /// Return the current validator set
+    public fun validators(wrapper: &SuiSystemState): &ValidatorSet {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validators(self)
+    }
+
+    #[test_only]
+    /// Return the currently active validator by address
+    public fun active_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_active_validator_ref(validators(self), validator_address)
+    }
+
+    #[test_only]
+    /// Return the currently pending validator by address
+    public fun pending_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_pending_validator_ref(validators(self), validator_address)
+    }
+
+    #[test_only]
+    /// Return the currently candidate validator by address
+    public fun candidate_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+        validator_set::get_candidate_validator_ref(validators(self), validator_address)
+    }
+
+    #[test_only]
+    public fun set_epoch_for_testing(wrapper: &mut SuiSystemState, epoch_num: u64) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::set_epoch_for_testing(self, epoch_num)
+    }
+
+    #[test_only]
+    public fun request_add_validator_for_testing(
+        wrapper: &mut SuiSystemState,
+        min_joining_stake_for_testing: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_add_validator_for_testing(self, min_joining_stake_for_testing, ctx)
+    }
+
+    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
+    // candidate validator - bypassing the proof of possession check and other metadata validation
+    // in the process.
+    #[test_only]
+    public entry fun request_add_validator_candidate_for_testing(
+        wrapper: &mut SuiSystemState,
+        pubkey_bytes: vector<u8>,
+        network_pubkey_bytes: vector<u8>,
+        worker_pubkey_bytes: vector<u8>,
+        proof_of_possession: vector<u8>,
+        name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        project_url: vector<u8>,
+        net_address: vector<u8>,
+        p2p_address: vector<u8>,
+        primary_address: vector<u8>,
+        worker_address: vector<u8>,
+        gas_price: u64,
+        commission_rate: u64,
+        ctx: &mut TxContext,
+    ) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::request_add_validator_candidate_for_testing(
+            self,
+            pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            gas_price,
+            commission_rate,
+            ctx
+        )
+    }
+
+    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
+    #[test_only]
+    public(friend) fun advance_epoch_for_testing(
+        wrapper: &mut SuiSystemState,
+        new_epoch: u64,
+        next_protocol_version: u64,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        storage_fund_reinvest_rate: u64,
+        reward_slashing_rate: u64,
+        epoch_start_timestamp_ms: u64,
+        new_system_state_version: u64,
+        ctx: &mut TxContext,
+    ) {
+        let storage_reward = balance::create_for_testing(storage_charge);
+        let computation_reward = balance::create_for_testing(computation_charge);
+        let storage_rebate = advance_epoch(
+            storage_reward,
+            computation_reward,
+            wrapper,
+            new_epoch,
+            next_protocol_version,
+            storage_rebate,
+            storage_fund_reinvest_rate,
+            reward_slashing_rate,
+            epoch_start_timestamp_ms,
+            new_system_state_version,
+            ctx,
+        );
+        test_utils::destroy(storage_rebate);
     }
 }

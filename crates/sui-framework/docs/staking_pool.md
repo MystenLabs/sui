@@ -5,46 +5,51 @@
 
 
 
--  [Struct `StakingPool`](#0x2_staking_pool_StakingPool)
--  [Resource `InactiveStakingPool`](#0x2_staking_pool_InactiveStakingPool)
--  [Struct `DelegationToken`](#0x2_staking_pool_DelegationToken)
--  [Struct `PendingDelegationEntry`](#0x2_staking_pool_PendingDelegationEntry)
--  [Struct `PendingWithdrawEntry`](#0x2_staking_pool_PendingWithdrawEntry)
--  [Resource `Delegation`](#0x2_staking_pool_Delegation)
+-  [Resource `StakingPool`](#0x2_staking_pool_StakingPool)
+-  [Struct `PoolTokenExchangeRate`](#0x2_staking_pool_PoolTokenExchangeRate)
 -  [Resource `StakedSui`](#0x2_staking_pool_StakedSui)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_staking_pool_new)
--  [Function `request_add_delegation`](#0x2_staking_pool_request_add_delegation)
--  [Function `request_withdraw_delegation`](#0x2_staking_pool_request_withdraw_delegation)
+-  [Function `request_add_stake`](#0x2_staking_pool_request_add_stake)
+-  [Function `request_withdraw_stake`](#0x2_staking_pool_request_withdraw_stake)
 -  [Function `withdraw_from_principal`](#0x2_staking_pool_withdraw_from_principal)
+-  [Function `unwrap_staked_sui`](#0x2_staking_pool_unwrap_staked_sui)
 -  [Function `deposit_rewards`](#0x2_staking_pool_deposit_rewards)
--  [Function `process_pending_delegation_withdraws`](#0x2_staking_pool_process_pending_delegation_withdraws)
--  [Function `process_pending_delegations`](#0x2_staking_pool_process_pending_delegations)
--  [Function `batch_withdraw_rewards_and_burn_pool_tokens`](#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens)
--  [Function `withdraw_rewards_and_burn_pool_tokens`](#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens)
--  [Function `mint_delegation_tokens_to_delegator`](#0x2_staking_pool_mint_delegation_tokens_to_delegator)
+-  [Function `process_pending_stakes_and_withdraws`](#0x2_staking_pool_process_pending_stakes_and_withdraws)
+-  [Function `process_pending_stake_withdraw`](#0x2_staking_pool_process_pending_stake_withdraw)
+-  [Function `process_pending_stake`](#0x2_staking_pool_process_pending_stake)
+-  [Function `withdraw_rewards`](#0x2_staking_pool_withdraw_rewards)
+-  [Function `activate_staking_pool`](#0x2_staking_pool_activate_staking_pool)
+-  [Function `request_withdraw_stake_preactive`](#0x2_staking_pool_request_withdraw_stake_preactive)
 -  [Function `deactivate_staking_pool`](#0x2_staking_pool_deactivate_staking_pool)
--  [Function `withdraw_from_inactive_pool`](#0x2_staking_pool_withdraw_from_inactive_pool)
--  [Function `destroy_empty_delegation`](#0x2_staking_pool_destroy_empty_delegation)
--  [Function `destroy_empty_staked_sui`](#0x2_staking_pool_destroy_empty_staked_sui)
 -  [Function `sui_balance`](#0x2_staking_pool_sui_balance)
--  [Function `validator_address`](#0x2_staking_pool_validator_address)
+-  [Function `pool_id`](#0x2_staking_pool_pool_id)
 -  [Function `staked_sui_amount`](#0x2_staking_pool_staked_sui_amount)
--  [Function `delegation_token_amount`](#0x2_staking_pool_delegation_token_amount)
--  [Function `new_pending_withdraw_entry`](#0x2_staking_pool_new_pending_withdraw_entry)
--  [Function `withdraw_from_principal_impl`](#0x2_staking_pool_withdraw_from_principal_impl)
+-  [Function `stake_activation_epoch`](#0x2_staking_pool_stake_activation_epoch)
+-  [Function `is_preactive`](#0x2_staking_pool_is_preactive)
+-  [Function `is_inactive`](#0x2_staking_pool_is_inactive)
+-  [Function `split`](#0x2_staking_pool_split)
+-  [Function `split_staked_sui`](#0x2_staking_pool_split_staked_sui)
+-  [Function `join_staked_sui`](#0x2_staking_pool_join_staked_sui)
+-  [Function `is_equal_staking_metadata`](#0x2_staking_pool_is_equal_staking_metadata)
+-  [Function `pool_token_exchange_rate_at_epoch`](#0x2_staking_pool_pool_token_exchange_rate_at_epoch)
+-  [Function `pending_stake_amount`](#0x2_staking_pool_pending_stake_amount)
+-  [Function `pending_stake_withdraw_amount`](#0x2_staking_pool_pending_stake_withdraw_amount)
+-  [Function `is_preactive_at_epoch`](#0x2_staking_pool_is_preactive_at_epoch)
 -  [Function `get_sui_amount`](#0x2_staking_pool_get_sui_amount)
 -  [Function `get_token_amount`](#0x2_staking_pool_get_token_amount)
+-  [Function `initial_exchange_rate`](#0x2_staking_pool_initial_exchange_rate)
+-  [Function `check_balance_invariants`](#0x2_staking_pool_check_balance_invariants)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="">0x1::vector</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
-<b>use</b> <a href="epoch_time_lock.md#0x2_epoch_time_lock">0x2::epoch_time_lock</a>;
-<b>use</b> <a href="locked_coin.md#0x2_locked_coin">0x2::locked_coin</a>;
+<b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<b>use</b> <a href="table.md#0x2_table">0x2::table</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -53,12 +58,12 @@
 
 <a name="0x2_staking_pool_StakingPool"></a>
 
-## Struct `StakingPool`
+## Resource `StakingPool`
 
 A staking pool embedded in each validator struct in the system state object.
 
 
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> <b>has</b> store
+<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> <b>has</b> store, key
 </code></pre>
 
 
@@ -69,66 +74,90 @@ A staking pool embedded in each validator struct in the system state object.
 
 <dl>
 <dt>
-<code>validator_address: <b>address</b></code>
+<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
 </dt>
 <dd>
- The sui address of the validator associated with this pool.
+
 </dd>
 <dt>
-<code>starting_epoch: u64</code>
+<code>activation_epoch: <a href="_Option">option::Option</a>&lt;u64&gt;</code>
 </dt>
 <dd>
- The epoch at which this pool started operating. Should be the epoch at which the validator became active.
+ The epoch at which this pool became active.
+ The value is <code>None</code> if the pool is pre-active and <code>Some(&lt;epoch_number&gt;)</code> if active or inactive.
+</dd>
+<dt>
+<code>deactivation_epoch: <a href="_Option">option::Option</a>&lt;u64&gt;</code>
+</dt>
+<dd>
+ The epoch at which this staking pool ceased to be active. <code>None</code> = {pre-active, active},
+ <code>Some(&lt;epoch_number&gt;)</code> if in-active, and it was de-activated at epoch <code>&lt;epoch_number&gt;</code>.
 </dd>
 <dt>
 <code>sui_balance: u64</code>
 </dt>
 <dd>
  The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
- in the <code><a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a></code> object, updated at epoch boundaries.
+ in the <code><a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a></code> object, updated at epoch boundaries.
 </dd>
 <dt>
 <code>rewards_pool: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
 </dt>
 <dd>
- The epoch delegation rewards will be added here at the end of each epoch.
+ The epoch stake rewards will be added here at the end of each epoch.
 </dd>
 <dt>
-<code>delegation_token_supply: <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;</code>
+<code>pool_token_balance: u64</code>
 </dt>
 <dd>
- The number of delegation pool tokens we have issued so far. This number should equal the sum of
- pool token balance in all the <code><a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a></code> objects delegated to this pool. Updated at epoch boundaries.
+ Total number of pool tokens issued by the pool.
 </dd>
 <dt>
-<code>pending_delegations: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">staking_pool::PendingDelegationEntry</a>&gt;</code>
+<code>exchange_rates: <a href="table.md#0x2_table_Table">table::Table</a>&lt;u64, <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>&gt;</code>
 </dt>
 <dd>
- Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
- and distribute staking pool tokens at the end-of-epoch exchange rate after the rewards for the current epoch
- have been deposited.
+ Exchange rate history of previous epochs. Key is the epoch number.
+ The entries start from the <code>activation_epoch</code> of this pool and contains exchange rates at the beginning of each epoch,
+ i.e., right after the rewards for the previous epoch have been deposited into the pool.
 </dd>
 <dt>
-<code>pending_withdraws: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;</code>
+<code>pending_stake: u64</code>
 </dt>
 <dd>
- Delegation withdraws requested during the current epoch. Similar to new delegation, the withdraws are processed
- at epoch boundaries. Rewards are withdrawn and distributed after the rewards for the current epoch have come in.
+ Pending stake amount for this epoch, emptied at epoch boundaries.
+</dd>
+<dt>
+<code>pending_total_sui_withdraw: u64</code>
+</dt>
+<dd>
+ Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+ This includes both the principal and rewards SUI withdrawn.
+</dd>
+<dt>
+<code>pending_pool_token_withdraw: u64</code>
+</dt>
+<dd>
+ Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
 
 </details>
 
-<a name="0x2_staking_pool_InactiveStakingPool"></a>
+<a name="0x2_staking_pool_PoolTokenExchangeRate"></a>
 
-## Resource `InactiveStakingPool`
+## Struct `PoolTokenExchangeRate`
 
-An inactive staking pool associated with an inactive validator.
-Only withdraws can be made from this pool.
+Struct representing the exchange rate of the stake pool token to SUI.
 
 
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a> <b>has</b> key
+<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -138,173 +167,17 @@ Only withdraws can be made from this pool.
 
 
 <dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>pool: <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_staking_pool_DelegationToken"></a>
-
-## Struct `DelegationToken`
-
-The staking pool token.
-
-
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a> <b>has</b> drop
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>dummy_field: bool</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_staking_pool_PendingDelegationEntry"></a>
-
-## Struct `PendingDelegationEntry`
-
-Struct representing a pending delegation.
-
-
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> <b>has</b> drop, store
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>delegator: <b>address</b></code>
-</dt>
-<dd>
-
-</dd>
 <dt>
 <code>sui_amount: u64</code>
 </dt>
 <dd>
 
 </dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_staking_pool_PendingWithdrawEntry"></a>
-
-## Struct `PendingWithdrawEntry`
-
-Struct representing a pending delegation withdraw.
-
-
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> <b>has</b> store
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
 <dt>
-<code>delegator: <b>address</b></code>
+<code>pool_token_amount: u64</code>
 </dt>
 <dd>
 
-</dd>
-<dt>
-<code>principal_withdraw_amount: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>withdrawn_pool_tokens: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;</code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_staking_pool_Delegation"></a>
-
-## Resource `Delegation`
-
-A self-custodial delegation object, serving as evidence that the delegator
-has delegated to a staking pool.
-
-
-<pre><code><b>struct</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a> <b>has</b> key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>id: <a href="object.md#0x2_object_UID">object::UID</a></code>
-</dt>
-<dd>
-
-</dd>
-<dt>
-<code>validator_address: <b>address</b></code>
-</dt>
-<dd>
- The sui address of the validator associated with the staking pool this object delgates to.
-</dd>
-<dt>
-<code>pool_starting_epoch: u64</code>
-</dt>
-<dd>
- The epoch at which the staking pool started operating.
-</dd>
-<dt>
-<code>pool_tokens: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;</code>
-</dt>
-<dd>
- The pool tokens representing the amount of rewards the delegator can get back when they withdraw
- from the pool.
-</dd>
-<dt>
-<code>principal_sui_amount: u64</code>
-</dt>
-<dd>
- Number of SUI token staked originally.
 </dd>
 </dl>
 
@@ -335,17 +208,28 @@ A self-custodial object holding the staked SUI tokens.
 
 </dd>
 <dt>
+<code>pool_id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ ID of the staking pool we are staking with.
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_activation_epoch: u64</code>
+</dt>
+<dd>
+ The epoch at which the stake becomes active.
+</dd>
+<dt>
 <code>principal: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
 </dt>
 <dd>
  The staked SUI tokens.
-</dd>
-<dt>
-<code>sui_token_lock: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;</code>
-</dt>
-<dd>
- If the stake comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>, this
- field will record the original lock expiration epoch, to be used when unstaking.
 </dd>
 </dl>
 
@@ -357,65 +241,164 @@ A self-custodial object holding the staked SUI tokens.
 ## Constants
 
 
-<a name="0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE"></a>
+<a name="0x2_staking_pool_EActivationOfInactivePool"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>: u64 = 5;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EActivationOfInactivePool">EActivationOfInactivePool</a>: u64 = 16;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EINSUFFICIENT_POOL_TOKEN_BALANCE"></a>
+<a name="0x2_staking_pool_EDeactivationOfInactivePool"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_POOL_TOKEN_BALANCE">EINSUFFICIENT_POOL_TOKEN_BALANCE</a>: u64 = 0;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>: u64 = 11;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EINSUFFICIENT_REWARDS_POOL_BALANCE"></a>
+<a name="0x2_staking_pool_EDelegationOfZeroSui"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_REWARDS_POOL_BALANCE">EINSUFFICIENT_REWARDS_POOL_BALANCE</a>: u64 = 4;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDelegationOfZeroSui">EDelegationOfZeroSui</a>: u64 = 17;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE"></a>
+<a name="0x2_staking_pool_EDelegationToInactivePool"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE">EINSUFFICIENT_SUI_TOKEN_BALANCE</a>: u64 = 3;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDelegationToInactivePool">EDelegationToInactivePool</a>: u64 = 10;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_ETOKEN_TIME_LOCK_IS_SOME"></a>
+<a name="0x2_staking_pool_EDestroyNonzeroBalance"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_ETOKEN_TIME_LOCK_IS_SOME">ETOKEN_TIME_LOCK_IS_SOME</a>: u64 = 6;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EDestroyNonzeroBalance">EDestroyNonzeroBalance</a>: u64 = 5;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO"></a>
+<a name="0x2_staking_pool_EIncompatibleStakedSui"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO">EWITHDRAW_AMOUNT_CANNOT_BE_ZERO</a>: u64 = 2;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EIncompatibleStakedSui">EIncompatibleStakedSui</a>: u64 = 12;
 </code></pre>
 
 
 
-<a name="0x2_staking_pool_EWRONG_POOL"></a>
+<a name="0x2_staking_pool_EInsufficientPoolTokenBalance"></a>
 
 
 
-<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>: u64 = 1;
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EInsufficientPoolTokenBalance">EInsufficientPoolTokenBalance</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EInsufficientRewardsPoolBalance"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EInsufficientRewardsPoolBalance">EInsufficientRewardsPoolBalance</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EInsufficientSuiTokenBalance"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EInsufficientSuiTokenBalance">EInsufficientSuiTokenBalance</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EPendingDelegationDoesNotExist"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPendingDelegationDoesNotExist">EPendingDelegationDoesNotExist</a>: u64 = 8;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EPoolAlreadyActive"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>: u64 = 14;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EPoolNotPreactive"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EPoolNotPreactive">EPoolNotPreactive</a>: u64 = 15;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_ETokenBalancesDoNotMatchExchangeRate"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_ETokenBalancesDoNotMatchExchangeRate">ETokenBalancesDoNotMatchExchangeRate</a>: u64 = 9;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_ETokenTimeLockIsSome"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_ETokenTimeLockIsSome">ETokenTimeLockIsSome</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EWithdrawAmountCannotBeZero"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWithdrawAmountCannotBeZero">EWithdrawAmountCannotBeZero</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EWithdrawalInSameEpoch"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWithdrawalInSameEpoch">EWithdrawalInSameEpoch</a>: u64 = 13;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EWrongDelegation"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWrongDelegation">EWrongDelegation</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x2_staking_pool_EWrongPool"></a>
+
+
+
+<pre><code><b>const</b> <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>: u64 = 1;
 </code></pre>
 
 
@@ -427,7 +410,7 @@ A self-custodial object holding the staked SUI tokens.
 Create a new, empty staking pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(validator_address: <b>address</b>, starting_epoch: u64): <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>
 </code></pre>
 
 
@@ -436,15 +419,20 @@ Create a new, empty staking pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(validator_address: <b>address</b>, starting_epoch: u64) : <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new">new</a>(ctx: &<b>mut</b> TxContext) : <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
+    <b>let</b> exchange_rates = <a href="table.md#0x2_table_new">table::new</a>(ctx);
     <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a> {
-        validator_address,
-        starting_epoch,
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        activation_epoch: <a href="_none">option::none</a>(),
+        deactivation_epoch: <a href="_none">option::none</a>(),
         sui_balance: 0,
         rewards_pool: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
-        delegation_token_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a> {}),
-        pending_delegations: <a href="_empty">vector::empty</a>(),
-        pending_withdraws: <a href="_empty">vector::empty</a>(),
+        pool_token_balance: 0,
+        exchange_rates,
+        pending_stake: 0,
+        pending_total_sui_withdraw: 0,
+        pending_pool_token_withdraw: 0,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     }
 }
 </code></pre>
@@ -453,15 +441,14 @@ Create a new, empty staking pool.
 
 </details>
 
-<a name="0x2_staking_pool_request_add_delegation"></a>
+<a name="0x2_staking_pool_request_add_stake"></a>
 
-## Function `request_add_delegation`
+## Function `request_add_stake`
 
-Request to delegate to a staking pool. The delegation gets counted at the beginning of the next epoch,
-when the delegation object containing the pool tokens is distributed to the delegator.
+Request to stake to a staking pool. The stake starts counting at the beginning of the next epoch,
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">request_add_delegation</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, <a href="stake.md#0x2_stake">stake</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, sui_token_lock: <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;, delegator: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_stake">request_add_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, stake: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, validator_address: <b>address</b>, staker: <b>address</b>, stake_activation_epoch: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -470,23 +457,26 @@ when the delegation object containing the pool tokens is distributed to the dele
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_delegation">request_add_delegation</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_add_stake">request_add_stake</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
-    <a href="stake.md#0x2_stake">stake</a>: Balance&lt;SUI&gt;,
-    sui_token_lock: Option&lt;EpochTimeLock&gt;,
-    delegator: <b>address</b>,
+    stake: Balance&lt;SUI&gt;,
+    validator_address: <b>address</b>,
+    staker: <b>address</b>,
+    stake_activation_epoch: u64,
     ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="stake.md#0x2_stake">stake</a>);
-    <b>assert</b>!(sui_amount &gt; 0, 0);
-    // insert delegation info into the pendng_delegations <a href="">vector</a>.
-    <a href="_push_back">vector::push_back</a>(&<b>mut</b> pool.pending_delegations, <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount });
+    <b>let</b> sui_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&stake);
+    <b>assert</b>!(!<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDelegationToInactivePool">EDelegationToInactivePool</a>);
+    <b>assert</b>!(sui_amount &gt; 0, <a href="staking_pool.md#0x2_staking_pool_EDelegationOfZeroSui">EDelegationOfZeroSui</a>);
     <b>let</b> staked_sui = <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        principal: <a href="stake.md#0x2_stake">stake</a>,
-        sui_token_lock,
+        pool_id: <a href="object.md#0x2_object_id">object::id</a>(pool),
+        validator_address,
+        stake_activation_epoch,
+        principal: stake,
     };
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(staked_sui, delegator);
+    pool.pending_stake = pool.pending_stake + sui_amount;
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(staked_sui, staker);
 }
 </code></pre>
 
@@ -494,18 +484,16 @@ when the delegation object containing the pool tokens is distributed to the dele
 
 </details>
 
-<a name="0x2_staking_pool_request_withdraw_delegation"></a>
+<a name="0x2_staking_pool_request_withdraw_stake"></a>
 
-## Function `request_withdraw_delegation`
+## Function `request_withdraw_stake`
 
-Request to withdraw <code>principal_withdraw_amount</code> of stake plus rewards from a staking pool.
-This amount of principal in SUI is withdrawn and transferred to the delegator. A proportional amount
-of pool tokens will be later burnt.
-The rewards portion will be withdrawn at the end of the epoch, after the rewards have come in so we
-can use the new exchange rate to calculate the rewards.
+Request to withdraw the given stake plus rewards from a staking pool.
+Both the principal and corresponding rewards in SUI are withdrawn and transferred to the staker.
+A proportional amount of pool token withdraw is recorded and processed at epoch change time.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation">request_withdraw_delegation</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, principal_withdraw_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake">request_withdraw_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -514,27 +502,31 @@ can use the new exchange rate to calculate the rewards.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_delegation">request_withdraw_delegation</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake">request_withdraw_stake</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
-    delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>,
-    staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-    principal_withdraw_amount: u64,
+    staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
     ctx: &<b>mut</b> TxContext
-) {
-    <b>let</b> (withdrawn_pool_tokens, principal_withdraw, time_lock) =
-        <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, delegation, staked_sui, principal_withdraw_amount);
+) : u64 {
+    <b>let</b> (pool_token_withdraw_amount, principal_withdraw) =
+        <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, staked_sui);
+    <b>let</b> staker = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> principal_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
 
-    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    <a href="_push_back">vector::push_back</a>(&<b>mut</b> pool.pending_withdraws, <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> {
-        delegator, principal_withdraw_amount, withdrawn_pool_tokens });
+    <b>let</b> rewards_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards">withdraw_rewards</a>(
+        pool, principal_withdraw_amount, pool_token_withdraw_amount, <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx)
+    );
+    <b>let</b> total_sui_withdraw_amount = principal_withdraw_amount + <a href="balance.md#0x2_balance_value">balance::value</a>(&rewards_withdraw);
+
+    pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + total_sui_withdraw_amount;
+    pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
+
+    // If the pool is inactive, we immediately process the withdrawal.
+    <b>if</b> (<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool)) <a href="staking_pool.md#0x2_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool);
 
     // TODO: implement withdraw bonding period here.
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
-        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal_withdraw, <a href="_destroy_some">option::destroy_some</a>(time_lock), delegator, ctx);
-    } <b>else</b> {
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), delegator);
-        <a href="_destroy_none">option::destroy_none</a>(time_lock);
-    };
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> principal_withdraw, rewards_withdraw);
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), staker);
+    total_sui_withdraw_amount
 }
 </code></pre>
 
@@ -546,16 +538,12 @@ can use the new exchange rate to calculate the rewards.
 
 ## Function `withdraw_from_principal`
 
-Withdraw the requested amount of the principal SUI stored in the StakedSui object, as
-well as a proportional amount of pool tokens from the delegation object.
-For example, suppose the delegation object contains 15 pool tokens and the principal SUI
-amount is 21. Then if <code>principal_withdraw_amount</code> is 7, 5 pool tokens and 7 SUI tokens will
-be withdrawn.
-Returns values are withdrawn pool tokens, withdrawn principal portion of SUI, and its
-time lock if applicable.
+Withdraw the principal SUI stored in the StakedSui object, and calculate the corresponding amount of pool
+tokens using exchange rate at staking epoch.
+Returns values are amount of pool tokens withdrawn and withdrawn principal portion of SUI.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, principal_withdraw_amount: u64): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;, <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): (u64, <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
 </code></pre>
 
 
@@ -566,34 +554,52 @@ time lock if applicable.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
-    delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>,
-    staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-    principal_withdraw_amount: u64,
-) : (Balance&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a>&gt;, Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
-    // Check that the delegation information matches the pool.
-    <b>assert</b>!(
-        delegation.validator_address == pool.validator_address &&
-        delegation.pool_starting_epoch == pool.starting_epoch,
-        <a href="staking_pool.md#0x2_staking_pool_EWRONG_POOL">EWRONG_POOL</a>
-    );
+    staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
+) : (u64, Balance&lt;SUI&gt;) {
 
-    <b>assert</b>!(principal_withdraw_amount &gt; 0, <a href="staking_pool.md#0x2_staking_pool_EWITHDRAW_AMOUNT_CANNOT_BE_ZERO">EWITHDRAW_AMOUNT_CANNOT_BE_ZERO</a>);
-    <b>assert</b>!(delegation.principal_sui_amount &gt;= principal_withdraw_amount, <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE">EINSUFFICIENT_SUI_TOKEN_BALANCE</a>);
+    // Check that the stake information matches the pool.
+    <b>assert</b>!(staked_sui.pool_id == <a href="object.md#0x2_object_id">object::id</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>);
 
-    <b>let</b> pool_token_balance = <a href="balance.md#0x2_balance_value">balance::value</a>(&delegation.pool_tokens);
-
-    // Calculate the amount of pool tokens <b>to</b> be withdrawn.
-    // We already checked that `delegation.principal_sui_amount` is greater than zero.
-    <b>let</b> withdraw_pool_token_amount =
-        (pool_token_balance <b>as</b> u128) * (principal_withdraw_amount <b>as</b> u128) / (delegation.principal_sui_amount <b>as</b> u128);
-
-    <b>let</b> (principal_withdraw, time_lock) = <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal_impl">withdraw_from_principal_impl</a>(delegation, staked_sui, principal_withdraw_amount);
+    <b>let</b> exchange_rate_at_staking_epoch = <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool, staked_sui.stake_activation_epoch);
+    <b>let</b> principal_withdraw = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
+    <b>let</b> pool_token_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(&exchange_rate_at_staking_epoch, <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw));
 
     (
-        <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> delegation.pool_tokens, (withdraw_pool_token_amount <b>as</b> u64)),
+        pool_token_withdraw_amount,
         principal_withdraw,
-        time_lock
     )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_unwrap_staked_sui"></a>
+
+## Function `unwrap_staked_sui`
+
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): Balance&lt;SUI&gt; {
+    <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+        id,
+        pool_id: _,
+        validator_address: _,
+        stake_activation_epoch: _,
+        principal,
+    } = staked_sui;
+    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    principal
 }
 </code></pre>
 
@@ -627,16 +633,13 @@ Called at epoch advancement times to add rewards (in SUI) to the staking pool.
 
 </details>
 
-<a name="0x2_staking_pool_process_pending_delegation_withdraws"></a>
+<a name="0x2_staking_pool_process_pending_stakes_and_withdraws"></a>
 
-## Function `process_pending_delegation_withdraws`
-
-Called at epoch boundaries to process pending delegation withdraws requested during the epoch.
-For each pending withdraw entry, we withdraw the rewards from the pool at the new exchange rate and burn the pool
-tokens.
+## Function `process_pending_stakes_and_withdraws`
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraws">process_pending_delegation_withdraws</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -645,16 +648,16 @@ tokens.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegation_withdraws">process_pending_delegation_withdraws</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) : u64 {
-    <b>let</b> total_reward_withdraw = 0;
-
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&pool.pending_withdraws)) {
-        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> { delegator, principal_withdraw_amount, withdrawn_pool_tokens } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> pool.pending_withdraws);
-        <b>let</b> reward_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool, principal_withdraw_amount, withdrawn_pool_tokens);
-        total_reward_withdraw = total_reward_withdraw + <a href="balance.md#0x2_balance_value">balance::value</a>(&reward_withdraw);
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(reward_withdraw, ctx), delegator);
-    };
-    total_reward_withdraw
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
+    <b>let</b> new_epoch = <a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool);
+    <a href="staking_pool.md#0x2_staking_pool_process_pending_stake">process_pending_stake</a>(pool);
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> pool.exchange_rates,
+        new_epoch,
+        <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> { sui_amount: pool.sui_balance, pool_token_amount: pool.pool_token_balance },
+    );
+    <a href="staking_pool.md#0x2_staking_pool_check_balance_invariants">check_balance_invariants</a>(pool, new_epoch);
 }
 </code></pre>
 
@@ -662,16 +665,15 @@ tokens.
 
 </details>
 
-<a name="0x2_staking_pool_process_pending_delegations"></a>
+<a name="0x2_staking_pool_process_pending_stake_withdraw"></a>
 
-## Function `process_pending_delegations`
+## Function `process_pending_stake_withdraw`
 
-Called at epoch boundaries to mint new pool tokens to new delegators at the new exchange rate.
-New delegators include both entirely new delegations and delegations switched to this staking pool
-during the previous epoch.
+Called at epoch boundaries to process pending stake withdraws requested during the epoch.
+Also called immediately upon withdrawal if the pool is inactive.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">process_pending_delegations</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>)
 </code></pre>
 
 
@@ -680,12 +682,11 @@ during the previous epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_delegations">process_pending_delegations</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&pool.pending_delegations)) {
-        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingDelegationEntry">PendingDelegationEntry</a> { delegator, sui_amount } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> pool.pending_delegations);
-        <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool, delegator, sui_amount, ctx);
-        pool.sui_balance = pool.sui_balance + sui_amount;
-    };
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>) {
+    pool.sui_balance = pool.sui_balance - pool.pending_total_sui_withdraw;
+    pool.pool_token_balance = pool.pool_token_balance - pool.pending_pool_token_withdraw;
+    pool.pending_total_sui_withdraw = 0;
+    pool.pending_pool_token_withdraw = 0;
 }
 </code></pre>
 
@@ -693,21 +694,14 @@ during the previous epoch.
 
 </details>
 
-<a name="0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens"></a>
+<a name="0x2_staking_pool_process_pending_stake"></a>
 
-## Function `batch_withdraw_rewards_and_burn_pool_tokens`
+## Function `process_pending_stake`
 
-Called by validator_set at epoch boundaries for delegation switches.
-This function goes through the provided vector of pending withdraw entries,
-and for each entry, calls <code>withdraw_rewards_and_burn_pool_tokens</code> to withdraw
-the rewards portion of the delegation and burn the pool tokens. We then aggregate
-the delegator addresses and their rewards into vectors, as well as calculate
-the total amount of rewards SUI withdrawn. These three return values are then
-used in <code><a href="validator_set.md#0x2_validator_set">validator_set</a></code>'s delegation switching code to deposit the rewards part
-into the new validator's staking pool.
+Called at epoch boundaries to process the pending stake.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens">batch_withdraw_rewards_and_burn_pool_tokens</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, entries: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>&gt;): (<a href="">vector</a>&lt;<b>address</b>&gt;, <a href="">vector</a>&lt;<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;&gt;, u64)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_stake">process_pending_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>)
 </code></pre>
 
 
@@ -716,21 +710,13 @@ into the new validator's staking pool.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_batch_withdraw_rewards_and_burn_pool_tokens">batch_withdraw_rewards_and_burn_pool_tokens</a>(
-    pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
-    entries: <a href="">vector</a>&lt;<a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a>&gt;,
-) : (<a href="">vector</a>&lt;<b>address</b>&gt;, <a href="">vector</a>&lt;Balance&lt;SUI&gt;&gt;, u64) {
-    <b>let</b> (delegators, rewards, total_rewards_withdraw_amount) = (<a href="_empty">vector::empty</a>(), <a href="_empty">vector::empty</a>(), 0);
-    <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&<b>mut</b> entries)) {
-        <b>let</b> <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> { delegator, principal_withdraw_amount, withdrawn_pool_tokens }
-            = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> entries);
-        <b>let</b> reward = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool, principal_withdraw_amount, withdrawn_pool_tokens);
-        total_rewards_withdraw_amount = total_rewards_withdraw_amount + <a href="balance.md#0x2_balance_value">balance::value</a>(&reward);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> delegators, delegator);
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> rewards, reward);
-    };
-    <a href="_destroy_empty">vector::destroy_empty</a>(entries);
-    (delegators, rewards, total_rewards_withdraw_amount)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_process_pending_stake">process_pending_stake</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>) {
+    // Use the most up <b>to</b> date exchange rate <b>with</b> the rewards deposited and withdraws effectuated.
+    <b>let</b> latest_exchange_rate =
+        <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> { sui_amount: pool.sui_balance, pool_token_amount: pool.pool_token_balance };
+    pool.sui_balance = pool.sui_balance + pool.pending_stake;
+    pool.pool_token_balance = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(&latest_exchange_rate, pool.sui_balance);
+    pool.pending_stake = 0;
 }
 </code></pre>
 
@@ -738,23 +724,20 @@ into the new validator's staking pool.
 
 </details>
 
-<a name="0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens"></a>
+<a name="0x2_staking_pool_withdraw_rewards"></a>
 
-## Function `withdraw_rewards_and_burn_pool_tokens`
+## Function `withdraw_rewards`
 
 This function does the following:
 1. Calculates the total amount of SUI (including principal and rewards) that the provided pool tokens represent
 at the current exchange rate.
 2. Using the above number and the given <code>principal_withdraw_amount</code>, calculates the rewards portion of the
-delegation we should withdraw.
+stake we should withdraw.
 3. Withdraws the rewards portion from the rewards pool at the current exchange rate. We only withdraw the rewards
-portion because the principal portion was already taken out of the delegator's self custodied StakedSui at request
-time in <code>request_withdraw_stake</code>.
-4. Since SUI tokens are withdrawn, we need to burn the corresponding pool tokens to keep the exchange rate the same.
-5. Updates the SUI balance amount of the pool.
+portion because the principal portion was already taken out of the staker's self custodied StakedSui.
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, principal_withdraw_amount: u64, withdrawn_pool_tokens: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards">withdraw_rewards</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, principal_withdraw_amount: u64, pool_token_withdraw_amount: u64, epoch: u64): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -763,20 +746,22 @@ time in <code>request_withdraw_stake</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards">withdraw_rewards</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
     principal_withdraw_amount: u64,
-    withdrawn_pool_tokens: Balance&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a>&gt;,
+    pool_token_withdraw_amount: u64,
+    epoch: u64,
 ) : Balance&lt;SUI&gt; {
-    <b>let</b> pool_token_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&withdrawn_pool_tokens);
-    <b>let</b> total_sui_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(pool, pool_token_amount);
-    <b>assert</b>!(total_sui_withdraw_amount &gt;= principal_withdraw_amount, 0);
-    <b>let</b> reward_withdraw_amount = total_sui_withdraw_amount - principal_withdraw_amount;
-    <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(
-        &<b>mut</b> pool.delegation_token_supply,
-        withdrawn_pool_tokens
-    );
-    pool.sui_balance = pool.sui_balance - (principal_withdraw_amount + reward_withdraw_amount);
+    <b>let</b> exchange_rate = <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool, epoch);
+    <b>let</b> total_sui_withdraw_amount = <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(&exchange_rate, pool_token_withdraw_amount);
+    <b>let</b> reward_withdraw_amount =
+        <b>if</b> (total_sui_withdraw_amount &gt;= principal_withdraw_amount)
+            total_sui_withdraw_amount - principal_withdraw_amount
+        <b>else</b> 0;
+    // This may happen when we are withdrawing everything from the pool and
+    // the rewards pool <a href="balance.md#0x2_balance">balance</a> may be less than reward_withdraw_amount.
+    // TODO: FIGURE OUT EXACTLY WHY THIS CAN HAPPEN.
+    reward_withdraw_amount = <a href="math.md#0x2_math_min">math::min</a>(reward_withdraw_amount, <a href="balance.md#0x2_balance_value">balance::value</a>(&pool.rewards_pool));
     <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> pool.rewards_pool, reward_withdraw_amount)
 }
 </code></pre>
@@ -785,15 +770,14 @@ time in <code>request_withdraw_stake</code>.
 
 </details>
 
-<a name="0x2_staking_pool_mint_delegation_tokens_to_delegator"></a>
+<a name="0x2_staking_pool_activate_staking_pool"></a>
 
-## Function `mint_delegation_tokens_to_delegator`
+## Function `activate_staking_pool`
 
-Given the <code>sui_amount</code>, mint the corresponding amount of pool tokens at the current exchange
-rate, puts the pool tokens in a delegation object, and gives the delegation object to the delegator.
+Called by <code><a href="validator.md#0x2_validator">validator</a></code> module to activate a staking pool.
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, delegator: <b>address</b>, sui_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, activation_epoch: u64)
 </code></pre>
 
 
@@ -802,26 +786,62 @@ rate, puts the pool tokens in a delegation object, and gives the delegation obje
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_mint_delegation_tokens_to_delegator">mint_delegation_tokens_to_delegator</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, activation_epoch: u64) {
+    // Add the initial exchange rate <b>to</b> the <a href="table.md#0x2_table">table</a>.
+    <a href="table.md#0x2_table_add">table::add</a>(
+        &<b>mut</b> pool.exchange_rates,
+        activation_epoch,
+        <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
+    );
+    // Check that the pool is preactive and not inactive.
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>);
+    <b>assert</b>!(!<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EActivationOfInactivePool">EActivationOfInactivePool</a>);
+    // Fill in the active epoch.
+    <a href="_fill">option::fill</a>(&<b>mut</b> pool.activation_epoch, activation_epoch);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_request_withdraw_stake_preactive"></a>
+
+## Function `request_withdraw_stake_preactive`
+
+Withdraw stake from a preactive staking pool.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake_preactive">request_withdraw_stake_preactive</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_request_withdraw_stake_preactive">request_withdraw_stake_preactive</a>(
     pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>,
-    delegator: <b>address</b>,
-    sui_amount: u64,
+    staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
     ctx: &<b>mut</b> TxContext
-) {
-    <b>let</b> new_pool_token_amount = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(pool, sui_amount);
+) : u64 {
+    // Check that the stake information matches the pool.
+    <b>assert</b>!(staked_sui.pool_id == <a href="object.md#0x2_object_id">object::id</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EWrongPool">EWrongPool</a>);
 
-    // Mint new pool tokens at the current exchange rate.
-    <b>let</b> pool_tokens = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> pool.delegation_token_supply, new_pool_token_amount);
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EPoolNotPreactive">EPoolNotPreactive</a>);
 
-    <b>let</b> delegation = <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a> {
-        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        validator_address: pool.validator_address,
-        pool_starting_epoch: pool.starting_epoch,
-        pool_tokens,
-        principal_sui_amount: sui_amount,
-    };
+    <b>let</b> staker = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
 
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(delegation, delegator);
+    <b>let</b> principal = <a href="staking_pool.md#0x2_staking_pool_unwrap_staked_sui">unwrap_staked_sui</a>(staked_sui);
+    <b>let</b> withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal);
+    // The exchange rate is always 1:1 for a preactive pool so we decrement the
+    // same amount for both sui_balance and pool_token_balance.
+    pool.sui_balance = pool.sui_balance - withdraw_amount;
+    pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
+
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), staker);
+    withdraw_amount
 }
 </code></pre>
 
@@ -833,11 +853,12 @@ rate, puts the pool tokens in a delegation object, and gives the delegation obje
 
 ## Function `deactivate_staking_pool`
 
-Deactivate a staking pool by wrapping it in an <code><a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a></code> and sharing this newly created object.
-After this pool deactivation, the pool stops earning rewards. Only delegation withdraws can be made to the pool.
+Deactivate a staking pool by setting the <code>deactivation_epoch</code>. After
+this pool deactivation, the pool stops earning rewards. Only stake
+withdraws can be made to the pool.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, deactivation_epoch: u64)
 </code></pre>
 
 
@@ -846,128 +867,10 @@ After this pool deactivation, the pool stops earning rewards. Only delegation wi
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> inactive_pool = <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), pool};
-    <a href="transfer.md#0x2_transfer_share_object">transfer::share_object</a>(inactive_pool);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_staking_pool_withdraw_from_inactive_pool"></a>
-
-## Function `withdraw_from_inactive_pool`
-
-Withdraw delegation from an inactive pool. Since no epoch rewards will be added to an inactive pool,
-the exchange rate between pool tokens and SUI tokens stay the same. Therefore, unlike withdrawing
-from an active pool, we can handle both principal and rewards withdraws directly here.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_inactive_pool">withdraw_from_inactive_pool</a>(inactive_pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">staking_pool::InactiveStakingPool</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, withdraw_pool_token_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_inactive_pool">withdraw_from_inactive_pool</a>(
-    inactive_pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_InactiveStakingPool">InactiveStakingPool</a>,
-    staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-    delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>,
-    withdraw_pool_token_amount: u64,
-    ctx: &<b>mut</b> TxContext
-) {
-    <b>let</b> pool = &<b>mut</b> inactive_pool.pool;
-    <b>let</b> (withdrawn_pool_tokens, principal_withdraw, time_lock) =
-        <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal">withdraw_from_principal</a>(pool, delegation, staked_sui, withdraw_pool_token_amount);
-    <b>let</b> principal_withdraw_amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&principal_withdraw);
-    <b>let</b> rewards_withdraw = <a href="staking_pool.md#0x2_staking_pool_withdraw_rewards_and_burn_pool_tokens">withdraw_rewards_and_burn_pool_tokens</a>(pool, principal_withdraw_amount, withdrawn_pool_tokens);
-    <b>let</b> total_withdraw_amount = principal_withdraw_amount + <a href="balance.md#0x2_balance_value">balance::value</a>(&rewards_withdraw);
-    pool.sui_balance = pool.sui_balance - total_withdraw_amount;
-
-    <b>let</b> delegator = <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
-    // TODO: implement withdraw bonding period here.
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&time_lock)) {
-        <a href="locked_coin.md#0x2_locked_coin_new_from_balance">locked_coin::new_from_balance</a>(principal_withdraw, <a href="_destroy_some">option::destroy_some</a>(time_lock), delegator, ctx);
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(rewards_withdraw, ctx), delegator);
-    } <b>else</b> {
-        <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> principal_withdraw, rewards_withdraw);
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), delegator);
-        <a href="_destroy_none">option::destroy_none</a>(time_lock);
-    };
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_staking_pool_destroy_empty_delegation"></a>
-
-## Function `destroy_empty_delegation`
-
-Destroy an empty delegation that no longer contains any SUI or pool tokens.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_delegation">destroy_empty_delegation</a>(delegation: <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_delegation">destroy_empty_delegation</a>(delegation: <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>) {
-    <b>let</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a> {
-        id,
-        validator_address: _,
-        pool_starting_epoch: _,
-        pool_tokens,
-        principal_sui_amount,
-    } = delegation;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&pool_tokens) == 0, <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>);
-    <b>assert</b>!(principal_sui_amount == 0, <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>);
-    <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(pool_tokens);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_staking_pool_destroy_empty_staked_sui"></a>
-
-## Function `destroy_empty_staked_sui`
-
-Destroy an empty delegation that no longer contains any SUI or pool tokens.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_staked_sui">destroy_empty_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_destroy_empty_staked_sui">destroy_empty_staked_sui</a>(staked_sui: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>) {
-    <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
-        id,
-        principal,
-        sui_token_lock
-    } = staked_sui;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&principal) == 0, <a href="staking_pool.md#0x2_staking_pool_EDESTROY_NON_ZERO_BALANCE">EDESTROY_NON_ZERO_BALANCE</a>);
-    <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(principal);
-    <b>assert</b>!(<a href="_is_none">option::is_none</a>(&sui_token_lock), <a href="staking_pool.md#0x2_staking_pool_ETOKEN_TIME_LOCK_IS_SOME">ETOKEN_TIME_LOCK_IS_SOME</a>);
-    <a href="_destroy_none">option::destroy_none</a>(sui_token_lock);
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_deactivate_staking_pool">deactivate_staking_pool</a>(pool: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, deactivation_epoch: u64) {
+    // We can't deactivate an already deactivated pool.
+    <b>assert</b>!(!<a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool), <a href="staking_pool.md#0x2_staking_pool_EDeactivationOfInactivePool">EDeactivationOfInactivePool</a>);
+    pool.deactivation_epoch = <a href="_some">option::some</a>(deactivation_epoch);
 }
 </code></pre>
 
@@ -990,20 +893,20 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_sui_balance">sui_balance</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>) : u64 { pool.sui_balance }
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_sui_balance">sui_balance</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): u64 { pool.sui_balance }
 </code></pre>
 
 
 
 </details>
 
-<a name="0x2_staking_pool_validator_address"></a>
+<a name="0x2_staking_pool_pool_id"></a>
 
-## Function `validator_address`
+## Function `pool_id`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>): <b>address</b>
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_id">pool_id</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): <a href="object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -1012,7 +915,7 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_validator_address">validator_address</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>) : <b>address</b> { delegation.validator_address }
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_id">pool_id</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): ID { staked_sui.pool_id }
 </code></pre>
 
 
@@ -1041,13 +944,13 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 
 </details>
 
-<a name="0x2_staking_pool_delegation_token_amount"></a>
+<a name="0x2_staking_pool_stake_activation_epoch"></a>
 
-## Function `delegation_token_amount`
+## Function `stake_activation_epoch`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_delegation_token_amount">delegation_token_amount</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_stake_activation_epoch">stake_activation_epoch</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): u64
 </code></pre>
 
 
@@ -1056,35 +959,8 @@ Destroy an empty delegation that no longer contains any SUI or pool tokens.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_delegation_token_amount">delegation_token_amount</a>(delegation: &<a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>): u64 { <a href="balance.md#0x2_balance_value">balance::value</a>(&delegation.pool_tokens) }
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_staking_pool_new_pending_withdraw_entry"></a>
-
-## Function `new_pending_withdraw_entry`
-
-Create a new pending withdraw entry.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new_pending_withdraw_entry">new_pending_withdraw_entry</a>(delegator: <b>address</b>, principal_withdraw_amount: u64, withdrawn_pool_tokens: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">staking_pool::DelegationToken</a>&gt;): <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">staking_pool::PendingWithdrawEntry</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_new_pending_withdraw_entry">new_pending_withdraw_entry</a>(
-    delegator: <b>address</b>,
-    principal_withdraw_amount: u64,
-    withdrawn_pool_tokens: Balance&lt;<a href="staking_pool.md#0x2_staking_pool_DelegationToken">DelegationToken</a>&gt;,
-) : <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> {
-    <a href="staking_pool.md#0x2_staking_pool_PendingWithdrawEntry">PendingWithdrawEntry</a> { delegator, principal_withdraw_amount, withdrawn_pool_tokens }
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_stake_activation_epoch">stake_activation_epoch</a>(staked_sui: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): u64 {
+    staked_sui.stake_activation_epoch
 }
 </code></pre>
 
@@ -1092,15 +968,14 @@ Create a new pending withdraw entry.
 
 </details>
 
-<a name="0x2_staking_pool_withdraw_from_principal_impl"></a>
+<a name="0x2_staking_pool_is_preactive"></a>
 
-## Function `withdraw_from_principal_impl`
+## Function `is_preactive`
 
-Withdraw <code>withdraw_sui_amount</code> of SUI tokens from the principal stored in the staked_sui together with its time lock
-if applicable, and also decrement the <code>principal_sui_amount</code> field of the delegation object.
+Returns true if the input staking pool is preactive.
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal_impl">withdraw_from_principal_impl</a>(delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">staking_pool::Delegation</a>, staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, withdraw_sui_amount: u64): (<a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, <a href="_Option">option::Option</a>&lt;<a href="epoch_time_lock.md#0x2_epoch_time_lock_EpochTimeLock">epoch_time_lock::EpochTimeLock</a>&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
 </code></pre>
 
 
@@ -1109,24 +984,271 @@ if applicable, and also decrement the <code>principal_sui_amount</code> field of
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_withdraw_from_principal_impl">withdraw_from_principal_impl</a>(
-    delegation: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_Delegation">Delegation</a>,
-    staked_sui: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>,
-    withdraw_sui_amount: u64,
-) : (Balance&lt;SUI&gt;, Option&lt;EpochTimeLock&gt;) {
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&staked_sui.principal) &gt;= withdraw_sui_amount, <a href="staking_pool.md#0x2_staking_pool_EINSUFFICIENT_SUI_TOKEN_BALANCE">EINSUFFICIENT_SUI_TOKEN_BALANCE</a>);
-    // Decrement the principal <a href="sui.md#0x2_sui">sui</a> value stored in delegation <a href="object.md#0x2_object">object</a>.
-    delegation.principal_sui_amount = delegation.principal_sui_amount - withdraw_sui_amount;
-    // Withdraw the SUI <a href="balance.md#0x2_balance">balance</a> from the staked <a href="sui.md#0x2_sui">sui</a> <a href="object.md#0x2_object">object</a>. Return it and its time lock.
-    <b>let</b> principal_withdraw = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> staked_sui.principal, withdraw_sui_amount);
-    <b>if</b> (<a href="_is_some">option::is_some</a>(&staked_sui.sui_token_lock)) {
-        <b>let</b> time_lock =
-            <b>if</b> (<a href="balance.md#0x2_balance_value">balance::value</a>(&staked_sui.principal) == 0) {<a href="_extract">option::extract</a>(&<b>mut</b> staked_sui.sui_token_lock)}
-            <b>else</b> *<a href="_borrow">option::borrow</a>(&staked_sui.sui_token_lock);
-        (principal_withdraw, <a href="_some">option::some</a>(time_lock))
-    } <b>else</b> {
-        (principal_withdraw, <a href="_none">option::none</a>())
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool{
+    <a href="_is_none">option::is_none</a>(&pool.activation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_inactive"></a>
+
+## Function `is_inactive`
+
+Returns true if the input staking pool is inactive.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_inactive">is_inactive</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): bool {
+    <a href="_is_some">option::is_some</a>(&pool.deactivation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_split"></a>
+
+## Function `split`
+
+Split StakedSui <code>self</code> to two parts, one with principal <code>split_amount</code>,
+and the remaining principal is left in <code>self</code>.
+All the other parameters of the StakedSui like <code>stake_activation_epoch</code> or <code>pool_id</code> remain the same.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split">split</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split">split</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> TxContext): <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+    <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+        id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
+        pool_id: self.pool_id,
+        validator_address: self.validator_address,
+        stake_activation_epoch: self.stake_activation_epoch,
+        principal: <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.principal, split_amount),
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_split_staked_sui"></a>
+
+## Function `split_staked_sui`
+
+Split the given StakedSui to the two parts, one with principal <code>split_amount</code>,
+transfer the newly split part to the sender address.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split_staked_sui">split_staked_sui</a>(c: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_split_staked_sui">split_staked_sui</a>(c: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, split_amount: u64, ctx: &<b>mut</b> TxContext) {
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="staking_pool.md#0x2_staking_pool_split">split</a>(c, split_amount, ctx), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_join_staked_sui"></a>
+
+## Function `join_staked_sui`
+
+Consume the staked sui <code>other</code> and add its value to <code>self</code>.
+Aborts if some of the staking parameters are incompatible (pool id, stake activation epoch, etc.)
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_join_staked_sui">join_staked_sui</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, other: <a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_join_staked_sui">join_staked_sui</a>(self: &<b>mut</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, other: <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>) {
+    <b>assert</b>!(<a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self, &other), <a href="staking_pool.md#0x2_staking_pool_EIncompatibleStakedSui">EIncompatibleStakedSui</a>);
+    <b>let</b> <a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a> {
+        id,
+        pool_id: _,
+        validator_address: _,
+        stake_activation_epoch: _,
+        principal,
+    } = other;
+
+    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.principal, principal);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_equal_staking_metadata"></a>
+
+## Function `is_equal_staking_metadata`
+
+Returns true if all the staking parameters of the staked sui except the principal are identical
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>, other: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">staking_pool::StakedSui</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_equal_staking_metadata">is_equal_staking_metadata</a>(self: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>, other: &<a href="staking_pool.md#0x2_staking_pool_StakedSui">StakedSui</a>): bool {
+    (self.pool_id == other.pool_id) &&
+    (self.validator_address == other.validator_address) &&
+    (self.stake_activation_epoch == other.stake_activation_epoch)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_pool_token_exchange_rate_at_epoch"></a>
+
+## Function `pool_token_exchange_rate_at_epoch`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, epoch: u64): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+    // If the pool is preactive then the exchange rate is always 1:1.
+    <b>if</b> (<a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool, epoch)) {
+        <b>return</b> <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
+    };
+    <b>let</b> clamped_epoch = <a href="_get_with_default">option::get_with_default</a>(&pool.deactivation_epoch, epoch);
+    <b>let</b> epoch = <a href="math.md#0x2_math_min">math::min</a>(clamped_epoch, epoch);
+    <b>let</b> activation_epoch = *<a href="_borrow">option::borrow</a>(&pool.activation_epoch);
+
+    // Find the latest epoch that's earlier than the given epoch <b>with</b> an entry in the <a href="table.md#0x2_table">table</a>
+    <b>while</b> (epoch &gt;= activation_epoch) {
+        <b>if</b> (<a href="table.md#0x2_table_contains">table::contains</a>(&pool.exchange_rates, epoch)) {
+            <b>return</b> *<a href="table.md#0x2_table_borrow">table::borrow</a>(&pool.exchange_rates, epoch)
+        };
+        epoch = epoch - 1;
+    };
+    // This line really should be unreachable. Do we want an <b>assert</b> <b>false</b> here?
+    <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_pending_stake_amount"></a>
+
+## Function `pending_stake_amount`
+
+Returns the total value of the pending staking requests for this staking pool.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_amount">pending_stake_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_amount">pending_stake_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): u64 {
+    <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>.pending_stake
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_pending_stake_withdraw_amount"></a>
+
+## Function `pending_stake_withdraw_amount`
+
+Returns the total withdrawal from the staking pool this epoch.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="staking_pool.md#0x2_staking_pool_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>(<a href="staking_pool.md#0x2_staking_pool">staking_pool</a>: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>): u64 {
+    <a href="staking_pool.md#0x2_staking_pool">staking_pool</a>.pending_total_sui_withdraw
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_is_preactive_at_epoch"></a>
+
+## Function `is_preactive_at_epoch`
+
+Returns true if the provided staking pool is preactive at the provided epoch.
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, epoch: u64): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64): bool{
+    // Either the pool is currently preactive or the pool's starting epoch is later than the provided epoch.
+    <a href="staking_pool.md#0x2_staking_pool_is_preactive">is_preactive</a>(pool) || (*<a href="_borrow">option::borrow</a>(&pool.activation_epoch) &gt; epoch)
 }
 </code></pre>
 
@@ -1140,7 +1262,7 @@ if applicable, and also decrement the <code>principal_sui_amount</code> field of
 
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, token_amount: u64): u64
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(exchange_rate: &<a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>, token_amount: u64): u64
 </code></pre>
 
 
@@ -1149,14 +1271,15 @@ if applicable, and also decrement the <code>principal_sui_amount</code> field of
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, token_amount: u64): u64 {
-    <b>let</b> token_supply = <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(&pool.delegation_token_supply);
-    <b>if</b> (token_supply == 0) {
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_sui_amount">get_sui_amount</a>(exchange_rate: &<a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a>, token_amount: u64): u64 {
+    // When either amount is 0, that means we have no stakes <b>with</b> this pool.
+    // The other amount might be non-zero when there's dust left in the pool.
+    <b>if</b> (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
         <b>return</b> token_amount
     };
-    <b>let</b> res = (pool.sui_balance <b>as</b> u128)
+    <b>let</b> res = (exchange_rate.sui_amount <b>as</b> u128)
             * (token_amount <b>as</b> u128)
-            / (token_supply <b>as</b> u128);
+            / (exchange_rate.pool_token_amount <b>as</b> u128);
     (res <b>as</b> u64)
 }
 </code></pre>
@@ -1171,7 +1294,7 @@ if applicable, and also decrement the <code>principal_sui_amount</code> field of
 
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, sui_amount: u64): u64
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(exchange_rate: &<a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>, sui_amount: u64): u64
 </code></pre>
 
 
@@ -1180,15 +1303,68 @@ if applicable, and also decrement the <code>principal_sui_amount</code> field of
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, sui_amount: u64): u64 {
-    <b>if</b> (pool.sui_balance == 0) {
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(exchange_rate: &<a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a>, sui_amount: u64): u64 {
+    // When either amount is 0, that means we have no stakes <b>with</b> this pool.
+    // The other amount might be non-zero when there's dust left in the pool.
+    <b>if</b> (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
         <b>return</b> sui_amount
     };
-    <b>let</b> token_supply = <a href="balance.md#0x2_balance_supply_value">balance::supply_value</a>(&pool.delegation_token_supply);
-    <b>let</b> res = (token_supply <b>as</b> u128)
+    <b>let</b> res = (exchange_rate.pool_token_amount <b>as</b> u128)
             * (sui_amount <b>as</b> u128)
-            / (pool.sui_balance <b>as</b> u128);
+            / (exchange_rate.sui_amount <b>as</b> u128);
     (res <b>as</b> u64)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_initial_exchange_rate"></a>
+
+## Function `initial_exchange_rate`
+
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>(): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_initial_exchange_rate">initial_exchange_rate</a>(): <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> {
+    <a href="staking_pool.md#0x2_staking_pool_PoolTokenExchangeRate">PoolTokenExchangeRate</a> { sui_amount: 0, pool_token_amount: 0 }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_staking_pool_check_balance_invariants"></a>
+
+## Function `check_balance_invariants`
+
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_check_balance_invariants">check_balance_invariants</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">staking_pool::StakingPool</a>, epoch: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="staking_pool.md#0x2_staking_pool_check_balance_invariants">check_balance_invariants</a>(pool: &<a href="staking_pool.md#0x2_staking_pool_StakingPool">StakingPool</a>, epoch: u64) {
+    <b>let</b> exchange_rate = <a href="staking_pool.md#0x2_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(pool, epoch);
+    // check that the pool token <a href="balance.md#0x2_balance">balance</a> and <a href="sui.md#0x2_sui">sui</a> <a href="balance.md#0x2_balance">balance</a> ratio matches the exchange rate stored.
+    <b>let</b> expected = <a href="staking_pool.md#0x2_staking_pool_get_token_amount">get_token_amount</a>(&exchange_rate, pool.sui_balance);
+    <b>let</b> actual = pool.pool_token_balance;
+    <b>assert</b>!(expected == actual, <a href="staking_pool.md#0x2_staking_pool_ETokenBalancesDoNotMatchExchangeRate">ETokenBalancesDoNotMatchExchangeRate</a>)
 }
 </code></pre>
 

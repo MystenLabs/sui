@@ -30,9 +30,9 @@ function ModuleViewWrapper({ id, data }: Props) {
 
     useEffect(() => {
         if (searchParams.get('module')) {
-            const moduleIndex = data.content.findIndex(([moduleName]) => {
-                return moduleName === searchParams.get('module');
-            });
+            const moduleIndex = data.content.findIndex(
+                ([moduleName]) => moduleName === searchParams.get('module')
+            );
 
             setModulesPageNumber(
                 Math.floor(moduleIndex / MODULES_PER_PAGE) + 1

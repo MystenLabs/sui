@@ -2,24 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { Link } from 'react-router-dom';
+import { createContext, type ReactNode, useState } from 'react';
 
-import DappStatus from '_app/shared/dapp-status';
+import { useAppSelector } from '../../hooks';
+import { AppType } from '../../redux/slices/app/AppType';
+import DappStatus from '../dapp-status';
+import { Header } from '../header/Header';
+import { Toaster } from '../toaster';
 import { ErrorBoundary } from '_components/error-boundary';
-import Logo from '_components/logo';
 import { MenuButton, MenuContent } from '_components/menu';
 import Navigation from '_components/navigation';
 
-import type { ReactNode } from 'react';
-
 import st from './PageMainLayout.module.scss';
+
+export const PageMainLayoutContext = createContext<HTMLDivElement | null>(null);
 
 export type PageMainLayoutProps = {
     children: ReactNode | ReactNode[];
     bottomNavEnabled?: boolean;
     topNavMenuEnabled?: boolean;
     dappStatusEnabled?: boolean;
-    centerLogo?: boolean;
     className?: string;
 };
 
@@ -28,26 +30,35 @@ export default function PageMainLayout({
     bottomNavEnabled = false,
     topNavMenuEnabled = false,
     dappStatusEnabled = false,
-    centerLogo = false,
     className,
 }: PageMainLayoutProps) {
+    const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
+    const appType = useAppSelector((state) => state.app.appType);
+    const isFullScreen = appType === AppType.fullscreen;
+    const [titlePortalContainer, setTitlePortalContainer] =
+        useState<HTMLDivElement | null>(null);
     return (
-        <div className={st.container}>
+        <div
+            className={cl(st.container, {
+                [st.fullScreenContainer]: isFullScreen,
+            })}
+        >
+            <Header
+                networkName={networkName}
+                middleContent={
+                    dappStatusEnabled ? (
+                        <DappStatus />
+                    ) : (
+                        <div ref={setTitlePortalContainer} />
+                    )
+                }
+                rightContent={topNavMenuEnabled ? <MenuButton /> : undefined}
+            />
             <div
-                className={cl(st.header, {
-                    [st.center]:
-                        centerLogo && !topNavMenuEnabled && !dappStatusEnabled,
+                className={cl(st.content, {
+                    [st.fullScreenContent]: isFullScreen,
                 })}
             >
-                <Link to="/tokens" className={st.logoLink}>
-                    <Logo className={st.logo} txt={true} />
-                </Link>
-                {dappStatusEnabled ? <DappStatus /> : null}
-                {topNavMenuEnabled ? (
-                    <MenuButton className={st.menuButton} />
-                ) : null}
-            </div>
-            <div className={st.content}>
                 <main
                     className={cl(
                         st.main,
@@ -55,10 +66,15 @@ export default function PageMainLayout({
                         className
                     )}
                 >
-                    <ErrorBoundary>{children}</ErrorBoundary>
+                    <PageMainLayoutContext.Provider
+                        value={titlePortalContainer}
+                    >
+                        <ErrorBoundary>{children}</ErrorBoundary>
+                    </PageMainLayoutContext.Provider>
                 </main>
                 {bottomNavEnabled ? <Navigation /> : null}
                 {topNavMenuEnabled ? <MenuContent /> : null}
+                <Toaster bottomNavEnabled={bottomNavEnabled} />
             </div>
         </div>
     );

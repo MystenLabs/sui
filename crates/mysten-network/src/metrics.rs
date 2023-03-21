@@ -26,7 +26,7 @@ pub trait MetricsCallbackProvider: Send + Sync + Clone + 'static {
     /// `path`: the endpoint uri path
     /// `latency`: the time when the request was received and when the response was created
     /// `status`: the http status code of the response
-    /// `grpc_status_code`: the grpc status code (see https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc)
+    /// `grpc_status_code`: the grpc status code (see <https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc>)
     fn on_response(&self, path: String, latency: Duration, status: u16, grpc_status_code: Code);
 
     /// Called when request call is started

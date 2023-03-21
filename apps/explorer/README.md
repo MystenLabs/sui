@@ -30,17 +30,6 @@ By default, the Sui Explorer attempts to connect to a local RPC server. For more
 
 If you want to use the explorer with another network, you can select your preferred network in the header of the explorer.
 
-## Connecting to the Static Data
-
-The Sui Explorer can also connect to a local, static JSON dataset that can be found at `./src/utils/static/mock_data.json` and `./src/utils/static/owned_object.json`.
-
-For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we could run the following:
-
-```bash
-pnpm explorer dev:static
-
-```
-
 ## To run end-to-end localnet test
 
 Start validators locally:
@@ -49,16 +38,10 @@ Start validators locally:
 cargo run --bin sui-test-validator
 ```
 
-In a a separate terminal, start explorer:
+In a a separate terminal, you can now run the end-to-end tests:
 
 ```bash
-pnpm explorer dev
-```
-
-In a separate terminal, run cypress locally, this should open a chrome simulating all tests:
-
-```bash
-pnpm explorer exec cypress open
+pnpm explorer playwright test
 ```
 
 # Other pnpm commands
@@ -75,7 +58,7 @@ It bundles React in production mode and optimizes the build for the best perform
 
 ### `pnpm explorer lint`
 
-Run linting check (prettier/eslint/stylelint).
+Run linting check (prettier/eslint).
 
 ### `pnpm explorer lint:fix`
 

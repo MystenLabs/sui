@@ -2,19 +2,19 @@
 title: Learn about Sui
 ---
 
-Sui *(swē)* is the water element in Japanese philosophy. The power of the sui element lies in its fluidity---its ability to easily adapt to and transform any environment. Similarly, the Sui platform seeks to provide a flexible network that you can leverage to shape the web3 landscape. 
+Sui *(swē)* is the water element in Japanese philosophy. The power of the sui element lies in its fluidity&mdash;its ability to easily adapt to and transform any environment. Similarly, the Sui platform seeks to provide a flexible network that you can leverage to shape the web3 landscape. 
 
 The Sui platform is built on Sui Move, which is derived from the core [Move](https://github.com/MystenLabs/awesome-move) programming language. This documentation assumes that you have a basic working knowledge of Move. To learn more about the differences between core Move and Sui Move, see [How Sui Move differs from core Move](../learn/sui-move-diffs.md).
 
-For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
+For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper.
 
-## Versions of the documentation
+## Documentation versions
 
 This site is available in two versions. You can choose which version to view using the drop-down menu at top left.
- * [Devnet](https://docs.sui.io/devnet/learn) reflects the stable `devnet` branch of the repo. Use the **Devnet** version of the docs if you build or test with the `devnet` branch of the repo. 
- * [Latest build](https://docs.sui.io/learn) reflects the `main` branch of the repo. The `main` branch includes the most recent updates we've made to the documentation. The `main` branch includes updates not yet merged into the `devnet` branch.
+ * **Devnet** reflects the version of Sui running on the Sui Devnet network.  
+ * **Testnet** reflects the version of Sui running on the Sui Testnet network. 
 
- When Sui releases a new feature, or change to an existing feature, to the `devnet` branch, the documentation in the **Devnet** version may not reflect the associated updates for a few days after the release. You can see the associated updates in the **Latest build** version in the interim.  
+Use the version of the documentation that corresponds to the Sui network you use.
 
 ## Sui releases
 
@@ -22,17 +22,9 @@ Check for the latest release of Sui, including Release Notes, on the [Sui Releas
 
 ### Doc updates
 
-We list changes and updates to the documentation in the [Sui documentation updates](../learn/sui-doc-updates.md) topic.
+We list changes and updates to the documentation in the [Sui documentation updates](../doc-updates/index.md) topic.
 
 See the [docs-related commit history](https://github.com/MystenLabs/sui/commits/main/doc/src) in the Sui repo.
-
-### Code changes
-
-For a complete view of all changes in the Sui `devnet` branch, see:
-https://github.com/MystenLabs/sui/commits/devnet
-
-For updates in the `main` branch, see:
-https://github.com/MystenLabs/sui/commits/main 
 
 ### Write Smart Contracts with Move
 

@@ -1,238 +1,168 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useCoinDecimals } from '@mysten/core';
+import { ArrowRight16, ArrowLeft16 } from '@mysten/icons';
 import { getTransactionDigest } from '@mysten/sui.js';
-import BigNumber from 'bignumber.js';
-import { Formik } from 'formik';
-import { useCallback, useMemo, useState } from 'react';
+import * as Sentry from '@sentry/react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import StepOne from './TransferCoinForm/StepOne';
-import StepTwo from './TransferCoinForm/StepTwo';
-import {
-    createValidationSchemaStepOne,
-    createValidationSchemaStepTwo,
-} from './validation';
-import { Content } from '_app/shared/bottom-menu-layout';
-import PageTitle from '_app/shared/page-title';
-import Loading from '_components/loading';
-import ProgressBar from '_components/progress-bar';
-import { useAppSelector, useAppDispatch, useCoinDecimals } from '_hooks';
-import {
-    accountAggregateBalancesSelector,
-    accountCoinsSelector,
-} from '_redux/slices/account';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { sendTokens } from '_redux/slices/transactions';
+import { PreviewTransfer } from './PreviewTransfer';
+import { SendTokenForm } from './SendTokenForm';
+import { createTokenTransferTransaction } from './utils/transaction';
+import { Button } from '_app/shared/ButtonUI';
+import BottomMenuLayout, {
+    Content,
+    Menu,
+} from '_app/shared/bottom-menu-layout';
+import { ActiveCoinsCard } from '_components/active-coins-card';
+import Overlay from '_components/overlay';
+import { useSigner } from '_hooks';
 import { trackEvent } from '_src/shared/plausible';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
-import type { SerializedError } from '@reduxjs/toolkit';
-import type { FormikHelpers } from 'formik';
+import type { SubmitProps } from './SendTokenForm';
 
-import st from './TransferCoinPage.module.scss';
-
-const initialValues = {
-    to: '',
-    amount: '',
-};
-
-export type FormValues = typeof initialValues;
-
-const DEFAULT_FORM_STEP = 1;
-
-// TODO: show out of sync when sui objects locally might be outdated
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
     const coinType = searchParams.get('type');
-
-    const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-    const coinBalance = useMemo(
-        () => (coinType && aggregateBalances[coinType]) || BigInt(0),
-        [coinType, aggregateBalances]
-    );
-
-    const gasAggregateBalance = useMemo(
-        () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
-        [aggregateBalances]
-    );
-
-    const coinSymbol = useMemo(
-        () => (coinType && Coin.getCoinSymbol(coinType)) || '',
-        [coinType]
-    );
-
-    const [sendError, setSendError] = useState<string | null>(null);
-    const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
-    const [formData] = useState<FormValues>(initialValues);
-
-    const [coinDecimals] = useCoinDecimals(coinType);
-    const [gasDecimals] = useCoinDecimals(GAS_TYPE_ARG);
-    const allCoins = useAppSelector(accountCoinsSelector);
-    const allCoinsOfSelectedTypeArg = useMemo(
-        () =>
-            allCoins.filter(
-                (aCoin) => coinType && Coin.getCoinTypeArg(aCoin) === coinType
-            ),
-        [coinType, allCoins]
-    );
-    const [amountToSend, setAmountToSend] = useState(BigInt(0));
-    const gasBudget = useMemo(
-        () =>
-            Coin.computeGasBudgetForPay(
-                allCoinsOfSelectedTypeArg,
-                amountToSend
-            ),
-        [allCoinsOfSelectedTypeArg, amountToSend]
-    );
-    const validationSchemaStepOne = useMemo(
-        () =>
-            createValidationSchemaStepOne(
-                coinType || '',
-                coinBalance,
-                coinSymbol,
-                gasAggregateBalance,
-                coinDecimals,
-                gasDecimals,
-                gasBudget
-            ),
-        [
-            coinType,
-            coinBalance,
-            coinSymbol,
-            coinDecimals,
-            gasDecimals,
-            gasAggregateBalance,
-            gasBudget,
-        ]
-    );
-    const validationSchemaStepTwo = useMemo(
-        () => createValidationSchemaStepTwo(),
-        []
-    );
-
-    const dispatch = useAppDispatch();
+    const [showTransactionPreview, setShowTransactionPreview] =
+        useState<boolean>(false);
+    const [formData, setFormData] = useState<SubmitProps>();
     const navigate = useNavigate();
-    const onHandleSubmit = useCallback(
-        async (
-            { to, amount }: FormValues,
-            { resetForm }: FormikHelpers<FormValues>
-        ) => {
-            if (coinType === null) {
-                return;
+    const [coinDecimals] = useCoinDecimals(coinType);
+    const signer = useSigner();
+    const address = useActiveAddress();
+    const queryClient = useQueryClient();
+
+    const transaction = useMemo(() => {
+        if (!coinType || !signer || !formData || !address) return null;
+
+        return createTokenTransferTransaction({
+            coinType,
+            coinDecimals,
+            ...formData,
+        });
+    }, [formData, signer, coinType, address, coinDecimals]);
+
+    const executeTransfer = useMutation({
+        mutationFn: async () => {
+            if (!transaction || !signer) {
+                throw new Error('Missing data');
             }
-            setSendError(null);
-            trackEvent('TransferCoins', {
-                props: { coinType },
+
+            const sentryTransaction = Sentry.startTransaction({
+                name: 'send-tokens',
             });
             try {
-                const bigIntAmount = BigInt(
-                    new BigNumber(amount)
-                        .shiftedBy(coinDecimals)
-                        .integerValue()
-                        .toString()
-                );
-                const response = await dispatch(
-                    sendTokens({
-                        amount: bigIntAmount,
-                        recipientAddress: to,
-                        tokenTypeArg: coinType,
-                    })
-                ).unwrap();
+                trackEvent('TransferCoins', {
+                    props: { coinType: coinType! },
+                });
 
-                resetForm();
-                const txDigest = getTransactionDigest(response);
-                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                    txDigest
-                )}&transfer=coin`;
-
-                navigate(receiptUrl);
-            } catch (e) {
-                setSendError((e as SerializedError).message || null);
+                const initializedSigner = await signer();
+                return initializedSigner.signAndExecuteTransaction({
+                    transaction,
+                    options: {
+                        showInput: true,
+                        showEffects: true,
+                        showEvents: true,
+                    },
+                });
+            } catch (error) {
+                sentryTransaction.setTag('failure', true);
+                throw error;
+            } finally {
+                sentryTransaction.finish();
             }
         },
-        [dispatch, navigate, coinType, coinDecimals]
-    );
-
-    const handleNextStep = useCallback(
-        (_: FormValues, { setSubmitting }: FormikHelpers<FormValues>) => {
-            setCurrentStep((prev) => prev + 1);
-            setSubmitting(false);
+        onSuccess: (response) => {
+            queryClient.invalidateQueries(['get-coins']);
+            queryClient.invalidateQueries(['coin-balance']);
+            const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                getTransactionDigest(response)
+            )}&from=transactions`;
+            return navigate(receiptUrl);
         },
-        []
-    );
-
-    const handleBackStep = useCallback(() => {
-        setCurrentStep(DEFAULT_FORM_STEP);
-    }, []);
-
-    const handleOnClearSubmitError = useCallback(() => {
-        setSendError(null);
-    }, []);
-    const loadingBalance = useAppSelector(
-        ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
-    );
+        onError: (error) => {
+            toast.error(
+                <div className="max-w-xs overflow-hidden flex flex-col">
+                    <small className="text-ellipsis overflow-hidden">
+                        {(error as Error).message || 'Something went wrong'}
+                    </small>
+                </div>
+            );
+        },
+    });
 
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
     }
 
-    const StepOneForm = (
-        <Formik
-            initialValues={formData}
-            validateOnMount={true}
-            validationSchema={validationSchemaStepOne}
-            onSubmit={handleNextStep}
+    return (
+        <Overlay
+            showModal={true}
+            title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
+            closeOverlay={() => navigate('/')}
         >
-            <StepOne
-                coinSymbol={coinSymbol}
-                coinType={coinType}
-                onClearSubmitError={handleOnClearSubmitError}
-                onAmountChanged={(anAmount) => setAmountToSend(anAmount)}
-            />
-        </Formik>
+            <div className="flex flex-col w-full mt-2.5">
+                {showTransactionPreview && formData ? (
+                    <BottomMenuLayout>
+                        <Content>
+                            <PreviewTransfer
+                                coinType={coinType}
+                                amount={formData.amount}
+                                to={formData.to}
+                                approximation={formData.isPayAllSui}
+                                transaction={transaction}
+                            />
+                        </Content>
+                        <Menu
+                            stuckClass="sendCoin-cta"
+                            className="w-full px-0 pb-0 mx-0 gap-2.5"
+                        >
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setShowTransactionPreview(false)}
+                                text="Back"
+                                before={<ArrowLeft16 />}
+                            />
+
+                            <Button
+                                type="button"
+                                variant="primary"
+                                onClick={() => executeTransfer.mutateAsync()}
+                                size="tall"
+                                text="Send Now"
+                                disabled={coinType === null}
+                                after={<ArrowRight16 />}
+                                loading={executeTransfer.isLoading}
+                            />
+                        </Menu>
+                    </BottomMenuLayout>
+                ) : (
+                    <>
+                        <div className="mb-7">
+                            <ActiveCoinsCard activeCoinType={coinType} />
+                        </div>
+
+                        <SendTokenForm
+                            onSubmit={(formData) => {
+                                setShowTransactionPreview(true);
+                                setFormData(formData);
+                            }}
+                            coinType={coinType}
+                            initialAmount={formData?.amount || ''}
+                            initialTo={formData?.to || ''}
+                        />
+                    </>
+                )}
+            </div>
+        </Overlay>
     );
-
-    const StepTwoForm = (
-        <Formik
-            initialValues={formData}
-            validateOnMount={true}
-            validationSchema={validationSchemaStepTwo}
-            onSubmit={onHandleSubmit}
-        >
-            <StepTwo
-                submitError={sendError}
-                gasBudget={gasBudget}
-                coinSymbol={coinSymbol}
-                coinType={coinType}
-                onClearSubmitError={handleOnClearSubmitError}
-            />
-        </Formik>
-    );
-
-    const steps = [StepOneForm, StepTwoForm];
-
-    const SendCoin = (
-        <div className={st.container}>
-            <PageTitle
-                title="Send Coins"
-                backLink={'/'}
-                className={st.pageTitle}
-                {...(currentStep > 1 && { onClick: handleBackStep })}
-            />
-
-            <Content className={st.content}>
-                <Loading loading={loadingBalance}>
-                    <ProgressBar
-                        currentStep={currentStep}
-                        stepsName={['Amount', 'Address']}
-                    />
-                    {steps[currentStep - 1]}
-                </Loading>
-            </Content>
-        </div>
-    );
-
-    return <>{SendCoin}</>;
 }
 
 export default TransferCoinPage;

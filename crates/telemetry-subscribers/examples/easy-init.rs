@@ -4,7 +4,7 @@
 use tracing::{debug, info, warn};
 
 fn main() {
-    let _guard = telemetry_subscribers::TelemetryConfig::new("my_app")
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 

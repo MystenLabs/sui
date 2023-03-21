@@ -1,0 +1,11 @@
+[package]
+name = "frenemies"
+version = "0.0.1"
+
+[dependencies]
+old-frenemies = { local = "../old-frenemies", addr_subst = { old_frenemies = "frenemies" } }
+Sui = { local = "../../../crates/sui-framework" }
+#Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+frenemies = "0x0"

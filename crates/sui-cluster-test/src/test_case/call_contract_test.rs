@@ -10,7 +10,7 @@ use tracing::info;
 
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiEvent;
+use sui_json_rpc_types::{ObjectChange, SuiEvent, SuiTransactionEffectsAPI};
 use sui_types::id::ID;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -57,43 +57,45 @@ impl TestCaseImpl for CallContractTest {
         ];
 
         let data = ctx
-            .build_transaction_remotely("sui_moveCall", params)
+            .build_transaction_remotely("unsafe_moveCall", params)
             .await?;
-        let (_, effects) = ctx.sign_and_execute(data, "call contract").await;
+        let response = ctx.sign_and_execute(data, "call contract").await;
 
         // Retrieve created nft
-        let nft_id = effects
-            .created
+        let nft_id = response
+            .effects
+            .as_ref()
+            .unwrap()
+            .created()
             .first()
             .expect("Failed to create NFT")
             .reference
             .object_id;
 
         // Examine effects
-        let events = &effects.events;
+        let events = &response.events.as_ref().unwrap().data;
+        let object_changes = response.object_changes.as_ref().unwrap();
+        // Only one move event emitted
         assert_eq!(
             events.len(),
-            3,
-            "Expect three event emitted, but got {}",
+            1,
+            "Expect 1 event emitted, but got {}",
             events.len()
         );
 
-        let new_object_version = events
+        let new_object_version = object_changes
             .iter()
             .find_map(|e| match e {
-                SuiEvent::NewObject {
-                    package_id,
-                    transaction_module,
+                ObjectChange::Created {
                     sender,
-                    recipient,
+                    owner,
                     object_type,
                     object_id,
                     version,
-                } if package_id == &SUI_FRAMEWORK_OBJECT_ID
-                    && transaction_module == &String::from("devnet_nft")
-                    && sender == &signer
-                    && recipient == &Owner::AddressOwner(signer)
-                    && object_type == "0x2::devnet_nft::DevNetNFT"
+                    ..
+                } if sender == &signer
+                    && owner == &Owner::AddressOwner(signer)
+                    && object_type.to_string() == "0x2::devnet_nft::DevNetNFT"
                     && object_id == &nft_id =>
                 {
                     Some(*version)
@@ -103,24 +105,21 @@ impl TestCaseImpl for CallContractTest {
             })
             .unwrap_or_else(|| panic!("Expect such a NewObject in events {:?}", events));
 
-        events.iter().find(|e| matches!(e, SuiEvent::MoveEvent{
+        events.iter().find(|e| matches!(e, SuiEvent{
             package_id,
-            transaction_module,
             sender,
+            bcs,
             type_,
-            fields: _,
-            bcs
+            ..
         } if
             package_id == &SUI_FRAMEWORK_OBJECT_ID
-            && transaction_module == &String::from("devnet_nft")
             && sender == &signer
-            && type_ == &String::from("0x2::devnet_nft::MintNFTEvent")
-            && bcs::from_bytes::<MintNFTEvent>(bcs).unwrap() == MintNFTEvent {object_id: ID {bytes: nft_id}, creator: signer, name: EXAMPLE_NFT_NAME.into()}
+            && &type_.to_string() == "0x2::devnet_nft::MintNFTEvent"
+            && bcs::from_bytes::<MintNFTEvent>(bcs).unwrap() == MintNFTEvent {object_id: ID::new(nft_id), creator: signer, name: EXAMPLE_NFT_NAME.into()}
         )).unwrap_or_else(|| panic!("Expect such a MoveEvent in events {:?}", events));
 
         // Verify fullnode observes the txn
-        ctx.let_fullnode_sync(vec![effects.transaction_digest], 5)
-            .await;
+        ctx.let_fullnode_sync(vec![response.digest], 5).await;
 
         let object = ObjectChecker::new(nft_id)
             .owner(Owner::AddressOwner(signer))
@@ -128,7 +127,7 @@ impl TestCaseImpl for CallContractTest {
             .await;
 
         assert_eq!(
-            object.reference.version, new_object_version,
+            object.version, new_object_version,
             "Expect sequence number to be 1"
         );
 

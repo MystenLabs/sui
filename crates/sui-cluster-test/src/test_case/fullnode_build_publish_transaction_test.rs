@@ -3,10 +3,10 @@
 
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
-use fastcrypto::encoding::Base64;
 use jsonrpsee::rpc_params;
+use sui_core::test_utils::compile_basics_package;
+use sui_json_rpc_types::SuiTransactionEffectsAPI;
 use sui_types::{base_types::ObjectID, object::Owner};
-use test_utils::transaction::compile_basics_package;
 
 pub struct FullNodeBuildPublishTransactionTest;
 
@@ -21,23 +21,28 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
     }
 
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error> {
-        let all_module_bytes = compile_basics_package()
-            .iter()
-            .map(|bytes| Base64::from_bytes(bytes))
-            .collect::<Vec<_>>();
+        let compiled_package = compile_basics_package();
+        let all_module_bytes =
+            compiled_package.get_package_base64(/* with_unpublished_deps */ false);
+        let dependencies = compiled_package.get_dependency_original_package_ids();
+
         let params = rpc_params![
             ctx.get_wallet_address(),
             all_module_bytes,
+            dependencies,
             None::<ObjectID>,
             10000
         ];
 
         let data = ctx
-            .build_transaction_remotely("sui_publish", params)
+            .build_transaction_remotely("unsafe_publish", params)
             .await?;
-        let (_, effects) = ctx.sign_and_execute(data, "publish basics package").await;
-        effects
-            .created
+        let response = ctx.sign_and_execute(data, "publish basics package").await;
+        response
+            .effects
+            .as_ref()
+            .unwrap()
+            .created()
             .iter()
             .find(|obj_ref| obj_ref.owner == Owner::Immutable)
             .unwrap();

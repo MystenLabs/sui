@@ -7,13 +7,13 @@
 
 use async_trait::async_trait;
 
-use crate::mutex_table::{LockGuard, MutexTable};
+use crate::mutex_table::{MutexGuard, MutexTable};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use sui_types::base_types::TransactionDigest;
-use typed_store::traits::TypedStoreDebug;
+use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store_derive::DBMapUtils;
 
 use sui_types::error::{SuiError, SuiResult};
@@ -23,6 +23,7 @@ use typed_store::{rocks::DBMap, traits::Map};
 use tracing::{debug, error, instrument, trace, warn};
 
 use tap::TapFallible;
+use typed_store::rocks::MetricConf;
 
 /// TxGuard is a handle on an in-progress transaction.
 ///
@@ -111,7 +112,7 @@ pub struct DBTxGuard<
 > {
     tx: TransactionDigest,
     retry_num: u32,
-    _mutex_guard: LockGuard,
+    _mutex_guard: MutexGuard,
     wal: &'a DBWriteAheadLog<C, ExecutionOutput>,
     dead: bool,
 }
@@ -124,7 +125,7 @@ where
     fn new(
         tx: &TransactionDigest,
         retry_num: u32,
-        _mutex_guard: LockGuard,
+        _mutex_guard: MutexGuard,
         wal: &'a DBWriteAheadLog<C, ExecutionOutput>,
     ) -> Self {
         Self {
@@ -176,6 +177,9 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     fn drop(&mut self) {
+        // do not run drop handler if current node was killed in simulator.
+        sui_simulator::return_if_killed!();
+
         if !self.dead {
             let tx = self.tx;
             error!(digest = ?tx, "DBTxGuard dropped without explicit commit");
@@ -212,8 +216,7 @@ where
     mutex_table: MutexTable<TransactionDigest>,
 }
 
-const MUTEX_TABLE_SIZE: usize = 1024;
-const MUTEX_TABLE_SHARD_SIZE: usize = 128;
+pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
 
 impl<C, ExecutionOutput> DBWriteAheadLog<C, ExecutionOutput>
 where
@@ -221,7 +224,8 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug,
 {
     pub fn new(path: PathBuf) -> Self {
-        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
+        let tables =
+            DBWriteAheadLogTables::open_tables_read_write(path, MetricConf::default(), None, None);
 
         // Read in any digests that were left in the log, e.g. due to a crash.
         //
@@ -235,7 +239,7 @@ where
         Self {
             tables,
             recoverable_txes: Mutex::new(recoverable_txes),
-            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE, MUTEX_TABLE_SHARD_SIZE),
+            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
         }
     }
 
@@ -282,7 +286,7 @@ where
 
     fn commit_tx(&self, tx: &TransactionDigest, is_commit: bool) -> SuiResult {
         if is_commit {
-            debug!(digest = ?tx, "committing tx");
+            debug!("committing tx");
         }
         let write_batch = self.tables.log.batch();
         let write_batch = write_batch.delete_batch(&self.tables.log, std::iter::once(tx))?;
@@ -326,7 +330,7 @@ where
     ExecutionOutput: Serialize + DeserializeOwned + Debug + Send + Sync,
 {
     type Guard = DBTxGuard<'a, C, ExecutionOutput>;
-    type LockGuard = LockGuard;
+    type LockGuard = MutexGuard;
 
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
     async fn begin_tx<'b>(

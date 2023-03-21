@@ -7,7 +7,7 @@
   "organizationName": "Mysten Labs",
   "projectName": "Dev Portal",
   "footerData": {
-    "copyRight": "©2022 Copyright Sui. All rights reserved.",
+    "copyRight": "©2023 Copyright Sui Foundation. All rights reserved.",
     "privacyPolicy": {
       "label": "Privacy Policy",
       "link": "https://sui.io/policy/"
@@ -58,8 +58,8 @@
           "arrow": true
         },
         {
-          "title": "Sui Blog (Medium)",
-          "link": "https://medium.com/mysten-labs",
+          "title": "Sui Developer Forums",
+          "link": "https://forums.sui.io/",
           "external": true,
           "arrow": true
         }
@@ -131,23 +131,17 @@
         "name": "What's New",
         "sublist": [
           {
-            "name": "Doc Updates",
-            "url": "/doc-updates"
+            "name": "Sui Migration Guide",
+            "url": "/doc-updates/sui-migration-guide"
           },
           {
-            "name": "Sui Releases",
-            "url": "https://github.com/MystenLabs/sui/releases",
-            "external": true
+            "name": "Sui Breaking Changes",
+            "url": "/doc-updates/sui-breaking-changes"
           },
           {
             "name": "Sui Announcements (Discord)",
             "url": "https://discord.com/channels/916379725201563759/925109817834631189",
             "external": true            
-          },
-          {
-            "name": "Sui Developer Experience Roadmap",
-            "url": "https://github.com/MystenLabs/sui/blob/main/DEVX_ROADMAP.md",
-            "external": true
           }
         ]
       },
@@ -181,8 +175,8 @@
             "external": true
           },
           {
-            "name": "Sui by Example",
-            "url": "https://examples.sui.io/",
+            "name": "Sui Move by Example",
+            "url": "https://examples.sui.io",
             "external": true
           },
           {

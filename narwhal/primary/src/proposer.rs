@@ -3,25 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
-use crypto::{PublicKey, Signature};
-use fastcrypto::{hash::Hash as _, SignatureService};
-use mysten_metrics::spawn_monitored_task;
-use std::collections::BTreeMap;
+use crypto::PublicKey;
+use fastcrypto::hash::Hash as _;
+use mysten_metrics::spawn_logged_monitored_task;
+use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
-use tokio::time::Instant;
+use tokio::time::{sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use tracing::{debug, error, info};
-use types::now;
+use tracing::{debug, enabled, error, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, ReconfigureNotification, Round, Timestamp, TimestampMs,
+    BatchDigest, Certificate, Header, Round, TimestampMs,
 };
+use types::{now, ConditionalBroadcastReceiver};
 
 /// Messages sent to the proposer about our own batch digests
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub struct OurDigestMessage {
     pub worker_id: WorkerId,
     pub timestamp: TimestampMs,
     /// A channel to send an () as an ack after this digest is processed by the primary.
-    pub ack_channel: oneshot::Sender<()>,
+    pub ack_channel: Option<oneshot::Sender<()>>,
 }
 
 #[cfg(test)]
@@ -45,8 +45,6 @@ pub struct Proposer {
     name: PublicKey,
     /// The committee information.
     committee: Committee,
-    /// Service to sign headers.
-    signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
     /// The threshold number of batches that can trigger
     /// a header creation. When there are available at least
     /// `header_num_of_batches_threshold` batches we are ok
@@ -54,8 +52,10 @@ pub struct Proposer {
     header_num_of_batches_threshold: usize,
     /// The maximum number of batches in header.
     max_header_num_of_batches: usize,
-    /// The maximum delay to wait for batches' digests.
+    /// The maximum delay to wait for conditions like having leader in parents.
     max_header_delay: Duration,
+    /// The minimum delay between generating headers.
+    min_header_delay: Duration,
     /// The delay to wait until resending the last proposed header if proposer
     /// hasn't proposed anything new since then. If None is provided then the
     /// default value will be used instead.
@@ -63,13 +63,13 @@ pub struct Proposer {
     /// The network model in which the node operates.
     network_model: NetworkModel,
 
-    /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+    /// Receiver for shutdown.
+    rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives the parents to include in the next header (along with their round number) from core.
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
     rx_our_digests: Receiver<OurDigestMessage>,
-    /// Sends newly created headers to the `Core`.
+    /// Sends newly created headers to the `Certifier`.
     tx_headers: Sender<Header>,
 
     /// The proposer store for persisting the last header.
@@ -83,14 +83,15 @@ pub struct Proposer {
     /// Holds the certificate of the last leader (if any).
     last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
-    digests: Vec<(BatchDigest, WorkerId, TimestampMs)>,
+    /// Digests are roughly oldest to newest, and popped in FIFO order from the front.
+    digests: VecDeque<OurDigestMessage>,
 
-    /// Holds the map of proposed previous round headers, used to ensure that
+    /// Holds the map of proposed previous round headers and their digest messages, to ensure that
     /// all batches' digest included will eventually be re-sent.
-    proposed_headers: BTreeMap<Round, Header>,
-    /// Commited headers channel on which we get updates on which of
+    proposed_headers: BTreeMap<Round, (Header, VecDeque<OurDigestMessage>)>,
+    /// Committed headers channel on which we get updates on which of
     /// our own headers have been committed.
-    rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
+    rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
 
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
@@ -102,49 +103,52 @@ impl Proposer {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        signature_service: SignatureService<Signature, { crypto::DIGEST_LENGTH }>,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
         max_header_delay: Duration,
+        min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
         network_model: NetworkModel,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_shutdown: ConditionalBroadcastReceiver,
         rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_our_digests: Receiver<OurDigestMessage>,
         tx_headers: Sender<Header>,
         tx_narwhal_round_updates: watch::Sender<Round>,
-        rx_commited_own_headers: Receiver<(Round, Vec<Round>)>,
+        rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
-        spawn_monitored_task!(async move {
-            Self {
-                name,
-                committee,
-                signature_service,
-                header_num_of_batches_threshold,
-                max_header_num_of_batches,
-                max_header_delay,
-                header_resend_timeout,
-                network_model,
-                rx_reconfigure,
-                rx_parents,
-                rx_our_digests,
-                tx_headers,
-                tx_narwhal_round_updates,
-                proposer_store,
-                round: 0,
-                last_parents: genesis,
-                last_leader: None,
-                digests: Vec::with_capacity(2 * max_header_num_of_batches),
-                proposed_headers: BTreeMap::new(),
-                rx_commited_own_headers,
-                metrics,
-            }
-            .run()
-            .await;
-        })
+        spawn_logged_monitored_task!(
+            async move {
+                Self {
+                    name,
+                    committee,
+                    header_num_of_batches_threshold,
+                    max_header_num_of_batches,
+                    max_header_delay,
+                    min_header_delay,
+                    header_resend_timeout,
+                    network_model,
+                    rx_shutdown,
+                    rx_parents,
+                    rx_our_digests,
+                    tx_headers,
+                    tx_narwhal_round_updates,
+                    proposer_store,
+                    round: 0,
+                    last_parents: genesis,
+                    last_leader: None,
+                    digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
+                    proposed_headers: BTreeMap::new(),
+                    rx_committed_own_headers,
+                    metrics,
+                }
+                .run()
+                .await;
+            },
+            "ProposerTask"
+        )
     }
 
     /// make_header creates a new Header, persists it to database
@@ -165,7 +169,7 @@ impl Proposer {
 
         let num_of_included_digests = header.payload.len();
 
-        // Send the new header to the `Core` that will broadcast and process it.
+        // Send the new header to the `Certifier` that will broadcast and certify it.
         self.tx_headers
             .send(header.clone())
             .await
@@ -185,13 +189,15 @@ impl Proposer {
         if let Some(last_header) = self.proposer_store.get_last_proposed()? {
             if last_header.round == this_round && last_header.epoch == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
+                debug!("Proposer re-using existing header for round {this_round}");
+                self.last_parents.clear(); // Clear parents that are now invalid for next round.
                 return Ok(last_header);
             }
         }
 
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let digests: Vec<_> = self.digests.drain(..num_of_digests).collect();
+        let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
         let parents: Vec<_> = self.last_parents.drain(..).collect();
 
         // Here we check that the timestamp we will include in the header is consistent with the
@@ -214,52 +220,122 @@ impl Proposer {
             self.name.clone(),
             this_round,
             this_epoch,
-            digests
+            header_digests
                 .iter()
-                .map(|(digest, worker_id, _)| (*digest, *worker_id))
+                .map(|m| (m.digest, (m.worker_id, m.timestamp)))
                 .collect(),
             parents.iter().map(|x| x.digest()).collect(),
-            &self.signature_service,
         )
         .await;
 
-        // Register the header by the current round, to remember that we need to commit
-        // it, or re-include the batch digests that it contains.
-        self.proposed_headers.insert(this_round, header.clone());
+        let leader_and_support = if this_round % 2 == 0 {
+            let leader_name = self.committee.leader(this_round);
+            if self.name == leader_name {
+                "even_round_is_leader"
+            } else {
+                "even_round_not_leader"
+            }
+        } else {
+            let leader_name = self.committee.leader(this_round - 1);
+            if parents.iter().any(|c| c.origin() == leader_name) {
+                "odd_round_gives_support"
+            } else {
+                "odd_round_no_support"
+            }
+        };
+        self.metrics
+            .headers_proposed
+            .with_label_values(&[leader_and_support])
+            .inc();
+        self.metrics.header_parents.observe(parents.len() as f64);
+
+        if enabled!(tracing::Level::DEBUG) {
+            let mut msg = format!("Created header {header:?} with parent certificates:\n");
+            for parent in parents.iter() {
+                msg.push_str(&format!("{parent:?}\n"));
+            }
+            debug!(msg);
+        }
 
         // Update metrics related to latency
-        for (_, _, created_at_timestamp) in digests {
+        let mut total_inclusion_secs = 0.0;
+        for digest in &header_digests {
+            let batch_inclusion_secs =
+                Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64();
+            total_inclusion_secs += batch_inclusion_secs;
+
+            #[cfg(feature = "benchmark")]
+            {
+                // NOTE: This log entry is used to compute performance.
+                tracing::info!(
+                    "Batch {:?} from worker {} took {} seconds from creation to be included in a proposed header",
+                    digest.digest,
+                    digest.worker_id,
+                    batch_inclusion_secs
+                );
+            }
+
             self.metrics
                 .proposer_batch_latency
-                .observe(created_at_timestamp.elapsed().as_secs_f64());
+                .observe(batch_inclusion_secs);
         }
+
+        // NOTE: This log entry is used to compute performance.
+        let (header_creation_secs, avg_inclusion_secs) =
+            if let Some(digest) = header_digests.front() {
+                (
+                    Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64(),
+                    total_inclusion_secs / header_digests.len() as f64,
+                )
+            } else {
+                (self.max_header_delay.as_secs_f64(), 0.0)
+            };
+        debug!(
+            "Header {:?} was created in {} seconds. Contains {} batches, with average delay {} seconds.",
+            header.digest(),
+            header_creation_secs,
+            header_digests.len(),
+            avg_inclusion_secs,
+        );
+
+        // Register the header by the current round, to remember that we need to commit
+        // it, or re-include the batch digests that it contains.
+        self.proposed_headers
+            .insert(this_round, (header.clone(), header_digests));
 
         Ok(header)
     }
 
-    /// Update the committee and cleanup internal state.
-    fn change_epoch(&mut self, committee: Committee) {
-        self.committee = committee;
-
-        self.round = 0;
-        let _ = self.tx_narwhal_round_updates.send(self.round);
-        self.last_parents = Certificate::genesis(&self.committee);
-    }
-
-    /// Compute the timeout value of the proposer.
-    fn timeout_value(&self) -> Instant {
+    fn max_delay(&self) -> Duration {
         match self.network_model {
             // In partial synchrony, if this node is going to be the leader of the next
-            // round, we set a lower timeout value to increase its chance of committing
-            // the leader committed.
+            // round, we set a lower max timeout value to increase its chance of committing
+            // the leader.
             NetworkModel::PartiallySynchronous
                 if self.committee.leader(self.round + 1) == self.name =>
             {
-                Instant::now() + self.max_header_delay / 2
+                self.max_header_delay / 2
             }
 
             // Otherwise we keep the default timeout value.
-            _ => Instant::now() + self.max_header_delay,
+            _ => self.max_header_delay,
+        }
+    }
+
+    fn min_delay(&self) -> Duration {
+        match self.network_model {
+            // In partial synchrony, if this node is going to be the leader of the next
+            // round and there are more than 1 primary in the committee, we use a lower
+            // min delay value to increase the chance of committing the leader.
+            NetworkModel::PartiallySynchronous
+                if self.committee.size() > 1
+                    && self.committee.leader(self.round + 1) == self.name =>
+            {
+                Duration::ZERO
+            }
+
+            // Otherwise we keep the default timeout value.
+            _ => self.min_header_delay,
         }
     }
 
@@ -279,9 +355,14 @@ impl Proposer {
         self.last_leader.is_some()
     }
 
-    /// Check whether if we have (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
-    /// or (iii) there is no leader to vote for. This is only relevant in partial synchrony.
+    /// Check whether if this validator is the leader of the round, or if we have
+    /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
+    /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
+        if self.committee.leader(self.round + 1) == self.name {
+            return true;
+        }
+
         let leader = match &self.last_leader {
             Some(x) => x.digest(),
             None => return true,
@@ -332,14 +413,18 @@ impl Proposer {
         debug!("Dag starting at round {}", self.round);
         let mut advance = true;
 
-        let timer = sleep(self.max_header_delay);
+        let timer_start = Instant::now();
+        let max_delay_timer = sleep_until(timer_start + self.max_header_delay);
+        let min_delay_timer = sleep_until(timer_start + self.min_header_delay);
+
         let header_resend_timeout = self
             .header_resend_timeout
             .unwrap_or(DEFAULT_HEADER_RESEND_TIMEOUT);
         let mut header_repeat_timer = Box::pin(sleep(header_resend_timeout));
         let mut opt_latest_header = None;
 
-        tokio::pin!(timer);
+        tokio::pin!(max_delay_timer);
+        tokio::pin!(min_delay_timer);
 
         info!(
             "Proposer on node {} has started successfully with header resend timeout {:?}.",
@@ -354,10 +439,14 @@ impl Proposer {
             // in partially synchrony. We guarantee that no more than max_header_num_of_batches are included in
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.digests.len() >= self.header_num_of_batches_threshold;
-            let mut timer_expired = timer.is_elapsed();
+            let max_delay_timed_out = max_delay_timer.is_elapsed();
+            let min_delay_timed_out = min_delay_timer.is_elapsed();
 
-            if (timer_expired || (enough_digests && advance)) && enough_parents {
-                if timer_expired && matches!(self.network_model, NetworkModel::PartiallySynchronous)
+            if (max_delay_timed_out || ((enough_digests || min_delay_timed_out) && advance))
+                && enough_parents
+            {
+                if max_delay_timed_out
+                    && matches!(self.network_model, NetworkModel::PartiallySynchronous)
                 {
                     // It is expected that this timer expires from time to time. If it expires too often, it
                     // either means some validators are Byzantine or that the network is experiencing periods
@@ -369,10 +458,7 @@ impl Proposer {
                 // Advance to the next round.
                 self.round += 1;
                 let _ = self.tx_narwhal_round_updates.send(self.round);
-                self.metrics
-                    .current_round
-                    .with_label_values(&[&self.committee.epoch.to_string()])
-                    .set(self.round as i64);
+                self.metrics.current_round.set(self.round as i64);
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.
@@ -380,10 +466,12 @@ impl Proposer {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok((header, digests)) => {
-                        let reason = if timer_expired {
-                            "timeout"
-                        } else {
+                        let reason = if max_delay_timed_out {
+                            "max_timeout"
+                        } else if enough_digests {
                             "threshold_size_reached"
+                        } else {
+                            "min_timeout"
                         };
 
                         // Save the header
@@ -392,15 +480,19 @@ impl Proposer {
 
                         self.metrics
                             .num_of_batch_digests_in_header
-                            .with_label_values(&[&self.committee.epoch.to_string(), reason])
+                            .with_label_values(&[reason])
                             .observe(digests as f64);
                     }
                 }
 
                 // Reschedule the timer.
-                let deadline = self.timeout_value();
-                timer.as_mut().reset(deadline);
-                timer_expired = false;
+                let timer_start = Instant::now();
+                max_delay_timer
+                    .as_mut()
+                    .reset(timer_start + self.max_delay());
+                min_delay_timer
+                    .as_mut()
+                    .reset(timer_start + self.min_delay());
             }
 
             tokio::select! {
@@ -421,34 +513,42 @@ impl Proposer {
                     }
                 }
 
-                Some((commit_round, commit_headers)) = self.rx_commited_own_headers.recv() => {
+                Some((commit_round, commit_headers)) = self.rx_committed_own_headers.recv() => {
                     // Remove committed headers from the list of pending
-                    for round in &commit_headers {
-                        self.proposed_headers.remove(round);
+                    let mut max_committed_round = 0;
+                    for round in commit_headers {
+                        max_committed_round = max_committed_round.max(round);
+                        let Some(_) = self.proposed_headers.remove(&round) else {
+                            info!("Own committed header not found at round {round}, probably because of restarts.");
+                            // There can still be later committed headers in proposed_headers.
+                            continue;
+                        };
                     }
 
-                    // Now for any round much below the current commit round we re-insert
-                    // the batches into the digests we need to send, effectivelly re-sending
-                    // them
-                    let mut digests_to_resend = Vec::new();
+                    // Now for any round below the current commit round we re-insert
+                    // the batches into the digests we need to send, effectively re-sending
+                    // them in FIFO order.
+                    // Oldest to newest payloads.
+                    let mut digests_to_resend = VecDeque::new();
+                    // Oldest to newest rounds.
                     let mut retransmit_rounds = Vec::new();
 
                     // Iterate in order of rounds of our own headers.
-                    for (round_header, header) in &mut self.proposed_headers {
-                        // If we are within 2 rounds of the commit we break
-                        if round_header + 2 >= commit_round {
+                    for (header_round, (_header, included_digests)) in &mut self.proposed_headers {
+                        // Stop once we have processed headers at and below last committed round.
+                        if *header_round > max_committed_round {
                             break;
                         }
-
-                        digests_to_resend.extend(
-                            header.payload.iter().map(|(digest, worker)| (*digest, *worker, 0))
-                        );
-                        retransmit_rounds.push(*round_header);
+                        // Add payloads from oldest to newest.
+                        digests_to_resend.append(included_digests);
+                        retransmit_rounds.push(*header_round);
                     }
 
                     if !retransmit_rounds.is_empty() {
-                        // Add the digests to retransmit to the digests for the next header
-                        digests_to_resend.extend(&self.digests);
+                        let num_to_resend = digests_to_resend.len();
+                        // Since all of digests_to_resend are roughly newer than self.digests,
+                        // prepend digests_to_resend to the digests for the next header.
+                        digests_to_resend.append(&mut self.digests);
                         self.digests = digests_to_resend;
 
                         // Now delete the headers with batches we re-transmit
@@ -457,37 +557,33 @@ impl Proposer {
                         }
 
                         debug!(
-                            "Retransmit batches in undelivered headers {:?} at commit round {:?}",
+                            "Retransmit {} batches in undelivered headers {:?} at commit round {:?}, remaining headers {}",
+                            num_to_resend,
                             retransmit_rounds,
-                            commit_round
+                            commit_round,
+                            self.proposed_headers.len()
                         );
+
+                        self.metrics.proposer_resend_headers.inc_by(retransmit_rounds.len() as u64);
+                        self.metrics.proposer_resend_batches.inc_by(num_to_resend as u64);
                     }
                 },
 
                 Some((parents, round, epoch)) = self.rx_parents.recv() => {
                     // If the core already moved to the next epoch we should pull the next
                     // committee as well.
+
                     match epoch.cmp(&self.committee.epoch()) {
-                        Ordering::Greater => {
-                            let message = self.rx_reconfigure.borrow_and_update().clone();
-                            match message  {
-                                ReconfigureNotification::NewEpoch(new_committee) => {
-                                    self.change_epoch(new_committee);
-                                },
-                                ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                    self.committee = new_committee;
-                                },
-                                ReconfigureNotification::Shutdown => return,
-                            }
-                            tracing::debug!("Committee updated to {}", self.committee);
-                        }
-                        Ordering::Less => {
-                            // We already updated committee but the core is slow. Ignore the parents
-                            // from older epochs.
-                            continue
-                        },
                         Ordering::Equal => {
-                            // Nothing to do, we can proceed.
+                            // we can proceed.
+                        }
+                        _ => continue
+                    }
+
+                    // Sanity check: verify provided certs are of the correct round & epoch.
+                    for parent in parents.iter() {
+                        if parent.round() != round || parent.epoch() != epoch {
+                            error!("Proposer received certificate {parent:?} that failed to match expected round {round} or epoch {epoch}. This should not be possible.");
                         }
                     }
 
@@ -500,6 +596,16 @@ impl Proposer {
                             let _ = self.tx_narwhal_round_updates.send(self.round);
                             self.last_parents = parents;
 
+                            // we re-calculate the timeout to give the opportunity to the node
+                            // to propose earlier if it's a leader for the round
+                            // Reschedule the timer.
+                            let timer_start = Instant::now();
+                            max_delay_timer
+                                .as_mut()
+                                .reset(timer_start + self.max_delay());
+                            min_delay_timer
+                                .as_mut()
+                                .reset(timer_start + self.min_delay());
                         },
                         Ordering::Less => {
                             // Ignore parents from older rounds.
@@ -524,55 +630,38 @@ impl Proposer {
 
                     self.metrics
                     .proposer_ready_to_advance
-                    .with_label_values(&[&self.committee.epoch.to_string(), &advance.to_string(), round_type])
+                    .with_label_values(&[&advance.to_string(), round_type])
                     .inc();
                 }
 
                 // Receive digests from our workers.
-                Some(OurDigestMessage {
-                    digest,
-                    worker_id,
-                    timestamp,
-                    ack_channel,
-                }) = self.rx_our_digests.recv() => {
-                    let digest_record = (digest, worker_id, timestamp, );
-                    self.digests.push(digest_record);
+                Some(mut message) = self.rx_our_digests.recv() => {
                     // Signal back to the worker that the batch is recorded on the
                     // primary, and will be tracked until inclusion. This means that
                     // if the primary does not fail it will attempt to send the digest
                     // (and re-send if necessary) until it is sequenced, or the end of
                     // the epoch is reached. For the moment this does not persist primary
                     // crashes and re-starts.
-                    let _ = ack_channel.send(());
+                    let _ = message.ack_channel.take().unwrap().send(());
+                    self.digests.push_back(message);
                 }
 
-                // Check whether the timer expired.
-                () = &mut timer, if !timer_expired => {
-                    // Nothing to do.
+                // Check whether any timer expired.
+                () = &mut max_delay_timer, if !max_delay_timed_out => {
+                    // Continue to next iteration of the loop.
+                }
+                () = &mut min_delay_timer, if !min_delay_timed_out => {
+                    // Continue to next iteration of the loop.
                 }
 
-                // Check whether the committee changed.
-                result = self.rx_reconfigure.changed() => {
-                    result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.change_epoch(new_committee);
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::Shutdown => return,
-                    }
-                    tracing::debug!("Committee updated to {}", self.committee);
-
+                _ = self.rx_shutdown.receiver.recv() => {
+                    return
                 }
             }
 
             // update metrics
             self.metrics
                 .num_of_pending_batches_in_proposer
-                .with_label_values(&[&self.committee.epoch.to_string()])
                 .set(self.digests.len() as i64);
         }
     }

@@ -28,7 +28,7 @@
 module games::rock_paper_scissors {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self};
+    use sui::transfer;
     use std::vector;
     use std::hash;
 
@@ -191,7 +191,7 @@ module games::rock_paper_scissors {
 
     /// The final accord to the game logic. After both secrets have been revealed,
     /// the game owner can choose a winner and release the prize.
-    public entry fun select_winner(game: Game, ctx: &mut TxContext) {
+    public entry fun select_winner(game: Game, ctx: &TxContext) {
         assert!(status(&game) == STATUS_REVEALED, 0);
 
         let Game {
@@ -213,11 +213,11 @@ module games::rock_paper_scissors {
         // If one of the players wins, he takes the prize.
         // If there's a tie, the game owner gets the prize.
         if (p1_wins) {
-            transfer::transfer(prize, player_one)
+            transfer::public_transfer(prize, player_one)
         } else if (p2_wins) {
-            transfer::transfer(prize, player_two)
+            transfer::public_transfer(prize, player_two)
         } else {
-            transfer::transfer(prize, tx_context::sender(ctx))
+            transfer::public_transfer(prize, tx_context::sender(ctx))
         };
     }
 

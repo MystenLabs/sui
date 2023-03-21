@@ -2,25 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use eyre::eyre;
 use rocksdb::MultiThreaded;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::epoch::committee_store::CommitteeStore;
-use sui_storage::default_db_options;
-use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
-use sui_types::base_types::EpochId;
+use sui_core::authority::authority_store_types::StoreData;
+use sui_core::epoch::committee_store::CommitteeStoreTables;
+use sui_storage::write_ahead_log::DBWriteAheadLogTables;
+use sui_storage::IndexStoreTables;
+use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
+use sui_types::temporary_store::InnerTemporaryStore;
+use typed_store::rocks::{default_db_options, MetricConf};
+use typed_store::traits::{Map, TableSummary};
 
-#[derive(EnumString, Parser, Debug)]
+#[derive(EnumString, Clone, Parser, Debug, ValueEnum)]
 pub enum StoreName {
     Validator,
     Index,
-    LocksService,
-    NodeSync,
     Wal,
     Epoch,
     // TODO: Add the new checkpoint v2 tables.
@@ -32,23 +35,86 @@ impl std::fmt::Display for StoreName {
 }
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
-    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(
-        &default_db_options(None, None).0.options,
-        &path,
-    )
-    .map_err(|e| e.into())
-    .map(|q| {
-        q.iter()
-            .filter_map(|s| {
-                // The `default` table is not used
-                if s != "default" {
-                    Some(s.clone())
-                } else {
-                    None
+    rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options().options, path)
+        .map_err(|e| e.into())
+        .map(|q| {
+            q.iter()
+                .filter_map(|s| {
+                    // The `default` table is not used
+                    if s != "default" {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+}
+
+pub fn table_summary(
+    store_name: StoreName,
+    epoch: Option<EpochId>,
+    db_path: PathBuf,
+    table_name: &str,
+) -> anyhow::Result<TableSummary> {
+    match store_name {
+        StoreName::Validator => {
+            let epoch_tables = AuthorityEpochTables::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::open_readonly(epoch, &db_path).table_summary(table_name)
+            } else {
+                AuthorityPerpetualTables::open_readonly(&db_path).table_summary(table_name)
+            }
+        }
+        StoreName::Index => {
+            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .table_summary(table_name)
+        }
+        StoreName::Wal => {
+            DBWriteAheadLogTables::<
+                TrustedCertificate,
+                (InnerTemporaryStore, SignedTransactionEffects),
+            >::get_read_only_handle(db_path, None, None, MetricConf::default())
+            .table_summary(table_name)
+        }
+        StoreName::Epoch => {
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .table_summary(table_name)
+        }
+    }
+    .map_err(|err| anyhow!(err.to_string()))
+}
+
+pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
+    let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
+    let iter = perpetual_tables.objects.iter();
+    let mut total_count = 0;
+    let mut duplicate_count = 0;
+    let mut total_bytes = 0;
+    let mut duplicated_bytes = 0;
+
+    let mut object_id: ObjectID = ObjectID::random();
+    let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
+
+    for (key, value) in iter {
+        let value = value.migrate().into_inner();
+
+        if let StoreData::Move(object) = value.data {
+            if object_id != key.0 {
+                for (k, cnt) in data.iter() {
+                    total_bytes += k.len() * cnt;
+                    duplicated_bytes += k.len() * (cnt - 1);
+                    total_count += cnt;
+                    duplicate_count += cnt - 1;
                 }
-            })
-            .collect()
-    })
+                object_id = key.0;
+                data.clear();
+            }
+            *data.entry(object.contents().to_vec()).or_default() += 1;
+        }
+    }
+    (total_count, duplicate_count, total_bytes, duplicated_bytes)
 }
 
 // TODO: condense this using macro or trait dyn skills
@@ -78,29 +144,20 @@ pub fn dump_table(
                 )
             }
         }
-        StoreName::Index => IndexStore::get_read_only_handle(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
-        StoreName::LocksService => LockServiceImpl::get_read_only_handle(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
-        StoreName::NodeSync => NodeSyncStore::get_read_only_handle(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
+        StoreName::Index => {
+            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default()).dump(
+                table_name,
+                page_size,
+                page_number,
+            )
+        }
         StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
-        StoreName::Epoch => CommitteeStore::get_read_only_handle(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
+        StoreName::Epoch => {
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .dump(table_name, page_size, page_number)
+        }
     }
     .map_err(|err| anyhow!(err.to_string()))
 }

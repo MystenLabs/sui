@@ -8,7 +8,6 @@ use crate::{
         object_runtime::{object_store::ObjectResult, ObjectRuntime},
     },
 };
-use fastcrypto::hash::{HashFunction, Sha3_256};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -25,7 +24,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
@@ -45,7 +44,13 @@ macro_rules! get_or_fetch_object {
             }
         };
         let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut();
-        object_runtime.get_or_fetch_child_object($parent, $child_id, &child_ty, layout, tag)?
+        object_runtime.get_or_fetch_child_object(
+            $parent,
+            $child_id,
+            &child_ty,
+            layout,
+            MoveObjectType::from(tag),
+        )?
     }};
 }
 
@@ -55,22 +60,12 @@ pub fn hash_type_and_key(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
-    assert!(ty_args.len() == 1);
-    assert!(args.len() == 2);
+    assert_eq!(ty_args.len(), 1);
+    assert_eq!(args.len(), 2);
     let k_ty = ty_args.pop().unwrap();
     let k: Value = args.pop_back().unwrap();
-    let parent: SuiAddress = pop_arg!(args, AccountAddress).into();
+    let parent = pop_arg!(args, AccountAddress);
     let k_tag = context.type_to_type_tag(&k_ty)?;
-    // build bytes
-    let k_tag_bytes = match bcs::to_bytes(&k_tag) {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ));
-        }
-    };
     let k_layout = match context.type_to_type_layout(&k_ty) {
         Ok(Some(layout)) => layout,
         _ => {
@@ -80,25 +75,18 @@ pub fn hash_type_and_key(
             ))
         }
     };
-    let k_bytes = match k.simple_serialize(&k_layout) {
-        Some(bytes) => bytes,
-        None => {
-            return Ok(NativeResult::err(
-                legacy_emit_cost(),
-                E_BCS_SERIALIZATION_FAILURE,
-            ))
-        }
+    let Some(k_bytes) = k.simple_serialize(&k_layout) else {
+        return Ok(NativeResult::err(
+            legacy_emit_cost(),
+            E_BCS_SERIALIZATION_FAILURE,
+        ))
     };
-    // hash(parent || k || K)
-    let mut hasher = Sha3_256::default();
-    hasher.update(parent);
-    hasher.update(k_bytes);
-    hasher.update(k_tag_bytes);
-    let hash = hasher.finalize();
-
-    // truncate into an ObjectID and return
-    // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
-    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+    let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
+        return Ok(NativeResult::err(
+            legacy_emit_cost(),
+            E_BCS_SERIALIZATION_FAILURE,
+        ));
+    };
 
     Ok(NativeResult::ok(
         legacy_emit_cost(),
@@ -127,7 +115,7 @@ pub fn add_child_object(
     let child_ty = ty_args.pop().unwrap();
     assert!(ty_args.is_empty());
     let tag = match context.type_to_type_tag(&child_ty)? {
-        TypeTag::Struct(s) => s,
+        TypeTag::Struct(s) => *s,
         _ => {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -136,7 +124,13 @@ pub fn add_child_object(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    object_runtime.add_child_object(parent, child_id, &child_ty, *tag, child)?;
+    object_runtime.add_child_object(
+        parent,
+        child_id,
+        &child_ty,
+        MoveObjectType::from(tag),
+        child,
+    )?;
     Ok(NativeResult::ok(legacy_emit_cost(), smallvec![]))
 }
 
@@ -240,8 +234,8 @@ pub fn has_child_object_with_ty(
     let parent = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
     let ty = ty_args.pop().unwrap();
-    let tag = match context.type_to_type_tag(&ty)? {
-        TypeTag::Struct(s) => s,
+    let tag: StructTag = match context.type_to_type_tag(&ty)? {
+        TypeTag::Struct(s) => *s,
         _ => {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -250,7 +244,11 @@ pub fn has_child_object_with_ty(
         }
     };
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let has_child = object_runtime.child_object_exists_and_has_type(parent, child_id, *tag)?;
+    let has_child = object_runtime.child_object_exists_and_has_type(
+        parent,
+        child_id,
+        &MoveObjectType::from(tag),
+    )?;
     Ok(NativeResult::ok(
         legacy_emit_cost(),
         smallvec![Value::bool(has_child)],

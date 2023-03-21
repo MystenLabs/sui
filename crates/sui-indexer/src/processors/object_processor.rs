@@ -1,33 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_indexer::errors::IndexerError;
-use sui_indexer::models::events::{events_to_sui_events, read_events};
-use sui_indexer::models::object_logs::{commit_object_log, read_object_log};
-use sui_indexer::models::objects::commit_objects_from_events;
-use sui_indexer::{get_pg_pool_connection, PgConnectionPool};
+use crate::errors::IndexerError;
+use crate::metrics::IndexerObjectProcessorMetrics;
 
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::sleep;
+use crate::store::IndexerStore;
+use prometheus::Registry;
 use tracing::info;
 
-const OBJECT_EVENT_BATCH_SIZE: usize = 100;
+//const OBJECT_EVENT_BATCH_SIZE: usize = 100;
 
-pub struct ObjectProcessor {
-    pg_connection_pool: Arc<PgConnectionPool>,
+pub struct ObjectProcessor<S> {
+    pub store: S,
+    pub object_processor_metrics: IndexerObjectProcessorMetrics,
 }
 
-impl ObjectProcessor {
-    pub fn new(pg_connection_pool: Arc<PgConnectionPool>) -> ObjectProcessor {
-        Self { pg_connection_pool }
+impl<S> ObjectProcessor<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
+    pub fn new(store: S, prometheus_registry: &Registry) -> ObjectProcessor<S> {
+        let object_processor_metrics = IndexerObjectProcessorMetrics::new(prometheus_registry);
+        Self {
+            store,
+            object_processor_metrics,
+        }
     }
 
     pub async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer object processor started...");
-        let mut pg_pool_conn = get_pg_pool_connection(self.pg_connection_pool.clone())?;
 
-        let object_log = read_object_log(&mut pg_pool_conn)?;
+        /* let object_log = read_object_log(&mut pg_pool_conn)?;
         let mut last_processed_id = object_log.last_processed_id;
 
         loop {
@@ -42,9 +45,13 @@ impl ObjectProcessor {
 
             last_processed_id += event_count as i64;
             commit_object_log(&mut pg_pool_conn, last_processed_id)?;
+            self.object_processor_metrics
+                .total_object_batch_processed
+                .inc();
             if event_count < OBJECT_EVENT_BATCH_SIZE {
                 sleep(Duration::from_secs_f32(0.1)).await;
             }
-        }
+        }*/
+        Ok(())
     }
 }

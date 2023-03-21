@@ -1,24 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::time::Duration;
-use std::sync::Arc;
-
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use tokio_stream::Stream;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{error, instrument, trace};
 
-use sui_json_rpc_types::SuiMoveStruct;
-use sui_storage::event_store::{EventStore, EventStoreType};
-use sui_types::base_types::TransactionDigest;
-use sui_types::filter::EventFilter;
-use sui_types::{
-    error::{SuiError, SuiResult},
-    event::{Event, EventEnvelope},
-    messages::TransactionEffects,
-};
+use sui_json_rpc_types::{EventFilter, SuiTransactionEffects, SuiTransactionEvents};
+use sui_json_rpc_types::{SuiEvent, SuiTransactionEffectsAPI};
+use sui_types::error::SuiResult;
 
-use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::streamer::Streamer;
 
 #[cfg(test)]
@@ -28,123 +17,41 @@ mod event_handler_tests;
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
-    module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
-    event_streamer: Streamer<EventEnvelope, EventFilter>,
-    pub(crate) event_store: Arc<EventStoreType>,
+    event_streamer: Streamer<SuiEvent, EventFilter>,
+}
+
+impl Default for EventHandler {
+    fn default() -> Self {
+        let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
+        Self {
+            event_streamer: streamer,
+        }
+    }
 }
 
 impl EventHandler {
-    pub fn new(
-        event_store: Arc<EventStoreType>,
-        module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
-    ) -> Self {
-        let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
-        Self {
-            module_cache,
-            event_streamer: streamer,
-            event_store,
-        }
-    }
-
-    /// Run a regular cleanup task on the store
-    pub fn regular_cleanup_task(&self) {
-        let store_copy = self.event_store.clone();
-        match store_copy.as_ref() {
-            EventStoreType::SqlEventStore(db) => {
-                // Start periodic task to clean up WAL
-                let _handle = db.wal_cleanup_thread(Some(Duration::from_secs(300)));
-            }
-        }
-    }
-
-    #[instrument(level = "debug", skip_all, fields(seq=?seq_num, tx_digest=?effects.transaction_digest), err)]
+    #[instrument(level = "debug", skip_all, fields(tx_digest=?effects.transaction_digest()), err)]
     pub async fn process_events(
         &self,
-        effects: &TransactionEffects,
-        timestamp_ms: u64,
-        seq_num: u64,
+        effects: &SuiTransactionEffects,
+        events: &SuiTransactionEvents,
     ) -> SuiResult {
-        let res: Result<Vec<_>, _> = effects
-            .events
-            .iter()
-            .enumerate()
-            .map(|(event_num, e)| {
-                self.create_envelope(
-                    e,
-                    effects.transaction_digest,
-                    event_num.try_into().unwrap(),
-                    seq_num,
-                    timestamp_ms,
-                )
-            })
-            .collect();
-        let envelopes = res?;
-
-        // Ingest all envelopes together at once (for efficiency) into Event Store
-        let row_inserted: u64 = self.event_store.add_events(&envelopes).await?;
-
-        if row_inserted != envelopes.len() as u64 {
-            warn!(
-                num_events = envelopes.len(),
-                row_inserted = row_inserted,
-                tx_digest =? effects.transaction_digest,
-                "Inserted event record is less than expected."
-            );
-        }
-
         trace!(
-            num_events = envelopes.len(),
-            tx_digest =? effects.transaction_digest,
+            num_events = events.data.len(),
+            tx_digest =? effects.transaction_digest(),
             "Finished writing events to event store"
         );
 
         // serially dispatch event processing to honor events' orders.
-        for envelope in envelopes {
-            if let Err(e) = self.event_streamer.send(envelope).await {
-                error!(error =? e, "Failed to send EventEnvelope to dispatch");
+        for event in events.data.clone() {
+            if let Err(e) = self.event_streamer.send(event).await {
+                error!(error =? e, "Failed to send event to dispatch");
             }
         }
-
         Ok(())
     }
 
-    fn create_envelope(
-        &self,
-        event: &Event,
-        digest: TransactionDigest,
-        event_num: u64,
-        seq_num: u64,
-        timestamp_ms: u64,
-    ) -> Result<EventEnvelope, SuiError> {
-        let json_value = match event {
-            Event::MoveEvent {
-                type_, contents, ..
-            } => {
-                debug!(event =? event, "Process MoveEvent.");
-                let move_struct =
-                    Event::move_event_to_move_struct(type_, contents, self.module_cache.as_ref())?;
-                // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but with additional type supports, (e.g. ascii::String).
-                let sui_move_struct = SuiMoveStruct::from(move_struct);
-                Some(sui_move_struct.to_json_value().map_err(|e| {
-                    SuiError::ObjectSerializationError {
-                        error: e.to_string(),
-                    }
-                })?)
-            }
-            _ => None,
-        };
-
-        Ok(EventEnvelope::new(
-            timestamp_ms,
-            Some(digest),
-            seq_num,
-            event_num,
-            event.clone(),
-            json_value,
-        ))
-    }
-
-    pub fn subscribe(&self, filter: EventFilter) -> impl Stream<Item = EventEnvelope> {
+    pub fn subscribe(&self, filter: EventFilter) -> impl Stream<Item = SuiEvent> {
         self.event_streamer.subscribe(filter)
     }
 }

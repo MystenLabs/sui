@@ -1,34 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress } from '../utils/stringUtils';
+import { formatAddress, formatDigest } from '@mysten/sui.js';
 
-import { Link } from '~/ui/Link';
+import { Link, type LinkProps } from '~/ui/Link';
 
-export type AddressLinkProps = {
-    address: string;
+interface BaseInternalLinkProps extends LinkProps {
     noTruncate?: boolean;
-};
-
-export type ObjectLinkProps = {
-    objectId: string;
-    noTruncate?: boolean;
-};
-
-export function AddressLink({ address, noTruncate }: AddressLinkProps) {
-    const truncatedAddress = noTruncate ? address : formatAddress(address);
-    return (
-        <Link variant="mono" to={`/address/${encodeURIComponent(address)}`}>
-            {truncatedAddress}
-        </Link>
-    );
 }
 
-export function ObjectLink({ objectId, noTruncate }: ObjectLinkProps) {
-    const truncatedObjectId = noTruncate ? objectId : formatAddress(objectId);
-    return (
-        <Link variant="mono" to={`/object/${encodeURIComponent(objectId)}`}>
-            {truncatedObjectId}
-        </Link>
-    );
+function createInternalLink<T extends string>(
+    base: string,
+    propName: T,
+    formatter = formatAddress
+) {
+    return ({
+        [propName]: id,
+        noTruncate,
+        ...props
+    }: BaseInternalLinkProps & Record<T, string>) => {
+        const truncatedAddress = noTruncate ? id : formatter(id);
+        return (
+            <Link
+                variant="mono"
+                to={`/${base}/${encodeURIComponent(id)}`}
+                {...props}
+            >
+                {truncatedAddress}
+            </Link>
+        );
+    };
 }
+
+export const AddressLink = createInternalLink('address', 'address');
+export const ObjectLink = createInternalLink('object', 'objectId');
+export const TransactionLink = createInternalLink(
+    'transaction',
+    'digest',
+    formatDigest
+);
+export const ValidatorLink = createInternalLink('validator', 'address');

@@ -40,12 +40,11 @@
 /// the above curl commands.
 ///
 module games::drand_based_lottery {
-    use sui::object::{Self, ID, UID};
+    use games::drand_lib::{derive_randomness, verify_drand_signature, safe_selection};
     use std::option::{Self, Option};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-
-    use games::drand_lib::{derive_randomness, safe_selection, verify_drand_signature};
 
 
     /// Error codes
@@ -94,7 +93,7 @@ module games::drand_based_lottery {
             participants: 0,
             winner: option::none(),
         };
-        transfer::share_object(game);
+        transfer::public_share_object(game);
     }
 
     /// Anyone can close the game by providing the randomness of round-2.
@@ -111,7 +110,7 @@ module games::drand_based_lottery {
         game.status = COMPLETED;
         // The randomness is derived from drand_sig by passing it through sha2_256 to make it uniform.
         let digest = derive_randomness(drand_sig);
-        game.winner = option::some(safe_selection(game.participants, digest));
+        game.winner = option::some(safe_selection(game.participants, &digest));
     }
 
     /// Anyone can participate in the game and receive a ticket.
@@ -123,7 +122,7 @@ module games::drand_based_lottery {
             participant_index: game.participants,
         };
         game.participants = game.participants + 1;
-        transfer::transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(ticket, tx_context::sender(ctx));
     }
 
     /// The winner can redeem its ticket.
@@ -135,7 +134,7 @@ module games::drand_based_lottery {
             id: object::new(ctx),
             game_id: ticket.game_id,
         };
-        transfer::transfer(winner, tx_context::sender(ctx));
+        transfer::public_transfer(winner, tx_context::sender(ctx));
     }
 
     // Note that a ticket can be deleted before the game was completed.

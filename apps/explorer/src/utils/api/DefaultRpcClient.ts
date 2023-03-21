@@ -1,19 +1,48 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JsonRpcProvider } from '@mysten/sui.js';
+import { SentryRpcClient } from '@mysten/core';
+import {
+    JsonRpcProvider,
+    Connection,
+    localnetConnection,
+} from '@mysten/sui.js';
 
-import { getEndpoint, Network } from './rpcSetting';
+export enum Network {
+    LOCAL = 'LOCAL',
+    DEVNET = 'DEVNET',
+    TESTNET = 'TESTNET',
+}
 
-export { Network, getEndpoint };
+const CONNECTIONS: Record<Network, Connection> = {
+    [Network.LOCAL]: localnetConnection,
+    [Network.DEVNET]: new Connection({
+        fullnode: 'https://explorer-rpc.devnet.sui.io:443',
+    }),
+    [Network.TESTNET]: new Connection({
+        fullnode: 'https://fullnode-explorer.testnet.sui.io:443',
+    }),
+};
 
 const defaultRpcMap: Map<Network | string, JsonRpcProvider> = new Map();
-/** @deprecated This shouldn't be directly used, and instead should be used through `useRpc()`. */
+
+// NOTE: This class should not be used directly in React components, prefer to use the useRpcClient() hook instead
 export const DefaultRpcClient = (network: Network | string) => {
     const existingClient = defaultRpcMap.get(network);
     if (existingClient) return existingClient;
 
-    const provider = new JsonRpcProvider(getEndpoint(network));
+    const connection =
+        network in Network
+            ? CONNECTIONS[network as Network]
+            : new Connection({ fullnode: network });
+
+    const provider = new JsonRpcProvider(connection, {
+        rpcClient:
+            // If the network is a known network, and not localnet, attach the sentry RPC client for instrumentation:
+            network in Network && network !== Network.LOCAL
+                ? new SentryRpcClient(connection.fullnode)
+                : undefined,
+    });
     defaultRpcMap.set(network, provider);
     return provider;
 };

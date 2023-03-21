@@ -31,9 +31,14 @@ impl FaucetClientFactory {
                     .await;
 
                 let prom_registry = prometheus::Registry::new();
-                let simple_faucet = SimpleFaucet::new(wallet_context, &prom_registry)
-                    .await
-                    .unwrap();
+                let simple_faucet = SimpleFaucet::new(
+                    wallet_context,
+                    &prom_registry,
+                    &cluster.config_directory().join("faucet.wal"),
+                )
+                .await
+                .unwrap();
+
                 Arc::new(LocalFaucetClient::new(simple_faucet))
             }
         }
@@ -109,7 +114,7 @@ impl FaucetClient for LocalFaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse {
         let receipt = self
             .simple_faucet
-            .send(Uuid::new_v4(), request_address, &[200000; 5])
+            .send(Uuid::new_v4(), request_address, &[200000000; 5])
             .await
             .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
 

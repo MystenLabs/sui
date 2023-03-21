@@ -10,7 +10,7 @@ export type RpcApiVersion = {
 };
 
 export function parseVersionFromString(
-  version: string
+  version: string,
 ): RpcApiVersion | undefined {
   return parse(version);
 }

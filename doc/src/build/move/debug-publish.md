@@ -3,7 +3,7 @@ title: Debug and Publish the Sui Move Package
 ---
 
 ## Debugging a package
-At the moment there isn't a yet debugger for Move. To help with debugging, however, you could use `std::debug` module to print out arbitrary value. To do so, first import the `debug` module:
+At the moment there isn't yet a debugger for Move. To help with debugging, however, you could use `std::debug` module to print out arbitrary value. To do so, first import the `debug` module:
 ```
 use std::debug;
 ```
@@ -63,32 +63,11 @@ one can simply dedicate the first transaction to executing the
 initializer function. Let us use a concrete example to illustrate
 this.
 
-Continuing our fantasy game example, let's introduce a
-concept of a forge that will be involved in the process of creating
-swords - for starters let it keep track of how many swords have been
-created. Let us define the `Forge` struct and a function returning the
-number of created swords as follows and put into the `my_module.move` file:
-
-``` rust
-    struct Forge has key, store {
-        id: UID,
-        swords_created: u64,
-    }
-
-    public fun swords_created(self: &Forge): u64 {
-        self.swords_created
-    }
-```
-
-In order to keep track of the number of created swords we must
-initialize the forge object and set its `sword_create` counts to 0.
-And module initializer is the perfect place to do it:
+Continuing our fantasy game example, notice that we have used the init function in our tests, but have not tested it itself (in particular, the fact that it properly creates a Forge object):
 
 ``` rust
     // module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
-        use sui::transfer;
-        use sui::tx_context;
         let admin = Forge {
             id: object::new(ctx),
             swords_created: 0,
@@ -99,7 +78,7 @@ And module initializer is the perfect place to do it:
     }
 ```
 
-In order to use the forge, we need to modify the `sword_create`
+In order to do so, we need to modify the `sword_create`
 function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 

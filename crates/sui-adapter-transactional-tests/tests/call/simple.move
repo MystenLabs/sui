@@ -20,7 +20,7 @@ module Test::M1 {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             Object { id: object::new(ctx), value },
             recipient
         )
@@ -29,4 +29,4 @@ module Test::M1 {
 
 //# run Test::M1::create --args 0 @A
 
-//# view-object 105
+//# view-object 106

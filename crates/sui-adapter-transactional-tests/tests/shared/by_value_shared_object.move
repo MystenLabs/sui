@@ -18,7 +18,7 @@ module t2::o2 {
 
     public entry fun create(ctx: &mut TxContext) {
         let o = Obj2 { id: object::new(ctx) };
-        transfer::share_object(o)
+        transfer::public_share_object(o)
     }
 
     public entry fun consume_o2(o2: Obj2) {
@@ -27,7 +27,7 @@ module t2::o2 {
     }
 }
 
-//# publish
+//# publish --dependencies t2
 
 module t1::o1 {
     use t2::o2::{Self, Obj2};
@@ -40,8 +40,8 @@ module t1::o1 {
 
 //# run t2::o2::create
 
-//# view-object 107
+//# view-object 108
 
-//# run t1::o1::consume_o2 --args object(107)
+//# run t1::o1::consume_o2 --args object(108)
 
-//# run t2::o2::consume_o2 --args object(107)
+//# run t2::o2::consume_o2 --args object(108)

@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWallet } from "@mysten/wallet-adapter-react";
-import * as Dialog from "@radix-ui/react-dialog";
+import { Dialog } from "@headlessui/react";
+import { formatAddress } from "@mysten/sui.js";
 import { styled } from "./stitches";
 import { Content, Overlay, Body, CloseButton } from "./utils/Dialog";
 import { Button } from "./utils/ui";
+import { useWalletKit } from "./WalletKitContext";
 
 interface AccountModalProps {
-  account: string;
   open: boolean;
   onClose(): void;
 }
@@ -27,46 +27,40 @@ const ButtonGroup = styled("div", {
   width: "100%",
 });
 
-export function AccountModal({ account, open, onClose }: AccountModalProps) {
-  const { disconnect } = useWallet();
+export function AccountModal({ open, onClose }: AccountModalProps) {
+  const { disconnect, currentAccount } = useWalletKit();
+  const account = currentAccount?.address || "";
 
   return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(isOpen) => (isOpen ? null : onClose())}
-    >
-      <Dialog.Portal>
-        <Overlay />
-        <Content>
-          <Body css={{ padding: "$4", minWidth: "320px" }}>
-            <Account title={account}>
-              {account.slice(0, 4)}...{account.slice(-4)}
-            </Account>
+    <Dialog as="div" open={open} onClose={onClose}>
+      <Overlay />
+      <Content>
+        <Body css={{ padding: "$4", minWidth: "320px" }}>
+          <Account title={account}>{formatAddress(account)}</Account>
 
-            <ButtonGroup>
-              <Button
-                css={{ flex: 1 }}
-                color="secondary"
-                onClick={() => navigator.clipboard.writeText(account)}
-              >
-                Copy Address
-              </Button>
-              <Button
-                css={{ flex: 1 }}
-                color="secondary"
-                onClick={() => {
-                  disconnect();
-                  onClose();
-                }}
-              >
-                Disconnect
-              </Button>
-            </ButtonGroup>
+          <ButtonGroup>
+            <Button
+              css={{ flex: 1 }}
+              color="secondary"
+              onClick={() => navigator.clipboard.writeText(account)}
+            >
+              Copy Address
+            </Button>
+            <Button
+              css={{ flex: 1 }}
+              color="secondary"
+              onClick={() => {
+                disconnect();
+                onClose();
+              }}
+            >
+              Disconnect
+            </Button>
+          </ButtonGroup>
 
-            <CloseButton />
-          </Body>
-        </Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          <CloseButton onClick={onClose} />
+        </Body>
+      </Content>
+    </Dialog>
   );
 }

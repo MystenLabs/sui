@@ -1,151 +1,134 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { useState, useCallback } from 'react';
+import { formatAddress } from '@mysten/sui.js';
+import { useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 
-import { Content } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
-import ExplorerLink from '_components/explorer-link';
-import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import ExternalLink from '_components/external-link';
-import Icon, { SuiIcons } from '_components/icon';
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { Button } from '../../shared/ButtonUI';
+import { Text } from '../../shared/text';
+import { DAppInfoCard } from '../DAppInfoCard';
+import { DAppPermissionsList } from '../DAppPermissionsList';
+import { SummaryCard } from '../SummaryCard';
+import { WalletListSelect } from '../WalletListSelect';
+import { type DAppEntry } from './SuiApp';
 import Overlay from '_components/overlay';
-import { useAppDispatch } from '_hooks';
-import { revokeAppPermissionByOrigin } from '_redux/slices/permissions';
+import { useAppSelector } from '_hooks';
+import { permissionsSelectors } from '_redux/slices/permissions';
 import { trackEvent } from '_src/shared/plausible';
 
-import type { SuiAddress } from '@mysten/sui.js';
-
-import st from './DisconnectApp.module.scss';
-
-type DisconnectAppProps = {
-    name: string;
-    icon?: string;
-    link: string;
-    linkLabel?: string;
-    account?: string;
-    id?: string;
-    address?: SuiAddress;
-    permissions: string[];
-    disconnect?: boolean;
-    pageLink?: string;
+export interface DisconnectAppProps
+    extends Omit<DAppEntry, 'description' | 'tags'> {
+    permissionID: string;
     setShowDisconnectApp: (showModal: boolean) => void;
-};
+}
 
 function DisconnectApp({
     name,
     icon,
     link,
-    address,
-    linkLabel,
-    account,
-    id,
-    permissions,
-    pageLink,
+    permissionID,
     setShowDisconnectApp,
 }: DisconnectAppProps) {
-    const [showModal] = useState(true);
-    const dispatch = useAppDispatch();
-
-    // TODO: add loading state since this is async
-    const revokeApp = useCallback(
-        (e: React.MouseEvent<HTMLElement>) => {
+    const [accountsToDisconnect, setAccountsToDisconnect] = useState<string[]>(
+        []
+    );
+    const permission = useAppSelector((state) =>
+        permissionsSelectors.selectById(state, permissionID)
+    );
+    useEffect(() => {
+        if (permission && !permission.allowed) {
+            setShowDisconnectApp(false);
+        }
+    }, [permission, setShowDisconnectApp]);
+    const connectedAccounts = useMemo(
+        () => (permission?.allowed && permission.accounts) || [],
+        [permission]
+    );
+    const backgroundClient = useBackgroundClient();
+    const disconnectMutation = useMutation({
+        mutationFn: async () => {
+            const origin = permission?.origin;
+            if (!origin) {
+                throw new Error('Failed, origin not found');
+            }
             trackEvent('AppDisconnect', {
                 props: { source: 'AppPage' },
             });
-            dispatch(revokeAppPermissionByOrigin({ origin: link }));
+            await backgroundClient.disconnectApp(origin, accountsToDisconnect);
+            await backgroundClient.sendGetPermissionRequests();
+        },
+        onSuccess: () => {
+            toast.success('Disconnected successfully');
             setShowDisconnectApp(false);
         },
-        [dispatch, link, setShowDisconnectApp]
-    );
+        onError: () => toast.error('Disconnect failed'),
+    });
+    if (!permission) {
+        return null;
+    }
     return (
         <Overlay
-            showModal={showModal}
+            showModal
             setShowModal={setShowDisconnectApp}
             title="Connection Active"
         >
-            <Content>
-                <div className={cl(st.container)}>
-                    <div className={st.details}>
-                        <div className={st.icon}>
-                            {icon ? (
-                                <img src={icon} alt={name} />
-                            ) : (
-                                <div className={st.defaultImg}></div>
-                            )}
-                        </div>
-                        <div className={st.info}>
-                            <div className={st.name}>{name}</div>
-                            <ExternalLink
-                                href={pageLink || link}
-                                title={name}
-                                className={st.appLink}
-                                showIcon={false}
-                            >
-                                {linkLabel || link}
-
-                                <Icon
-                                    icon={SuiIcons.ArrowRight}
-                                    className={cl(
-                                        st.arrowActionIcon,
-                                        st.angledArrow
-                                    )}
-                                />
-                            </ExternalLink>
-                            {address && (
-                                <ExplorerLink
-                                    type={ExplorerLinkType.address}
-                                    address={address}
-                                    showIcon={false}
-                                    className={st['explorer-link']}
-                                >
-                                    {address} <Icon icon={SuiIcons.Clipboard} />
-                                </ExplorerLink>
-                            )}
-                        </div>
-
-                        <div className={st.permissions}>
-                            <div className={st.label}>
-                                Permissions requested
-                            </div>
-                            <div className={st.permissionsList}>
-                                {permissions.map((permission) => (
-                                    <div className={st.access} key={permission}>
-                                        <div className={st.accessIcon}>
-                                            <Icon icon={SuiIcons.Checkmark} />
-                                        </div>
-                                        {permission}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className={st.cta}>
-                    <Button
-                        className={cl('btn', st.ctaBtn, st.disconnectApp)}
-                        onClick={revokeApp}
-                    >
-                        <div className={st.disconnect}>
-                            <Icon icon={SuiIcons.Close} />
-                        </div>
-                        <span>Disconnect</span>
-                    </Button>
-                    <ExternalLink
-                        href={pageLink || link}
-                        title={name}
-                        className={cl('btn', st.ctaBtn, st.view)}
-                        showIcon={false}
-                    >
-                        View
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className={cl(st.arrowActionIcon, st.angledArrow)}
+            <div className="flex flex-col flex-nowrap items-stretch flex-1 gap-3.75">
+                <DAppInfoCard name={name} iconUrl={icon} url={link} />
+                <SummaryCard
+                    header="Permissions given"
+                    body={
+                        <DAppPermissionsList
+                            permissions={permission.permissions}
                         />
-                    </ExternalLink>
+                    }
+                />
+                {connectedAccounts.length > 1 ? (
+                    <WalletListSelect
+                        title="Connected Accounts"
+                        visibleValues={connectedAccounts}
+                        values={accountsToDisconnect}
+                        onChange={setAccountsToDisconnect}
+                        mode="disconnect"
+                        disabled={disconnectMutation.isLoading}
+                    />
+                ) : (
+                    <SummaryCard
+                        header="Connected Account"
+                        body={
+                            <Text
+                                variant="body"
+                                color="steel-dark"
+                                weight="semibold"
+                                mono
+                            >
+                                {connectedAccounts[0]
+                                    ? formatAddress(connectedAccounts[0])
+                                    : null}
+                            </Text>
+                        }
+                    />
+                )}
+                <div className="sticky flex items-end flex-1 -bottom-5 bg-white pt-1 pb-5">
+                    <Button
+                        size="tall"
+                        variant="warning"
+                        text={
+                            connectedAccounts.length === 1
+                                ? 'Disconnect'
+                                : accountsToDisconnect.length === 0 ||
+                                  connectedAccounts.length ===
+                                      accountsToDisconnect.length
+                                ? 'Disconnect All'
+                                : 'Disconnect Selected'
+                        }
+                        loading={disconnectMutation.isLoading}
+                        onClick={() => disconnectMutation.mutate()}
+                    />
                 </div>
-            </Content>
+            </div>
         </Overlay>
     );
 }

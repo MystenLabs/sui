@@ -4,11 +4,14 @@
   "license": "Apache-2.0",
   "scripts": {
     "turbo": "turbo",
+    "core": "pnpm --filter ./apps/core",
+    "icons": "pnpm --filter ./apps/icons",
     "explorer": "pnpm --filter ./apps/explorer",
     "wallet": "pnpm --filter ./apps/wallet",
     "wallet-adapter": "pnpm --filter ./sdk/wallet-adapter",
     "sdk": "pnpm --filter ./sdk/typescript",
-    "bcs": "pnpm --filter ./sdk/bcs"
+    "bcs": "pnpm --filter ./sdk/bcs",
+    "changeset-version": "pnpm changeset version && pnpm sdk codegen:version"
   },
   "pnpm": {
     "overrides": {
@@ -18,7 +21,7 @@
     }
   },
   "devDependencies": {
-    "@changesets/cli": "^2.25.2",
-    "turbo": "^1.6.3"
+    "@changesets/cli": "^2.26.0",
+    "turbo": "^1.8.3"
   }
 }

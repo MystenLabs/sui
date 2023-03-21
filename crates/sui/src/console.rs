@@ -126,7 +126,7 @@ async fn handle_command(
     // TODO: Completion data are keyed by strings, are there ways to make it more error proof?
     if let Ok(mut cache) = completion_cache.write() {
         match result {
-            SuiClientCommandResult::Addresses(ref addresses) => {
+            SuiClientCommandResult::Addresses(ref addresses, _) => {
                 let addresses = addresses
                     .iter()
                     .map(|addr| format!("{addr}"))
@@ -137,7 +137,7 @@ async fn handle_command(
             SuiClientCommandResult::Objects(ref objects) => {
                 let objects = objects
                     .iter()
-                    .map(|oref| format!("{}", oref.object_id))
+                    .map(|oref| format!("{}", oref.clone().into_object().unwrap().object_id))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
                 cache.insert(CacheKey::flag("--gas"), objects.clone());

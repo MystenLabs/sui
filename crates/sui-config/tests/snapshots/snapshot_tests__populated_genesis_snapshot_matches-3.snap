@@ -1,11 +1,8 @@
 ---
 source: crates/sui-config/tests/snapshot_tests.rs
-expression: genesis.narwhal_committee()
+expression: genesis.clock()
 ---
-authorities:
-  mfJe9h+AMrkUY2RgmCxcxvE07x3a52ZX8sv+wev8jQlzdAgN9vzw3Li8Sw2OCvXYDrv/K0xZn1T0LWMS38MUJ2B4wcw0fru+xRmL4lhRPzhrkw0CwnSagD4jMJVevRoQ:
-    stake: 1
-    primary_address: ""
-    network_key: DX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=
-epoch: 0
+id:
+  id: "0x0000000000000000000000000000000000000000000000000000000000000006"
+timestamp_ms: 0
 

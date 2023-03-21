@@ -6,10 +6,17 @@ import Browser from 'webextension-polyfill';
 import { ContentScriptConnection } from './ContentScriptConnection';
 import { KeepAliveConnection } from './KeepAliveConnection';
 import { UiConnection } from './UiConnection';
+import { createMessage } from '_messages';
 import { KEEP_ALIVE_BG_PORT_NAME } from '_src/content-script/keep-bg-alive';
 
+import type { NetworkEnvType } from '../NetworkEnv';
 import type { Connection } from './Connection';
+import type { SetNetworkPayload } from '_payloads/network';
 import type { Permission } from '_payloads/permissions';
+import type {
+    WalletStatusChange,
+    WalletStatusChangePayload,
+} from '_payloads/wallet-status-change';
 
 export class Connections {
     #connections: (Connection | KeepAliveConnection)[] = [];
@@ -47,21 +54,65 @@ export class Connections {
         });
     }
 
-    public notifyForPermissionReply(permission: Permission) {
+    public notifyContentScript(
+        notification:
+            | { event: 'permissionReply'; permission: Permission }
+            | {
+                  event: 'walletStatusChange';
+                  change: Omit<WalletStatusChange, 'accounts'>;
+              }
+            | {
+                  event: 'walletStatusChange';
+                  origin: string;
+                  change: WalletStatusChange;
+              }
+    ) {
         for (const aConnection of this.#connections) {
-            if (
-                aConnection instanceof ContentScriptConnection &&
-                aConnection.origin === permission.origin
-            ) {
-                aConnection.permissionReply(permission);
+            if (aConnection instanceof ContentScriptConnection) {
+                switch (notification.event) {
+                    case 'permissionReply':
+                        aConnection.permissionReply(notification.permission);
+                        break;
+                    case 'walletStatusChange':
+                        if (
+                            !('origin' in notification) ||
+                            aConnection.origin === notification.origin
+                        ) {
+                            aConnection.send(
+                                createMessage<WalletStatusChangePayload>({
+                                    type: 'wallet-status-changed',
+                                    ...notification.change,
+                                })
+                            );
+                        }
+                        break;
+                }
             }
         }
     }
 
-    public notifyForLockedStatusUpdate(isLocked: boolean) {
+    public notifyUI(
+        notification:
+            | { event: 'networkChanged'; network: NetworkEnvType }
+            | { event: 'lockStatusUpdate'; isLocked: boolean }
+    ) {
         for (const aConnection of this.#connections) {
             if (aConnection instanceof UiConnection) {
-                aConnection.sendLockedStatusUpdate(isLocked);
+                switch (notification.event) {
+                    case 'networkChanged':
+                        aConnection.send(
+                            createMessage<SetNetworkPayload>({
+                                type: 'set-network',
+                                network: notification.network,
+                            })
+                        );
+                        break;
+                    case 'lockStatusUpdate':
+                        aConnection.sendLockedStatusUpdate(
+                            notification.isLocked
+                        );
+                        break;
+                }
             }
         }
     }
