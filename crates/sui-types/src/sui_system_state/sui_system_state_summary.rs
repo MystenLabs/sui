@@ -4,7 +4,7 @@
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::multiaddr::Multiaddr;
-use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -114,17 +114,17 @@ impl SuiSystemStateSummary {
 pub struct SuiValidatorSummary {
     // Metadata
     pub sui_address: SuiAddress,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub protocol_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub network_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub worker_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
@@ -134,17 +134,17 @@ pub struct SuiValidatorSummary {
     pub p2p_address: String,
     pub primary_address: String,
     pub worker_address: String,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_net_address: Option<String>,
     pub next_epoch_p2p_address: Option<String>,
