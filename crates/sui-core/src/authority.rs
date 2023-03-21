@@ -191,6 +191,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_ready: IntGauge,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
+    pub(crate) execution_driver_dispatch_queue: IntGauge,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -365,6 +366,12 @@ impl AuthorityMetrics {
             execution_driver_executed_transactions: register_int_counter_with_registry!(
                 "execution_driver_executed_transactions",
                 "Cumulative number of transaction executed by execution driver",
+                registry,
+            )
+            .unwrap(),
+            execution_driver_dispatch_queue: register_int_gauge_with_registry!(
+                "execution_driver_dispatch_queue",
+                "Number of transaction pending in execution driver dispatch queue",
                 registry,
             )
             .unwrap(),
