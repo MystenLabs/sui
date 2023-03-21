@@ -37,7 +37,7 @@ module sui_system::stake_subsidy {
 
     public(friend) fun create(
         balance: Balance<SUI>,
-        initial_stake_subsidy_amount: u64,
+        initial_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
         ctx: &mut TxContext,
@@ -51,7 +51,7 @@ module sui_system::stake_subsidy {
         StakeSubsidy {
             balance,
             distribution_counter: 0,
-            current_distribution_amount: initial_stake_subsidy_amount,
+            current_distribution_amount: initial_distribution_amount,
             stake_subsidy_period_length,
             stake_subsidy_decrease_rate,
             extra_fields: bag::new(ctx),
