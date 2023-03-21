@@ -11,7 +11,7 @@ The requirements to configure a SUI integration include:
  * Suggested hardware requirements to run a Sui Full node:
     * CPU: 10 core
     * RAM: 32 GB
-    * Storage: 1 TB SSD
+    * Storage: 2 TB SSD
 
 We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions.
 
