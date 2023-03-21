@@ -850,8 +850,8 @@ impl SuiNode {
             .ok_or_else(|| anyhow::anyhow!("Transaction Orchestrator is not enabled in this node."))
     }
 
-    /// This function waits for a signal from the checkpoint executor to indicate that on-chain
-    /// epoch has changed. Upon receiving such signal, we reconfigure the entire system.
+    /// This function awaits the completion of checkpoint execution of the current epoch,
+    /// after which it iniitiates reconfiguration of the entire system.
     pub async fn monitor_reconfiguration(self: Arc<Self>) -> Result<()> {
         let mut checkpoint_executor = CheckpointExecutor::new(
             self.state_sync.subscribe_to_synced_checkpoints(),
@@ -1007,6 +1007,26 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
+                    // was a fullnode, still a fullnode
+                    let live_object_set = self
+                        .state
+                        .database
+                        .iter_live_object_set()
+                        .map(|oref| oref.2);
+                    let mut acc = sui_types::accumulator::Accumulator::default();
+                    fastcrypto::hash::MultisetHash::insert_all(&mut acc, live_object_set);
+
+                    let live_object_set_hash = fastcrypto::hash::MultisetHash::digest(&acc);
+
+                    let root_state_hash = self
+                        .state
+                        .database
+                        .get_root_state_hash(cur_epoch_store.epoch())
+                        .expect("Retrieving root state hash cannot fail");
+
+                    let is_inconsistent = root_state_hash != live_object_set_hash;
+                    checkpoint_executor.set_inconsistent_state(is_inconsistent);
+
                     None
                 }
             };
