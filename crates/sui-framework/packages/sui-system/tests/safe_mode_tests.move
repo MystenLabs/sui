@@ -14,6 +14,8 @@ module sui::safe_mode_tests {
     use sui_system::sui_system;
     use sui_system::sui_system::SuiSystemState;
 
+    const MIST_PER_SUI: u64 = 1_000_000_000;
+
     #[test]
     fun test_safe_mode_gas_accumulation() {
         let scenario_val = test_scenario::begin(@0x1);
@@ -36,8 +38,8 @@ module sui::safe_mode_tests {
         {
             test_scenario::next_tx(scenario, @0x1);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-            test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x1), 1);
-            test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1000);
+            test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x1), 1 * MIST_PER_SUI);
+            test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1000 * MIST_PER_SUI);
             test_scenario::return_shared(system_state);
         };
 
@@ -55,15 +57,15 @@ module sui::safe_mode_tests {
         test_utils::destroy(rebates);
 
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        // For each validator, total computation reward is 20 / 4  + 40 / 4 = 15, init stake is 1.
+        // For each validator, total computation reward is 20 / 4  + 40 / 4 = 15
         // However due to integer division, each validator is getting 1 less.
-        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x1), 15);
-        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x2), 15);
-        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x3), 15);
-        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x4), 15);
+        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x1), 14 + 1 * MIST_PER_SUI);
+        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x2), 14 + 1 * MIST_PER_SUI);
+        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x3), 14 + 1 * MIST_PER_SUI);
+        test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x4), 14 + 1 * MIST_PER_SUI);
 
-        // Storage fund is 1000 + 48 + 32 - 30 - 30 = 1020. 4 leftover due to integer division.
-        test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1024);
+        // Storage fund delta is 48 + 32 - 30 - 30 = 20. 4 leftover due to integer division.
+        test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1000 * MIST_PER_SUI + 24);
 
         // Storage charges are deposited and storage rebates are taken out of the object rebate
         // portion of the fund so its balance is 48 + 32 - 30 - 30 - 2 - 6 = 12.

@@ -108,6 +108,7 @@ module sui_system::validator_set {
     const ANY_VALIDATOR: u8 = 3;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
+    const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
 
     // Errors
     const ENonValidatorInReportRecords: u64 = 0;
@@ -120,7 +121,7 @@ module sui_system::validator_set {
     const EValidatorNotCandidate: u64 = 7;
     const ENotValidatorCandidate: u64 = 8;
     const ENotActiveOrPendingValidator: u64 = 9;
-
+    const EStakingBelowThreshold: u64 = 10;
     const EInvalidCap: u64 = 101;
 
 
@@ -265,12 +266,15 @@ module sui_system::validator_set {
     /// Called by `sui_system`, to add a new stake to the validator.
     /// This request is added to the validator's staking pool's pending stake entries, processed at the end
     /// of the epoch.
+    /// Aborts in case the staking amount is smaller than MIN_STAKING_THRESHOLD
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
         validator_address: address,
         stake: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
+        let sui_amount = balance::value(&stake);
+        assert!(sui_amount >= MIN_STAKING_THRESHOLD, EStakingBelowThreshold);
         let validator = get_candidate_or_active_validator_mut(self, validator_address);
         validator::request_add_stake(validator, stake, tx_context::sender(ctx), ctx);
     }
