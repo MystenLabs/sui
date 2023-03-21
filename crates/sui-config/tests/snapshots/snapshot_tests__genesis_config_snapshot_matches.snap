@@ -4,11 +4,11 @@ expression: genesis_config
 ---
 validator_config_info: ~
 parameters:
-  timestamp_ms: 0
+  chain_start_timestamp_ms: 0
   protocol_version: 1
   allow_insertion_of_extra_objects: true
-  stake_subsidy_start_epoch: 0
   epoch_duration_ms: 86400000
+  stake_subsidy_start_epoch: 0
   stake_subsidy_initial_distribution_amount: 1000000000000000
   stake_subsidy_period_length: 30
   stake_subsidy_decrease_rate: 10000

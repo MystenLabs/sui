@@ -395,12 +395,16 @@ pub struct GenesisValidatorMetadata {
 #[serde(rename_all = "kebab-case")]
 pub struct GenesisChainParameters {
     pub protocol_version: u64,
-    pub stake_subsidy_start_epoch: u64,
     pub chain_start_timestamp_ms: u64,
     pub epoch_duration_ms: u64,
+
+    // Stake Subsidy parameters
+    pub stake_subsidy_start_epoch: u64,
     pub stake_subsidy_initial_distribution_amount: u64,
     pub stake_subsidy_period_length: u64,
     pub stake_subsidy_decrease_rate: u16,
+
+    // Validator committee parameters
     pub max_validator_count: u64,
     pub min_validator_joining_stake: u64,
     pub validator_low_stake_threshold: u64,
@@ -412,7 +416,7 @@ pub struct GenesisChainParameters {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisCeremonyParameters {
     #[serde(default = "GenesisCeremonyParameters::default_timestamp_ms")]
-    pub timestamp_ms: u64,
+    pub chain_start_timestamp_ms: u64,
 
     /// protocol version that the chain starts at.
     #[serde(default = "ProtocolVersion::max")]
@@ -421,13 +425,13 @@ pub struct GenesisCeremonyParameters {
     #[serde(default = "GenesisCeremonyParameters::default_allow_insertion_of_extra_objects")]
     pub allow_insertion_of_extra_objects: bool,
 
-    /// The starting epoch in which stake subsidies start being paid out.
-    #[serde(default)]
-    pub stake_subsidy_start_epoch: u64,
-
     /// The duration of an epoch, in milliseconds.
     #[serde(default = "GenesisCeremonyParameters::default_epoch_duration_ms")]
     pub epoch_duration_ms: u64,
+
+    /// The starting epoch in which stake subsidies start being paid out.
+    #[serde(default)]
+    pub stake_subsidy_start_epoch: u64,
 
     /// The amount of stake subsidy to be drawn down per distribution.
     /// This amount decays and decreases over time.
@@ -450,7 +454,7 @@ pub struct GenesisCeremonyParameters {
 impl GenesisCeremonyParameters {
     pub fn new() -> Self {
         Self {
-            timestamp_ms: Self::default_timestamp_ms(),
+            chain_start_timestamp_ms: Self::default_timestamp_ms(),
             protocol_version: ProtocolVersion::MAX,
             allow_insertion_of_extra_objects: true,
             stake_subsidy_start_epoch: 0,
@@ -497,7 +501,7 @@ impl GenesisCeremonyParameters {
         GenesisChainParameters {
             protocol_version: self.protocol_version.as_u64(),
             stake_subsidy_start_epoch: self.stake_subsidy_start_epoch,
-            chain_start_timestamp_ms: self.timestamp_ms,
+            chain_start_timestamp_ms: self.chain_start_timestamp_ms,
             epoch_duration_ms: self.epoch_duration_ms,
             stake_subsidy_initial_distribution_amount: self
                 .stake_subsidy_initial_distribution_amount,
@@ -1000,7 +1004,7 @@ fn create_genesis_checkpoint(
         previous_digest: None,
         epoch_rolling_gas_cost_summary: Default::default(),
         end_of_epoch_data: None,
-        timestamp_ms: parameters.timestamp_ms,
+        timestamp_ms: parameters.chain_start_timestamp_ms,
         version_specific_data: Vec::new(),
         checkpoint_commitments: Default::default(),
     };
