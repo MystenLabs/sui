@@ -42,9 +42,10 @@ jobs:
       NUM_CPUS: 24
 
     steps:
-    - name: Cargo clean
+    - name: Environment clean
       run: |
         cd ~/sui && cargo clean && git restore Cargo.lock
+        sudo rm -rf /tmp/*.*
 
     - name: Tmpfs clean
       run: |
@@ -52,7 +53,7 @@ jobs:
 
     - name: Checkout sui repo
       run: |
-        cd ~/sui && git fetch origin && git rebase origin/main
+        cd ~/sui && git fetch origin main && git rebase origin/main
 
     - name: Install simtest
       run: |
