@@ -414,8 +414,8 @@ impl AuthorityMetrics {
             consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
                 .unwrap(),
             consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
-                "consensus_handler_num_low_scoring_authorities", 
-                "Number of low scoring authorities based on reputation scores from consensus", 
+                "consensus_handler_num_low_scoring_authorities",
+                "Number of low scoring authorities based on reputation scores from consensus",
                 registry
             ).unwrap(),
             consensus_handler_scores: register_histogram_with_registry!(
@@ -1161,13 +1161,12 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let mut gas_status = SuiGasStatus::new_with_budget(
+        let gas_status = SuiGasStatus::new_with_budget(
             max_tx_gas,
             GasPrice::from(gas_price),
             storage_gas_price.into(),
             SuiCostTable::new(protocol_config),
         );
-        gas_status.charge_min_tx_gas()?;
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),

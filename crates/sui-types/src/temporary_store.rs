@@ -37,6 +37,7 @@ use crate::{
         WriteKind,
     },
 };
+use crate::error::ExecutionErrorKind;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -292,17 +293,14 @@ impl<S> TemporaryStore<S> {
         }
     }
 
-    /// Compute storage gas for each mutable input object (including the gas coin), and each created object.
-    /// Compute storage refunds for each deleted object
-    /// Will *not* charge any computation gas. Returns the total size in bytes of all deleted objects + all mutated objects,
-    /// which the caller can use to charge computation gas
-    fn charge_gas_for_storage_changes(
+    /// Track storage gas for each mutable input object (including the gas coin)
+    /// and each created object. Compute storage refunds for each deleted object.
+    /// Will *not* charge anything, gas status keeps track of storage cost and rebate
+    fn track_gas_for_storage_changes(
         &mut self,
         gas_status: &mut SuiGasStatus<'_>,
         gas_object_id: ObjectID,
-    ) -> Result<u64, ExecutionError> {
-        let mut total_bytes_written_deleted = 0;
-
+    ) {
         // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
         let gas_object = self
             .read_object(&gas_object_id)
@@ -312,23 +310,22 @@ impl<S> TemporaryStore<S> {
             .entry(gas_object_id)
             .or_insert_with(|| (gas_object, WriteKind::Mutate));
         self.ensure_active_inputs_mutated();
-        let mut objects_to_update = vec![];
 
+        let mut objects_to_update = vec![];
         for (object_id, (object, write_kind)) in &mut self.written {
-            let (old_object_size, storage_rebate) = self
+            let storage_rebate = self
                 .input_objects
                 .get(object_id)
-                .map(|old| (old.object_size_for_gas_metering(), old.storage_rebate))
-                .unwrap_or((0, 0));
+                .map(|old| old.storage_rebate)
+                .unwrap_or(0);
 
             let new_object_size = object.object_size_for_gas_metering();
             let new_storage_rebate =
-                gas_status.charge_storage_mutation(new_object_size, storage_rebate.into())?;
+                gas_status.track_storage_mutation(new_object_size, storage_rebate.into());
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
             }
-            total_bytes_written_deleted += old_object_size + new_object_size;
         }
 
         for object_id in self.deleted.keys() {
@@ -337,8 +334,7 @@ impl<S> TemporaryStore<S> {
             // object was unwrapped and then deleted. The rebate would have been provided already when
             // mutating the object that wrapped this object.
             if let Some(old_object) = self.input_objects.get(object_id) {
-                gas_status.charge_storage_mutation(0, old_object.storage_rebate.into())?;
-                total_bytes_written_deleted += old_object.object_size_for_gas_metering();
+                gas_status.track_storage_mutation(0, old_object.storage_rebate.into());
             }
         }
 
@@ -347,7 +343,6 @@ impl<S> TemporaryStore<S> {
         for (object, write_kind) in objects_to_update {
             self.write_object(object, write_kind);
         }
-        Ok(total_bytes_written_deleted as u64)
     }
 
     pub fn to_effects(
@@ -526,7 +521,7 @@ impl<S> TemporaryStore<S> {
         gas_status: &mut SuiGasStatus<'_>,
         execution_result: &mut Result<T, ExecutionError>,
         gas: &[ObjectRef],
-    ) {
+    ) -> Result<(), ExecutionError> {
         // at this point, we have done some charging for computation, but have not yet set the storage rebate or storage gas units
         assert!(gas_status.storage_rebate() == 0);
         assert!(gas_status.storage_gas_units() == 0);
@@ -541,27 +536,22 @@ impl<S> TemporaryStore<S> {
             self.reset(gas, gas_status);
         }
 
-        if let Err(err) = self.charge_gas_for_storage_changes(gas_status, gas_object_id) {
-            // Ran out of gas while charging for storage changes. reset store, now at state just after gas smashing
-            self.reset(gas, gas_status);
-
-            // charge for storage again. This will now account only for the storage cost of gas coins
-            if self
-                .charge_gas_for_storage_changes(gas_status, gas_object_id)
-                .is_err()
-            {
-                // TODO: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
-                // perhaps that check isn't there?
-                trace!("out of gas while charging for gas smashing")
-            }
-
-            // if execution succeeded, but we ran out of gas while charging for storage, overwrite the successful execution result
-            // with an out of gas failure
-            if execution_result.is_ok() {
-                *execution_result = Err(err)
-            }
-        }
-        let cost_summary = gas_status.summary();
+        self.track_gas_for_storage_changes(gas_status, gas_object_id);
+        let cost_summary = gas_status
+            .charge_storage_and_rebate(self.storage_rebate_rate)
+            .or_else(|err| {
+                // Ran out of gas while charging for storage. reset store, now at state just after gas smashing
+                self.reset(gas, gas_status);
+                self.track_gas_for_storage_changes(gas_status, gas_object_id);
+                // if execution succeeded, but we ran out of gas while charging for storage,
+                // overwrite the successful execution result with an out of gas failure
+                if execution_result.is_ok() {
+                    *execution_result = Err(err)
+                }
+                gas_status
+                    .charge_storage_and_rebate(self.storage_rebate_rate)
+                    .or_else(|err| ExecutionErrorKind::InvariantViolation.into())
+            })?;
         let gas_used = cost_summary.gas_used();
 
         // Important to fetch the gas object here instead of earlier, as it may have been reset
@@ -576,6 +566,7 @@ impl<S> TemporaryStore<S> {
 
         self.write_object(gas_object, WriteKind::Mutate);
         self.gas_charged = Some((gas_object_id, cost_summary));
+        Ok(())
     }
 
     pub fn smash_gas(&mut self, gas: &[ObjectRef]) -> Result<ObjectRef, ExecutionError> {

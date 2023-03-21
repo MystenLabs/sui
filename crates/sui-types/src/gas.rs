@@ -173,6 +173,17 @@ impl std::fmt::Display for GasCostSummary {
     }
 }
 
+/// Portion of the storage rebate that gets passed on to the transaction sender. The remainder
+/// will be burned, then re-minted + added to the storage fund at the next epoch change
+pub fn sender_rebate(storage_rebate: u64, storage_rebate_rate: u64) -> u64 {
+    // we round storage rebate such that `>= x.5` goes to x+1 (rounds up) and
+    // `< x.5` goes to x (truncates). We replicate `f32/64::round()`
+    const BASIS_POINTS: u128 = 10000;
+    (((storage_rebate as u128 * storage_rebate_rate as u128)
+        + (BASIS_POINTS / 2)) // integer rounding adds half of the BASIS_POINTS (denominator)
+        / BASIS_POINTS) as u64
+}
+
 // Fixed cost type
 #[derive(Clone)]
 pub struct FixedCost(InternalGas);
@@ -400,15 +411,6 @@ impl<'a> SuiGasStatus<'a> {
         self.storage_rebate = GasQuantity::zero();
     }
 
-    /// Try to charge the minimal amount of gas from the gas object.
-    /// This function is called in tx signing phase to make sure
-    /// the gas object has enough balance to cover minimal transaction cost.
-    pub fn charge_min_tx_gas(&mut self) -> UserInputResult {
-        let cost = self.cost_table.min_transaction_cost.clone();
-        self.deduct_computation_cost(cost.deref())
-            .map_err(|_e| UserInputError::InsufficientBalanceToCoverMinimalGas)
-    }
-
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
         let computation_cost =
             NumBytes::new(size as u64).mul(*self.cost_table.package_publish_per_byte_cost);
@@ -421,29 +423,19 @@ impl<'a> SuiGasStatus<'a> {
         self.deduct_computation_cost(&cost)
     }
 
-    pub fn charge_computation_gas_for_storage_mutation(
-        &mut self,
-        size: u64,
-    ) -> Result<(), ExecutionError> {
-        let cost = NumBytes::new(size).mul(*self.cost_table.object_mutation_per_byte_cost);
-        self.deduct_computation_cost(&cost)
-    }
-
-    pub fn charge_storage_mutation(
+    pub fn track_storage_mutation(
         &mut self,
         new_size: usize,
         storage_rebate: SuiGas,
-    ) -> Result<u64, ExecutionError> {
+    ) -> u64 {
         if self.is_unmetered() {
-            return Ok(0);
+            return 0;
         }
 
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*self.cost_table.storage_per_byte_cost);
-        self.deduct_storage_cost(&storage_cost).map(|gu| {
-            self.storage_rebate += storage_rebate;
-            gu.into()
-        })
+        self.storage_rebate += storage_rebate;
+        self.track_storage_cost(&storage_cost)
     }
 
     /// This function is only called during testing, where we need to mock
@@ -479,6 +471,25 @@ impl<'a> SuiGasStatus<'a> {
         }
     }
 
+    pub fn charge_storage_and_rebate(&self, storage_rebate_rate: u64) -> Result<GasCostSummary, ExecutionError> {
+        let remaining_gas = u64::from(self.gas_status.remaining_gas());
+        let storage_cost = u64::from(self.storage_gas_units);
+        let storage_rebate = sender_rebate(u64::from(self.storage_rebate), storage_rebate_rate);
+        let mut unit_computation_cost = u64::from(self.init_budget);
+        unit_computation_cost = unit_computation_cost
+            .checked_add(storage_rebate)
+            .and_then(|val| val.checked_sub(remaining_gas))
+            .and_then(|val| val.checked_sub(storage_cost))
+            .ok_or(ExecutionErrorKind::InvariantViolation.into())?;
+        let storage_cost = u64::from(self.storage_gas_units.mul(self.storage_gas_unit_price));
+        let computation_cost = u64::from(unit_computation_cost.mul(self.computation_gas_unit_price));
+        Ok(GasCostSummary {
+            computation_cost,
+            storage_cost,
+            storage_rebate,
+        })
+    }
+
     fn new(
         move_gas_status: GasStatus<'a>,
         gas_budget: u64,
@@ -508,27 +519,16 @@ impl<'a> SuiGasStatus<'a> {
         })
     }
 
-    fn deduct_storage_cost(&mut self, cost: &InternalGas) -> Result<GasUnits, ExecutionError> {
+    fn track_storage_cost(&mut self, cost: &InternalGas) -> u64 {
         if self.is_unmetered() {
-            return Ok(0.into());
+            return 0.into();
         }
         let ext_cost = to_external(NumBytes::new(1).mul(InternalGasPerByte::new(u64::from(*cost))));
-        let charge_amount = to_internal(ext_cost);
-        let remaining_gas = self.gas_status.remaining_gas();
-        if self.gas_status.deduct_gas(charge_amount).is_err() {
-            debug_assert_eq!(u64::from(self.gas_status.remaining_gas()), 0);
-            // Even when we run out of gas, we still keep track of the storage_cost change,
-            // so that at the end, we could still use it to accurately derive the
-            // computation cost.
-            self.storage_gas_units = self.storage_gas_units.add(remaining_gas);
-            Err(ExecutionErrorKind::InsufficientGas.into())
-        } else {
-            self.storage_gas_units = self.storage_gas_units.add(ext_cost);
-            Ok(ext_cost.mul(self.storage_gas_unit_price))
-        }
+        self.storage_gas_units = self.storage_gas_units.add(ext_cost);
+        ext_cost.mul(self.storage_gas_unit_price).into()
     }
 
-    fn gas_used(&self) -> GasUnits {
+    pub fn gas_used(&self) -> GasUnits {
         let remaining_gas = self.gas_status.remaining_gas();
         self.init_budget
             .checked_sub(remaining_gas)
@@ -536,38 +536,34 @@ impl<'a> SuiGasStatus<'a> {
     }
 }
 
-/// Check whether the given gas_object and gas_budget is legit:
-/// 1. If the gas object has an address owner.
-/// 2. If it's enough to pay the flat minimum transaction fee
-/// 3. If it's less than the max gas budget allowed
-/// 4. If the gas_object actually has enough balance to pay for the budget
-/// 5. If total balance in gas object and extra input objects is sufficient
-/// to pay total amount of gas budget and extra amount to pay, extra input objects
-/// and extra amount to pay are only relevant in SUI payment transactions.
+// Check whether gas arguments are legit:
+// 1. Gas object has an address owner.
+// 2. Gas budget is between min and max budget allowed
+// 3. Gas balance (all gas coins together) is bigger or equal to budget
 pub fn check_gas_balance(
     gas_object: &Object,
+    more_gas_objs: Vec<&Object>,
     gas_budget: u64,
     gas_price: u64,
-    more_gas_objs: Vec<Object>,
     cost_table: &SuiCostTable,
 ) -> UserInputResult {
+    // 1. Gas object has an address owner.
     if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
         return Err(UserInputError::GasObjectNotOwnedObject {
             owner: gas_object.owner,
         });
     }
 
+    // 2. Gas budget is between min and max budget allowed
     let max_gas_budget = cost_table.max_gas_budget as u128 * gas_price as u128;
     let min_gas_budget = cost_table.min_gas_budget_external() as u128 * gas_price as u128;
     let required_gas_amount = gas_budget as u128;
-
     if required_gas_amount > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
             max_budget: cost_table.max_gas_budget,
         });
     }
-
     if required_gas_amount < min_gas_budget {
         return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
@@ -575,9 +571,10 @@ pub fn check_gas_balance(
         });
     }
 
+    // 3. Gas balance (all gas coins together) is bigger or equal to budget
     let mut gas_balance = get_gas_balance(gas_object)? as u128;
     for extra_obj in more_gas_objs {
-        gas_balance += get_gas_balance(&extra_obj)? as u128;
+        gas_balance += get_gas_balance(extra_obj)? as u128;
     }
     ok_or_gas_balance_error!(gas_balance, required_gas_amount)
 }
@@ -589,14 +586,12 @@ pub fn start_gas_metering(
     storage_gas_unit_price: u64,
     cost_table: SuiCostTable,
 ) -> UserInputResult<SuiGasStatus<'static>> {
-    let mut gas_status = SuiGasStatus::new_with_budget(
+    let gas_status = SuiGasStatus::new_with_budget(
         gas_budget,
         computation_gas_unit_price.into(),
         storage_gas_unit_price.into(),
         cost_table,
     );
-    // Charge the flat transaction fee.
-    gas_status.charge_min_tx_gas()?;
     Ok(gas_status)
 }
 
@@ -607,7 +602,7 @@ pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u6
     // The object must be a gas coin as we have checked in transaction handle phase.
     let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
     let balance = gas_coin.value();
-    assert!(balance >= deduct_amount);
+    assert!(deduct_amount <= rebate_amount || balance >= deduct_amount - rebate_amount);
     let new_gas_coin = GasCoin::new(*gas_coin.id(), balance + rebate_amount - deduct_amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
     // unwrap safe because GasCoin is guaranteed to serialize
