@@ -1775,6 +1775,90 @@ async fn test_handle_conflicting_transaction_response() {
 }
 
 #[tokio::test]
+async fn test_handle_overload_response() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let txn = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        None,
+    );
+
+    let overload_error = SuiError::TooManyTransactionsPendingExecution {
+        queue_len: 100,
+        threshold: 100,
+    };
+    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+
+    // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    set_tx_info_response_with_error(&mut clients, authority_keys.iter().skip(1), overload_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::SystemOverload {
+                    overloaded_stake,
+                    ..
+                } if *overloaded_stake == 7500
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    // Change one of the valdiators' errors to RPC error so the system is considered not overloaded now and a `RetryableTransaction`
+    // should be returned.
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(rpc_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn test_byzantine_authority_sig_aggregation() {
     telemetry_subscribers::init_for_testing();
     // For 4 validators, we need 2f+1 = 3 for quorum for signing a sender signed tx.
@@ -1989,6 +2073,10 @@ async fn assert_resp_err<E, F>(
             AggregatorProcessTransactionError::FatalTransaction { errors } => {
                 assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
             }
+
+            AggregatorProcessTransactionError::SystemOverload { errors, .. } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
         },
         Err(received_agg_err) => {
             assert!(
@@ -2039,13 +2127,21 @@ fn set_tx_info_response_with_signed_tx(
 
 fn set_retryable_tx_info_response_error(
     clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
-    authority_keys: &Vec<(AuthorityName, AuthorityKeyPair)>,
+    authority_keys: &[(AuthorityName, AuthorityKeyPair)],
+) {
+    let error = SuiError::RpcError("RPC".into(), "Error".into());
+    set_tx_info_response_with_error(clients, authority_keys.iter(), error);
+}
+
+fn set_tx_info_response_with_error<'a>(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: impl Iterator<Item = &'a (AuthorityName, AuthorityKeyPair)>,
+    error: SuiError,
 ) {
     for (name, _) in authority_keys {
-        let error = SuiError::RpcError("RPC".into(), "Error".into());
         clients
             .get_mut(name)
             .unwrap()
-            .set_tx_info_response_error(error);
+            .set_tx_info_response_error(error.clone());
     }
 }
