@@ -42,7 +42,7 @@ module sui_system::genesis {
 
     struct GenesisChainParameters has drop, copy {
         protocol_version: u64,
-        governance_start_epoch: u64,
+        stake_subsidy_start_epoch: u64,
         chain_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
         initial_stake_subsidy_distribution_amount: u64,
@@ -163,7 +163,7 @@ module sui_system::genesis {
             subsidy_fund,
             storage_fund,
             genesis_chain_parameters.protocol_version,
-            genesis_chain_parameters.governance_start_epoch,
+            genesis_chain_parameters.stake_subsidy_start_epoch,
             genesis_chain_parameters.chain_start_timestamp_ms,
             genesis_chain_parameters.epoch_duration_ms,
             genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
