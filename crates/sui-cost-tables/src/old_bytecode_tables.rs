@@ -15,7 +15,7 @@ use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
 
-use crate::units_types::{CostTable, Gas, GasCost};
+use crate::old_units_types::{CostTable, Gas, GasCost};
 use move_binary_format::{
     file_format::{
         Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
@@ -765,3 +765,19 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
 
     new_from_instructions(instrs)
 });
+
+//pub fn initial_cost_schedule_for_unit_tests() -> move_vm_test_utils::gas_schedule::CostTable {
+//move_vm_test_utils::gas_schedule::CostTable {
+//instruction_table: INITIAL_COST_SCHEDULE
+//.clone()
+//.instruction_table
+//.into_iter()
+//.map(|gas_cost| {
+//move_vm_test_utils::gas_schedule::GasCost::new(
+//gas_cost.instruction_gas,
+//gas_cost.memory_gas,
+//)
+//})
+//.collect(),
+//}
+//}

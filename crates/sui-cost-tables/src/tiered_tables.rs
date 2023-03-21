@@ -14,7 +14,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
 
-use crate::units_types::{CostTable, Gas, GasCost};
+use crate::tiered_units_types::{CostTable, Gas, GasCost};
 
 /// VM flat fee
 pub const VM_FLAT_FEE: Gas = Gas::new(8_000);
@@ -51,19 +51,19 @@ pub struct GasStatus<'a> {
     charge: bool,
 
     // The current height of the operand stack, and the maximal height that it has reached.
-    stack_height_high_water_mark: u64,
+    pub stack_height_high_water_mark: u64,
     stack_height_current: u64,
     stack_height_next_tier_start: Option<u64>,
     stack_height_current_tier_mult: u64,
 
     // The current (abstract) size  of the operand stack and the maximal size that it has reached.
-    stack_size_high_water_mark: u64,
+    pub stack_size_high_water_mark: u64,
     stack_size_current: u64,
     stack_size_next_tier_start: Option<u64>,
     stack_size_current_tier_mult: u64,
 
     // The total number of bytecode instructions that have been executed in the transaction.
-    instructions_executed: u64,
+    pub instructions_executed: u64,
     instructions_next_tier_start: Option<u64>,
     instructions_current_tier_mult: u64,
 }
@@ -240,14 +240,18 @@ impl<'a> GasStatus<'a> {
     }
 
     /// Return the gas left.
-    pub fn remaining_gas(&self) -> Gas {
-        self.gas_left.to_unit_round_down()
+    pub fn remaining_gas(&self) -> InternalGas {
+        self.gas_left
     }
 
     /// Charge a given amount of gas and fail if not enough gas units are left.
     pub fn deduct_gas(&mut self, amount: InternalGas) -> PartialVMResult<()> {
         if !self.charge {
             return Ok(());
+        }
+
+        if u64::from(amount) == 855814000 {
+            panic!("BOOM");
         }
 
         match self.gas_left.checked_sub(amount) {
@@ -666,42 +670,44 @@ pub fn unit_cost_schedule() -> CostTable {
 pub fn initial_cost_schedule() -> CostTable {
     let var = std::env::var("COST_TABLES").unwrap();
     let ct = std::env::var("COST_TABLE").unwrap();
-    let path = std::path::Path::new(&var).join(std::path::Path::new("tables")).join(std::path::Path::new(&ct));
+    let path = std::path::Path::new(&var)
+        .join(std::path::Path::new("tables"))
+        .join(std::path::Path::new(&ct));
     let x = cost_table_from_path(&path);
     //let instruction_tiers: BTreeMap<u64, u64> = vec![
-        //(0, 1),
-        //(1000, 2),
-        //(2000, 4),
-        //(2500, 16),
-        //(3000, 256), // After this all instructions get charged this amount.
+    //(0, 1),
+    //(1000, 2),
+    //(2000, 4),
+    //(2500, 16),
+    //(3000, 256), // After this all instructions get charged this amount.
     //]
     //.into_iter()
     //.collect();
 
     //let stack_height_tiers: BTreeMap<u64, u64> = vec![
-        //(0, 1),
-        //(200, 2),
-        //(400, 4),
-        //(800, 16),
-        //(1200, 256), // After this all increases to the stack height get charged this amount.
+    //(0, 1),
+    //(200, 2),
+    //(400, 4),
+    //(800, 16),
+    //(1200, 256), // After this all increases to the stack height get charged this amount.
     //]
     //.into_iter()
     //.collect();
 
     //let stack_size_tiers: BTreeMap<u64, u64> = vec![
-        //(0, 1),
-        //(5000, 2),
-        //(7000, 4),
-        //(10000, 16),
-        //(15000, 256), // After this all increases to the stack height get charged this amount.
+    //(0, 1),
+    //(5000, 2),
+    //(7000, 4),
+    //(10000, 16),
+    //(15000, 256), // After this all increases to the stack height get charged this amount.
     //]
     //.into_iter()
     //.collect();
 
     //let x = CostTable {
-        //instruction_tiers,
-        //stack_size_tiers,
-        //stack_height_tiers,
+    //instruction_tiers,
+    //stack_size_tiers,
+    //stack_height_tiers,
     //};
     println!("{}", serde_json::to_string_pretty(&x).unwrap());
     x

@@ -8998,14 +8998,12 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
+ "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
  "serde 1.0.152",
-<<<<<<< HEAD
- "sui-protocol-config",
-=======
  "serde_json",
->>>>>>> 8f30babab1 (WIP: GAS)
+ "sui-protocol-config",
  "workspace-hack",
 ]
 

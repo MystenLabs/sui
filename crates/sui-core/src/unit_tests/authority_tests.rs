@@ -453,6 +453,7 @@ async fn test_dev_inspect_unowned_object() {
     )
     .await
     .unwrap();
+    println!("{:#?}", effects);
     let created_object_id = effects.created()[0].0 .0;
     let created_object = validator
         .get_object(&created_object_id)

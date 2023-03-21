@@ -28,6 +28,17 @@ use sui_cost_tables::{
 };
 use sui_protocol_config::*;
 
+static LOGGING_FILE: Lazy<std::sync::Mutex<std::fs::File>> = Lazy::new(|| {
+    std::sync::Mutex::new(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open("/Users/timothyzakian/work/gas_costs")
+            .unwrap(),
+    )
+});
+
 // A bucket defines a range of units that will be priced the same.
 // A cost for the bucket is defined to make the step function non linear.
 #[allow(dead_code)]
@@ -460,6 +471,28 @@ impl<'a> SuiGasStatus<'a> {
     pub fn summary(&self) -> GasCostSummary {
         let remaining_gas = self.gas_status.remaining_gas();
         let storage_cost = self.storage_gas_units;
+        if self.gas_status.bytecode.is_metered() {
+            let f = &mut *LOGGING_FILE.lock().unwrap();
+            use std::io::Write;
+            let bytecode = u64::from(self.gas_used());
+            let tiered = (u32::MAX as u64)
+                - u64::from(InternalGas::to_unit_round_down::<
+                    sui_cost_tables::tiered_units_types::GasUnit,
+                >(self.gas_status.tiered.remaining_gas()));
+            // bytecode,tiered,bucket_bytecode,bucket_tiered,instrs,stack_size,stack_height
+            writeln!(
+                f,
+                "{},{},{},{},{},{},{},{}",
+                self.gas_status.time(),
+                bytecode,
+                tiered,
+                get_bucket_cost(&COMPUTATION_BUCKETS, bytecode),
+                get_bucket_cost(&COMPUTATION_BUCKETS, tiered),
+                self.gas_status.tiered.instructions_executed,
+                self.gas_status.tiered.stack_size_high_water_mark,
+                self.gas_status.tiered.stack_height_high_water_mark,
+            );
+        }
         // MUSTFIX: handle underflow how?
         let computation_cost = self
             .init_budget
