@@ -208,6 +208,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
+    pub consensus_committed_subdags: IntCounterVec,
+    pub consensus_committed_certificates: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -422,6 +424,20 @@ impl AuthorityMetrics {
             consensus_handler_scores: register_int_gauge_vec_with_registry!(
                 "consensus_handler_scores",
                 "scores from consensus for each authority",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
+            consensus_committed_subdags: register_int_counter_vec_with_registry!(
+                "consensus_committed_subdags",
+                "Number of committed subdags, sliced by author",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
+            consensus_committed_certificates: register_int_counter_vec_with_registry!(
+                "consensus_committed_certificates",
+                "Number of committed certificates, sliced by author",
                 &["authority"],
                 registry,
             )
