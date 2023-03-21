@@ -42,14 +42,9 @@ module sui_system::sui_system_state_inner {
     spec module { pragma verify = false; }
 
     /// A list of system config parameters.
-    // TDOO: We will likely add more, a few potential ones:
-    // - the change in stake across epochs can be at most +/- x%
-    // - the change in the validator set across epochs can be at most x validators
-    //
     struct SystemParameters has store {
-        /// The starting epoch in which various on-chain governance features take effect:
-        /// - stake subsidies are paid out
-        governance_start_epoch: u64,
+        /// The starting epoch in which stake subsidies start being paid out
+        stake_subsidy_start_epoch: u64,
 
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
@@ -156,7 +151,7 @@ module sui_system::sui_system_state_inner {
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
-        governance_start_epoch: u64,
+        stake_subsidy_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
         initial_stake_subsidy_distribution_amount: u64,
@@ -178,7 +173,7 @@ module sui_system::sui_system_state_inner {
             validators,
             storage_fund,
             parameters: SystemParameters {
-                governance_start_epoch,
+                stake_subsidy_start_epoch,
                 epoch_duration_ms,
                 max_validator_count,
                 min_validator_joining_stake,
@@ -693,8 +688,8 @@ module sui_system::sui_system_state_inner {
         let computation_charge = balance::value(&computation_reward);
 
         // Include stake subsidy in the rewards given out to validators and stakers.
-        // Delay distributing any stake subsidies until after `governance_start_epoch`.
-        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.governance_start_epoch) {
+        // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
+        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.stake_subsidy_start_epoch) {
             stake_subsidy::advance_epoch(&mut self.stake_subsidy)
         } else {
             balance::zero()
@@ -734,7 +729,6 @@ module sui_system::sui_system_state_inner {
             self.parameters.validator_low_stake_threshold,
             self.parameters.validator_very_low_stake_threshold,
             self.parameters.validator_low_stake_grace_period,
-            self.parameters.governance_start_epoch,
             ctx,
         );
 

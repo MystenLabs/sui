@@ -190,7 +190,7 @@ mod tests {
             reference_gas_price: 5,
             safe_mode: false,
             epoch_start_timestamp_ms: 123456,
-            governance_start_epoch: 123456,
+            stake_subsidy_start_epoch: 123456,
             epoch_duration_ms: 123456789,
             stake_subsidy_epoch_counter: 1,
             stake_subsidy_balance: 1,

@@ -320,7 +320,6 @@ module sui_system::validator_set {
         low_stake_threshold: u64,
         very_low_stake_threshold: u64,
         low_stake_grace_period: u64,
-        governance_start_epoch: u64,
         ctx: &mut TxContext,
     ) {
         let new_epoch = tx_context::epoch(ctx) + 1;
@@ -394,10 +393,14 @@ module sui_system::validator_set {
         process_pending_removals(self, validator_report_records, ctx);
 
         // kick low stake validators out.
-        if (tx_context::epoch(ctx) >= governance_start_epoch) {
-            update_and_process_low_stake_departures(
-                self, low_stake_threshold, very_low_stake_threshold, low_stake_grace_period, validator_report_records, ctx);
-        };
+        update_and_process_low_stake_departures(
+            self,
+            low_stake_threshold,
+            very_low_stake_threshold,
+            low_stake_grace_period,
+            validator_report_records,
+            ctx
+        );
 
         self.total_stake = calculate_total_stakes(&self.active_validators);
 

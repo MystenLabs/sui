@@ -395,7 +395,7 @@ pub struct GenesisValidatorMetadata {
 #[serde(rename_all = "kebab-case")]
 pub struct GenesisChainParameters {
     pub protocol_version: u64,
-    pub governance_start_epoch: u64,
+    pub stake_subsidy_start_epoch: u64,
     pub chain_start_timestamp_ms: u64,
     pub epoch_duration_ms: u64,
     pub initial_stake_subsidy_distribution_amount: u64,
@@ -421,12 +421,9 @@ pub struct GenesisCeremonyParameters {
     #[serde(default = "GenesisCeremonyParameters::default_allow_insertion_of_extra_objects")]
     pub allow_insertion_of_extra_objects: bool,
 
-    /// The starting epoch in which various on-chain governance features take effect. E.g.
-    /// - stake subsidies are paid out
-    /// - validators with stake less than a 'validator_stake_threshold' are
-    ///   kicked from the validator set
+    /// The starting epoch in which stake subsidies start being paid out.
     #[serde(default)]
-    pub governance_start_epoch: u64,
+    pub stake_subsidy_start_epoch: u64,
 
     /// The duration of an epoch, in milliseconds.
     #[serde(default = "GenesisCeremonyParameters::default_epoch_duration_ms")]
@@ -456,7 +453,7 @@ impl GenesisCeremonyParameters {
             timestamp_ms: Self::default_timestamp_ms(),
             protocol_version: ProtocolVersion::MAX,
             allow_insertion_of_extra_objects: true,
-            governance_start_epoch: 0,
+            stake_subsidy_start_epoch: 0,
             epoch_duration_ms: Self::default_epoch_duration_ms(),
             initial_stake_subsidy_distribution_amount:
                 Self::default_initial_stake_subsidy_distribution_amount(),
@@ -499,7 +496,7 @@ impl GenesisCeremonyParameters {
     fn to_genesis_chain_parameters(&self) -> GenesisChainParameters {
         GenesisChainParameters {
             protocol_version: self.protocol_version.as_u64(),
-            governance_start_epoch: self.governance_start_epoch,
+            stake_subsidy_start_epoch: self.stake_subsidy_start_epoch,
             chain_start_timestamp_ms: self.timestamp_ms,
             epoch_duration_ms: self.epoch_duration_ms,
             initial_stake_subsidy_distribution_amount: self

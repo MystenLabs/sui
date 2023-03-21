@@ -823,7 +823,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, governance_start_epoch: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -841,7 +841,6 @@ It does the following things:
     low_stake_threshold: u64,
     very_low_stake_threshold: u64,
     low_stake_grace_period: u64,
-    governance_start_epoch: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = <a href="_epoch">tx_context::epoch</a>(ctx) + 1;
@@ -915,10 +914,14 @@ It does the following things:
     <a href="validator_set.md#0x3_validator_set_process_pending_removals">process_pending_removals</a>(self, validator_report_records, ctx);
 
     // kick low stake validators out.
-    <b>if</b> (<a href="_epoch">tx_context::epoch</a>(ctx) &gt;= governance_start_epoch) {
-        <a href="validator_set.md#0x3_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
-            self, low_stake_threshold, very_low_stake_threshold, low_stake_grace_period, validator_report_records, ctx);
-    };
+    <a href="validator_set.md#0x3_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
+        self,
+        low_stake_threshold,
+        very_low_stake_threshold,
+        low_stake_grace_period,
+        validator_report_records,
+        ctx
+    );
 
     self.total_stake = <a href="validator_set.md#0x3_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.active_validators);
 
