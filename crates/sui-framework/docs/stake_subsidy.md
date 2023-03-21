@@ -100,7 +100,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(<a href="">balance</a>: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, initial_stake_subsidy_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(<a href="">balance</a>: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, initial_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
 </code></pre>
 
 
@@ -111,7 +111,7 @@
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(
     <a href="">balance</a>: Balance&lt;SUI&gt;,
-    initial_stake_subsidy_amount: u64,
+    initial_distribution_amount: u64,
     stake_subsidy_period_length: u64,
     stake_subsidy_decrease_rate: u16,
     ctx: &<b>mut</b> TxContext,
@@ -125,7 +125,7 @@
     <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
         <a href="">balance</a>,
         distribution_counter: 0,
-        current_distribution_amount: initial_stake_subsidy_amount,
+        current_distribution_amount: initial_distribution_amount,
         stake_subsidy_period_length,
         stake_subsidy_decrease_rate,
         extra_fields: <a href="_new">bag::new</a>(ctx),

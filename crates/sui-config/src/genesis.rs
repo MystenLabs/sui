@@ -398,7 +398,7 @@ pub struct GenesisChainParameters {
     pub stake_subsidy_start_epoch: u64,
     pub chain_start_timestamp_ms: u64,
     pub epoch_duration_ms: u64,
-    pub initial_stake_subsidy_distribution_amount: u64,
+    pub stake_subsidy_initial_distribution_amount: u64,
     pub stake_subsidy_period_length: u64,
     pub stake_subsidy_decrease_rate: u16,
     pub max_validator_count: u64,
@@ -434,7 +434,7 @@ pub struct GenesisCeremonyParameters {
     #[serde(
         default = "GenesisCeremonyParameters::default_initial_stake_subsidy_distribution_amount"
     )]
-    pub initial_stake_subsidy_distribution_amount: u64,
+    pub stake_subsidy_initial_distribution_amount: u64,
 
     /// Number of distributions to occur before the distribution amount decays.
     #[serde(default = "GenesisCeremonyParameters::default_stake_subsidy_period_length")]
@@ -455,7 +455,7 @@ impl GenesisCeremonyParameters {
             allow_insertion_of_extra_objects: true,
             stake_subsidy_start_epoch: 0,
             epoch_duration_ms: Self::default_epoch_duration_ms(),
-            initial_stake_subsidy_distribution_amount:
+            stake_subsidy_initial_distribution_amount:
                 Self::default_initial_stake_subsidy_distribution_amount(),
             stake_subsidy_period_length: Self::default_stake_subsidy_period_length(),
             stake_subsidy_decrease_rate: Self::default_stake_subsidy_decrease_rate(),
@@ -499,8 +499,8 @@ impl GenesisCeremonyParameters {
             stake_subsidy_start_epoch: self.stake_subsidy_start_epoch,
             chain_start_timestamp_ms: self.timestamp_ms,
             epoch_duration_ms: self.epoch_duration_ms,
-            initial_stake_subsidy_distribution_amount: self
-                .initial_stake_subsidy_distribution_amount,
+            stake_subsidy_initial_distribution_amount: self
+                .stake_subsidy_initial_distribution_amount,
             stake_subsidy_period_length: self.stake_subsidy_period_length,
             stake_subsidy_decrease_rate: self.stake_subsidy_decrease_rate,
             max_validator_count: sui_types::governance::MAX_VALIDATOR_COUNT,
