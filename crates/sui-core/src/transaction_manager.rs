@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
     base_types::ObjectID,
@@ -163,6 +164,7 @@ impl TransactionManager {
 
         // Internal lock is held only for updating the internal state.
         let mut inner = self.inner.write();
+        let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for pending_cert in pending {
             // Tx lock is not held here, which makes it possible to send duplicated transactions to
@@ -298,6 +300,7 @@ impl TransactionManager {
         let mut ready_digests = Vec::new();
 
         let inner = &mut self.inner.write();
+        let _scope = monitored_scope("TransactionManager::objects_available::wlock");
         if inner.epoch != epoch_store.epoch() {
             warn!(
                 "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
@@ -356,6 +359,7 @@ impl TransactionManager {
     ) {
         {
             let inner = &mut self.inner.write();
+            let _scope = monitored_scope("TransactionManager::certificate_executed::wlock");
             if inner.epoch != epoch_store.epoch() {
                 warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
                 return;
@@ -372,6 +376,7 @@ impl TransactionManager {
     fn certificate_ready(&self, certificate: VerifiedExecutableTransaction) {
         self.metrics.transaction_manager_num_ready.inc();
         let _ = self.tx_ready_certificates.send(certificate);
+        self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.
