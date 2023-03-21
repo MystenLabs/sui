@@ -557,6 +557,7 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
+            &committee,
             consensus_config,
             state.name,
             connection_monitor_status,
@@ -746,6 +747,7 @@ impl SuiNode {
     }
 
     fn construct_consensus_adapter(
+        committee: &Committee,
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
@@ -774,6 +776,8 @@ impl SuiNode {
             Box::new(consensus_client),
             authority,
             Box::new(connection_monitor_status),
+            consensus_config.max_pending_transactions(),
+            consensus_config.max_pending_transactions() * 2 / committee.num_members(),
             ca_metrics,
         )
     }
