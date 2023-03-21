@@ -8840,6 +8840,7 @@ dependencies = [
  "sui-framework-build",
  "sui-protocol-config",
  "sui-types",
+ "url",
  "workspace-hack",
 ]
 

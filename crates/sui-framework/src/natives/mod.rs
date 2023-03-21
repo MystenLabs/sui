@@ -12,6 +12,7 @@ mod test_utils;
 mod transfer;
 mod tx_context;
 mod types;
+mod url;
 mod validator;
 
 use crate::make_native;
@@ -317,6 +318,12 @@ pub fn all_natives(
             "validator",
             "validate_metadata_bcs",
             make_native!(validator::validate_metadata_bcs),
+        ),
+        ("url", "validate_url", make_native!(url::validate_url)),
+        (
+            "url",
+            "parse_url_internal",
+            make_native!(url::parse_url_internal),
         ),
         ("test_utils", "destroy", make_native!(test_utils::destroy)),
         (
