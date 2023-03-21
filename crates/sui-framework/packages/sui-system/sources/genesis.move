@@ -42,12 +42,16 @@ module sui_system::genesis {
 
     struct GenesisChainParameters has drop, copy {
         protocol_version: u64,
-        stake_subsidy_start_epoch: u64,
         chain_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+
+        // Stake Subsidy parameters
+        stake_subsidy_start_epoch: u64,
         stake_subsidy_initial_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
+
+        // Validator committee parameters
         max_validator_count: u64,
         min_validator_joining_stake: u64,
         validator_low_stake_threshold: u64,
@@ -163,12 +167,16 @@ module sui_system::genesis {
             subsidy_fund,
             storage_fund,
             genesis_chain_parameters.protocol_version,
-            genesis_chain_parameters.stake_subsidy_start_epoch,
             genesis_chain_parameters.chain_start_timestamp_ms,
             genesis_chain_parameters.epoch_duration_ms,
+
+            // Stake Subsidy parameters
+            genesis_chain_parameters.stake_subsidy_start_epoch,
             genesis_chain_parameters.stake_subsidy_initial_distribution_amount,
             genesis_chain_parameters.stake_subsidy_period_length,
             genesis_chain_parameters.stake_subsidy_decrease_rate,
+
+            // Validator committee parameters
             genesis_chain_parameters.max_validator_count,
             genesis_chain_parameters.min_validator_joining_stake,
             genesis_chain_parameters.validator_low_stake_threshold,

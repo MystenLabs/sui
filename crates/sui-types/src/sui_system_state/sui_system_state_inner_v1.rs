@@ -32,10 +32,11 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SystemParametersV1 {
-    pub stake_subsidy_start_epoch: u64,
-
     /// The duration of an epoch, in milliseconds.
     pub epoch_duration_ms: u64,
+
+    /// The starting epoch in which stake subsidies start being paid out
+    pub stake_subsidy_start_epoch: u64,
 
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.

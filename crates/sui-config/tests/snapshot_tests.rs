@@ -39,7 +39,7 @@ fn genesis_config_snapshot_matches() {
 
     let fake_obj_id = ObjectID::from(fake_addr);
     let mut genesis_config = GenesisConfig::for_local_testing();
-    genesis_config.parameters.timestamp_ms = 0;
+    genesis_config.parameters.chain_start_timestamp_ms = 0;
     for account in &mut genesis_config.accounts {
         account.address = Some(fake_addr);
         for gas_obj in &mut account.gas_objects {
@@ -82,7 +82,7 @@ fn populated_genesis_snapshot_matches() {
         .add_objects(objects)
         .add_validator(validator, pop)
         .with_parameters(GenesisCeremonyParameters {
-            timestamp_ms: 10,
+            chain_start_timestamp_ms: 10,
             ..GenesisCeremonyParameters::new()
         })
         .add_validator_signature(&key)

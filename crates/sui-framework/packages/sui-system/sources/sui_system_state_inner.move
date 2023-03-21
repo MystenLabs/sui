@@ -43,11 +43,11 @@ module sui_system::sui_system_state_inner {
 
     /// A list of system config parameters.
     struct SystemParameters has store {
-        /// The starting epoch in which stake subsidies start being paid out
-        stake_subsidy_start_epoch: u64,
-
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
+
+        /// The starting epoch in which stake subsidies start being paid out
+        stake_subsidy_start_epoch: u64,
 
         /// Maximum number of active validators at any moment.
         /// We do not allow the number of validators in any epoch to go above this.
@@ -151,12 +151,16 @@ module sui_system::sui_system_state_inner {
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
-        stake_subsidy_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+
+        // Stake Subsidy parameters
+        stake_subsidy_start_epoch: u64,
         stake_subsidy_initial_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
+
+        // Validator committee parameters
         max_validator_count: u64,
         min_validator_joining_stake: u64,
         validator_low_stake_threshold: u64,
@@ -173,8 +177,8 @@ module sui_system::sui_system_state_inner {
             validators,
             storage_fund,
             parameters: SystemParameters {
-                stake_subsidy_start_epoch,
                 epoch_duration_ms,
+                stake_subsidy_start_epoch,
                 max_validator_count,
                 min_validator_joining_stake,
                 validator_low_stake_threshold,
