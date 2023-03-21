@@ -6,7 +6,7 @@ import { Field, Form, useFormikContext } from 'formik';
 import { memo, useCallback, useMemo } from 'react';
 
 import { parseAmount } from '../../helpers';
-import { useTransactionGasBudget } from '../../hooks';
+import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
 import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
 import { type FormValues } from './StakingCard';
 import { createStakeTransaction } from './utils/transaction';
@@ -45,7 +45,11 @@ function StakeForm({
         return createStakeTransaction(amountWithoutDecimals, validatorAddress);
     }, [values.amount, validatorAddress, decimals]);
 
-    const { data: gasBudget } = useTransactionGasBudget(transaction);
+    const activeAddress = useActiveAddress();
+    const { data: gasBudget } = useTransactionGasBudget(
+        activeAddress,
+        transaction
+    );
 
     const setMaxToken = useCallback(() => {
         if (!maxToken) return;
