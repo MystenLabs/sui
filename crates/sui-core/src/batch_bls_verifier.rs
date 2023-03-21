@@ -18,6 +18,7 @@ use sui_types::{
     messages_checkpoint::SignedCheckpointSummary,
 };
 
+use mysten_metrics::monitored_scope;
 use tap::TapFallible;
 use tokio::{
     sync::oneshot,
@@ -198,6 +199,7 @@ impl BatchCertificateVerifier {
     fn process_queue(&self, mut queue: MutexGuard<'_, CertBuffer>) {
         let taken = queue.take_and_replace();
         drop(queue);
+        let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
 
         let results = batch_verify_certificates(&self.committee, &taken.certs);
         izip!(
