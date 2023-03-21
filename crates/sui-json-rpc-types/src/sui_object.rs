@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{Page, SuiMoveStruct, SuiMoveValue};
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -23,19 +24,37 @@ use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber,
     TransactionDigest,
 };
-use sui_types::error::{UserInputError, UserInputResult};
+use sui_types::error::{SuiObjectResponseError, UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
 
-use crate::{Page, SuiMoveStruct, SuiMoveValue};
-
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
-#[serde(tag = "status", content = "details", rename = "ObjectRead")]
-pub enum SuiObjectResponse {
-    Exists(SuiObjectData),
-    NotExists(ObjectID),
-    Deleted(SuiObjectRef),
+pub struct SuiObjectResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<SuiObjectData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<SuiObjectResponseError>,
+}
+
+impl SuiObjectResponse {
+    pub fn new(data: Option<SuiObjectData>, error: Option<SuiObjectResponseError>) -> Self {
+        Self { data, error }
+    }
+
+    pub fn new_with_data(data: SuiObjectData) -> Self {
+        Self {
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    pub fn new_with_error(error: SuiObjectResponseError) -> Self {
+        Self {
+            data: None,
+            error: Some(error),
+        }
+    }
 }
 
 impl SuiObjectResponse {
@@ -318,11 +337,20 @@ impl TryFrom<(ObjectRead, SuiObjectDataOptions)> for SuiObjectResponse {
         (object_read, options): (ObjectRead, SuiObjectDataOptions),
     ) -> Result<Self, Self::Error> {
         match object_read {
-            ObjectRead::NotExists(id) => Ok(Self::NotExists(id)),
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
             ObjectRead::Exists(object_ref, o, layout) => {
-                Ok(Self::Exists((object_ref, o, layout, options).try_into()?))
+                let data = (object_ref, o, layout, options).try_into()?;
+                Ok(SuiObjectResponse::new_with_data(data))
             }
-            ObjectRead::Deleted(oref) => Ok(Self::Deleted(oref.into())),
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
         }
     }
 }
@@ -340,7 +368,7 @@ impl TryFrom<(ObjectInfo, SuiObjectDataOptions)> for SuiObjectResponse {
             ..
         } = options;
 
-        Ok(Self::Exists(SuiObjectData {
+        Ok(Self::new_with_data(SuiObjectData {
             object_id: object_info.object_id,
             version: object_info.version,
             digest: object_info.digest,
@@ -477,31 +505,31 @@ impl
 impl SuiObjectResponse {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn object(&self) -> UserInputResult<&SuiObjectData> {
-        match &self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.to_object_ref(),
-            }),
-            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
-                object_id: *id,
-                version: None,
-            }),
-            Self::Exists(o) => Ok(o),
+    pub fn object(&self) -> Result<&SuiObjectData, SuiObjectResponseError> {
+        let data = &self.data;
+        let error = self.error.clone();
+        if let Some(data) = data {
+            Ok(data)
+        } else if let Some(error) = error {
+            Err(error)
+        } else {
+            // We really shouldn't reach this code block since either data, or error field should always be filled.
+            Err(SuiObjectResponseError::Unknown)
         }
     }
 
     /// Returns the object value if there is any, otherwise an Err if
     /// the object does not exist or is deleted.
-    pub fn into_object(self) -> UserInputResult<SuiObjectData> {
-        match self {
-            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted {
-                object_ref: oref.to_object_ref(),
-            }),
-            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
-                object_id: id,
-                version: None,
-            }),
-            Self::Exists(o) => Ok(o),
+    pub fn into_object(self) -> Result<SuiObjectData, SuiObjectResponseError> {
+        let data = self.data.clone();
+        let error = self.error.clone();
+        if let Some(data) = data {
+            Ok(data)
+        } else if let Some(error) = error {
+            Err(error)
+        } else {
+            // We really shouldn't reach this code block since either data, or error field should always be filled.
+            Err(SuiObjectResponseError::Unknown)
         }
     }
 }

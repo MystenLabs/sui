@@ -16,7 +16,9 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
@@ -184,6 +186,55 @@ pub enum UserInputError {
     Unsupported(String),
 }
 
+#[derive(
+    Eq,
+    PartialEq,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    AsRefStr,
+    IntoStaticStr,
+    JsonSchema,
+    Error,
+)]
+pub enum SuiObjectResponseError {
+    NotExists {
+        object_id: ObjectID,
+    },
+    Deleted {
+        object_id: ObjectID,
+        /// Object version.
+        version: SequenceNumber,
+        /// Base64 string representing the object digest
+        digest: ObjectDigest,
+    },
+    Unknown, // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
+}
+
+impl fmt::Display for SuiObjectResponseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SuiObjectResponseError::NotExists { object_id } => {
+                write!(f, "Object not exists: {}", object_id)
+            }
+            SuiObjectResponseError::Deleted {
+                object_id,
+                version,
+                digest,
+            } => {
+                write!(
+                    f,
+                    "Object deleted: {}, version: {}, digest: {}",
+                    object_id, version, digest
+                )
+            }
+            SuiObjectResponseError::Unknown => write!(f, "Unknown error"),
+        }
+    }
+}
+
 /// Custom error type for Sui.
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
@@ -191,6 +242,10 @@ pub enum UserInputError {
 pub enum SuiError {
     #[error("Error checking transaction input objects: {:?}", error)]
     UserInputError { error: UserInputError },
+
+    #[error("Error checking transaction object: {:?}", error)]
+    SuiObjectResponseError { error: SuiObjectResponseError },
+
     #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
 
@@ -543,6 +598,12 @@ impl TryFrom<SuiError> for UserInputError {
 impl From<UserInputError> for SuiError {
     fn from(error: UserInputError) -> Self {
         SuiError::UserInputError { error }
+    }
+}
+
+impl From<SuiObjectResponseError> for SuiError {
+    fn from(error: SuiObjectResponseError) -> Self {
+        SuiError::SuiObjectResponseError { error }
     }
 }
 

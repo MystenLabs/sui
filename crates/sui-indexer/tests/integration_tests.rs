@@ -63,9 +63,12 @@ pub mod pg_integration_test {
             .await?
             .data
             .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
-                _ => None,
+            .filter_map(|object_resp| {
+                if let Some(data) = object_resp.data {
+                    Some(data.object_id)
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -143,9 +146,12 @@ pub mod pg_integration_test {
             .await?
             .data
             .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
-                _ => None,
+            .filter_map(|object_resp| {
+                if let Some(data) = object_resp.data {
+                    Some(data.object_id)
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -472,9 +478,12 @@ pub mod pg_integration_test {
             .await?
             .data
             .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data),
-                _ => None,
+            .filter_map(|object_resp| {
+                if let Some(data) = object_resp.data {
+                    Some(data.object_id)
+                } else {
+                    None
+                }
             })
             .any(|obj| obj.object_id == transferred_object);
         assert!(object_correctly_transferred);

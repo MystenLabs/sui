@@ -23,7 +23,7 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffects, SuiTransactionEffectsAPI,
+    SuiObjectDataOptions, SuiTransactionEffects, SuiTransactionEffectsAPI,
     SuiTransactionResponseOptions,
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
@@ -549,14 +549,18 @@ impl FullNodeProxy {
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        match self
+        let response = self
             .sui_client
             .read_api()
             .get_object_with_options(object_id, SuiObjectDataOptions::bcs_lossless())
-            .await?
-        {
-            SuiObjectResponse::Exists(sui_object) => sui_object.try_into(),
-            _ => bail!("Object {:?} not found", object_id),
+            .await?;
+
+        if let Some(sui_object) = response.data {
+            sui_object.try_into()
+        } else if let Some(error) = response.error {
+            bail!("Error getting object {:?}: {}", object_id, error)
+        } else {
+            bail!("Object {:?} not found and no error provided", object_id)
         }
     }
 

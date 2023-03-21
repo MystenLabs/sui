@@ -282,7 +282,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(
-            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
+            matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())
@@ -315,7 +315,7 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(
-            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
+            matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())

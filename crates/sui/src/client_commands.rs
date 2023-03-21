@@ -1343,15 +1343,13 @@ impl WalletContext {
             .await?;
 
         for object in responses {
-            match object {
-                SuiObjectResponse::Exists(o) => {
-                    if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
-                        // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o.clone()));
-                    }
+            let o = object.data;
+            if let Some(o) = o {
+                if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
+                    // Okay to unwrap() since we already checked type
+                    let gas_coin = GasCoin::try_from(&o)?;
+                    values_objects.push((gas_coin.value(), o.clone()));
                 }
-                _ => continue,
             }
         }
 

@@ -42,7 +42,7 @@ use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::error::UserInputError;
+use sui_types::error::{SuiObjectResponseError, UserInputError};
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::{
     TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
@@ -202,18 +202,26 @@ impl ReadApiServer for ReadApi {
         let options = options.unwrap_or_default();
 
         match object_read {
-            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::NotExists(id)),
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
             ObjectRead::Exists(object_ref, o, layout) => {
                 let display_fields = if options.show_display {
                     get_display_fields(self, &o, &layout).await?
                 } else {
                     None
                 };
-                Ok(SuiObjectResponse::Exists(
+                Ok(SuiObjectResponse::new_with_data(
                     (object_ref, o, layout, options, display_fields).try_into()?,
                 ))
             }
-            ObjectRead::Deleted(oref) => Ok(SuiObjectResponse::Deleted(oref.into())),
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
         }
     }
 

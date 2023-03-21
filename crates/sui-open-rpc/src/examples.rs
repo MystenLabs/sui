@@ -208,7 +208,7 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectResponse::Exists(SuiObjectData {
+        let result = SuiObjectResponse::new_with_data(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     coin.to_object(SequenceNumber::from_u64(1)),
