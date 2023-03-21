@@ -49,7 +49,6 @@ impl<S: IndexerStore> ReadApi<S> {
         digest: &TransactionDigest,
         options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
-        // TODO(chris): support options in indexer
         let response: SuiTransactionFullResponse = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?
