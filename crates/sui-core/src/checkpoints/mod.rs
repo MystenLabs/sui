@@ -708,12 +708,6 @@ impl CheckpointBuilder {
             let epoch_rolling_gas_cost_summary =
                 self.get_epoch_total_gas_cost(last_checkpoint.as_ref().map(|(_, c)| c), &effects);
 
-            self.accumulator.accumulate_checkpoint(
-                effects.clone(),
-                sequence_number,
-                self.epoch_store.clone(),
-            )?;
-
             let end_of_epoch_data = if last_checkpoint_of_epoch {
                 let system_state_obj = self
                     .augment_epoch_last_checkpoint(
@@ -726,15 +720,21 @@ impl CheckpointBuilder {
                     .await?;
 
                 let committee = system_state_obj.get_current_epoch_committee().committee;
+
+                // This must happen after the call to augment_epoch_last_checkpoint,
+                // otherwise we will not capture the change_epoch tx
+                self.accumulator.accumulate_checkpoint(
+                    effects.clone(),
+                    sequence_number,
+                    self.epoch_store.clone(),
+                )?;
+
                 let root_state_digest = self
                     .accumulator
                     .digest_epoch(&epoch, sequence_number, self.epoch_store.clone())
                     .in_monitored_scope("CheckpointBuilder::digest_epoch")
                     .await?;
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
-
-                // for now, just log this value. Later it must be included in
-                // EndOfEpochData::epoch_commitments
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
                 Some(EndOfEpochData {
@@ -750,6 +750,12 @@ impl CheckpointBuilder {
                     epoch_commitments: vec![],
                 })
             } else {
+                self.accumulator.accumulate_checkpoint(
+                    effects.clone(),
+                    sequence_number,
+                    self.epoch_store.clone(),
+                )?;
+
                 None
             };
 
