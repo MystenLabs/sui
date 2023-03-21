@@ -36,6 +36,8 @@ module sui_system::sui_system_state_inner {
     const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
     const ANY_VALIDATOR: u8 = 3;
 
+    const SYSTEM_STATE_VERSION_V1: u64 = 1;
+
     // TODO: To suppress a false positive prover failure, which we should look into.
     spec module { pragma verify = false; }
 
@@ -150,7 +152,6 @@ module sui_system::sui_system_state_inner {
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
-        system_state_version: u64,
         governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
@@ -164,7 +165,7 @@ module sui_system::sui_system_state_inner {
         let system_state = SuiSystemStateInner {
             epoch: 0,
             protocol_version,
-            system_state_version,
+            system_state_version: SYSTEM_STATE_VERSION_V1,
             validators,
             storage_fund,
             parameters: SystemParameters {

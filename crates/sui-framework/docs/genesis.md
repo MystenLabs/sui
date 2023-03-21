@@ -163,12 +163,6 @@
 
 </dd>
 <dt>
-<code>system_state_version: u64</code>
-</dt>
-<dd>
-
-</dd>
-<dt>
 <code>governance_start_epoch: u64</code>
 </dt>
 <dd>
@@ -406,7 +400,6 @@ all the information we need in the system.
         subsidy_fund,
         storage_fund,
         genesis_chain_parameters.protocol_version,
-        genesis_chain_parameters.system_state_version,
         genesis_chain_parameters.governance_start_epoch,
         genesis_chain_parameters.chain_start_timestamp_ms,
         genesis_chain_parameters.epoch_duration_ms,
