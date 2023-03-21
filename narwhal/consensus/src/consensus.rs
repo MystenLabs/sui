@@ -434,3 +434,124 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ConsensusState;
+    use fastcrypto::{bls12381::min_sig::BLS12381KeyPair, traits::KeyPair};
+    use rand::thread_rng;
+    use types::Certificate;
+
+    #[test]
+    fn test_gc() {
+        let mut state = ConsensusState::new();
+        // nothing in DAG yet
+        assert_eq!(state.dag.len(), 0);
+        // create 2 keypairs
+        let kp1 = BLS12381KeyPair::generate(&mut thread_rng());
+        let pub_key1 = kp1.public();
+        let kp2 = BLS12381KeyPair::generate(&mut thread_rng());
+        let pub_key2 = kp2.public();
+
+        // create certs with these key pairs
+        let mut cert1_kp1 = Certificate::new_test_empty(pub_key1.clone());
+        cert1_kp1.header.round = 1;
+        let mut cert1_kp2 = Certificate::new_test_empty(pub_key2.clone());
+        cert1_kp2.header.round = 1;
+        let mut cert2_kp1 = Certificate::new_test_empty(pub_key1.clone());
+        cert2_kp1.header.round = 2;
+        let mut cert2_kp2 = Certificate::new_test_empty(pub_key2.clone());
+        cert2_kp2.header.round = 2;
+        let mut cert3_kp1 = Certificate::new_test_empty(pub_key1.clone());
+        cert3_kp1.header.round = 3;
+        let mut cert3_kp2 = Certificate::new_test_empty(pub_key2.clone());
+        cert3_kp2.header.round = 3;
+        let mut cert4 = Certificate::new_test_empty(pub_key1.clone());
+        cert4.header.round = 4;
+        let mut cert5 = Certificate::new_test_empty(pub_key1.clone());
+        cert5.header.round = 5;
+
+        // insert them into the DAG
+        state.try_insert(&cert1_kp1);
+        state.try_insert(&cert1_kp2);
+        state.try_insert(&cert2_kp1);
+        state.try_insert(&cert2_kp2);
+        state.try_insert(&cert3_kp1);
+        state.try_insert(&cert3_kp2);
+        state.try_insert(&cert4);
+        state.try_insert(&cert5);
+        assert_eq!(state.dag.len(), 5); // we now have 5 rounds in DAG
+
+        // commit cert3_kp1
+        // this also removes everything of _kp1 until round 3
+        state.update(&cert3_kp1, 5);
+        // nothing is purged yet as the _kp2 certs are still there
+        assert_eq!(state.dag.len(), 5);
+        // commit cert3_kp2
+        // this also removes everything of _kp2 until round 3
+        state.update(&cert3_kp2, 5);
+        assert_eq!(state.dag.len(), 2);
+        // now everything up to round 3 is committed, so only round 4 and 5 are there
+    }
+
+    #[test]
+    fn test_gc_at_depth_2() {
+        let mut state = ConsensusState::new();
+        assert_eq!(state.dag.len(), 0);
+        let kp1 = BLS12381KeyPair::generate(&mut thread_rng());
+        let pub_key1 = kp1.public();
+        let kp2 = BLS12381KeyPair::generate(&mut thread_rng());
+        let pub_key2 = kp2.public();
+        let mut certs = Vec::new();
+        for i in 1..=20 {
+            let mut cert = Certificate::new_test_empty(pub_key1.clone());
+            cert.header.round = i;
+            state.try_insert(&cert);
+            certs.push(cert);
+            let mut cert = Certificate::new_test_empty(pub_key2.clone());
+            cert.header.round = i;
+            state.try_insert(&cert);
+            certs.push(cert);
+        }
+        assert_eq!(state.dag.len(), 20);
+        // 18 & 19 are round 10
+        state.update(&certs.get(18).unwrap(), 2);
+        // all of _kp1 up to round 10 are gone, last committed round = 10
+        // GC depth = 2, so rounds 1-7 are gone completely (r + 2 < 10) -> 13 left
+        assert_eq!(state.dag.len(), 13);
+        state.update(&certs.get(19).unwrap(), 2);
+        // after this, also all of _kp2 up to round 10 are gone
+        // still 10 rounds in DAG
+        assert_eq!(state.dag.len(), 10);
+    }
+
+    #[test]
+    fn test_gc_at_depth_20() {
+        let mut state = ConsensusState::new();
+        assert_eq!(state.dag.len(), 0);
+        let kp1 = BLS12381KeyPair::generate(&mut thread_rng());
+        let pub_key1 = kp1.public();
+        let kp2 = BLS12381KeyPair::generate(&mut thread_rng());
+        let pub_key2 = kp2.public();
+        let mut certs = Vec::new();
+        for i in 1..=20 {
+            let mut cert = Certificate::new_test_empty(pub_key1.clone());
+            cert.header.round = i;
+            state.try_insert(&cert);
+            certs.push(cert);
+            let mut cert = Certificate::new_test_empty(pub_key2.clone());
+            cert.header.round = i;
+            state.try_insert(&cert);
+            certs.push(cert);
+        }
+        assert_eq!(state.dag.len(), 20);
+        // 18 & 19 are round 10
+        state.update(&certs.get(18).unwrap(), 20);
+        // all of _kp1 up to round 10 are gone, and at GC depth 20, none of _kp2 are gone, so still 20 rounds in DAG
+        assert_eq!(state.dag.len(), 20);
+        // after this, also all of _kp2 up to round 10 are gone
+        state.update(&certs.get(19).unwrap(), 20);
+        assert_eq!(state.dag.len(), 10);
+        // still 10 rounds in DAG
+    }
+}
