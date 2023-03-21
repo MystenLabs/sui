@@ -97,8 +97,8 @@ export const respondToTransactionRequest = createAsyncThunk<
                     } else {
                         txResult = await signer.signAndExecuteTransaction({
                             transaction: tx,
-                            options: txRequest.tx.options?.contentOptions,
-                            requestType: txRequest.tx.options?.requestType,
+                            options: txRequest.tx.options,
+                            requestType: txRequest.tx.requestType,
                         });
                     }
                 } else {

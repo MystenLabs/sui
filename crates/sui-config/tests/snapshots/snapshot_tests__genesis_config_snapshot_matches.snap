@@ -9,6 +9,9 @@ parameters:
   allow_insertion_of_extra_objects: true
   governance_start_epoch: 0
   epoch_duration_ms: 86400000
+  initial_stake_subsidy_distribution_amount: 1000000000000000
+  stake_subsidy_period_length: 30
+  stake_subsidy_decrease_rate: 10000
 committee_size: 4
 grpc_load_shed: ~
 grpc_concurrency_limit: 20000000000

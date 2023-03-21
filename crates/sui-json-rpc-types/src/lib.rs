@@ -4,19 +4,18 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use sui_types::base_types::ObjectID;
-use sui_types::dynamic_field::DynamicFieldInfo;
-
-pub use sui_event::*;
-pub use sui_object::*;
-pub use sui_transaction::*;
-
 pub use balance_changes::*;
 pub use object_changes::*;
 pub use sui_checkpoint::*;
 pub use sui_coin::*;
+pub use sui_event::*;
+pub use sui_extended::*;
 pub use sui_governance::*;
 pub use sui_move::*;
+pub use sui_object::*;
+pub use sui_transaction::*;
+use sui_types::base_types::ObjectID;
+use sui_types::dynamic_field::DynamicFieldInfo;
 
 #[cfg(test)]
 #[path = "unit_tests/rpc_types_tests.rs"]
@@ -27,6 +26,7 @@ mod object_changes;
 mod sui_checkpoint;
 mod sui_coin;
 mod sui_event;
+mod sui_extended;
 mod sui_governance;
 mod sui_move;
 mod sui_object;

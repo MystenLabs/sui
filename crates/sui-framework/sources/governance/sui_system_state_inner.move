@@ -47,8 +47,6 @@ module sui::sui_system_state_inner {
     struct SystemParameters has store {
         /// The starting epoch in which various on-chain governance features take effect:
         /// - stake subsidies are paid out
-        /// - TODO validators with stake less than a 'validator_stake_threshold' are
-        ///   kicked from the validator set
         governance_start_epoch: u64,
 
         /// The duration of an epoch, in milliseconds.
@@ -91,8 +89,7 @@ module sui::sui_system_state_inner {
         /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
         /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
         /// It can be reset once we are able to successfully execute advance_epoch.
-        /// TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
-        /// redistribute them.
+        /// MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
         safe_mode: bool,
         /// Unix timestamp of the current epoch start
         epoch_start_timestamp_ms: u64,
@@ -152,12 +149,14 @@ module sui::sui_system_state_inner {
         validators: vector<Validator>,
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
-        governance_start_epoch: u64,
-        initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         system_state_version: u64,
+        governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+        initial_stake_subsidy_distribution_amount: u64,
+        stake_subsidy_period_length: u64,
+        stake_subsidy_decrease_rate: u16,
         ctx: &mut TxContext,
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
@@ -175,7 +174,13 @@ module sui::sui_system_state_inner {
             },
             reference_gas_price,
             validator_report_records: vec_map::empty(),
-            stake_subsidy: stake_subsidy::create(stake_subsidy_fund, initial_stake_subsidy_amount, ctx),
+            stake_subsidy: stake_subsidy::create(
+                stake_subsidy_fund,
+                initial_stake_subsidy_distribution_amount,
+                stake_subsidy_period_length,
+                stake_subsidy_decrease_rate,
+                ctx
+            ),
             safe_mode: false,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),

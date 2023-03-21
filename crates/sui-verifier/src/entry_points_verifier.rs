@@ -188,15 +188,36 @@ fn verify_entry_function_impl(
         verify_param_type(view, &module_id, &handle.type_parameters, param)?;
     }
 
-    let return_ = view.signature_at(handle.return_);
-    if !return_.is_empty() {
-        return Err(format!(
-            "Entry function {} cannot have return values",
-            view.identifier_at(handle.name)
-        ));
+    for return_ty in &view.signature_at(handle.return_).0 {
+        verify_return_type(view, &handle.type_parameters, return_ty)?;
     }
 
     Ok(())
+}
+
+fn verify_return_type(
+    view: &BinaryIndexedView,
+    type_parameters: &[AbilitySet],
+    return_ty: &SignatureToken,
+) -> Result<(), String> {
+    if matches!(
+        return_ty,
+        SignatureToken::Reference(_) | SignatureToken::MutableReference(_)
+    ) {
+        return Err("Invalid entry point return type. Expected a non reference type.".to_owned());
+    }
+    let abilities = view
+        .abilities(return_ty, type_parameters)
+        .map_err(|e| format!("Unexpected CompiledModule error: {}", e))?;
+    if abilities.has_drop() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Invalid entry point return type. \
+            The specified return type does not have the 'drop' ability: {}",
+            format_signature_token(view, return_ty),
+        ))
+    }
 }
 
 fn verify_param_type(

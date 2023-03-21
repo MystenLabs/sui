@@ -689,7 +689,7 @@ Intended validator is not a candidate one.
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x2_validator_Validator">Validator</a> {
     <b>assert</b>!(
-        // TODO: These constants are arbitrary, will adjust once we know more.
+        // MUSTFIX: These constants are arbitrary, will adjust once we know more.
         <a href="_length">vector::length</a>(&net_address) &lt;= 128
             && <a href="_length">vector::length</a>(&p2p_address) &lt;= 128
             && <a href="_length">vector::length</a>(&name) &lt;= 128
@@ -2017,7 +2017,7 @@ Set the voting power of this validator, called only from validator_set.
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x2_validator_is_duplicate">is_duplicate</a>(self: &<a href="validator.md#0x2_validator_Validator">Validator</a>, other: &<a href="validator.md#0x2_validator_Validator">Validator</a>): bool {
      self.metadata.sui_address == other.metadata.sui_address
         || self.metadata.name == other.metadata.name
-        //TODO tests <b>break</b> when this is uncommented
+        // MUSTFIX: tests <b>break</b> when this is uncommented
         // || self.metadata.net_address == other.metadata.net_address
         // || self.metadata.p2p_address == other.metadata.p2p_address
         || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
@@ -2414,7 +2414,6 @@ Update protocol public key of this candidate validator
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x2_validator_update_candidate_protocol_pubkey">update_candidate_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x2_validator_Validator">Validator</a>, protocol_pubkey: <a href="">vector</a>&lt;u8&gt;, proof_of_possession: <a href="">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x2_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x2_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
-    // TODO <b>move</b> proof of possession verification <b>to</b> the <b>native</b> function
     self.metadata.protocol_pubkey_bytes = protocol_pubkey;
     self.metadata.proof_of_possession = proof_of_possession;
     <a href="validator.md#0x2_validator_validate_metadata">validate_metadata</a>(&self.metadata);

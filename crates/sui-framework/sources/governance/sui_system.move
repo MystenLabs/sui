@@ -45,24 +45,28 @@ module sui::sui_system {
         validators: vector<Validator>,
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
-        governance_start_epoch: u64,
-        initial_stake_subsidy_amount: u64,
         protocol_version: u64,
         system_state_version: u64,
+        governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
+        initial_stake_subsidy_distribution_amount: u64,
+        stake_subsidy_period_length: u64,
+        stake_subsidy_decrease_rate: u16,
         ctx: &mut TxContext,
     ) {
         let system_state = sui_system_state_inner::create(
             validators,
             stake_subsidy_fund,
             storage_fund,
-            governance_start_epoch,
-            initial_stake_subsidy_amount,
             protocol_version,
             system_state_version,
+            governance_start_epoch,
             epoch_start_timestamp_ms,
             epoch_duration_ms,
+            initial_stake_subsidy_distribution_amount,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
             ctx,
         );
         let self = SuiSystemState {
@@ -510,7 +514,7 @@ module sui::sui_system {
         storage_rebate
     }
 
-    // TODO: keep rewards for safe mode epoch change too and make this a private fun.
+    // TODO: Make this a private fun.
     /// An extremely simple version of advance_epoch.
     /// This is called in two situations:
     ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the

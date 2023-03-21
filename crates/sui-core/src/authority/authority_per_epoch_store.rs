@@ -33,7 +33,6 @@ use typed_store::rocks::{
 };
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
-use crate::authority::authority_notify_read::NotifyRead;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper};
 use crate::batch_bls_verifier::*;
@@ -52,7 +51,8 @@ use crate::stake_aggregator::StakeAggregator;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::native_functions::NativeFunctionTable;
-use mysten_common::notify_once::NotifyOnce;
+use mysten_common::sync::notify_once::NotifyOnce;
+use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use prometheus::IntCounter;
 use std::cmp::Ordering as CmpOrdering;

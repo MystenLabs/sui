@@ -5,9 +5,13 @@ use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
 
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
+    WriteApiClient,
+};
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
-use sui_json::SuiJsonValue;
+use sui_json::{call_args, type_args};
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::ObjectsPage;
 use sui_json_rpc_types::{
@@ -23,13 +27,8 @@ use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{parse_sui_struct_tag, parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS};
+use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
-
-use crate::api::{
-    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
-    WriteApiClient,
-};
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
@@ -203,19 +202,14 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let module = "pay".to_string();
     let function = "split".to_string();
 
-    let json_args = vec![
-        SuiJsonValue::from_object_id(coin.object_id),
-        SuiJsonValue::from_str("\"10\"")?,
-    ];
-
     let transaction_bytes: TransactionBytes = http_client
         .move_call(
             *address,
             package_id,
             module,
             function,
-            vec![GAS::type_tag().into()],
-            json_args,
+            type_args![GAS::type_tag()]?,
+            call_args!(coin.object_id, 10)?,
             Some(gas.object_id),
             10_000,
             None,
@@ -521,7 +515,6 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let coin_name = format!("{package_id}::trusted_coin::TRUSTED_COIN");
-    let coin_type = parse_sui_type_tag(&coin_name).unwrap();
     let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
 
     assert_eq!(0, result.value);
@@ -555,12 +548,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
             SUI_FRAMEWORK_ADDRESS.into(),
             COIN_MODULE_NAME.to_string(),
             "mint_and_transfer".into(),
-            vec![coin_type.into()],
-            vec![
-                SuiJsonValue::from_str(&treasury_cap.to_string()).unwrap(),
-                SuiJsonValue::from_str("\"100000\"").unwrap(),
-                SuiJsonValue::from_str(&address.to_string()).unwrap(),
-            ],
+            type_args![coin_name]?,
+            call_args![treasury_cap, 100000, address]?,
             Some(gas.object_id),
             10_000,
             None,
@@ -633,12 +622,8 @@ async fn test_locked_sui() -> Result<(), anyhow::Error> {
             SUI_FRAMEWORK_ADDRESS.into(),
             LOCKED_COIN_MODULE_NAME.to_string(),
             "lock_coin".to_string(),
-            vec![parse_sui_type_tag("0x2::sui::SUI")?.into()],
-            vec![
-                SuiJsonValue::from_str(&coins.data[0].coin_object_id.to_string())?,
-                SuiJsonValue::from_str(&format!("{address}"))?,
-                SuiJsonValue::from_bcs_bytes(&bcs::to_bytes(&"20")?)?,
-            ],
+            type_args!("0x2::sui::SUI")?,
+            call_args![coins.data[0].coin_object_id, address, 20]?,
             None,
             2000,
             None,

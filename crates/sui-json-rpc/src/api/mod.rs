@@ -3,6 +3,7 @@
 
 mod coin;
 mod event;
+mod extended;
 mod governance;
 mod read;
 mod transaction_builder;
@@ -12,6 +13,10 @@ use anyhow::anyhow;
 pub use coin::CoinReadApiClient;
 pub use coin::CoinReadApiOpenRpc;
 pub use coin::CoinReadApiServer;
+
+pub use extended::ExtendedApiClient;
+pub use extended::ExtendedApiOpenRpc;
+pub use extended::ExtendedApiServer;
 
 pub use event::EventReadApiClient;
 pub use event::EventReadApiOpenRpc;

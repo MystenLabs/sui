@@ -13,6 +13,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
@@ -26,7 +27,7 @@ use sui_json_rpc_types::{
     ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
     SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiTransactionEvents, SuiTransactionResponse,
+    SuiPastObjectResponse, SuiTransaction, SuiTransactionEvents, SuiTransactionResponse,
     SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
@@ -443,8 +444,12 @@ impl ReadApiServer for ReadApi {
                 temp_response.object_changes = Some(object_changes);
             }
         }
-
-        Ok(convert_to_response(temp_response, &opts))
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        Ok(convert_to_response(
+            temp_response,
+            &opts,
+            epoch_store.module_cache(),
+        ))
     }
 
     async fn multi_get_transactions_with_options(
@@ -657,9 +662,10 @@ impl ReadApiServer for ReadApi {
             }
         }
 
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(temp_response
             .into_iter()
-            .map(|c| convert_to_response(c.1, &opts))
+            .map(|c| convert_to_response(c.1, &opts, epoch_store.module_cache()))
             .collect::<Vec<_>>())
     }
 
@@ -1137,6 +1143,7 @@ fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> Rp
 fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionResponseOptions,
+    module_cache: &impl GetModule,
 ) -> SuiTransactionResponse {
     let mut response = SuiTransactionResponse::new(cache.digest);
     response.errors = cache.errors;
@@ -1150,7 +1157,7 @@ fn convert_to_response(
     }
 
     if opts.show_input && cache.transaction.is_some() {
-        match cache.transaction.unwrap().into_message().try_into() {
+        match SuiTransaction::try_from(cache.transaction.unwrap().into_message(), module_cache) {
             Ok(t) => {
                 response.transaction = Some(t);
             }

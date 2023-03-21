@@ -77,15 +77,38 @@ export const SuiCommand = union([
     }),
   }),
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
-  object({ SplitCoin: tuple([SuiArgument, SuiAddress]) }),
+  object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ Publish: SuiMovePackage }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
 ]);
 
+export const SuiCallArg = union([
+  object({
+    type: literal('pure'),
+    valueType: optional(string()),
+    value: SuiJsonValue,
+  }),
+  object({
+    type: literal('object'),
+    objectType: literal('immOrOwnedObject'),
+    objectId: ObjectId,
+    version: SequenceNumber,
+    digest: ObjectDigest,
+  }),
+  object({
+    type: literal('object'),
+    objectType: literal('sharedObject'),
+    objectId: ObjectId,
+    initialSharedVersion: SequenceNumber,
+    mutable: boolean(),
+  }),
+]);
+export type SuiCallArg = Infer<typeof SuiCallArg>;
+
 export const ProgrammableTransaction = object({
   commands: array(),
-  inputs: array(SuiJsonValue),
+  inputs: array(SuiCallArg),
 });
 export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
 

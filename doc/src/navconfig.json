@@ -6,7 +6,7 @@
 				"link": "doc-updates/sui-migration-guide"
 			},
 			{
-				"label": "Sui Upcoming Breaking Changes",
+				"label": "Sui Breaking Changes",
 				"link": "doc-updates/sui-breaking-changes"
 			},
 			{
@@ -198,7 +198,12 @@
 				"label": "Connect to Sui",
 				"fileName": "build/comms",
 				"title": "Connect to Sui",
-				"items": [{
+				"items": [
+					{
+						"label": "Programmable Transactions with TypeScript SDK",
+						"fileName": "build/prog-trans-ts-sdk"
+					},
+					{
 						"label": "JSON-RPC API",
 						"fileName": "build/json-rpc"
 					},

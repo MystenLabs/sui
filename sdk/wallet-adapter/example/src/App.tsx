@@ -46,7 +46,7 @@ function App() {
             console.log(
               await signAndExecuteTransaction({
                 transaction,
-                options: { contentOptions: { showEffects: true } },
+                options: { showEffects: true },
               })
             );
           }}

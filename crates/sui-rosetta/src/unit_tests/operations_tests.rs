@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::{Encoding, Hex};
-
-use shared_crypto::intent::IntentMessage;
+use move_core_types::value::MoveTypeLayout;
+use sui_json_rpc_types::SuiCallArg;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
-use sui_types::messages::TransactionData;
+use sui_types::messages::{CallArg, TransactionData};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
-use crate::types::{ConstructionMetadata, OperationType};
+use crate::types::ConstructionMetadata;
 
 #[tokio::test]
 async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
@@ -45,12 +44,10 @@ async fn test_operation_data_parsing() -> Result<(), anyhow::Error> {
     Ok(())
 }
 #[tokio::test]
-async fn test_shorter_bytearray_bug() {
-    // Sometime CallArg::Pure(Vec<u8>) for u64 will serialise to 8 bytes array instead of 9 bytes (length + data), this is to test the work around until we fix it in Sui Json.
-    let bytes = "0x00000000000200208c0e814842a1b1e2d9870983dafc238bfda4d38feb5ac6bb32371c21eaebc68e0008077600000000000002020001010001010200000100008043cfb5f8976fe5602d4ad2c12545c8a3021ad87e79376a26ebc627b22b39510178791fd3cb356712ef23ec2c97c07b0c7c21d5853d6735ae794fb9f646670e0304000000000000002097e15e12b4a173a1755c747b1ae7b4e43518324bd4dfbe3be120062ce25861688043cfb5f8976fe5602d4ad2c12545c8a3021ad87e79376a26ebc627b22b395101000000000000009b0000000000000000";
-    let hex = Hex::decode(bytes).unwrap();
-    let data: IntentMessage<TransactionData> = bcs::from_bytes(&hex).unwrap();
-
-    let op = Operations::try_from(data.value).unwrap();
-    assert_eq!(OperationType::PaySui, op.type_().unwrap());
+async fn test_sui_json() {
+    let arg1 = CallArg::Pure(bcs::to_bytes(&1000000u64).unwrap());
+    let arg2 = CallArg::Pure(bcs::to_bytes(&30215u64).unwrap());
+    let json1 = SuiCallArg::try_from(arg1, Some(&MoveTypeLayout::U64)).unwrap();
+    let json2 = SuiCallArg::try_from(arg2, Some(&MoveTypeLayout::U64)).unwrap();
+    println!("{:?}, {:?}", json1, json2);
 }

@@ -43,7 +43,7 @@ pub enum CommandToken {
 }
 
 pub const TRANSFER_OBJECTS: &str = "TransferObjects";
-pub const SPLIT_COIN: &str = "SplitCoin";
+pub const SPLIT_COINS: &str = "SplitCoins";
 pub const MERGE_COINS: &str = "MergeCoins";
 pub const MAKE_MOVE_VEC: &str = "MakeMoveVec";
 pub const GAS_COIN: &str = "Gas";

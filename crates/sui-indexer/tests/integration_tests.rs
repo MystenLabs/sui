@@ -4,20 +4,25 @@
 // integration test with standalone postgresql database
 #[cfg(feature = "pg_integration")]
 pub mod pg_integration_test {
+    use std::env;
+    use std::str::FromStr;
+
+    use futures::future::join_all;
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
     use move_core_types::ident_str;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
-    use std::env;
-    use std::str::FromStr;
+    use tokio::task::JoinHandle;
+
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
+    use sui_indexer::test_utils::start_test_indexer;
     use sui_indexer::IndexerConfig;
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        EventFilter, SuiMoveObject, SuiObjectDataOptions, SuiObjectResponse,
+        EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
         SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponse,
         SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes,
     };
@@ -33,8 +38,75 @@ pub mod pg_integration_test {
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, transfer_coin};
 
-    use sui_indexer::indexer_test_utils::start_test_indexer;
-    use tokio::task::JoinHandle;
+    async fn get_owned_objects_for_address(
+        indexer_rpc_client: &HttpClient,
+        address: &SuiAddress,
+    ) -> Result<Vec<ObjectID>, anyhow::Error> {
+        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+            .get_owned_objects(
+                *address,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::new().with_type(),
+                )),
+                None,
+                None,
+                None,
+            )
+            .await?
+            .data
+            .into_iter()
+            .filter_map(|object_resp| match object_resp {
+                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
+                _ => None,
+            })
+            .collect();
+
+        Ok(gas_objects)
+    }
+
+    async fn sign_and_execute_transaction(
+        test_cluster: &TestCluster,
+        indexer_rpc_client: &HttpClient,
+        transaction_bytes: TransactionBytes,
+        sender: &SuiAddress,
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
+        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let tx =
+            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(sender)?);
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+        let tx_response = indexer_rpc_client
+            .execute_transaction(
+                tx_bytes,
+                signatures,
+                Some(SuiTransactionResponseOptions::full_content()),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(tx_response)
+    }
+
+    async fn sign_and_transfer_object(
+        test_cluster: &TestCluster,
+        indexer_rpc_client: &HttpClient,
+        sender: &SuiAddress,
+        recipient: &SuiAddress,
+        object_id: ObjectID,
+        gas: Option<ObjectID>,
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
+        let transaction_bytes: TransactionBytes = indexer_rpc_client
+            .transfer_object(*sender, object_id, gas, 2000, *recipient)
+            .await?;
+        let tx_response = sign_and_execute_transaction(
+            test_cluster,
+            indexer_rpc_client,
+            transaction_bytes,
+            sender,
+        )
+        .await?;
+        Ok(tx_response)
+    }
 
     async fn execute_simple_transfer(
         test_cluster: &mut TestCluster,
@@ -69,35 +141,22 @@ pub mod pg_integration_test {
             })
             .collect();
 
-        let transaction_bytes: TransactionBytes = indexer_rpc_client
-            .transfer_object(
-                *sender,
-                *gas_objects.first().unwrap(),
-                Some(*gas_objects.last().unwrap()),
-                2000,
-                *recipient,
-            )
-            .await?;
-        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-        let tx =
-            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(sender)?);
-        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-        let tx_response = indexer_rpc_client
-            .execute_transaction(
-                tx_bytes,
-                signatures,
-                Some(SuiTransactionResponseOptions::full_content()),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+        let tx_response = sign_and_transfer_object(
+            test_cluster,
+            indexer_rpc_client,
+            sender,
+            recipient,
+            *gas_objects.first().unwrap(),
+            Some(*gas_objects.last().unwrap()),
+        )
+        .await?;
+
         Ok((tx_response, *sender, *recipient, gas_objects))
     }
 
     #[tokio::test]
     async fn test_genesis_sync() {
-        let (test_cluster, indexer_rpc_client, store, handle) = start_test_cluster().await;
+        let (test_cluster, indexer_rpc_client, store, handle) = start_test_cluster(None).await;
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
 
@@ -128,7 +187,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_total_address() -> Result<(), anyhow::Error> {
-        let (_test_cluster, _indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (_test_cluster, _indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let total_address_count = store.get_total_address_number().unwrap();
@@ -139,7 +198,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let (tx_response, sender, recipient, gas_objects) =
@@ -242,7 +301,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_event_query_e2e() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         wait_until_next_checkpoint(&store).await;
         let nft_creator = test_cluster.get_address_0();
         let context = &mut test_cluster.wallet;
@@ -329,7 +388,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_event_query_pagination_e2e() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let context = &mut test_cluster.wallet;
@@ -388,8 +447,201 @@ pub mod pg_integration_test {
     }
 
     #[tokio::test]
+    async fn test_get_object_with_options() -> Result<(), anyhow::Error> {
+        let (test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        wait_until_next_checkpoint(&store).await;
+        let address = test_cluster.get_address_0();
+        let gas_objects = get_owned_objects_for_address(&indexer_rpc_client, &address).await?;
+        let source_object_id = *gas_objects.first().unwrap();
+        let show_all_content = SuiObjectDataOptions {
+            show_type: true,
+            show_owner: true,
+            show_previous_transaction: true,
+            show_display: true,
+            show_content: true,
+            show_bcs: true,
+            show_storage_rebate: true,
+        };
+        let resp = indexer_rpc_client
+            .get_object_with_options(source_object_id, Some(show_all_content.clone()))
+            .await
+            .unwrap();
+        let initial_full_obj_data = resp.object()?;
+        let tx_response = sign_and_transfer_object(
+            &test_cluster,
+            &indexer_rpc_client,
+            &test_cluster.get_address_0(),
+            &test_cluster.get_address_1(),
+            source_object_id,
+            None,
+        )
+        .await?;
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+
+        let response = indexer_rpc_client
+            .get_object_with_options(source_object_id, Some(show_all_content.clone()))
+            .await?;
+        let post_transfer_full_obj_data = response.object()?;
+        let object_required_fields = SuiObjectData {
+            type_: None,
+            owner: None,
+            previous_transaction: None,
+            storage_rebate: None,
+            display: None,
+            content: None,
+            bcs: None,
+            ..post_transfer_full_obj_data.clone()
+        };
+        let show_some_content = SuiObjectDataOptions::new();
+        let futures = vec![
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(SuiObjectDataOptions::bcs_lossless()),
+            ),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(SuiObjectDataOptions::full_content()),
+            ),
+            indexer_rpc_client
+                .get_object_with_options(source_object_id, Some(show_some_content.clone())),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(show_some_content.clone().with_content()),
+            ),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(show_some_content.clone().with_owner()),
+            ),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(show_some_content.clone().with_type()),
+            ),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(show_some_content.clone().with_display()),
+            ),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(show_some_content.clone().with_bcs()),
+            ),
+            indexer_rpc_client.get_object_with_options(
+                source_object_id,
+                Some(show_some_content.clone().with_previous_transaction()),
+            ),
+        ];
+
+        let results: Vec<SuiObjectResponse> = join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        let expected_results = vec![
+            // bcs_lossless
+            SuiObjectData {
+                display: None,
+                content: None,
+                ..post_transfer_full_obj_data.clone()
+            },
+            // full_content
+            SuiObjectData {
+                bcs: None,
+                display: None,
+                ..post_transfer_full_obj_data.clone()
+            },
+            // non-optional
+            object_required_fields.clone(),
+            SuiObjectData {
+                content: post_transfer_full_obj_data.content.clone(),
+                ..object_required_fields.clone()
+            },
+            SuiObjectData {
+                owner: post_transfer_full_obj_data.owner,
+                ..object_required_fields.clone()
+            },
+            SuiObjectData {
+                type_: post_transfer_full_obj_data.type_.clone(),
+                ..object_required_fields.clone()
+            },
+            SuiObjectData {
+                display: post_transfer_full_obj_data.display.clone(),
+                ..object_required_fields.clone()
+            },
+            SuiObjectData {
+                bcs: post_transfer_full_obj_data.bcs.clone(),
+                ..object_required_fields.clone()
+            },
+            SuiObjectData {
+                previous_transaction: post_transfer_full_obj_data.previous_transaction,
+                ..object_required_fields.clone()
+            },
+        ];
+
+        for (received, expected) in results.iter().zip(expected_results.iter()) {
+            let data = received.object()?;
+            assert_eq!(data, expected);
+            assert_eq!(data.version.value(), 2);
+            assert_eq!(data.object_id, initial_full_obj_data.object_id);
+        }
+
+        // deleted object - returns SuiObjectRef
+        let gas_objects =
+            get_owned_objects_for_address(&indexer_rpc_client, &test_cluster.get_address_1())
+                .await?;
+        let primary_coin = gas_objects
+            .iter()
+            .find(|&id| *id != post_transfer_full_obj_data.object_id)
+            .unwrap();
+        assert_ne!(*primary_coin, post_transfer_full_obj_data.object_id);
+
+        let transaction_bytes = indexer_rpc_client
+            .merge_coin(
+                test_cluster.get_address_1(),
+                *primary_coin,                         // coin to merge into
+                post_transfer_full_obj_data.object_id, // coin to merge and delete
+                None,
+                2000,
+            )
+            .await?;
+        let tx_response = sign_and_execute_transaction(
+            &test_cluster,
+            &indexer_rpc_client,
+            transaction_bytes,
+            &test_cluster.get_address_1(),
+        )
+        .await?;
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let resp = indexer_rpc_client
+            .get_object_with_options(post_transfer_full_obj_data.object_id, None)
+            .await
+            .unwrap();
+
+        match resp {
+            SuiObjectResponse::Deleted(obj) => {
+                assert_eq!(obj.object_id, post_transfer_full_obj_data.object_id);
+                assert_eq!(obj.digest, post_transfer_full_obj_data.digest);
+                assert_eq!(obj.version.value(), 3);
+            }
+            _ => {
+                panic!("Expected SuiObjectResponse::Deleted, but got {:?}", resp);
+            }
+        }
+
+        // Not exists
+        let object_id = ObjectID::from([42; 32]);
+        let resp = indexer_rpc_client
+            .get_object_with_options(object_id, Some(show_all_content.clone()))
+            .await
+            .unwrap();
+
+        assert!(matches!(resp, SuiObjectResponse::NotExists(obj_id) if obj_id == object_id));
+        matches!(resp, SuiObjectResponse::NotExists(_));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_module_cache() {
-        let (test_cluster, _, store, handle) = start_test_cluster().await;
+        let (test_cluster, _, store, handle) = start_test_cluster(None).await;
         let coins = test_cluster
             .sui_client()
             .coin_read_api()
@@ -424,7 +676,39 @@ pub mod pg_integration_test {
         drop(handle);
     }
 
-    async fn start_test_cluster() -> (
+    #[tokio::test]
+    async fn test_get_epoch() {
+        let (test_cluster, _, store, handle) = start_test_cluster(Some(20000)).await;
+
+        // Allow indexer to sync
+        wait_until_next_checkpoint(&store).await;
+
+        let current_epoch = store.get_current_epoch().unwrap();
+        let epoch_page = store.get_epochs(None, 100).unwrap();
+
+        assert_eq!(0, current_epoch.epoch);
+        assert!(current_epoch.end_of_epoch_info.is_none());
+        assert_eq!(1, epoch_page.len());
+
+        wait_until_next_epoch(&store).await;
+
+        let current_epoch = store.get_current_epoch().unwrap();
+        let epoch_page = store.get_epochs(None, 100).unwrap();
+
+        assert_eq!(1, current_epoch.epoch);
+        assert!(current_epoch.end_of_epoch_info.is_none());
+        assert_eq!(2, epoch_page.len());
+
+        let last_epoch = &epoch_page[0];
+        assert!(last_epoch.end_of_epoch_info.is_some());
+
+        drop(handle);
+        drop(test_cluster);
+    }
+
+    async fn start_test_cluster(
+        epoch_duration_ms: Option<u64>,
+    ) -> (
         TestCluster,
         HttpClient,
         PgIndexerStore,
@@ -435,12 +719,21 @@ pub mod pg_integration_test {
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}/sui_indexer");
 
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = if let Some(epoch) = epoch_duration_ms {
+            TestClusterBuilder::new()
+                .with_epoch_duration_ms(epoch)
+                .build()
+                .await
+                .unwrap()
+        } else {
+            TestClusterBuilder::new().build().await.unwrap()
+        };
 
         let config = IndexerConfig {
             db_url,
             rpc_client_url: test_cluster.rpc_url().to_string(),
             migrated_methods: IndexerConfig::all_migrated_methods(),
+            reset_db: true,
             ..Default::default()
         };
 
@@ -450,9 +743,7 @@ pub mod pg_integration_test {
         );
         let http_client = HttpClientBuilder::default().build(http_addr_port).unwrap();
 
-        let (store, handle) = start_test_indexer(config, /* reset_db */ true)
-            .await
-            .unwrap();
+        let (store, handle) = start_test_indexer(config).await.unwrap();
 
         (test_cluster, http_client, store, handle)
     }
@@ -463,6 +754,15 @@ pub mod pg_integration_test {
         while cp < target {
             tokio::task::yield_now().await;
             cp = store.get_latest_checkpoint_sequence_number().unwrap();
+        }
+    }
+
+    async fn wait_until_next_epoch(store: &PgIndexerStore) {
+        let mut cp = store.get_current_epoch().unwrap().epoch;
+        let target = cp + 1;
+        while cp < target {
+            tokio::task::yield_now().await;
+            cp = store.get_current_epoch().unwrap().epoch;
         }
     }
 

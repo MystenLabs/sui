@@ -161,7 +161,7 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ): ID {
-    // TODO: <b>update</b> all tests <b>to</b> <b>use</b> @0x0 <b>to</b> create validators so we can
+    // MUSTFIX: <b>update</b> all tests <b>to</b> <b>use</b> @0x0 <b>to</b> create validators so we can
     // enforce the <b>assert</b> below.
     // This function needs <b>to</b> be called only by the <a href="validator.md#0x2_validator">validator</a> itself, <b>except</b>
     // 1. in <a href="genesis.md#0x2_genesis">genesis</a> <b>where</b> all valdiators are created by @0x0

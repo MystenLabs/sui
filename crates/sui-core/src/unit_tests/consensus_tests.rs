@@ -126,6 +126,8 @@ async fn submit_transaction_to_consensus_adapter() {
         Box::new(SubmitDirectly(state.clone())),
         state.name,
         Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+        100_000,
+        100_000,
         metrics,
     ));
 

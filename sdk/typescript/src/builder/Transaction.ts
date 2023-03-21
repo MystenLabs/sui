@@ -303,8 +303,8 @@ export class Transaction {
 
   // Method shorthands:
 
-  splitCoin(...args: Parameters<(typeof Commands)['SplitCoin']>) {
-    return this.add(Commands.SplitCoin(...args));
+  splitCoins(...args: Parameters<(typeof Commands)['SplitCoins']>) {
+    return this.add(Commands.SplitCoins(...args));
   }
   mergeCoins(...args: Parameters<(typeof Commands)['MergeCoins']>) {
     return this.add(Commands.MergeCoins(...args));

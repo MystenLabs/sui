@@ -50,7 +50,7 @@ module sui::validator_cap {
         validator_address: address,
         ctx: &mut TxContext,
     ): ID {
-        // TODO: update all tests to use @0x0 to create validators so we can
+        // MUSTFIX: update all tests to use @0x0 to create validators so we can
         // enforce the assert below.
         // This function needs to be called only by the validator itself, except
         // 1. in genesis where all valdiators are created by @0x0

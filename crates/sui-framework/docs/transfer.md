@@ -42,7 +42,9 @@ be constructed in the transaction they are created.
 ## Function `transfer`
 
 Transfer ownership of <code>obj</code> to <code>recipient</code>. <code>obj</code> must have the <code>key</code> attribute,
-which (in turn) ensures that <code>obj</code> has a globally unique ID.
+which (in turn) ensures that <code>obj</code> has a globally unique ID. Note that if the recipient
+address represents an object ID, the <code>obj</code> sent will be inaccessible after the transfer
+(though they will be retrievable at a future date once new features are added).
 This function has custom rules performed by the Sui Move bytecode verifier that ensures
 that <code>T</code> is an object defined in the module where <code><a href="transfer.md#0x2_transfer">transfer</a></code> is invoked. Use
 <code>public_transfer</code> to transfer an object with <code>store</code> outside of its module.
@@ -71,7 +73,9 @@ that <code>T</code> is an object defined in the module where <code><a href="tran
 ## Function `public_transfer`
 
 Transfer ownership of <code>obj</code> to <code>recipient</code>. <code>obj</code> must have the <code>key</code> attribute,
-which (in turn) ensures that <code>obj</code> has a globally unique ID.
+which (in turn) ensures that <code>obj</code> has a globally unique ID. Note that if the recipient
+address represents an object ID, the <code>obj</code> sent will be inaccessible after the transfer
+(though they will be retrievable at a future date once new features are added).
 The object must have <code>store</code> to be transferred outside of its module.
 
 

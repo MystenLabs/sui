@@ -27,12 +27,8 @@ export type SuiSignMessageMethod = (
 /** Input for signing messages. */
 export interface SuiSignMessageInput {
   message: Uint8Array;
-  options?: SuiSignMessageOptions;
   account: WalletAccount;
 }
 
 /** Output of signing messages. */
 export interface SuiSignMessageOutput extends SignedMessage {}
-
-/** Options for signing messages. */
-export interface SuiSignMessageOptions {}

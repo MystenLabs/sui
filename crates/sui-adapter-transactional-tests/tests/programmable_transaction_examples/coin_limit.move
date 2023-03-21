@@ -28,7 +28,7 @@ module test::m1 {
 // call an entry function
 //# programmable --sender A --inputs 100
 
-//> 0: SplitCoin(Gas, Input(0)); // split the coin as a limit
+//> 0: SplitCoins(Gas, [Input(0)]); // split the coin as a limit
 //> 1: test::m1::purchase(Result(0));
 
 //# view-object 107
@@ -38,16 +38,21 @@ module test::m1 {
 // call a non-entry function, but forget the object
 //# programmable --sender A --inputs 100
 
-//> 0: SplitCoin(Gas, Input(0)); /* split the coin as a limit */
+//> 0: SplitCoins(Gas, [Input(0)]); /* split the coin as a limit */
 //> 1: test::m1::purchase_(Result(0));
 
 // call a non-entry function, and transfer the object
 //# programmable --sender A --inputs 100 @A
 
-//> 0: SplitCoin(Gas, Input(0)); /* /* nested */*/
-//> 1: test::m1::purchase_(Result(0));
-//> 2: TransferObjects([Result(1)], Input(1));
+//> 0: SplitCoins(Gas, [Input(0), Input(0)]); /* /* nested */*/
+//> 1: test::m1::purchase_(NestedResult(0, 0));
+//> 2: test::m1::purchase_(NestedResult(0, 1));
+//> TransferObjects([Result(1), Result(2)], Input(1));
 
 //# view-object 111
 
 //# view-object 112
+
+//# view-object 113
+
+//# view-object 114

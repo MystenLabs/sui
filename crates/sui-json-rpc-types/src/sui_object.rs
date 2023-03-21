@@ -811,7 +811,7 @@ impl From<MovePackage> for SuiRawMovePackage {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
 pub enum SuiPastObjectResponse {
     /// The object exists and is found with this version

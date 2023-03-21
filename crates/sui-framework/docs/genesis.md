@@ -157,6 +157,18 @@
 
 <dl>
 <dt>
+<code>protocol_version: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>system_state_version: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
 <code>governance_start_epoch: u64</code>
 </dt>
 <dd>
@@ -170,6 +182,24 @@
 </dd>
 <dt>
 <code>epoch_duration_ms: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>initial_stake_subsidy_distribution_amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_subsidy_period_length: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_subsidy_decrease_rate: u16</code>
 </dt>
 <dd>
 
@@ -275,7 +305,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(sui_system_state_id: <a href="object.md#0x2_object_UID">object::UID</a>, sui_supply: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, genesis_chain_parameters: <a href="genesis.md#0x2_genesis_GenesisChainParameters">genesis::GenesisChainParameters</a>, genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">genesis::GenesisValidatorMetadata</a>&gt;, token_distribution_schedule: <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">genesis::TokenDistributionSchedule</a>, protocol_version: u64, system_state_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(sui_system_state_id: <a href="object.md#0x2_object_UID">object::UID</a>, sui_supply: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, genesis_chain_parameters: <a href="genesis.md#0x2_genesis_GenesisChainParameters">genesis::GenesisChainParameters</a>, genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">genesis::GenesisValidatorMetadata</a>&gt;, token_distribution_schedule: <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">genesis::TokenDistributionSchedule</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -290,8 +320,6 @@ all the information we need in the system.
     genesis_chain_parameters: <a href="genesis.md#0x2_genesis_GenesisChainParameters">GenesisChainParameters</a>,
     genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a>&gt;,
     token_distribution_schedule: <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a>,
-    protocol_version: u64,
-    system_state_version: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     // Ensure this is only called at <a href="genesis.md#0x2_genesis">genesis</a>
@@ -377,12 +405,14 @@ all the information we need in the system.
         validators,
         subsidy_fund,
         storage_fund,
+        genesis_chain_parameters.protocol_version,
+        genesis_chain_parameters.system_state_version,
         genesis_chain_parameters.governance_start_epoch,
-        <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
-        protocol_version,
-        system_state_version,
         genesis_chain_parameters.chain_start_timestamp_ms,
         genesis_chain_parameters.epoch_duration_ms,
+        genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
+        genesis_chain_parameters.stake_subsidy_period_length,
+        genesis_chain_parameters.stake_subsidy_decrease_rate,
         ctx,
     );
 }

@@ -384,8 +384,10 @@ const compiledModulesAndDependencies = JSON.parse(
 );
 const tx = new Transaction();
 tx.publish(
-    compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
-    compiledModulesAndDeps.dependencies.map((addr: string) => normalizeSuiObjectId(addr)),
+  compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
+  compiledModulesAndDeps.dependencies.map((addr: string) =>
+    normalizeSuiObjectId(addr),
+  ),
 );
 const result = await signer.signAndExecuteTransaction({ transaction: tx });
 console.log({ result });

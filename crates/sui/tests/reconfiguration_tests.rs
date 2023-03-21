@@ -515,12 +515,10 @@ async fn test_inactive_validator_pool_read() {
             .state()
             .get_sui_system_state_object_for_testing()
             .unwrap();
-        let version = system_state.version();
         let inactive_pool_id = system_state
             .into_sui_system_state_summary()
             .inactive_pools_id;
         let validator = get_validator_from_table(
-            version,
             node.state().db().as_ref(),
             inactive_pool_id,
             &ID::new(staking_pool_id),

@@ -55,9 +55,9 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# run test::m::transfer --sender A --args object(113) @B
+//# run test::m::transfer --sender A --args object(114) @B
 
-//# view-object 113
+//# view-object 114
 
 //
 // Test TransferObject allows non-zero child count
@@ -65,6 +65,6 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# transfer-object 119 --sender A --recipient B
+//# transfer-object 118 --sender A --recipient B
 
-//# view-object 119
+//# view-object 118

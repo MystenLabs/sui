@@ -221,7 +221,7 @@ module sui::validator {
         ctx: &mut TxContext
     ): Validator {
         assert!(
-            // TODO: These constants are arbitrary, will adjust once we know more.
+            // MUSTFIX: These constants are arbitrary, will adjust once we know more.
             vector::length(&net_address) <= 128
                 && vector::length(&p2p_address) <= 128
                 && vector::length(&name) <= 128
@@ -315,14 +315,14 @@ module sui::validator {
 
         staking_pool::request_add_stake(
             &mut self.staking_pool,
-            stake, 
-            self.metadata.sui_address, 
-            staker_address, 
+            stake,
+            self.metadata.sui_address,
+            staker_address,
             0, // epoch 0 -- genesis
             ctx
         );
 
-        // Process stake right away 
+        // Process stake right away
         staking_pool::process_pending_stake(&mut self.staking_pool);
         self.next_epoch_stake = self.next_epoch_stake + stake_amount;
     }
@@ -560,10 +560,11 @@ module sui::validator {
         object::id(&self.staking_pool)
     }
 
+    // MUSTFIX: We need to check this when updating metadata as well.
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
-            //TODO tests break when this is uncommented
+            // MUSTFIX: tests break when this is uncommented
             // || self.metadata.net_address == other.metadata.net_address
             // || self.metadata.p2p_address == other.metadata.p2p_address
             || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
@@ -662,7 +663,6 @@ module sui::validator {
     /// Update protocol public key of this candidate validator
     public(friend) fun update_candidate_protocol_pubkey(self: &mut Validator, protocol_pubkey: vector<u8>, proof_of_possession: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
-        // TODO move proof of possession verification to the native function
         self.metadata.protocol_pubkey_bytes = protocol_pubkey;
         self.metadata.proof_of_possession = proof_of_possession;
         validate_metadata(&self.metadata);

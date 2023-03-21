@@ -107,8 +107,6 @@ A list of system config parameters.
 <dd>
  The starting epoch in which various on-chain governance features take effect:
  - stake subsidies are paid out
- - TODO validators with stake less than a 'validator_stake_threshold' are
-   kicked from the validator set
 </dd>
 <dt>
 <code>epoch_duration_ms: u64</code>
@@ -214,8 +212,7 @@ The top-level object containing all information of the Sui system.
  Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
- TODO: Down the road we may want to save a few states such as pending gas rewards, so that we could
- redistribute them.
+ MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
 </dd>
 <dt>
 <code>epoch_start_timestamp_ms: u64</code>
@@ -494,7 +491,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, protocol_version: u64, system_state_version: u64, governance_start_epoch: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, initial_stake_subsidy_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
 </code></pre>
 
 
@@ -507,12 +504,14 @@ This function will be called only once in genesis.
     validators: <a href="">vector</a>&lt;Validator&gt;,
     stake_subsidy_fund: Balance&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
-    governance_start_epoch: u64,
-    initial_stake_subsidy_amount: u64,
     protocol_version: u64,
     system_state_version: u64,
+    governance_start_epoch: u64,
     epoch_start_timestamp_ms: u64,
     epoch_duration_ms: u64,
+    initial_stake_subsidy_distribution_amount: u64,
+    stake_subsidy_period_length: u64,
+    stake_subsidy_decrease_rate: u16,
     ctx: &<b>mut</b> TxContext,
 ): <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
     <b>let</b> validators = <a href="validator_set.md#0x2_validator_set_new">validator_set::new</a>(validators, ctx);
@@ -530,7 +529,13 @@ This function will be called only once in genesis.
         },
         reference_gas_price,
         validator_report_records: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(stake_subsidy_fund, initial_stake_subsidy_amount, ctx),
+        <a href="stake_subsidy.md#0x2_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x2_stake_subsidy_create">stake_subsidy::create</a>(
+            stake_subsidy_fund,
+            initial_stake_subsidy_distribution_amount,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
+            ctx
+        ),
         safe_mode: <b>false</b>,
         epoch_start_timestamp_ms,
         extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),

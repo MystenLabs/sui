@@ -893,7 +893,7 @@ impl InternalOperation {
                     let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
                     (validator, state, amount)
                 };
-                let coin = builder.command(Command::SplitCoin(Argument::GasCoin, amount));
+                let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
 
                 let arguments = vec![system_state, coin, validator];
 

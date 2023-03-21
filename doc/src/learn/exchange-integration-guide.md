@@ -11,7 +11,7 @@ The requirements to configure a SUI integration include:
  * Suggested hardware requirements to run a Sui Full node:
     * CPU: 10 core
     * RAM: 32 GB
-    * Storage: 1 TB SSD
+    * Storage: 2 TB SSD
 
 We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions.
 
@@ -92,7 +92,7 @@ The following code sample demonstrates how to derive a Sui address in Rust:
 ```rust
 let flag = 0x00; // 0x00 = ED25519, 0x01 = Secp256k1, 0x02 = Secp256r1, 0x03 = Multisig
 // Hash the [flag, public key] bytearray using Blake2b
-let mut hasher = UserHash::default();
+let mut hasher = DefaultHash::default();
 hasher.update([flag]);
 hasher.update(pk);
 let arr = hasher.finalize();
