@@ -36,6 +36,9 @@ pub enum IndexerError {
     #[error("Indexer failed to read PostgresDB with error: `{0}`")]
     PostgresReadError(String),
 
+    #[error("Indexer failed to reset PostgresDB with error: `{0}`")]
+    PostgresResetError(String),
+
     #[error("Indexer failed to commit changes to PostgresDB with error: `{0}`")]
     PostgresWriteError(String),
 
@@ -72,6 +75,7 @@ impl IndexerError {
         match self {
             IndexerError::FullNodeReadingError(_) => "FullNodeReadingError".into(),
             IndexerError::PostgresReadError(_) => "PostgresReadError".into(),
+            IndexerError::PostgresResetError(_) => "PostgresResetError".into(),
             IndexerError::PostgresWriteError(_) => "PostgresWriteError".into(),
             IndexerError::InsertableParsingError(_) => "InsertableParsingError".into(),
             IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".into(),

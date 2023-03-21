@@ -18,14 +18,14 @@ use prometheus::Registry;
 use tracing::{info, warn};
 use url::Url;
 
-use crate::apis::{
+use apis::{
     CoinReadApi, EventReadApi, ExtendedApi, GovernanceReadApi, ReadApi, TransactionBuilderApi,
     WriteApi,
 };
-use crate::handlers::checkpoint_handler::CheckpointHandler;
-use crate::store::IndexerStore;
 use errors::IndexerError;
+use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::spawn_monitored_task;
+use store::IndexerStore;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -33,20 +33,18 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 pub mod apis;
 pub mod errors;
 mod handlers;
-pub mod indexer_test_utils;
 pub mod metrics;
 pub mod models;
 pub mod processors;
 pub mod schema;
 pub mod store;
+pub mod test_utils;
 pub mod types;
 pub mod utils;
 
 pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
-// TODO: placeholder, read from env or config file.
-pub const FAKE_PKG_VERSION: &str = "0.0.0";
 pub const MIGRATED_METHODS: [&str; 7] = [
     "get_checkpoint",
     "get_latest_checkpoint_sequence_number",
@@ -78,6 +76,8 @@ pub struct IndexerConfig {
     pub rpc_server_port: u16,
     #[clap(long, multiple_occurrences = false, multiple_values = true)]
     pub migrated_methods: Vec<String>,
+    #[clap(long)]
+    pub reset_db: bool,
 }
 
 impl IndexerConfig {
@@ -111,6 +111,7 @@ impl Default for IndexerConfig {
             rpc_server_url: "0.0.0.0".to_string(),
             rpc_server_port: 9000,
             migrated_methods: vec![],
+            reset_db: false,
         }
     }
 }
@@ -129,7 +130,10 @@ impl Indexer {
             .expect("Json rpc server should not run into errors upon start.");
         // let JSON RPC server run forever.
         spawn_monitored_task!(handle.stopped());
-        info!("Sui indexer started...");
+        info!(
+            "Sui indexer of version {:?} started...",
+            env!("CARGO_PKG_VERSION")
+        );
 
         backoff::future::retry(ExponentialBackoff::default(), || async {
             let event_handler_clone = event_handler.clone();
@@ -199,7 +203,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     event_handler: Arc<EventHandler>,
     config: &IndexerConfig,
 ) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(FAKE_PKG_VERSION, prometheus_registry);
+    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
     let mut headers = HeaderMap::new();
     headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
