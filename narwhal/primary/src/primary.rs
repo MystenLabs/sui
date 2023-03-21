@@ -826,7 +826,7 @@ impl PrimaryReceiverHandler {
 
         // Check that the time of the header is smaller than the current time. If not but the difference is
         // small, just wait. Otherwise reject with an error.
-        const TOLERANCE: u64 = 15 * 1000; // 15 sec in milliseconds
+        const TOLERANCE: u64 = 1 * 1000; // 1 sec in milliseconds
         let current_time = now();
         if current_time < header.created_at {
             if header.created_at - current_time < TOLERANCE {
