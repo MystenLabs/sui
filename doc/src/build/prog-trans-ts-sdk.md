@@ -56,7 +56,7 @@ signer.signAndExecuteTransaction({ transaction: tx });
 
 Programmable Transactions have two key concepts: inputs and commands.
 
-Inputs are values that are used as arguments to the commands in the transaction. Inputs can either be an object reference (either to an owned object, or a shared object), or a pure BCS value (for example, an encoded string used as an argument to a move call).
+Inputs are values that are used as arguments to the commands in the transaction. Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or a pure BCS value (for example, an encoded string used as an argument to a move call).
 
 Commands are steps of execution in the transaction. You can also use the result of previous commands as arguments to a future command. By combining multiple commands together, programmable transactions provide a flexible way to create complex transactions.
 
@@ -108,7 +108,7 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
 
 ## Use the gas coin
 
-With Programmable Transactions, you’re able to use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a transaction, and is valid as input for any arguments.
+With Programmable Transactions, you’re able to use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a transaction, and is valid as input for any arguments. You can also use the gas coin to merge coins and in Move cals.
 
 You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer all of your coin balance to another address.
 
