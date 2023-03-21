@@ -116,13 +116,17 @@ export function ImportLedgerAccounts() {
             </div>
         );
     } else if (!encounteredDerviceAccountsError) {
+        const selectedLedgerAddresses = selectedLedgerAccounts.map(
+            ({ address }) => address
+        );
         summaryCardBody = (
             <div className="max-h-[272px] -mr-2 mt-1 pr-2 overflow-auto custom-scrollbar">
                 <LedgerAccountList
                     accounts={ledgerAccounts.map((ledgerAccount) => ({
                         ...ledgerAccount,
-                        isSelected:
-                            selectedLedgerAccounts.includes(ledgerAccount),
+                        isSelected: selectedLedgerAddresses.includes(
+                            ledgerAccount.address
+                        ),
                     }))}
                     onAccountClick={onAccountClick}
                 />
