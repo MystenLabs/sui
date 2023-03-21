@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-// #[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 pub mod pg_integration_test {
     use std::env;
     use std::str::FromStr;
