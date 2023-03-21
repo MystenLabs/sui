@@ -52,7 +52,7 @@ module sui::validator {
     /// Invalid primary_address field in ValidatorMetadata
     const EMetadataInvalidPrimaryAddr: u64 = 6;
 
-    /// Invalidworker_address field in ValidatorMetadata
+    /// Invalid worker_address field in ValidatorMetadata
     const EMetadataInvalidWorkerAddr: u64 = 7;
 
     /// Commission rate set by the validator is higher than the threshold
