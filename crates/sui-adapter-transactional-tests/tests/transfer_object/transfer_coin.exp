@@ -1,17 +1,26 @@
-processed 4 tasks
+processed 7 tasks
 
 init:
 A: object(103), B: object(104)
 
-task 1 'view-object'. lines 8-8:
+task 1 'view-object'. lines 9-9:
 Owner: Account Address ( A )
 Version: 1
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(103)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 2000000u64}}
 
-task 2 'transfer-object'. lines 10-10:
+task 2 'transfer-object'. lines 11-11:
 written: object(103), object(105)
 
-task 3 'view-object'. lines 12-12:
+task 3 'view-object'. lines 13-14:
 Owner: Account Address ( B )
 Version: 2
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(103)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 2000000u64}}
+
+task 4 'view-object'. lines 15-15:
+Error: task 4, lines 15-15. Unbound fake id 99
+
+task 5 'transfer-object'. lines 17-17:
+Error: INVALID TEST. Unknown object, object(99)
+
+task 6 'view-object'. lines 19-20:
+Error: task 6, lines 19-19. Unbound fake id 99

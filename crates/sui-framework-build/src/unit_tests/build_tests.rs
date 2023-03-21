@@ -13,7 +13,7 @@ fn generate_struct_layouts() {
         .unwrap()
         .to_path_buf()
         .join("sui-framework")
-        .join("package")
+        .join("packages")
         .join("sui-system");
     let pkg = BuildConfig::new_for_testing().build(path).unwrap();
     let registry = pkg.generate_struct_layouts();

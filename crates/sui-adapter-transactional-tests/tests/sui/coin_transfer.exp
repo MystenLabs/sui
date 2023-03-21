@@ -1,31 +1,43 @@
-processed 7 tasks
+processed 11 tasks
 
 init:
 A: object(103), B: object(104), C: object(105)
 
-task 1 'view-object'. lines 8-8:
+task 1 'view-object'. lines 9-9:
 Owner: Account Address ( B )
 Version: 1
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 2000000u64}}
 
-task 2 'run'. lines 10-10:
+task 2 'run'. lines 11-11:
 created: object(107)
 written: object(104), object(106)
 
-task 3 'view-object'. lines 12-12:
+task 3 'view-object'. lines 13-14:
 Owner: Account Address ( B )
 Version: 2
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1999990u64}}
 
-task 4 'view-object'. lines 14-14:
+task 4 'view-object'. lines 15-15:
+Error: task 4, lines 15-15. Unbound fake id 100
+
+task 5 'run'. lines 17-17:
+Error: INVALID TEST. Unknown object, object(100)
+
+task 6 'view-object'. lines 19-20:
+Error: task 6, lines 19-19. Unbound fake id 100
+
+task 7 'view-object'. lines 22-22:
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
 
-task 5 'run'. lines 16-16:
+task 8 'run'. lines 24-26:
 Error: Transaction was not signed by the correct sender: Object 0xbea8d80a001a7aaf43f65d32de297e626941d085d8ba7d961aabb0a9d5743c4e is owned by account address 0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a, but given owner/signer address is 0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e
 
-task 6 'view-object'. lines 18-18:
+task 9 'view-object'. lines 27-28:
 Owner: Account Address ( B )
 Version: 2
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1999990u64}}
+
+task 10 'view-object'. lines 29-30:
+Error: task 10, lines 29-29. Unbound fake id 100
