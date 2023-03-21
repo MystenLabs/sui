@@ -271,6 +271,12 @@ pub mod pg_integration_test {
         assert_eq!(tx_response.digest, tx_read_response.digest);
         assert_eq!(tx_response.transaction, tx_read_response.transaction);
         assert_eq!(tx_response.effects, tx_read_response.effects);
+        assert_eq!(tx_response.events, tx_read_response.events);
+        assert_eq!(tx_response.object_changes, tx_read_response.object_changes);
+        assert_eq!(
+            tx_response.balance_changes,
+            tx_read_response.balance_changes
+        );
 
         // query tx with sender address
         let from_query =
