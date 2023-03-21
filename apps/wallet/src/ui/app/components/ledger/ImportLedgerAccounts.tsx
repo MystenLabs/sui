@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { LockedDeviceError } from '@ledgerhq/errors';
 import {
     LockUnlocked16 as UnlockedLockIcon,
     Spinner16 as SpinnerIcon,
@@ -10,20 +11,19 @@ import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useAccounts } from '../../hooks/useAccounts';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
 import {
     LedgerAccountList,
-    SelectableLedgerAccount,
+    type SelectableLedgerAccount,
 } from './LedgerAccountList';
 import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
+import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
-import { LockedDeviceError } from '@ledgerhq/errors';
-import { SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
-import { useAccounts } from '../../hooks/useAccounts';
 
 const numLedgerAccountsToDeriveByDefault = 10;
 
