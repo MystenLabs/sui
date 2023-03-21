@@ -350,8 +350,8 @@ module sui::malicious_policy {
 #[test_only]
 module sui::transfer_policy_test {
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
-    use sui::tx_context::{TxContext, dummy as ctx};
-    use sui::object::{Self, UID};
+    use sui::tx_context::{Self, TxContext, dummy as ctx};
+    use sui::object::{Self, ID, UID};
     use sui::dummy_policy;
     use sui::malicious_policy;
     use sui::package;
@@ -367,7 +367,7 @@ module sui::transfer_policy_test {
         let (policy, cap) = prepare(ctx);
 
         // time to make a new transfer request
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -382,7 +382,7 @@ module sui::transfer_policy_test {
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
 
         dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
         policy::confirm_request(&policy, request);
@@ -402,7 +402,7 @@ module sui::transfer_policy_test {
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -419,7 +419,7 @@ module sui::transfer_policy_test {
         dummy_policy::set(&mut policy, &cap);
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -434,7 +434,7 @@ module sui::transfer_policy_test {
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
-        let request = policy::new_request(10_000, object::new_id(ctx), ctx);
+        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
 
         // try to add receipt from another rule
         malicious_policy::cheat(&mut request);
@@ -453,5 +453,9 @@ module sui::transfer_policy_test {
     fun wrapup(policy: TransferPolicy<Asset>, cap: TransferPolicyCap<Asset>, ctx: &mut TxContext): u64 {
         let profits = policy::destroy_and_withdraw(policy, cap, ctx);
         coin::burn_for_testing(profits)
+    }
+
+    fun fresh_id(ctx: &mut TxContext): ID {
+        object::id_from_address(tx_context::fresh_object_address(ctx))
     }
 }

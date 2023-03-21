@@ -9,7 +9,7 @@
 module sui::borrow {
     use sui::object::{Self, ID};
     use std::option::{Self, Option};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     /// The `Borrow` does not match the `Referent`.
     const EWrongBorrow: u64 = 0;
@@ -18,17 +18,17 @@ module sui::borrow {
 
     /// An object wrapping a `T` and providing the borrow API.
     struct Referent<T: key + store> has store {
-        id: ID,
+        id: address,
         value: Option<T>
     }
 
     /// A hot potato making sure the object is put back once borrowed.
-    struct Borrow { ref: ID, obj: ID }
+    struct Borrow { ref: address, obj: ID }
 
     /// Create a new `Referent` struct
     public fun new<T: key + store>(value: T, ctx: &mut TxContext): Referent<T> {
         Referent {
-            id: object::new_id(ctx),
+            id: tx_context::fresh_object_address(ctx),
             value: option::some(value)
         }
     }

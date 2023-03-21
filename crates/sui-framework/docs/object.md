@@ -11,7 +11,6 @@ Sui object identifiers
 -  [Resource `Ownership`](#0x2_object_Ownership)
 -  [Resource `DynamicFields`](#0x2_object_DynamicFields)
 -  [Constants](#@Constants_0)
--  [Function `new_id`](#0x2_object_new_id)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
 -  [Function `id_from_bytes`](#0x2_object_id_from_bytes)
@@ -204,32 +203,6 @@ The hardcoded ID for the singleton Sui System State Object.
 </code></pre>
 
 
-
-<a name="0x2_object_new_id"></a>
-
-## Function `new_id`
-
-Create an <code><a href="object.md#0x2_object_ID">ID</a></code>. Not to be mistaken for <code><a href="object.md#0x2_object_new">object::new</a></code> which
-generates a new UID.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_new_id">new_id</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="object.md#0x2_object_ID">object::ID</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_new_id">new_id</a>(ctx: &<b>mut</b> TxContext): <a href="object.md#0x2_object_ID">ID</a> {
-    <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="tx_context.md#0x2_tx_context_new_object">tx_context::new_object</a>(ctx) }
-}
-</code></pre>
-
-
-
-</details>
 
 <a name="0x2_object_id_to_bytes"></a>
 
@@ -507,7 +480,7 @@ This is the only way to create <code><a href="object.md#0x2_object_UID">UID</a><
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_new">new</a>(ctx: &<b>mut</b> TxContext): <a href="object.md#0x2_object_UID">UID</a> {
     <a href="object.md#0x2_object_UID">UID</a> {
-        id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="tx_context.md#0x2_tx_context_new_object">tx_context::new_object</a>(ctx) },
+        id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx) },
     }
 }
 </code></pre>

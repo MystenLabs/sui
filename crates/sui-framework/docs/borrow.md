@@ -44,7 +44,7 @@ An object wrapping a <code>T</code> and providing the borrow API.
 
 <dl>
 <dt>
-<code>id: <a href="object.md#0x2_object_ID">object::ID</a></code>
+<code>id: <b>address</b></code>
 </dt>
 <dd>
 
@@ -78,7 +78,7 @@ A hot potato making sure the object is put back once borrowed.
 
 <dl>
 <dt>
-<code>ref: <a href="object.md#0x2_object_ID">object::ID</a></code>
+<code>ref: <b>address</b></code>
 </dt>
 <dd>
 
@@ -137,7 +137,7 @@ Create a new <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code> s
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow_new">new</a>&lt;T: key + store&gt;(value: T, ctx: &<b>mut</b> TxContext): <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt; {
     <a href="borrow.md#0x2_borrow_Referent">Referent</a> {
-        id: <a href="object.md#0x2_object_new_id">object::new_id</a>(ctx),
+        id: <a href="tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx),
         value: <a href="_some">option::some</a>(value)
     }
 }
