@@ -7,13 +7,13 @@ use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-#[cfg(msim)]
-use crate::sui_system_state::msim_sui_system_state_inner_v2::SimTestSuiSystemStateInnerV2;
 use crate::versioned::Versioned;
 use crate::{id::UID, MoveTypeTagTrait, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+#[cfg(msim)]
+use msim_sui_system_state_inner_v2::v2::SimTestSuiSystemStateInnerV2;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
