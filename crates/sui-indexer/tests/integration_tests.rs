@@ -71,7 +71,7 @@ pub mod pg_integration_test {
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
         transaction_bytes: TransactionBytes,
-        sender: &SuiAddress
+        sender: &SuiAddress,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -105,9 +105,9 @@ pub mod pg_integration_test {
             test_cluster,
             indexer_rpc_client,
             transaction_bytes,
-            sender
+            sender,
         )
-            .await?;
+        .await?;
         Ok(tx_response)
     }
 
@@ -587,17 +587,56 @@ pub mod pg_integration_test {
             assert_eq!(data.object_id, initial_full_obj_data.object_id);
         }
 
-        // indexer_rpc_client
-            // .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
-        // deleted(SuiObjectRef);
-        // we can try this with merging coins maybe
+        // deleted object - returns SuiObjectRef
+        let gas_objects =
+            get_owned_objects_for_address(&indexer_rpc_client, &test_cluster.get_address_1())
+                .await?;
+        assert_ne!(
+            *gas_objects.first().unwrap(),
+            post_transfer_full_obj_data.object_id
+        );
 
-        // not exists
+        let transaction_bytes = indexer_rpc_client
+            .merge_coin(
+                test_cluster.get_address_1(),
+                *gas_objects.first().unwrap(), // coin to merge into
+                post_transfer_full_obj_data.object_id, // coin to merge and delete
+                None,
+                2000,
+            )
+            .await?;
+        let tx_response = sign_and_execute_transaction(
+            &test_cluster,
+            &indexer_rpc_client,
+            transaction_bytes,
+            &test_cluster.get_address_1(),
+        )
+        .await?;
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let resp = indexer_rpc_client
+            .get_object_with_options(post_transfer_full_obj_data.object_id, None)
+            .await
+            .unwrap();
+
+        match resp {
+            SuiObjectResponse::Deleted(obj) => {
+                assert_eq!(obj.object_id, post_transfer_full_obj_data.object_id);
+                assert_eq!(obj.digest, post_transfer_full_obj_data.digest);
+                assert_ne!(obj.version, post_transfer_full_obj_data.version);
+            }
+            _ => {
+                panic!("Expected SuiObjectResponse::Deleted, but got {:?}", resp);
+            }
+        }
+
+        // Not exists
         let object_id = ObjectID::from([42; 32]);
         let resp = indexer_rpc_client
             .get_object_with_options(object_id, Some(show_all_content.clone()))
             .await
             .unwrap();
+
+        assert!(matches!(resp, SuiObjectResponse::NotExists(obj_id) if obj_id == object_id));
         matches!(resp, SuiObjectResponse::NotExists(_));
         Ok(())
     }
