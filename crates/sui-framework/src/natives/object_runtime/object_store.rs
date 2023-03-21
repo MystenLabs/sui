@@ -13,7 +13,7 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
     error::VMMemoryLimitExceededSubStatusCode,
-    object::{Data, MoveObject},
+    object::{Data, MoveObject, Owner},
     storage::ChildObjectResolver,
 };
 pub(super) struct ChildObject {
@@ -81,6 +81,24 @@ impl<'a> Inner<'a> {
                     PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
                 })?;
             let obj_opt = if let Some(object) = child_opt {
+                // guard against bugs in `read_child_object`: if it returns a child object such that
+                // C.parent != parent, we raise an invariant violation
+                match &object.owner {
+                    Owner::ObjectOwner(id) => {
+                        if ObjectID::from(*id) != parent {
+                            return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                                format!("Bad owner for {child}. \
+                                Expected owner {parent} but found owner {id}")
+                            ))
+                        }
+                    }
+                    Owner::AddressOwner(_) | Owner::Immutable | Owner::Shared { .. } => {
+                        return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                            format!("Bad owner for {child}. \
+                            Expected an id owner {parent} but found an address, immutable, or shared owner")
+                        ))
+                    }
+                };
                 match object.data {
                     Data::Package(_) => {
                         return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
