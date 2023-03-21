@@ -8,7 +8,6 @@ pub mod pg_integration_test {
     use std::str::FromStr;
 
     use diesel::RunQueryDsl;
-
     use futures::future::join_all;
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
     use move_core_types::ident_str;
@@ -18,7 +17,6 @@ pub mod pg_integration_test {
 
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
-    use sui_indexer::indexer_test_utils::start_test_indexer;
     use sui_indexer::models::objects::{Object, ObjectStatus};
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
