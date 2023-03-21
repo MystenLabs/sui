@@ -15,7 +15,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::*, messages::*};
@@ -265,7 +264,7 @@ impl ValidatorService {
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
         epoch_store
-            .batch_verifier
+            .signature_verifier
             .verify_tx(&transaction.data())
             .tap_err(|_| {
                 metrics.signature_errors.inc();
@@ -367,7 +366,7 @@ impl ValidatorService {
         let certificate = {
             let certificate = {
                 let _timer = metrics.cert_verification_latency.start_timer();
-                epoch_store.batch_verifier.verify_cert(certificate).await?
+                epoch_store.signature_verifier.verify_cert(certificate).await?
             };
 
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
