@@ -254,6 +254,7 @@ impl BatchCertificateVerifier {
 pub struct BatchCertificateVerifierMetrics {
     certificate_signatures_cache_hits: IntCounter,
     certificate_signatures_cache_evictions: IntCounter,
+    certificate_signatures_cache_dup: IntCounter,
     timeouts: IntCounter,
     full_batches: IntCounter,
     partial_batches: IntCounter,
@@ -273,6 +274,12 @@ impl BatchCertificateVerifierMetrics {
             certificate_signatures_cache_evictions: register_int_counter_with_registry!(
                 "certificate_signatures_cache_evictions",
                 "Number of times we evict a pre-existing key were known to be verified because of signature cache.",
+                registry
+            )
+            .unwrap(),
+            certificate_signatures_cache_dup: register_int_counter_with_registry!(
+                "certificate_signatures_cache_dup",
+                "Number we verified certificate twice because of cache race condition.",
                 registry
             )
             .unwrap(),
@@ -420,6 +427,8 @@ impl VerifiedCertificateCache {
         if let Some(old) = inner.push(digest, ()) {
             if old.0 != digest {
                 self.metrics.certificate_signatures_cache_evictions.inc();
+            } else {
+                self.metrics.certificate_signatures_cache_dup.inc();
             }
         }
     }
@@ -430,6 +439,8 @@ impl VerifiedCertificateCache {
             if let Some(old) = inner.push(d, ()) {
                 if old.0 != d {
                     self.metrics.certificate_signatures_cache_evictions.inc();
+                } else {
+                    self.metrics.certificate_signatures_cache_dup.inc();
                 }
             }
         });
