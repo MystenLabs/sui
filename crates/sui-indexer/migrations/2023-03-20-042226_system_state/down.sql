@@ -1,1 +1,3 @@
--- This file should undo anything in `up.sql`
+DROP TABLE IF EXISTS system_states;
+DROP TABLE IF EXISTS validators;
+DROP TABLE IF EXISTS at_risk_validators;

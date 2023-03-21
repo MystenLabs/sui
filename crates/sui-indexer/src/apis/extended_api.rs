@@ -5,9 +5,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
-use sui_json_rpc::api::{
-    cap_page_limit, validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
-};
+use sui_json_rpc::api::{validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{EpochInfo, EpochPage, Page};
 use sui_open_rpc::Module;

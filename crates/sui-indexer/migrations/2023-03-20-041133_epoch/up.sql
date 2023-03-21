@@ -1,4 +1,3 @@
--- Your SQL goes here
 CREATE TABLE epochs
 (
     epoch                           BIGINT PRIMARY KEY,
