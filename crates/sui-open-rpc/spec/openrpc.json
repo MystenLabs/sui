@@ -6170,7 +6170,6 @@
           "epoch",
           "epochDurationMs",
           "epochStartTimestampMs",
-          "governanceStartEpoch",
           "inactivePoolsId",
           "inactivePoolsSize",
           "pendingActiveValidatorsId",
@@ -6182,6 +6181,7 @@
           "stakeSubsidyBalance",
           "stakeSubsidyCurrentEpochAmount",
           "stakeSubsidyEpochCounter",
+          "stakeSubsidyStartEpoch",
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
           "storageFund",
@@ -6232,12 +6232,6 @@
           },
           "epochStartTimestampMs": {
             "description": "Unix timestamp of the current epoch start",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "governanceStartEpoch": {
-            "description": "The starting epoch in which various on-chain governance features take effect.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6309,6 +6303,12 @@
           },
           "stakeSubsidyEpochCounter": {
             "description": "This counter may be different from the current epoch number if in some epochs we decide to skip the subsidy.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stakeSubsidyStartEpoch": {
+            "description": "The starting epoch in which various on-chain governance features take effect.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

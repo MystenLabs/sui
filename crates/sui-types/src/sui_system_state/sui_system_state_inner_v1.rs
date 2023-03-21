@@ -32,7 +32,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SystemParametersV1 {
-    pub governance_start_epoch: u64,
+    pub stake_subsidy_start_epoch: u64,
 
     /// The duration of an epoch, in milliseconds.
     pub epoch_duration_ms: u64,
@@ -611,7 +611,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             storage_fund,
             parameters:
                 SystemParametersV1 {
-                    governance_start_epoch,
+                    stake_subsidy_start_epoch,
                     epoch_duration_ms,
                     //TODO should we include these in the summary?
                     max_vaidator_count: _,
@@ -647,7 +647,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             reference_gas_price,
             safe_mode,
             epoch_start_timestamp_ms,
-            governance_start_epoch,
+            stake_subsidy_start_epoch,
             epoch_duration_ms,
             stake_subsidy_epoch_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
@@ -699,7 +699,7 @@ impl Default for SuiSystemStateInnerV1 {
             validators: validator_set,
             storage_fund: Balance::new(0),
             parameters: SystemParametersV1 {
-                governance_start_epoch: 0,
+                stake_subsidy_start_epoch: 0,
                 epoch_duration_ms: 10000,
                 max_vaidator_count: crate::governance::MAX_VALIDATOR_COUNT,
                 min_validator_joining_stake: crate::governance::MIN_VALIDATOR_JOINING_STAKE_MIST,
