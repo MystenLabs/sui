@@ -12,7 +12,10 @@ use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
-use move_binary_format::normalized::{Module as NormalizedModule, Type};
+use move_binary_format::{
+    file_format_common::VERSION_MAX,
+    normalized::{Module as NormalizedModule, Type},
+};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -741,14 +744,11 @@ impl ReadApiServer for ReadApi {
         let normalized = match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
                 Data::Package(p) => {
-                    let max_binary_format_version = self
-                        .state
-                        .load_epoch_store_one_call_per_task()
-                        .protocol_config()
-                        .move_binary_format_version();
+                    // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                    // binary format
                     normalize_modules(
                         p.serialized_module_map().values(),
-                        max_binary_format_version,
+                        /* max_binary_format_version */ VERSION_MAX,
                     )
                     .map_err(|e| anyhow!("{e}"))
                 }

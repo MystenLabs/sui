@@ -511,8 +511,8 @@ where
 {
     let mut disassembled = BTreeMap::new();
     for bytecode in modules {
-        // TODO: this function is only from JSON RPC - is it then OK to deserialize with max Move
-        // binary version?
+        // this function is only from JSON RPC - it is OK to deserialize with max Move binary
+        // version
         let module = CompiledModule::deserialize(bytecode).map_err(|error| {
             SuiError::ModuleDeserializationFailure {
                 error: error.to_string(),

@@ -11,7 +11,7 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{LinkageResolver, ModuleResolver, ResourceResolver};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 use tracing::trace;
 
 use crate::coin::Coin;
@@ -152,7 +152,7 @@ pub struct TemporaryStore<S> {
     events: Vec<Event>,
     gas_charged: Option<(ObjectID, GasCostSummary)>,
     storage_rebate_rate: u64,
-    protocol_version: ProtocolVersion,
+    protocol_config: ProtocolConfig,
 }
 
 impl<S> TemporaryStore<S> {
@@ -178,7 +178,7 @@ impl<S> TemporaryStore<S> {
             events: Vec::new(),
             gas_charged: None,
             storage_rebate_rate: protocol_config.storage_rebate_rate(),
-            protocol_version: protocol_config.version,
+            protocol_config: protocol_config.clone(),
         }
     }
 
@@ -248,8 +248,10 @@ impl<S> TemporaryStore<S> {
             written,
             deleted,
             events: TransactionEvents { data: self.events },
-            max_binary_format_version: ProtocolConfig::get_for_version(self.protocol_version)
-                .move_binary_format_version(),
+            max_binary_format_version: ProtocolConfig::get_for_version(
+                self.protocol_config.version,
+            )
+            .move_binary_format_version(),
         }
     }
 
@@ -295,7 +297,7 @@ impl<S> TemporaryStore<S> {
             modified_at_versions.push((*id, *version));
         });
 
-        let protocol_version = self.protocol_version;
+        let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
 
         // In the case of special transactions that don't require a gas object,
@@ -1110,7 +1112,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
                     .expect("Bad object type--expected package")
                     .deserialize_module(
                         &module_id.name().to_owned(),
-                        ProtocolConfig::get_for_version(self.protocol_version)
+                        ProtocolConfig::get_for_version(self.protocol_config.version)
                             .move_binary_format_version(),
                     )?,
             ))
