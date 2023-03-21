@@ -219,9 +219,11 @@ pub struct ConsensusConfig {
     // For example, this could be used to connect to co-located workers over a private LAN address.
     pub internal_worker_address: Option<Multiaddr>,
 
-    // Timeout to retry sending transaction to consensus internally.
-    // Default to 60s.
-    pub timeout_secs: Option<u64>,
+    // Maximum number of pending transactions to submit to consensus, including those
+    // in submission wait.
+    // Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
+    // Default to 100_000.
+    pub max_pending_transactions: Option<usize>,
 
     pub narwhal_config: ConsensusParameters,
 }
@@ -233,6 +235,10 @@ impl ConsensusConfig {
 
     pub fn db_path(&self) -> &Path {
         &self.db_path
+    }
+
+    pub fn max_pending_transactions(&self) -> usize {
+        self.max_pending_transactions.unwrap_or(100_000)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {

@@ -88,6 +88,8 @@ impl AuthorityServer {
             consensus_client,
             state.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            100_000,
+            100_000,
             ConsensusAdapterMetrics::new_test(),
         ));
 
