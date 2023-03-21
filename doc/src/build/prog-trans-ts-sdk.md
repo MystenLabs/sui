@@ -137,7 +137,7 @@ const tx = Transaction.from(bytes);
 
 ## Building Offline
 
-In the event that you wish to build a transaction offline (i.e. with no `provider` required), you’ll need to fully-define all of your input values, and gas configuration (see below). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
+In the event that you want to build a transaction offline (i.e. with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```tsx
 import { Inputs } from '@mysten/sui.js';
