@@ -143,8 +143,15 @@ pub struct Amount {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct AmountMetadata {
+    pub sub_balances: Vec<SubBalance>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct SubBalance {
     pub stake_id: ObjectID,
     pub validator: SuiAddress,
+    #[serde(with = "str_format")]
+    pub value: i128,
 }
 
 impl Amount {
@@ -155,14 +162,13 @@ impl Amount {
             metadata: None,
         }
     }
-    pub fn new_stake(value: i128, stake_id: ObjectID, validator: SuiAddress) -> Self {
+    pub fn new_from_sub_balances(sub_balances: Vec<SubBalance>) -> Self {
+        let value = sub_balances.iter().map(|b| b.value).sum();
+
         Self {
             value,
             currency: SUI.clone(),
-            metadata: Some(AmountMetadata {
-                stake_id,
-                validator,
-            }),
+            metadata: Some(AmountMetadata { sub_balances }),
         }
     }
 }
