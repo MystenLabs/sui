@@ -41,5 +41,5 @@ Error: Transaction Effects Status: Invalid command argument at 1. The type of th
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(1) } }
 
 task 10 'programmable'. lines 61-63:
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of result 0, expected a single result but found multiple return values
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of result 0, expected a single result but found either no return values or multiple.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidResultArity { result_idx: 0 } }, source: None, command: Some(1) } }

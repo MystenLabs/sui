@@ -2379,7 +2379,7 @@ pub enum CommandArgumentError {
     SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
     #[error(
         "Invalid usage of result {result_idx}, \
-        expected a single result but found multiple return values"
+        expected a single result but found either no return values or multiple."
     )]
     InvalidResultArity { result_idx: u16 },
     #[error(
@@ -2388,16 +2388,12 @@ pub enum CommandArgumentError {
     )]
     InvalidGasCoinUsage,
     #[error(
-        "Invalid usage of borrowed value. \
+        "Invalid usage of value. \
         Mutably borrowed values require unique usage. \
-        Immutably borrowed values cannot be taken or borrowed mutably"
+        Immutably borrowed values cannot be taken or borrowed mutably. \
+        Taken values cannot be used again."
     )]
-    InvalidUsageOfBorrowedValue,
-    #[error(
-        "Invalid usage of already taken value. \
-        There is now no value available at this location"
-    )]
-    InvalidUsageOfTakenValue,
+    InvalidValueUsage,
     #[error("Immutable and shared objects cannot be passed by-value.")]
     InvalidObjectByValue,
     #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
