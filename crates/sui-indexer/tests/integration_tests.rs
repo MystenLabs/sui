@@ -4,14 +4,18 @@
 // integration test with standalone postgresql database
 #[cfg(feature = "pg_integration")]
 pub mod pg_integration_test {
+    use std::env;
+    use std::str::FromStr;
+
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
     use move_core_types::ident_str;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
-    use std::env;
-    use std::str::FromStr;
+    use tokio::task::JoinHandle;
+
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
+    use sui_indexer::indexer_test_utils::start_test_indexer;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
     use sui_indexer::IndexerConfig;
     use sui_json_rpc::api::EventReadApiClient;
@@ -32,9 +36,6 @@ pub mod pg_integration_test {
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, transfer_coin};
-
-    use sui_indexer::indexer_test_utils::start_test_indexer;
-    use tokio::task::JoinHandle;
 
     async fn execute_simple_transfer(
         test_cluster: &mut TestCluster,
@@ -97,7 +98,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_genesis_sync() {
-        let (test_cluster, indexer_rpc_client, store, handle) = start_test_cluster().await;
+        let (test_cluster, indexer_rpc_client, store, handle) = start_test_cluster(None).await;
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
 
@@ -128,7 +129,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_total_address() -> Result<(), anyhow::Error> {
-        let (_test_cluster, _indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (_test_cluster, _indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let total_address_count = store.get_total_address_number().unwrap();
@@ -139,7 +140,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let (tx_response, sender, recipient, gas_objects) =
@@ -242,7 +243,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_event_query_e2e() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         wait_until_next_checkpoint(&store).await;
         let nft_creator = test_cluster.get_address_0();
         let context = &mut test_cluster.wallet;
@@ -329,7 +330,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_event_query_pagination_e2e() -> Result<(), anyhow::Error> {
-        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster().await;
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
         let context = &mut test_cluster.wallet;
@@ -389,7 +390,7 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_module_cache() {
-        let (test_cluster, _, store, handle) = start_test_cluster().await;
+        let (test_cluster, _, store, handle) = start_test_cluster(None).await;
         let coins = test_cluster
             .sui_client()
             .coin_read_api()
@@ -424,7 +425,39 @@ pub mod pg_integration_test {
         drop(handle);
     }
 
-    async fn start_test_cluster() -> (
+    #[tokio::test]
+    async fn test_get_epoch() {
+        let (test_cluster, _, store, handle) = start_test_cluster(Some(20000)).await;
+
+        // Allow indexer to sync
+        wait_until_next_checkpoint(&store).await;
+
+        let current_epoch = store.get_current_epoch().unwrap();
+        let epoch_page = store.get_epochs(None, 100).unwrap();
+
+        assert_eq!(0, current_epoch.epoch);
+        assert!(current_epoch.end_of_epoch_info.is_none());
+        assert_eq!(1, epoch_page.len());
+
+        wait_until_next_epoch(&store).await;
+
+        let current_epoch = store.get_current_epoch().unwrap();
+        let epoch_page = store.get_epochs(None, 100).unwrap();
+
+        assert_eq!(1, current_epoch.epoch);
+        assert!(current_epoch.end_of_epoch_info.is_none());
+        assert_eq!(2, epoch_page.len());
+
+        let last_epoch = &epoch_page[0];
+        assert!(last_epoch.end_of_epoch_info.is_some());
+
+        drop(handle);
+        drop(test_cluster);
+    }
+
+    async fn start_test_cluster(
+        epoch_duration_ms: Option<u64>,
+    ) -> (
         TestCluster,
         HttpClient,
         PgIndexerStore,
@@ -435,7 +468,15 @@ pub mod pg_integration_test {
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
         let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}/sui_indexer");
 
-        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let test_cluster = if let Some(epoch) = epoch_duration_ms {
+            TestClusterBuilder::new()
+                .with_epoch_duration_ms(epoch)
+                .build()
+                .await
+                .unwrap()
+        } else {
+            TestClusterBuilder::new().build().await.unwrap()
+        };
 
         let config = IndexerConfig {
             db_url,
@@ -463,6 +504,15 @@ pub mod pg_integration_test {
         while cp < target {
             tokio::task::yield_now().await;
             cp = store.get_latest_checkpoint_sequence_number().unwrap();
+        }
+    }
+
+    async fn wait_until_next_epoch(store: &PgIndexerStore) {
+        let mut cp = store.get_current_epoch().unwrap().epoch;
+        let target = cp + 1;
+        while cp < target {
+            tokio::task::yield_now().await;
+            cp = store.get_current_epoch().unwrap().epoch;
         }
     }
 

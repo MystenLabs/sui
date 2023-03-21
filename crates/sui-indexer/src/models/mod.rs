@@ -3,9 +3,11 @@
 
 pub mod addresses;
 pub mod checkpoints;
+pub mod epoch;
 pub mod events;
 pub mod objects;
 pub mod owners;
 pub mod packages;
+pub mod system_state;
 pub mod transaction_index;
 pub mod transactions;

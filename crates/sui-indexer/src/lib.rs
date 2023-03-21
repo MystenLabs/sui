@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![recursion_limit = "256"]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
@@ -18,7 +19,8 @@ use tracing::{info, warn};
 use url::Url;
 
 use crate::apis::{
-    CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, TransactionBuilderApi, WriteApi,
+    CoinReadApi, EventReadApi, ExtendedApi, GovernanceReadApi, ReadApi, TransactionBuilderApi,
+    WriteApi,
 };
 use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::store::IndexerStore;
@@ -217,8 +219,13 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
-    builder.register_module(EventReadApi::new(state, http_client.clone(), event_handler))?;
+    builder.register_module(EventReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        event_handler,
+    ))?;
     builder.register_module(WriteApi::new(http_client))?;
+    builder.register_module(ExtendedApi::new(state))?;
     let default_socket_addr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.
         IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),

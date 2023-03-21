@@ -1924,6 +1924,59 @@
       }
     },
     {
+      "name": "suix_getCurrentEpoch",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return current epoch info",
+      "params": [],
+      "result": {
+        "name": "EpochInfo",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EpochInfo"
+        }
+      }
+    },
+    {
+      "name": "suix_getEpochs",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return a list of epoch info",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "EpochPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_EpochInfo_and_uint64"
+        }
+      }
+    },
+    {
       "name": "unsafe_batchTransaction",
       "tags": [
         {
@@ -3362,6 +3415,144 @@
           }
         }
       },
+      "EndOfEpochInfo": {
+        "type": "object",
+        "required": [
+          "epochEndTimestamp",
+          "lastCheckpointId",
+          "leftoverStorageFundInflow",
+          "protocolVersion",
+          "referenceGasPrice",
+          "stakeSubsidyAmount",
+          "storageCharge",
+          "storageFundBalance",
+          "storageFundReinvestment",
+          "storageRebate",
+          "totalGasFees",
+          "totalStake",
+          "totalStakeRewardsDistributed"
+        ],
+        "properties": {
+          "epochEndTimestamp": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "lastCheckpointId": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "leftoverStorageFundInflow": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "protocolVersion": {
+            "description": "existing fields from `SystemEpochInfo`",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "referenceGasPrice": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stakeSubsidyAmount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageCharge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageFundBalance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageFundReinvestment": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageRebate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalGasFees": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalStake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalStakeRewardsDistributed": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "EpochInfo": {
+        "type": "object",
+        "required": [
+          "epoch",
+          "epochStartTimestamp",
+          "epochTotalTransactions",
+          "firstCheckpointId",
+          "validators"
+        ],
+        "properties": {
+          "endOfEpochInfo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndOfEpochInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "epoch": {
+            "description": "epoch number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epochStartTimestamp": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epochTotalTransactions": {
+            "description": "count of tx in epoch",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "firstCheckpointId": {
+            "description": "first, last checkpoint sequence numbers",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validators": {
+            "description": "list of validators included in epoch",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
+          }
+        }
+      },
       "Event": {
         "type": "object",
         "required": [
@@ -4746,6 +4937,33 @@
                 "type": "null"
               }
             ]
+          }
+        }
+      },
+      "Page_for_EpochInfo_and_uint64": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EpochInfo"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },

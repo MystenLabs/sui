@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use futures::future::join_all;
 use futures::FutureExt;
+use move_core_types::ident_str;
 use prometheus::Registry;
 use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
@@ -19,10 +20,14 @@ use sui_json_rpc_types::{
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
 use crate::models::checkpoints::Checkpoint;
+use crate::models::epoch::{DBEpochInfo, SystemEpochInfoEvent};
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
 use crate::models::packages::Package;
 use crate::store::{
@@ -105,6 +110,10 @@ where
             // TODO: Metrics
             let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
 
+            if let Some(indexed_epoch) = indexed_epoch {
+                self.state.persist_epoch(&indexed_epoch)?;
+            }
+
             // Write to DB
             let db_guard = self.metrics.db_write_request_latency.start_timer();
             let tx_count = indexed_checkpoint.transactions.len();
@@ -127,9 +136,6 @@ where
             }
             db_guard.stop_and_record();
 
-            if let Some(indexed_epoch) = indexed_epoch {
-                self.state.persist_epoch(&indexed_epoch)?;
-            }
             next_cursor_sequence_number += 1;
         }
     }
@@ -352,15 +358,83 @@ where
             .collect();
 
         // Index epoch
-        // TODO: Aggregate all object owner changes into owner index at epoch change.
-        let epoch_index =
-            checkpoint
-                .end_of_epoch_data
-                .as_ref()
-                .map(|_epoch_change| TemporaryEpochStore {
-                    owner_index: vec![],
-                    epoch_id: checkpoint.epoch,
-                });
+        let epoch_index = if checkpoint.epoch == 0 && checkpoint.sequence_number == 0 {
+            // very first epoch
+            let system_state = get_sui_system_state(data)?;
+            let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
+            let validators = system_state
+                .active_validators
+                .iter()
+                .map(|v| (system_state.epoch, v.clone()).into())
+                .collect();
+
+            Some(TemporaryEpochStore {
+                last_epoch: None,
+                new_epoch: DBEpochInfo {
+                    epoch: 0,
+                    first_checkpoint_id: 0,
+                    epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
+                    ..Default::default()
+                },
+                system_state: system_state.into(),
+                validators,
+            })
+        } else if checkpoint.end_of_epoch_data.is_some() {
+            // Find system state object
+            let system_state = get_sui_system_state(data)?;
+            let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
+
+            let epoch_event = transactions
+                .iter()
+                .find_map(|tx| {
+                    tx.events.data.iter().find(|ev| {
+                        ev.type_.address == SUI_FRAMEWORK_ADDRESS
+                            && ev.type_.module.as_ident_str()
+                                == ident_str!("sui_system_state_inner")
+                            && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
+                    })
+                })
+                .ok_or_else(|| anyhow::anyhow!("Cannot find epoch event"))?;
+
+            let event: SystemEpochInfoEvent = bcs::from_bytes(&epoch_event.bcs)?;
+            let validators = system_state
+                .active_validators
+                .iter()
+                .map(|v| (system_state.epoch, v.clone()).into())
+                .collect();
+
+            Some(TemporaryEpochStore {
+                last_epoch: Some(DBEpochInfo {
+                    epoch: system_state.epoch as i64 - 1,
+                    first_checkpoint_id: 0,
+                    last_checkpoint_id: Some(checkpoint.sequence_number as i64),
+                    epoch_start_timestamp: 0,
+                    epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
+                    epoch_total_transactions: 0,
+                    stake_subsidy_amount: Some(event.stake_subsidy_amount),
+                    reference_gas_price: Some(event.reference_gas_price),
+                    storage_fund_balance: Some(event.storage_fund_balance),
+                    total_gas_fees: Some(event.total_gas_fees),
+                    total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
+                    total_stake: Some(event.total_stake),
+                    storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
+                    storage_charge: Some(event.storage_charge),
+                    protocol_version: Some(event.protocol_version),
+                    storage_rebate: Some(event.storage_rebate),
+                    leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
+                }),
+                new_epoch: DBEpochInfo {
+                    epoch: system_state.epoch as i64,
+                    first_checkpoint_id: checkpoint.sequence_number as i64 + 1,
+                    epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
+                    ..Default::default()
+                },
+                system_state: system_state.into(),
+                validators,
+            })
+        } else {
+            None
+        };
 
         Ok((
             TemporaryCheckpointStore {

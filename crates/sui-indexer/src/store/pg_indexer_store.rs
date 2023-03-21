@@ -8,7 +8,8 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use diesel::dsl::{count, max};
-use diesel::sql_types::VarChar;
+use diesel::query_builder::AsQuery;
+use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
@@ -16,7 +17,7 @@ use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use tracing::info;
 
-use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
+use sui_json_rpc_types::{CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::event::EventID;
@@ -24,14 +25,17 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
+use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::objects::Object;
+use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
 use crate::schema::{
-    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, events, input_objects,
-    input_objects::dsl as input_objects_dsl, move_calls, move_calls::dsl as move_calls_dsl,
-    objects, objects::dsl as objects_dsl, objects_history, packages, recipients,
-    recipients::dsl as recipients_dsl, transactions, transactions::dsl as transactions_dsl,
+    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs, epochs::dsl as epochs_dsl,
+    events, input_objects, input_objects::dsl as input_objects_dsl, move_calls,
+    move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
+    packages, recipients, recipients::dsl as recipients_dsl, system_states, transactions,
+    transactions::dsl as transactions_dsl, validators,
 };
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
@@ -1014,6 +1018,18 @@ impl IndexerStore for PgIndexerStore {
             .serializable()
             .read_write()
             .run(|conn| {
+                // update epoch transaction count
+                let sql = "UPDATE epochs e1
+SET epoch_total_transactions = e2.epoch_total_transactions + $1
+FROM epochs e2
+WHERE e1.epoch = e2.epoch
+  AND e1.epoch = $2;";
+                diesel::sql_query(sql)
+                    .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
+                    .bind::<BigInt, _>(checkpoint.epoch)
+                    .as_query()
+                    .execute(conn)?;
+
                 diesel::insert_into(checkpoints::table)
                     .values(checkpoint)
                     .on_conflict_do_nothing()
@@ -1028,12 +1044,148 @@ impl IndexerStore for PgIndexerStore {
     }
 
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
-        // TODO: create new partition on epoch change
-        self.partition_manager.advance_epoch(data.epoch_id + 1)
+        self.partition_manager
+            .advance_epoch(data.new_epoch.epoch as u64)?;
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| {
+                if let Some(last_epoch) = &data.last_epoch {
+                    diesel::insert_into(epochs::table)
+                        .values(last_epoch)
+                        .on_conflict(epochs::epoch)
+                        .do_update()
+                        .set((
+                            epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
+                            epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
+                            epochs::protocol_version.eq(excluded(epochs::protocol_version)),
+                            epochs::reference_gas_price.eq(excluded(epochs::reference_gas_price)),
+                            epochs::total_stake.eq(excluded(epochs::total_stake)),
+                            epochs::storage_fund_reinvestment
+                                .eq(excluded(epochs::storage_fund_reinvestment)),
+                            epochs::storage_charge.eq(excluded(epochs::storage_charge)),
+                            epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
+                            epochs::storage_fund_balance.eq(excluded(epochs::storage_fund_balance)),
+                            epochs::stake_subsidy_amount.eq(excluded(epochs::stake_subsidy_amount)),
+                            epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
+                            epochs::total_stake_rewards_distributed
+                                .eq(excluded(epochs::total_stake_rewards_distributed)),
+                            epochs::leftover_storage_fund_inflow
+                                .eq(excluded(epochs::leftover_storage_fund_inflow)),
+                        ))
+                        .execute(conn)?;
+                }
+                diesel::insert_into(epochs::table)
+                    .values(&data.new_epoch)
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
+
+                diesel::insert_into(system_states::table)
+                    .values(&data.system_state)
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
+
+                diesel::insert_into(validators::table)
+                    .values(&data.validators)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing epoch to PostgresDB with error: {:?}",
+                    e
+                ))
+            })?;
+        Ok(())
     }
 
     fn module_cache(&self) -> &Self::ModuleCache {
         &self.module_cache
+    }
+
+    fn get_epochs(
+        &self,
+        cursor: Option<EpochId>,
+        limit: usize,
+    ) -> Result<Vec<EpochInfo>, IndexerError> {
+        let id = cursor.map(|id| id as i64).unwrap_or(-1);
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let epoch_info :Vec<DBEpochInfo> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                epochs_dsl::epochs.filter(epochs::epoch.gt(id)).order_by(epochs::epoch.asc())
+                    .limit(limit as i64).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let validators : Vec<DBValidatorSummary> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                validators::dsl::validators.filter(validators::epoch.gt(id)).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let mut validators =
+            validators
+                .into_iter()
+                .fold(BTreeMap::<i64, Vec<_>>::new(), |mut acc, v| {
+                    acc.entry(v.epoch).or_default().push(v);
+                    acc
+                });
+
+        epoch_info
+            .into_iter()
+            .map(|info| {
+                let epoch = info.epoch;
+                info.to_epoch_info(validators.remove(&epoch).unwrap_or_default())
+            })
+            .collect()
+    }
+
+    fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let epoch_info :DBEpochInfo =   pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                epochs::dsl::epochs.order_by(epochs::epoch.desc())
+                    .first::<DBEpochInfo>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let validators : Vec<DBValidatorSummary> =   pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                validators::dsl::validators.filter(validators::epoch.eq(epoch_info.epoch)).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        epoch_info.to_epoch_info(validators)
     }
 }
 
@@ -1054,6 +1206,7 @@ impl PartitionManager {
         );
         Ok(manager)
     }
+
     fn advance_epoch(&self, next_epoch_id: EpochId) -> Result<(), IndexerError> {
         let tables = self.get_table_partitions()?;
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
