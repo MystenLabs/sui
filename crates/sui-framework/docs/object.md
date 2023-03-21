@@ -11,7 +11,6 @@ Sui object identifiers
 -  [Resource `Ownership`](#0x2_object_Ownership)
 -  [Resource `DynamicFields`](#0x2_object_DynamicFields)
 -  [Constants](#@Constants_0)
--  [Function `new_id`](#0x2_object_new_id)
 -  [Function `id_to_bytes`](#0x2_object_id_to_bytes)
 -  [Function `id_to_address`](#0x2_object_id_to_address)
 -  [Function `id_from_bytes`](#0x2_object_id_from_bytes)
@@ -175,6 +174,16 @@ containing object's address)
 ## Constants
 
 
+<a name="0x2_object_ENotSystemAddress"></a>
+
+Sender is not @0x0 the system address.
+
+
+<pre><code><b>const</b> <a href="object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="0x2_object_SUI_CLOCK_OBJECT_ID"></a>
 
 The hardcoded ID for the singleton Clock Object.
@@ -194,32 +203,6 @@ The hardcoded ID for the singleton Sui System State Object.
 </code></pre>
 
 
-
-<a name="0x2_object_new_id"></a>
-
-## Function `new_id`
-
-Create an <code><a href="object.md#0x2_object_ID">ID</a></code>. Not to be mistaken for <code><a href="object.md#0x2_object_new">object::new</a></code> which
-generates a new UID.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_new_id">new_id</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="object.md#0x2_object_ID">object::ID</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_new_id">new_id</a>(ctx: &<b>mut</b> TxContext): <a href="object.md#0x2_object_ID">ID</a> {
-    <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="tx_context.md#0x2_tx_context_new_object">tx_context::new_object</a>(ctx) }
-}
-</code></pre>
-
-
-
-</details>
 
 <a name="0x2_object_id_to_bytes"></a>
 
@@ -329,7 +312,7 @@ Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singl
 This should only be called once from <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(): <a href="object.md#0x2_object_UID">object::UID</a>
+<pre><code><b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -338,7 +321,8 @@ This should only be called once from <code><a href="sui_system.md#0x2_sui_system
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(): <a href="object.md#0x2_object_UID">UID</a> {
+<pre><code><b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &TxContext): <a href="object.md#0x2_object_UID">UID</a> {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="object.md#0x2_object_ENotSystemAddress">ENotSystemAddress</a>);
     <a href="object.md#0x2_object_UID">UID</a> {
         id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="object.md#0x2_object_SUI_SYSTEM_STATE_OBJECT_ID">SUI_SYSTEM_STATE_OBJECT_ID</a> },
     }
@@ -496,7 +480,7 @@ This is the only way to create <code><a href="object.md#0x2_object_UID">UID</a><
 
 <pre><code><b>public</b> <b>fun</b> <a href="object.md#0x2_object_new">new</a>(ctx: &<b>mut</b> TxContext): <a href="object.md#0x2_object_UID">UID</a> {
     <a href="object.md#0x2_object_UID">UID</a> {
-        id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="tx_context.md#0x2_tx_context_new_object">tx_context::new_object</a>(ctx) },
+        id: <a href="object.md#0x2_object_ID">ID</a> { bytes: <a href="tx_context.md#0x2_tx_context_fresh_object_address">tx_context::fresh_object_address</a>(ctx) },
     }
 }
 </code></pre>

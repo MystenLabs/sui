@@ -106,7 +106,7 @@ module sui::package {
     /// Since this function can only be called in the module initializer,
     /// the sender is the publisher.
     public fun claim_and_keep<OTW: drop>(otw: OTW, ctx: &mut TxContext) {
-        sui::transfer::transfer(claim(otw, ctx), sender(ctx))
+        sui::transfer::public_transfer(claim(otw, ctx), sender(ctx))
     }
 
     /// Destroy a Publisher object effectively removing all privileges
@@ -188,7 +188,7 @@ module sui::package {
     /// package.  This ticket only authorizes an upgrade to a package
     /// that matches this digest.  A package's contents are identified
     /// by two things:
-    ///   
+    ///
     ///  - modules: [[u8]]       a list of the package's module contents
     ///  - deps:    [[u8; 32]]   a list of 32 byte ObjectIDs of the
     ///                          package's transitive dependencies
@@ -248,7 +248,7 @@ module sui::package {
         UpgradeTicket {
             cap: object::id(cap),
             package,
-            policy: cap.policy,
+            policy,
             digest,
         }
     }

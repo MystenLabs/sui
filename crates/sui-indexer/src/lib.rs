@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![recursion_limit = "256"]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
@@ -15,22 +16,19 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
+use url::Url;
 
+use apis::{
+    CoinReadApi, EventReadApi, ExtendedApi, GovernanceReadApi, ReadApi, TransactionBuilderApi,
+    WriteApi,
+};
 use errors::IndexerError;
+use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::spawn_monitored_task;
+use store::IndexerStore;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
-use sui_json_rpc_types::SuiTransactionResponseOptions;
-use sui_sdk::apis::ReadApi as SuiReadApi;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::TransactionDigest;
-
-use crate::apis::{
-    CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, TransactionBuilderApi, WriteApi,
-};
-use crate::handlers::checkpoint_handler::CheckpointHandler;
-use crate::store::IndexerStore;
-use crate::types::SuiTransactionFullResponse;
 
 pub mod apis;
 pub mod errors;
@@ -40,14 +38,22 @@ pub mod models;
 pub mod processors;
 pub mod schema;
 pub mod store;
+pub mod test_utils;
 pub mod types;
 pub mod utils;
 
 pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
-// TODO: placeholder, read from env or config file.
-pub const FAKE_PKG_VERSION: &str = "0.0.0";
+pub const MIGRATED_METHODS: [&str; 7] = [
+    "get_checkpoint",
+    "get_latest_checkpoint_sequence_number",
+    "get_object_with_options",
+    "get_total_transaction_number",
+    "get_transaction",
+    "multi_get_transactions_with_options",
+    "query_transactions",
+];
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -68,10 +74,35 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
+    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    pub migrated_methods: Vec<String>,
+    #[clap(long)]
+    pub reset_db: bool,
 }
 
 impl IndexerConfig {
-    pub fn default() -> Self {
+    /// returns connection url without the db name
+    pub fn base_connection_url(&self) -> String {
+        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
+        format!(
+            "{}://{}:{}@{}:{}/",
+            url.scheme(),
+            url.username(),
+            url.password().unwrap_or_default(),
+            url.host_str().unwrap_or_default(),
+            url.port().unwrap_or_default()
+        )
+    }
+
+    /// returns all endpoints for which we have implemented on the indexer
+    /// NOTE: we only use this for integration testing
+    pub fn all_migrated_methods() -> Vec<String> {
+        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
+    }
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
         Self {
             db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
@@ -79,6 +110,8 @@ impl IndexerConfig {
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
             rpc_server_port: 9000,
+            migrated_methods: vec![],
+            reset_db: false,
         }
     }
 }
@@ -97,7 +130,10 @@ impl Indexer {
             .expect("Json rpc server should not run into errors upon start.");
         // let JSON RPC server run forever.
         spawn_monitored_task!(handle.stopped());
-        info!("Sui indexer started...");
+        info!(
+            "Sui indexer of version {:?} started...",
+            env!("CARGO_PKG_VERSION")
+        );
 
         backoff::future::retry(ExponentialBackoff::default(), || async {
             let event_handler_clone = event_handler.clone();
@@ -167,7 +203,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     event_handler: Arc<EventHandler>,
     config: &IndexerConfig,
 ) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(FAKE_PKG_VERSION, prometheus_registry);
+    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
     let mut headers = HeaderMap::new();
     headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
@@ -179,49 +215,25 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         .build(config.rpc_client_url.as_str())
         .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
 
-    builder.register_module(ReadApi::new(state.clone(), http_client.clone()))?;
+    builder.register_module(ReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        config.migrated_methods.clone(),
+    ))?;
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
-    builder.register_module(EventReadApi::new(state, http_client.clone(), event_handler))?;
+    builder.register_module(EventReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        event_handler,
+    ))?;
     builder.register_module(WriteApi::new(http_client))?;
+    builder.register_module(ExtendedApi::new(state))?;
     let default_socket_addr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.
         IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),
         config.rpc_server_port,
     );
     Ok(builder.start(default_socket_addr).await?)
-}
-
-pub async fn multi_get_full_transactions(
-    read_api: &SuiReadApi,
-    digests: Vec<TransactionDigest>,
-) -> Result<Vec<SuiTransactionFullResponse>, IndexerError> {
-    let sui_transactions = read_api
-        .multi_get_transactions_with_options(
-            digests.clone(),
-            SuiTransactionResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_events(),
-        )
-        .await
-        .map_err(|e| {
-            IndexerError::FullNodeReadingError(format!(
-                "Failed to get transactions {:?} with error: {:?}",
-                digests.clone(),
-                e
-            ))
-        })?;
-    let sui_full_transactions: Vec<SuiTransactionFullResponse> = sui_transactions
-        .into_iter()
-        .map(SuiTransactionFullResponse::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| {
-            IndexerError::FullNodeReadingError(format!(
-                "Unexpected None value in SuiTransactionFullResponse of digests {:?} with error {:?}",
-                digests, e
-            ))
-        })?;
-    Ok(sui_full_transactions)
 }

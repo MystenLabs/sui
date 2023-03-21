@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { blake2b } from '@noble/hashes/blake2b';
 import { Keypair } from '../cryptography/keypair';
 import {
   SerializedSignature,
@@ -24,7 +25,8 @@ export class RawSigner extends SignerWithProvider {
 
   async signData(data: Uint8Array): Promise<SerializedSignature> {
     const pubkey = this.keypair.getPublicKey();
-    const signature = this.keypair.signData(data, false);
+    const digest = blake2b(data, { dkLen: 32 });
+    const signature = this.keypair.signData(digest, false);
     const signatureScheme = this.keypair.getKeyScheme();
 
     return toSerializedSignature({

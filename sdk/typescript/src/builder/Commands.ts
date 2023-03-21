@@ -17,6 +17,7 @@ import {
   Struct,
   define,
 } from 'superstruct';
+import { ObjectId } from '../types/common';
 import { COMMAND_TYPE, WellKnownEncoding, create } from './utils';
 
 const option = <T extends Struct<any, any>>(some: T) =>
@@ -79,12 +80,12 @@ export const TransferObjectsCommand = object({
 });
 export type TransferObjectsCommand = Infer<typeof TransferObjectsCommand>;
 
-export const SplitCoinCommand = object({
-  kind: literal('SplitCoin'),
+export const SplitCoinsCommand = object({
+  kind: literal('SplitCoins'),
   coin: ObjectCommandArgument,
-  amount: PureCommandArgument('u64'),
+  amounts: array(PureCommandArgument('u64')),
 });
-export type SplitCoinCommand = Infer<typeof SplitCoinCommand>;
+export type SplitCoinsCommand = Infer<typeof SplitCoinsCommand>;
 
 export const MergeCoinsCommand = object({
   kind: literal('MergeCoins'),
@@ -103,13 +104,14 @@ export type MakeMoveVecCommand = Infer<typeof MakeMoveVecCommand>;
 export const PublishCommand = object({
   kind: literal('Publish'),
   modules: array(array(integer())),
+  dependencies: array(ObjectId),
 });
 export type PublishCommand = Infer<typeof PublishCommand>;
 
 const TransactionCommandTypes = [
   MoveCallCommand,
   TransferObjectsCommand,
-  SplitCoinCommand,
+  SplitCoinsCommand,
   MergeCoinsCommand,
   PublishCommand,
   MakeMoveVecCommand,
@@ -152,8 +154,11 @@ export const Commands = {
       TransferObjectsCommand,
     );
   },
-  SplitCoin(coin: CommandArgument, amount: CommandArgument): SplitCoinCommand {
-    return create({ kind: 'SplitCoin', coin, amount }, SplitCoinCommand);
+  SplitCoins(
+    coin: CommandArgument,
+    amounts: CommandArgument[],
+  ): SplitCoinsCommand {
+    return create({ kind: 'SplitCoins', coin, amounts }, SplitCoinsCommand);
   },
   MergeCoins(
     destination: CommandArgument,
@@ -164,8 +169,8 @@ export const Commands = {
       MergeCoinsCommand,
     );
   },
-  Publish(modules: number[][]): PublishCommand {
-    return create({ kind: 'Publish', modules }, PublishCommand);
+  Publish(modules: number[][], dependencies: ObjectId[]): PublishCommand {
+    return create({ kind: 'Publish', modules, dependencies }, PublishCommand);
   },
   MakeMoveVec({
     type,

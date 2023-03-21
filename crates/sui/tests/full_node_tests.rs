@@ -402,7 +402,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .state()
         .query_events(
             EventQuery::MoveModule {
-                package: SUI_FRAMEWORK_OBJECT_ID,
+                package: SuiFramework::ID,
                 module: "unused_input_object".to_string(),
             },
             None,

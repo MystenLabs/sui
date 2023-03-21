@@ -16,7 +16,7 @@ describe('Test Move call with strings', () => {
   ) {
     const tx = new Transaction();
     tx.moveCall({
-      target: `${packageId}::entry_point_string::${funcName}`,
+      target: `${packageId}::entry_point_types::${funcName}`,
       arguments: [tx.pure(str), tx.pure(len)],
     });
     const result = await toolbox.signer.signAndExecuteTransaction({
@@ -32,7 +32,7 @@ describe('Test Move call with strings', () => {
     toolbox = await setup();
     const packagePath =
       __dirname +
-      '/../../../../crates/sui-core/src/unit_tests/data/entry_point_string';
+      '/../../../../crates/sui-core/src/unit_tests/data/entry_point_types';
     ({ packageId } = await publishPackage(packagePath));
   });
 

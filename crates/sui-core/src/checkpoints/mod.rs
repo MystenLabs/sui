@@ -189,6 +189,13 @@ impl CheckpointStore {
         Ok(checkpoints)
     }
 
+    pub fn multi_get_checkpoint_content(
+        &self,
+        contents_digest: &[CheckpointContentsDigest],
+    ) -> Result<Vec<Option<CheckpointContents>>, TypedStoreError> {
+        self.checkpoint_content.multi_get(contents_digest)
+    }
+
     pub fn get_highest_verified_checkpoint(
         &self,
     ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
@@ -1287,8 +1294,12 @@ mod tests {
                     MovePackage::new(
                         ObjectID::random(),
                         SequenceNumber::new(),
-                        &BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
+                        BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
                         100_000,
+                        // no modules so empty type_origin_table as no types are defined in this package
+                        Vec::new(),
+                        // no modules so empty linkage_table as no dependencies of this package exist
+                        BTreeMap::new(),
                     )
                     .unwrap(),
                 ),

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::TransactionBuilderServer;
+use crate::api::{validate_limit, TransactionBuilderServer};
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     BigInt, CheckpointId, ObjectsPage, Page, SuiObjectDataOptions, SuiObjectResponse,
-    SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    SuiObjectResponseQuery, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
@@ -22,7 +22,7 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_adapter::execution_mode::{DevInspect, Normal};
 
-use crate::api::cap_page_objects_limit;
+use crate::api::MAX_GET_OWNED_OBJECT_LIMIT;
 use crate::error::Error;
 use anyhow::anyhow;
 use sui_json::SuiJsonValue;
@@ -56,7 +56,7 @@ impl DataReader for AuthorityStateDataReader {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectDataOptions>,
+        query: Option<SuiObjectResponseQuery>,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         at_checkpoint: Option<CheckpointId>,
@@ -65,10 +65,14 @@ impl DataReader for AuthorityStateDataReader {
             return Err(anyhow!("at_checkpoint param currently not supported"));
         }
 
-        let limit = cap_page_objects_limit(limit)?;
+        let limit = validate_limit(limit, MAX_GET_OWNED_OBJECT_LIMIT)?;
+        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
+
         let options = options.unwrap_or_default();
 
-        let mut objects = self.0.get_owner_objects(address, cursor, limit + 1)?;
+        let mut objects = self
+            .0
+            .get_owner_objects(address, cursor, limit + 1, filter)?;
 
         // objects here are of size (limit + 1), where the last one is the cursor for the next page
         let has_next_page = objects.len() > limit;
@@ -199,6 +203,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
+        dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -208,7 +213,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .builder
-            .publish(sender, compiled_modules, gas, gas_budget)
+            .publish(sender, compiled_modules, dependencies, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

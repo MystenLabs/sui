@@ -20,14 +20,14 @@ module a::m {
     }
 
     entry fun mint(ctx: &mut TxContext) {
-        sui::transfer::transfer(
+        sui::transfer::public_transfer(
             S { id: object::new(ctx) },
             tx_context::sender(ctx),
         );
     }
 
     entry fun wrap(s: S, ctx: &mut TxContext) {
-        sui::transfer::transfer(
+        sui::transfer::public_transfer(
             T { id: object::new(ctx), s },
             tx_context::sender(ctx),
         );
@@ -36,7 +36,7 @@ module a::m {
     entry fun unwrap(t: T, ctx: &mut TxContext) {
         let T { id, s } = t;
         object::delete(id);
-        sui::transfer::transfer(s, tx_context::sender(ctx));
+        sui::transfer::public_transfer(s, tx_context::sender(ctx));
     }
 }
 

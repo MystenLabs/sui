@@ -30,6 +30,7 @@
 -  [Function `next_epoch_validator_count`](#0x2_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#0x2_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#0x2_validator_set_is_duplicate_with_active_validator)
+-  [Function `is_duplicate_validator`](#0x2_validator_set_is_duplicate_validator)
 -  [Function `is_duplicate_with_pending_validator`](#0x2_validator_set_is_duplicate_with_pending_validator)
 -  [Function `get_candidate_or_active_validator_mut`](#0x2_validator_set_get_candidate_or_active_validator_mut)
 -  [Function `find_validator`](#0x2_validator_set_find_validator)
@@ -68,6 +69,7 @@
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -158,6 +160,12 @@
 </dt>
 <dd>
  Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -509,6 +517,7 @@ The epoch value corresponds to the first epoch this change takes place.
         inactive_validators: <a href="table.md#0x2_table_new">table::new</a>(ctx),
         validator_candidates: <a href="table.md#0x2_table_new">table::new</a>(ctx),
         at_risk_validators: <a href="vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     };
     <a href="voting_power.md#0x2_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.active_validators);
     validators
@@ -1268,10 +1277,34 @@ only the sui address but this function looks at more metadata.
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="validator_set.md#0x2_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
-    <b>let</b> len = <a href="_length">vector::length</a>(&self.active_validators);
+    <a href="validator_set.md#0x2_validator_set_is_duplicate_validator">is_duplicate_validator</a>(&self.active_validators, new_validator)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_validator_set_is_duplicate_validator"></a>
+
+## Function `is_duplicate_validator`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, new_validator: &<a href="validator.md#0x2_validator_Validator">validator::Validator</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
+    <b>let</b> len = <a href="_length">vector::length</a>(validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; len) {
-        <b>let</b> v = <a href="_borrow">vector::borrow</a>(&self.active_validators, i);
+        <b>let</b> v = <a href="_borrow">vector::borrow</a>(validators, i);
         <b>if</b> (<a href="validator.md#0x2_validator_is_duplicate">validator::is_duplicate</a>(v, new_validator)) {
             <b>return</b> <b>true</b>
         };
@@ -1462,7 +1495,7 @@ Aborts if any address isn't in the given validator set.
 
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, validator_address: <b>address</b>): &<b>mut</b> <a href="validator.md#0x2_validator_Validator">validator::Validator</a>
 </code></pre>
 
 
@@ -1471,7 +1504,7 @@ Aborts if any address isn't in the given validator set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x2_validator_set_get_validator_mut">get_validator_mut</a>(
     validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;,
     validator_address: <b>address</b>,
 ): &<b>mut</b> Validator {

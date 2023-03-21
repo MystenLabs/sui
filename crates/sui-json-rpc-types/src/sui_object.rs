@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout};
 use schemars::JsonSchema;
@@ -24,7 +25,7 @@ use sui_types::base_types::{
 };
 use sui_types::error::{UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
-use sui_types::move_package::MovePackage;
+use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
 
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
@@ -269,6 +270,10 @@ impl SuiObjectDataOptions {
         self.show_previous_transaction = true;
         self
     }
+
+    pub fn is_not_in_object_info(&self) -> bool {
+        self.show_bcs || self.show_content || self.show_display || self.show_storage_rebate
+    }
 }
 
 impl TryFrom<(ObjectRead, SuiObjectDataOptions)> for SuiObjectResponse {
@@ -359,7 +364,8 @@ impl
                     })?;
                     SuiRawData::try_from_object(m, layout)?
                 }
-                Data::Package(p) => SuiRawData::try_from_package(p)?,
+                Data::Package(p) => SuiRawData::try_from_package(p)
+                    .map_err(|e| anyhow!("Error getting raw data from package: {e:#?}"))?,
             };
             Some(data)
         } else {
@@ -483,8 +489,10 @@ impl TryInto<Object> for SuiObjectData {
             Some(SuiRawData::Package(p)) => Data::Package(MovePackage::new(
                 p.id,
                 self.version,
-                &p.module_map,
+                p.module_map,
                 protocol_config.max_move_package_size(),
+                p.type_origin_table,
+                p.linkage_table,
             )?),
             _ => Err(anyhow!(
                 "BCS data is required to convert SuiObjectData to Object"
@@ -787,6 +795,8 @@ pub struct SuiRawMovePackage {
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
     pub module_map: BTreeMap<String, Vec<u8>>,
+    pub type_origin_table: Vec<TypeOrigin>,
+    pub linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
 impl From<MovePackage> for SuiRawMovePackage {
@@ -795,11 +805,13 @@ impl From<MovePackage> for SuiRawMovePackage {
             id: p.id(),
             version: p.version(),
             module_map: p.serialized_module_map().clone(),
+            type_origin_table: p.type_origin_table().clone(),
+            linkage_table: p.linkage_table().clone(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
 pub enum SuiPastObjectResponse {
     /// The object exists and is found with this version
@@ -889,4 +901,55 @@ pub struct SuiGetPastObjectRequest {
     pub object_id: ObjectID,
     /// the version of the queried object.
     pub version: SequenceNumber,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub enum SuiObjectDataFilter {
+    /// Query by type a specified Package.
+    Package(ObjectID),
+    /// Query by type a specified Move module.
+    MoveModule {
+        /// the Move package ID
+        package: ObjectID,
+        /// the module name
+        #[schemars(with = "String")]
+        #[serde_as(as = "DisplayFromStr")]
+        module: Identifier,
+    },
+    /// Query by type
+    StructType(
+        #[schemars(with = "String")]
+        #[serde_as(as = "DisplayFromStr")]
+        StructTag,
+    ),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]
+pub struct SuiObjectResponseQuery {
+    /// If None, no filter will be applied
+    pub filter: Option<SuiObjectDataFilter>,
+    /// config which fields to include in the response, by default only digest is included
+    pub options: Option<SuiObjectDataOptions>,
+}
+
+impl SuiObjectResponseQuery {
+    pub fn new(filter: Option<SuiObjectDataFilter>, options: Option<SuiObjectDataOptions>) -> Self {
+        Self { filter, options }
+    }
+
+    pub fn new_with_filter(filter: SuiObjectDataFilter) -> Self {
+        Self {
+            filter: Some(filter),
+            options: None,
+        }
+    }
+
+    pub fn new_with_options(options: SuiObjectDataOptions) -> Self {
+        Self {
+            filter: None,
+            options: Some(options),
+        }
+    }
 }

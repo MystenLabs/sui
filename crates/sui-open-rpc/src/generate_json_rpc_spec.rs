@@ -9,6 +9,8 @@ use clap::Parser;
 use pretty_assertions::assert_str_eq;
 use sui_core::SUI_CORE_VERSION;
 
+use crate::examples::RpcExampleProvider;
+use sui_json_rpc::api::ExtendedApiOpenRpc;
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::event_api::EventReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
@@ -17,8 +19,6 @@ use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::SuiRpcModule;
-
-use crate::examples::RpcExampleProvider;
 
 mod examples;
 
@@ -52,6 +52,7 @@ async fn main() {
     open_rpc.add_module(TransactionExecutionApi::rpc_doc_module());
     open_rpc.add_module(TransactionBuilderApi::rpc_doc_module());
     open_rpc.add_module(GovernanceReadApi::rpc_doc_module());
+    open_rpc.add_module(ExtendedApiOpenRpc::module_doc());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
 

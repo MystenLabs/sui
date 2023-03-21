@@ -5,9 +5,10 @@
 /// Initializes a simple collection.
 module sui::boars {
     use sui::tx_context::{TxContext, sender};
-    use sui::transfer::transfer;
+    use sui::transfer;
     use sui::collectible;
     use sui::display;
+    // use sui::royalty;
     use std::string::utf8;
     use std::option;
 
@@ -23,9 +24,14 @@ module sui::boars {
     struct Boar has store {}
 
     fun init(otw: BOARS, ctx: &mut TxContext) {
-        let (pub, display, creator_cap) = collectible::create_collection<BOARS, Boar>(
-            otw, option::some(CAP), ctx
-        );
+        let sender = sender(ctx);
+        let (
+            publisher,
+            type_owner_cap,
+            creator_cap
+        ) = collectible::create_collection<BOARS, Boar>(otw, option::some(CAP), ctx);
+
+        let (display, borrow) = collectible::borrow_display(&mut creator_cap);
 
         display::add_multiple(&mut display, vector[
             utf8(b"name"),
@@ -42,9 +48,14 @@ module sui::boars {
         ]);
 
         display::update_version(&mut display);
-        transfer(creator_cap, sender(ctx));
-        transfer(display, sender(ctx));
-        transfer(pub, sender(ctx))
+        collectible::return_display(&mut creator_cap, display, borrow);
+
+        // let (policy, royalty_cap) = royalty::new_royalty_policy(type_owner_cap, 500, ctx);
+
+        transfer::public_transfer(type_owner_cap, sender);
+        transfer::public_transfer(creator_cap, sender);
+        transfer::public_transfer(publisher, sender);
+        // transfer::share_object(policy)
     }
 
     #[test_only]
@@ -58,7 +69,7 @@ module sui::collectible_tests {
     use sui::test_scenario::{Self as ts};
     use sui::collectible::{Self, CollectionCreatorCap};
     use sui::boars::{Self, Boar};
-    use sui::transfer::transfer;
+    use sui::transfer;
     use std::option::{some, none};
     use std::string::utf8;
     use std::vector as vec;
@@ -86,8 +97,8 @@ module sui::collectible_tests {
                 ts::ctx(&mut test)
             );
 
-            transfer(creator_cap, creator);
-            transfer(boar, creator)
+            transfer::public_transfer(creator_cap, creator);
+            transfer::public_transfer(boar, creator)
         };
 
         ts::next_tx(&mut test, creator); {
@@ -103,10 +114,10 @@ module sui::collectible_tests {
             );
 
             while (vec::length(&boars) > 0) {
-                transfer(vec::pop_back(&mut boars), creator);
+                transfer::public_transfer(vec::pop_back(&mut boars), creator);
             };
 
-            transfer(creator_cap, creator);
+            transfer::public_transfer(creator_cap, creator);
             vec::destroy_empty(boars);
         };
 

@@ -11,6 +11,8 @@ module sui::staking_pool {
     use sui::coin;
     use sui::math;
     use sui::table::{Self, Table};
+    use sui::bag::Bag;
+    use sui::bag;
 
     friend sui::validator;
     friend sui::validator_set;
@@ -61,6 +63,8 @@ module sui::staking_pool {
         pending_total_sui_withdraw: u64,
         /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
         pending_pool_token_withdraw: u64,
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     /// Struct representing the exchange rate of the stake pool token to SUI.
@@ -98,6 +102,7 @@ module sui::staking_pool {
             pending_stake: 0,
             pending_total_sui_withdraw: 0,
             pending_pool_token_withdraw: 0,
+            extra_fields: bag::new(ctx),
         }
     }
 
@@ -152,7 +157,7 @@ module sui::staking_pool {
 
         // TODO: implement withdraw bonding period here.
         balance::join(&mut principal_withdraw, rewards_withdraw);
-        transfer::transfer(coin::from_balance(principal_withdraw, ctx), staker);
+        transfer::public_transfer(coin::from_balance(principal_withdraw, ctx), staker);
         total_sui_withdraw_amount
     }
 
@@ -291,7 +296,7 @@ module sui::staking_pool {
         pool.sui_balance = pool.sui_balance - withdraw_amount;
         pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
-        transfer::transfer(coin::from_balance(principal, ctx), staker);
+        transfer::public_transfer(coin::from_balance(principal, ctx), staker);
         withdraw_amount
     }
 

@@ -3,11 +3,11 @@
 
 pub mod addresses;
 pub mod checkpoints;
-pub mod error_logs;
+pub mod epoch;
 pub mod events;
-pub mod move_calls;
 pub mod objects;
 pub mod owners;
 pub mod packages;
-pub mod recipients;
+pub mod system_state;
+pub mod transaction_index;
 pub mod transactions;

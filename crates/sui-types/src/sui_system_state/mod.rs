@@ -14,6 +14,7 @@ use enum_dispatch::enum_dispatch;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorV1};
 use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
@@ -27,8 +28,6 @@ const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemSta
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
-pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
-    ident_str!("consensus_commit_prologue");
 
 pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
 
@@ -83,9 +82,7 @@ pub enum SuiSystemState {
 
 /// This is the fixed type used by genesis.
 pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
-
-/// This is the fixed type used by benchmarking.
-pub type SuiSystemStateInnerBenchmark = SuiSystemStateInnerV1;
+pub type SuiValidatorGenesis = ValidatorV1;
 
 impl SuiSystemState {
     pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
@@ -98,16 +95,6 @@ impl SuiSystemState {
         match self {
             SuiSystemState::V1(inner) => inner,
         }
-    }
-
-    pub fn into_benchmark_version(self) -> SuiSystemStateInnerBenchmark {
-        match self {
-            SuiSystemState::V1(inner) => inner,
-        }
-    }
-
-    pub fn new_for_benchmarking(inner: SuiSystemStateInnerBenchmark) -> Self {
-        Self::V1(inner)
     }
 
     pub fn new_for_testing(epoch: EpochId) -> Self {
@@ -155,8 +142,16 @@ where
     let wrapper = get_sui_system_state_wrapper(object_store)?;
     match wrapper.version {
         1 => {
+            let id = wrapper.id.id.bytes;
             let result: SuiSystemStateInnerV1 =
-                get_dynamic_field_from_store(object_store, wrapper.id.id.bytes, &wrapper.version)?;
+                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
+                    |err| {
+                        SuiError::DynamicFieldReadError(format!(
+                            "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
+                            id, wrapper.version, err
+                        ))
+                    },
+                )?;
             Ok(SuiSystemState::V1(result))
         }
         // The following case is for sim_test only to support authority_tests::test_sui_system_state_nop_upgrade.
@@ -178,29 +173,38 @@ where
 /// the Validator type. This is assuming that the validator is stored in the table as
 /// ValidatorWrapper type.
 pub fn get_validator_from_table<S, K>(
-    system_state_version: u64,
     object_store: &S,
     table_id: ObjectID,
     key: &K,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
     S: ObjectStore,
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {
-    let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)?;
+    let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)
+        .map_err(|err| {
+            SuiError::SuiSystemStateReadError(format!(
+                "Failed to load validator wrapper from table: {:?}",
+                err
+            ))
+        })?;
     let versioned = field.inner;
-    match system_state_version {
+    let version = versioned.version;
+    match version {
         1 => {
-            let validator: ValidatorV1 = get_dynamic_field_from_store(
-                object_store,
-                versioned.id.id.bytes,
-                &system_state_version,
-            )?;
+            let validator: ValidatorV1 =
+                get_dynamic_field_from_store(object_store, versioned.id.id.bytes, &version)
+                    .map_err(|err| {
+                        SuiError::SuiSystemStateReadError(format!(
+                            "Failed to load inner validator from the wrapper: {:?}",
+                            err
+                        ))
+                    })?;
             Ok(validator.into_sui_validator_summary())
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
-            "Unsupported SuiSystemState version: {}",
-            system_state_version
+            "Unsupported Validator version: {}",
+            version
         ))),
     }
 }

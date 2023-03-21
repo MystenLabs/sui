@@ -5,7 +5,6 @@ import {
   any,
   array,
   assign,
-  bigint,
   boolean,
   Infer,
   literal,
@@ -34,7 +33,7 @@ export const SuiObjectRef = object({
   /** Hex code as string representing the object id */
   objectId: string(),
   /** Object version */
-  version: union([bigint(), number()]),
+  version: union([number(), string()]),
 });
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
 
@@ -249,7 +248,7 @@ export function getObjectId(
 
 export function getObjectVersion(
   data: SuiObjectResponse | SuiObjectRef | SuiObjectData,
-): bigint | number | undefined {
+): string | number | undefined {
   if ('version' in data) {
     return data.version;
   }
@@ -369,3 +368,14 @@ export const PaginatedObjectsResponse = object({
   hasNextPage: boolean(),
 });
 export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;
+
+// mirrors sui_json_rpc_types:: SuiObjectDataFilter
+export type SuiObjectDataFilter =
+  | { Package: ObjectId }
+  | { MoveModule: { package: ObjectId; module: string } }
+  | { StructType: string };
+
+export type SuiObjectResponseQuery = {
+  filter?: SuiObjectDataFilter;
+  options?: SuiObjectDataOptions;
+};

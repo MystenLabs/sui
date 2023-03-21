@@ -45,7 +45,7 @@ export function createTokenTransferTransaction({
     );
 
     if (coinType === SUI_TYPE_ARG) {
-        const coin = tx.splitCoin(tx.gas, tx.pure(bigIntAmount));
+        const coin = tx.splitCoins(tx.gas, [tx.pure(bigIntAmount)]);
         tx.transferObjects([coin], tx.pure(to));
     } else {
         const primaryCoinInput = tx.object(primaryCoin.coinObjectId);
@@ -56,7 +56,7 @@ export function createTokenTransferTransaction({
                 mergeCoins.map((coin) => tx.object(coin.coinObjectId))
             );
         }
-        const coin = tx.splitCoin(primaryCoinInput, tx.pure(bigIntAmount));
+        const coin = tx.splitCoins(primaryCoinInput, [tx.pure(bigIntAmount)]);
         tx.transferObjects([coin], tx.pure(to));
     }
 

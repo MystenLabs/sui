@@ -42,7 +42,7 @@ impl ProgrammableTransactionBuilder {
         ProgrammableTransaction { inputs, commands }
     }
 
-    fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
+    pub fn pure_bytes(&mut self, bytes: Vec<u8>, force_separate: bool) -> Argument {
         let arg = if force_separate {
             BuilderArg::ForcedNonUniquePure(self.inputs.len())
         } else {
@@ -179,12 +179,16 @@ impl ProgrammableTransactionBuilder {
         })))
     }
 
-    pub fn publish_upgradeable(&mut self, modules: Vec<Vec<u8>>) -> Argument {
-        self.command(Command::Publish(modules))
+    pub fn publish_upgradeable(
+        &mut self,
+        modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
+    ) -> Argument {
+        self.command(Command::Publish(modules, dep_ids))
     }
 
-    pub fn publish_immutable(&mut self, modules: Vec<Vec<u8>>) {
-        let cap = self.publish_upgradeable(modules);
+    pub fn publish_immutable(&mut self, modules: Vec<Vec<u8>>, dep_ids: Vec<ObjectID>) {
+        let cap = self.publish_upgradeable(modules, dep_ids);
         self.commands
             .push(Command::MoveCall(Box::new(ProgrammableMoveCall {
                 package: SUI_FRAMEWORK_OBJECT_ID,
@@ -235,7 +239,7 @@ impl ProgrammableTransactionBuilder {
         let rec_arg = self.pure(recipient).unwrap();
         let coin_arg = if let Some(amount) = amount {
             let amt_arg = self.pure(amount).unwrap();
-            self.command(Command::SplitCoin(Argument::GasCoin, amt_arg))
+            self.command(Command::SplitCoins(Argument::GasCoin, vec![amt_arg]))
         } else {
             Argument::GasCoin
         };
@@ -292,23 +296,28 @@ impl ProgrammableTransactionBuilder {
                 amounts.len()
             )
         }
+        if amounts.is_empty() {
+            return Ok(());
+        }
 
         // collect recipients in the case where they are non-unique in order
         // to minimize the number of transfers that must be performed
-        let mut recipient_map = IndexMap::new();
-        for (recipient, amount) in recipients.into_iter().zip(amounts) {
-            recipient_map
-                .entry(recipient)
-                .or_insert_with(Vec::new)
-                .push(amount);
+        let mut recipient_map: IndexMap<SuiAddress, Vec<usize>> = IndexMap::new();
+        let mut amt_args = vec![];
+        for (i, (recipient, amount)) in recipients.into_iter().zip(amounts).enumerate() {
+            recipient_map.entry(recipient).or_default().push(i);
+            amt_args.push(self.pure(amount)?);
         }
-        for (recipient, amounts) in recipient_map {
+        let Argument::Result(split_primary) = self.command(Command::SplitCoins(coin, amt_args))
+        else {
+            panic!("self.command should always give a Argument::Result")
+        };
+        for (recipient, split_secondaries) in recipient_map {
             let rec_arg = self.pure(recipient).unwrap();
-            let mut coins = vec![];
-            for amount in amounts {
-                let amt_arg = self.pure(amount).unwrap();
-                coins.push(self.command(Command::SplitCoin(coin, amt_arg)));
-            }
+            let coins = split_secondaries
+                .into_iter()
+                .map(|j| Argument::NestedResult(split_primary, j as u16))
+                .collect();
             self.command(Command::TransferObjects(coins, rec_arg));
         }
         Ok(())

@@ -53,7 +53,7 @@ module adversarial::adversarial {
         let i = 0;
         let sender = tx_context::sender(ctx);
         while (i < n) {
-            transfer::transfer(create_max_size_object(ctx), sender);
+            transfer::public_transfer(create_max_size_object(ctx), sender);
             i = i + 1
         }
     }
@@ -62,7 +62,7 @@ module adversarial::adversarial {
     public fun create_max_size_shared_objects(n: u64, ctx: &mut TxContext) {
         let i = 0;
         while (i < n) {
-            transfer::share_object(create_max_size_object(ctx));
+            transfer::public_share_object(create_max_size_object(ctx));
             i = i + 1
         }
     }

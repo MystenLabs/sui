@@ -46,7 +46,7 @@ module frenemies::frenemies {
     /// an initial assignment
     public entry fun register(name: String, registry: &mut Registry, state: &SuiSystemState, ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
-        transfer::transfer(
+        transfer::public_transfer(
              Scorecard {
                 id: object::new(ctx),
                 name: registry::register(registry, name, ctx),

@@ -3,6 +3,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { SuiObjectData } from '../../src';
 
 describe('Dynamic Fields Reading API', () => {
   let toolbox: TestToolbox;
@@ -18,12 +19,11 @@ describe('Dynamic Fields Reading API', () => {
       .getOwnedObjects({
         owner: toolbox.address(),
         options: { showType: true },
+        filter: { StructType: `${packageId}::dynamic_fields_test::Test` },
       })
       .then(function (objects) {
-        const obj = objects.filter(
-          (o) => o.type === `${packageId}::dynamic_fields_test::Test`,
-        );
-        parentObjectId = obj[0].objectId;
+        const data = objects.data[0].details as SuiObjectData;
+        parentObjectId = data.objectId;
       });
   });
 

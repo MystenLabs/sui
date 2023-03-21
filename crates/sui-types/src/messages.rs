@@ -28,9 +28,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
-use move_binary_format::CompiledModule;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
@@ -154,9 +152,10 @@ pub struct ChangeEpoch {
     pub epoch_start_timestamp_ms: u64,
     /// System packages (specifically framework and move stdlib) that are written before the new
     /// epoch starts. This tracks framework upgrades on chain. When executing the ChangeEpoch txn,
-    /// the validator must write out the modules below.  Modules are given in their serialized form,
-    /// and include the ObjectID within their serialized form.
-    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
+    /// the validator must write out the modules below.  Modules are provided with the version they
+    /// will be upgraded to, their modules in serialized form (which include their package ID), and
+    /// a list of their transitive dependencies.
+    pub system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -361,14 +360,15 @@ pub enum Command {
     /// (public transfer) and either the previous owner must be an address or the object must
     /// be newly created.
     TransferObjects(Vec<Argument>, Argument),
-    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
-    /// It splits off some amount into a new coin
-    SplitCoin(Argument, Argument),
+    /// `(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>`
+    /// It splits off some amounts into a new coins with those amounts
+    SplitCoins(Argument, Vec<Argument>),
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(Argument, Vec<Argument>),
-    /// Publishes a Move package
-    Publish(Vec<Vec<u8>>),
+    /// Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    /// dependencies to link against on-chain.
+    Publish(Vec<Vec<u8>>, Vec<ObjectID>),
     /// `forall T: Vec<T> -> vector<T>`
     /// Given n-values of the same type, it constructs a vector. For non objects or an empty vector,
     /// the type tag must be specified.
@@ -478,25 +478,6 @@ impl Command {
         }))
     }
 
-    fn publish_command_input_objects(modules: &[Vec<u8>]) -> Vec<InputObjectKind> {
-        // For module publishing, all the dependent packages are implicit input objects
-        // because they must all be on-chain in order for the package to publish.
-        // All authorities must have the same view of those dependencies in order
-        // to achieve consistent publish results.
-        let compiled_modules = modules
-            .iter()
-            .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
-                Ok(m) => Some(m),
-                // We will ignore this error here and simply let latter execution
-                // to discover this error again and fail the transaction.
-                // It's preferable to let transaction fail and charge gas when
-                // malformed package is provided.
-                Err(_) => None,
-            })
-            .collect::<Vec<_>>();
-        Transaction::input_objects_in_compiled_modules(&compiled_modules)
-    }
-
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Command::Upgrade(_, deps, package_id, _) => deps
@@ -504,7 +485,10 @@ impl Command {
                 .map(|id| InputObjectKind::MovePackage(*id))
                 .chain(Some(InputObjectKind::MovePackage(*package_id)))
                 .collect(),
-            Command::Publish(modules) => Self::publish_command_input_objects(modules),
+            Command::Publish(_, deps) => deps
+                .iter()
+                .map(|id| InputObjectKind::MovePackage(*id))
+                .collect(),
             Command::MoveCall(c) => c.input_objects(),
             Command::MakeMoveVec(Some(t), _) => {
                 let mut packages = BTreeSet::new();
@@ -516,7 +500,7 @@ impl Command {
             }
             Command::MakeMoveVec(None, _)
             | Command::TransferObjects(_, _)
-            | Command::SplitCoin(_, _)
+            | Command::SplitCoins(_, _)
             | Command::MergeCoins(_, _) => vec![],
         }
     }
@@ -524,7 +508,9 @@ impl Command {
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => call.validity_check(config)?,
-            Command::TransferObjects(args, _) | Command::MergeCoins(_, args) => {
+            Command::TransferObjects(args, _)
+            | Command::MergeCoins(_, args)
+            | Command::SplitCoins(_, args) => {
                 fp_ensure!(!args.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     args.len() < config.max_arguments() as usize,
@@ -560,7 +546,7 @@ impl Command {
                     }
                 );
             }
-            Command::Publish(modules) => {
+            Command::Publish(modules, _dep_ids) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
                     modules.len() < config.max_modules_in_publish() as usize,
@@ -571,7 +557,6 @@ impl Command {
                     }
                 );
             }
-            Command::SplitCoin(_, _) => (),
             Command::Upgrade(modules, _, _, _) => {
                 fp_ensure!(!modules.is_empty(), UserInputError::EmptyCommandInput);
                 fp_ensure!(
@@ -731,13 +716,21 @@ impl Display for Command {
                 write_sep(f, objs, ",")?;
                 write!(f, "],{addr})")
             }
-            Command::SplitCoin(coin, amount) => write!(f, "SplitCoin({coin},{amount})"),
+            Command::SplitCoins(coin, amounts) => {
+                write!(f, "SplitCoins({coin}")?;
+                write_sep(f, amounts, ",")?;
+                write!(f, ")")
+            }
             Command::MergeCoins(target, coins) => {
                 write!(f, "MergeCoins({target},")?;
                 write_sep(f, coins, ",")?;
                 write!(f, ")")
             }
-            Command::Publish(_bytes) => write!(f, "Publish(_)"),
+            Command::Publish(_bytes, deps) => {
+                write!(f, "Publish(_,")?;
+                write_sep(f, deps, ",")?;
+                write!(f, ")")
+            }
             Command::Upgrade(_bytes, deps, current_package_id, ticket) => {
                 write!(f, "Upgrade(_,")?;
                 write_sep(f, deps, ",")?;
@@ -1310,21 +1303,30 @@ impl TransactionData {
         sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas_budget: u64,
     ) -> Self {
-        Self::new_module(sender, gas_payment, modules, gas_budget, DUMMY_GAS_PRICE)
+        Self::new_module(
+            sender,
+            gas_payment,
+            modules,
+            dep_ids,
+            gas_budget,
+            DUMMY_GAS_PRICE,
+        )
     }
 
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas_budget: u64,
         gas_price: u64,
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            let upgrade_cap = builder.publish_upgradeable(modules);
+            let upgrade_cap = builder.publish_upgradeable(modules, dep_ids);
             builder.transfer_arg(sender, upgrade_cap);
             builder.finish()
         };
@@ -1414,9 +1416,8 @@ pub trait TransactionDataAPI {
     #[cfg(test)]
     fn gas_data_mut(&mut self) -> &mut GasData;
 
-    // TODO: this should be #[cfg(test)], but for some reason it is not visible in
-    // authority_tests.rs even though that entire module is #[cfg(test)]
-    fn expiration_mut(&mut self) -> &mut TransactionExpiration;
+    // This should be used in testing only.
+    fn expiration_mut_for_testing(&mut self) -> &mut TransactionExpiration;
 }
 
 impl TransactionDataAPI for TransactionDataV1 {
@@ -1553,7 +1554,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         &mut self.gas_data
     }
 
-    fn expiration_mut(&mut self) -> &mut TransactionExpiration {
+    fn expiration_mut_for_testing(&mut self) -> &mut TransactionExpiration {
         &mut self.expiration
     }
 }
@@ -1745,28 +1746,6 @@ impl<S> Envelope<SenderSignedData, S> {
             .into_iter()
     }
 
-    pub fn input_objects_in_compiled_modules(
-        compiled_modules: &[CompiledModule],
-    ) -> Vec<InputObjectKind> {
-        let to_be_published: BTreeSet<_> = compiled_modules.iter().map(|m| m.self_id()).collect();
-        let mut dependent_packages = BTreeSet::new();
-        for module in compiled_modules {
-            for handle in &module.module_handles {
-                if !to_be_published.contains(&module.module_id_for_handle(handle)) {
-                    let address = ObjectID::from(*module.address_identifier_at(handle.address));
-                    dependent_packages.insert(address);
-                }
-            }
-        }
-
-        // We don't care about the digest of the dependent packages.
-        // They are all read-only on-chain and their digest never changes.
-        dependent_packages
-            .into_iter()
-            .map(InputObjectKind::MovePackage)
-            .collect::<Vec<_>>()
-    }
-
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
     }
@@ -1834,7 +1813,7 @@ impl VerifiedTransaction {
         computation_charge: u64,
         storage_rebate: u64,
         epoch_start_timestamp_ms: u64,
-        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>)>,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
     ) -> Self {
         ChangeEpoch {
             epoch: next_epoch,
@@ -2124,7 +2103,6 @@ impl PlainTransactionInfoResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HandleCertificateResponse {
     pub signed_effects: SignedTransactionEffects,
-    // TODO: Add a case for finalized transaction.
     pub events: TransactionEvents,
 }
 
@@ -2189,13 +2167,14 @@ pub enum ExecutionFailureStatus {
     CoinBalanceOverflow,
 
     //
-    // Publish errors
+    // Publish/Upgrade errors
     //
     #[error(
         "Publish Error, Non-zero Address. \
-        The modules in the package must have their address set to zero."
+        The modules in the package must have their self-addresses set to zero."
     )]
     PublishErrorNonZeroAddress,
+
     #[error(
         "Sui Move Bytecode Verification Error. \
         Please run the Sui Move Verifier for more information."
@@ -2270,6 +2249,24 @@ pub enum ExecutionFailureStatus {
     Limit is {max_size} bytes"
     )]
     EffectsTooLarge { current_size: u64, max_size: u64 },
+
+    #[error(
+        "Publish/Upgrade Error, Missing dependency. \
+         A dependency of a published or upgraded package has not been assigned an on-chain \
+         address."
+    )]
+    PublishUpgradeMissingDependency,
+
+    #[error(
+        "Publish/Upgrade Error, Dependency downgrade. \
+         Indirect (transitive) dependency of published or upgraded package has been assigned an \
+         on-chain version that is less than the version required by one of the package's \
+         transitive dependencies."
+    )]
+    PublishUpgradeDependencyDowngrade,
+
+    #[error("Invalid package upgrade. {upgrade_error}")]
+    PackageUpgradeError { upgrade_error: PackageUpgradeError },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -2330,6 +2327,25 @@ pub enum CommandArgumentError {
     InvalidObjectByValue,
     #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
     InvalidObjectByMutRef,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+pub enum PackageUpgradeError {
+    #[error("Unable to fetch package at {package_id}")]
+    UnableToFetchPackage { package_id: ObjectID },
+    #[error("Object {object_id} is not a package")]
+    NotAPackage { object_id: ObjectID },
+    #[error("New package is incompatible with previous version")]
+    IncompatibleUpgrade,
+    #[error("Digest in upgrade ticket and computed digest disagree")]
+    DigestDoesNotMatch { digest: Vec<u8> },
+    #[error("Upgrade policy {policy} is not a valid upgrade policy")]
+    UnknownUpgradePolicy { policy: u8 },
+    #[error("Package ID {package_id} does not match package ID in upgrade ticket {ticket_id}")]
+    PackageIDDoesNotMatch {
+        package_id: ObjectID,
+        ticket_id: ObjectID,
+    },
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash, Error)]

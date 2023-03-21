@@ -7,6 +7,7 @@ import {
   getCreatedObjects,
   getExecutionStatusType,
   ObjectId,
+  SuiObjectData,
   SUI_FRAMEWORK_ADDRESS,
   Transaction,
 } from '../../src';
@@ -62,6 +63,7 @@ describe('Test Move call with a vector of objects as input', () => {
 
   it('Test regular arg mixed with object vector arg', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
+    const coin = coins[3].details as SuiObjectData;
     const coinIDs = coins.map((coin) => Coin.getID(coin));
     const tx = new Transaction();
     const vec = tx.makeMoveVec({
@@ -72,7 +74,7 @@ describe('Test Move call with a vector of objects as input', () => {
       typeArguments: ['0x2::sui::SUI'],
       arguments: [tx.object(coinIDs[0]), vec],
     });
-    tx.setGasPayment([coins[3]]);
+    tx.setGasPayment([coin]);
     const result = await toolbox.signer.signAndExecuteTransaction({
       transaction: tx,
       options: {

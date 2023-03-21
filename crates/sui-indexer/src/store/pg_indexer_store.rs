@@ -8,15 +8,16 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use diesel::dsl::{count, max};
-use diesel::sql_types::VarChar;
+use diesel::query_builder::AsQuery;
+use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use tracing::{error, info};
+use tracing::info;
 
-use sui_json_rpc_types::{CheckpointId, EventFilter, EventPage, SuiEvent};
+use sui_json_rpc_types::{CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::event::EventID;
@@ -24,15 +25,17 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::models::checkpoints::Checkpoint;
-use crate::models::error_logs::commit_error_logs;
+use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::objects::Object;
+use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
 use crate::schema::{
-    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, events, move_calls,
+    addresses, checkpoints, checkpoints::dsl as checkpoints_dsl, epochs, epochs::dsl as epochs_dsl,
+    events, input_objects, input_objects::dsl as input_objects_dsl, move_calls,
     move_calls::dsl as move_calls_dsl, objects, objects::dsl as objects_dsl, objects_history,
-    packages, recipients, recipients::dsl as recipients_dsl, transactions,
-    transactions::dsl as transactions_dsl,
+    packages, recipients, recipients::dsl as recipients_dsl, system_states, transactions,
+    transactions::dsl as transactions_dsl, validators,
 };
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
@@ -54,11 +57,17 @@ WHERE parent.relkind = 'p'
 GROUP BY table_name;
 "#;
 
+#[derive(QueryableByName, Debug, Clone)]
+struct TempDigestTable {
+    #[diesel(sql_type = VarChar)]
+    digest_name: String,
+}
+
 #[derive(Clone)]
 pub struct PgIndexerStore {
     cp: PgConnectionPool,
     partition_manager: PartitionManager,
-    pub module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
+    module_cache: Arc<SyncModuleCache<IndexerModuleResolver>>,
 }
 
 impl PgIndexerStore {
@@ -397,6 +406,38 @@ impl IndexerStore for PgIndexerStore {
             .transpose()
     }
 
+    fn get_input_object_sequence_by_digest(
+        &self,
+        txn_digest: Option<String>,
+        is_descending: bool,
+    ) -> Result<Option<i64>, IndexerError> {
+        txn_digest
+            .map(|digest| {
+                let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+                pg_pool_conn
+                    .build_transaction()
+                    .read_only()
+                    .run(|conn| {
+                        let mut boxed_query = input_objects_dsl::input_objects
+                            .filter(input_objects_dsl::transaction_digest.eq(digest.clone()))
+                            .into_boxed();
+                        if is_descending {
+                            boxed_query = boxed_query.order(input_objects_dsl::id.desc());
+                        } else {
+                            boxed_query = boxed_query.order(input_objects_dsl::id.asc());
+                        }
+                        boxed_query.select(input_objects_dsl::id).first::<i64>(conn)
+                    })
+                    .map_err(|e| {
+                        IndexerError::PostgresReadError(format!(
+                            "Failed reading input object sequence with digest {} and err: {:?}",
+                            digest, e
+                        ))
+                    })
+            })
+            .transpose()
+    }
+
     fn get_recipient_sequence_by_digest(
         &self,
         txn_digest: Option<String>,
@@ -441,22 +482,24 @@ impl IndexerStore for PgIndexerStore {
             .read_only()
             .run(|conn| {
                 let mut boxed_query = transactions_dsl::transactions.into_boxed();
-                if is_descending {
-                    boxed_query = boxed_query.order(transactions_dsl::id.desc());
-                } else {
-                    boxed_query = boxed_query.order(transactions_dsl::id.asc());
+                if let Some(start_sequence) = start_sequence {
+                    if is_descending {
+                        boxed_query = boxed_query.filter(transactions_dsl::id.lt(start_sequence));
+                    } else {
+                        boxed_query = boxed_query.filter(transactions_dsl::id.gt(start_sequence));
+                    }
                 }
 
                 if is_descending {
                     boxed_query
                         .order(transactions_dsl::id.desc())
-                        .limit((limit + 1) as i64)
+                        .limit((limit) as i64)
                         .select(transactions_dsl::transaction_digest)
                         .load::<String>(conn)
                 } else {
                     boxed_query
                         .order(transactions_dsl::id.asc())
-                        .limit((limit + 1) as i64)
+                        .limit((limit) as i64)
                         .select(transactions_dsl::transaction_digest)
                         .load::<String>(conn)
                 }
@@ -464,55 +507,6 @@ impl IndexerStore for PgIndexerStore {
             IndexerError::PostgresReadError(format!(
                 "Failed reading all transaction digests with start_sequence {:?} and limit {} and err: {:?}",
                 start_sequence, limit, e
-            ))
-        })
-    }
-
-    fn get_transaction_digest_page_by_move_call(
-        &self,
-        package_name: String,
-        module_name: Option<String>,
-        function_name: Option<String>,
-        start_sequence: Option<i64>,
-        limit: usize,
-        is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
-        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-        pg_pool_conn
-            .build_transaction()
-            .read_only()
-            .run(|conn| {
-                let mut builder = move_calls_dsl::move_calls.filter(move_calls_dsl::move_package.eq(package_name.clone()))
-                    .group_by(move_calls_dsl::transaction_digest)
-                    .select((move_calls_dsl::transaction_digest, max(move_calls_dsl::id)))
-                    .into_boxed();
-                if let Some(module_name) = module_name.clone() {
-                    builder = builder.filter(move_calls_dsl::move_module.eq(module_name));
-                }
-                if let Some(function_name) = function_name.clone() {
-                    builder = builder.filter(move_calls_dsl::move_function.eq(function_name));
-                }
-                if let Some(start_sequence) = start_sequence {
-                    if is_descending {
-                        builder = builder.filter(move_calls_dsl::id.lt(start_sequence));
-                    } else {
-                        builder = builder.filter(move_calls_dsl::id.gt(start_sequence));
-                    }
-                }
-
-                if is_descending {
-                    builder.order(move_calls_dsl::id.desc())
-                        .limit(limit as i64)
-                        .load::<(String, Option<i64>)>(conn)
-                } else {
-                    builder.order(move_calls_dsl::id.asc())
-                        .limit(limit as i64)
-                        .load::<(String, Option<i64>)>(conn)
-                }
-            }).map(|v| v.into_iter().map(|(digest, _)| digest).collect()).map_err(|e| {
-            IndexerError::PostgresReadError(format!(
-                "Failed reading transaction digests with package_name {} module_name {:?} and function_name {:?} and start_sequence {:?} and limit {} and err: {:?}",
-                package_name, module_name, function_name, start_sequence, limit, e
             ))
         })
     }
@@ -610,6 +604,108 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
+    fn get_transaction_digest_page_by_input_object(
+        &self,
+        object_id: String,
+        version: Option<i64>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id 
+                FROM input_objects
+                WHERE object_id = '{}' {} {} 
+                GROUP BY transaction_digest 
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
+            object_id,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if let Some(version) = version {
+                format!("AND version = {}", version)
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        Ok(pg_pool_conn.build_transaction()
+            .read_only()
+            .run(|conn| {
+                diesel::sql_query(sql_query).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transaction digests by input object ID {} and version {:?} with start_sequence {:?} and limit {} and err: {:?}",
+                object_id, version, start_sequence, limit, e
+            ))
+        })?.into_iter().map(|table: TempDigestTable| table.digest_name ).collect())
+    }
+
+    fn get_transaction_digest_page_by_move_call(
+        &self,
+        package_name: String,
+        module_name: Option<String>,
+        function_name: Option<String>,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id 
+                FROM move_calls
+                WHERE move_package = '{}' {} {} {}
+                GROUP BY transaction_digest 
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
+            package_name,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if let Some(module_name) = module_name.clone() {
+                format!("AND move_module = '{}'", module_name)
+            } else {
+                "".to_string()
+            },
+            if let Some(function_name) = function_name.clone() {
+                format!("AND move_function = '{}'", function_name)
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
+        Ok(pg_pool_conn.build_transaction()
+            .read_only()
+            .run(|conn| {
+                diesel::sql_query(sql_query).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading transaction digests with package_name {} module_name {:?} and function_name {:?} and start_sequence {:?} and limit {} and err: {:?}",
+                    package_name, module_name, function_name, start_sequence, limit, e
+                ))
+        })?.into_iter().map(|table: TempDigestTable| table.digest_name ).collect())
+    }
+
     fn get_transaction_digest_page_by_recipient_address(
         &self,
         recipient_address: String,
@@ -617,38 +713,30 @@ impl IndexerStore for PgIndexerStore {
         limit: usize,
         is_descending: bool,
     ) -> Result<Vec<String>, IndexerError> {
-        #[derive(QueryableByName, Debug, Clone)]
-        struct TempDigestTable {
-            #[diesel(sql_type = VarChar)]
-            digest_name: String,
-        }
-
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let sql_query = format!(
+            "SELECT transaction_digest as digest_name FROM (
+                SELECT transaction_digest, max(id) AS max_id
+                FROM recipients
+                WHERE recipient = '{}' {} GROUP BY transaction_digest
+                ORDER BY max_id {} LIMIT {}
+            ) AS t",
+            recipient_address,
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    format!("AND id < {}", start_sequence)
+                } else {
+                    format!("AND id > {}", start_sequence)
+                }
+            } else {
+                "".to_string()
+            },
+            if is_descending { "DESC" } else { "ASC" },
+            limit
+        );
         Ok(pg_pool_conn.build_transaction()
             .read_only()
             .run(|conn| {
-                let sql_query = format!(
-                    "SELECT transaction_digest as digest_name FROM (
-                        SELECT transaction_digest, max(id) AS max_id 
-                        FROM recipients WHERE recipient = '{}' {} GROUP BY transaction_digest ORDER BY max_id {} LIMIT {}
-                    ) AS t",
-                    recipient_address.clone(),
-                    if let Some(start_sequence) = start_sequence {
-                        if is_descending {
-                            format!("AND id < {}", start_sequence)
-                        } else {
-                            format!("AND id > {}", start_sequence)
-                        }
-                    } else {
-                        "".to_string()
-                    },
-                    if is_descending {
-                        "DESC"
-                    } else {
-                        "ASC"
-                    },
-                    limit
-                );
                 diesel::sql_query(sql_query).load(conn)
             })
             .map_err(|e| {
@@ -682,6 +770,20 @@ impl IndexerStore for PgIndexerStore {
             })
     }
 
+    fn get_total_address_number(&self) -> Result<u64, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let total_addresses = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                addresses::table
+                    .select(count(addresses::account_address))
+                    .first::<i64>(conn)
+            })
+            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))?;
+        Ok(total_addresses as u64)
+    }
+
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
         let TemporaryCheckpointStore {
             checkpoint,
@@ -690,8 +792,9 @@ impl IndexerStore for PgIndexerStore {
             objects_changes,
             addresses,
             packages,
+            input_objects,
             move_calls,
-            recipients, // TODO: store raw object
+            recipients,
         } = data;
 
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
@@ -753,10 +856,15 @@ impl IndexerStore for PgIndexerStore {
                                 objects::checkpoint.eq(excluded(objects::checkpoint)),
                                 objects::version.eq(excluded(objects::version)),
                                 objects::object_digest.eq(excluded(objects::object_digest)),
+                                objects::owner_type.eq(excluded(objects::owner_type)),
                                 objects::owner_address.eq(excluded(objects::owner_address)),
-                                objects::previous_transaction
-                                    .eq(excluded(objects::previous_transaction)),
+                                objects::initial_shared_version.eq(excluded(objects::initial_shared_version)),
+                                objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                                objects::object_type.eq(excluded(objects::object_type)),
                                 objects::object_status.eq(excluded(objects::object_status)),
+                                objects::has_public_transfer.eq(excluded(objects::has_public_transfer)),
+                                objects::storage_rebate.eq(excluded(objects::storage_rebate)),
+                                objects::bcs.eq(excluded(objects::bcs)),
                             ))
                             .execute(conn)
                     })
@@ -863,6 +971,26 @@ impl IndexerStore for PgIndexerStore {
                 })?;
         }
 
+        // Commit indexed input objects
+        for input_objects_chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| {
+                    diesel::insert_into(input_objects::table)
+                        .values(input_objects_chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)
+                })
+                .map_err(|e| {
+                    IndexerError::PostgresWriteError(format!(
+                        "Failed writing input_objects to PostgresDB with error: {:?}",
+                        e
+                    ))
+                })?;
+        }
+
         // Commit indexed recipients
         for recipients_chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE) {
             pg_pool_conn
@@ -890,6 +1018,18 @@ impl IndexerStore for PgIndexerStore {
             .serializable()
             .read_write()
             .run(|conn| {
+                // update epoch transaction count
+                let sql = "UPDATE epochs e1
+SET epoch_total_transactions = e2.epoch_total_transactions + $1
+FROM epochs e2
+WHERE e1.epoch = e2.epoch
+  AND e1.epoch = $2;";
+                diesel::sql_query(sql)
+                    .bind::<BigInt, _>(checkpoint.transactions.len() as i64)
+                    .bind::<BigInt, _>(checkpoint.epoch)
+                    .as_query()
+                    .execute(conn)?;
+
                 diesel::insert_into(checkpoints::table)
                     .values(checkpoint)
                     .on_conflict_do_nothing()
@@ -904,23 +1044,148 @@ impl IndexerStore for PgIndexerStore {
     }
 
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
-        // TODO: create new partition on epoch change
-        self.partition_manager.advance_epoch(data.epoch_id + 1)
-    }
+        self.partition_manager
+            .advance_epoch(data.new_epoch.epoch as u64)?;
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| {
+                if let Some(last_epoch) = &data.last_epoch {
+                    diesel::insert_into(epochs::table)
+                        .values(last_epoch)
+                        .on_conflict(epochs::epoch)
+                        .do_update()
+                        .set((
+                            epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
+                            epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
+                            epochs::protocol_version.eq(excluded(epochs::protocol_version)),
+                            epochs::reference_gas_price.eq(excluded(epochs::reference_gas_price)),
+                            epochs::total_stake.eq(excluded(epochs::total_stake)),
+                            epochs::storage_fund_reinvestment
+                                .eq(excluded(epochs::storage_fund_reinvestment)),
+                            epochs::storage_charge.eq(excluded(epochs::storage_charge)),
+                            epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
+                            epochs::storage_fund_balance.eq(excluded(epochs::storage_fund_balance)),
+                            epochs::stake_subsidy_amount.eq(excluded(epochs::stake_subsidy_amount)),
+                            epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
+                            epochs::total_stake_rewards_distributed
+                                .eq(excluded(epochs::total_stake_rewards_distributed)),
+                            epochs::leftover_storage_fund_inflow
+                                .eq(excluded(epochs::leftover_storage_fund_inflow)),
+                        ))
+                        .execute(conn)?;
+                }
+                diesel::insert_into(epochs::table)
+                    .values(&data.new_epoch)
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
 
-    fn log_errors(&self, errors: Vec<IndexerError>) -> Result<(), IndexerError> {
-        if !errors.is_empty() {
-            let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-            let new_error_logs = errors.into_iter().map(|e| e.into()).collect();
-            if let Err(e) = commit_error_logs(&mut pg_pool_conn, new_error_logs) {
-                error!("Failed writing error logs with error {:?}", e);
-            }
-        }
+                diesel::insert_into(system_states::table)
+                    .values(&data.system_state)
+                    .on_conflict_do_nothing()
+                    .execute(conn)?;
+
+                diesel::insert_into(validators::table)
+                    .values(&data.validators)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed writing epoch to PostgresDB with error: {:?}",
+                    e
+                ))
+            })?;
         Ok(())
     }
 
     fn module_cache(&self) -> &Self::ModuleCache {
-        todo!()
+        &self.module_cache
+    }
+
+    fn get_epochs(
+        &self,
+        cursor: Option<EpochId>,
+        limit: usize,
+    ) -> Result<Vec<EpochInfo>, IndexerError> {
+        let id = cursor.map(|id| id as i64).unwrap_or(-1);
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let epoch_info :Vec<DBEpochInfo> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                epochs_dsl::epochs.filter(epochs::epoch.gt(id)).order_by(epochs::epoch.asc())
+                    .limit(limit as i64).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let validators : Vec<DBValidatorSummary> = pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                validators::dsl::validators.filter(validators::epoch.gt(id)).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let mut validators =
+            validators
+                .into_iter()
+                .fold(BTreeMap::<i64, Vec<_>>::new(), |mut acc, v| {
+                    acc.entry(v.epoch).or_default().push(v);
+                    acc
+                });
+
+        epoch_info
+            .into_iter()
+            .map(|info| {
+                let epoch = info.epoch;
+                info.to_epoch_info(validators.remove(&epoch).unwrap_or_default())
+            })
+            .collect()
+    }
+
+    fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
+        let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
+        let epoch_info :DBEpochInfo =   pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                epochs::dsl::epochs.order_by(epochs::epoch.desc())
+                    .first::<DBEpochInfo>(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        let validators : Vec<DBValidatorSummary> =   pg_pool_conn
+            .build_transaction()
+            .read_only()
+            .run(|conn| {
+                validators::dsl::validators.filter(validators::epoch.eq(epoch_info.epoch)).load(conn)
+            })
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
+                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    e
+                ))
+            })?;
+
+        epoch_info.to_epoch_info(validators)
     }
 }
 
@@ -941,6 +1206,7 @@ impl PartitionManager {
         );
         Ok(manager)
     }
+
     fn advance_epoch(&self, next_epoch_id: EpochId) -> Result<(), IndexerError> {
         let tables = self.get_table_partitions()?;
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;

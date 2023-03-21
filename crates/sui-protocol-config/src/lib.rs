@@ -155,7 +155,7 @@ pub struct ProtocolConfig {
     /// Maximum size of serialized transaction effects for system transactions.
     max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
 
-    /// Maximum number of gas payment objets for a transaction.
+    /// Maximum number of gas payment objects for a transaction.
     max_gas_payment_objects: Option<u32>,
 
     /// Maximum number of modules in a Publish transaction.
@@ -240,10 +240,10 @@ pub struct ProtocolConfig {
     max_num_deleted_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
-    max_num_transfered_move_object_ids: Option<u64>,
+    max_num_transferred_move_object_ids: Option<u64>,
 
     /// Maximum number of IDs that a single system transaction can transfer. Enforced by the VM during execution.
-    max_num_transfered_move_object_ids_system_tx: Option<u64>,
+    max_num_transferred_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
@@ -365,6 +365,23 @@ pub struct ProtocolConfig {
     event_value_size_derivation_cost_per_byte: Option<u64>,
     event_tag_size_derivation_cost_per_byte: Option<u64>,
     event_emit_cost_per_byte: Option<u64>,
+
+    // Crypto natives
+
+    // ed25519
+    ed25519_ed25519_verify_cost_base: Option<u64>,
+    ed25519_ed25519_verify_msg_cost_per_byte: Option<u64>,
+    ed25519_ed25519_verify_msg_cost_per_block: Option<u64>,
+
+    // hash::blake2b256
+    hash_blake2b256_cost_base: Option<u64>,
+    hash_blake2b256_data_cost_per_byte: Option<u64>,
+    hash_blake2b256_data_cost_per_block: Option<u64>,
+
+    // hash::keccak256
+    hash_keccak256_cost_base: Option<u64>,
+    hash_keccak256_data_cost_per_byte: Option<u64>,
+    hash_keccak256_data_cost_per_block: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -496,12 +513,12 @@ impl ProtocolConfig {
         self.max_num_deleted_move_object_ids_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_transfered_move_object_ids(&self) -> u64 {
-        self.max_num_transfered_move_object_ids
+    pub fn max_num_transferred_move_object_ids(&self) -> u64 {
+        self.max_num_transferred_move_object_ids
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_transfered_move_object_ids_system_tx(&self) -> u64 {
-        self.max_num_transfered_move_object_ids_system_tx
+    pub fn max_num_transferred_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_transferred_move_object_ids_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_event_emit_size(&self) -> u64 {
@@ -623,6 +640,40 @@ impl ProtocolConfig {
     pub fn event_emit_cost_per_byte(&self) -> u64 {
         self.event_emit_cost_per_byte.expect(CONSTANT_ERR_MSG)
     }
+    pub fn ed25519_ed25519_verify_cost_base(&self) -> u64 {
+        self.ed25519_ed25519_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ed25519_ed25519_verify_msg_cost_per_byte(&self) -> u64 {
+        self.ed25519_ed25519_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ed25519_ed25519_verify_msg_cost_per_block(&self) -> u64 {
+        self.ed25519_ed25519_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_cost_base(&self) -> u64 {
+        self.hash_blake2b256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_data_cost_per_byte(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_data_cost_per_block(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_cost_base(&self) -> u64 {
+        self.hash_keccak256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_byte(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_block(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
 
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
@@ -717,7 +768,7 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
-                // will be overwitten before being returned
+                // will be overwritten before being returned
                 version,
 
                 // All flags are disabled in V1
@@ -755,8 +806,8 @@ impl ProtocolConfig {
                 max_num_new_move_object_ids_system_tx: Some(2048 * 16),
                 max_num_deleted_move_object_ids: Some(2048),
                 max_num_deleted_move_object_ids_system_tx: Some(2048 * 16),
-                max_num_transfered_move_object_ids: Some(2048),
-                max_num_transfered_move_object_ids_system_tx: Some(2048 * 16),
+                max_num_transferred_move_object_ids: Some(2048),
+                max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
                 max_event_emit_size: Some(250 * 1024),
                 max_move_vector_len: Some(256 * 1024),
                 object_runtime_max_num_cached_objects: Some(1000),
@@ -804,6 +855,19 @@ impl ProtocolConfig {
                 event_tag_size_derivation_cost_per_byte: Some(1_000),
                 // Emitting an event is cheap since its a vector push
                 event_emit_cost_per_byte: Some(1_000),
+                // Crypto
+                // ed25519
+                ed25519_ed25519_verify_cost_base: Some(52),
+                ed25519_ed25519_verify_msg_cost_per_byte: Some(0),
+                ed25519_ed25519_verify_msg_cost_per_block: Some(0),
+                // hash::blake2b256
+                hash_blake2b256_cost_base: Some(52),
+                hash_blake2b256_data_cost_per_byte: Some(0),
+                hash_blake2b256_data_cost_per_block: Some(0),
+                // hash::keccak256
+                hash_keccak256_cost_base: Some(52),
+                hash_keccak256_data_cost_per_byte: Some(0),
+                hash_keccak256_data_cost_per_block: Some(0)
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
@@ -851,6 +915,9 @@ impl ProtocolConfig {
     }
     pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
         self.buffer_stake_for_protocol_upgrade_bps = Some(b)
+    }
+    pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
+        self.feature_flags.package_upgrades = val
     }
 }
 

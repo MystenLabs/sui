@@ -209,7 +209,9 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
 
         self.sender.send(message).await.unwrap();
 
-        Ok(anemo::Response::new(SendCertificateResponse {}))
+        Ok(anemo::Response::new(SendCertificateResponse {
+            accepted: true,
+        }))
     }
 
     async fn request_vote(

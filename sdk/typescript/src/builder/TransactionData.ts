@@ -75,9 +75,9 @@ function prepareSuiAddress(address: string) {
 const TRANSACTION_DATA_MAX_SIZE = 128 * 1024;
 
 export class TransactionDataBuilder {
-  static fromBytes(bytes: Uint8Array) {
-    const data = builder.de('TransactionData', bytes);
-    const programmableTx = data?.V1?.kind?.ProgrammableTransaction;
+  static fromKindBytes(bytes: Uint8Array) {
+    const kind = builder.de('TransactionKind', bytes);
+    const programmableTx = kind?.ProgrammableTransaction;
     if (!programmableTx) {
       throw new Error('Unable to deserialize from bytes.');
     }
@@ -85,9 +85,7 @@ export class TransactionDataBuilder {
     const serialized = create(
       {
         version: 1,
-        sender: data.V1.sender,
-        expiration: data.V1.expiration,
-        gasConfig: data.V1.gasData,
+        gasConfig: {},
         inputs: programmableTx.inputs.map((value: unknown, index: number) =>
           create(
             {
@@ -104,9 +102,40 @@ export class TransactionDataBuilder {
       SerializedTransactionDataBuilder,
     );
 
-    const transactionData = new TransactionDataBuilder();
-    Object.assign(transactionData, serialized);
-    return transactionData;
+    return TransactionDataBuilder.restore(serialized);
+  }
+
+  static fromBytes(bytes: Uint8Array) {
+    const rawData = builder.de('TransactionData', bytes);
+    const data = rawData?.V1;
+    const programmableTx = data?.kind?.ProgrammableTransaction;
+    if (!data || !programmableTx) {
+      throw new Error('Unable to deserialize from bytes.');
+    }
+
+    const serialized = create(
+      {
+        version: 1,
+        sender: data.sender,
+        expiration: data.expiration,
+        gasConfig: data.gasData,
+        inputs: programmableTx.inputs.map((value: unknown, index: number) =>
+          create(
+            {
+              kind: 'Input',
+              value,
+              index,
+              type: is(value, PureCallArg) ? 'pure' : 'object',
+            },
+            TransactionInput,
+          ),
+        ),
+        commands: programmableTx.commands,
+      },
+      SerializedTransactionDataBuilder,
+    );
+
+    return TransactionDataBuilder.restore(serialized);
   }
 
   static restore(data: SerializedTransactionDataBuilder) {

@@ -9,11 +9,9 @@ publish = false
 [dependencies]
 match_opt = "0.1.2"
 serde = { version = "1.0.144", features = ["derive"] }
-serde_with = "2.1.0"
 serde_json = "1.0.88"
 thiserror = "1.0.35"
 tracing = "0.1.36"
-arc-swap = { version = "1.5.1", features = ["serde"] }
 
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }

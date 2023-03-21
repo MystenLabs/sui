@@ -31,7 +31,7 @@ use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::messages::VerifiedTransaction;
+use sui_types::messages::{TransactionDataAPI, VerifiedTransaction};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
 use tokio::{time, time::Instant};
@@ -142,8 +142,16 @@ struct Stats {
 }
 
 type RetryType = Box<(VerifiedTransaction, Box<dyn Payload>)>;
+
 enum NextOp {
-    Response(Option<(Duration, Box<dyn Payload>)>),
+    Response {
+        /// Time taken to execute the tx and produce effects
+        latency: Duration,
+        /// Number of commands in the executed transction
+        num_commands: u16,
+        /// The payload updated with the effects of the transaction
+        payload: Box<dyn Payload>,
+    },
     Retry(RetryType),
 }
 
@@ -308,8 +316,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let runner = tokio::spawn(async move {
                 cloned_barrier.wait().await;
                 let start_time = print_and_start_benchmark().await;
-                let mut num_success = 0;
-                let mut num_error = 0;
+                let mut num_success_txes = 0;
+                let mut num_error_txes = 0;
+                let mut num_success_cmds = 0;
                 let mut num_no_gas = 0;
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted = 0;
@@ -337,8 +346,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     num_submitted,
                                     bench_stats: BenchmarkStats {
                                         duration: stat_start_time.elapsed(),
-                                        num_error,
-                                        num_success,
+                                        num_error_txes,
+                                        num_success_txes,
+                                        num_success_cmds,
                                         latency_ms: HistogramWrapper {histogram: latency_histogram.clone()},
                                     },
                                 })
@@ -346,8 +356,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             {
                                 debug!("Failed to update stat!");
                             }
-                            num_success = 0;
-                            num_error = 0;
+                            num_success_txes = 0;
+                            num_error_txes = 0;
+                            num_success_cmds = 0;
                             num_no_gas = 0;
                             num_submitted = 0;
                             stat_start_time = Instant::now();
@@ -358,7 +369,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             // If a retry is available send that
                             // (sending retries here subjects them to our rate limit)
                             if let Some(mut b) = retry_queue.pop_front() {
-                                num_error += 1;
+                                num_error_txes += 1;
                                 num_submitted += 1;
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
@@ -388,11 +399,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 if let Some(sig_info) = effects.quorum_sig() {
                                                     sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
                                                 }
+                                                let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
                                                 b.1.make_new_payload(&effects);
-                                                NextOp::Response(Some((
-                                                    latency,
-                                                    b.1,
-                                                )))
+                                                NextOp::Response { latency, num_commands, payload: b.1 }
                                             }
                                             Err(err) => {
                                                 error!("{}", err);
@@ -441,10 +450,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             payload.make_new_payload(&effects);
-                                            NextOp::Response(Some((
-                                                latency,
-                                                payload,
-                                            )))
+                                            let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
+                                            NextOp::Response { latency, num_commands, payload }
                                         }
                                         Err(err) => {
                                             error!("Retry due to error: {}", err);
@@ -465,19 +472,16 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                         break;
                                     }
                                 }
-                                NextOp::Response(Some((latency, new_payload))) => {
-                                    num_success += 1;
+                                NextOp::Response { latency, num_commands, payload } => {
+                                    num_success_txes += 1;
+                                    num_success_cmds += num_commands as u64;
                                     num_in_flight -= 1;
-                                    free_pool.push(new_payload);
+                                    free_pool.push(payload);
                                     latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
                                     BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
                                     if progress_cloned.is_finished() {
                                         break;
                                     }
-                                }
-                                NextOp::Response(None) => {
-                                    // num_in_flight -= 1;
-                                    unreachable!();
                                 }
                             }
                         }
@@ -492,8 +496,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                         num_submitted,
                         bench_stats: BenchmarkStats {
                             duration: stat_start_time.elapsed(),
-                            num_error,
-                            num_success,
+                            num_error_txes,
+                            num_success_txes,
+                            num_success_cmds,
                             latency_ms: HistogramWrapper {
                                 histogram: latency_histogram,
                             },
@@ -510,8 +515,9 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let benchmark_stat_task = tokio::spawn(async move {
             let mut benchmark_stat = BenchmarkStats {
                 duration: Duration::ZERO,
-                num_error: 0,
-                num_success: 0,
+                num_error_txes: 0,
+                num_success_txes: 0,
+                num_success_cmds: 0,
                 latency_ms: HistogramWrapper {
                     histogram: hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap(),
                 },
@@ -533,8 +539,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 benchmark_stat.update(start.elapsed(), &sample_stat.bench_stats);
                 stat_collection.insert(id, sample_stat);
                 let mut total_qps: f32 = 0.0;
-                let mut num_success: u64 = 0;
-                let mut num_error: u64 = 0;
+                let mut total_cps: f32 = 0.0;
+                let mut num_success_txes: u64 = 0;
+                let mut num_error_txes: u64 = 0;
+                let mut num_success_cmds = 0;
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
 
@@ -542,10 +550,12 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 let mut num_submitted: u64 = 0;
                 let mut num_no_gas = 0;
                 for (_, v) in stat_collection.iter() {
-                    total_qps +=
-                        v.bench_stats.num_success as f32 / v.bench_stats.duration.as_secs() as f32;
-                    num_success += v.bench_stats.num_success;
-                    num_error += v.bench_stats.num_error;
+                    let duration = v.bench_stats.duration.as_secs() as f32;
+                    total_qps += v.bench_stats.num_success_txes as f32 / duration;
+                    total_cps += v.bench_stats.num_success_cmds as f32 / duration;
+                    num_success_txes += v.bench_stats.num_success_txes;
+                    num_error_txes += v.bench_stats.num_error_txes;
+                    num_success_cmds += v.bench_stats.num_success_cmds;
                     num_no_gas += v.num_no_gas;
                     num_submitted += v.num_submitted;
                     num_in_flight += v.num_in_flight;
@@ -553,15 +563,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                         .add(&v.bench_stats.latency_ms.histogram)
                         .unwrap();
                 }
-                let denom = num_success + num_error;
+                let denom = num_success_txes + num_error_txes;
                 let _error_rate = if denom > 0 {
-                    num_error as f32 / denom as f32
+                    num_error_txes as f32 / denom as f32
                 } else {
                     0.0
                 };
                 counter += 1;
                 if counter % num_workers == 0 {
-                    stat = format!("Throughput = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, num_success = {}, num_error = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, latency_histogram.min(), latency_histogram.value_at_quantile(0.5), latency_histogram.value_at_quantile(0.99), latency_histogram.max(), num_success, num_error, num_no_gas, num_submitted, num_in_flight);
+                    stat = format!("TPS = {}, CPS = {}, latency_ms(min/p50/p99/max) = {}/{}/{}/{}, num_success_tx = {}, num_error_tx = {}, num_success_cmds = {}, no_gas = {}, submitted = {}, in_flight = {}", total_qps, total_cps, latency_histogram.min(), latency_histogram.value_at_quantile(0.5), latency_histogram.value_at_quantile(0.99), latency_histogram.max(), num_success_txes, num_error_txes, num_success_cmds, num_no_gas, num_submitted, num_in_flight);
                     if show_progress {
                         eprintln!("{}", stat);
                     }

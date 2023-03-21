@@ -21,7 +21,10 @@ module sui::validator_set {
     use sui::voting_power;
     use sui::validator_wrapper::ValidatorWrapper;
     use sui::validator_wrapper;
+    use sui::bag::Bag;
+    use sui::bag;
 
+    friend sui::genesis;
     friend sui::sui_system_state_inner;
 
     #[test_only]
@@ -62,6 +65,9 @@ module sui::validator_set {
 
         /// Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
         at_risk_validators: VecMap<address, u64>,
+
+        /// Any extra fields that's not defined statically.
+        extra_fields: Bag,
     }
 
     /// Event containing staking and rewards related information of
@@ -139,6 +145,7 @@ module sui::validator_set {
             inactive_validators: table::new(ctx),
             validator_candidates: table::new(ctx),
             at_risk_validators: vec_map::empty(),
+            extra_fields: bag::new(ctx),
         };
         voting_power::set_voting_power(&mut validators.active_validators);
         validators
@@ -533,10 +540,14 @@ module sui::validator_set {
     /// It differs from `is_active_validator_by_sui_address` in that the former checks
     /// only the sui address but this function looks at more metadata.
     fun is_duplicate_with_active_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-        let len = vector::length(&self.active_validators);
+        is_duplicate_validator(&self.active_validators, new_validator)
+    }
+
+    public(friend) fun is_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
+        let len = vector::length(validators);
         let i = 0;
         while (i < len) {
-            let v = vector::borrow(&self.active_validators, i);
+            let v = vector::borrow(validators, i);
             if (validator::is_duplicate(v, new_validator)) {
                 return true
             };
@@ -617,7 +628,7 @@ module sui::validator_set {
         res
     }
 
-    fun get_validator_mut(
+    public(friend) fun get_validator_mut(
         validators: &mut vector<Validator>,
         validator_address: address,
     ): &mut Validator {

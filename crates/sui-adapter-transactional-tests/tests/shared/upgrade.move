@@ -20,21 +20,21 @@ module t::m {
         let o = Obj { id: object::new(ctx) };
         sui::dynamic_field::add(&mut o.id, 0, Obj { id: object::new(ctx) });
         sui::dynamic_object_field::add(&mut o.id, 0, Obj { id: object::new(ctx) });
-        transfer::transfer(o, sender(ctx))
+        transfer::public_transfer(o, sender(ctx))
     }
 
     public entry fun share(o: Obj) {
-        transfer::share_object(o)
+        transfer::public_share_object(o)
     }
 
     public entry fun share_wrapped(o: &mut Obj) {
         let inner: Obj = sui::dynamic_field::remove(&mut o.id, 0);
-        transfer::share_object(inner)
+        transfer::public_share_object(inner)
     }
 
     public entry fun share_child(o: &mut Obj) {
         let inner: Obj = sui::dynamic_object_field::remove(&mut o.id, 0);
-        transfer::share_object(inner)
+        transfer::public_share_object(inner)
     }
 
 }

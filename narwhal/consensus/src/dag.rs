@@ -134,7 +134,7 @@ impl InnerDag {
         loop {
             tokio::select! {
                  Some(certificate) = self.rx_primary.recv() => {
-                    // The Core (process_certificate) guarantees the certificate
+                    // The Synchronizer (process_certificate) guarantees the certificate
                     // has gone through causal completion => this is ready to be inserted
                     let _ = self.insert(certificate);
                 }

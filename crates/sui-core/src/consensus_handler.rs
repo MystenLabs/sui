@@ -6,7 +6,10 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointService;
+
+use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
@@ -15,15 +18,18 @@ use narwhal_types::ConsensusOutput;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
+use sui_types::committee::Committee;
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
 use sui_types::storage::ParentSync;
+
 use tracing::{debug, error, instrument};
 
 pub struct ConsensusHandler<T> {
@@ -34,6 +40,10 @@ pub struct ConsensusHandler<T> {
     checkpoint_service: Arc<CheckpointService>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     parent_sync_store: T,
+    /// Reputation scores used by consensus adapter that we update, forwarded from consensus
+    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    /// The committee used to do stake computations for deciding set of low scoring authorities
+    committee: Arc<Committee>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -50,6 +60,8 @@ impl<T> ConsensusHandler<T> {
         checkpoint_service: Arc<CheckpointService>,
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
+        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+        committee: Arc<Committee>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
@@ -60,6 +72,8 @@ impl<T> ConsensusHandler<T> {
             last_seen,
             checkpoint_service,
             parent_sync_store,
+            low_scoring_authorities,
+            committee,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
@@ -120,6 +134,14 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             SequencedConsensusTransactionKind::System(prologue_transaction),
             Arc::new(consensus_output.sub_dag.leader.clone()),
         ));
+
+        // TODO: spawn a separate task for this as an optimization
+        update_low_scoring_authorities(
+            self.low_scoring_authorities.clone(),
+            self.committee.clone(),
+            consensus_output.sub_dag.reputation_score.clone(),
+            &self.metrics,
+        );
 
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author.clone();

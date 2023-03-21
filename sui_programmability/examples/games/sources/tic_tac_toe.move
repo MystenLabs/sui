@@ -128,7 +128,7 @@ module games::tic_tac_toe {
             game_id: *&cap.game_id,
             mark_id: object::id(&mark),
         });
-        transfer::transfer(mark, game_address);
+        transfer::public_transfer(mark, game_address);
     }
 
     public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
@@ -154,9 +154,9 @@ module games::tic_tac_toe {
             // Notify the server that the game ended so that it can delete the game.
             event::emit(GameEndEvent { game_id: object::id(game) });
             if (game.game_status == X_WIN) {
-                transfer::transfer( Trophy { id: object::new(ctx) }, *&game.x_address);
+                transfer::transfer(Trophy { id: object::new(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                transfer::transfer( Trophy { id: object::new(ctx) }, *&game.o_address);
+                transfer::transfer(Trophy { id: object::new(ctx) }, *&game.o_address);
             }
         }
     }

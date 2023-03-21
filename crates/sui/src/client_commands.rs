@@ -37,8 +37,8 @@ use sui_framework_build::compiled_package::{
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiObjectData, SuiObjectResponse, SuiRawData, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    DynamicFieldPage, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -482,10 +482,10 @@ impl SuiClientCommands {
                 let resolution_graph = config.resolution_graph(&package_path)?;
                 let dependencies = gather_dependencies(&resolution_graph);
 
-                check_invalid_dependencies(dependencies.invalid)?;
+                check_invalid_dependencies(&dependencies.invalid)?;
 
                 if !with_unpublished_dependencies {
-                    check_unpublished_dependencies(dependencies.unpublished)?;
+                    check_unpublished_dependencies(&dependencies.unpublished)?;
                 };
 
                 let compiled_package = build_from_resolution_graph(
@@ -528,7 +528,13 @@ impl SuiClientCommands {
 
                 let data = client
                     .transaction_builder()
-                    .publish(sender, compiled_modules, gas, gas_budget)
+                    .publish(
+                        sender,
+                        compiled_modules,
+                        dependencies.published.into_values().collect(),
+                        gas,
+                        gas_budget,
+                    )
                     .await?;
                 let signature =
                     context
@@ -811,10 +817,11 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let address_object = client
                     .read_api()
-                    // TODO: (jian) fill in later
                     .get_owned_objects(
                         address,
-                        Some(SuiObjectDataOptions::full_content()),
+                        Some(SuiObjectResponseQuery::new_with_options(
+                            SuiObjectDataOptions::full_content(),
+                        )),
                         None,
                         None,
                         None,
@@ -1133,10 +1140,9 @@ impl WalletContext {
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout)
                 .await?;
-
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
-                println!("{}", format!("[warn] {e}").yellow().bold());
+                eprintln!("{}", format!("[warn] {e}").yellow().bold());
             }
             self.client.write().await.insert(client).clone()
         })
@@ -1179,12 +1185,13 @@ impl WalletContext {
         let client = self.get_client().await?;
         let objects = client
             .read_api()
-            // TODO: (jian) fill in later
             .get_owned_objects(
                 address,
-                Some(SuiObjectDataOptions::full_content()),
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
                 None,
-                Some(256),
+                None,
                 None,
             )
             .await?
@@ -1271,7 +1278,10 @@ impl WalletContext {
                 SuiTransactionResponseOptions::new()
                     .with_effects()
                     .with_events()
-                    .with_input(),
+                    .with_input()
+                    .with_events()
+                    .with_object_changes()
+                    .with_balance_changes(),
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)
@@ -1347,7 +1357,6 @@ impl Display for SuiClientCommandResult {
                 )?;
                 writeln!(writer, "{}", ["-"; 165].join(""))?;
                 for oref in object_refs {
-                    // TODO (jian): fix unwrap and clone later
                     let obj = oref.clone().into_object().unwrap();
 
                     let owner_type = match obj.owner {
@@ -1413,13 +1422,13 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
-                writeln!(writer, " {0: ^42} | {1: ^11}", "Object ID", "Gas Value")?;
+                writeln!(writer, " {0: ^66} | {1: ^11}", "Object ID", "Gas Value")?;
                 writeln!(
                     writer,
-                    "----------------------------------------------------------------------"
+                    "----------------------------------------------------------------------------------"
                 )?;
                 for gas in gases {
-                    writeln!(writer, " {0: ^42} | {1: ^11}", gas.id(), gas.value())?;
+                    writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
             SuiClientCommandResult::SplitCoin(response) => {
@@ -1545,18 +1554,34 @@ fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
     }
 }
 
+// TODOD(chris): only print out the full response when `--verbose` is provided
 pub fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
     writeln!(writer, "{}", response.digest)?;
     writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
     if let Some(t) = &response.transaction {
-        write!(writer, "{}", t)?;
+        writeln!(writer, "{}", t)?;
     }
 
     writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
     if let Some(e) = &response.effects {
-        write!(writer, "{}", e)?;
+        writeln!(writer, "{}", e)?;
+    }
+
+    writeln!(writer, "{}", "----- Events ----".bold())?;
+    if let Some(e) = &response.events {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
+
+    writeln!(writer, "{}", "----- Object changes ----".bold())?;
+    if let Some(e) = &response.object_changes {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
+
+    writeln!(writer, "{}", "----- Balance changes ----".bold())?;
+    if let Some(e) = &response.balance_changes {
+        writeln!(writer, "{:#?}", json!(e))?;
     }
     Ok(writer)
 }

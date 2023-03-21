@@ -43,11 +43,6 @@
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "pnpm lint"
-    }
-  },
   "prettier": {
     "printWidth": 80,
     "semi": true,
@@ -72,14 +67,14 @@
   ],
   "devDependencies": {
     "@size-limit/preset-small-lib": "^8.2.4",
+    "@types/node": "^18.15.3",
     "@types/tmp": "^0.2.3",
     "cross-env": "^7.0.3",
-    "eslint": "^8.35.0",
-    "eslint-config-prettier": "^8.6.0",
+    "eslint": "^8.36.0",
+    "eslint-config-prettier": "^8.7.0",
     "eslint-config-react-app": "^7.0.1",
     "eslint-plugin-prettier": "^4.2.1",
-    "husky": "^7.0.4",
-    "mockttp": "^2.7.0",
+    "mockttp": "^3.7.0",
     "prettier": "^2.8.4",
     "size-limit": "^8.2.4",
     "tmp": "^0.2.1",
@@ -87,9 +82,9 @@
     "ts-retry-promise": "^0.7.0",
     "tsup": "^6.6.3",
     "typedoc": "^0.23.26",
-    "typescript": "^4.9.5",
-    "vite": "^4.1.4",
-    "vitest": "^0.26.3",
+    "typescript": "^4.9.4",
+    "vite": "^4.2.0",
+    "vitest": "^0.29.3",
     "wait-on": "^7.0.1"
   },
   "dependencies": {

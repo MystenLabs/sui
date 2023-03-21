@@ -3,7 +3,7 @@
 
 import { toB58 } from '@mysten/bcs';
 import { describe, it, expect } from 'vitest';
-import { Transaction, Commands } from '..';
+import { Transaction, Commands, builder } from '..';
 import { Inputs } from '../Inputs';
 
 it('can construct and serialize an empty tranaction', () => {
@@ -13,7 +13,7 @@ it('can construct and serialize an empty tranaction', () => {
 
 it('can be serialized and deserialized to the same values', () => {
   const tx = new Transaction();
-  tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+  tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
   const serialized = tx.serialize();
   const tx2 = Transaction.from(serialized);
   expect(serialized).toEqual(tx2.serialize());
@@ -21,7 +21,7 @@ it('can be serialized and deserialized to the same values', () => {
 
 it('allows transfer with the result of split commands', () => {
   const tx = new Transaction();
-  const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+  const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
   tx.add(Commands.TransferObjects([coin], tx.object('0x2')));
 });
 
@@ -54,19 +54,29 @@ describe('offline build', () => {
 
   it('builds a split command', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(Inputs.Pure('u64', 100))));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
     await tx.build();
   });
 
-  it('infers the type of inputs', async () => {
+  it('can determine the type of inputs for built-in commands', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+    await tx.build();
+  });
+
+  it('supports pre-serialized inputs as Uint8Array', async () => {
+    const tx = setup();
+    const inputBytes = builder.ser('u64', 100n).toBytes();
+    // Use bytes directly in pure value:
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
+    // Use bytes in input helper:
+    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(inputBytes))]));
     await tx.build();
   });
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
     tx.add(
       Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
     );
@@ -75,9 +85,9 @@ describe('offline build', () => {
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          tx.pure(Inputs.Pure('string', 'foo')),
-          tx.pure(Inputs.Pure('string', 'bar')),
-          tx.pure(Inputs.Pure('string', 'baz')),
+          tx.pure(Inputs.Pure('foo', 'string')),
+          tx.pure(Inputs.Pure('bar', 'string')),
+          tx.pure(Inputs.Pure('baz', 'string')),
         ],
       }),
     );
@@ -86,7 +96,7 @@ describe('offline build', () => {
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoin(tx.gas, tx.pure(100)));
+    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
     tx.add(
       Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
     );
@@ -95,9 +105,9 @@ describe('offline build', () => {
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
-          tx.pure(Inputs.Pure('string', 'foo')),
-          tx.pure(Inputs.Pure('string', 'bar')),
-          tx.pure(Inputs.Pure('string', 'baz')),
+          tx.pure(Inputs.Pure('foo', 'string')),
+          tx.pure(Inputs.Pure('bar', 'string')),
+          tx.pure(Inputs.Pure('baz', 'string')),
         ],
       }),
     );
@@ -110,10 +120,10 @@ describe('offline build', () => {
   });
 });
 
-function ref(): { objectId: string; version: bigint; digest: string } {
+function ref(): { objectId: string; version: string; digest: string } {
   return {
     objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
-    version: BigInt((Math.random() * 10000).toFixed(0)),
+    version: String((Math.random() * 10000).toFixed(0)),
     digest: toB58(
       new Uint8Array([
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,

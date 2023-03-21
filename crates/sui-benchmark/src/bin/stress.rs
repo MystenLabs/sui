@@ -60,13 +60,13 @@ async fn main() -> Result<()> {
     };
 
     let max_num_new_move_object_ids = protocol_config.max_num_new_move_object_ids();
-    let max_num_transfered_move_object_ids = protocol_config.max_num_transfered_move_object_ids();
+    let max_num_transferred_move_object_ids = protocol_config.max_num_transferred_move_object_ids();
 
     if (opts.gas_request_chunk_size > max_num_new_move_object_ids)
-        || (opts.gas_request_chunk_size > max_num_transfered_move_object_ids)
+        || (opts.gas_request_chunk_size > max_num_transferred_move_object_ids)
     {
         eprintln!(
-            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transfered_move_object_ids}",
+            "`gas-request-chunk-size` must be less than the maximum number of new IDs {max_num_new_move_object_ids} and the maximum number of transferred IDs {max_num_transferred_move_object_ids}",
         );
     }
 
@@ -157,34 +157,41 @@ async fn main() -> Result<()> {
             .server_handle
             .join()
             .expect("Failed to join the server handle");
-        let (benchmark_stats, stress_stats) = joined.unwrap().unwrap();
-        let benchmark_table = benchmark_stats.to_table();
-        eprintln!("Benchmark Report:");
-        eprintln!("{}", benchmark_table);
+        match joined {
+            Ok(result) => match result {
+                Ok((benchmark_stats, stress_stats)) => {
+                    let benchmark_table = benchmark_stats.to_table();
+                    eprintln!("Benchmark Report:");
+                    eprintln!("{}", benchmark_table);
 
-        if stress_stat_collection {
-            eprintln!("Stress Performance Report:");
-            let stress_stats_table = stress_stats.to_table();
-            eprintln!("{}", stress_stats_table);
-        }
+                    if stress_stat_collection {
+                        eprintln!("Stress Performance Report:");
+                        let stress_stats_table = stress_stats.to_table();
+                        eprintln!("{}", stress_stats_table);
+                    }
 
-        if !prev_benchmark_stats_path.is_empty() {
-            let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
-            let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
-            let cmp = BenchmarkCmp {
-                new: &benchmark_stats,
-                old: &prev_stats,
-            };
-            let cmp_table = cmp.to_table();
-            eprintln!(
-                "Benchmark Comparison Report[{}]:",
-                prev_benchmark_stats_path
-            );
-            eprintln!("{}", cmp_table);
-        }
-        if !curr_benchmark_stats_path.is_empty() {
-            let serialized = serde_json::to_string(&benchmark_stats)?;
-            std::fs::write(curr_benchmark_stats_path, serialized)?;
+                    if !prev_benchmark_stats_path.is_empty() {
+                        let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
+                        let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
+                        let cmp = BenchmarkCmp {
+                            new: &benchmark_stats,
+                            old: &prev_stats,
+                        };
+                        let cmp_table = cmp.to_table();
+                        eprintln!(
+                            "Benchmark Comparison Report[{}]:",
+                            prev_benchmark_stats_path
+                        );
+                        eprintln!("{}", cmp_table);
+                    }
+                    if !curr_benchmark_stats_path.is_empty() {
+                        let serialized = serde_json::to_string(&benchmark_stats)?;
+                        std::fs::write(curr_benchmark_stats_path, serialized)?;
+                    }
+                }
+                Err(e) => eprintln!("{e}"),
+            },
+            Err(e) => eprintln!("{e:?}"),
         }
         Ok(())
     }

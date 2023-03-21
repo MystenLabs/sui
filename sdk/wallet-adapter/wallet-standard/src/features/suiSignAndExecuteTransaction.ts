@@ -32,15 +32,15 @@ export type SuiSignAndExecuteTransactionMethod = (
 /** Input for signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionInput
   extends SuiSignTransactionInput {
-  options?: SuiSignAndExecuteTransactionOptions;
+  /**
+   * `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
+   * Defaults to `WaitForLocalExecution` if options.showEffects or options.showEvents is true
+   */
+  requestType?: ExecuteTransactionRequestType;
+  /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
+  options?: SuiTransactionResponseOptions;
 }
 
 /** Output of signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionOutput
   extends SuiTransactionResponse {}
-
-/** Options for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionOptions {
-  requestType?: ExecuteTransactionRequestType;
-  contentOptions?: SuiTransactionResponseOptions;
-}

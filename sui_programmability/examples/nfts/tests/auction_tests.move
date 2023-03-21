@@ -31,7 +31,7 @@ module nfts::auction_tests {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
             let coin = coin::mint_for_testing<SUI>(100, ctx);
-            transfer::transfer(coin, bidder);
+            transfer::public_transfer(coin, bidder);
         };
     }
 

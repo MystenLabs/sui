@@ -3,7 +3,7 @@
 
 use crate::balance::Balance;
 use crate::base_types::{EpochId, ObjectID, SuiAddress};
-use crate::collection_types::{Table, TableVec, VecMap, VecSet};
+use crate::collection_types::{Bag, Table, TableVec, VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion};
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
@@ -34,6 +34,7 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 pub struct SystemParametersV1 {
     pub governance_start_epoch: u64,
     pub epoch_duration_ms: u64,
+    pub extra_fields: Bag,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -59,6 +60,7 @@ pub struct ValidatorMetadataV1 {
     pub next_epoch_p2p_address: Option<String>,
     pub next_epoch_primary_address: Option<String>,
     pub next_epoch_worker_address: Option<String>,
+    pub extra_fields: Bag,
 }
 
 #[derive(derivative::Derivative, Clone, Eq, PartialEq)]
@@ -271,6 +273,7 @@ pub struct ValidatorV1 {
     pub next_epoch_stake: u64,
     pub next_epoch_gas_price: u64,
     pub next_epoch_commission_rate: u64,
+    pub extra_fields: Bag,
 }
 
 impl ValidatorV1 {
@@ -307,6 +310,7 @@ impl ValidatorV1 {
                     next_epoch_p2p_address,
                     next_epoch_primary_address,
                     next_epoch_worker_address,
+                    extra_fields: _,
                 },
             verified_metadata: _,
             voting_power,
@@ -328,11 +332,13 @@ impl ValidatorV1 {
                     pending_stake,
                     pending_total_sui_withdraw,
                     pending_pool_token_withdraw,
+                    extra_fields: _,
                 },
             commission_rate,
             next_epoch_stake,
             next_epoch_gas_price,
             next_epoch_commission_rate,
+            extra_fields: _,
         } = self;
         SuiValidatorSummary {
             sui_address,
@@ -391,6 +397,7 @@ pub struct StakingPoolV1 {
     pub pending_stake: u64,
     pub pending_total_sui_withdraw: u64,
     pub pending_pool_token_withdraw: u64,
+    pub extra_fields: Bag,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
@@ -404,6 +411,7 @@ pub struct ValidatorSetV1 {
     pub inactive_validators: Table,
     pub validator_candidates: Table,
     pub at_risk_validators: VecMap<SuiAddress, u64>,
+    pub extra_fields: Bag,
 }
 
 /// Rust version of the Move sui::sui_system::SuiSystemStateInner type
@@ -421,6 +429,7 @@ pub struct SuiSystemStateInnerV1 {
     pub stake_subsidy: StakeSubsidyV1,
     pub safe_mode: bool,
     pub epoch_start_timestamp_ms: u64,
+    pub extra_fields: Bag,
     // TODO: Use getters instead of all pub.
 }
 
@@ -435,9 +444,24 @@ impl SuiSystemStateInnerV1 {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakeSubsidyV1 {
-    pub epoch_counter: u64,
+    /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
     pub balance: Balance,
-    pub current_epoch_amount: u64,
+
+    /// Count of the number of times stake subsidies have been distributed.
+    pub distribution_counter: u64,
+
+    /// The amount of stake subsidy to be drawn down per distribution.
+    /// This amount decays and decreases over time.
+    pub current_distribution_amount: u64,
+
+    /// Number of distributions to occur before the distribution amount decays.
+    pub stake_subsidy_period_length: u64,
+
+    /// The rate at which the distribution amount decays at the end of each
+    /// period. Expressed in basis points.
+    pub stake_subsidy_decrease_rate: u16,
+
+    pub extra_fields: Bag,
 }
 
 impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
@@ -480,6 +504,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 name,
                 NetworkMetadata {
                     network_address: verified_metadata.net_address.clone(),
+                    narwhal_primary_address: verified_metadata.primary_address.clone(),
                 },
             );
         }
@@ -558,12 +583,14 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         VecMap {
                             contents: at_risk_validators,
                         },
+                    extra_fields: _,
                 },
             storage_fund,
             parameters:
                 SystemParametersV1 {
                     governance_start_epoch,
                     epoch_duration_ms,
+                    extra_fields: _,
                 },
             reference_gas_price,
             validator_report_records:
@@ -572,12 +599,16 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 },
             stake_subsidy:
                 StakeSubsidyV1 {
-                    epoch_counter: stake_subsidy_epoch_counter,
                     balance: stake_subsidy_balance,
-                    current_epoch_amount: stake_subsidy_current_epoch_amount,
+                    distribution_counter: stake_subsidy_epoch_counter,
+                    current_distribution_amount: stake_subsidy_current_epoch_amount,
+                    stake_subsidy_period_length: _,
+                    stake_subsidy_decrease_rate: _,
+                    extra_fields: _,
                 },
             safe_mode,
             epoch_start_timestamp_ms,
+            extra_fields: _,
         } = self;
         SuiSystemStateSummary {
             epoch,
@@ -630,6 +661,7 @@ impl Default for SuiSystemStateInnerV1 {
             inactive_validators: Table::default(),
             validator_candidates: Table::default(),
             at_risk_validators: VecMap { contents: vec![] },
+            extra_fields: Default::default(),
         };
         Self {
             epoch: 0,
@@ -640,16 +672,21 @@ impl Default for SuiSystemStateInnerV1 {
             parameters: SystemParametersV1 {
                 governance_start_epoch: 0,
                 epoch_duration_ms: 10000,
+                extra_fields: Default::default(),
             },
             reference_gas_price: 1,
             validator_report_records: VecMap { contents: vec![] },
             stake_subsidy: StakeSubsidyV1 {
-                epoch_counter: 0,
                 balance: Balance::new(0),
-                current_epoch_amount: 0,
+                distribution_counter: 0,
+                current_distribution_amount: 0,
+                stake_subsidy_period_length: 1,
+                stake_subsidy_decrease_rate: 0,
+                extra_fields: Default::default(),
             },
             safe_mode: false,
             epoch_start_timestamp_ms: 0,
+            extra_fields: Default::default(),
         }
     }
 }

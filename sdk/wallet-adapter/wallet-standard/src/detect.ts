@@ -2,20 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  ConnectFeature,
-  DisconnectFeature,
-  EventsFeature,
+  StandardConnectFeature,
+  StandardDisconnectFeature,
+  StandardEventsFeature,
   Wallet,
   WalletWithFeatures,
 } from "@wallet-standard/core";
 import { SuiFeatures } from "./features";
 
 export type StandardWalletAdapterWallet = WalletWithFeatures<
-  ConnectFeature &
-    EventsFeature &
+  StandardConnectFeature &
+    StandardEventsFeature &
     SuiFeatures &
     // Disconnect is an optional feature:
-    Partial<DisconnectFeature>
+    Partial<StandardDisconnectFeature>
 >;
 
 // These features are absolutely required for wallets to function in the Sui ecosystem.

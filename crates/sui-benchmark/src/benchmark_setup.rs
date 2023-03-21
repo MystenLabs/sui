@@ -142,7 +142,7 @@ impl Env {
         info!("Fullnode rpc url: {fullnode_rpc_url}");
         fullnode_barrier.wait().await;
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_network_config(&config, registry, None).await,
+            LocalValidatorAggregatorProxy::from_genesis(&config.genesis, registry, None).await,
         );
         let keypair = Arc::new(keypair);
         let primary_gas = (

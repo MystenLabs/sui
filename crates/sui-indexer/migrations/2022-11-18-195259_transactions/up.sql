@@ -1,11 +1,19 @@
+DO $$
+BEGIN
 -- SuiAddress and ObjectId type, 0x + 64 chars hex string
 CREATE DOMAIN address VARCHAR(66);
 -- Max char length for base58 encoded digest
 CREATE DOMAIN base58digest VARCHAR(44);
+EXCEPTION
+    WHEN duplicate_object THEN
+        -- Domain already exists, do nothing
+        NULL;
+END $$;
+
 
 CREATE TABLE transactions (
     id                          BIGSERIAL PRIMARY KEY,
-    transaction_digest          VARCHAR(255) NOT NULL,
+    transaction_digest          base58digest NOT NULL,
     sender                      VARCHAR(255) NOT NULL,
     recipients                  TEXT[]       NOT NULL,
     checkpoint_sequence_number  BIGINT       NOT NULL,
@@ -20,9 +28,9 @@ CREATE TABLE transactions (
     -- each move call is <package>::<module>::<function>
     move_calls                  TEXT[]       NOT NULL,
     -- gas object related
-    gas_object_id               VARCHAR(255) NOT NULL,
+    gas_object_id               address      NOT NULL,
     gas_object_sequence         BIGINT       NOT NULL,
-    gas_object_digest           VARCHAR(255) NOT NULL,
+    gas_object_digest           address      NOT NULL,
     -- gas budget & cost related
     gas_budget                  BIGINT       NOT NULL,
     total_gas_cost              BIGINT       NOT NULL,
@@ -32,7 +40,8 @@ CREATE TABLE transactions (
     -- gas price from transaction data,
     -- not the reference gas price
     gas_price                   BIGINT       NOT NULL,
-    -- serialized transaction
+    -- BCS serialized SenderSignedData
+    raw_transaction             bytea        NOT NULL,
     transaction_content         TEXT         NOT NULL,
     transaction_effects_content TEXT         NOT NULL,
     confirmed_local_execution   BOOLEAN,

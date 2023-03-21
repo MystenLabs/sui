@@ -7,6 +7,7 @@ A minimalist example to demonstrate how to create an NFT like object
 on Sui. The user should be able to use the wallet command line tool
 (https://docs.sui.io/build/wallet) to mint an NFT. For example,
 <code>wallet example-nft --<a href="devnet_nft.md#0x2_devnet_nft_name">name</a> &lt;Name&gt; --<a href="devnet_nft.md#0x2_devnet_nft_description">description</a> &lt;Description&gt; --<a href="url.md#0x2_url">url</a> &lt;URL&gt;</code>
+MUSTFIX: Remove this module from framework.
 
 
 -  [Resource `DevNetNFT`](#0x2_devnet_nft_DevNetNFT)
@@ -148,7 +149,7 @@ Create a new devnet_nft
         creator: sender,
         name: nft.name,
     });
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(nft, sender);
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(nft, sender);
 }
 </code></pre>
 

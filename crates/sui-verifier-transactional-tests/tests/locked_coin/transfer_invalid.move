@@ -8,35 +8,35 @@
 //# publish
 module test::m {
     use sui::locked_coin::LockedCoin;
-    use sui::transfer::transfer;
+    use sui::transfer;
 
     struct TestCoin { }
 
     fun t(coin: LockedCoin<TestCoin>) {
-        transfer(coin, @0x42);
+        transfer::transfer(coin, @0x42);
     }
 }
 
 //# publish
 module test::m {
     use sui::locked_coin::LockedCoin;
-    use sui::transfer::share_object;
+    use sui::transfer;
 
     struct TestCoin { }
 
     fun t(coin: LockedCoin<TestCoin>) {
-        share_object(coin);
+        transfer::share_object(coin);
     }
 }
 
 //# publish
 module test::m {
     use sui::locked_coin::LockedCoin;
-    use sui::transfer::freeze_object;
+    use sui::transfer;
 
     struct TestCoin { }
 
     fun t(coin: LockedCoin<TestCoin>) {
-        freeze_object(coin);
+        transfer::freeze_object(coin);
     }
 }

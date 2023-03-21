@@ -5,6 +5,7 @@ module serializer::serializer_tests {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::object::{Self, UID};
+    use sui::clock::Clock;
 
     struct MutableShared has key {
         id: UID,
@@ -18,11 +19,13 @@ module serializer::serializer_tests {
         })
     }
 
+    public entry fun use_clock(_clock: &Clock) {}
+
     public entry fun list<T: key + store, C>(
         item: T,
         ctx: &mut TxContext
     ) {
-        transfer::transfer(item, tx_context::sender(ctx))
+        transfer::public_transfer(item, tx_context::sender(ctx))
     }
 
     public fun return_struct<T: key + store>(

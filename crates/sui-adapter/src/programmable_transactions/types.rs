@@ -17,17 +17,23 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectChange, ParentSync, Storage},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 pub trait StorageView<E: std::fmt::Debug>:
-    ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync + ChildObjectResolver
+    ResourceResolver<Error = E>
+    + ModuleResolver<Error = E>
+    + BackingPackageStore
+    + Storage
+    + ParentSync
+    + ChildObjectResolver
 {
 }
 impl<
         E: std::fmt::Debug,
         T: ResourceResolver<Error = E>
             + ModuleResolver<Error = E>
+            + BackingPackageStore
             + Storage
             + ParentSync
             + ChildObjectResolver,
@@ -113,7 +119,7 @@ pub enum CommandKind<'a> {
     },
     MakeMoveVec,
     TransferObjects,
-    SplitCoin,
+    SplitCoins,
     MergeCoins,
     Publish,
     Upgrade,
@@ -288,7 +294,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            if ty == &expected_ty {
+            if ty != &expected_ty {
                 return Err(CommandArgumentError::TypeMismatch);
             }
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)

@@ -43,6 +43,7 @@
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="math.md#0x2_math">0x2::math</a>;
@@ -137,6 +138,12 @@ A staking pool embedded in each validator struct in the system state object.
 </dt>
 <dd>
  Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+</dd>
+<dt>
+<code>extra_fields: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -425,6 +432,7 @@ Create a new, empty staking pool.
         pending_stake: 0,
         pending_total_sui_withdraw: 0,
         pending_pool_token_withdraw: 0,
+        extra_fields: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
     }
 }
 </code></pre>
@@ -517,7 +525,7 @@ A proportional amount of pool token withdraw is recorded and processed at epoch 
 
     // TODO: implement withdraw bonding period here.
     <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> principal_withdraw, rewards_withdraw);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), staker);
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal_withdraw, ctx), staker);
     total_sui_withdraw_amount
 }
 </code></pre>
@@ -832,7 +840,7 @@ Withdraw stake from a preactive staking pool.
     pool.sui_balance = pool.sui_balance - withdraw_amount;
     pool.pool_token_balance = pool.pool_token_balance - withdraw_amount;
 
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), staker);
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(principal, ctx), staker);
     withdraw_amount
 }
 </code></pre>

@@ -667,14 +667,18 @@ impl<'de> Deserialize<'de> for Signature {
 }
 
 impl Signature {
+    /// The messaged passed in is already hashed form.
+    pub fn new_hashed(hashed_msg: &[u8], secret: &dyn Signer<Signature>) -> Self {
+        Signer::sign(secret, hashed_msg)
+    }
+
     pub fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn Signer<Signature>) -> Self
     where
         T: Serialize,
     {
-        Signer::sign(
-            secret,
-            &bcs::to_bytes(&value).expect("Message serialization should not fail"),
-        )
+        let mut hasher = DefaultHash::default();
+        hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        Signer::sign(secret, &hasher.finalize().digest)
     }
 
     /// Parse [enum CompressedSignature] from trait SuiSignature `flag || sig || pk`.
@@ -1004,10 +1008,6 @@ pub trait SuiSignature: Sized + ToFromBytes {
     fn public_key_bytes(&self) -> &[u8];
     fn scheme(&self) -> SignatureScheme;
 
-    fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>;
-
     fn verify_secure<T>(&self, value: &IntentMessage<T>, author: SuiAddress) -> SuiResult<()>
     where
         T: Serialize;
@@ -1030,27 +1030,16 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         S::PubKey::SIGNATURE_SCHEME
     }
 
-    fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        // Currently done twice - can we improve on this?;
-        let (sig, pk) = &self.get_verification_inputs(author)?;
-        let mut message = Vec::new();
-        value.write(&mut message);
-        pk.verify(&message[..], sig)
-            .map_err(|e| SuiError::InvalidSignature {
-                error: format!("{}", e),
-            })
-    }
-
     fn verify_secure<T>(&self, value: &IntentMessage<T>, author: SuiAddress) -> Result<(), SuiError>
     where
         T: Serialize,
     {
-        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
+        let mut hasher = DefaultHash::default();
+        hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        let digest = hasher.finalize().digest;
+
         let (sig, pk) = &self.get_verification_inputs(author)?;
-        pk.verify(&message[..], sig)
+        pk.verify(&digest, sig)
             .map_err(|e| SuiError::InvalidSignature {
                 error: format!("{}", e),
             })
@@ -1647,7 +1636,7 @@ pub enum SignatureScheme {
     ED25519,
     Secp256k1,
     Secp256r1,
-    BLS12381,
+    BLS12381, // This is currently not supported for user Sui Address.
     MultiSig,
 }
 
@@ -1658,7 +1647,7 @@ impl SignatureScheme {
             SignatureScheme::Secp256k1 => 0x01,
             SignatureScheme::Secp256r1 => 0x02,
             SignatureScheme::MultiSig => 0x03,
-            SignatureScheme::BLS12381 => 0xff,
+            SignatureScheme::BLS12381 => 0xff, // This is currently not supported for user Sui Address.
         }
     }
 

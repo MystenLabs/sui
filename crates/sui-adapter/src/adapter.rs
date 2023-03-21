@@ -30,7 +30,7 @@ use move_vm_runtime::{
 
 use crate::{
     execution_mode::ExecutionMode,
-    programmable_transactions::execution::{special_argument_validate, SpecialArgumentLayout},
+    programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout},
 };
 use sui_framework::natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
@@ -68,7 +68,12 @@ pub fn new_move_vm(
                 max_fields_in_struct: Some(protocol_config.max_fields_in_struct() as usize),
                 max_function_definitions: Some(protocol_config.max_function_definitions() as usize),
                 max_struct_definitions: Some(protocol_config.max_struct_definitions() as usize),
-                max_constant_vector_len: protocol_config.max_move_vector_len(),
+                max_constant_vector_len: Some(protocol_config.max_move_vector_len()),
+                max_back_edges_per_function: None,
+                max_back_edges_per_module: None,
+                max_basic_blocks_in_script: None,
+                max_per_fun_meter_units: None,
+                max_per_mod_meter_units: None,
             },
             max_binary_format_version: protocol_config.move_binary_format_version(),
             paranoid_type_checks: false,
@@ -104,9 +109,7 @@ pub fn new_session<
 }
 
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
-/// If `is_framework` is true, then the modules can have arbitrary user-defined address,
-/// otherwise their addresses must be 0.
-/// Mutate each module's self ID to the appropriate fresh ID and update its module handle tables
+/// Mutate each module's self ID (which must be 0) to the appropriate fresh ID and update its module handle tables
 /// to reflect the new ID's of its dependencies.
 /// Returns the newly created package ID.
 pub fn generate_package_id(
@@ -114,7 +117,15 @@ pub fn generate_package_id(
     ctx: &mut TxContext,
 ) -> Result<ObjectID, ExecutionError> {
     let package_id = ctx.fresh_id();
-    let new_address = AccountAddress::from(package_id);
+    substitute_package_id(modules, package_id)?;
+    Ok(package_id)
+}
+
+pub fn substitute_package_id(
+    modules: &mut [CompiledModule],
+    object_id: ObjectID,
+) -> Result<(), ExecutionError> {
+    let new_address = AccountAddress::from(object_id);
 
     for module in modules.iter_mut() {
         let self_handle = module.self_handle().clone();
@@ -140,7 +151,7 @@ pub fn generate_package_id(
         *address_mut = new_address;
     }
 
-    Ok(package_id)
+    Ok(())
 }
 
 /// Small enum used to type check function calls for external tools. ObjVec does not exist
@@ -257,7 +268,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
                     );
                 }
                 if let Some(layout) = additional_validation_layout(view, param_type) {
-                    special_argument_validate(&arg, idx as u16, layout)?;
+                    bcs_argument_validate(&arg, idx as u16, layout)?;
                 }
             }
             CheckCallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
@@ -333,7 +344,7 @@ pub fn resolve_and_type_check<Mode: ExecutionMode>(
 fn additional_validation_layout(
     view: &BinaryIndexedView,
     param_type: &SignatureToken,
-) -> Option<SpecialArgumentLayout> {
+) -> Option<PrimitiveArgumentLayout> {
     match param_type {
         // should be ruled out above
         SignatureToken::Reference(_)
@@ -343,22 +354,22 @@ fn additional_validation_layout(
         // actually checking this requires a VM instance to load the type arguments
         SignatureToken::TypeParameter(_) => None,
         // primitives
-        SignatureToken::Bool => Some(SpecialArgumentLayout::Bool),
-        SignatureToken::U8 => Some(SpecialArgumentLayout::U8),
-        SignatureToken::U16 => Some(SpecialArgumentLayout::U16),
-        SignatureToken::U32 => Some(SpecialArgumentLayout::U32),
-        SignatureToken::U64 => Some(SpecialArgumentLayout::U64),
-        SignatureToken::U128 => Some(SpecialArgumentLayout::U128),
-        SignatureToken::U256 => Some(SpecialArgumentLayout::U256),
-        SignatureToken::Address => Some(SpecialArgumentLayout::Address),
+        SignatureToken::Bool => Some(PrimitiveArgumentLayout::Bool),
+        SignatureToken::U8 => Some(PrimitiveArgumentLayout::U8),
+        SignatureToken::U16 => Some(PrimitiveArgumentLayout::U16),
+        SignatureToken::U32 => Some(PrimitiveArgumentLayout::U32),
+        SignatureToken::U64 => Some(PrimitiveArgumentLayout::U64),
+        SignatureToken::U128 => Some(PrimitiveArgumentLayout::U128),
+        SignatureToken::U256 => Some(PrimitiveArgumentLayout::U256),
+        SignatureToken::Address => Some(PrimitiveArgumentLayout::Address),
 
         SignatureToken::Vector(inner) => additional_validation_layout(view, inner)
-            .map(|layout| SpecialArgumentLayout::Vector(Box::new(layout))),
+            .map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout))),
         SignatureToken::StructInstantiation(idx, targs) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
                 additional_validation_layout(view, &targs[0])
-                    .map(|layout| SpecialArgumentLayout::Option(Box::new(layout)))
+                    .map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else {
                 None
             }
@@ -366,11 +377,11 @@ fn additional_validation_layout(
         SignatureToken::Struct(idx) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *idx);
             if resolved_struct == RESOLVED_SUI_ID {
-                Some(SpecialArgumentLayout::Address)
+                Some(PrimitiveArgumentLayout::Address)
             } else if resolved_struct == RESOLVED_ASCII_STR {
-                Some(SpecialArgumentLayout::Ascii)
+                Some(PrimitiveArgumentLayout::Ascii)
             } else if resolved_struct == RESOLVED_UTF8_STR {
-                Some(SpecialArgumentLayout::UTF8)
+                Some(PrimitiveArgumentLayout::UTF8)
             } else {
                 None
             }

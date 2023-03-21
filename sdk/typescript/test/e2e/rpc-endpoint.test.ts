@@ -18,13 +18,7 @@ describe('Invoke any RPC endpoint', () => {
     const gasObjects = await toolbox.provider.call('sui_getOwnedObjects', [
       toolbox.address(),
     ]);
-    // TODO (jian): fix this test in the upcoming PR because sui_getOwnedObjects returns a paginated response which our API
-    // currently doesn't consume
-    for (let i = 0; i < gasObjectsExpected.length; i++) {
-      expect(gasObjects.data[i].details.objectId).toStrictEqual(
-        gasObjectsExpected[i].objectId,
-      );
-    }
+    expect(gasObjects.data).toStrictEqual(gasObjectsExpected.data);
   });
 
   it('sui_getObjectOwnedByAddress Error', async () => {

@@ -10,6 +10,7 @@ use sui_proxy::{
         make_reqwest_client, server,
     },
     config::load,
+    metrics,
 };
 use sui_tls::TlsAcceptor;
 use telemetry_subscribers::TelemetryConfig;
@@ -58,6 +59,13 @@ async fn main() -> Result<()> {
     let acceptor = TlsAcceptor::new(tls_config);
     let client = make_reqwest_client(config.remote_write);
     let app = app(config.network, client, allower);
+
+    let registry_service = metrics::start_prometheus_server(config.metrics_address);
+    let prometheus_registry = registry_service.default_registry();
+    prometheus_registry
+        .register(mysten_metrics::uptime_metric(VERSION))
+        .unwrap();
+
     server(listener, app, Some(acceptor)).await.unwrap();
 
     Ok(())
@@ -67,35 +75,10 @@ const GIT_REVISION: &str = {
     if let Some(revision) = option_env!("GIT_REVISION") {
         revision
     } else {
-        let version = git_version::git_version!(
+        git_version::git_version!(
             args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
+            fallback = "DIRTY"
+        )
     }
 };
 const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
-
-/// var extracts environment variables at runtime with a default fallback value
-/// if a default is not provided, the value is simply an empty string if not found
-/// This function will return the provided default if env::var cannot find the key
-/// or if the key is somehow malformed.
-#[macro_export]
-macro_rules! var {
-    ($key:expr) => {
-        match std::env::var($key) {
-            Ok(val) => val,
-            Err(_) => "".into(),
-        }
-    };
-    ($key:expr, $default:expr) => {
-        match std::env::var($key) {
-            Ok(val) => val,
-            Err(_) => $default,
-        }
-    };
-}

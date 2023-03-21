@@ -5,7 +5,7 @@ use crate::{
     block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
     block_waiter::BlockWaiter,
     certificate_fetcher::CertificateFetcher,
-    core::Core,
+    certifier::Certifier,
     grpc_server::ConsensusAPIGrpc,
     metrics::{initialise_metrics, PrimaryMetrics},
     proposer::{OurDigestMessage, Proposer},
@@ -333,6 +333,8 @@ impl Primary {
 
         let anemo_config = {
             let mut quic_config = anemo::QuicConfig::default();
+            // Allow more concurrent streams for burst activity.
+            quic_config.max_concurrent_bidi_streams = Some(10_000);
             // Increase send and receive buffer sizes on the primary, since the primary also
             // needs to fetch payloads.
             // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
@@ -459,7 +461,7 @@ impl Primary {
             }
         }
 
-        let core_handle = Core::spawn(
+        let core_handle = Certifier::spawn(
             name.clone(),
             committee.clone(),
             header_store.clone(),
@@ -473,7 +475,7 @@ impl Primary {
         );
 
         // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
-        // `Core` for further processing.
+        // `Synchronizer` for further processing.
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             name.clone(),
             committee.clone(),
@@ -486,8 +488,8 @@ impl Primary {
             node_metrics.clone(),
         );
 
-        // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
-        // digests from our workers and sends it back to the `Core`.
+        // When the `Synchronizer` collects enough parent certificates, the `Proposer` generates
+        // a new header with new batch digests from our workers and sends it to the `Certifier`.
         let proposer_handle = Proposer::spawn(
             name.clone(),
             committee.clone(),
@@ -920,11 +922,19 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 )
             })?;
         let certificate = request.into_body().certificate;
-        self.synchronizer
+        match self
+            .synchronizer
             .try_accept_certificate(certificate, &network)
             .await
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
-        Ok(anemo::Response::new(SendCertificateResponse {}))
+        {
+            Ok(()) => Ok(anemo::Response::new(SendCertificateResponse {
+                accepted: true,
+            })),
+            Err(DagError::Suspended(_)) => Ok(anemo::Response::new(SendCertificateResponse {
+                accepted: false,
+            })),
+            Err(e) => Err(anemo::rpc::Status::internal(e.to_string())),
+        }
     }
 
     async fn request_vote(
@@ -1147,7 +1157,7 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 digest: message.digest,
                 worker_id: message.worker_id,
                 timestamp: message.metadata.created_at,
-                ack_channel: tx_ack,
+                ack_channel: Some(tx_ack),
             })
             .await
             .map(|_| anemo::Response::new(()))

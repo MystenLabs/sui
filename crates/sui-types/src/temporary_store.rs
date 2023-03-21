@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
@@ -16,6 +16,7 @@ use tracing::trace;
 
 use crate::coin::Coin;
 use crate::committee::EpochId;
+use crate::is_system_package;
 use crate::messages::TransactionEvents;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::{
@@ -183,7 +184,7 @@ impl<S> TemporaryStore<S> {
     }
 
     /// Return the dynamic field objects that are written or deleted by this transaction
-    pub fn dynamic_fields_touched(&self) -> Vec<ObjectID> {
+    pub fn dynamic_fields_touched_do_not_call_before_fixing(&self) -> Vec<ObjectID> {
         let mut dynamic_fields = Vec::new();
         for (id, (_, kind)) in &self.written {
             match kind {
@@ -195,10 +196,10 @@ impl<S> TemporaryStore<S> {
                 WriteKind::Create | WriteKind::Unwrap => (),
             }
         }
+        // TODO: The following logic is incorrect.
         for (id, (_, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Normal => {
-                    // TODO: is this how a deleted dynamic field will show up?
                     if !self.input_objects.contains_key(id) {
                         dynamic_fields.push(*id)
                     }
@@ -446,7 +447,6 @@ impl<S> TemporaryStore<S> {
     /// An internal check of the invariants (will only fire in debug)
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
-        use std::collections::HashSet;
         // Check not both deleted and written
         debug_assert!(
             {
@@ -550,7 +550,7 @@ impl<S> TemporaryStore<S> {
                 .charge_gas_for_storage_changes(gas_status, gas_object_id)
                 .is_err()
             {
-                // TODO: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
+                // MUSTFIX: this shouldn't happen, because we should check that the budget is enough to cover the storage costs of gas coins at signing time
                 // perhaps that check isn't there?
                 trace!("out of gas while charging for gas smashing")
             }
@@ -570,6 +570,7 @@ impl<S> TemporaryStore<S> {
         gas::deduct_gas(
             &mut gas_object,
             gas_used,
+            // MUSTFIX: This is incorrect. Storage rebate in cost summary need to be consistent with balance change.
             cost_summary.sender_rebate(self.storage_rebate_rate),
         );
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
@@ -689,13 +690,160 @@ impl<S> TemporaryStore<S> {
     }
 }
 
+impl<S: ObjectStore> TemporaryStore<S> {
+    /// returns lists of (objects whose owner we must authenticate, objects whose owner has already been authenticated)
+    fn get_objects_to_authenticate(
+        &self,
+        sender: &SuiAddress,
+        gas: &[ObjectRef],
+        is_epoch_change: bool,
+    ) -> SuiResult<(Vec<ObjectID>, HashSet<ObjectID>)> {
+        let gas_objs: HashSet<&ObjectID> = gas.iter().map(|g| &g.0).collect();
+        let mut objs_to_authenticate = Vec::new();
+        let mut authenticated_objs = HashSet::new();
+        for (id, obj) in &self.input_objects {
+            if gas_objs.contains(id) {
+                // gas could be owned by either the sender (common case) or sponsor (if this is a sponsored tx,
+                // which we do not know inside this function).
+                // either way, no object ownership chain should be rooted in a gas object
+                // thus, consider object authenticated, but don't add it to authenticated_objs
+                continue;
+            }
+            match &obj.owner {
+                Owner::AddressOwner(a) => {
+                    assert!(sender == a, "Input object not owned by sender");
+                    authenticated_objs.insert(*id);
+                }
+                Owner::Shared { .. } => {
+                    authenticated_objs.insert(*id);
+                }
+                Owner::Immutable => {
+                    // object is authenticated, but it cannot own other objects,
+                    // so we should not add it to `authenticated_objs`
+                    // However, we would definitely want to add immutable objects
+                    // to the set of autehnticated roots if we were doing runtime
+                    // checks inside the VM instead of after-the-fact in the temporary
+                    // store. Here, we choose not to add them because this will catch a
+                    // bug where we mutate or delete an object that belongs to an immutable
+                    // object (though it will show up somewhat opaquely as an authentication
+                    // failure), whereas adding the immutable object to the roots will prevent
+                    // us from catching this.
+                }
+                Owner::ObjectOwner(_parent) => {
+                    unreachable!("Input objects must be address owned, shared, or immutable")
+                }
+            }
+        }
+
+        for (id, (_new_obj, kind)) in &self.written {
+            if authenticated_objs.contains(id) || gas_objs.contains(id) {
+                continue;
+            }
+            match kind {
+                WriteKind::Mutate => {
+                    // get owner at beginning of tx, since that's what we have to authenticate against
+                    // _new_obj.owner is not relevant here
+                    let old_obj = self.store.get_object(id)?.unwrap();
+                    match &old_obj.owner {
+                        Owner::ObjectOwner(_parent) => {
+                            objs_to_authenticate.push(*id);
+                        }
+                        Owner::AddressOwner(_) | Owner::Shared { .. } => {
+                            unreachable!("Should already be in authenticated_objs")
+                        }
+                        Owner::Immutable => {
+                            assert!(is_epoch_change, "Immutable objects cannot be written, except for Sui Framework/Move stdlib upgrades at epoch change boundaries");
+                            // Note: this assumes that the only immutable objects an epoch change tx can update are system packages,
+                            // but in principle we could allow others.
+                            assert!(
+                                is_system_package(*id),
+                                "Only system packages can be upgraded"
+                            );
+                        }
+                    }
+                }
+                WriteKind::Create | WriteKind::Unwrap => {
+                    // created and unwrapped objects were not inputs to the tx
+                    // or dynamic fields accessed at runtime, no ownership checks needed
+                }
+            }
+        }
+
+        for (id, (_version, kind)) in &self.deleted {
+            if authenticated_objs.contains(id) || gas_objs.contains(id) {
+                continue;
+            }
+            match kind {
+                DeleteKind::Normal | DeleteKind::Wrap => {
+                    // get owner at beginning of tx
+                    let old_obj = self.store.get_object(id)?.unwrap();
+                    match &old_obj.owner {
+                        Owner::ObjectOwner(_) => {
+                            objs_to_authenticate.push(*id);
+                        }
+                        Owner::AddressOwner(_) | Owner::Shared { .. } => {
+                            unreachable!("Should already be in authenticated_objs")
+                        }
+                        Owner::Immutable => unreachable!("Immutable objects cannot be deleted"),
+                    }
+                }
+                DeleteKind::UnwrapThenDelete => {
+                    // unwrapped-then-deleted object was not an input to the tx,
+                    // no ownership checks needed
+                }
+            }
+        }
+        Ok((objs_to_authenticate, authenticated_objs))
+    }
+
+    // check that every object read is owned directly or indirectly by sender, sponsor, or a shared object input
+    pub fn check_ownership_invariants(
+        &self,
+        sender: &SuiAddress,
+        gas: &[ObjectRef],
+        is_epoch_change: bool,
+    ) -> SuiResult<()> {
+        let (mut objects_to_authenticate, mut authenticated_objects) =
+            self.get_objects_to_authenticate(sender, gas, is_epoch_change)?;
+
+        // Map from an ObjectID to the ObjectID that covers it.
+        let mut covered = BTreeMap::new();
+        while let Some(to_authenticate) = objects_to_authenticate.pop() {
+            let Some(old_obj) = self.store.get_object(&to_authenticate)? else {
+                // lookup failure is expected when the parent is an "object-less" UID (e.g., the ID of a table or bag)
+                // we cannot distinguish this case from an actual authentication failure, so continue
+                continue;
+            };
+            let parent = match &old_obj.owner {
+                Owner::ObjectOwner(parent) => ObjectID::from(*parent),
+                owner => panic!(
+                    "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
+             Potentially covering objects in: {covered:#?}",
+                ),
+            };
+
+            if authenticated_objects.contains(&parent) {
+                authenticated_objects.insert(to_authenticate);
+            } else if !covered.contains_key(&parent) {
+                objects_to_authenticate.push(parent);
+            }
+
+            covered.insert(to_authenticate, parent);
+        }
+        Ok(())
+    }
+}
+
 impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
     /// Check that this transaction neither creates nor destroys SUI. This should hold for all txes except
     /// the epoch change tx, which mints staking rewards equal to the gas fees burned in the previous epoch.
     /// This intended to be called *after* we have charged for gas + applied the storage rebate to the gas object,
     /// but *before* we have updated object versions
     pub fn check_sui_conserved(&self) {
-        if !self.dynamic_fields_touched().is_empty() {
+        if !self
+            .dynamic_fields_touched_do_not_call_before_fixing()
+            .is_empty()
+        {
             // TODO: check conservation in the presence of dynamic fields
             return;
         }
@@ -713,15 +861,18 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                 .unwrap()
         });
         // if a dynamic field object O is written by this tx, count get_total_sui(pre_tx_value(O)) as part of input_sui
-        let dynamic_field_input_sui = self.dynamic_fields_touched().iter().fold(0, |acc, id| {
-            acc + self
-                .store
-                .get_object(id)
-                .unwrap()
-                .unwrap()
-                .get_total_sui(&self)
-                .unwrap()
-        });
+        let dynamic_field_input_sui = self
+            .dynamic_fields_touched_do_not_call_before_fixing()
+            .iter()
+            .fold(0, |acc, id| {
+                acc + self
+                    .store
+                    .get_object(id)
+                    .unwrap()
+                    .unwrap()
+                    .get_total_sui(&self)
+                    .unwrap()
+            });
         // sum of the storage rebate fields of all objects written by this tx
         let mut output_rebate_amount = 0;
         // total SUI in output objects
@@ -783,6 +934,12 @@ impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     }
 }
 
+impl<S: BackingPackageStore> BackingPackageStore for TemporaryStore<S> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        self.store.get_package_object(package_id)
+    }
+}
+
 impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -790,7 +947,7 @@ impl<S: BackingPackageStore> ModuleResolver for TemporaryStore<S> {
         let package_obj;
         let package = match self.read_object(package_id) {
             Some(object) => object,
-            None => match self.store.get_package(package_id)? {
+            None => match self.store.get_package_object(package_id)? {
                 Some(object) => {
                     package_obj = object;
                     &package_obj

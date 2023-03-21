@@ -355,7 +355,7 @@ async fn genesis(
                 })?;
             }
         } else if files.len() != 2 || !client_path.exists() || !keystore_path.exists() {
-            bail!("Cannot run genesis with non-empty Sui config directory {}, please use --force/-f option to remove existing configuration", sui_config_dir.to_str().unwrap());
+            bail!("Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration", sui_config_dir.to_str().unwrap());
         }
     }
 
@@ -472,10 +472,10 @@ async fn prompt_if_no_config(
             }),
             None => {
                 if accept_defaults {
-                    print!("Creating config file [{:?}] with default (devnet) full node server and ed25519 key scheme.", wallet_conf_path);
+                    print!("Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.", wallet_conf_path);
                 } else {
                     print!(
-                        "Config file [{:?}] doesn't exist, do you want to connect to a Sui full node server [yN]?",
+                        "Config file [{:?}] doesn't exist, do you want to connect to a Sui Full node server [y/N]?",
                         wallet_conf_path
                     );
                 }
@@ -486,7 +486,7 @@ async fn prompt_if_no_config(
                         String::new()
                     } else {
                         print!(
-                            "Sui full node server url (Default to Sui DevNet if not specified) : "
+                            "Sui Full node server URL (Defaults to Sui Devnet if not specified) : "
                         );
                         read_line()?
                     };
@@ -521,7 +521,7 @@ async fn prompt_if_no_config(
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
-                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:");
+                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):");
                 match SignatureScheme::from_flag(read_line()?.trim()) {
                     Ok(s) => s,
                     Err(e) => return Err(anyhow!("{e}")),

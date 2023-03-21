@@ -43,7 +43,7 @@ module.exports = {
                 '4lg': '1rem',
             },
             gridTemplateColumns: {
-                header: '1fr fit-content(160px) 1fr',
+                header: '1fr fit-content(162px) 1fr',
             },
             height: {
                 header: '4.25rem',

@@ -6,7 +6,7 @@ import {
   JsonRpcProvider,
   RawSigner,
   Connection,
-  devnetConnection,
+  localnetConnection,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
@@ -27,7 +27,7 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   #signer: RawSigner;
   #account: ReadonlyWalletAccount;
 
-  constructor(network: Connection = devnetConnection) {
+  constructor(network: Connection = localnetConnection) {
     this.#keypair = new Ed25519Keypair();
     this.#provider = new JsonRpcProvider(network);
     this.#account = new ReadonlyWalletAccount({
@@ -65,8 +65,8 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     async (transactionInput) => {
       return await this.#signer.signAndExecuteTransaction({
         transaction: transactionInput.transaction,
-        options: transactionInput.options?.contentOptions,
-        requestType: transactionInput.options?.requestType,
+        options: transactionInput.options,
+        requestType: transactionInput.requestType,
       });
     };
 

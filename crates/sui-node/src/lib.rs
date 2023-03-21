@@ -71,6 +71,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
@@ -199,7 +200,7 @@ impl SuiNode {
 
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
-            committee,
+            committee.clone(),
             &config.db_path().join("store"),
             None,
             EpochMetrics::new(&registry_service.default_registry()),
@@ -208,6 +209,20 @@ impl SuiNode {
             cache_metrics,
             batch_verifier_metrics,
         );
+
+        if let Some(override_buffer_stake) =
+            epoch_store.get_override_protocol_upgrade_buffer_stake()
+        {
+            let default_buffer_stake = epoch_store
+                .protocol_config()
+                .buffer_stake_for_protocol_upgrade_bps();
+
+            warn!(
+                ?override_buffer_stake,
+                ?default_buffer_stake,
+                "buffer_stake_for_protocol_upgrade_bps is currently overridden"
+            );
+        }
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         checkpoint_store.insert_genesis_checkpoint(
@@ -353,6 +368,7 @@ impl SuiNode {
             let components = Self::construct_validator_components(
                 &config,
                 state.clone(),
+                committee,
                 epoch_store.clone(),
                 checkpoint_store.clone(),
                 state_sync_handle.clone(),
@@ -421,6 +437,20 @@ impl SuiNode {
             .consensus_adapter
             .close_epoch(epoch_store);
         Ok(())
+    }
+
+    pub fn clear_override_protocol_upgrade_buffer_stake(&self, epoch: EpochId) -> SuiResult {
+        self.state
+            .clear_override_protocol_upgrade_buffer_stake(epoch)
+    }
+
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
+        self.state
+            .set_override_protocol_upgrade_buffer_stake(epoch, buffer_stake_bps)
     }
 
     // Testing-only API to start epoch close process.
@@ -514,6 +544,7 @@ impl SuiNode {
     async fn construct_validator_components(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
+        committee: Arc<Committee>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
@@ -525,21 +556,12 @@ impl SuiNode {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
-        let consensus_adapter = Self::construct_consensus_adapter(
+        let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             consensus_config,
             state.name,
             connection_monitor_status,
             &registry_service.default_registry(),
-        );
-
-        let validator_server_handle = Self::start_grpc_validator_service(
-            config,
-            state.clone(),
-            consensus_adapter.clone(),
-            &registry_service.default_registry(),
-        )
-        .await?;
-
+        ));
         let narwhal_manager =
             Self::construct_narwhal_manager(config, consensus_config, registry_service)?;
 
@@ -552,6 +574,15 @@ impl SuiNode {
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
+
+        let validator_server_handle = Self::start_grpc_validator_service(
+            config,
+            state.clone(),
+            consensus_adapter.clone(),
+            &registry_service.default_registry(),
+        )
+        .await?;
+
         Self::start_epoch_specific_validator_components(
             config,
             state.clone(),
@@ -561,8 +592,9 @@ impl SuiNode {
             state_sync_handle,
             narwhal_manager,
             narwhal_epoch_data_remover,
-            validator_server_handle,
+            committee,
             accumulator,
+            validator_server_handle,
             checkpoint_metrics,
             sui_tx_validator_metrics,
         )
@@ -578,8 +610,9 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
-        validator_server_handle: JoinHandle<Result<()>>,
+        committee: Arc<Committee>,
         accumulator: Arc<StateAccumulator>,
+        validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
@@ -594,11 +627,20 @@ impl SuiNode {
             checkpoint_metrics.clone(),
         );
 
+        // create a new map that gets injected into both the consensus handler and the consensus adapter
+        // the consensus handler will write values forwarded from consensus, and the consensus adapter
+        // will read the values to make decisions about which validator submits a transaction to consensus
+        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
+
+        consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
+
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
             checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
+            low_scoring_authorities,
+            committee,
             state.metrics.clone(),
         ));
 
@@ -708,7 +750,7 @@ impl SuiNode {
         authority: AuthorityName,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
-    ) -> Arc<ConsensusAdapter> {
+    ) -> ConsensusAdapter {
         const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
         let consensus_address = consensus_config.address().to_owned();
@@ -838,11 +880,12 @@ impl SuiNode {
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
-            let new_epoch_start_state = self
+            let latest_system_state = self
                 .state
                 .get_sui_system_state_object_during_reconfig()
-                .expect("Read Sui System State object cannot fail")
-                .into_epoch_start_state();
+                .expect("Read Sui System State object cannot fail");
+            cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
+            let new_epoch_start_state = latest_system_state.into_epoch_start_state();
             let next_epoch_committee = new_epoch_start_state.get_sui_committee();
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
@@ -855,6 +898,8 @@ impl SuiNode {
                 next_epoch,
                 "Finished executing all checkpoints in epoch. About to reconfigure the system."
             );
+
+            fail_point_async!("reconfig_delay");
 
             // We save the connection monitor status map regardless of validator / fullnode status
             // so that we don't need to restart the connection monitor every epoch.
@@ -898,7 +943,7 @@ impl SuiNode {
                 let new_epoch_store = self
                     .reconfigure_state(
                         &cur_epoch_store,
-                        next_epoch_committee,
+                        next_epoch_committee.clone(),
                         new_epoch_start_state,
                     )
                     .await;
@@ -919,8 +964,9 @@ impl SuiNode {
                             self.state_sync.clone(),
                             narwhal_manager,
                             narwhal_epoch_data_remover,
-                            validator_server_handle,
+                            Arc::new(next_epoch_committee.clone()),
                             self.accumulator.clone(),
+                            validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
                         )
@@ -934,7 +980,7 @@ impl SuiNode {
                 let new_epoch_store = self
                     .reconfigure_state(
                         &cur_epoch_store,
-                        next_epoch_committee,
+                        next_epoch_committee.clone(),
                         new_epoch_start_state,
                     )
                     .await;
@@ -946,6 +992,7 @@ impl SuiNode {
                         Self::construct_validator_components(
                             &self.config,
                             self.state.clone(),
+                            Arc::new(next_epoch_committee.clone()),
                             new_epoch_store.clone(),
                             self.checkpoint_store.clone(),
                             self.state_sync.clone(),

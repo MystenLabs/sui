@@ -49,7 +49,7 @@ module Test::M1 {
     }
 
     public entry fun transfer_object_with_size(n: u64, ctx: &mut TxContext) {
-        transfer::transfer(create_object_with_size(n, ctx), tx_context::sender(ctx))
+        transfer::public_transfer(create_object_with_size(n, ctx), tx_context::sender(ctx))
     }
 
     /// Add a byte to `s`
@@ -72,7 +72,7 @@ module Test::M1 {
         };
         let Wrapper { id, s } = wrapper;
         object::delete(id);
-        transfer::transfer(s, tx_context::sender(ctx))
+        transfer::public_transfer(s, tx_context::sender(ctx))
     }
 }
 

@@ -152,13 +152,14 @@
             {
               "name": "signatures",
               "value": [
-                "ALhGcUtEV3kT9ukC4ItNjlv5/gATBGmWEQan7ri2YKHzbtI2rSMpWvxUg7CN+Jap2zPyhfXIes+xt9Q60H2Ylw1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
+                "ALGzUorJ5eSfoPZSblxKUjNuNnB9R06PFVBmbopMmzcmHgZZWAfIpxifHMP9ogXFMxb0weTzRgVbUf241OrvvA1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
               ]
             },
             {
               "name": "options",
               "value": {
                 "showInput": true,
+                "showRawInput": true,
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": true,
@@ -180,8 +181,18 @@
                   "transaction": {
                     "kind": "ProgrammableTransaction",
                     "inputs": [
-                      "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80",
-                      "4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc"
+                      {
+                        "type": "pure",
+                        "valueType": "address",
+                        "value": "0x7ba91ddc7e717cf708c937060f04048736ec33fb1746d999a5e58cd5c677ed80"
+                      },
+                      {
+                        "type": "object",
+                        "objectType": "immOrOwnedObject",
+                        "objectId": "0x4f82f1c8587b98d64c00bfb46c3843bd8bf6ccfa7c65a86138698cd1fdcac3dc",
+                        "version": 2,
+                        "digest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
+                      }
                     ],
                     "commands": [
                       {
@@ -213,9 +224,10 @@
                   }
                 },
                 "txSignatures": [
-                  "ALhGcUtEV3kT9ukC4ItNjlv5/gATBGmWEQan7ri2YKHzbtI2rSMpWvxUg7CN+Jap2zPyhfXIes+xt9Q60H2Ylw1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
+                  "ALGzUorJ5eSfoPZSblxKUjNuNnB9R06PFVBmbopMmzcmHgZZWAfIpxifHMP9ogXFMxb0weTzRgVbUf241OrvvA1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ=="
                 ]
               },
+              "rawTransaction": "AQAAAAAAAgAge6kd3H5xfPcIyTcGDwQEhzbsM/sXRtmZpeWM1cZ37YABAE+C8chYe5jWTAC/tGw4Q72L9sz6fGWoYThpjNH9ysPcAgAAAAAAAAAgsQwARuKTwIzsD0B4PZrEv0q7TX+CBkf9hdGRg97nx/8BAQEBAQABAABh+7W080KkC9v4f+SpRrnjjRjPj/x7AAC5dRdce2qVdgHo2MfOhj8xPaPb2SqD7ybRKLiP5mvybg4NCc2vcn0dhAIAAAAAAAAAIMzKqXoCzDqYBBZw4WCdtxTphYyW6eRphV8c87/fl+hlYfu1tPNCpAvb+H/kqUa5440Yz4/8ewAAuXUXXHtqlXYBAAAAAAAAAOgDAAAAAAAAAAFhALGzUorJ5eSfoPZSblxKUjNuNnB9R06PFVBmbopMmzcmHgZZWAfIpxifHMP9ogXFMxb0weTzRgVbUf241OrvvA1Dij1TvBYKLcfLNo8fq6GASb9yfo6uvuwNUBGkTf54wQ==",
               "effects": {
                 "messageVersion": "v1",
                 "status": {
@@ -433,7 +445,6 @@
                 "storageRebate": 0
               },
               "timestampMs": 1676911928,
-              "endOfEpochData": null,
               "transactions": [
                 "3bpzHaSLTQ6p4trLDk2euZxzQ6XqLeWDmUNTAdEXXL2c"
               ],
@@ -442,6 +453,50 @@
           }
         }
       ]
+    },
+    {
+      "name": "sui_getCheckpoints",
+      "tags": [
+        {
+          "name": "Read API"
+        }
+      ],
+      "description": "Return paginated list of checkpoints",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "required": true,
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "CheckpointPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Checkpoint_and_uint64"
+        }
+      }
     },
     {
       "name": "sui_getCoinMetadata",
@@ -598,7 +653,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -1005,15 +1060,15 @@
           }
         },
         {
-          "name": "options",
-          "description": "options for specifying the content to be returned",
+          "name": "query",
+          "description": "the objects query criteria.",
           "schema": {
-            "$ref": "#/components/schemas/ObjectDataOptions"
+            "$ref": "#/components/schemas/ObjectResponseQuery"
           }
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
@@ -1051,15 +1106,20 @@
               "value": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
             },
             {
-              "name": "options",
+              "name": "query",
               "value": {
-                "showType": true,
-                "showOwner": true,
-                "showPreviousTransaction": true,
-                "showDisplay": false,
-                "showContent": false,
-                "showBcs": false,
-                "showStorageRebate": false
+                "filter": {
+                  "StructType": "0x2::coin::Coin<0x2::sui::SUI>"
+                },
+                "options": {
+                  "showType": true,
+                  "showOwner": true,
+                  "showPreviousTransaction": true,
+                  "showDisplay": false,
+                  "showContent": false,
+                  "showBcs": false,
+                  "showStorageRebate": false
+                }
               }
             },
             {
@@ -1300,6 +1360,7 @@
               "name": "options",
               "value": {
                 "showInput": true,
+                "showRawInput": false,
                 "showEffects": true,
                 "showEvents": true,
                 "showObjectChanges": false,
@@ -1317,8 +1378,18 @@
                   "transaction": {
                     "kind": "ProgrammableTransaction",
                     "inputs": [
-                      "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb",
-                      "5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc"
+                      {
+                        "type": "pure",
+                        "valueType": "address",
+                        "value": "0x8196d048b7a6d04c8edc89579d86fd3fc90c52f9a14c6b812b94fe613c5bcebb"
+                      },
+                      {
+                        "type": "object",
+                        "objectType": "immOrOwnedObject",
+                        "objectId": "0x5eeb1d449e2516166d57d71fdeb154d0dc9ecdb7b30057d0a932684cac352cdc",
+                        "version": 2,
+                        "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
+                      }
                     ],
                     "commands": [
                       {
@@ -1350,9 +1421,10 @@
                   }
                 },
                 "txSignatures": [
-                  "ALwMcYis9u/ynkzVhCb8UNtgS8kWOk6MaMWXlWOXONq5KDbfEv49Z0cEvz2tObRkDjaS9kxNSc+Cjfe1F0PtEwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA=="
+                  "AJY4zVI51I4JcmR04FFv9e5pShBckeC0Tu7Jsejgt84ZqDwX+yZXN4Tlo/wmFUDaZh34SS2BmXW+J4HVC8+xFwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA=="
                 ]
               },
+              "rawTransaction": "AQAAAAAAAgAggZbQSLem0EyO3IlXnYb9P8kMUvmhTGuBK5T+YTxbzrsBAF7rHUSeJRYWbVfXH96xVNDcns23swBX0KkyaEysNSzcAgAAAAAAAAAg43+UGkUe+CCaD7+/G1SbK7Jrjq7giJUUbfJ7w88mEMEBAQEBAQABAACCF5xX1Ylbq/tlXNYujohqUzNLXnvpvmWOt1nMNeP8ZgEaPomAKdAk7sHUTGr14vrN7YTQO1NzUU8W49ZuAAgQUQIAAAAAAAAAIGS7c6HtWLLBiwy/N3eS4gbmuA1NXupk4ucFY7FYkCbEghecV9WJW6v7ZVzWLo6IalMzS1576b5ljrdZzDXj/GYBAAAAAAAAAOgDAAAAAAAAAAFhAJY4zVI51I4JcmR04FFv9e5pShBckeC0Tu7Jsejgt84ZqDwX+yZXN4Tlo/wmFUDaZh34SS2BmXW+J4HVC8+xFwptCxWrqsEEHAdxoMDwblU5hyWJ8H3zFvk20E2fO5bzHA==",
               "effects": {
                 "messageVersion": "v1",
                 "status": {
@@ -1605,7 +1677,7 @@
         },
         {
           "name": "cursor",
-          "description": "Optional paging cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
           }
@@ -1848,6 +1920,59 @@
           "items": {
             "$ref": "#/components/schemas/ObjectRead"
           }
+        }
+      }
+    },
+    {
+      "name": "suix_getCurrentEpoch",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return current epoch info",
+      "params": [],
+      "result": {
+        "name": "EpochInfo",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/EpochInfo"
+        }
+      }
+    },
+    {
+      "name": "suix_getEpochs",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return a list of epoch info",
+      "params": [
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "EpochPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_EpochInfo_and_uint64"
         }
       }
     },
@@ -2292,6 +2417,17 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Base64"
+            }
+          }
+        },
+        {
+          "name": "dependencies",
+          "description": "a list of transitive dependency addresses that this set of modules depends on.",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
             }
           }
         },
@@ -2741,8 +2877,7 @@
         "properties": {
           "amount": {
             "description": "The amount indicate the balance value changes, negative amount means spending coin value and positive means receiving coin value.",
-            "type": "integer",
-            "format": "int128"
+            "type": "string"
           },
           "coinType": {
             "type": "string"
@@ -3239,19 +3374,19 @@
       "EndOfEpochData": {
         "type": "object",
         "required": [
-          "epoch_commitments",
-          "next_epoch_committee",
-          "next_epoch_protocol_version"
+          "epochCommitments",
+          "nextEpochCommittee",
+          "nextEpochProtocolVersion"
         ],
         "properties": {
-          "epoch_commitments": {
+          "epochCommitments": {
             "description": "Commitments to epoch specific state (e.g. live object set)",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CheckpointCommitment"
             }
           },
-          "next_epoch_committee": {
+          "nextEpochCommittee": {
             "description": "next_epoch_committee is `Some` if and only if the current checkpoint is the last checkpoint of an epoch. Therefore next_epoch_committee can be used to pick the last checkpoint of an epoch, which is often useful to get epoch level summary stats like total gas cost of an epoch, or the total number of transactions from genesis to the end of an epoch. The committee is stored as a vector of validator pub key and stake pairs. The vector should be sorted based on the Committee data structure.",
             "type": "array",
             "items": {
@@ -3270,13 +3405,151 @@
               "minItems": 2
             }
           },
-          "next_epoch_protocol_version": {
+          "nextEpochProtocolVersion": {
             "description": "The protocol version that is in effect during the epoch that starts immediately after this checkpoint.",
             "allOf": [
               {
                 "$ref": "#/components/schemas/ProtocolVersion"
               }
             ]
+          }
+        }
+      },
+      "EndOfEpochInfo": {
+        "type": "object",
+        "required": [
+          "epochEndTimestamp",
+          "lastCheckpointId",
+          "leftoverStorageFundInflow",
+          "protocolVersion",
+          "referenceGasPrice",
+          "stakeSubsidyAmount",
+          "storageCharge",
+          "storageFundBalance",
+          "storageFundReinvestment",
+          "storageRebate",
+          "totalGasFees",
+          "totalStake",
+          "totalStakeRewardsDistributed"
+        ],
+        "properties": {
+          "epochEndTimestamp": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "lastCheckpointId": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "leftoverStorageFundInflow": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "protocolVersion": {
+            "description": "existing fields from `SystemEpochInfo`",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "referenceGasPrice": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stakeSubsidyAmount": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageCharge": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageFundBalance": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageFundReinvestment": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageRebate": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalGasFees": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalStake": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalStakeRewardsDistributed": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "EpochInfo": {
+        "type": "object",
+        "required": [
+          "epoch",
+          "epochStartTimestamp",
+          "epochTotalTransactions",
+          "firstCheckpointId",
+          "validators"
+        ],
+        "properties": {
+          "endOfEpochInfo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EndOfEpochInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "epoch": {
+            "description": "epoch number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epochStartTimestamp": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "epochTotalTransactions": {
+            "description": "count of tx in epoch",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "firstCheckpointId": {
+            "description": "first, last checkpoint sequence numbers",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validators": {
+            "description": "list of validators included in epoch",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiValidatorSummary"
+            }
           }
         }
       },
@@ -4092,6 +4365,7 @@
               "objectId",
               "objectType",
               "owner",
+              "previousVersion",
               "sender",
               "type",
               "version"
@@ -4108,6 +4382,9 @@
               },
               "owner": {
                 "$ref": "#/components/schemas/Owner"
+              },
+              "previousVersion": {
+                "$ref": "#/components/schemas/SequenceNumber"
               },
               "sender": {
                 "$ref": "#/components/schemas/SuiAddress"
@@ -4463,6 +4740,35 @@
           }
         }
       },
+      "ObjectResponseQuery": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "description": "If None, no filter will be applied",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuiObjectDataFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "description": "config which fields to include in the response, by default only digest is included",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectDataOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "ObjectValueKind": {
         "type": "string",
         "enum": [
@@ -4549,6 +4855,33 @@
           }
         ]
       },
+      "Page_for_Checkpoint_and_uint64": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Checkpoint"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
       "Page_for_Coin_and_ObjectID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
@@ -4604,6 +4937,33 @@
                 "type": "null"
               }
             ]
+          }
+        }
+      },
+      "Page_for_EpochInfo_and_uint64": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EpochInfo"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
@@ -4804,7 +5164,9 @@
             "required": [
               "dataType",
               "id",
+              "linkageTable",
               "moduleMap",
+              "typeOriginTable",
               "version"
             ],
             "properties": {
@@ -4817,10 +5179,22 @@
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
               },
+              "linkageTable": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/UpgradeInfo"
+                }
+              },
               "moduleMap": {
                 "type": "object",
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Base64"
+                }
+              },
+              "typeOriginTable": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TypeOrigin"
                 }
               },
               "version": {
@@ -5023,6 +5397,103 @@
           }
         ]
       },
+      "SuiCallArg": {
+        "oneOf": [
+          {
+            "type": "object",
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "objectId",
+                  "objectType",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string",
+                    "enum": [
+                      "immOrOwnedObject"
+                    ]
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "initialSharedVersion",
+                  "mutable",
+                  "objectId",
+                  "objectType"
+                ],
+                "properties": {
+                  "initialSharedVersion": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "mutable": {
+                    "type": "boolean"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string",
+                    "enum": [
+                      "sharedObject"
+                    ]
+                  }
+                }
+              }
+            ],
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "object"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "value"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "pure"
+                ]
+              },
+              "value": {
+                "$ref": "#/components/schemas/SuiJsonValue"
+              },
+              "valueType": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
       "SuiCoinMetadata": {
         "type": "object",
         "required": [
@@ -5113,20 +5584,23 @@
             "additionalProperties": false
           },
           {
-            "description": "`(&mut Coin<T>, u64)` -> `Coin<T>` It splits off some amount into a new coin",
+            "description": "`(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>` It splits off some amounts into a new coins with those amounts",
             "type": "object",
             "required": [
-              "SplitCoin"
+              "SplitCoins"
             ],
             "properties": {
-              "SplitCoin": {
+              "SplitCoins": {
                 "type": "array",
                 "items": [
                   {
                     "$ref": "#/components/schemas/SuiArgument"
                   },
                   {
-                    "$ref": "#/components/schemas/SuiArgument"
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
                   }
                 ],
                 "maxItems": 2,
@@ -5162,14 +5636,27 @@
             "additionalProperties": false
           },
           {
-            "description": "Publishes a Move package",
+            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
             "type": "object",
             "required": [
               "Publish"
             ],
             "properties": {
               "Publish": {
-                "$ref": "#/components/schemas/MovePackage"
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
               }
             },
             "additionalProperties": false
@@ -5570,6 +6057,67 @@
           "Private",
           "Public",
           "Friend"
+        ]
+      },
+      "SuiObjectDataFilter": {
+        "oneOf": [
+          {
+            "description": "Query by type a specified Package.",
+            "type": "object",
+            "required": [
+              "Package"
+            ],
+            "properties": {
+              "Package": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by type a specified Move module.",
+            "type": "object",
+            "required": [
+              "MoveModule"
+            ],
+            "properties": {
+              "MoveModule": {
+                "type": "object",
+                "required": [
+                  "module",
+                  "package"
+                ],
+                "properties": {
+                  "module": {
+                    "description": "the module name",
+                    "type": "string"
+                  },
+                  "package": {
+                    "description": "the Move package ID",
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/ObjectID"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by type",
+            "type": "object",
+            "required": [
+              "StructType"
+            ],
+            "properties": {
+              "StructType": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
         ]
       },
       "SuiProgrammableMoveCall": {
@@ -6543,7 +7091,7 @@
                 "description": "Input objects or primitive values",
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/SuiJsonValue"
+                  "$ref": "#/components/schemas/SuiCallArg"
                 }
               },
               "kind": {
@@ -6623,6 +7171,14 @@
               "$ref": "#/components/schemas/ObjectChange"
             }
           },
+          "rawTransaction": {
+            "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
+          },
           "timestampMs": {
             "type": [
               "integer",
@@ -6669,6 +7225,11 @@
           },
           "showObjectChanges": {
             "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showRawInput": {
+            "description": "Whether to show bcs-encoded transaction input data",
             "default": false,
             "type": "boolean"
           }
@@ -6718,8 +7279,54 @@
           }
         }
       },
+      "TypeOrigin": {
+        "description": "Identifies a struct and the module it was defined in",
+        "type": "object",
+        "required": [
+          "module_name",
+          "package",
+          "struct_name"
+        ],
+        "properties": {
+          "module_name": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "struct_name": {
+            "type": "string"
+          }
+        }
+      },
       "TypeTag": {
         "type": "string"
+      },
+      "UpgradeInfo": {
+        "description": "Upgraded package info for the linkage table",
+        "type": "object",
+        "required": [
+          "upgraded_id",
+          "upgraded_version"
+        ],
+        "properties": {
+          "upgraded_id": {
+            "description": "ID of the upgraded packages",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            ]
+          },
+          "upgraded_version": {
+            "description": "Version of the upgraded package",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            ]
+          }
+        }
       }
     }
   }

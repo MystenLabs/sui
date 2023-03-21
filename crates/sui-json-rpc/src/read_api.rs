@@ -13,6 +13,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
@@ -22,12 +23,12 @@ use tracing::debug;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, Checkpoint, CheckpointId, DynamicFieldPage, MoveFunctionArgType, ObjectChange,
-    ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionEvents,
-    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
+    ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
+    SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiPastObjectResponse, SuiTransaction, SuiTransactionEvents, SuiTransactionResponse,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -49,9 +50,10 @@ use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimesta
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 
-use crate::api::ReadApiServer;
-use crate::api::QUERY_MAX_RESULT_LIMIT;
-use crate::api::{cap_page_limit, cap_page_objects_limit};
+use crate::api::{cap_page_limit, validate_limit, ReadApiServer};
+use crate::api::{
+    MAX_GET_OWNED_OBJECT_LIMIT, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+};
 use crate::error::Error;
 use crate::{
     get_balance_change_from_effect, get_object_change_from_effect, ObjectProviderCache,
@@ -117,22 +119,25 @@ impl ReadApiServer for ReadApi {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        // exclusive cursor if `Some`, otherwise start from the beginning
-        options: Option<SuiObjectDataOptions>,
+        query: Option<SuiObjectResponseQuery>,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
         if at_checkpoint.is_some() {
-            return Err(anyhow!("at_checkpoint param currently not supported").into());
+            return Err(anyhow!(UserInputError::Unsupported(
+                "at_checkpoint param currently not supported".to_string()
+            ))
+            .into());
         }
-        let limit = cap_page_objects_limit(limit)?;
+        let limit = validate_limit(limit, MAX_GET_OWNED_OBJECT_LIMIT)?;
+        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
 
-        // MUSTFIXD(jian): multi-get-object for content/storage rebate if opt.show_content is true
         let mut objects = self
             .state
-            .get_owner_objects(address, cursor, limit + 1)
+            .get_owner_objects(address, cursor, limit + 1, filter)
             .map_err(|e| anyhow!("{e}"))?;
 
         // objects here are of size (limit + 1), where the last one is the cursor for the next page
@@ -143,11 +148,17 @@ impl ReadApiServer for ReadApi {
             .cloned()
             .map_or(cursor, |o_info| Some(o_info.object_id));
 
-        let data = objects.into_iter().try_fold(vec![], |mut acc, o_info| {
-            let o_resp = SuiObjectResponse::try_from((o_info, options.clone()))?;
-            acc.push(o_resp);
-            Ok::<Vec<SuiObjectResponse>, Error>(acc)
-        })?;
+        let data = match options.is_not_in_object_info() {
+            true => {
+                let object_ids = objects.iter().map(|obj| obj.object_id).collect();
+                self.multi_get_object_with_options(object_ids, Some(options.clone()))
+                    .await?
+            }
+            false => objects
+                .into_iter()
+                .map(|o_info| SuiObjectResponse::try_from((o_info, options.clone())))
+                .collect::<Result<Vec<SuiObjectResponse>, _>>()?,
+        };
 
         Ok(Page {
             data,
@@ -159,7 +170,7 @@ impl ReadApiServer for ReadApi {
     async fn get_dynamic_fields(
         &self,
         parent_object_id: ObjectID,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
@@ -361,7 +372,7 @@ impl ReadApiServer for ReadApi {
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
         // the input is needed for object_changes to retrieve the sender address.
-        if opts.show_input || opts.show_object_changes {
+        if opts.require_input() {
             temp_response.transaction =
                 Some(self.state.get_executed_transaction(digest).await.tap_err(
                     |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
@@ -433,8 +444,12 @@ impl ReadApiServer for ReadApi {
                 temp_response.object_changes = Some(object_changes);
             }
         }
-
-        Ok(convert_to_response(temp_response, &opts))
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        Ok(convert_to_response(
+            temp_response,
+            &opts,
+            epoch_store.module_cache(),
+        ))
     }
 
     async fn multi_get_transactions_with_options(
@@ -452,15 +467,6 @@ impl ReadApiServer for ReadApi {
         }
 
         let opts = opts.unwrap_or_default();
-        if opts.show_balance_changes || opts.show_object_changes {
-            // Not supported because it's likely the response will easily exceed response limit
-            return Err(anyhow!(UserInputError::Unsupported(
-                "show_balance_changes and show_object_changes is not available on \
-                multiGetTransactions"
-                    .to_string()
-            ))
-            .into());
-        }
 
         // use LinkedHashMap to dedup and can iterate in insertion order.
         let mut temp_response: LinkedHashMap<&TransactionDigest, IntermediateTransactionResponse> =
@@ -473,7 +479,7 @@ impl ReadApiServer for ReadApi {
             return Err(anyhow!("The list of digests in the input contain duplicates").into());
         }
 
-        if opts.show_input {
+        if opts.require_input() {
             let transactions = self
                 .state
                 .multi_get_executed_transactions(&digests)
@@ -490,7 +496,7 @@ impl ReadApiServer for ReadApi {
         }
 
         // Fetch effects when `show_events` is true because events relies on effects
-        if opts.show_effects || opts.show_events {
+        if opts.require_effects() {
             let effects_list = self
                 .state
                 .multi_get_executed_effects(&digests)
@@ -602,9 +608,64 @@ impl ReadApiServer for ReadApi {
             }
         }
 
+        let object_cache = ObjectProviderCache::new(self.state.clone());
+        if opts.show_balance_changes {
+            let mut futures = vec![];
+            for resp in temp_response.values() {
+                futures.push(get_balance_change_from_effect(
+                    &object_cache,
+                    resp.effects.as_ref().ok_or_else(|| {
+                        anyhow!("unable to derive balance changes because effect is empty")
+                    })?,
+                ));
+            }
+            let results = join_all(futures).await;
+            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+                match result {
+                    Ok(balance_changes) => entry.1.balance_changes = Some(balance_changes),
+                    Err(e) => entry
+                        .1
+                        .errors
+                        .push(format!("Failed to fetch balance changes {e:?}")),
+                }
+            }
+        }
+
+        if opts.show_object_changes {
+            let mut futures = vec![];
+            for resp in temp_response.values() {
+                futures.push(get_object_change_from_effect(
+                    &object_cache,
+                    resp.transaction
+                        .as_ref()
+                        .ok_or_else(|| {
+                            anyhow!("unable to derive object changes because effect is empty")
+                        })?
+                        .data()
+                        .intent_message()
+                        .value
+                        .sender(),
+                    resp.effects.as_ref().ok_or_else(|| {
+                        anyhow!("unable to derive object changes because effect is empty")
+                    })?,
+                ));
+            }
+            let results = join_all(futures).await;
+            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+                match result {
+                    Ok(object_changes) => entry.1.object_changes = Some(object_changes),
+                    Err(e) => entry
+                        .1
+                        .errors
+                        .push(format!("Failed to fetch object changes {e:?}")),
+                }
+            }
+        }
+
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(temp_response
             .into_iter()
-            .map(|c| convert_to_response(c.1, &opts))
+            .map(|c| convert_to_response(c.1, &opts, epoch_store.module_cache()))
             .collect::<Vec<_>>())
     }
 
@@ -718,7 +779,7 @@ impl ReadApiServer for ReadApi {
     async fn query_transactions(
         &self,
         query: SuiTransactionResponseQuery,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -726,15 +787,6 @@ impl ReadApiServer for ReadApi {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
         let opts = query.options.unwrap_or_default();
-        if opts.show_balance_changes || opts.show_object_changes {
-            // Not supported because it's likely the response will easily exceed response limit
-            return Err(anyhow!(UserInputError::Unsupported(
-                "show_balance_changes and show_object_changes is not available on \
-                queryTransactions"
-                    .to_string()
-            ))
-            .into());
-        }
 
         // Retrieve 1 extra item for next cursor
         let mut digests =
@@ -774,6 +826,35 @@ impl ReadApiServer for ReadApi {
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
         Ok(self.get_checkpoint_internal(id)?)
+    }
+
+    async fn get_checkpoints(
+        &self,
+        // If `Some`, the query will start from the next item after the specified cursor
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: Option<usize>,
+        descending_order: bool,
+    ) -> RpcResult<CheckpointPage> {
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
+
+        let mut data = self
+            .state
+            .get_checkpoints(cursor, limit as u64 + 1, descending_order)?;
+
+        let has_next_page = data.len() > limit;
+        data.truncate(limit);
+
+        let next_cursor = if has_next_page {
+            data.last().cloned().map(|d| d.sequence_number)
+        } else {
+            None
+        };
+
+        Ok(CheckpointPage {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 }
 
@@ -1062,12 +1143,21 @@ fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> Rp
 fn convert_to_response(
     cache: IntermediateTransactionResponse,
     opts: &SuiTransactionResponseOptions,
+    module_cache: &impl GetModule,
 ) -> SuiTransactionResponse {
     let mut response = SuiTransactionResponse::new(cache.digest);
     response.errors = cache.errors;
 
+    if opts.show_raw_input && cache.transaction.is_some() {
+        let sender_signed_data = cache.transaction.as_ref().unwrap().data();
+        match bcs::to_bytes(sender_signed_data) {
+            Ok(t) => response.raw_transaction = t,
+            Err(e) => response.errors.push(e.to_string()),
+        }
+    }
+
     if opts.show_input && cache.transaction.is_some() {
-        match cache.transaction.unwrap().into_message().try_into() {
+        match SuiTransaction::try_from(cache.transaction.unwrap().into_message(), module_cache) {
             Ok(t) => {
                 response.transaction = Some(t);
             }
