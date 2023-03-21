@@ -403,7 +403,7 @@ impl Orchestrator {
         loop {
             let now = interval.tick().await;
             let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
-            display::status(format!("{elapsed}s",));
+            display::status(format!("{elapsed}s"));
 
             let stdio = self
                 .ssh_manager
@@ -417,7 +417,7 @@ impl Orchestrator {
             if aggregator.benchmark_duration() >= parameters.duration {
                 break;
             } else if elapsed > (parameters.duration + self.scrape_interval).as_secs() {
-                display::warn("Maximum scraping duration exceeded");
+                display::error("Maximum scraping duration exceeded");
                 break;
             }
         }
