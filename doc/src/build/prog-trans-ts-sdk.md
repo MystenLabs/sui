@@ -77,7 +77,7 @@ The following commands are available:
     - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
 - `tx.transferObjects(objects, address)` - Transfers a list of objects to the specified address.
     - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure(myAddress))`
-- `tx.moveCall({ target, arguments, typeArguments  })` - Executes a move call. Returns whatever the move call returns.
+- `tx.moveCall({ target, arguments, typeArguments  })` - Executes a move call. Returns whatever the Sui Move call returns.
     - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure(name), tx.pure(description), tx.pure(image)] })`
 - `tx.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a `moveCall`. This is required as there’s no way to define a vector as an input.
     - Example: `tx.makeMoveVec({ objects: [tx.object(id1), tx.object(id2)] })`
@@ -108,7 +108,7 @@ tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
 
 ## Use the gas coin
 
-With Programmable Transactions, you’re able to use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a transaction, and is valid as input for any arguments. You can also use the gas coin to merge coins and in Move cals.
+With Programmable Transactions, you’re able to use the gas payment coin to construct coins with a set balance using `splitCoin`. This is useful for Sui payments, and avoids the need for up-front coin selection. You can use `tx.gas` to access the gas coin in a transaction, and is valid as input for any arguments. You can also use the gas coin to merge coins and in Sui Move calls.
 
 You can also transfer the gas coin using `transferObjects`, in the event that you want to transfer all of your coin balance to another address.
 
