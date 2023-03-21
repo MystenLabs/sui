@@ -33,4 +33,23 @@ describe('Test ID as args to entry functions', () => {
     });
     expect(getExecutionStatusType(result)).toEqual('success');
   });
+
+  it('Test ID as arg to entry functions', async () => {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${packageId}::test::test_id_non_mut`,
+      arguments: [
+        tx.pure(
+          '0x000000000000000000000000c2b5625c221264078310a084df0a3137956d20ee',
+        ),
+      ],
+    });
+    const result = await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      options: {
+        showEffects: true,
+      },
+    });
+    expect(getExecutionStatusType(result)).toEqual('success');
+  });
 });
