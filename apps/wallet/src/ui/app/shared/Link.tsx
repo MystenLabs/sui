@@ -37,6 +37,11 @@ const styles = cva(
                 bodySmall: 'text-bodySmall',
                 body: 'text-body',
                 base: 'text-base leading-none',
+                captionSmall: 'text-captionSmall',
+            },
+            mono: {
+                true: 'font-mono',
+                false: '',
             },
         },
     }
@@ -77,12 +82,13 @@ export const Link = forwardRef(
             weight,
             size = 'bodySmall',
             underline = 'none',
+            mono,
             ...otherProps
         }: LinkProps,
         ref: Ref<HTMLAnchorElement | HTMLButtonElement>
     ) => (
         <ButtonOrLink
-            className={styles({ color, weight, size, underline })}
+            className={styles({ color, weight, size, underline, mono })}
             {...otherProps}
             ref={ref}
         >
