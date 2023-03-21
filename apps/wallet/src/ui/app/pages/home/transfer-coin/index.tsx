@@ -21,10 +21,10 @@ import BottomMenuLayout, {
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
 import { trackEvent } from '_src/shared/plausible';
+import { useSigner } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 import type { SubmitProps } from './SendTokenForm';
-import { useSigner } from '_src/ui/app/hooks';
 
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();

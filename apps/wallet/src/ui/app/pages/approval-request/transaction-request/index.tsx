@@ -4,7 +4,6 @@
 // import { Transaction } from '@mysten/sui.js';
 import { Transaction } from '@mysten/sui.js';
 import { useCallback, useMemo } from 'react';
-import toast from 'react-hot-toast';
 
 import { GasFees } from './GasFees';
 import { TransactionDetails } from './TransactionDetails';
@@ -12,8 +11,6 @@ import { UserApproveContainer } from '_components/user-approve-container';
 import { useAppDispatch, useSigner } from '_hooks';
 import { type TransactionApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { respondToTransactionRequest } from '_redux/slices/transaction-requests';
-import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
-import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { PageMainLayoutTitle } from '_src/ui/app/shared/page-main-layout/PageMainLayoutTitle';
 
 import st from './TransactionRequest.module.scss';
@@ -43,7 +40,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                 })
             );
         },
-        [dispatch, txRequest.id, txRequest.tx.account]
+        [dispatch, txRequest.id, signer]
     );
 
     return (

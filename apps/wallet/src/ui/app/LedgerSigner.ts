@@ -11,7 +11,7 @@ import {
     type JsonRpcProvider,
 } from '@mysten/sui.js';
 
-import SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
+import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export class LedgerSigner extends SignerWithProvider {
     #suiLedgerClient: SuiLedgerClient | null;

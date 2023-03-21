@@ -15,7 +15,6 @@ import {
 
 import {
     LedgerConnectionFailedError,
-    LedgerDeviceNotFoundError,
     LedgerNoTransportMechanismError,
 } from './LedgerExceptions';
 
@@ -98,26 +97,4 @@ async function requestConnectionToLedger() {
     throw new LedgerNoTransportMechanismError(
         "There are no supported transport mechanisms to connect to the user's Ledger device"
     );
-}
-
-async function forceConnectionToLedger() {
-    let transport: TransportWebHID | TransportWebUSB | null | undefined;
-    try {
-        if (await TransportWebHID.isSupported()) {
-            transport = await TransportWebHID.openConnected();
-        } else if (await TransportWebUSB.isSupported()) {
-            transport = await TransportWebUSB.openConnected();
-        }
-    } catch (error) {
-        throw new LedgerConnectionFailedError(
-            "Unable to connect to the user's Ledger device"
-        );
-    }
-
-    if (!transport) {
-        throw new LedgerDeviceNotFoundError(
-            'Connected Ledger device not found'
-        );
-    }
-    return transport;
 }

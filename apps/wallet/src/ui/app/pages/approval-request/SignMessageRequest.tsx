@@ -3,12 +3,9 @@
 
 import { fromB64 } from '@mysten/sui.js';
 import { useMemo } from 'react';
-import toast from 'react-hot-toast';
 
-import { useSuiLedgerClient } from '../../components/ledger/SuiLedgerClientProvider';
 import { UserApproveContainer } from '../../components/user-approve-container';
 import { useAppDispatch, useSigner } from '../../hooks';
-import { useAccounts } from '../../hooks/useAccounts';
 import { respondToTransactionRequest } from '../../redux/slices/transaction-requests';
 import { Heading } from '../../shared/heading';
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';

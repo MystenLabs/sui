@@ -14,12 +14,6 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import {
-    AccountType,
-    type SerializedAccount,
-} from '_src/background/keyring/Account';
-import { type LedgerSigner } from '_src/ui/app/LedgerSigner';
-
 import type { SuiTransactionResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
@@ -49,12 +43,8 @@ export const respondToTransactionRequest = createAsyncThunk<
 >(
     'respond-to-transaction-request',
     async (
-        {
-            txRequestID,
-            approved,
-            signer,
-        },
-        { extra: { background, }, getState }
+        { txRequestID, approved, signer },
+        { extra: { background }, getState }
     ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
