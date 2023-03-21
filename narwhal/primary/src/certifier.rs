@@ -225,7 +225,21 @@ impl Certifier {
                 received: vote.round
             }
         );
-        vote.verify(&committee)?;
+
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            vote.epoch == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: vote.epoch
+            }
+        );
+
+        // Ensure the authority has voting rights.
+        ensure!(
+            committee.stake_by_id(vote.author) > 0,
+            DagError::UnknownAuthority(vote.author.to_string())
+        );
 
         Ok(vote)
     }

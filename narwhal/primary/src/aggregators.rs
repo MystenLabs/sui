@@ -4,9 +4,14 @@
 
 use crate::metrics::PrimaryMetrics;
 use config::{AuthorityIdentifier, Committee, Stake};
-use crypto::Signature;
+use crypto::{
+    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
+    NarwhalAuthoritySignature, Signature,
+};
+use fastcrypto::hash::{Digest, Hash};
 use std::collections::HashSet;
 use std::sync::Arc;
+use tracing::warn;
 use types::{
     ensure,
     error::{DagError, DagResult},
@@ -53,14 +58,39 @@ impl VotesAggregator {
         self.metrics
             .votes_received_last_round
             .set(self.votes.len() as i64);
-
         if self.weight >= committee.quorum_threshold() {
-            self.weight = 0; // Ensures quorum is only reached once.
-            return Ok(Some(Certificate::new(
-                committee,
-                header.clone(),
-                self.votes.clone(),
-            )?));
+            let cert = Certificate::new_unverified(committee, header.clone(), self.votes.clone())?;
+            let (_, pks) = cert.signed_by(committee);
+
+            let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(cert.digest());
+            match AggregateSignature::try_from(&cert.aggregated_signature)
+                .map_err(|_| DagError::InvalidSignature)?
+                .verify_secure(&to_intent_message(certificate_digest), &pks[..])
+            {
+                Err(err) => {
+                    warn!(
+                        "Failed to verify aggregated sig on certificate: {} error: {}",
+                        certificate_digest, err
+                    );
+                    let mut i = 0;
+                    while i < self.votes.len() {
+                        let (id, sig) = &self.votes[i];
+                        let pk = committee.authority_safe(id).protocol_key();
+                        if sig
+                            .verify_secure(&to_intent_message(certificate_digest), pk)
+                            .is_err()
+                        {
+                            warn!("Invalid signature on header from authority: {}", id);
+                            self.weight -= committee.stake(pk);
+                            self.votes.remove(i);
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    return Ok(None);
+                }
+                Ok(_) => return Ok(Some(cert)),
+            }
         }
         Ok(None)
     }
