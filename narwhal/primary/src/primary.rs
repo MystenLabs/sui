@@ -734,11 +734,6 @@ impl PrimaryReceiverHandler {
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
         let mut rx_narwhal_round_updates = self.rx_narwhal_round_updates.clone();
-        // Maximum header age is chosen to strike a balance between allowing for slightly older
-        // certificates to still have a chance to be included in the DAG while not wasting
-        // resources on very old vote requests. This value affects performance but not correctness
-        // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 20;
 
         // If requester has provided us with parent certificates, process them all
         // before proceeding.
@@ -772,11 +767,6 @@ impl PrimaryReceiverHandler {
                     if result.is_err() {
                         return Err(DagError::NetworkError("Node shutting down".to_owned()));
                     }
-                    let narwhal_round = *rx_narwhal_round_updates.borrow();
-                    ensure!(
-                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
-                        DagError::TooOld(header.digest().into(), header.round, narwhal_round)
-                    )
                 },
             }
         }
@@ -792,14 +782,6 @@ impl PrimaryReceiverHandler {
                 missing,
             });
         }
-
-        // Now that we've got all the required certificates, ensure we're voting on a
-        // current Header.
-        let narwhal_round = *rx_narwhal_round_updates.borrow();
-        ensure!(
-            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
-        );
 
         // Check the parent certificates. Ensure the parents:
         // - form a quorum
@@ -876,7 +858,7 @@ impl PrimaryReceiverHandler {
                 return Err(DagError::TooOld(
                     header.digest().into(),
                     header.round,
-                    narwhal_round,
+                    vote_info.round,
                 ));
             }
             if header.epoch == vote_info.epoch && header.round == vote_info.round {

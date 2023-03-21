@@ -541,12 +541,6 @@ impl Synchronizer {
                 received: certificate.epoch()
             }
         );
-        // Ok to drop old certificate, because it will never be included into the consensus dag.
-        let gc_round = self.inner.gc_round.load(Ordering::Acquire);
-        ensure!(
-            gc_round < certificate.round(),
-            DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
-        );
         // Verify the certificate (and the embedded header).
         certificate
             .verify(&self.inner.committee, &self.inner.worker_cache)
@@ -849,7 +843,7 @@ impl Synchronizer {
         inner: Arc<Inner>,
         header: &Header,
         network: anemo::Network,
-        max_age: Round,
+        _max_age: Round,
         is_certified: bool,
     ) -> DagResult<()> {
         if header.author == inner.name {
@@ -860,15 +854,7 @@ impl Synchronizer {
         // Clone the round updates channel so we can get update notifications specific to
         // this RPC handler.
         let mut rx_consensus_round_updates = inner.rx_consensus_round_updates.clone();
-        let mut consensus_round = rx_consensus_round_updates.borrow().committed_round;
-        ensure!(
-            header.round >= consensus_round.saturating_sub(max_age),
-            DagError::TooOld(
-                header.digest().into(),
-                header.round,
-                consensus_round.saturating_sub(max_age)
-            )
-        );
+        let mut _consensus_round = rx_consensus_round_updates.borrow().committed_round;
 
         let mut missing = HashMap::new();
         for (digest, (worker_id, _)) in header.payload.iter() {
@@ -952,15 +938,7 @@ impl Synchronizer {
                 // problematic, this function could be augmented to also support cancellation based
                 // on narwhal round.
                 Ok(()) = rx_consensus_round_updates.changed() => {
-                    consensus_round = rx_consensus_round_updates.borrow().committed_round;
-                    ensure!(
-                        header.round >= consensus_round.saturating_sub(max_age),
-                        DagError::TooOld(
-                            header.digest().into(),
-                            header.round,
-                            consensus_round.saturating_sub(max_age),
-                        )
-                    );
+                    _consensus_round = rx_consensus_round_updates.borrow().committed_round;
                 },
             }
         }
