@@ -79,8 +79,8 @@ export function TokenView({ data }: { data: DataType }) {
                 <TabPanels>
                     <TabPanel>
                         <div className="-mt-4 flex flex-col md:flex-row md:divide-x md:divide-gray-45">
-                            <div className="divide-y divide-gray-45 pt-4 md:basis-2/3">
-                                <div className="pb-7.5">
+                            <div className="divide-y divide-gray-45 md:basis-2/3 md:pt-2.5">
+                                <div className="pb-7">
                                     <DescriptionList>
                                         <DescriptionItem
                                             title="Owner"
@@ -137,7 +137,7 @@ export function TokenView({ data }: { data: DataType }) {
                                         </DescriptionItem>
                                     </DescriptionList>
                                 </div>
-                                <div className="pt-7.5">
+                                <div className="pt-2 md:pt-2.5">
                                     <DescriptionList>
                                         {name && (
                                             <DescriptionItem title="Name">
@@ -163,7 +163,7 @@ export function TokenView({ data }: { data: DataType }) {
                             </div>
 
                             {imgUrl !== '' && (
-                                <div className="pl-0 pt-10 md:pl-10">
+                                <div className="pl-0 pt-6 md:pt-10 md:pl-10">
                                     <div className="flex items-center justify-start gap-5 md:justify-center">
                                         <div className="flex w-40 justify-center md:w-50">
                                             <DisplayBox
