@@ -97,6 +97,6 @@ module examples::lock_and_key {
         key: &Key<T>,
         ctx: &mut TxContext,
     ) {
-        transfer::transfer(unlock(lock, key), tx_context::sender(ctx))
+        transfer::public_transfer(unlock(lock, key), tx_context::sender(ctx))
     }
 }

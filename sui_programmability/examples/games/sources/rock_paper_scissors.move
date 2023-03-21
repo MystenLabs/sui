@@ -28,7 +28,7 @@
 module games::rock_paper_scissors {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self};
+    use sui::transfer;
     use std::vector;
     use std::hash;
 
@@ -213,11 +213,11 @@ module games::rock_paper_scissors {
         // If one of the players wins, he takes the prize.
         // If there's a tie, the game owner gets the prize.
         if (p1_wins) {
-            transfer::transfer(prize, player_one)
+            transfer::public_transfer(prize, player_one)
         } else if (p2_wins) {
-            transfer::transfer(prize, player_two)
+            transfer::public_transfer(prize, player_two)
         } else {
-            transfer::transfer(prize, tx_context::sender(ctx))
+            transfer::public_transfer(prize, tx_context::sender(ctx))
         };
     }
 

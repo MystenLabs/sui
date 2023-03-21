@@ -31,7 +31,7 @@ use types::{
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
-/// forward the certificates to the Executor Core.
+/// forward the certificates to the Executor.
 pub struct Subscriber<Network> {
     /// Receiver for shutdown
     rx_shutdown: ConditionalBroadcastReceiver,

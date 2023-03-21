@@ -346,50 +346,71 @@ pub struct ProtocolConfig {
     /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
     buffer_stake_for_protocol_upgrade_bps: Option<u64>,
 
-    /// === Native Function Costs ===
+    // === Native Function Costs ===
 
-    /// `address` module
-    /// Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
+    // `address` module
+    // Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
     address_from_bytes_cost_base: Option<u64>,
-    /// Cost params for the Move native function `address::to_u256(address): u256`
+    // Cost params for the Move native function `address::to_u256(address): u256`
     address_to_u256_cost_base: Option<u64>,
-    /// Cost params for the Move native function `address::from_u256(u256): address`
+    // Cost params for the Move native function `address::from_u256(u256): address`
     address_from_u256_cost_base: Option<u64>,
 
-
-    /// `dynamic_field` module
-    /// Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
+    // `dynamic_field` module
+    // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
     dynamic_field_hash_type_and_key_cost_base: Option<u64>,
     dynamic_field_hash_type_and_key_type_cost_per_byte: Option<u64>,
     dynamic_field_hash_type_and_key_value_cost_per_byte: Option<u64>,
     dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Option<u64>,
-    /// Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
+    // Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
     dynamic_field_add_child_object_cost_base: Option<u64>,
     dynamic_field_add_child_object_type_cost_per_byte: Option<u64>,
     dynamic_field_add_child_object_value_cost_per_byte: Option<u64>,
     dynamic_field_add_child_object_struct_tag_cost_per_byte: Option<u64>,
-    /// Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
+    // Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
     dynamic_field_borrow_child_object_cost_base: Option<u64>,
     dynamic_field_borrow_child_object_child_ref_cost_per_byte: Option<u64>,
     dynamic_field_borrow_child_object_type_cost_per_byte: Option<u64>,
-    /// Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
+    // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
     dynamic_field_remove_child_object_cost_base: Option<u64>,
     dynamic_field_remove_child_object_child_cost_per_byte: Option<u64>,
     dynamic_field_remove_child_object_type_cost_per_byte: Option<u64>,
-    /// Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
+    // Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
     dynamic_field_has_child_object_cost_base: Option<u64>,
-    /// Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
+    // Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
     dynamic_field_has_child_object_with_ty_cost_base: Option<u64>,
     dynamic_field_has_child_object_with_ty_type_cost_per_byte: Option<u64>,
     dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Option<u64>,
 
-
-    copy_convert_to_address_cost_per_byte: Option<u64>,
-
-    /// Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+    // `event` module
+    // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+    event_emit_cost_base: Option<u64>,
     event_emit_value_size_derivation_cost_per_byte: Option<u64>,
-    event_tag_size_derivation_cost_per_byte: Option<u64>,
-    event_emit_cost_per_byte: Option<u64>,
+    event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
+    event_emit_output_cost_per_byte: Option<u64>,
+
+    //  `object` module
+    // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
+    object_borrow_uid_cost_base: Option<u64>,
+    // Cost params for the Move native function `delete_impl(id: address)`
+    object_delete_impl_cost_base: Option<u64>,
+    // Cost params for the Move native function `record_new_uid(id: address)`
+    object_record_new_uid_cost_base: Option<u64>,
+
+    // Crypto natives
+    // ed25519
+    ed25519_ed25519_verify_cost_base: Option<u64>,
+    ed25519_ed25519_verify_msg_cost_per_byte: Option<u64>,
+    ed25519_ed25519_verify_msg_cost_per_block: Option<u64>,
+
+    // hash::blake2b256
+    hash_blake2b256_cost_base: Option<u64>,
+    hash_blake2b256_data_cost_per_byte: Option<u64>,
+    hash_blake2b256_data_cost_per_block: Option<u64>,
+    // hash::keccak256
+    hash_keccak256_cost_base: Option<u64>,
+    hash_keccak256_data_cost_per_byte: Option<u64>,
+    hash_keccak256_data_cost_per_block: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -609,43 +630,154 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
-    pub fn address_from_bytes_cost_per_byte(&self) -> u64 {
-        self.address_from_bytes_cost_per_byte
-            .expect(CONSTANT_ERR_MSG)
+    pub fn address_from_bytes_cost_base(&self) -> u64 {
+        self.address_from_bytes_cost_base.expect(CONSTANT_ERR_MSG)
     }
     pub fn address_to_u256_cost_base(&self) -> u64 {
         self.address_to_u256_cost_base.expect(CONSTANT_ERR_MSG)
     }
-    pub fn address_vec_reverse_cost_per_byte(&self) -> u64 {
-        self.address_vec_reverse_cost_per_byte
-            .expect(CONSTANT_ERR_MSG)
-    }
-    pub fn copy_convert_to_u256_cost_per_byte(&self) -> u64 {
-        self.copy_convert_to_u256_cost_per_byte
-            .expect(CONSTANT_ERR_MSG)
-    }
     pub fn address_from_u256_cost_base(&self) -> u64 {
         self.address_from_u256_cost_base.expect(CONSTANT_ERR_MSG)
     }
-    pub fn u256_bytes_vec_reverse_cost_per_byte(&self) -> u64 {
-        self.u256_bytes_vec_reverse_cost_per_byte
+
+    pub fn dynamic_field_hash_type_and_key_cost_base(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_cost_base
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn copy_convert_to_address_cost_per_byte(&self) -> u64 {
-        self.copy_convert_to_address_cost_per_byte
+    pub fn dynamic_field_hash_type_and_key_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_hash_type_and_key_value_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_value_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_hash_type_and_key_type_tag_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_type_tag_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn dynamic_field_add_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_add_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_add_child_object_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_add_child_object_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_add_child_object_value_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_add_child_object_value_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_add_child_object_struct_tag_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_add_child_object_struct_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_borrow_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_borrow_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_borrow_child_object_child_ref_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_borrow_child_object_child_ref_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_borrow_child_object_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_borrow_child_object_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_remove_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_remove_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_remove_child_object_child_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_remove_child_object_child_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_remove_child_object_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_remove_child_object_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_has_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_has_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_has_child_object_with_ty_cost_base(&self) -> u64 {
+        self.dynamic_field_has_child_object_with_ty_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_has_child_object_with_ty_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_has_child_object_with_ty_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn event_emit_cost_base(&self) -> u64 {
+        self.event_emit_cost_base.expect(CONSTANT_ERR_MSG)
+    }
     pub fn event_emit_value_size_derivation_cost_per_byte(&self) -> u64 {
         self.event_emit_value_size_derivation_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn event_tag_size_derivation_cost_per_byte(&self) -> u64 {
-        self.event_tag_size_derivation_cost_per_byte
+    pub fn event_emit_tag_size_derivation_cost_per_byte(&self) -> u64 {
+        self.event_emit_tag_size_derivation_cost_per_byte
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn event_emit_cost_per_byte(&self) -> u64 {
-        self.event_emit_cost_per_byte.expect(CONSTANT_ERR_MSG)
+    pub fn event_emit_output_cost_per_byte(&self) -> u64 {
+        self.event_emit_output_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn object_borrow_uid_cost_base(&self) -> u64 {
+        self.object_borrow_uid_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_delete_impl_cost_base(&self) -> u64 {
+        self.object_delete_impl_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_record_new_uid_cost_base(&self) -> u64 {
+        self.object_record_new_uid_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ed25519_ed25519_verify_cost_base(&self) -> u64 {
+        self.ed25519_ed25519_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ed25519_ed25519_verify_msg_cost_per_byte(&self) -> u64 {
+        self.ed25519_ed25519_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ed25519_ed25519_verify_msg_cost_per_block(&self) -> u64 {
+        self.ed25519_ed25519_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_cost_base(&self) -> u64 {
+        self.hash_blake2b256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_data_cost_per_byte(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_data_cost_per_block(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_cost_base(&self) -> u64 {
+        self.hash_keccak256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_byte(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_block(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
     }
 
     // When adding a new constant, create a new getter for it as follows, so that the validator
@@ -808,27 +940,69 @@ impl ProtocolConfig {
                 buffer_stake_for_protocol_upgrade_bps: Some(7500),
 
                 /// === Native Function Costs ===
-                // Copying bytes is a simple low-cost operation
-                address_to_u256_cost_base: Some(10),
-                // Copying bytes snd converting sre simple low-cost operations
-                address_from_u256_cost_base: Some(10),
+                // `address` module
+                // Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
+                address_from_bytes_cost_base: Some(52),
+                // Cost params for the Move native function `address::to_u256(address): u256`
+                address_to_u256_cost_base: Some(52),
+                // Cost params for the Move native function `address::from_u256(u256): address`
+                address_from_u256_cost_base: Some(52),
 
+                // `dynamic_field` module
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                dynamic_field_hash_type_and_key_cost_base: Some(52),
+                dynamic_field_hash_type_and_key_type_cost_per_byte: Some(0),
+                dynamic_field_hash_type_and_key_value_cost_per_byte: Some(0),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Some(0),
+                // Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
+                dynamic_field_add_child_object_cost_base: Some(52),
+                dynamic_field_add_child_object_type_cost_per_byte: Some(0),
+                dynamic_field_add_child_object_value_cost_per_byte: Some(0),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: Some(0),
+                // Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
+                dynamic_field_borrow_child_object_cost_base: Some(52),
+                dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(0),
+                dynamic_field_borrow_child_object_type_cost_per_byte: Some(0),
+                 // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
+                dynamic_field_remove_child_object_cost_base: Some(52),
+                dynamic_field_remove_child_object_child_cost_per_byte: Some(0),
+                dynamic_field_remove_child_object_type_cost_per_byte: Some(0),
+                // Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
+                dynamic_field_has_child_object_cost_base: Some(52),
+                // Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
+                dynamic_field_has_child_object_with_ty_cost_base: Some(52),
+                dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(0),
+                dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(0),
 
-                
-                // Deriving event value size can be expensive due to recursion overhead
-                event_emit_value_size_derivation_cost_per_byte: Some(1_000),
-                // Converting type to typetag be expensive due to recursion overhead
-                event_tag_size_derivation_cost_per_byte: Some(1_000),
-                // Emitting an event is cheap since its a vector push
-                event_emit_cost_per_byte: Some(1_000),
-                address_from_bytes_cost_per_byte: todo!(),
-                address_vec_reverse_cost_per_byte: todo!(),
-                copy_convert_to_u256_cost_per_byte: todo!(),
-                u256_bytes_vec_reverse_cost_per_byte: todo!(),
-                copy_convert_to_address_cost_per_byte: todo!(),
+                // `event` module
+                // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+                event_emit_cost_base: Some(52),
+                event_emit_value_size_derivation_cost_per_byte: Some(0),
+                event_emit_tag_size_derivation_cost_per_byte: Some(0),
+                event_emit_output_cost_per_byte:Some(0),
 
-                // When adding a new constant, set it to None in the earliest version, like this:
-                // new_constant: None,
+                //  `object` module
+                // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
+                object_borrow_uid_cost_base: Some(52),
+                // Cost params for the Move native function `delete_impl(id: address)`
+                object_delete_impl_cost_base: Some(52),
+                // Cost params for the Move native function `record_new_uid(id: address)`
+                object_record_new_uid_cost_base: Some(52),
+
+                // Crypto
+                // ed25519
+                ed25519_ed25519_verify_cost_base: Some(52),
+                ed25519_ed25519_verify_msg_cost_per_byte: Some(0),
+                ed25519_ed25519_verify_msg_cost_per_block: Some(0),
+                // hash::blake2b256
+                hash_blake2b256_cost_base: Some(52),
+                hash_blake2b256_data_cost_per_byte: Some(0),
+                hash_blake2b256_data_cost_per_block: Some(0),
+                // hash::keccak256
+                hash_keccak256_cost_base: Some(52),
+                hash_keccak256_data_cost_per_byte: Some(0),
+                hash_keccak256_data_cost_per_block: Some(0), // When adding a new constant, set it to None in the earliest version, like this:
+                                                             // new_constant: None,
             },
 
             // Use this template when making changes:

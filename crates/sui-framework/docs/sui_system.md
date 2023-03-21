@@ -41,7 +41,6 @@
 -  [Function `update_candidate_validator_network_pubkey`](#0x2_sui_system_update_candidate_validator_network_pubkey)
 -  [Function `advance_epoch`](#0x2_sui_system_advance_epoch)
 -  [Function `advance_epoch_safe_mode`](#0x2_sui_system_advance_epoch_safe_mode)
--  [Function `consensus_commit_prologue`](#0x2_sui_system_consensus_commit_prologue)
 -  [Function `epoch`](#0x2_sui_system_epoch)
 -  [Function `epoch_start_timestamp_ms`](#0x2_sui_system_epoch_start_timestamp_ms)
 -  [Function `validator_stake_amount`](#0x2_sui_system_validator_stake_amount)
@@ -54,7 +53,6 @@
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="clock.md#0x2_clock">0x2::clock</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
@@ -112,7 +110,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(id: <a href="object.md#0x2_object_UID">object::UID</a>, validators: <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, storage_fund: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, governance_start_epoch: u64, initial_stake_subsidy_amount: u64, protocol_version: u64, system_state_version: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -122,6 +120,7 @@ This function will be called only once in genesis.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_create">create</a>(
+    id: UID,
     validators: <a href="">vector</a>&lt;Validator&gt;,
     stake_subsidy_fund: Balance&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
@@ -146,8 +145,7 @@ This function will be called only once in genesis.
         ctx,
     );
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a> {
-        // Use a hardcoded ID.
-        id: <a href="object.md#0x2_object_sui_system_state">object::sui_system_state</a>(),
+        id,
         version: system_state_version,
     };
     <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, system_state_version, system_state);
@@ -1194,7 +1192,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_charge: u64, computation_charge: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, new_system_state_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(storage_reward: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, computation_reward: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, storage_rebate: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, new_system_state_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1203,12 +1201,12 @@ gas coins.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(
+<pre><code><b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch">advance_epoch</a>(
+    storage_reward: Balance&lt;SUI&gt;,
+    computation_reward: Balance&lt;SUI&gt;,
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
     new_epoch: u64,
     next_protocol_version: u64,
-    storage_charge: u64,
-    computation_charge: u64,
     storage_rebate: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
@@ -1216,17 +1214,17 @@ gas coins.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     new_system_state_version: u64,
     ctx: &<b>mut</b> TxContext,
-) {
+) : Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="sui_system.md#0x2_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
     <b>let</b> old_protocol_version = <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_protocol_version">sui_system_state_inner::protocol_version</a>(self);
-    <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_advance_epoch">sui_system_state_inner::advance_epoch</a>(
+    <b>let</b> storage_rebate = <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_advance_epoch">sui_system_state_inner::advance_epoch</a>(
         self,
         new_epoch,
         next_protocol_version,
-        storage_charge,
-        computation_charge,
+        storage_reward,
+        computation_reward,
         storage_rebate,
         storage_fund_reinvest_rate,
         reward_slashing_rate,
@@ -1243,6 +1241,7 @@ gas coins.
         wrapper.version = new_system_state_version;
         <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> wrapper.id, wrapper.version, new_state);
     };
+    storage_rebate
 }
 </code></pre>
 
@@ -1262,7 +1261,7 @@ system running and continue making epoch changes.
 version
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">sui_system::SuiSystemState</a>, new_epoch: u64, next_protocol_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1271,7 +1270,7 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x2_sui_system_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(
     wrapper: &<b>mut</b> <a href="sui_system.md#0x2_sui_system_SuiSystemState">SuiSystemState</a>,
     new_epoch: u64,
     next_protocol_version: u64,
@@ -1281,37 +1280,6 @@ version
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
     <a href="sui_system_state_inner.md#0x2_sui_system_state_inner_advance_epoch_safe_mode">sui_system_state_inner::advance_epoch_safe_mode</a>(self, new_epoch, next_protocol_version, ctx)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_sui_system_consensus_commit_prologue"></a>
-
-## Function `consensus_commit_prologue`
-
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_consensus_commit_prologue">consensus_commit_prologue</a>(<a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> <a href="clock.md#0x2_clock_Clock">clock::Clock</a>, timestamp_ms: u64, ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="sui_system.md#0x2_sui_system_consensus_commit_prologue">consensus_commit_prologue</a>(
-    <a href="clock.md#0x2_clock">clock</a>: &<b>mut</b> Clock,
-    timestamp_ms: u64,
-    ctx: &TxContext,
-) {
-    // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, 0);
-
-    <a href="clock.md#0x2_clock_set_timestamp">clock::set_timestamp</a>(<a href="clock.md#0x2_clock">clock</a>, timestamp_ms);
 }
 </code></pre>
 

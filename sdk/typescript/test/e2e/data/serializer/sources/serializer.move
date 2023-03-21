@@ -25,7 +25,7 @@ module serializer::serializer_tests {
         item: T,
         ctx: &mut TxContext
     ) {
-        transfer::transfer(item, tx_context::sender(ctx))
+        transfer::public_transfer(item, tx_context::sender(ctx))
     }
 
     public fun return_struct<T: key + store>(

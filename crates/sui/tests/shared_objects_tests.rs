@@ -45,7 +45,7 @@ async fn shared_object_transaction() {
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
-    let _effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let _effects = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
 }
@@ -73,7 +73,7 @@ async fn many_shared_object_transactions() {
 
     // Submit the transaction. Note that this transaction is random and we do not expect
     // it to be successfully executed by the Move execution engine.
-    let _effects = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let _effects = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
 }
@@ -90,7 +90,7 @@ async fn call_shared_object_contract() {
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -102,7 +102,7 @@ async fn call_shared_object_contract() {
         package_id,
         /* arguments */ Vec::default(),
     );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
+    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let counter_creation_transaction = *effects.transaction_digest();
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
@@ -130,7 +130,7 @@ async fn call_shared_object_contract() {
                 CallArg::Pure(0u64.to_le_bytes().to_vec()),
             ],
         );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
             .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -151,7 +151,7 @@ async fn call_shared_object_contract() {
         package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     let increment_transaction = *effects.transaction_digest();
@@ -182,7 +182,7 @@ async fn call_shared_object_contract() {
                 CallArg::Pure(1u64.to_le_bytes().to_vec()),
             ],
         );
-        let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+        let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
             .await
             .unwrap();
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -202,7 +202,7 @@ async fn call_shared_object_contract() {
         package_id,
         vec![CallArg::Object(counter_object_arg_imm)],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     // Transaction fails
@@ -232,7 +232,7 @@ async fn access_clock_object_test() {
     let handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -253,7 +253,7 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, events) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     let finish = SystemTime::now()
@@ -313,7 +313,7 @@ async fn shared_object_flood() {
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -325,7 +325,7 @@ async fn shared_object_flood() {
         package_id,
         /* arguments */ Vec::default(),
     );
-    let (effects, _) = submit_single_owner_transaction(transaction, &configs.validator_set()).await;
+    let (effects, _) = submit_single_owner_transaction(transaction, &configs.net_addresses()).await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
     let counter_object_arg = ObjectArg::SharedObject {
@@ -345,7 +345,7 @@ async fn shared_object_flood() {
             CallArg::Pure(0u64.to_le_bytes().to_vec()),
         ],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -358,7 +358,7 @@ async fn shared_object_flood() {
         package_id,
         vec![CallArg::Object(counter_object_arg)],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -374,7 +374,7 @@ async fn shared_object_flood() {
             CallArg::Pure(1u64.to_le_bytes().to_vec()),
         ],
     );
-    let (effects, _) = submit_shared_object_transaction(transaction, &configs.validator_set())
+    let (effects, _) = submit_shared_object_transaction(transaction, &configs.net_addresses())
         .await
         .unwrap();
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -391,7 +391,7 @@ async fn shared_object_sync() {
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID.
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -404,19 +404,24 @@ async fn shared_object_sync() {
         /* arguments */ Vec::default(),
     );
 
-    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
-        configs.validator_set().iter().cloned().partition(|info| {
+    let committee = configs.committee_with_network();
+    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) = committee
+        .network_metadata
+        .into_iter()
+        .partition(|(name, _net)| {
             position_submit_certificate(
-                &configs.committee(),
-                &info.protocol_key(),
+                &committee.committee,
+                name,
                 create_counter_transaction.digest(),
             ) > 0
         });
 
     let (effects, _) = submit_single_owner_transaction(
         create_counter_transaction.clone(),
-        //&configs.validator_set()[1..],
-        &slow_validators,
+        &slow_validators
+            .iter()
+            .map(|(_, net)| net.network_address.clone())
+            .collect::<Vec<_>>(),
     )
     .await;
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
@@ -429,9 +434,8 @@ async fn shared_object_sync() {
 
     // Check that the counter object exists in at least one of the validators the transaction was
     // sent to.
-    let validator_set = configs.validator_set();
-    let has_counter = stream::iter(&validator_set[1..]).any(|config| async move {
-        get_client(config)
+    let has_counter = stream::iter(&slow_validators).any(|(_, net)| async move {
+        get_client(&net.network_address)
             .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
                 counter_id, None,
             ))
@@ -442,7 +446,7 @@ async fn shared_object_sync() {
     assert!(has_counter.await);
 
     // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    assert!(get_client(&fast_validators[0])
+    assert!(get_client(&fast_validators[0].1.network_address)
         .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
             counter_id, None,
         ))
@@ -461,7 +465,7 @@ async fn shared_object_sync() {
     // Let's submit the transaction to the original set of validators.
     let (effects, _) = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
-        &configs.validator_set()[1..],
+        &configs.net_addresses()[1..],
     )
     .await
     .unwrap();
@@ -471,7 +475,7 @@ async fn shared_object_sync() {
     // It will succeed because we share owned object certificates through narwhal
     let (effects, _) = submit_shared_object_transaction(
         increment_counter_transaction,
-        &configs.validator_set()[0..1],
+        &configs.net_addresses()[0..1],
     )
     .await
     .unwrap();
@@ -489,7 +493,7 @@ async fn replay_shared_object_transaction() {
     let _handles = spawn_test_authorities(&configs).await;
 
     // Publish the move package to all authorities and get its package ID
-    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.validator_set())
+    let package_id = publish_counter_package(gas_objects.pop().unwrap(), &configs.net_addresses())
         .await
         .0;
 
@@ -506,7 +510,7 @@ async fn replay_shared_object_transaction() {
     for _ in 0..2 {
         let (effects, _) = submit_single_owner_transaction(
             create_counter_transaction.clone(),
-            &configs.validator_set(),
+            &configs.net_addresses(),
         )
         .await;
         assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));

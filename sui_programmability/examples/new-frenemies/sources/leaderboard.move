@@ -77,7 +77,7 @@ module frenemies::leaderboard {
 
     fun init(ctx: &mut TxContext) {
         let epoch = tx_context::epoch(ctx);
-        transfer::share_object(
+        transfer::public_share_object(
             Leaderboard {
                 id: object::new(ctx),
                 top_scores: vector[],
@@ -86,7 +86,7 @@ module frenemies::leaderboard {
                 start_epoch: epoch,
             }
         );
-        transfer::transfer(
+        transfer::public_transfer(
             AdminCap { id: object::new(ctx) },
             tx_context::sender(ctx)
         )

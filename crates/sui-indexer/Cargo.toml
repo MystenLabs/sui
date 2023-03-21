@@ -24,6 +24,8 @@ serde_json = "1.0.83"
 thiserror = "1.0.34"
 tracing = "0.1.36"
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
+url = "2.3.1"
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics = { path = "../mysten-metrics" }
@@ -43,11 +45,12 @@ telemetry-subscribers.workspace = true
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 
+diesel_migrations = { version = "2.0.0" }
+
 [features]
 pg_integration = []
 
 [dev-dependencies]
-diesel_migrations = "2.0.0"
 sui-framework-build = { path = "../sui-framework-build" }
 sui-keys = { path = "../sui-keys" }
 test-utils = { path = "../test-utils" }

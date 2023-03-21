@@ -148,7 +148,7 @@ Create a new devnet_nft
         creator: sender,
         name: nft.name,
     });
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(nft, sender);
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(nft, sender);
 }
 </code></pre>
 

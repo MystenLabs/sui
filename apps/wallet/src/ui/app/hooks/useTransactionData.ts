@@ -16,7 +16,7 @@ export function useTransactionData(transaction?: Transaction | null) {
 
         const tx = new Transaction(transaction);
         if (address) {
-            tx.setSender(address);
+            tx.setSenderIfNotSet(address);
         }
         return tx;
     }, [transaction, address]);

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    legacy_emit_cost,
-    natives::{object_runtime::ObjectRuntime, NativesCostTable},
-};
+use crate::natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -46,9 +43,6 @@ pub fn borrow_uid(
     let obj = pop_arg!(args, StructRef);
     let id_field = obj.borrow_field(0)?;
 
-    // TODO: what should the cost of this be?
-    let cost = legacy_emit_cost();
-
     Ok(NativeResult::ok(context.gas_used(), smallvec![id_field]))
 }
 
@@ -84,12 +78,9 @@ pub fn delete_impl(
     // unwrap safe because the interface of native function guarantees it.
     let uid_bytes = pop_arg!(args, AccountAddress);
 
-    // TODO: what should the cost of this be?
-    let cost = legacy_emit_cost();
-
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     obj_runtime.delete_id(uid_bytes.into())?;
-    Ok(NativeResult::ok(cost, smallvec![]))
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
 #[derive(Clone)]
@@ -124,10 +115,7 @@ pub fn record_new_uid(
     // unwrap safe because the interface of native function guarantees it.
     let uid_bytes = pop_arg!(args, AccountAddress);
 
-    // TODO: what should the cost of this be?
-    let cost = legacy_emit_cost();
-
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     obj_runtime.new_id(uid_bytes.into())?;
-    Ok(NativeResult::ok(cost, smallvec![]))
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }

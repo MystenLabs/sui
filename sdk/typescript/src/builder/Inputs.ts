@@ -33,8 +33,12 @@ export const BuilderCallArg = union([PureCallArg, ObjectCallArg]);
 export type BuilderCallArg = Infer<typeof BuilderCallArg>;
 
 export const Inputs = {
-  Pure(type: string, data: unknown): PureCallArg {
-    return { Pure: Array.from(builder.ser(type, data).toBytes()) };
+  Pure(data: unknown, type?: string): PureCallArg {
+    return {
+      Pure: Array.from(
+        data instanceof Uint8Array ? data : builder.ser(type!, data).toBytes(),
+      ),
+    };
   },
   ObjectRef(ref: SuiObjectRef): ObjectCallArg {
     return { Object: { ImmOrOwned: ref } };

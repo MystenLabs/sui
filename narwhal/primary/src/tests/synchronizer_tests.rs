@@ -17,7 +17,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
+use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
 use tokio::sync::{oneshot, watch};
 use types::{error::DagError, Certificate, PreSubscribedBroadcastSender, Round};
 
@@ -164,11 +164,11 @@ async fn accept_suspended_certificates() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
-    let (certificates, _next_parents) =
+    let (certificates, next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
 
-    // Try to aceept certificates from round 2 and above. All of them should be suspended.
+    // Try to aceept certificates from round 2 to 5. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
         match synchronizer
@@ -207,6 +207,24 @@ async fn accept_suspended_certificates() {
             Ok(()) => continue,
             Err(e) => panic!("Unexpected error {e}"),
         }
+    }
+
+    // Create a certificate > 100 rounds above the highest local round.
+    let (_digest, cert) = mock_signed_certificate(
+        keys.as_slice(),
+        certificates.last().cloned().unwrap().origin(),
+        200,
+        next_parents,
+        &committee,
+    );
+    // The certificate should not be accepted or suspended.
+    match synchronizer
+        .try_accept_certificate(cert.clone(), &network)
+        .await
+    {
+        Ok(()) => panic!("Unexpected success!"),
+        Err(DagError::TooNew(_, _, _)) => {}
+        Err(e) => panic!("Unexpected error {e}!"),
     }
 }
 

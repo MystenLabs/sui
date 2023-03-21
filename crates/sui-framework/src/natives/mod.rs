@@ -30,6 +30,10 @@ use sui_protocol_config::ProtocolConfig;
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
+    crypto::{
+        ed25519::Ed25519VerifyCostParams,
+        hash::{HashBlake2b256CostParams, HashKeccak256CostParams},
+    },
     dynamic_field::{
         DynamicFieldAddChildObjectCostParams, DynamicFieldBorrowChildObjectCostParams,
         DynamicFieldHasChildObjectCostParams, DynamicFieldHasChildObjectWithTyCostParams,
@@ -62,6 +66,13 @@ pub struct NativesCostTable {
     pub borrow_uid_cost_params: BorrowUidCostParams,
     pub delete_impl_cost_params: DeleteImplCostParams,
     pub record_new_id_cost_params: RecordNewIdCostParams,
+
+    // Crypto natives
+    // ed25519
+    pub ed25519_verify_cost_params: Ed25519VerifyCostParams,
+    // hash
+    pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
+    pub hash_keccak256_cost_params: HashKeccak256CostParams,
 }
 
 impl NativesCostTable {
@@ -78,53 +89,132 @@ impl NativesCostTable {
             },
 
             dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
-                dynamic_field_hash_type_and_key_cost_base: todo!(),
-                dynamic_field_hash_type_and_key_type_cost_per_byte: todo!(),
-                dynamic_field_hash_type_and_key_value_cost_per_byte: todo!(),
-                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: todo!(),
+                dynamic_field_hash_type_and_key_cost_base: protocol_config
+                    .dynamic_field_hash_type_and_key_cost_base()
+                    .into(),
+                dynamic_field_hash_type_and_key_type_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_type_cost_per_byte()
+                    .into(),
+                dynamic_field_hash_type_and_key_value_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_value_cost_per_byte()
+                    .into(),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_type_tag_cost_per_byte()
+                    .into(),
             },
             dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams {
-                dynamic_field_add_child_object_cost_base: (),
-                dynamic_field_add_child_object_type_cost_per_byte: (),
-                dynamic_field_add_child_object_value_cost_per_byte: (),
-                dynamic_field_add_child_object_struct_tag_cost_per_byte: (),
+                dynamic_field_add_child_object_cost_base: protocol_config
+                    .dynamic_field_add_child_object_cost_base()
+                    .into(),
+                dynamic_field_add_child_object_type_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_type_cost_per_byte()
+                    .into(),
+                dynamic_field_add_child_object_value_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_value_cost_per_byte()
+                    .into(),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_struct_tag_cost_per_byte()
+                    .into(),
             },
             dynamic_field_borrow_child_object_cost_params:
                 DynamicFieldBorrowChildObjectCostParams {
-                    dynamic_field_borrow_child_object_cost_base: (),
-                    dynamic_field_borrow_child_object_child_ref_cost_per_byte: (),
-                    dynamic_field_borrow_child_object_type_cost_per_byte: (),
+                    dynamic_field_borrow_child_object_cost_base: protocol_config
+                        .dynamic_field_borrow_child_object_cost_base()
+                        .into(),
+                    dynamic_field_borrow_child_object_child_ref_cost_per_byte: protocol_config
+                        .dynamic_field_borrow_child_object_child_ref_cost_per_byte()
+                        .into(),
+                    dynamic_field_borrow_child_object_type_cost_per_byte: protocol_config
+                        .dynamic_field_borrow_child_object_type_cost_per_byte()
+                        .into(),
                 },
             dynamic_field_remove_child_object_cost_params:
                 DynamicFieldRemoveChildObjectCostParams {
-                    dynamic_field_remove_child_object_cost_base: (),
-                    dynamic_field_remove_child_object_child_cost_per_byte: (),
-                    dynamic_field_remove_child_object_type_cost_per_byte: (),
+                    dynamic_field_remove_child_object_cost_base: protocol_config
+                        .dynamic_field_remove_child_object_cost_base()
+                        .into(),
+                    dynamic_field_remove_child_object_child_cost_per_byte: protocol_config
+                        .dynamic_field_remove_child_object_child_cost_per_byte()
+                        .into(),
+                    dynamic_field_remove_child_object_type_cost_per_byte: protocol_config
+                        .dynamic_field_remove_child_object_type_cost_per_byte()
+                        .into(),
                 },
             dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams {
-                dynamic_field_has_child_object_cost_base: (),
+                dynamic_field_has_child_object_cost_base: protocol_config
+                    .dynamic_field_has_child_object_cost_base()
+                    .into(),
             },
             dynamic_field_has_child_object_with_ty_cost_params:
-            DynamicFieldHasChildObjectWithTyCostParams { dynamic_field_has_child_object_with_ty_cost_base: todo!(), dynamic_field_has_child_object_with_ty_type_cost_per_byte: todo!(), dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: todo!() }
-
-
-
-
-
+                DynamicFieldHasChildObjectWithTyCostParams {
+                    dynamic_field_has_child_object_with_ty_cost_base: protocol_config
+                        .dynamic_field_has_child_object_with_ty_cost_base()
+                        .into(),
+                    dynamic_field_has_child_object_with_ty_type_cost_per_byte: protocol_config
+                        .dynamic_field_has_child_object_with_ty_type_cost_per_byte()
+                        .into(),
+                    dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: protocol_config
+                        .dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte()
+                        .into(),
+                },
 
             event_emit_cost_params: EventEmitCostParams {
                 event_emit_value_size_derivation_cost_per_byte: protocol_config
                     .event_emit_value_size_derivation_cost_per_byte()
                     .into(),
-                event_tag_size_derivation_cost_per_byte: protocol_config
-                    .event_tag_size_derivation_cost_per_byte()
+                event_emit_tag_size_derivation_cost_per_byte: protocol_config
+                    .event_emit_tag_size_derivation_cost_per_byte()
                     .into(),
-                event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
+                event_emit_output_cost_per_byte: protocol_config
+                    .event_emit_output_cost_per_byte()
+                    .into(),
+                event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
             },
 
-            borrow_uid_cost_params: todo!(),
-            delete_impl_cost_params: todo!(),
-            record_new_id_cost_params: todo!(),
+            borrow_uid_cost_params: BorrowUidCostParams {
+                object_borrow_uid_cost_base: protocol_config.object_borrow_uid_cost_base().into(),
+            },
+            delete_impl_cost_params: DeleteImplCostParams {
+                object_delete_impl_cost_base: protocol_config.object_delete_impl_cost_base().into(),
+            },
+            record_new_id_cost_params: RecordNewIdCostParams {
+                object_record_new_uid_cost_base: protocol_config
+                    .object_record_new_uid_cost_base()
+                    .into(),
+            },
+
+            // Crypto
+            // ed25519
+            ed25519_verify_cost_params: Ed25519VerifyCostParams {
+                ed25519_ed25519_verify_cost_base: protocol_config
+                    .ed25519_ed25519_verify_cost_base()
+                    .into(),
+                ed25519_ed25519_verify_msg_cost_per_byte: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_byte()
+                    .into(),
+                ed25519_ed25519_verify_msg_cost_per_block: protocol_config
+                    .ed25519_ed25519_verify_msg_cost_per_block()
+                    .into(),
+            },
+            // hash
+            hash_blake2b256_cost_params: HashBlake2b256CostParams {
+                hash_blake2b256_cost_base: protocol_config.hash_blake2b256_cost_base().into(),
+                hash_blake2b256_data_cost_per_byte: protocol_config
+                    .hash_blake2b256_data_cost_per_byte()
+                    .into(),
+                hash_blake2b256_data_cost_per_block: protocol_config
+                    .hash_blake2b256_data_cost_per_block()
+                    .into(),
+            },
+            hash_keccak256_cost_params: HashKeccak256CostParams {
+                hash_keccak256_cost_base: protocol_config.hash_keccak256_cost_base().into(),
+                hash_keccak256_data_cost_per_byte: protocol_config
+                    .hash_keccak256_data_cost_per_byte()
+                    .into(),
+                hash_keccak256_data_cost_per_block: protocol_config
+                    .hash_keccak256_data_cost_per_block()
+                    .into(),
+            },
         }
     }
 }
@@ -295,17 +385,17 @@ pub fn all_natives(
         ),
         (
             "transfer",
-            "transfer_internal",
+            "transfer_impl",
             make_native!(transfer::transfer_internal),
         ),
         (
             "transfer",
-            "freeze_object",
+            "freeze_object_impl",
             make_native!(transfer::freeze_object),
         ),
         (
             "transfer",
-            "share_object",
+            "share_object_impl",
             make_native!(transfer::share_object),
         ),
         (

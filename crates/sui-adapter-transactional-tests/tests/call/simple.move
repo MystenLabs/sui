@@ -20,7 +20,7 @@ module Test::M1 {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             Object { id: object::new(ctx), value },
             recipient
         )

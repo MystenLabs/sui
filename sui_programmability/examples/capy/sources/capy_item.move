@@ -16,7 +16,7 @@ module capy::capy_item {
     use std::option::{Self, Option};
     use sui::dynamic_object_field as dof;
     use sui::coin::{Self, Coin};
-    use sui::transfer::{transfer, share_object};
+    use sui::transfer;
     use std::vector as vec;
     use sui::event::emit;
     use sui::pay;
@@ -65,12 +65,12 @@ module capy::capy_item {
 
     /// Create a `ItemStore` and a `StoreOwnerCap` for this store.
     fun init(ctx: &mut TxContext) {
-        share_object(ItemStore {
+        transfer::share_object(ItemStore {
             id: object::new(ctx),
             balance: balance::zero()
         });
 
-        transfer(StoreOwnerCap {
+        transfer::public_transfer(StoreOwnerCap {
             id: object::new(ctx)
         }, sender(ctx))
     }
@@ -82,7 +82,7 @@ module capy::capy_item {
         let a = balance::value(&s.balance);
         let b = balance::split(&mut s.balance, a);
 
-        sui::transfer::transfer(coin::from_balance(b, ctx), sender(ctx))
+        transfer::public_transfer(coin::from_balance(b, ctx), sender(ctx))
     }
 
     /// Change the quantity value for the listing in the `ItemStore`.
@@ -139,7 +139,7 @@ module capy::capy_item {
             name: listing_mut.name
         });
 
-        transfer(CapyItem {
+        transfer::public_transfer(CapyItem {
             id,
             url: listing_mut.url,
             name: listing_mut.name,
@@ -164,7 +164,7 @@ module capy::capy_item {
         let paid = vec::pop_back(&mut coins);
         pay::join_vec(&mut paid, coins);
         buy_mut(s, name, &mut paid, ctx);
-        transfer(paid, sender(ctx))
+        transfer::public_transfer(paid, sender(ctx))
     }
 
     /// Construct an image URL for the `CapyItem`.

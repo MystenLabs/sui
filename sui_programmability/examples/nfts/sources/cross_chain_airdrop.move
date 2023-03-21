@@ -85,7 +85,7 @@ module nfts::cross_chain_airdrop {
             metadata: erc721_metadata::new(token_id, name, token_uri),
         };
         vector::push_back(&mut contract.claimed_source_token_ids, token_id);
-        transfer::transfer(nft, recipient)
+        transfer::public_transfer(nft, recipient)
     }
 
     fun get_or_create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {

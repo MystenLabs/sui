@@ -31,7 +31,7 @@ module sui::safe_tests {
         let cap = ts::take_from_sender<OwnerCapability<SUI>>(scenario);
         let capability = safe::create_transfer_capability(&mut safe, &cap, delegate_amount, ctx(scenario));
         id = object::id(&capability);
-        transfer::transfer(capability, delegate_to);
+        transfer::public_transfer(capability, delegate_to);
         ts::return_to_sender(scenario, cap);
         ts::return_shared(safe);
         id

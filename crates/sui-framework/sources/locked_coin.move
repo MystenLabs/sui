@@ -49,6 +49,6 @@ module sui::locked_coin {
         object::delete(id);
         epoch_time_lock::destroy(locked_until_epoch, ctx);
         let coin = coin::from_balance(balance, ctx);
-        transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 }

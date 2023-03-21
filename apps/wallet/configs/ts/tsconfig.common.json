@@ -2,6 +2,7 @@
     "compilerOptions": {
         "target": "es2020",
         "module": "esnext",
+        "lib": ["dom", "esnext"],
         "allowJs": true,
         "skipLibCheck": true,
         "allowSyntheticDefaultImports": true,
@@ -45,7 +46,9 @@
             "_font-icons/*": ["./font-icons/*"],
             "@mysten/sui.js": ["../../sdk/typescript/src/"],
             "@mysten/bcs": ["../../sdk/bcs/src/"],
-            "@mysten/ledgerjs-hw-app-sui": ["../../sdk/ledgerjs-hw-app-sui"],
+            "@mysten/ledgerjs-hw-app-sui": [
+                "../../sdk/ledgerjs-hw-app-sui/src/Sui.ts"
+            ],
             "@mysten/wallet-standard": [
                 "../../sdk/wallet-adapter/wallet-standard/src/"
             ]

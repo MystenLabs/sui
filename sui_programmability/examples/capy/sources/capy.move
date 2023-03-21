@@ -142,7 +142,7 @@ module capy::capy {
 
         emit(RegistryCreated { id: object::uid_to_inner(&id) });
 
-        transfer::transfer(CapyManagerCap { id: object::new(ctx) }, tx_context::sender(ctx));
+        transfer::public_transfer(CapyManagerCap { id: object::new(ctx) }, tx_context::sender(ctx));
         transfer::share_object(CapyRegistry {
             id,
             capy_hash,
@@ -265,7 +265,7 @@ module capy::capy {
             item_id: *&item_id
         });
 
-        transfer::transfer(dof::remove<ID, T>(&mut capy.id, item_id), tx_context::sender(ctx));
+        transfer::public_transfer(dof::remove<ID, T>(&mut capy.id, item_id), tx_context::sender(ctx));
     }
 
     /// Breed capys and keep the newborn at sender's address.
@@ -275,7 +275,7 @@ module capy::capy {
         c2: &mut Capy,
         ctx: &mut TxContext
     ) {
-        transfer::transfer(breed(reg, c1, c2, ctx), tx_context::sender(ctx))
+        transfer::public_transfer(breed(reg, c1, c2, ctx), tx_context::sender(ctx))
     }
 
     /// Breed two Capys together. Perform a gene science algorithm and select

@@ -30,7 +30,7 @@ module tutorial::trusted_swap {
             scarcity,
             style,
         };
-        transfer::transfer(object, tx_context::sender(ctx))
+        transfer::public_transfer(object, tx_context::sender(ctx))
     }
 
     /// Anyone owns an `Object` can request swapping their object. This object
@@ -75,7 +75,7 @@ module tutorial::trusted_swap {
         // Service provider takes the fee.
         let service_address = tx_context::sender(ctx);
         balance::join(&mut fee1, fee2);
-        transfer::transfer(coin::from_balance(fee1, ctx), service_address);
+        transfer::public_transfer(coin::from_balance(fee1, ctx), service_address);
 
         // Effectively delete the wrapper objects.
         object::delete(id1);

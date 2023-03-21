@@ -26,7 +26,7 @@ module test::m {
         let id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
         ofield::add(&mut id, 0, child);
-        sui::transfer::share_object(S { id })
+        sui::transfer::public_share_object(S { id })
     }
 
 }

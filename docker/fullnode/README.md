@@ -1,101 +1,120 @@
-# Run a Sui DevNet Fullnode Locally with Docker
+# Use Docker to Run a Sui Full node Locally
 
-Run a Sui DevNet [fullnode](../../doc/src/build/fullnode.md) locally for testing/experimenting by following the instructions below. This has been tested and should work for:
+Follow the steps in this Readme to install and configure a Sui Full node for testing locally using Docker. The instructions were validated on the following operating system/processor combinations:
 
-- linux/amd64
-- darwin/amd64
-- darwin/arm64
+ * Linux/AMD64
+ * Darwin/AMD64
+ * Darwin/ARM64
 
 ## Prerequisites
 
-Install Docker / Docker Compose:
-- https://docs.docker.com/get-docker/
-- https://docs.docker.com/compose/install/
-- https://github.com/MystenLabs/sui/blob/main/docker/fullnode/docker-compose.yaml
+ * [Install Docker](https://docs.docker.com/get-docker/) 
+ * [Install Docker Compose](https://docs.docker.com/compose/install/)
+ * Download the Full node [docker-compose.yaml](https://github.com/MystenLabs/sui/blob/main/docker/fullnode/docker-compose.yaml) file.
 
-## Running
 
-### Fullnode config
+## Configure Sui Full node
 
-Download the latest version of the fullnode config [fullnode-template.yaml](https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml) over the web or by using `curl` or `wget`, for example:
+Download the latest version of the Sui Full node configuration file [fullnode-template.yaml](https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml). Use the following command to download the file:
 
 ```shell
 wget https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-template.yaml
 ```
 
-### sui devnet genesis
+### Download the Sui genesis blob
 
-Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) file over the web or:
+The genesis blob contains the information that defined the Sui network configuration. Before you can start the Full node, you need to download the most recent file to ensure compatibility with the version of Sui you use. Use the following command to download the [genesis.blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) from the `devnet` branch of the Sui repository:
 
 ```wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob```
 
+## Start your Sui Full node
 
-## Start the fullnode
-
-> **Important:** This document reflects Docker Compose V1. If you are using [Docker Compose V2](https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command), replace the hyphen (-) in the `docker-compose` commands below with a space, like so: `docker compose`
-
-To start the fullnode using Docker, run:
+Run the following command to start the Sui Full in Docker:
 
 ```shell
-docker-compose up
+docker compose up
 ```
 
-## Test
+**Important:** The commands in this document assume you use Docker Compose V2. The `docker compose` command uses a dash (`docker-compose`) in Docker Compose V1. If you use Docker Compose V1, replace the space in each `docker compose` command with a dash (`docker-compose`). For more information, see [Docker Compose V2](https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command).
 
-Once the fullnode is up and running, test some of the JSON-RPC interfaces.
+## Test the Sui Full node
 
-## Use your fullnode with Explorer
+After the Full node starts you can test the JSON-RPC interfaces.
 
-To use the Sui Explorer with your fullnode, follow these steps:
-1. Open a browser and go to: https://explorer.sui.io/
-1. Click the **Devnet** button in the top right-hand corner of the Explorer and select
-   the *Local* network from the drop-down menu.
-1. Close the *Choose a Network* menu to see the latest transactions.
+## View activity on your local Full node with Sui Explorer
 
-## Troubleshoot / tips / documentation
+Sui Explorer supports connecting to a local network. To view activity on your local Full node, open the URL: [https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local).
 
-### Start the fullnode in detached mode
+You can also change the network that Sui Explorer connects to by select it in the Sui Explorer interface. 
 
-```docker-compose up -d```
+### Stop the Full node
 
-### Stop the fullnode
+Run the following command to stop the Full node when you finish using it:
+```shell
+docker compose stop
+```
 
-```docker-compose stop```
+## Troubleshooting
+
+If you encounter errors or your Full node stops working, run the commands in the following section to resolve the issue.
+
+### Start the Full node in detached mode
+
+First, try starting the Full node in detached mode:
+
+```shell
+docker compose up -d
+```
 
 ### Reset the environment
 
-Take everything down, removing the container and volume. Use this to start completely fresh (image, config, or genesis updates):
+If you continue to see issues, stop the Full node (`docker compose stop`) and delete the Docker container and volume. Then run the following command to start a new instance of the Full node using the same genesis blob. 
 
-```docker-compose down --volumes```
+```shell
+docker compose down --volumes
+```
 
 ### Stats (CPU/MEM USAGE %)
 
-```docker stats```
+To view usage details for the Full node running in Docker, run the following command:
+```shell
+docker stats
+```
 
-This command will show you live data stream of your running containers (CPU/MEM USAGE %), consumption of your machine resources. Add prefix "docker stats -a" to display all containers.
+This command shows a live data stream of the Docker container resource usage, such as CPU and memory. To view data for all containers, use the following command:
+```shell
+docker stats -a
+```
 
-
-### Inspect the state of a running fullnode
+### Inspect the state of a running Full node
 
 Get the running container ID:
 
-```docker ps```
+```shell
+docker ps
+```
 
 Connect to a bash shell inside the container:
 
-```docker exec -it $CONTAINER_ID /bin/bash```
+```shell
+docker exec -it $CONTAINER_ID /bin/bash
+```
 
 Inspect the database:
 
-```ls -la suidb/```
+```shell
+ls -la suidb/
+```
 
 ### Investigate local RPC connectivity issues
 
-Update the `json-rpc-address` in the fullnode config to listen on all addresses:
+Update the `json-rpc-address` in the Full node config to listen on all addresses:
 
-```sed -i 's/127.0.0.1/0.0.0.0/' fullnode-template.yaml```
-
+```shell
+sed -i 's/127.0.0.1/0.0.0.0/' fullnode-template.yaml
 ```
+
+```shell
 -json-rpc-address: "127.0.0.1:9000"
 +json-rpc-address: "0.0.0.0:9000"
 ```
@@ -107,10 +126,10 @@ Download each package. For example, on macOS use [homebrew](https://brew.sh/):
 ```brew install wget curl```
 
 ### Learn more about Sui
-- https://docs.sui.io/learn
+ * https://docs.sui.io/learn
 
-### Learn more about building and running a fullnode natively
-- https://docs.sui.io/build/fullnode
+### Learn more about building and running a Full node from source code
+ * https://docs.sui.io/build/fullnode
 
-### Learn more about docker-compose
-- https://docs.docker.com/compose/gettingstarted/
+### Learn more about Docker Compose
+ * https://docs.docker.com/compose/gettingstarted/

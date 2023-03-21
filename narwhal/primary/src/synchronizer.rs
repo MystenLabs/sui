@@ -46,6 +46,10 @@ use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNE
 #[path = "tests/synchronizer_tests.rs"]
 pub mod synchronizer_tests;
 
+/// Only try to accept or suspend a certificate, if it is within this limit above the
+/// locally highest processed round.
+const NEW_CERTIFICATE_ROUND_LIMIT: Round = 100;
+
 struct Inner {
     /// The public key of this primary.
     name: PublicKey,
@@ -627,6 +631,20 @@ impl Synchronizer {
         self.inner.batch_tasks.lock().spawn(async move {
             Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age, true).await
         });
+
+        let highest_processed_round = self.inner.highest_processed_round.load(Ordering::Acquire);
+        if highest_processed_round + NEW_CERTIFICATE_ROUND_LIMIT < certificate.round() {
+            self.inner
+                .tx_certificate_fetcher
+                .send(certificate.clone())
+                .await
+                .map_err(|_| DagError::ShuttingDown)?;
+            return Err(DagError::TooNew(
+                certificate.digest().into(),
+                certificate.round(),
+                highest_processed_round,
+            ));
+        }
 
         let (sender, receiver) = oneshot::channel();
         self.inner

@@ -5,7 +5,8 @@
 /// module to allow balance operations and can be used to implement
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance {
-    friend sui::sui_system_state_inner;
+    use sui::tx_context::{Self, TxContext};
+
     friend sui::sui;
 
     /// For when trying to destroy a non-zero balance.
@@ -16,6 +17,9 @@ module sui::balance {
 
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 2;
+
+    /// Sender is not @0x0 the system address.
+    const ENotSystemAddress: u64 = 3;
 
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
@@ -105,16 +109,18 @@ module sui::balance {
     }
 
     /// CAUTION: this function creates a `Balance` without increasing the supply.
-    /// It should only be called by `sui_system::advance_epoch` to create staking rewards,
+    /// It should only be called by the epoch change system txn to create staking rewards,
     /// and nowhere else.
-    public(friend) fun create_staking_rewards<T>(value: u64): Balance<T> {
+    fun create_staking_rewards<T>(value: u64, ctx: &TxContext): Balance<T> {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         Balance { value }
     }
 
     /// CAUTION: this function destroys a `Balance` without decreasing the supply.
-    /// It should only be called by `sui_system::advance_epoch` to destroy storage rebates,
+    /// It should only be called by the epoch change system txn to destroy storage rebates,
     /// and nowhere else.
-    public(friend) fun destroy_storage_rebates<T>(self: Balance<T>) {
+    fun destroy_storage_rebates<T>(self: Balance<T>, ctx: &TxContext) {
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let Balance { value: _ } = self;
     }
 

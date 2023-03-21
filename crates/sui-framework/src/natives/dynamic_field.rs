@@ -385,6 +385,7 @@ pub fn remove_child_object(
     Ok(NativeResult::ok(context.gas_used(), smallvec![child]))
 }
 
+#[derive(Clone)]
 pub struct DynamicFieldHasChildObjectCostParams {
     // All inputs are constant same size. No need for special costing as this is a lookup
     pub dynamic_field_has_child_object_cost_base: InternalGas,
@@ -402,10 +403,11 @@ pub fn has_child_object(
     assert!(ty_args.is_empty());
     assert!(args.len() == 2);
 
-    let dynamic_field_has_child_object_cost_params = &context
+    let dynamic_field_has_child_object_cost_params = context
         .extensions_mut()
         .get::<NativesCostTable>()
-        .dynamic_field_has_child_object_cost_params;
+        .dynamic_field_has_child_object_cost_params
+        .clone();
     native_charge_gas_early_exit!(
         context,
         dynamic_field_has_child_object_cost_params.dynamic_field_has_child_object_cost_base
@@ -442,10 +444,11 @@ pub fn has_child_object_with_ty(
     assert!(ty_args.len() == 1);
     assert!(args.len() == 2);
 
-    let dynamic_field_has_child_object_with_ty_cost_params = &context
+    let dynamic_field_has_child_object_with_ty_cost_params = context
         .extensions_mut()
         .get::<NativesCostTable>()
-        .dynamic_field_has_child_object_with_ty_cost_params;
+        .dynamic_field_has_child_object_with_ty_cost_params
+        .clone();
     native_charge_gas_early_exit!(
         context,
         dynamic_field_has_child_object_with_ty_cost_params

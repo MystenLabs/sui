@@ -18,12 +18,12 @@ module examples::trusted_coin {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
         let (treasury_cap, metadata) = coin::create_currency<TRUSTED_COIN>(witness, 2, b"TRUSTED", b"", b"", option::none(), ctx);
-        transfer::freeze_object(metadata);
-        transfer::transfer(treasury_cap, tx_context::sender(ctx))
+        transfer::public_freeze_object(metadata);
+        transfer::public_transfer(treasury_cap, tx_context::sender(ctx))
     }
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<TRUSTED_COIN>, amount: u64, ctx: &mut TxContext) {
         let coin = coin::mint<TRUSTED_COIN>(treasury_cap, amount, ctx);
-        transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, tx_context::sender(ctx));
     }
 }

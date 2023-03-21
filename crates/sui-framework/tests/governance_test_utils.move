@@ -5,6 +5,7 @@
 module sui::governance_test_utils {
     use sui::address;
     use sui::balance;
+    use sui::object;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::staking_pool::{Self, StakedSui, StakingPool};
@@ -59,6 +60,7 @@ module sui::governance_test_utils {
         validators: vector<Validator>, sui_supply_amount: u64, storage_fund_amount: u64, ctx: &mut TxContext
     ) {
         sui_system::create(
+            object::new(ctx), // it doesn't matter what ID sui system state has in tests
             validators,
             balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
             balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
@@ -111,7 +113,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0, 1, ctx);
+        sui_system::advance_epoch_for_testing(&mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, 0, 0, 1, ctx);
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);
     }
@@ -128,7 +130,7 @@ module sui::governance_test_utils {
 
         let ctx = test_scenario::ctx(scenario);
 
-        sui_system::advance_epoch(
+        sui_system::advance_epoch_for_testing(
             &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 1, ctx
         );
         test_scenario::return_shared(system_state);

@@ -63,7 +63,7 @@ module sui::validator_cap {
             authorizer_validator_address: validator_address,
         };
         let operation_cap_id = object::id(&operation_cap);
-        transfer::transfer(operation_cap, validator_address);
+        transfer::public_transfer(operation_cap, validator_address);
         operation_cap_id
     }
 

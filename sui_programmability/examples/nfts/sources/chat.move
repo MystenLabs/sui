@@ -50,7 +50,7 @@ module nfts::chat {
             ref_id,
             metadata,
         };
-        transfer::transfer(chat, tx_context::sender(ctx));
+        transfer::public_transfer(chat, tx_context::sender(ctx));
     }
 
     /// Mint (post) a Chat object without referencing another object.

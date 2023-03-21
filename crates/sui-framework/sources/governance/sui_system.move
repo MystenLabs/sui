@@ -3,9 +3,10 @@
 
 module sui::sui_system {
     use sui::balance::Balance;
-    use sui::clock::{Self, Clock};
+    #[test_only]
+    use sui::balance;
     use sui::coin::Coin;
-    use sui::object::{Self, ID, UID};
+    use sui::object::{ID, UID};
     use sui::staking_pool::StakedSui;
     use sui::sui::SUI;
     use sui::transfer;
@@ -26,6 +27,8 @@ module sui::sui_system {
     friend sui::genesis;
 
     #[test_only]
+    use sui::test_utils;
+    #[test_only]
     friend sui::governance_test_utils;
 
     struct SuiSystemState has key {
@@ -38,6 +41,7 @@ module sui::sui_system {
     /// Create a new SuiSystemState object and make it shared.
     /// This function will be called only once in genesis.
     public(friend) fun create(
+        id: UID,
         validators: vector<Validator>,
         stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
@@ -62,8 +66,7 @@ module sui::sui_system {
             ctx,
         );
         let self = SuiSystemState {
-            // Use a hardcoded ID.
-            id: object::sui_system_state(),
+            id,
             version: system_state_version,
         };
         dynamic_field::add(&mut self.id, system_state_version, system_state);
@@ -464,12 +467,12 @@ module sui::sui_system {
     ///    gas coins.
     /// 3. Distribute computation charge to validator stake.
     /// 4. Update all validators.
-    public entry fun advance_epoch(
+    fun advance_epoch(
+        storage_reward: Balance<SUI>,
+        computation_reward: Balance<SUI>,
         wrapper: &mut SuiSystemState,
         new_epoch: u64,
         next_protocol_version: u64,
-        storage_charge: u64,
-        computation_charge: u64,
         storage_rebate: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
@@ -477,17 +480,17 @@ module sui::sui_system {
         epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
         new_system_state_version: u64,
         ctx: &mut TxContext,
-    ) {
+    ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
         let old_protocol_version = sui_system_state_inner::protocol_version(self);
-        sui_system_state_inner::advance_epoch(
+        let storage_rebate = sui_system_state_inner::advance_epoch(
             self,
             new_epoch,
             next_protocol_version,
-            storage_charge,
-            computation_charge,
+            storage_reward,
+            computation_reward,
             storage_rebate,
             storage_fund_reinvest_rate,
             reward_slashing_rate,
@@ -504,15 +507,17 @@ module sui::sui_system {
             wrapper.version = new_system_state_version;
             dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
         };
+        storage_rebate
     }
 
+    // TODO: keep rewards for safe mode epoch change too and make this a private fun.
     /// An extremely simple version of advance_epoch.
     /// This is called in two situations:
     ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
     ///     system running and continue making epoch changes.
     ///   - When advancing to a new protocol version, we want to be able to change the protocol
     ///     version
-    public entry fun advance_epoch_safe_mode(
+    public(friend) fun advance_epoch_safe_mode(
         wrapper: &mut SuiSystemState,
         new_epoch: u64,
         next_protocol_version: u64,
@@ -522,17 +527,6 @@ module sui::sui_system {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
         sui_system_state_inner::advance_epoch_safe_mode(self, new_epoch, next_protocol_version, ctx)
-    }
-
-    public entry fun consensus_commit_prologue(
-        clock: &mut Clock,
-        timestamp_ms: u64,
-        ctx: &TxContext,
-    ) {
-        // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, 0);
-
-        clock::set_timestamp(clock, timestamp_ms);
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -672,4 +666,36 @@ module sui::sui_system {
         )
     }
 
+    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
+    #[test_only]
+    public(friend) fun advance_epoch_for_testing(
+        wrapper: &mut SuiSystemState,
+        new_epoch: u64,
+        next_protocol_version: u64,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        storage_fund_reinvest_rate: u64,
+        reward_slashing_rate: u64,
+        epoch_start_timestamp_ms: u64,
+        new_system_state_version: u64,
+        ctx: &mut TxContext,
+    ) {
+        let storage_reward = balance::create_for_testing(storage_charge);
+        let computation_reward = balance::create_for_testing(computation_charge);
+        let storage_rebate = advance_epoch(
+            storage_reward,
+            computation_reward,
+            wrapper,
+            new_epoch,
+            next_protocol_version,
+            storage_rebate,
+            storage_fund_reinvest_rate,
+            reward_slashing_rate,
+            epoch_start_timestamp_ms,
+            new_system_state_version,
+            ctx,
+        );
+        test_utils::destroy(storage_rebate);
+    }
 }

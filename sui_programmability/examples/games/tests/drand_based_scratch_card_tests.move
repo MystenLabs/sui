@@ -11,7 +11,7 @@ module games::drand_based_scratch_card_tests {
     use games::drand_based_scratch_card;
 
     fun mint(addr: address, amount: u64, scenario: &mut Scenario) {
-        transfer::transfer(coin::mint_for_testing<SUI>(amount, test_scenario::ctx(scenario)), addr);
+        transfer::public_transfer(coin::mint_for_testing<SUI>(amount, test_scenario::ctx(scenario)), addr);
         test_scenario::next_tx(scenario, addr);
     }
 

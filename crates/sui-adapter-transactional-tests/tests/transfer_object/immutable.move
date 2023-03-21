@@ -17,7 +17,7 @@ module test::m {
 
     public entry fun mint_s(ctx: &mut TxContext) {
         let id = object::new(ctx);
-        transfer::freeze_object(S { id })
+        transfer::public_freeze_object(S { id })
     }
 }
 

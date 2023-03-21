@@ -22,7 +22,7 @@ module nfts::discount_coupon_tests {
     // coins to users).
     fun init(ctx: &mut TxContext) {
         let coin = coin::mint_for_testing<SUI>(100, ctx);
-        transfer::transfer(coin, ISSUER_ADDRESS);
+        transfer::public_transfer(coin, ISSUER_ADDRESS);
     }
 
     #[test]

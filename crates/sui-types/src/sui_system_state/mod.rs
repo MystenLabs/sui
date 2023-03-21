@@ -27,8 +27,6 @@ const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemSta
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
-pub const CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME: &IdentStr =
-    ident_str!("consensus_commit_prologue");
 
 pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
 
@@ -83,9 +81,7 @@ pub enum SuiSystemState {
 
 /// This is the fixed type used by genesis.
 pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
-
-/// This is the fixed type used by benchmarking.
-pub type SuiSystemStateInnerBenchmark = SuiSystemStateInnerV1;
+pub type SuiValidatorGenesis = ValidatorV1;
 
 impl SuiSystemState {
     pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
@@ -98,16 +94,6 @@ impl SuiSystemState {
         match self {
             SuiSystemState::V1(inner) => inner,
         }
-    }
-
-    pub fn into_benchmark_version(self) -> SuiSystemStateInnerBenchmark {
-        match self {
-            SuiSystemState::V1(inner) => inner,
-        }
-    }
-
-    pub fn new_for_benchmarking(inner: SuiSystemStateInnerBenchmark) -> Self {
-        Self::V1(inner)
     }
 
     pub fn new_for_testing(epoch: EpochId) -> Self {

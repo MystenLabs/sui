@@ -130,6 +130,8 @@ pub trait IndexerStore {
         limit: usize,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
+    fn get_total_address_number(&self) -> Result<u64, IndexerError>;
+
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 

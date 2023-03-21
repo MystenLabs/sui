@@ -15,22 +15,23 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
-
-use errors::IndexerError;
-use mysten_metrics::spawn_monitored_task;
-use sui_core::event_handler::EventHandler;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use url::Url;
 
 use crate::apis::{
     CoinReadApi, EventReadApi, GovernanceReadApi, ReadApi, TransactionBuilderApi, WriteApi,
 };
 use crate::handlers::checkpoint_handler::CheckpointHandler;
 use crate::store::IndexerStore;
+use errors::IndexerError;
+use mysten_metrics::spawn_monitored_task;
+use sui_core::event_handler::EventHandler;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
+use sui_sdk::{SuiClient, SuiClientBuilder};
 
 pub mod apis;
 pub mod errors;
 mod handlers;
+pub mod indexer_test_utils;
 pub mod metrics;
 pub mod models;
 pub mod processors;
@@ -44,6 +45,15 @@ pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
 // TODO: placeholder, read from env or config file.
 pub const FAKE_PKG_VERSION: &str = "0.0.0";
+pub const MIGRATED_METHODS: [&str; 7] = [
+    "get_checkpoint",
+    "get_latest_checkpoint_sequence_number",
+    "get_object_with_options",
+    "get_total_transaction_number",
+    "get_transaction",
+    "multi_get_transactions_with_options",
+    "query_transactions",
+];
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -64,10 +74,33 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
+    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    pub migrated_methods: Vec<String>,
 }
 
 impl IndexerConfig {
-    pub fn default() -> Self {
+    /// returns connection url without the db name
+    pub fn base_connection_url(&self) -> String {
+        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
+        format!(
+            "{}://{}:{}@{}:{}/",
+            url.scheme(),
+            url.username(),
+            url.password().unwrap_or_default(),
+            url.host_str().unwrap_or_default(),
+            url.port().unwrap_or_default()
+        )
+    }
+
+    /// returns all endpoints for which we have implemented on the indexer
+    /// NOTE: we only use this for integration testing
+    pub fn all_migrated_methods() -> Vec<String> {
+        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
+    }
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
         Self {
             db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
             rpc_client_url: "http://127.0.0.1:9000".to_string(),
@@ -75,6 +108,7 @@ impl IndexerConfig {
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
             rpc_server_port: 9000,
+            migrated_methods: vec![],
         }
     }
 }
@@ -175,7 +209,11 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         .build(config.rpc_client_url.as_str())
         .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
 
-    builder.register_module(ReadApi::new(state.clone(), http_client.clone()))?;
+    builder.register_module(ReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        config.migrated_methods.clone(),
+    ))?;
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;

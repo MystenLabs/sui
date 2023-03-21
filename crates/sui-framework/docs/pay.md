@@ -56,7 +56,7 @@ Transfer <code>c</code> to the sender of the current transaction
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="pay.md#0x2_pay_keep">keep</a>&lt;T&gt;(c: Coin&lt;T&gt;, ctx: &TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
 }
 </code></pre>
 
@@ -144,7 +144,7 @@ Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal 
 <pre><code><b>public</b> entry <b>fun</b> <a href="pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
     c: &<b>mut</b> Coin&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
 ) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), recipient)
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), recipient)
 }
 </code></pre>
 
@@ -175,7 +175,7 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
     <b>let</b> vec: <a href="">vector</a>&lt;Coin&lt;T&gt;&gt; = <a href="coin.md#0x2_coin_divide_into_n">coin::divide_into_n</a>(self, n, ctx);
     <b>let</b> (i, len) = (0, <a href="_length">vector::length</a>(&vec));
     <b>while</b> (i &lt; len) {
-        <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> vec), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+        <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="_pop_back">vector::pop_back</a>(&<b>mut</b> vec), <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
         i = i + 1;
     };
     <a href="_destroy_empty">vector::destroy_empty</a>(vec);
@@ -264,7 +264,7 @@ Join a vector of <code>Coin</code> into a single object and transfer it to <code
 
     <b>let</b> self = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
     <a href="pay.md#0x2_pay_join_vec">join_vec</a>(&<b>mut</b> self, coins);
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(self, receiver)
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(self, receiver)
 }
 </code></pre>
 

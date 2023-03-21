@@ -88,6 +88,6 @@ module examples::donuts_with_events {
         // simply create new type instance and emit it
         event::emit(ProfitsCollected { amount });
 
-        transfer::transfer(profits, tx_context::sender(ctx))
+        transfer::public_transfer(profits, tx_context::sender(ctx))
     }
 }
