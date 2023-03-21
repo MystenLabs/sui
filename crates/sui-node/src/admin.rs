@@ -31,7 +31,7 @@ use tracing::info;
 //
 //   $ curl -X POST 'http://127.0.0.1:1337/force-close-epoch?epoch=2'
 //
-// View current authorities capabilities:
+// View current all capabilities from all authorities that have been received by this node:
 //
 //   $ curl 'http://127.0.0.1:1337/capabilities'
 
