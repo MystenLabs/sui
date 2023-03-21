@@ -154,7 +154,7 @@ module sui_system::sui_system_state_inner {
         stake_subsidy_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
-        initial_stake_subsidy_distribution_amount: u64,
+        stake_subsidy_initial_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
         max_validator_count: u64,
@@ -186,7 +186,7 @@ module sui_system::sui_system_state_inner {
             validator_report_records: vec_map::empty(),
             stake_subsidy: stake_subsidy::create(
                 stake_subsidy_fund,
-                initial_stake_subsidy_distribution_amount,
+                stake_subsidy_initial_distribution_amount,
                 stake_subsidy_period_length,
                 stake_subsidy_decrease_rate,
                 ctx
