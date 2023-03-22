@@ -196,7 +196,7 @@ Sui Capys use dynamic image generation. When a Capy is born, its attributes dete
 
 To implement this, the Capys game API service refreshes the image in response to a user-initiated change. The URL for a Capy is a template with the `capy.id`. But storing the full URL - as well as other fields in the Capy object due to their diverse population - also leads to users paying for excess storage and increased gas fees. 
 
-The following example demonstrates to implement dynamic image generation:
+The following example demonstrates how to implement dynamic image generation:
 
 ```rust
 module capy::capy {
