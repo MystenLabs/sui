@@ -16,7 +16,7 @@ use sui_types::coin::CoinMetadata;
 use sui_types::error::SuiError;
 use sui_types::object::Object;
 
-use crate::Page;
+use crate::{BigInt, Page};
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
@@ -63,7 +63,7 @@ pub struct Coin {
     pub coin_object_id: ObjectID,
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
-    pub balance: u64,
+    pub balance: BigInt,
     pub locked_until_epoch: Option<EpochId>,
     pub previous_transaction: TransactionDigest,
 }

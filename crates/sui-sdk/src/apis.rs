@@ -328,7 +328,7 @@ impl CoinReadApi {
             })
             .take_while(|coin: &Coin| {
                 let ready = future::ready(total < amount);
-                total += coin.balance as u128;
+                total += <u64>::from(coin.balance) as u128;
                 ready
             })
             .collect::<Vec<_>>()

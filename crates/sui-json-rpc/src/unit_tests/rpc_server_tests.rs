@@ -796,9 +796,12 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
     let new_coin = coins
         .data
         .iter()
-        .find(|coin| coin.balance > genesis_coin_amount)
+        .find(|coin| <u64>::from(coin.balance) > <u64>::from(genesis_coin_amount))
         .unwrap();
-    assert_eq!((genesis_coin_amount * 3) - 1000000, new_coin.balance);
+    assert_eq!(
+        (<u64>::from(genesis_coin_amount) * 3) - 1000000,
+        <u64>::from(new_coin.balance)
+    );
 
     Ok(())
 }

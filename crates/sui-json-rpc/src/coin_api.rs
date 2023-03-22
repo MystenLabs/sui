@@ -74,7 +74,7 @@ impl CoinReadApi {
                 coin_object_id: o.id(),
                 version: o.version(),
                 digest: o.digest(),
-                balance,
+                balance: balance.into(),
                 locked_until_epoch,
                 previous_transaction: o.previous_transaction,
             })
@@ -221,9 +221,9 @@ impl CoinReadApiServer for CoinReadApi {
         for coin in coins {
             let coin = self.get_coin(&coin).await?;
             if let Some(lock) = coin.locked_until_epoch {
-                *locked_balance.entry(lock).or_default() += coin.balance as u128
+                *locked_balance.entry(lock).or_default() += <u64>::from(coin.balance) as u128
             } else {
-                total_balance += coin.balance as u128;
+                total_balance += <u64>::from(coin.balance) as u128;
             }
             coin_object_count += 1;
         }
@@ -250,10 +250,11 @@ impl CoinReadApiServer for CoinReadApi {
                 locked_balance: Default::default(),
             });
             if let Some(lock) = coin.locked_until_epoch {
-                *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
+                *balance.locked_balance.entry(lock).or_default() +=
+                    <u64>::from(coin.balance) as u128
             } else {
                 let total_balance: u128 =
-                    <u128>::from(balance.total_balance) + coin.balance as u128;
+                    <u128>::from(balance.total_balance) + <u64>::from(coin.balance) as u128;
                 balance.total_balance = <BigBigInt>::from(total_balance);
             }
             balance.coin_object_count += 1;

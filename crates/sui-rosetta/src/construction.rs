@@ -288,7 +288,9 @@ pub async fn metadata(
             .await
     };
 
-    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
+    let total_coin_value = coins
+        .iter()
+        .fold(0, |sum, coin| sum + <u64>::from(coin.balance));
 
     let coins = coins
         .into_iter()

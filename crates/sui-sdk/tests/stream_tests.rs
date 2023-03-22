@@ -108,7 +108,9 @@ async fn test_coins_stream() -> Result<(), anyhow::Error> {
     let amount = client
         .coin_read_api()
         .get_coins_stream(address, Some(SUI_COIN_TYPE.to_string()))
-        .fold(0u128, |acc, coin| async move { acc + coin.balance as u128 })
+        .fold(0u128, |acc, coin| async move {
+            acc + <u64>::from(coin.balance) as u128
+        })
         .await;
 
     assert_eq!(500000000000000, amount);
@@ -120,7 +122,7 @@ async fn test_coins_stream() -> Result<(), anyhow::Error> {
         .get_coins_stream(address, Some(SUI_COIN_TYPE.to_string()))
         .take_while(|coin| {
             let ready = future::ready(total < 300000000000000);
-            total += coin.balance as u128;
+            total += <u64>::from(coin.balance) as u128;
             ready
         })
         .map(|coin| coin.object_ref())

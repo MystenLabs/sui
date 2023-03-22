@@ -221,7 +221,7 @@ impl From<sui_sdk::rpc_types::Coin> for Coin {
                 },
             },
             amount: Amount {
-                value: coin.balance as i128,
+                value: <u64>::from(coin.balance) as i128,
                 currency: SUI.clone(),
                 metadata: None,
             },

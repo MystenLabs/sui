@@ -21,7 +21,7 @@ export const CoinStruct = object({
   coinObjectId: ObjectId,
   version: number(),
   digest: TransactionDigest,
-  balance: number(),
+  balance: string(),
   lockedUntilEpoch: nullable(number()),
   previousTransaction: TransactionDigest,
 });

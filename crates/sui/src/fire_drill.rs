@@ -103,7 +103,9 @@ pub async fn get_gas_obj_ref(
         .get_coins(sui_address, Some("0x2::sui::SUI".into()), None, None)
         .await?
         .data;
-    let gas_obj = coins.iter().find(|c| c.balance >= minimal_gas_balance);
+    let gas_obj = coins
+        .iter()
+        .find(|c| <u64>::from(c.balance) >= minimal_gas_balance);
     if gas_obj.is_none() {
         bail!("Validator doesn't have enough Sui coins to cover transaction fees.");
     }
