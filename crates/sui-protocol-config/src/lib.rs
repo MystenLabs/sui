@@ -397,6 +397,29 @@ pub struct ProtocolConfig {
     // Cost params for the Move native function `record_new_uid(id: address)`
     object_record_new_uid_cost_base: Option<u64>,
 
+    // Transfer
+    // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+    transfer_transfer_internal_cost_base: Option<u64>,
+    // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
+    transfer_freeze_object_cost_base: Option<u64>,
+    // Cost params for the Move native function `share_object<T: key>(obj: T)`
+    transfer_share_object_cost_base: Option<u64>,
+
+    // TxContext
+    // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+    tx_context_derive_id_cost_base: Option<u64>,
+
+    // Types
+    // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
+    types_is_one_time_witness_cost_base: Option<u64>,
+    types_is_one_time_witness_type_tag_cost_per_byte: Option<u64>,
+    types_is_one_time_witness_type_cost_per_byte: Option<u64>,
+
+    // Validator
+    // Cost params for the Move native function `validate_metadata_bcs(metadata: vector<u8>)`
+    validator_validate_metadata_cost_base: Option<u64>,
+    validator_validate_metadata_data_cost_per_byte: Option<u64>,
+
     // Crypto natives
     // ed25519
     ed25519_ed25519_verify_cost_base: Option<u64>,
@@ -745,6 +768,45 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn transfer_transfer_internal_cost_base(&self) -> u64 {
+        self.transfer_transfer_internal_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn transfer_freeze_object_cost_base(&self) -> u64 {
+        self.transfer_freeze_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn transfer_share_object_cost_base(&self) -> u64 {
+        self.transfer_share_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn tx_context_derive_id_cost_base(&self) -> u64 {
+        self.tx_context_derive_id_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn types_is_one_time_witness_cost_base(&self) -> u64 {
+        self.types_is_one_time_witness_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn types_is_one_time_witness_type_tag_cost_per_byte(&self) -> u64 {
+        self.types_is_one_time_witness_type_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn types_is_one_time_witness_type_cost_per_byte(&self) -> u64 {
+        self.types_is_one_time_witness_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn validator_validate_metadata_cost_base(&self) -> u64 {
+        self.validator_validate_metadata_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn validator_validate_metadata_data_cost_per_byte(&self) -> u64 {
+        self.validator_validate_metadata_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
     pub fn ed25519_ed25519_verify_cost_base(&self) -> u64 {
         self.ed25519_ed25519_verify_cost_base
             .expect(CONSTANT_ERR_MSG)
@@ -989,6 +1051,29 @@ impl ProtocolConfig {
                 // Cost params for the Move native function `record_new_uid(id: address)`
                 object_record_new_uid_cost_base: Some(52),
 
+                // `transfer` module
+                // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+                transfer_transfer_internal_cost_base: Some(52),
+                // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
+                transfer_freeze_object_cost_base: Some(52),
+                // Cost params for the Move native function `share_object<T: key>(obj: T)`
+                transfer_share_object_cost_base: Some(52),
+
+                // `tx_context` module
+                // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+                tx_context_derive_id_cost_base: Some(52),
+
+                // `types` module
+                // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
+                types_is_one_time_witness_cost_base: Some(52),
+                types_is_one_time_witness_type_tag_cost_per_byte: Some(0),
+                types_is_one_time_witness_type_cost_per_byte: Some(0),
+
+                // `validator` module
+                // Cost params for the Move native function `validate_metadata_bcs(metadata: vector<u8>)`
+                validator_validate_metadata_cost_base: Some(52),
+                validator_validate_metadata_data_cost_per_byte: Some(0),
+
                 // Crypto
                 // ed25519
                 ed25519_ed25519_verify_cost_base: Some(52),
@@ -1001,8 +1086,10 @@ impl ProtocolConfig {
                 // hash::keccak256
                 hash_keccak256_cost_base: Some(52),
                 hash_keccak256_data_cost_per_byte: Some(0),
-                hash_keccak256_data_cost_per_block: Some(0), // When adding a new constant, set it to None in the earliest version, like this:
-                                                             // new_constant: None,
+                hash_keccak256_data_cost_per_block: Some(0),
+
+                // When adding a new constant, set it to None in the earliest version, like this:
+                // new_constant: None,
             },
 
             // Use this template when making changes:

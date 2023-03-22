@@ -41,6 +41,12 @@ use self::{
     },
     event::EventEmitCostParams,
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    transfer::{
+        TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
+    },
+    tx_context::TxContextDeriveIdCostParams,
+    types::TypesIsOneTimeWitnessCostParams,
+    validator::ValidatorValidateMetadataBcsCostParams,
 };
 
 #[derive(Tid)]
@@ -66,6 +72,20 @@ pub struct NativesCostTable {
     pub borrow_uid_cost_params: BorrowUidCostParams,
     pub delete_impl_cost_params: DeleteImplCostParams,
     pub record_new_id_cost_params: RecordNewIdCostParams,
+
+    // Transfer
+    pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
+    pub transfer_freeze_object_cost_params: TransferFreezeObjectCostParams,
+    pub transfer_share_object_cost_params: TransferShareObjectCostParams,
+
+    // TxContext
+    pub tx_context_derive_id_cost_params: TxContextDeriveIdCostParams,
+
+    // Type
+    pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
+
+    // Validator
+    pub validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams,
 
     // Crypto natives
     // ed25519
@@ -213,6 +233,45 @@ impl NativesCostTable {
                     .into(),
                 hash_keccak256_data_cost_per_block: protocol_config
                     .hash_keccak256_data_cost_per_block()
+                    .into(),
+            },
+            transfer_transfer_internal_cost_params: TransferInternalCostParams {
+                transfer_transfer_internal_cost_base: protocol_config
+                    .transfer_transfer_internal_cost_base()
+                    .into(),
+            },
+            transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
+                transfer_freeze_object_cost_base: protocol_config
+                    .transfer_freeze_object_cost_base()
+                    .into(),
+            },
+            transfer_share_object_cost_params: TransferShareObjectCostParams {
+                transfer_share_object_cost_base: protocol_config
+                    .transfer_share_object_cost_base()
+                    .into(),
+            },
+            tx_context_derive_id_cost_params: TxContextDeriveIdCostParams {
+                tx_context_derive_id_cost_base: protocol_config
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
+                types_is_one_time_witness_cost_base: protocol_config
+                    .types_is_one_time_witness_cost_base()
+                    .into(),
+                types_is_one_time_witness_type_tag_cost_per_byte: protocol_config
+                    .types_is_one_time_witness_type_tag_cost_per_byte()
+                    .into(),
+                types_is_one_time_witness_type_cost_per_byte: protocol_config
+                    .types_is_one_time_witness_type_cost_per_byte()
+                    .into(),
+            },
+            validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams {
+                validator_validate_metadata_cost_base: protocol_config
+                    .validator_validate_metadata_cost_base()
+                    .into(),
+                validator_validate_metadata_data_cost_per_byte: protocol_config
+                    .validator_validate_metadata_data_cost_per_byte()
                     .into(),
             },
         }
