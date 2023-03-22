@@ -6,7 +6,7 @@ Welcome to the Sui tutorial for building smart contracts with [Sui Move](../lear
 This tutorial provides a brief explanation of the Move language and includes concrete examples to demonstrate how you can use Move in Sui.
 
 
-## About Move
+## About Sui Move
 
 Move is an open source language for writing safe smart contracts. It was originally developed at Facebook to power the [Diem](https://github.com/diem/diem) blockchain. However, Move was designed as a platform-agnostic language to enable common libraries, tooling, and developer communities across
 blockchains with vastly different data and execution models. [Sui](https://github.com/MystenLabs/sui/blob/main/README.md), [0L](https://github.com/0LNetworkCommunity/libra), and [Starcoin](https://github.com/starcoinorg/starcoin) are using Move, and there are also plans to integrate the language in several upcoming and existing platforms, like [Celo](https://www.businesswire.com/news/home/20210921006104/en/Celo-Sets-Sights-On-Becoming-Fastest-EVM-Chain-Through-Collaboration-With-Mysten-Labs).
