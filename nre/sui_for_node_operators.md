@@ -249,7 +249,7 @@ sui client call --package 0x2 --module sui_system --function update_validator_na
 sui client call --package 0x2 --module sui_system --function update_validator_next_epoch_p2p_address --args 0x5 "[4, 192, 168, 1, 1]" --gas-budget 10000
 ```
 
-See the [full list of metadata update functions here](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move#L413-L553).
+See the [full list of metadata update functions here](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move#L267-L444).
 
 ### Operation Cap
 
