@@ -56,6 +56,16 @@ Name of the coin
 ## Constants
 
 
+<a name="0x2_sui_ENotSystemAddress"></a>
+
+Sender is not @0x0 the system address.
+
+
+<pre><code><b>const</b> <a href="sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="0x2_sui_EAlreadyMinted"></a>
 
 
@@ -104,7 +114,7 @@ Register the <code><a href="sui.md#0x2_sui_SUI">SUI</a></code> Coin to acquire i
 This should be called only once during genesis creation.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -113,7 +123,8 @@ This should be called only once during genesis creation.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> TxContext): Balance&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt; {
+<pre><code><b>fun</b> <a href="sui.md#0x2_sui_new">new</a>(ctx: &<b>mut</b> TxContext): Balance&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt; {
+    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="sui.md#0x2_sui_ENotSystemAddress">ENotSystemAddress</a>);
     <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, <a href="sui.md#0x2_sui_EAlreadyMinted">EAlreadyMinted</a>);
 
     <b>let</b> (treasury, metadata) = <a href="coin.md#0x2_coin_create_currency">coin::create_currency</a>(
@@ -126,7 +137,7 @@ This should be called only once during genesis creation.
         <a href="_none">option::none</a>(),
         ctx
     );
-    <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(metadata);
+    <a href="transfer.md#0x2_transfer_public_freeze_object">transfer::public_freeze_object</a>(metadata);
     <b>let</b> supply = <a href="coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury);
     <b>let</b> total_sui = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> supply, <a href="sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>);
     <a href="balance.md#0x2_balance_destroy_supply">balance::destroy_supply</a>(supply);
@@ -154,7 +165,7 @@ This should be called only once during genesis creation.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>(c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt;, recipient: <b>address</b>) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, recipient)
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, recipient)
 }
 </code></pre>
 

@@ -16,11 +16,13 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
+mod math;
 pub mod metrics;
 pub mod module_cache_metrics;
 pub mod narwhal_manager;
 pub mod quorum_driver;
 pub mod safe_client;
+mod scoring_decision;
 mod stake_aggregator;
 pub mod state_accumulator;
 pub mod storage;
@@ -30,6 +32,12 @@ pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
 
+#[cfg(test)]
+#[path = "unit_tests/move_package_tests.rs"]
+mod move_package_tests;
+#[cfg(test)]
+#[path = "unit_tests/move_package_upgrade_tests.rs"]
+mod move_package_upgrade_tests;
 #[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;

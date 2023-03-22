@@ -30,7 +30,10 @@ export function PreviewTransfer({
     const accountAddress = useActiveAddress();
     const [decimals] = useCoinDecimals(coinType);
     const amountWithoutDecimals = parseAmount(amount, decimals);
-    const { data: gasBudget } = useTransactionGasBudget(transaction);
+    const { data: gasBudget } = useTransactionGasBudget(
+        accountAddress,
+        transaction
+    );
 
     return (
         <div className="divide-y divide-solid divide-steel/20 divide-x-0 flex flex-col px-2.5 w-full">

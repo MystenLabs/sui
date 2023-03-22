@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::base_types::{ObjectID, SuiAddress};
+use crate::id::UID;
 
 /// Rust version of the Move sui::vec_map::VecMap type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -73,6 +74,22 @@ impl<K> Default for LinkedTable<K> {
             size: 0,
             head: None,
             tail: None,
+        }
+    }
+}
+
+/// Rust version of the Move sui::bag::Bag type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct Bag {
+    pub id: UID,
+    pub size: u64,
+}
+
+impl Default for Bag {
+    fn default() -> Self {
+        Self {
+            id: UID::new(ObjectID::ZERO),
+            size: 0,
         }
     }
 }

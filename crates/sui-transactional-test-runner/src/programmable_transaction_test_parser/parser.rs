@@ -11,7 +11,7 @@ use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_types::messages::{Argument, Command, ProgrammableMoveCall};
 
 use crate::programmable_transaction_test_parser::token::{
-    GAS_COIN, INPUT, MAKE_MOVE_VEC, MERGE_COINS, NESTED_RESULT, RESULT, SPLIT_COIN,
+    GAS_COIN, INPUT, MAKE_MOVE_VEC, MERGE_COINS, NESTED_RESULT, RESULT, SPLIT_COINS,
     TRANSFER_OBJECTS,
 };
 
@@ -42,7 +42,7 @@ pub struct ParsedMoveCall {
 pub enum ParsedCommand {
     MoveCall(Box<ParsedMoveCall>),
     TransferObjects(Vec<Argument>, Argument),
-    SplitCoin(Argument, Argument),
+    SplitCoins(Argument, Vec<Argument>),
     MergeCoins(Argument, Vec<Argument>),
     MakeMoveVec(Option<ParsedType>, Vec<Argument>),
 }
@@ -119,14 +119,14 @@ where
                 self.inner().advance(Tok::RParen)?;
                 ParsedCommand::TransferObjects(args, arg)
             }
-            (Tok::Ident, SPLIT_COIN) => {
+            (Tok::Ident, SPLIT_COINS) => {
                 self.inner().advance(Tok::LParen)?;
                 let coin = self.parse_command_arg()?;
                 self.inner().advance(Tok::Comma)?;
-                let amt = self.parse_command_arg()?;
+                let amts = self.parse_command_args(Tok::LBracket, Tok::RBracket)?;
                 self.maybe_trailing_comma()?;
                 self.inner().advance(Tok::RParen)?;
-                ParsedCommand::SplitCoin(coin, amt)
+                ParsedCommand::SplitCoins(coin, amts)
             }
             (Tok::Ident, MERGE_COINS) => {
                 self.inner().advance(Tok::LParen)?;
@@ -286,7 +286,7 @@ impl ParsedCommand {
             ParsedCommand::TransferObjects(objs, recipient) => {
                 Command::TransferObjects(objs, recipient)
             }
-            ParsedCommand::SplitCoin(coin, amt) => Command::SplitCoin(coin, amt),
+            ParsedCommand::SplitCoins(coin, amts) => Command::SplitCoins(coin, amts),
             ParsedCommand::MergeCoins(target, coins) => Command::MergeCoins(target, coins),
             ParsedCommand::MakeMoveVec(ty_opt, args) => Command::MakeMoveVec(
                 ty_opt

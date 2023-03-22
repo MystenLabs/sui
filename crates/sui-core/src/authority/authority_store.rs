@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use either::Either;
+use fastcrypto::hash::{Digest, MultisetHash};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
 
+use sui_protocol_config::ProtocolConfig;
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
@@ -24,8 +26,7 @@ use sui_types::error::UserInputError;
 use sui_types::message_envelope::Message;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module, get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey,
-    ObjectStore,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -38,8 +39,8 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 
-use super::authority_notify_read::NotifyRead;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
+use mysten_common::sync::notify_read::NotifyRead;
 
 const NUM_SHARDS: usize = 4096;
 
@@ -183,6 +184,15 @@ impl AuthorityStore {
         }
 
         Ok(store)
+    }
+
+    pub fn get_root_state_hash(&self, epoch: EpochId) -> SuiResult<Digest<32>> {
+        let acc = self
+            .perpetual_tables
+            .root_state_hash_by_epoch
+            .get(&epoch)?
+            .expect("Root state hash for this epoch does not exist");
+        Ok(acc.1.digest())
     }
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
@@ -1394,7 +1404,7 @@ impl AuthorityStore {
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         let package = self.get_object(package_id)?;
         if let Some(obj) = &package {
             fp_ensure!(
@@ -1445,7 +1455,21 @@ impl ModuleResolver for AuthorityStore {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        get_module(self, module_id)
+        // TODO: We should cache the deserialized modules to avoid
+        // fetching from the store / re-deserializing them every time.
+        // https://github.com/MystenLabs/sui/issues/809
+        Ok(self
+            .get_package_object(&ObjectID::from(*module_id.address()))?
+            .and_then(|package| {
+                // unwrap safe since get_package() ensures it's a package object.
+                package
+                    .data
+                    .try_as_package()
+                    .unwrap()
+                    .serialized_module_map()
+                    .get(module_id.name().as_str())
+                    .cloned()
+            }))
     }
 }
 

@@ -85,7 +85,9 @@ export abstract class SignerWithProvider implements Signer {
     let transactionBytes;
 
     if (Transaction.is(input.transaction)) {
-      input.transaction.setSender(await this.getAddress());
+      // If the sender has not yet been set on the transaction, then set it.
+      // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
+      input.transaction.setSenderIfNotSet(await this.getAddress());
       transactionBytes = await input.transaction.build({
         provider: this.provider,
       });
@@ -143,7 +145,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async getTransactionDigest(tx: Uint8Array | Transaction): Promise<string> {
     if (Transaction.is(tx)) {
-      tx.setSender(await this.getAddress());
+      tx.setSenderIfNotSet(await this.getAddress());
       return tx.getDigest({ provider: this.provider });
     } else if (tx instanceof Uint8Array) {
       return TransactionDataBuilder.getDigestFromBytes(tx);
@@ -175,7 +177,7 @@ export abstract class SignerWithProvider implements Signer {
   }): Promise<DryRunTransactionResponse> {
     let dryRunTxBytes: Uint8Array;
     if (Transaction.is(input.transaction)) {
-      input.transaction.setSender(await this.getAddress());
+      input.transaction.setSenderIfNotSet(await this.getAddress());
       dryRunTxBytes = await input.transaction.build({
         provider: this.provider,
       });

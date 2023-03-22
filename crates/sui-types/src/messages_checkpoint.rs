@@ -82,6 +82,7 @@ impl From<ECMHLiveObjectSetDigest> for CheckpointCommitment {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct EndOfEpochData {
     /// next_epoch_committee is `Some` if and only if the current checkpoint is
     /// the last checkpoint of an epoch.

@@ -7,6 +7,7 @@ import { Link, type LinkProps } from '~/ui/Link';
 
 interface BaseInternalLinkProps extends LinkProps {
     noTruncate?: boolean;
+    label?: string;
 }
 
 function createInternalLink<T extends string>(
@@ -17,16 +18,13 @@ function createInternalLink<T extends string>(
     return ({
         [propName]: id,
         noTruncate,
+        label,
         ...props
     }: BaseInternalLinkProps & Record<T, string>) => {
         const truncatedAddress = noTruncate ? id : formatter(id);
         return (
-            <Link
-                variant="mono"
-                to={`/${base}/${encodeURIComponent(id)}`}
-                {...props}
-            >
-                {truncatedAddress}
+            <Link variant="mono" to={`/${base}/${encodeURI(id)}`} {...props}>
+                {label || truncatedAddress}
             </Link>
         );
     };

@@ -48,7 +48,7 @@ module examples::trade_in {
         assert!(coin::value(&payment) == price, EIncorrectAmount);
 
         // for simplicity's sake transfer directly to @examples account
-        transfer::transfer(payment, @examples);
+        transfer::public_transfer(payment, @examples);
     }
 
     /// Give back an old phone and get 50% of its price as a discount for the new one.
@@ -59,7 +59,7 @@ module examples::trade_in {
 
         assert!(coin::value(&payment) == to_pay, EIncorrectAmount);
 
-        transfer::transfer(old_phone, @examples);
-        transfer::transfer(payment, @examples);
+        transfer::public_transfer(old_phone, @examples);
+        transfer::public_transfer(payment, @examples);
     }
 }

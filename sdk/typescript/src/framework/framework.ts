@@ -17,6 +17,7 @@ import { CoinStruct } from '../types/coin';
 import { StructTag } from '../types/sui-bcs';
 import { Infer, literal, number, object, string, union } from 'superstruct';
 
+export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
 export const OBJECT_MODULE_NAME = 'object';

@@ -67,7 +67,7 @@ impl Executor {
     {
         let metrics = ExecutorMetrics::new(registry);
 
-        // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
+        // This will be needed in the `Subscriber`.
         let arc_metrics = Arc::new(metrics);
 
         // Spawn the subscriber.

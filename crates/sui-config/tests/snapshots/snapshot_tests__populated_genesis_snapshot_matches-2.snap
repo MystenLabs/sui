@@ -1,8 +1,323 @@
 ---
 source: crates/sui-config/tests/snapshot_tests.rs
-expression: genesis.sui_system_wrapper_object()
+expression: genesis.sui_system_object()
 ---
-id:
-  id: "0x0000000000000000000000000000000000000000000000000000000000000005"
-version: 1
+epoch: 0
+protocol_version: 1
+system_state_version: 1
+validators:
+  total_stake: 25000000000000000
+  active_validators:
+    - metadata:
+        sui_address: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
+        protocol_pubkey_bytes:
+          - 153
+          - 242
+          - 94
+          - 246
+          - 31
+          - 128
+          - 50
+          - 185
+          - 20
+          - 99
+          - 100
+          - 96
+          - 152
+          - 44
+          - 92
+          - 198
+          - 241
+          - 52
+          - 239
+          - 29
+          - 218
+          - 231
+          - 102
+          - 87
+          - 242
+          - 203
+          - 254
+          - 193
+          - 235
+          - 252
+          - 141
+          - 9
+          - 115
+          - 116
+          - 8
+          - 13
+          - 246
+          - 252
+          - 240
+          - 220
+          - 184
+          - 188
+          - 75
+          - 13
+          - 142
+          - 10
+          - 245
+          - 216
+          - 14
+          - 187
+          - 255
+          - 43
+          - 76
+          - 89
+          - 159
+          - 84
+          - 244
+          - 45
+          - 99
+          - 18
+          - 223
+          - 195
+          - 20
+          - 39
+          - 96
+          - 120
+          - 193
+          - 204
+          - 52
+          - 126
+          - 187
+          - 190
+          - 197
+          - 25
+          - 139
+          - 226
+          - 88
+          - 81
+          - 63
+          - 56
+          - 107
+          - 147
+          - 13
+          - 2
+          - 194
+          - 116
+          - 154
+          - 128
+          - 62
+          - 35
+          - 48
+          - 149
+          - 94
+          - 189
+          - 26
+          - 16
+        network_pubkey_bytes:
+          - 13
+          - 125
+          - 171
+          - 53
+          - 140
+          - 141
+          - 173
+          - 170
+          - 78
+          - 250
+          - 0
+          - 73
+          - 167
+          - 91
+          - 7
+          - 67
+          - 101
+          - 85
+          - 177
+          - 10
+          - 54
+          - 130
+          - 25
+          - 187
+          - 104
+          - 15
+          - 112
+          - 87
+          - 19
+          - 73
+          - 215
+          - 117
+        worker_pubkey_bytes:
+          - 13
+          - 125
+          - 171
+          - 53
+          - 140
+          - 141
+          - 173
+          - 170
+          - 78
+          - 250
+          - 0
+          - 73
+          - 167
+          - 91
+          - 7
+          - 67
+          - 101
+          - 85
+          - 177
+          - 10
+          - 54
+          - 130
+          - 25
+          - 187
+          - 104
+          - 15
+          - 112
+          - 87
+          - 19
+          - 73
+          - 215
+          - 117
+        proof_of_possession_bytes:
+          - 176
+          - 81
+          - 164
+          - 232
+          - 143
+          - 71
+          - 217
+          - 26
+          - 206
+          - 233
+          - 63
+          - 195
+          - 47
+          - 30
+          - 65
+          - 201
+          - 145
+          - 199
+          - 195
+          - 120
+          - 45
+          - 204
+          - 61
+          - 44
+          - 156
+          - 62
+          - 176
+          - 15
+          - 202
+          - 179
+          - 6
+          - 85
+          - 117
+          - 235
+          - 141
+          - 16
+          - 201
+          - 85
+          - 81
+          - 255
+          - 154
+          - 70
+          - 63
+          - 157
+          - 87
+          - 56
+          - 150
+          - 193
+        name: "0"
+        description: ""
+        image_url: ""
+        project_url: ""
+        net_address: /ip4/127.0.0.1/tcp/80
+        p2p_address: /ip4/127.0.0.1/udp/80
+        primary_address: /ip4/127.0.0.1/udp/80
+        worker_address: /ip4/127.0.0.1/udp/80
+        next_epoch_protocol_pubkey_bytes: ~
+        next_epoch_proof_of_possession: ~
+        next_epoch_network_pubkey_bytes: ~
+        next_epoch_worker_pubkey_bytes: ~
+        next_epoch_net_address: ~
+        next_epoch_p2p_address: ~
+        next_epoch_primary_address: ~
+        next_epoch_worker_address: ~
+        extra_fields:
+          id:
+            id: "0x03838f7b4ae40ab0b2291040509974ee2c8264adce8c08748fcc663491d2cd6d"
+          size: 0
+      voting_power: 10000
+      operation_cap_id: "0xe880b8b1085e5cf3fde5ba88684311ac8b8ea43f6a99feb0a52c206d0c720d62"
+      gas_price: 1
+      staking_pool:
+        id: "0x21710d064e393974914a2b0dcc572d8d96c55bc3b4da9c3a80b0dc37c47516f8"
+        activation_epoch: 0
+        deactivation_epoch: ~
+        sui_balance: 25000000000000000
+        rewards_pool:
+          value: 0
+        pool_token_balance: 25000000000000000
+        exchange_rates:
+          id: "0x91d84ed6dc0105a32ea1ea5806b2454fdaa784e8eea5aaa62ab29d4932870b0d"
+          size: 1
+        pending_stake: 0
+        pending_total_sui_withdraw: 0
+        pending_pool_token_withdraw: 0
+        extra_fields:
+          id:
+            id: "0x75824803e2a4c17ee0b3712f88693ac9fbce096eca6f1fc2b70d8f8426ea2af6"
+          size: 0
+      commission_rate: 0
+      next_epoch_stake: 25000000000000000
+      next_epoch_gas_price: 1
+      next_epoch_commission_rate: 0
+      extra_fields:
+        id:
+          id: "0x7365155b04cefa5b2941dfc20fb1c2ae86888a0679a64ff25bac3d20b01e4026"
+        size: 0
+  pending_active_validators:
+    contents:
+      id: "0x56053be2d34ea8e9f8763f90df844ede5d0a8f1d1dc65d81457b43416a1a8899"
+      size: 0
+  pending_removals: []
+  staking_pool_mappings:
+    id: "0x22b9215b1c6804e1796c90df7ac728a3f2ba53ed711e63e88d7516fc846c92f5"
+    size: 1
+  inactive_validators:
+    id: "0x68e07ec6a578e119f45c182fc5a4817138a3644420d0747cd04bd75de6248b0e"
+    size: 0
+  validator_candidates:
+    id: "0x50f83cf7c9541d9a1268ed2f1be646b3c83e9c6ee6dbd28c254667fe87b2911d"
+    size: 0
+  at_risk_validators:
+    contents: []
+  extra_fields:
+    id:
+      id: "0xbffb7fb481053445f00c0d104f86ff6a02b96a5e3b22f2e4129093a17914320c"
+    size: 0
+storage_fund:
+  value: 0
+parameters:
+  governance_start_epoch: 0
+  epoch_duration_ms: 86400000
+  extra_fields:
+    id:
+      id: "0x1a349a6f387c0ff82d7ac3080c2e3db3c658cd1fda602e59e5593fe0043d1061"
+    size: 0
+reference_gas_price: 1
+validator_report_records:
+  contents: []
+stake_subsidy:
+  balance:
+    value: 9975000000000000000
+  distribution_counter: 0
+  current_distribution_amount: 1000000000000000
+  stake_subsidy_period_length: 30
+  stake_subsidy_decrease_rate: 10000
+  extra_fields:
+    id:
+      id: "0xdf827f61fb4c1a584e14428b796468b0d2c04a132b6713f83db4c9ca691ac0fa"
+    size: 0
+safe_mode: false
+epoch_start_timestamp_ms: 10
+extra_fields:
+  id:
+    id: "0xc8e8268db32f8fbaf610b8241a63ca23807b3d295a683a74406a868da62cdb7a"
+  size: 0
 

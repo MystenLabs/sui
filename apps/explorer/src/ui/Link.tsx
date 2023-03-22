@@ -42,7 +42,7 @@ export function Link({
 }: LinkProps) {
     return (
         <ButtonOrLink className={linkStyles({ variant, size })} {...props}>
-            <div className="inline-flex flex-nowrap gap-2">
+            <div className="inline-flex flex-nowrap items-center gap-2">
                 {before}
                 {children}
                 {after}

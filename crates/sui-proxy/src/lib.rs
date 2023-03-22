@@ -4,6 +4,7 @@ pub mod admin;
 pub mod config;
 pub mod consumer;
 pub mod handlers;
+pub mod metrics;
 pub mod middleware;
 pub mod peers;
 pub mod prom_to_mimir;

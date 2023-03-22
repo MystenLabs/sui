@@ -85,7 +85,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_one_input_coin() {
         res.txn_result.as_ref().unwrap().status(),
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientCoinBalance,
-            command: Some(2)
+            command: Some(0) // SplitCoins is the first command in the implementation of pay
         },
     );
 }
@@ -138,7 +138,7 @@ async fn test_pay_sui_failure_insufficient_total_balance_multiple_input_coins() 
         res.txn_result.as_ref().unwrap().status(),
         &ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientCoinBalance,
-            command: Some(2)
+            command: Some(0) // SplitCoins is the first command in the implementation of pay
         },
     );
 }

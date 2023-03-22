@@ -7,7 +7,7 @@ use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
@@ -17,17 +17,25 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
-    storage::{ChildObjectResolver, ObjectChange, ParentSync, Storage},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 pub trait StorageView<E: std::fmt::Debug>:
-    ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync + ChildObjectResolver
+    ResourceResolver<Error = E>
+    + ModuleResolver<Error = E>
+    + LinkageResolver<Error = E>
+    + BackingPackageStore
+    + Storage
+    + ParentSync
+    + ChildObjectResolver
 {
 }
 impl<
         E: std::fmt::Debug,
         T: ResourceResolver<Error = E>
             + ModuleResolver<Error = E>
+            + LinkageResolver<Error = E>
+            + BackingPackageStore
             + Storage
             + ParentSync
             + ChildObjectResolver,
@@ -113,7 +121,7 @@ pub enum CommandKind<'a> {
     },
     MakeMoveVec,
     TransferObjects,
-    SplitCoin,
+    SplitCoins,
     MergeCoins,
     Publish,
     Upgrade,

@@ -7,7 +7,7 @@ services:
     image: mysten/sui-node:${SUI_SHA} # UPDATE HERE
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info
+      - RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
     labels:
       org.label-schema.name: "validator"
     ports:
@@ -21,7 +21,7 @@ services:
       - ./validator.yaml:/opt/sui/config/validator.yaml:ro
       - ./genesis.blob:/opt/sui/config/genesis.blob:ro
       - ../genesis/key-pairs:/opt/sui/key-pairs/:ro
-      - suidb:/opt/sui/db:rw
+      - /opt/sui/db:/opt/sui/db:rw
     command:
       [
         "/usr/local/bin/sui-node",
@@ -34,6 +34,3 @@ services:
       options:
         max-file: "10"
         max-size: "5g"
-
-volumes:
-  suidb:

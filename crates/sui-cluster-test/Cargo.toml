@@ -24,17 +24,18 @@ prometheus = "0.13.3"
 fastcrypto = { workspace = true }
 shared-crypto = { path = "../shared-crypto" }
 
+sui-indexer = { path = "../sui-indexer" }
 sui-faucet = { path = "../sui-faucet" }
 sui-swarm = { path = "../sui-swarm" }
 sui = { path = "../sui" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
+sui-framework-build = { path = "../sui-framework-build" }
 sui-sdk = { path = "../sui-sdk" }
 sui-keys = { path = "../sui-keys" }
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
 sui-json = { path = "../sui-json" }
 sui-config = { path = "../sui-config" }
-sui-transaction-builder = { path = "../sui-transaction-builder" }
 telemetry-subscribers.workspace = true
 
 test-utils = { path = "../test-utils" }

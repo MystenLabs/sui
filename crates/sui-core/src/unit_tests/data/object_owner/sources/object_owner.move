@@ -6,7 +6,7 @@ module object_owner::object_owner {
     use sui::dynamic_object_field;
     use sui::dynamic_field;
     use sui::object::{Self, ID, UID};
-    use sui::transfer::transfer;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Parent has key {
@@ -24,7 +24,7 @@ module object_owner::object_owner {
     }
 
     public entry fun create_child(ctx: &mut TxContext) {
-        transfer(
+        transfer::public_transfer(
             Child { id: object::new(ctx) },
             tx_context::sender(ctx),
         );
@@ -35,7 +35,7 @@ module object_owner::object_owner {
             id: object::new(ctx),
             child: option::none(),
         };
-        transfer(parent, tx_context::sender(ctx));
+        transfer::transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun create_parent_and_child(ctx: &mut TxContext) {
@@ -47,7 +47,7 @@ module object_owner::object_owner {
             id: parent_id,
             child: option::some(child_id),
         };
-        transfer(parent, tx_context::sender(ctx));
+        transfer::transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun add_child(parent: &mut Parent, child: Child) {
@@ -80,7 +80,7 @@ module object_owner::object_owner {
         let child_id = option::extract(&mut parent.child);
         let child: Child = dynamic_object_field::remove(&mut parent.id, 0);
         assert!(object::id(&child) == child_id, 0);
-        transfer(child, tx_context::sender(ctx));
+        transfer::public_transfer(child, tx_context::sender(ctx));
     }
 
     // Call to delete_child
@@ -107,7 +107,7 @@ module object_owner::object_owner {
             id,
             child: child_id,
         };
-        transfer(parent, tx_context::sender(ctx));
+        transfer::transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun create_parent_and_child_wrapped(ctx: &mut TxContext) {
@@ -119,7 +119,7 @@ module object_owner::object_owner {
             id: parent_id,
             child: option::some(child_id),
         };
-        transfer(parent, tx_context::sender(ctx));
+        transfer::transfer(parent, tx_context::sender(ctx));
     }
 
     public entry fun delete_parent_and_child_wrapped(parent: Parent) {

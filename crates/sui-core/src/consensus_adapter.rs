@@ -8,8 +8,7 @@ use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
-use narwhal_types::TransactionProto;
-use narwhal_types::TransactionsClient;
+use narwhal_types::{TransactionProto, TransactionsClient};
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
@@ -52,14 +51,6 @@ use tracing::{debug, info, warn};
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
 pub mod consensus_tests;
-
-// Assuming 2000 txn tps * 10 sec consensus latency = 20000 inflight consensus txns.
-// Leaving a bit more headroom to cap the max inflight consensus txns to 40000.
-pub const MAX_PENDING_CONSENSUS_TRANSACTIONS: u64 = 40000;
-
-// Assuming 100 nodes cluster
-const MAX_PENDING_LOCAL_SUBMISSIONS: usize =
-    (MAX_PENDING_CONSENSUS_TRANSACTIONS as usize) / 100 * 2;
 
 const SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.1, 0.25, 0.5, 1., 2.5, 5., 7.5, 10., 12.5, 15., 20., 25., 30., 60., 90., 120., 180., 300.,
@@ -124,7 +115,7 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_latency: register_histogram_vec_with_registry!(
                 "sequencing_certificate_latency",
                 "The latency for sequencing a certificate.",
-                &["position"],
+                &["position", "mapped_to_low_scoring"],
                 SEQUENCING_CERTIFICATE_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -199,10 +190,14 @@ pub struct ConsensusAdapter {
     consensus_client: Box<dyn SubmitToConsensus>,
     /// Authority pubkey.
     authority: AuthorityName,
+    /// The limit to number of inflight transactions at this node.
+    max_pending_transactions: usize,
     /// Number of submitted transactions still inflight at this node.
     num_inflight_transactions: AtomicU64,
     /// A structure to check the connection statuses populated by the Connection Monitor Listener
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+    /// A structure to check the reputation scores populated by Consensus
+    low_scoring_authorities: ArcSwap<Arc<ArcSwap<HashMap<AuthorityName, u64>>>>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
@@ -234,18 +229,31 @@ impl ConsensusAdapter {
         consensus_client: Box<dyn SubmitToConsensus>,
         authority: AuthorityName,
         connection_monitor_status: Box<Arc<dyn CheckConnection>>,
+        max_pending_transactions: usize,
+        max_pending_local_submissions: usize,
         metrics: ConsensusAdapterMetrics,
-    ) -> Arc<Self> {
+    ) -> Self {
         let num_inflight_transactions = Default::default();
-        Arc::new(Self {
+        let low_scoring_authorities =
+            ArcSwap::from_pointee(Arc::new(ArcSwap::from_pointee(HashMap::new())));
+        Self {
             consensus_client,
             authority,
+            max_pending_transactions,
             num_inflight_transactions,
             connection_monitor_status,
+            low_scoring_authorities,
             metrics,
-            submit_semaphore: Semaphore::new(MAX_PENDING_LOCAL_SUBMISSIONS),
+            submit_semaphore: Semaphore::new(max_pending_local_submissions),
             latency_observer: LatencyObserver::new(),
-        })
+        }
+    }
+
+    pub fn swap_low_scoring_authorities(
+        &self,
+        new_low_scoring: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
+    ) {
+        self.low_scoring_authorities.swap(Arc::new(new_low_scoring));
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
@@ -287,11 +295,12 @@ impl ConsensusAdapter {
         &self,
         committee: &Committee,
         transaction: &ConsensusTransaction,
-    ) -> (impl Future<Output = ()>, usize) {
-        let (duration, position) = match &transaction.kind {
+    ) -> (impl Future<Output = ()>, usize, bool) {
+        let (duration, position, mapped_to_low_scoring) = match &transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
                 let tx_digest = certificate.digest();
-                let position = self.submission_position(committee, tx_digest);
+                let (position, mapped_to_low_scoring) =
+                    self.submission_position(committee, tx_digest);
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 let latency = std::cmp::max(latency, DEFAULT_LATENCY);
@@ -299,15 +308,19 @@ impl ConsensusAdapter {
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
                 let delay_step = latency * 3 / 2;
-                const MAX_DELAY_MUL: usize = 10;
                 (
-                    delay_step * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+                    delay_step * position as u32,
                     position,
+                    mapped_to_low_scoring,
                 )
             }
-            _ => (Duration::ZERO, 0),
+            _ => (Duration::ZERO, 0, false),
         };
-        (tokio::time::sleep(duration), position)
+        (
+            tokio::time::sleep(duration),
+            position,
+            mapped_to_low_scoring,
+        )
     }
 
     /// Check when this authority should submit the certificate to consensus.
@@ -317,10 +330,14 @@ impl ConsensusAdapter {
     /// when system operates normally.
     ///
     /// The function returns the position of this authority when it is their turn to submit the transaction to consensus.
-    fn submission_position(&self, committee: &Committee, tx_digest: &TransactionDigest) -> usize {
+    fn submission_position(
+        &self,
+        committee: &Committee,
+        tx_digest: &TransactionDigest,
+    ) -> (usize, bool) {
         let positions = order_validators_for_submission(committee, tx_digest);
 
-        self.check_submission_wrt_connectivity(positions)
+        self.check_submission_wrt_connectivity_and_scores(positions)
     }
 
     /// This function runs the following algorithm to decide whether or not to submit a transaction
@@ -341,11 +358,18 @@ impl ConsensusAdapter {
     ///
     /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
     /// move our positions up one, and submit at the same time. This allows low performing
-    /// node a chance to participate in consensus and redeem their scores while maintaining performance.
-    fn check_submission_wrt_connectivity(&self, positions: Vec<AuthorityName>) -> usize {
+    /// node a chance to participate in consensus and redeem their scores while maintaining performance
+    /// overall. We will only do this part for authorities that are not low performers themselves to
+    /// prevent extra amplification in the case that the positions look like [low_scoring_a1, low_scoring_a2, a3]
+    fn check_submission_wrt_connectivity_and_scores(
+        &self,
+        positions: Vec<AuthorityName>,
+    ) -> (usize, bool) {
+        let mut mapped_to_low_scoring = false;
         let filtered_positions = positions
             .into_iter()
             .filter(|authority| {
+                // Filter out any nodes that appear disconnected to us
                 self.authority == *authority
                     || self
                         .connection_monitor_status
@@ -353,9 +377,36 @@ impl ConsensusAdapter {
                         .unwrap_or(ConnectionStatus::Disconnected)
                         == ConnectionStatus::Connected
             })
+            .filter(|authority| {
+                // If we are a low scoring authority, we do not filter out ourselves from the list,
+                // nor do we filter out other low scoring authorities. If we are a high scoring
+                // authority, we will co-submit with any low scoring authorities in front of us.
+                let ourself_is_low_scoring = self.authority_is_low_scoring(&self.authority);
+                let authority_is_low_scoring = self.authority_is_low_scoring(authority);
+
+                // if we filtered anything out here, the tx was mapped to a low scoring authority
+                if !ourself_is_low_scoring && authority_is_low_scoring {
+                    mapped_to_low_scoring = true;
+                }
+
+                ourself_is_low_scoring || !authority_is_low_scoring
+            })
             .collect();
 
-        get_position_in_list(self.authority, filtered_positions)
+        let position = get_position_in_list(self.authority, filtered_positions);
+        (
+            position,
+            mapped_to_low_scoring
+                || (position == 0 && self.authority_is_low_scoring(&self.authority)),
+        )
+    }
+
+    fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
+        self.low_scoring_authorities
+            .load()
+            .load_full()
+            .get(authority)
+            .is_some()
     }
 
     /// This method blocks until transaction is persisted in local database
@@ -379,8 +430,8 @@ impl ConsensusAdapter {
     /// discard transactions if we are overloaded
     pub fn check_limits(&self) -> bool {
         // First check total transactions (waiting and in submission)
-        if self.num_inflight_transactions.load(Ordering::Relaxed)
-            > MAX_PENDING_CONSENSUS_TRANSACTIONS
+        if self.num_inflight_transactions.load(Ordering::Relaxed) as usize
+            > self.max_pending_transactions
         {
             return false;
         }
@@ -440,7 +491,7 @@ impl ConsensusAdapter {
             .consensus_message_processed_notify(transaction_key)
             .boxed();
 
-        let (await_submit, position) =
+        let (await_submit, position, mapped_to_low_scoring) =
             self.await_submit_delay(epoch_store.committee(), &transaction);
         let mut guard = InflightDropGuard::acquire(&self);
 
@@ -470,6 +521,8 @@ impl ConsensusAdapter {
             // populate the position only when this authority submits the transaction
             // to consensus
             guard.position = Some(position);
+            guard.mapped_to_low_scoring = mapped_to_low_scoring;
+
             let _permit: SemaphorePermit = self
                 .submit_semaphore
                 .acquire()
@@ -693,6 +746,7 @@ struct InflightDropGuard<'a> {
     adapter: &'a ConsensusAdapter,
     start: Instant,
     position: Option<usize>,
+    mapped_to_low_scoring: bool,
 }
 
 impl<'a> InflightDropGuard<'a> {
@@ -709,6 +763,7 @@ impl<'a> InflightDropGuard<'a> {
             adapter,
             start: Instant::now(),
             position: None,
+            mapped_to_low_scoring: false,
         }
     }
 }
@@ -742,7 +797,7 @@ impl<'a> Drop for InflightDropGuard<'a> {
         self.adapter
             .metrics
             .sequencing_certificate_latency
-            .with_label_values(&[&position])
+            .with_label_values(&[&position, &format!("{:?}", self.mapped_to_low_scoring)])
             .observe(latency.as_secs_f64());
     }
 }

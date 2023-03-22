@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::TransactionBuilderServer;
+use crate::api::{validate_limit, TransactionBuilderServer};
 use crate::SuiRpcModule;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
@@ -22,7 +22,7 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::RpcModule;
 use sui_adapter::execution_mode::{DevInspect, Normal};
 
-use crate::api::cap_page_objects_limit;
+use crate::api::MAX_GET_OWNED_OBJECT_LIMIT;
 use crate::error::Error;
 use anyhow::anyhow;
 use sui_json::SuiJsonValue;
@@ -65,7 +65,7 @@ impl DataReader for AuthorityStateDataReader {
             return Err(anyhow!("at_checkpoint param currently not supported"));
         }
 
-        let limit = cap_page_objects_limit(limit)?;
+        let limit = validate_limit(limit, MAX_GET_OWNED_OBJECT_LIMIT)?;
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
 
         let options = options.unwrap_or_default();
@@ -203,6 +203,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Base64>,
+        dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes> {
@@ -212,7 +213,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
             .collect::<Result<Vec<_>, _>>()?;
         let data = self
             .builder
-            .publish(sender, compiled_modules, gas, gas_budget)
+            .publish(sender, compiled_modules, dependencies, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

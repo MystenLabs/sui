@@ -21,7 +21,7 @@ module Test::M1 {
     public entry fun transfer_n_ids(n: u64, ctx: &mut TxContext) {
         let i = 0;
         while (i < n) {
-            transfer::transfer(
+            transfer::public_transfer(
                 Obj {
                     id: object::new(ctx)
                 },

@@ -25,7 +25,7 @@ module Test::M {
     struct Any {}
 
     public entry fun mint_any<Any>(v: u64, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             ObjAny<Any> {
                 id: object::new(ctx),
                 value: v,
@@ -56,7 +56,7 @@ module Test::M {
     }
 
     public entry fun mint_shared_any<Any>(v: u64, ctx: &mut TxContext) {
-        transfer::share_object(
+        transfer::public_share_object(
             ObjAny<Any> {
                 id: object::new(ctx),
                 value: v,

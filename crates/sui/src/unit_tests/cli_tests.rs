@@ -5,7 +5,6 @@ use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use anyhow::anyhow;
 use expect_test::expect;
-use move_package::BuildConfig;
 use serde_json::json;
 use sui_types::object::Owner;
 use tokio::time::sleep;
@@ -21,6 +20,7 @@ use sui_config::{
     NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
+use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
@@ -400,7 +400,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("move_call_args_linter");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
@@ -606,7 +606,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
@@ -673,7 +673,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
@@ -740,7 +740,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing().config;
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
@@ -793,7 +793,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
-    let build_config = BuildConfig::default();
+    let build_config = BuildConfig::new_for_testing().config;
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
@@ -813,6 +813,42 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         )
     "#]];
     expect.assert_debug_eq(&result);
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(address, None, None, None, None)
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("module_publish_with_nonexistent_dependency");
+    let build_config = BuildConfig::new_for_testing().config;
+    let result = SuiClientCommands::Publish {
+        package_path,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: 20_000,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await;
+
+    assert!(&result
+        .unwrap_err()
+        .to_string()
+        .contains("DependentPackageNotFound"));
     Ok(())
 }
 
@@ -1014,10 +1050,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         .get_owned_objects(
             addr1,
             Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
+                SuiObjectDataOptions::full_content(),
             )),
             None,
             None,
@@ -1616,7 +1649,7 @@ async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
         config_path.to_str().unwrap(),
         "call",
         "--package",
-        "0x2",
+        "0x3",
         "--module",
         "sui_system",
         "--function",
@@ -1668,7 +1701,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
         config_path.to_str().unwrap(),
         "call",
         "--package",
-        "0x2",
+        "0x3",
         "--module",
         "sui_system",
         "--function",

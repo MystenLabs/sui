@@ -37,7 +37,9 @@ use std::{
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
 use sui_core::transaction_input_checker::check_objects;
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_framework::{
+    make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
+};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
@@ -58,15 +60,18 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
-use sui_types::{clock::Clock, object::OBJECT_START_VERSION};
+use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 
 pub(crate) type FakeID = u64;
 
-// initial value for fake object ID mapping
-const INIT_NEXT_FAKE: FakeID = 100;
+// initial value for fake object ID mapping. If the object ID is less than this value, it will not
+// be remapped.
+// This used to be set to 100, but when the system objects were excluded, this got bumped to avoid
+// breaking tests
+const INIT_NEXT_FAKE: FakeID = 103;
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
     21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
@@ -115,42 +120,12 @@ pub fn clone_genesis_objects() -> Vec<Object> {
     GENESIS.objects.clone()
 }
 
-pub fn get_framework_object_ref() -> ObjectRef {
-    GENESIS
-        .packages
-        .iter()
-        .find(|o| o.id() == SUI_FRAMEWORK_ADDRESS.into())
-        .unwrap()
-        .compute_object_reference()
-}
-
 /// Create and return objects wrapping the genesis modules for sui
 fn create_genesis_module_objects() -> Genesis {
-    let sui_modules = sui_framework::get_sui_framework();
-    let std_modules = sui_framework::get_move_stdlib();
-    let objects = vec![create_clock()];
-    // SAFETY: unwraps safe because genesis packages should never exceed max size
-    let packages = vec![
-        Object::new_package(
-            std_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-        Object::new_package(
-            sui_modules.clone(),
-            OBJECT_START_VERSION,
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-    ];
-    let modules = vec![std_modules, sui_modules];
     Genesis {
-        objects,
-        packages,
-        modules,
+        objects: vec![create_clock()],
+        packages: make_system_objects(),
+        modules: make_system_modules(),
     }
 }
 
@@ -244,8 +219,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             named_address_mapping.insert(name, addr);
         }
 
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let native_functions = sui_framework::natives::all_natives();
         let mut objects = clone_genesis_packages();
         objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
@@ -308,6 +282,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             sender,
             upgradeable,
             view_gas_used,
+            dependencies,
         } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
@@ -316,13 +291,26 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             buf
         };
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let mut dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
+                    bail!("There is no published module address corresponding to name address {d}");
+                };
+                let id: ObjectID = addr.into_inner().into();
+                Ok(id)
+            })
+            .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on the system packages, so these don't have to
+        // be provided explicitly as parameters
+        dependencies.extend(system_package_ids());
         let data = |sender, gas| {
             let mut builder = ProgrammableTransactionBuilder::new();
             if upgradeable {
-                let cap = builder.publish_upgradeable(vec![module_bytes]);
+                let cap = builder.publish_upgradeable(vec![module_bytes], dependencies);
                 builder.transfer_arg(sender, cap);
             } else {
-                builder.publish_immutable(vec![module_bytes]);
+                builder.publish_immutable(vec![module_bytes], dependencies);
             };
             let pt = builder.finish();
             TransactionData::new_programmable_with_dummy_gas_price(
@@ -781,8 +769,8 @@ impl<'a> SuiTestAdapter<'a> {
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
-            sui_types::object::Data::Package(pkg) => pkg
+            object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
+            object::Data::Package(pkg) => pkg
                 .serialized_module_map()
                 .keys()
                 .map(|s| s.as_str())
@@ -800,6 +788,30 @@ impl<'a> SuiTestAdapter<'a> {
     }
 
     fn enumerate_fake(&mut self, id: ObjectID) -> FakeID {
+        // Check if the object ID as a u64 is less than INIT_NEXT_FAKE. If it is, use that value
+        // as the "fake" ID. This essentially excludes the Sui System objects from the fake ID
+        // mapping.
+        let id_addr: SuiAddress = id.into();
+        let id_bytes: [u8; SUI_ADDRESS_LENGTH] = id_addr.to_inner();
+        let high = &id_bytes[0..(SUI_ADDRESS_LENGTH - 8)];
+        let low = [
+            id_bytes[SUI_ADDRESS_LENGTH - 8],
+            id_bytes[SUI_ADDRESS_LENGTH - 7],
+            id_bytes[SUI_ADDRESS_LENGTH - 6],
+            id_bytes[SUI_ADDRESS_LENGTH - 5],
+            id_bytes[SUI_ADDRESS_LENGTH - 4],
+            id_bytes[SUI_ADDRESS_LENGTH - 3],
+            id_bytes[SUI_ADDRESS_LENGTH - 2],
+            id_bytes[SUI_ADDRESS_LENGTH - 1],
+        ];
+        assert!(high.len() + low.len() == SUI_ADDRESS_LENGTH);
+        let id_u64 = u64::from_be_bytes(low);
+        // to check if `id < INIT_NEXT_FAKE`, we check that the "high" value bytes are all 0
+        // and that the "low" value bytes are less than `INIT_NEXT_FAKE` when converted to `u64`
+        if id_u64 < INIT_NEXT_FAKE && high.iter().copied().all(|u| u == 0) {
+            self.object_enumeration.insert(id, id_u64);
+            return id_u64;
+        }
         if let Some(fake) = self.object_enumeration.get_by_left(&id) {
             return *fake;
         }
@@ -871,6 +883,7 @@ impl<'a> SuiTestAdapter<'a> {
         objs.iter()
             .map(|id| match self.real_to_fake_object_id(id) {
                 None => "object(_)".to_string(),
+                Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
                 Some(fake) => format!("object({})", fake),
             })
             .collect::<Vec<_>>()
@@ -935,6 +948,7 @@ impl<'a> SuiTestAdapter<'a> {
         }
         match self.real_to_fake_object_id(&parsed.into()) {
             None => "_".to_string(),
+            Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
             Some(fake) => format!("fake({})", fake),
         }
     }
@@ -966,20 +980,36 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "sui_system".to_string(),
+        NumericalAddress::new(
+            SUI_SYSTEM_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
 pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
+    let sui_system_sources: String = {
+        let mut buf = sui_files.to_path_buf();
+        buf.push("packages");
+        buf.push("sui-system");
+        buf.push("sources");
+        buf.to_string_lossy().to_string()
+    };
     let sui_sources: String = {
         let mut buf = sui_files.to_path_buf();
+        buf.push("packages");
+        buf.push("sui-framework");
         buf.push("sources");
         buf.to_string_lossy().to_string()
     };
     let sui_deps = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("deps");
+        buf.push("packages");
         buf.push("move-stdlib");
         buf.push("sources");
         buf.to_string_lossy().to_string()
@@ -987,7 +1017,7 @@ pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: vec![sui_sources, sui_deps],
+            paths: vec![sui_system_sources, sui_sources, sui_deps],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,

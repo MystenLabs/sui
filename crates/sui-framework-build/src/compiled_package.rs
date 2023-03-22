@@ -41,16 +41,18 @@ use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
-    move_package::{FnInfo, FnInfoKey, FnInfoMap},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME};
+use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME, SUI_SYSTEM_PACKAGE_NAME};
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 pub struct CompiledPackage {
     pub package: MoveCompiledPackage,
+    /// The dependency IDs of this package
+    pub dependency_ids: PackageDependencies,
     /// Path to the Move package (i.e., where the Move.toml file is)
     pub path: PathBuf,
 }
@@ -68,7 +70,10 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         let mut build_config: Self = Default::default();
-        build_config.config.install_dir = Some(tempfile::TempDir::new().unwrap().into_path());
+        let install_dir = tempfile::tempdir().unwrap().into_path();
+        let lock_file = install_dir.join("Move.lock");
+        build_config.config.install_dir = Some(install_dir);
+        build_config.config.lock_file = Some(lock_file);
         build_config
     }
 
@@ -160,6 +165,7 @@ pub fn build_from_resolution_graph(
     run_bytecode_verifier: bool,
     print_diags_to_stderr: bool,
 ) -> SuiResult<CompiledPackage> {
+    let dependency_ids = gather_dependencies(&resolution_graph);
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
     } else {
@@ -187,7 +193,11 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
-    Ok(CompiledPackage { package, path })
+    Ok(CompiledPackage {
+        package,
+        dependency_ids,
+        path,
+    })
 }
 
 impl CompiledPackage {
@@ -277,6 +287,32 @@ impl CompiledPackage {
         }
     }
 
+    /// Return the set of Object IDs corresponding to this package's transitive dependencies'
+    /// original package IDs.
+    pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
+        let mut ids: BTreeSet<_> = self
+            .package
+            .deps_compiled_units
+            .iter()
+            .map(|(_, m)| match &m.unit {
+                CompiledUnitEnum::Module(m) => ObjectID::from(*m.module.address()),
+                CompiledUnitEnum::Script(_) => unimplemented!("Scripts not supported in Sui Move"),
+            })
+            .collect();
+
+        // `0x0` is not a real dependency ID -- it means that the package has unpublished
+        // dependencies.
+        ids.remove(&ObjectID::ZERO);
+        ids.into_iter().collect()
+    }
+
+    pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
+        MovePackage::compute_digest_for_modules_and_deps(
+            &self.get_package_bytes(with_unpublished_deps),
+            self.dependency_ids.published.values(),
+        )
+    }
+
     /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
     pub fn get_package_bytes(&self, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
         self.get_dependency_sorted_modules(with_unpublished_deps)
@@ -297,8 +333,23 @@ impl CompiledPackage {
             .collect()
     }
 
+    pub fn get_package_dependencies_hex(&self) -> Vec<String> {
+        self.dependency_ids
+            .published
+            .values()
+            .into_iter()
+            .map(|object_id| object_id.to_hex_uncompressed())
+            .collect()
+    }
+
+    /// Get bytecode modules from the Sui System that are used by this package
+    pub fn get_sui_system_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+        self.get_modules_and_deps()
+            .filter(|m| *m.self_id().address() == SUI_SYSTEM_ADDRESS)
+    }
+
     /// Get bytecode modules from the Sui Framework that are used by this package
-    pub fn get_framework_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+    pub fn get_sui_framework_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == SUI_FRAMEWORK_ADDRESS)
     }
@@ -315,18 +366,43 @@ impl CompiledPackage {
     // TODO: replace this with actual versioning checks instead of hacky byte-for-byte comparisons
     pub fn verify_framework_version(
         &self,
+        ext_sui_system: Vec<CompiledModule>,
         ext_sui_framework: Vec<CompiledModule>,
         ext_move_stdlib: Vec<CompiledModule>,
     ) -> SuiResult<()> {
         // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
         // compiled modules directly.
-        let ext_framework_modules = Modules::new(ext_sui_framework.iter());
-        let pkg_framework_modules: Vec<&CompiledModule> = self.get_framework_modules().collect();
+        let ext_sui_system_modules = Modules::new(ext_sui_system.iter());
+        let pkg_sui_system_modules: Vec<&CompiledModule> = self.get_sui_system_modules().collect();
+
+        // compare sui-system modules pulled as dependencies (if any - a developer may choose to use only
+        // stdlib) with sui-system modules bundled with the distribution
+        if !pkg_sui_system_modules.is_empty()
+            && ext_sui_system_modules != Modules::new(pkg_sui_system_modules)
+        {
+            return Err(SuiError::ModuleVerificationFailure {
+            error: "Sui system package version mismatch detected.\
+		    Make sure that you are using a GitHub dep in your Move.toml:\
+		    \
+                    [dependencies]
+                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-system\", rev = \"devnet\" }
+`                   \
+                    If that does not fix the issue, your `sui` binary is likely out of date--try \
+                    cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
+                .to_string(),
+        });
+        }
+
+        // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
+        // compiled modules directly.
+        let ext_sui_framework_modules = Modules::new(ext_sui_framework.iter());
+        let pkg_sui_framework_modules: Vec<&CompiledModule> =
+            self.get_sui_framework_modules().collect();
 
         // compare framework modules pulled as dependencies (if any - a developer may choose to use only
         // stdlib) with framework modules bundled with the distribution
-        if !pkg_framework_modules.is_empty()
-            && ext_framework_modules != Modules::new(pkg_framework_modules)
+        if !pkg_sui_framework_modules.is_empty()
+            && ext_sui_framework_modules != Modules::new(pkg_sui_framework_modules)
         {
             // note: this advice is overfitted to the most common failure modes we see:
             // user is trying to publish to testnet, but has a `sui` binary and Sui Framework
@@ -338,7 +414,7 @@ impl CompiledPackage {
 		    Make sure that you are using a GitHub dep in your Move.toml:\
 		    \
                     [dependencies]
-                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework\", rev = \"devnet\" }
+                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-framework\", rev = \"devnet\" }
 `                   \
                     If that does not fix the issue, your `sui` binary is likely out of date--try \
                     cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
@@ -431,9 +507,11 @@ impl CompiledPackage {
     }
 
     /// Checks whether this package corresponds to a built-in framework
-    pub fn is_framework(&self) -> bool {
+    pub fn is_system_package(&self) -> bool {
         let package_name = self.package.compiled_package_info.package_name.as_str();
-        package_name == SUI_PACKAGE_NAME || package_name == MOVE_STDLIB_PACKAGE_NAME
+        package_name == SUI_SYSTEM_PACKAGE_NAME
+            || package_name == SUI_PACKAGE_NAME
+            || package_name == MOVE_STDLIB_PACKAGE_NAME
     }
 
     /// Checks for root modules with non-zero package addresses.  Returns an arbitrary one, if one
@@ -540,7 +618,7 @@ pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependenc
     }
 }
 
-pub fn check_unpublished_dependencies(unpublished: BTreeSet<Symbol>) -> Result<(), SuiError> {
+pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<(), SuiError> {
     if unpublished.is_empty() {
         return Ok(());
     };
@@ -567,7 +645,7 @@ pub fn check_unpublished_dependencies(unpublished: BTreeSet<Symbol>) -> Result<(
     })
 }
 
-pub fn check_invalid_dependencies(invalid: BTreeMap<Symbol, String>) -> Result<(), SuiError> {
+pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<(), SuiError> {
     if invalid.is_empty() {
         return Ok(());
     }

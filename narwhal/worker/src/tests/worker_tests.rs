@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
+use async_trait::async_trait;
 use bytes::Bytes;
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -29,13 +30,14 @@ use types::{
 // A test validator that rejects every transaction / batch
 #[derive(Clone)]
 struct NilTxValidator;
+#[async_trait]
 impl TransactionValidator for NilTxValidator {
     type Error = eyre::Report;
 
     fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
         eyre::bail!("Invalid transaction");
     }
-    fn validate_batch(&self, _txs: &Batch) -> Result<(), Self::Error> {
+    async fn validate_batch(&self, _txs: &Batch) -> Result<(), Self::Error> {
         eyre::bail!("Invalid batch");
     }
 }

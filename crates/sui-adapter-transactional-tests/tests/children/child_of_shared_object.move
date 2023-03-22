@@ -16,11 +16,11 @@ module t3::o3 {
 
     public entry fun create(ctx: &mut TxContext) {
         let o = Obj3 { id: object::new(ctx) };
-        transfer::transfer(o, tx_context::sender(ctx))
+        transfer::public_transfer(o, tx_context::sender(ctx))
     }
 }
 
-//# publish
+//# publish --dependencies t3
 
 module t2::o2 {
     use sui::object::{Self, UID};
@@ -33,15 +33,15 @@ module t2::o2 {
     }
 
     public entry fun create_shared(child: Obj3, ctx: &mut TxContext) {
-        transfer::share_object(new(child, ctx))
+        transfer::public_share_object(new(child, ctx))
     }
 
     public entry fun create_owned(child: Obj3, ctx: &mut TxContext) {
-        transfer::transfer(new(child, ctx), tx_context::sender(ctx))
+        transfer::public_transfer(new(child, ctx), tx_context::sender(ctx))
     }
 
     public entry fun use_o2_o3(_o2: &mut Obj2, o3: Obj3, ctx: &mut TxContext) {
-        transfer::transfer(o3, tx_context::sender(ctx))
+        transfer::public_transfer(o3, tx_context::sender(ctx))
     }
 
     fun new(child: Obj3, ctx: &mut TxContext): Obj2 {
@@ -52,7 +52,7 @@ module t2::o2 {
 }
 
 
-//# publish
+//# publish --dependencies t2 t3
 
 module t1::o1 {
     use sui::object::{Self, UID};
@@ -71,7 +71,7 @@ module t1::o1 {
 
     // This function will be invalid if _o2 is a shared object and owns _o3.
     public entry fun use_o2_o3(_o2: &mut Obj2, o3: Obj3, ctx: &mut TxContext) {
-        transfer::transfer(o3, tx_context::sender(ctx))
+        transfer::public_transfer(o3, tx_context::sender(ctx))
     }
 
     fun new(child: Obj2, ctx: &mut TxContext): Obj1 {

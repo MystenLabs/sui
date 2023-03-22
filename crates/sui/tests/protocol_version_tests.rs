@@ -60,7 +60,8 @@ mod sim_only_tests {
     use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use sui_core::authority::sui_framework_injection;
+    use sui_core::authority::sui_system_injection;
+    use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
@@ -72,7 +73,6 @@ mod sim_only_tests {
         object::{Object, OBJECT_START_VERSION},
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         storage::ObjectStore,
-        SUI_FRAMEWORK_OBJECT_ID,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tokio::time::{sleep, timeout, Duration};
@@ -123,7 +123,7 @@ mod sim_only_tests {
             .sui_node
             .subscribe_to_epoch_change();
 
-        timeout(Duration::from_secs(60), async move {
+        timeout(Duration::from_secs(90), async move {
             while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
                 info!(
                     "received epoch {} {:?}",
@@ -205,7 +205,81 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    async fn test_protocol_version_upgrade_forced() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_version_callback(Arc::new(|idx, name| {
+                if name.is_some() && idx == 0 {
+                    // first validator only does not support version 2.
+                    SupportedProtocolVersions::new_for_testing(START, START)
+                } else {
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
+                }
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
+        });
+
+        // upgrade happens with only 3 votes
+        monitor_version_change(&test_cluster, FINISH /* expected proto version */).await;
+    }
+
+    #[sim_test]
+    async fn test_protocol_version_upgrade_no_override_cleared() {
+        ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_version_callback(Arc::new(|idx, name| {
+                if name.is_some() && idx == 0 {
+                    // first validator only does not support version FINISH.
+                    SupportedProtocolVersions::new_for_testing(START, START)
+                } else {
+                    SupportedProtocolVersions::new_for_testing(START, FINISH)
+                }
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.set_override_protocol_upgrade_buffer_stake(0, 0)
+                    .unwrap()
+            });
+        });
+
+        // Verify that clearing the override is respected.
+        test_cluster.swarm.validators().for_each(|v| {
+            let node_handle = v.get_node_handle().expect("node should be running");
+            node_handle.with(|node| {
+                node.clear_override_protocol_upgrade_buffer_stake(0)
+                    .unwrap()
+            });
+        });
+
+        // default buffer stake is in effect, we do not advance to version FINISH.
+        monitor_version_change(&test_cluster, START /* expected proto version */).await;
+    }
+
+    #[sim_test]
     async fn test_protocol_version_upgrade_no_quorum() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
+            config
+        });
+
         ProtocolConfig::poison_get_for_min_version();
 
         let test_cluster = TestClusterBuilder::new()
@@ -294,10 +368,10 @@ mod sim_only_tests {
     async fn run_framework_upgrade(from: &str, to: &str) -> TestCluster {
         ProtocolConfig::poison_get_for_min_version();
 
-        sui_framework_injection::set_override(sui_framework(to));
+        sui_system_injection::set_override(sui_system_modules(to));
         TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
-            .with_objects([sui_framework_object(from)])
+            .with_objects([sui_system_package_object(from)])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, FINISH,
             ))
@@ -314,7 +388,7 @@ mod sim_only_tests {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder
                 .move_call(
-                    SUI_FRAMEWORK_OBJECT_ID,
+                    SuiSystem::ID,
                     ident_str!("msim_extra_1").to_owned(),
                     ident_str!("canary").to_owned(),
                     vec![],
@@ -363,7 +437,7 @@ mod sim_only_tests {
         let effects = node_handle
             .with_async(|node| async {
                 let db = node.state().db();
-                let framework = db.get_object(&SUI_FRAMEWORK_OBJECT_ID);
+                let framework = db.get_object(&SuiSystem::ID);
                 let digest = framework.unwrap().unwrap().previous_transaction;
                 let effects = db.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
@@ -373,12 +447,12 @@ mod sim_only_tests {
         let modified_at = effects
             .modified_at_versions()
             .iter()
-            .find_map(|(id, v)| (id == &SUI_FRAMEWORK_OBJECT_ID).then_some(*v));
+            .find_map(|(id, v)| (id == &SuiSystem::ID).then_some(*v));
 
         let mutated_to = effects
             .mutated()
             .iter()
-            .find_map(|((id, v, _), _)| (id == &SUI_FRAMEWORK_OBJECT_ID).then_some(*v));
+            .find_map(|((id, v, _), _)| (id == &SuiSystem::ID).then_some(*v));
 
         (modified_at, mutated_to)
     }
@@ -388,10 +462,10 @@ mod sim_only_tests {
         ProtocolConfig::poison_get_for_min_version();
 
         // Even though a new framework is available, the required new protocol version is not.
-        sui_framework_injection::set_override(sui_framework("compatible"));
+        sui_system_injection::set_override(sui_system_modules("compatible"));
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
-            .with_objects([sui_framework_object("base")])
+            .with_objects([sui_system_package_object("base")])
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 START, START,
             ))
@@ -421,12 +495,12 @@ mod sim_only_tests {
 
         let first = test_cluster.swarm.validators().next().unwrap();
         let first_name = first.name();
-        sui_framework_injection::set_override_cb(Box::new(move |name| {
+        sui_system_injection::set_override_cb(Box::new(move |name| {
             if name == first_name {
                 info!("node {:?} using compatible packages", name.concise());
-                Some(sui_framework("base"))
+                Some(sui_system_modules("base"))
             } else {
-                Some(sui_framework("compatible"))
+                Some(sui_system_modules("compatible"))
             }
         }));
 
@@ -470,9 +544,9 @@ mod sim_only_tests {
         let mut validators = test_cluster.swarm.validators();
         let first = validators.next().unwrap().name();
         let second = validators.next().unwrap().name();
-        sui_framework_injection::set_override_cb(Box::new(move |name| {
+        sui_system_injection::set_override_cb(Box::new(move |name| {
             if name == first || name == second {
-                Some(sui_framework("compatible"))
+                Some(sui_system_modules("compatible"))
             } else {
                 None
             }
@@ -508,7 +582,7 @@ mod sim_only_tests {
 
     /// Get compiled modules for Sui Framework, built from fixture `fixture` in the
     /// `framework_upgrades` directory.
-    fn sui_framework(fixture: &str) -> Vec<CompiledModule> {
+    fn sui_system_modules(fixture: &str) -> Vec<CompiledModule> {
         let mut package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         package.extend(["tests", "framework_upgrades", fixture]);
 
@@ -516,16 +590,17 @@ mod sim_only_tests {
         config.run_bytecode_verifier = true;
 
         let pkg = config.build(package).unwrap();
-        pkg.get_framework_modules().cloned().collect()
+        pkg.get_sui_system_modules().cloned().collect()
     }
 
     /// Like `sui_framework`, but package the modules in an `Object`.
-    fn sui_framework_object(fixture: &str) -> Object {
+    fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
-            sui_framework(fixture),
+            sui_system_modules(fixture),
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,
+            &[MoveStdlib::as_package(), SuiFramework::as_package()],
         )
         .unwrap()
     }

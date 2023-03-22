@@ -57,7 +57,7 @@ export function Button({
             )}
             <div
                 className={clsx(
-                    'inline-flex flex-nowrap gap-2',
+                    'inline-flex flex-nowrap items-center gap-2',
                     loading && 'text-transparent'
                 )}
             >

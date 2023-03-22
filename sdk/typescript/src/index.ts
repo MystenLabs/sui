@@ -27,6 +27,7 @@ export * from './types';
 export * from './utils/format';
 export * from './utils/intent';
 export * from './utils/verify';
+export * from './utils/errors';
 
 export * from './framework';
 

@@ -16,8 +16,8 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    DevInspectResults, DryRunTransactionResponse, SuiTransaction, SuiTransactionEvents,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -75,9 +75,14 @@ impl TransactionExecutionApi {
         for sig in signatures {
             sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
         }
-
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), sigs);
-        let tx = txn.data().clone().try_into()?;
+        let tx = SuiTransaction::try_from(txn.data().clone(), epoch_store.module_cache())?;
+        let raw_transaction = if opts.show_raw_input {
+            bcs::to_bytes(txn.data())?
+        } else {
+            vec![]
+        };
         let digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
@@ -125,6 +130,7 @@ impl TransactionExecutionApi {
                 Ok(SuiTransactionResponse {
                     digest,
                     transaction: opts.show_input.then_some(tx),
+                    raw_transaction,
                     effects: opts.show_effects.then_some(effects.effects.try_into()?),
                     events,
                     object_changes,

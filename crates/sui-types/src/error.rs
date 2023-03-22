@@ -9,13 +9,10 @@ use crate::{
     object::Owner,
 };
 use fastcrypto::error::FastCryptoError;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::{
-    errors::{Location, PartialVMError, VMError},
-    file_format::FunctionDefinitionIndex,
-};
+use move_binary_format::{access::ModuleAccess, errors::VMError};
+use move_binary_format::{errors::Location, file_format::FunctionDefinitionIndex};
 use move_core_types::{
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -448,6 +445,16 @@ pub enum SuiError {
 #[repr(u64)]
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Sub-status codes for the `UNKNOWN_VERIFICATION_ERROR` VM Status Code which provides more context
+/// TODO: add more Vm Status errors. We use `UNKNOWN_VERIFICATION_ERROR` as a catchall for now.
+pub enum VMMVerifierErrorSubStatusCode {
+    MULTIPLE_RETURN_VALUES_NOT_ALLOWED = 0,
+    INVALID_OBJECT_CREATION = 1,
+}
+
+#[repr(u64)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 /// Sub-status codes for the `MEMORY_LIMIT_EXCEEDED` VM Status Code which provides more context
 pub enum VMMemoryLimitExceededSubStatusCode {
     EVENT_COUNT_LIMIT_EXCEEDED = 0,
@@ -468,26 +475,9 @@ impl From<sui_protocol_config::Error> for SuiError {
     }
 }
 
-// TODO these are both horribly wrong, categorization needs to be considered
-impl From<PartialVMError> for SuiError {
-    fn from(error: PartialVMError) -> Self {
-        SuiError::ModuleVerificationFailure {
-            error: error.to_string(),
-        }
-    }
-}
-
 impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
-    }
-}
-
-impl From<VMError> for SuiError {
-    fn from(error: VMError) -> Self {
-        SuiError::ModuleVerificationFailure {
-            error: error.to_string(),
-        }
     }
 }
 
@@ -695,7 +685,7 @@ impl From<ExecutionErrorKind> for ExecutionError {
 pub fn convert_vm_error<
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + LinkageResolver<Error = E>,
 >(
     error: VMError,
     vm: &'r MoveVM,

@@ -9,17 +9,17 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::future::join_all;
 
-use anyhow::{anyhow, ensure, Ok};
+use anyhow::{anyhow, bail, ensure, Ok};
 use move_binary_format::file_format::SignatureToken;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use std::result::Result;
 use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
-use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
+use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTypeTag,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
@@ -34,7 +34,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
-    coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
@@ -396,17 +396,16 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
             .await?
             .into_object()?;
-        let package = object
-            .bcs
-            .ok_or_else(|| anyhow!("Bcs field in object [{}] is missing.", package_id))?
-            .try_as_package()
-            .cloned()
-            .ok_or_else(|| anyhow!("Object [{}] is not a move package.", package_id))?;
+        let Some(SuiRawData::Package(package)) = object.bcs else {
+            bail!("Bcs field in object [{}] is missing or not a package.", package_id);
+        };
         let package: MovePackage = MovePackage::new(
             package.id,
             object.version,
-            &package.module_map,
+            package.module_map,
             ProtocolConfig::get_for_min_version().max_move_package_size(),
+            package.type_origin_table,
+            package.linkage_table,
         )?;
 
         let json_args_and_tokens = resolve_move_function_args(
@@ -421,11 +420,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         let mut objects = BTreeMap::new();
         for (arg, expected_type) in json_args_and_tokens {
             check_args.push(match arg {
-                SuiJsonCallArg::Object(id) => CheckCallArg::Object(
+                ResolvedCallArg::Object(id) => CheckCallArg::Object(
                     self.get_object_arg(id, &mut objects, expected_type).await?,
                 ),
-                SuiJsonCallArg::Pure(p) => CheckCallArg::Pure(p),
-                SuiJsonCallArg::ObjVec(v) => {
+                ResolvedCallArg::Pure(p) => CheckCallArg::Pure(p),
+                ResolvedCallArg::ObjVec(v) => {
                     let mut object_ids = vec![];
                     for id in v {
                         object_ids.push(
@@ -463,6 +462,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         &self,
         sender: SuiAddress,
         compiled_modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> anyhow::Result<TransactionData> {
@@ -474,6 +474,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             sender,
             gas,
             compiled_modules,
+            dep_ids,
             gas_budget,
             gas_price,
         ))
@@ -714,7 +715,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                     .unwrap(),
             ];
             builder.command(Command::move_call(
-                SUI_FRAMEWORK_OBJECT_ID,
+                SUI_SYSTEM_PACKAGE_ID,
                 SUI_SYSTEM_MODULE_NAME.to_owned(),
                 ADD_STAKE_MUL_COIN_FUN_NAME.to_owned(),
                 vec![],
@@ -745,7 +746,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             .await?;
         TransactionData::new_move_call(
             signer,
-            SUI_FRAMEWORK_OBJECT_ID,
+            SUI_SYSTEM_PACKAGE_ID,
             SUI_SYSTEM_MODULE_NAME.to_owned(),
             WITHDRAW_STAKE_FUN_NAME.to_owned(),
             vec![],

@@ -343,6 +343,7 @@ pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NetworkMetadata {
     pub network_address: Multiaddr,
+    pub narwhal_primary_address: Multiaddr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

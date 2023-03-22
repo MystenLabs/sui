@@ -5,7 +5,7 @@ module display_test::boars {
     use sui::object::{Self, UID};
     use std::option::{Self, Option};
     use sui::tx_context::{TxContext, sender};
-    use sui::transfer::transfer;
+    use sui::transfer;
     use sui::package;
     use sui::url::{Self, Url};
     use sui::display;
@@ -71,8 +71,8 @@ module display_test::boars {
             utf8(b"\\{name\\}"),
         ]);
 
-        transfer(display, sender(ctx));
-        transfer(pub, sender(ctx));
+        transfer::public_transfer(display, sender(ctx));
+        transfer::public_transfer(pub, sender(ctx));
 
         let boar = Boar {
             id: object::new(ctx),
@@ -87,6 +87,6 @@ module display_test::boars {
             buyer: sender(ctx),
             full_url: url::new_unsafe_from_bytes(b"https://get-a-boar.fullurl.com/"),
         };
-        transfer(boar, sender(ctx))
+        transfer::transfer(boar, sender(ctx))
     }
 }

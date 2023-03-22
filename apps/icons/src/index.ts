@@ -71,6 +71,7 @@ export { default as Fail32 } from "./Fail32";
 export { default as Filter12 } from "./Filter12";
 export { default as Filter16 } from "./Filter16";
 export { default as Flag16 } from "./Flag16";
+export { default as FlagFill16 } from "./FlagFill16";
 export { default as Globe16 } from "./Globe16";
 export { default as HamburgerOpen24 } from "./HamburgerOpen24";
 export { default as HamburgerRest24 } from "./HamburgerRest24";

@@ -116,8 +116,8 @@ module games::drand_based_scratch_card {
             id: object::new(ctx),
             game_id: object::id(game),
         };
-        transfer::transfer(coin, game.creator);
-        transfer::transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(coin, game.creator);
+        transfer::public_transfer(ticket, tx_context::sender(ctx));
     }
 
     public entry fun evaluate(
@@ -142,7 +142,7 @@ module games::drand_based_scratch_card {
                 id: object::new(ctx),
                 game_id: object::id(game),
             };
-            transfer::transfer(winner, tx_context::sender(ctx));
+            transfer::public_transfer(winner, tx_context::sender(ctx));
         };
         // Delete the ticket.
         let Ticket { id, game_id:  _} = ticket;
@@ -153,7 +153,7 @@ module games::drand_based_scratch_card {
         assert!(winner.game_id == reward.game_id, EInvalidTicket);
         let full_balance = balance::value(&reward.balance);
         if (full_balance > 0) {
-            transfer::transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
+            transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
         };
         let Winner { id, game_id:  _} = winner;
         object::delete(id);
@@ -167,7 +167,7 @@ module games::drand_based_scratch_card {
         // x+2 or x+3.
         assert!(game.base_epoch + 3 < tx_context::epoch(ctx), ETooSoonToRedeem);
         let full_balance = balance::value(&reward.balance);
-        transfer::transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
+        transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
     }
 
     public entry fun delete_ticket(ticket: Ticket) {

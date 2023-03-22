@@ -1,12 +1,12 @@
 Sui indexer is an off-fullnode service to serve data from Sui protocol, including both data directly generated from chain and derivative data.
 
-## Architecture 
+## Architecture
 ![enhanced_FN](https://user-images.githubusercontent.com/106119108/221022505-a1d873c6-60e2-45f1-b2aa-e50192c4dfbb.png)
 
 
 ## Steps to run locally
 ### Prerequisites
-- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgres@version` and then add the following to your `~/.zshrc` `~/.zprofile` etc: 
+- install local [Postgres server](https://www.postgresql.org/download/). You can also `brew install postgres@version` and then add the following to your `~/.zshrc` or `~/.zprofile`, etc: 
 ```sh
 export LDFLAGS="-L/opt/homebrew/opt/postgresql@15/lib"
 export CPPFLAGS="-I/opt/homebrew/opt/postgresql@15/include"
@@ -14,10 +14,16 @@ export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"
 ```
 - make sure you have libpq installed: `brew install libpq`, and in your profile, add `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. If this doesn't work, try `brew link --force libpq`.
 
-- install Diesel CLI, you can follow the [Diesel Getting Started guide](https://diesel.rs/guides/getting-started) up to the *Write Rust* section
+- install Diesel CLI with `cargo install diesel_cli --no-default-features --features postgres`, refer to [Diesel Getting Started guide](https://diesel.rs/guides/getting-started) for more details
 - [optional but handy] Postgres client like [Postico](https://eggerapps.at/postico2/), for local check, query execution etc.
 
-### Steps
+
+### Local Development(Recommended)
+
+Use [sui-test-validator](../../crates/sui-test-validator/README.md)
+
+
+### Running standalone indexer
 1. DB setup, under `sui/crates/sui-indexer` run:
 ```sh
 # an example DATABASE_URL is "postgres://postgres:postgres@localhost/gegao"
@@ -26,7 +32,9 @@ diesel migration run --database-url="<DATABASE_URL>"
 ```
 Note that you'll need an existing database for the above to work. Replace `gegao` with the name of the database created.
 
-2. Checkout devnet
+2. Checkout to your target branch
+
+For example, if you want to be on the DevNet branch
 ```sh
 git fetch upstream devnet && git reset --hard upstream/devnet
 ```
@@ -46,4 +54,15 @@ to run the test locally, start a Postgresql DB and run the test using following 
 ```sh
 POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration
 ```
-Note: all existing data will be wiped during the test.
+
+If you run into an error like `DatabaseError(UniqueViolation, "duplicate key value violates unique constraint \"pg_proc_proname_args_nsp_index\""))'` you can try running each integration test individually with
+```sh
+POSTGRES_PORT=5432 cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+```
+
+And to execute a single test such as just `test_event_query_e2e`, you can do
+```sh
+POSTGRES_PORT=5432 cargo test test_event_query_e2e --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+```
+
+**Note** all existing data will be wiped during the test.

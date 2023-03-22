@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
-use crate::legacy_emit_cost;
+use crate::{legacy_emit_cost, natives::NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress, language_storage::TypeTag, vm_status::StatusCode,
+    account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
+    vm_status::StatusCode,
 };
-use move_vm_runtime::native_functions::NativeContext;
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
@@ -20,13 +21,15 @@ use sui_types::{
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
 
-/// Implementation of Move native function
-/// `transfer_internal<T: key>(obj: T, recipient: vector<u8>, to_object: bool)`
-/// Here, we simply emit this event. The sui adapter
-/// treats this as a special event that is handled
-/// differently from user events:
-/// the adapter will change the owner of the object
-/// in question to `recipient`.
+#[derive(Clone, Debug)]
+pub struct TransferInternalCostParams {
+    pub transfer_transfer_internal_cost_base: InternalGas,
+}
+/***************************************************************************************************
+* native fun transfer_impl
+* Implementation of the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+*   gas cost: transfer_transfer_internal_cost_base                  |  covers various fixed costs in the oper
+**************************************************************************************************/
 pub fn transfer_internal(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -35,21 +38,35 @@ pub fn transfer_internal(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 2);
 
+    let transfer_transfer_internal_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .transfer_transfer_internal_cost_params
+        .clone();
+
+    native_charge_gas_early_exit!(
+        context,
+        transfer_transfer_internal_cost_params.transfer_transfer_internal_cost_base
+    );
+
     let ty = ty_args.pop().unwrap();
     let recipient = pop_arg!(args, AccountAddress);
     let obj = args.pop_back().unwrap();
     let owner = Owner::AddressOwner(recipient.into());
     object_runtime_transfer(context, owner, ty, obj)?;
-    // Charge a constant native gas cost here, since
-    // we will charge it properly when processing
-    // all the events in adapter.
-    // TODO: adjust native_gas cost size base.
-    let cost = legacy_emit_cost();
-    Ok(NativeResult::ok(cost, smallvec![]))
+
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
-/// Implementation of Move native function
-/// `freeze_object<T: key>(obj: T)`
+#[derive(Clone, Debug)]
+pub struct TransferFreezeObjectCostParams {
+    pub transfer_freeze_object_cost_base: InternalGas,
+}
+/***************************************************************************************************
+* native fun freeze_object
+* Implementation of the Move native function `freeze_object<T: key>(obj: T)`
+*   gas cost: transfer_freeze_object_cost_base                  |  covers various fixed costs in the oper
+**************************************************************************************************/
 pub fn freeze_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -58,15 +75,33 @@ pub fn freeze_object(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
+    let transfer_freeze_object_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .transfer_freeze_object_cost_params
+        .clone();
+
+    native_charge_gas_early_exit!(
+        context,
+        transfer_freeze_object_cost_params.transfer_freeze_object_cost_base
+    );
+
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
     object_runtime_transfer(context, Owner::Immutable, ty, obj)?;
-    let cost = legacy_emit_cost();
-    Ok(NativeResult::ok(cost, smallvec![]))
+
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
-/// Implementation of Move native function
-/// `share_object<T: key>(obj: T)`
+#[derive(Clone, Debug)]
+pub struct TransferShareObjectCostParams {
+    pub transfer_share_object_cost_base: InternalGas,
+}
+/***************************************************************************************************
+* native fun share_object
+* Implementation of the Move native function `share_object<T: key>(obj: T)`
+*   gas cost: transfer_share_object_cost_base                  |  covers various fixed costs in the oper
+**************************************************************************************************/
 pub fn share_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -74,6 +109,17 @@ pub fn share_object(
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
+
+    let transfer_share_object_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()
+        .transfer_share_object_cost_params
+        .clone();
+
+    native_charge_gas_early_exit!(
+        context,
+        transfer_share_object_cost_params.transfer_share_object_cost_base
+    );
 
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();

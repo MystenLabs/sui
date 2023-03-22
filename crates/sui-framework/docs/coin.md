@@ -981,7 +981,7 @@ Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code
 <pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(
     c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
 ) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="coin.md#0x2_coin_mint">mint</a>(c, amount, ctx), recipient)
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_mint">mint</a>(c, amount, ctx), recipient)
 }
 </code></pre>
 

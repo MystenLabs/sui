@@ -46,8 +46,10 @@ export const DelegatedStake = object({
 
 export const StakeSubsidyFields = object({
   balance: object({ value: number() }),
-  currentEpochAmount: number(),
-  epochCounter: number(),
+  distribution_counter: number(),
+  current_distribution_amount: number(),
+  stake_subsidy_period_length: number(),
+  stake_subsidy_decrease_rate: number(),
 });
 
 export const StakeSubsidy = object({

@@ -374,7 +374,7 @@ the sender is the publisher.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_claim_and_keep">claim_and_keep</a>&lt;OTW: drop&gt;(otw: OTW, ctx: &<b>mut</b> TxContext) {
-    sui::transfer::transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), sender(ctx))
+    sui::transfer::public_transfer(<a href="package.md#0x2_package_claim">claim</a>(otw, ctx), sender(ctx))
 }
 </code></pre>
 
@@ -918,7 +918,7 @@ for the upgrade to succeed.
     <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
         cap: <a href="object.md#0x2_object_id">object::id</a>(cap),
         <a href="package.md#0x2_package">package</a>,
-        policy: cap.policy,
+        policy,
         <a href="digest.md#0x2_digest">digest</a>,
     }
 }

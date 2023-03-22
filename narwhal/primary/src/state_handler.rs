@@ -20,7 +20,7 @@ pub struct StateHandler {
     /// Channel to signal committee changes.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// A channel to update the committed rounds
-    tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
+    tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
 
     network: anemo::Network,
 }
@@ -31,7 +31,7 @@ impl StateHandler {
         name: PublicKey,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_shutdown: ConditionalBroadcastReceiver,
-        tx_commited_own_headers: Option<Sender<(Round, Vec<Round>)>>,
+        tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -40,7 +40,7 @@ impl StateHandler {
                     name,
                     rx_committed_certificates,
                     rx_shutdown,
-                    tx_commited_own_headers,
+                    tx_committed_own_headers,
                     network,
                 }
                 .run()
@@ -69,7 +69,7 @@ impl StateHandler {
 
         // If a reporting channel is available send the committed own
         // headers to it.
-        if let Some(sender) = &self.tx_commited_own_headers {
+        if let Some(sender) = &self.tx_committed_own_headers {
             let _ = sender.send((commit_round, own_rounds_committed)).await;
         }
     }

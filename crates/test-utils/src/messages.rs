@@ -14,7 +14,7 @@ use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
-use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     deterministic_random_account_key, get_key_pair, AccountKeyPair, AuthorityKeyPair,
@@ -34,7 +34,8 @@ use sui_types::parse_sui_struct_tag;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 /// The maximum gas per transaction.
@@ -75,7 +76,6 @@ pub async fn get_gas_object_with_wallet_context(
     if res.is_empty() {
         None
     } else {
-        // TODO (jian): handle unwrap error
         Some(res.swap_remove(0).into_object().unwrap().object_ref())
     }
 }
@@ -300,13 +300,16 @@ pub fn create_publish_move_package_transaction(
     gas_price: Option<u64>,
 ) -> VerifiedTransaction {
     let build_config = BuildConfig::new_for_testing();
-    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+    let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let all_module_bytes =
+        compiled_package.get_package_bytes(/* with_unpublished_deps */ false);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
+
     let data = TransactionData::new_module(
         sender,
         gas_object_ref,
         all_module_bytes,
+        dependencies,
         MAX_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
@@ -324,38 +327,6 @@ pub fn make_transfer_object_transaction_with_wallet_context(
         recipient, object_ref, sender, gas_object, MAX_GAS,
     );
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
-}
-
-pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> VerifiedTransaction {
-    let (sender, keypair) = deterministic_random_account_key();
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sui_programmability/examples/basics");
-    let build_config = BuildConfig::new_for_testing();
-    let all_module_bytes = sui_framework::build_move_package(&path, build_config)
-        .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
-    let data = TransactionData::new_module_with_dummy_gas_price(
-        sender,
-        gas_object,
-        all_module_bytes,
-        MAX_GAS,
-    );
-    to_sender_signed_transaction(data, &keypair)
-}
-
-pub fn random_object_digest() -> ObjectRef {
-    (
-        ObjectID::random(),
-        SequenceNumber::from_u64(1),
-        ObjectDigest::random(),
-    )
-}
-
-pub fn make_random_certified_transaction() -> VerifiedCertificate {
-    let gas_ref = random_object_digest();
-    let txn = make_publish_basics_transaction(gas_ref);
-    let (mut certs, _) = make_tx_certs_and_signed_effects(vec![txn]);
-    certs.swap_remove(0)
 }
 
 pub fn make_counter_create_transaction(
@@ -418,7 +389,7 @@ pub fn make_staking_transaction(
 ) -> VerifiedTransaction {
     let data = TransactionData::new_move_call(
         sender,
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         "request_add_stake".parse().unwrap(),
         vec![],

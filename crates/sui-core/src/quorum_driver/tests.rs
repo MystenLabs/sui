@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_notify_read::Registration;
 use crate::quorum_driver::reconfig_observer::DummyReconfigObserver;
 use crate::quorum_driver::{AuthorityAggregator, QuorumDriverHandlerBuilder};
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::make_transfer_sui_transaction;
-use crate::{
-    authority::authority_notify_read::NotifyRead, quorum_driver::QuorumDriverMetrics,
-    test_utils::init_local_authorities,
-};
+use crate::{quorum_driver::QuorumDriverMetrics, test_utils::init_local_authorities};
+use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::SuiAddress;

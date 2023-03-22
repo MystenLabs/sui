@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// A basic ECDSA utility contract to do the following: 
+// A basic ECDSA utility contract to do the following:
 // 1) Hash a piece of data using keccak256, output an object with hashed data.
-// 2) Recover a Secp256k1 signature to its public key, output an object with the public key. 
-// 3) Verify a Secp256k1 signature, produce an event for whether it is verified. 
+// 2) Recover a Secp256k1 signature to its public key, output an object with the public key.
+// 3) Verify a Secp256k1 signature, produce an event for whether it is verified.
 module math::ecdsa_k1 {
     use sui::ecdsa_k1;
     use sui::event;
@@ -29,7 +29,7 @@ module math::ecdsa_k1 {
             value: ecdsa_k1::keccak256(&data),
         };
         // Transfer an output data object holding the hashed data to the recipient.
-        transfer::transfer(hashed, recipient)
+        transfer::public_transfer(hashed, recipient)
     }
 
     public entry fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
@@ -38,7 +38,7 @@ module math::ecdsa_k1 {
             value: ecdsa_k1::ecrecover(&signature, &hashed_msg),
         };
         // Transfer an output data object holding the pubkey to the recipient.
-        transfer::transfer(pubkey, recipient)
+        transfer::public_transfer(pubkey, recipient)
     }
 
     public entry fun ecrecover_to_eth_address(signature: vector<u8>, hashed_msg: vector<u8>, recipient: address, ctx: &mut TxContext) {
@@ -80,7 +80,7 @@ module math::ecdsa_k1 {
         };
 
         // Transfer an output data object holding the address to the recipient.
-        transfer::transfer(addr_object, recipient)
+        transfer::public_transfer(addr_object, recipient)
     }
 
     public entry fun secp256k1_verify(signature: vector<u8>, public_key: vector<u8>, hashed_msg: vector<u8>) {

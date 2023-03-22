@@ -19,12 +19,14 @@ use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tap::TapFallible;
+use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -43,11 +45,11 @@ use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
+    Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
     SuiObjectDataFilter, SuiTransactionEvents,
 };
-use sui_macros::{fail_point, nondeterministic};
-use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
+use sui_macros::{fail_point, fail_point_async, nondeterministic};
+use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
 use sui_storage::write_ahead_log::WriteAheadLog;
 use sui_storage::{
@@ -77,8 +79,6 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 pub use sui_types::temporary_store::TemporaryStore;
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryModuleResolver};
-use sui_types::MOVE_STDLIB_OBJECT_ID;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -87,7 +87,7 @@ use sui_types::{
     fp_ensure,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
-    SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
 use typed_store::Map;
 
@@ -191,6 +191,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_ready: IntGauge,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
+    pub(crate) execution_driver_dispatch_queue: IntGauge,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -206,6 +207,10 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed_batches: IntCounter,
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
+    pub consensus_handler_num_low_scoring_authorities: IntGauge,
+    pub consensus_handler_scores: IntGaugeVec,
+    pub consensus_committed_subdags: IntCounterVec,
+    pub consensus_committed_certificates: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -364,6 +369,12 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            execution_driver_dispatch_queue: register_int_gauge_with_registry!(
+                "execution_driver_dispatch_queue",
+                "Number of transaction pending in execution driver dispatch queue",
+                registry,
+            )
+            .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
@@ -411,7 +422,33 @@ impl AuthorityMetrics {
                 registry
             ).unwrap(),
             consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
-                .unwrap()
+                .unwrap(),
+            consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
+                "consensus_handler_num_low_scoring_authorities", 
+                "Number of low scoring authorities based on reputation scores from consensus", 
+                registry
+            ).unwrap(),
+            consensus_handler_scores: register_int_gauge_vec_with_registry!(
+                "consensus_handler_scores",
+                "scores from consensus for each authority",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
+            consensus_committed_subdags: register_int_counter_vec_with_registry!(
+                "consensus_committed_subdags",
+                "Number of committed subdags, sliced by author",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
+            consensus_committed_certificates: register_int_counter_vec_with_registry!(
+                "consensus_committed_certificates",
+                "Number of committed certificates, sliced by author",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
         }
     }
 }
@@ -1017,11 +1054,13 @@ impl AuthorityState {
         let mut gas_object_refs = transaction.gas().to_vec();
         let (gas_status, input_objects) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
-            let protocol_config = epoch_store.protocol_config();
-            let max_tx_gas = protocol_config.max_tx_gas();
+            // use a 100M sui coin
+            const MIST_TO_SUI: u64 = 1_000_000_000;
+            const DRY_RUN_SUI: u64 = 100_000_000;
+            let max_coin_value = MIST_TO_SUI * DRY_RUN_SUI;
             let gas_object_id = ObjectID::random();
             let gas_object = Object::new_move(
-                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_tx_gas),
+                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_coin_value),
                 Owner::AddressOwner(sender),
                 TransactionDigest::genesis(),
             );
@@ -1942,9 +1981,9 @@ impl AuthorityState {
         self.database.get_object(object_id)
     }
 
-    pub async fn get_framework_object_ref(&self) -> SuiResult<ObjectRef> {
+    pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
-            .get_object(&SUI_FRAMEWORK_ADDRESS.into())
+            .get_object(&SUI_SYSTEM_ADDRESS.into())
             .await?
             .expect("framework object should always exist")
             .compute_object_reference())
@@ -2149,6 +2188,7 @@ impl AuthorityState {
     pub fn get_owner_objects(
         &self,
         owner: SuiAddress,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
         filter: Option<SuiObjectDataFilter>,
@@ -2163,6 +2203,7 @@ impl AuthorityState {
     pub fn get_owner_objects_iterator(
         &self,
         owner: SuiAddress,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: Option<usize>,
         filter: Option<SuiObjectDataFilter>,
@@ -2202,7 +2243,7 @@ impl AuthorityState {
     pub fn get_dynamic_fields(
         &self,
         owner: ObjectID,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> SuiResult<Vec<DynamicFieldInfo>> {
@@ -2215,6 +2256,7 @@ impl AuthorityState {
     pub fn get_dynamic_fields_iterator(
         &self,
         owner: ObjectID,
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
         if let Some(indexes) = &self.indexes {
@@ -2342,7 +2384,7 @@ impl AuthorityState {
     pub fn get_transactions(
         &self,
         filter: Option<TransactionFilter>,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         reverse: bool,
@@ -2423,6 +2465,46 @@ impl AuthorityState {
         }
     }
 
+    pub fn get_checkpoints(
+        &self,
+        // If `Some`, the query will start from the next item after the specified cursor
+        cursor: Option<CheckpointSequenceNumber>,
+        limit: u64,
+        descending_order: bool,
+    ) -> Result<Vec<Checkpoint>, anyhow::Error> {
+        let max_checkpoint = self.get_latest_checkpoint_sequence_number()?;
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        let verified_checkpoints = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_by_sequence_number(&checkpoint_numbers)?;
+
+        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
+            .into_iter()
+            .flatten()
+            .map(|check| check.into_summary_and_sequence().1)
+            .collect();
+
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
+            .iter()
+            .map(|summary| summary.content_digest)
+            .collect();
+
+        let checkpoint_contents = self
+            .get_checkpoint_store()
+            .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
+        let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
+
+        let mut checkpoints: Vec<Checkpoint> = vec![];
+
+        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
+            checkpoints.push(Checkpoint::from((summary, content)));
+        }
+
+        Ok(checkpoints)
+    }
+
     pub async fn get_timestamp_ms(
         &self,
         digest: &TransactionDigest,
@@ -2433,7 +2515,7 @@ impl AuthorityState {
     pub async fn query_events(
         &self,
         query: EventFilter,
-        // exclusive cursor if `Some`, otherwise start from the beginning
+        // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
@@ -2839,24 +2921,75 @@ impl AuthorityState {
         self.database.get_latest_parent_entry(object_id)
     }
 
+    /// Ordinarily, protocol upgrades occur when 2f + 1 + (f *
+    /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps) vote for the upgrade.
+    ///
+    /// This method can be used to dynamic adjust the amount of buffer. If set to 0, the upgrade
+    /// will go through with only 2f+1 votes.
+    ///
+    /// IMPORTANT: If this is used, it must be used on >=2f+1 validators (all should have the same
+    /// value), or you risk halting the chain.
+    pub fn set_override_protocol_upgrade_buffer_stake(
+        &self,
+        expected_epoch: EpochId,
+        buffer_stake_bps: u64,
+    ) -> SuiResult {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        let actual_epoch = epoch_store.epoch();
+        if actual_epoch != expected_epoch {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch,
+            });
+        }
+
+        epoch_store.set_override_protocol_upgrade_buffer_stake(buffer_stake_bps)
+    }
+
+    pub fn clear_override_protocol_upgrade_buffer_stake(
+        &self,
+        expected_epoch: EpochId,
+    ) -> SuiResult {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        let actual_epoch = epoch_store.epoch();
+        if actual_epoch != expected_epoch {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch,
+                actual_epoch,
+            });
+        }
+
+        epoch_store.clear_override_protocol_upgrade_buffer_stake()
+    }
+
     /// Get the set of system packages that are compiled in to this build, if those packages are
     /// compatible with the current versions of those packages on-chain.
     pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
-            MOVE_STDLIB_OBJECT_ID,
-            sui_framework::get_move_stdlib(),
-        ) .await else {
-            return vec![];
-        };
-
-        let Some(sui_framework) = self.compare_system_package(
-            SUI_FRAMEWORK_OBJECT_ID,
-            sui_framework_injection::get_modules(self.name),
+            MoveStdlib::ID,
+            MoveStdlib::as_modules(),
+            MoveStdlib::transitive_dependencies(),
         ).await else {
             return vec![];
         };
 
-        vec![move_stdlib, sui_framework]
+        let Some(sui_framework) = self.compare_system_package(
+            SuiFramework::ID,
+            SuiFramework::as_modules(),
+            SuiFramework::transitive_dependencies(),
+        ).await else {
+            return vec![];
+        };
+
+        let Some(sui_system) = self.compare_system_package(
+            SuiSystem::ID,
+            sui_system_injection::get_modules(self.name),
+            SuiSystem::transitive_dependencies(),
+        ).await else {
+            return vec![];
+        };
+
+        vec![move_stdlib, sui_framework, sui_system]
     }
 
     /// Check whether the framework defined by `modules` is compatible with the framework that is
@@ -2870,10 +3003,11 @@ impl AuthorityState {
     ///   framework (indicates support for a protocol upgrade without a framework upgrade).
     /// - Returns the digest of the new framework (and version) if it is compatible (indicates
     ///   support for a protocol upgrade with a framework upgrade).
-    async fn compare_system_package(
+    async fn compare_system_package<'p>(
         &self,
         id: ObjectID,
         modules: Vec<CompiledModule>,
+        dependencies: Vec<ObjectID>,
     ) -> Option<ObjectRef> {
         let cur_object = match self.get_object(&id).await {
             Ok(Some(cur_object)) => cur_object,
@@ -2895,19 +3029,14 @@ impl AuthorityState {
             .try_as_package()
             .expect("Framework not package");
 
-        let mut new_object = match Object::new_system_package(
+        let mut new_object = Object::new_system_package(
             modules,
             // Start at the same version as the current package, and increment if compatibility is
             // successful
             cur_object.version(),
+            dependencies,
             cur_object.previous_transaction,
-        ) {
-            Ok(object) => object,
-            Err(e) => {
-                error!("Failed to create new framework package for {id}: {e:?}");
-                return None;
-            }
-        };
+        );
 
         if cur_ref == new_object.compute_object_reference() {
             return Some(cur_ref);
@@ -2945,9 +3074,9 @@ impl AuthorityState {
         Some(new_object.compute_object_reference())
     }
 
-    /// Return the new versions and module bytes for the packages that have been committed to for a
-    /// framework upgrade, in `system_packages`.  Loads the module contents from the binary, and
-    /// performs the following checks:
+    /// Return the new versions, module bytes, and dependencies for the packages that have been
+    /// committed to for a framework upgrade, in `system_packages`.  Loads the module contents from
+    /// the binary, and performs the following checks:
     ///
     /// - Whether its contents matches what is on-chain already, in which case no upgrade is
     ///   required, and its contents are omitted from the output.
@@ -2961,7 +3090,7 @@ impl AuthorityState {
     async fn get_system_package_bytes(
         &self,
         system_packages: Vec<ObjectRef>,
-    ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>)>> {
+    ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await.expect("read cannot fail");
 
@@ -2977,9 +3106,19 @@ impl AuthorityState {
                 continue;
             }
 
-            let bytes = match system_package.0 {
-                MOVE_STDLIB_OBJECT_ID => sui_framework::get_move_stdlib_bytes(),
-                SUI_FRAMEWORK_OBJECT_ID => sui_framework_injection::get_bytes(self.name),
+            let (bytes, dependencies) = match system_package.0 {
+                MoveStdlib::ID => (
+                    MoveStdlib::as_bytes(),
+                    MoveStdlib::transitive_dependencies(),
+                ),
+                SuiFramework::ID => (
+                    SuiFramework::as_bytes(),
+                    SuiFramework::transitive_dependencies(),
+                ),
+                SuiSystem::ID => (
+                    sui_system_injection::get_bytes(self.name),
+                    SuiSystem::transitive_dependencies(),
+                ),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
@@ -2989,9 +3128,9 @@ impl AuthorityState {
                     .map(|m| CompiledModule::deserialize(m).unwrap())
                     .collect(),
                 system_package.1,
+                dependencies.clone(),
                 cur_object.previous_transaction,
-            )
-            .unwrap();
+            );
 
             let new_ref = new_object.compute_object_reference();
             if new_ref != system_package {
@@ -2999,7 +3138,7 @@ impl AuthorityState {
                 return None;
             }
 
-            res.push((system_package.1, bytes));
+            res.push((system_package.1, bytes, dependencies));
         }
 
         Some(res)
@@ -3008,10 +3147,15 @@ impl AuthorityState {
     fn choose_protocol_version_and_system_packages(
         current_protocol_version: ProtocolVersion,
         committee: &Committee,
-        protocol_config: &ProtocolConfig,
         capabilities: Vec<AuthorityCapabilities>,
+        mut buffer_stake_bps: u64,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
         let next_protocol_version = current_protocol_version + 1;
+
+        if buffer_stake_bps > 10000 {
+            warn!("clamping buffer_stake_bps to 10000");
+            buffer_stake_bps = 10000;
+        }
 
         // For each validator, gather the protocol version and system packages that it would like
         // to upgrade to in the next epoch.
@@ -3061,15 +3205,15 @@ impl AuthorityState {
                 let total_votes = stake_aggregator.total_votes();
                 let quorum_threshold = committee.quorum_threshold();
                 let f = committee.total_votes - committee.quorum_threshold();
-                let buffer_bps = protocol_config.buffer_stake_for_protocol_upgrade_bps();
-                // multiple by buffer_bps / 10000, rounded up.
-                let buffer_stake = (f * buffer_bps + 9999) / 10000;
+
+                // multiple by buffer_stake_bps / 10000, rounded up.
+                let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;
                 let effective_threshold = quorum_threshold + buffer_stake;
 
                 info!(
                     ?total_votes,
                     ?quorum_threshold,
-                    ?buffer_bps,
+                    ?buffer_stake_bps,
                     ?effective_threshold,
                     ?next_protocol_version,
                     ?packages,
@@ -3102,12 +3246,21 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
+        let buffer_stake_bps = epoch_store
+            .get_override_protocol_upgrade_buffer_stake()
+            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
+            .unwrap_or_else(|| {
+                epoch_store
+                    .protocol_config()
+                    .buffer_stake_for_protocol_upgrade_bps()
+            });
+
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
                 epoch_store.protocol_version(),
                 epoch_store.committee(),
-                epoch_store.protocol_config(),
                 epoch_store.get_capabilities(),
+                buffer_stake_bps,
             );
 
         let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
@@ -3158,7 +3311,21 @@ impl AuthorityState {
             "Creating advance epoch transaction"
         );
 
+        fail_point_async!("change_epoch_tx_delay");
         let _tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
+
+        // The tx could have been executed by state sync already - if so simply return an error.
+        // The checkpoint builder will shortly be terminated by reconfiguration anyway.
+        if self
+            .database
+            .is_tx_already_executed(tx_digest)
+            .expect("read cannot fail")
+        {
+            warn!("change epoch tx has already been executed via state sync");
+            return Err(anyhow::anyhow!(
+                "change epoch tx has already been executed via state sync"
+            ));
+        }
 
         let execution_guard = self
             .database
@@ -3185,7 +3352,7 @@ impl AuthorityState {
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
-        epoch_store.record_is_safe_mode_metric(system_obj.safe_mode());
+        epoch_store.record_checkpoint_builder_is_safe_mode_metric(system_obj.safe_mode());
         // The change epoch transaction cannot fail to execute.
         assert!(effects.status().is_ok());
         Ok((system_obj, effects))
@@ -3268,8 +3435,130 @@ impl AuthorityState {
     }
 }
 
+fn calculate_checkpoint_numbers(
+    // If `Some`, the query will start from the next item after the specified cursor
+    cursor: Option<CheckpointSequenceNumber>,
+    limit: u64,
+    descending_order: bool,
+    max_checkpoint: CheckpointSequenceNumber,
+) -> Vec<CheckpointSequenceNumber> {
+    let (start_index, end_index) = match cursor {
+        Some(t) => {
+            if descending_order {
+                let start = std::cmp::min(t.saturating_sub(1), max_checkpoint);
+                let end = start.saturating_sub(limit - 1);
+                (end, start)
+            } else {
+                let start =
+                    std::cmp::min(t.checked_add(1).unwrap_or(max_checkpoint), max_checkpoint);
+                let end = std::cmp::min(
+                    start.checked_add(limit - 1).unwrap_or(max_checkpoint),
+                    max_checkpoint,
+                );
+                (start, end)
+            }
+        }
+        None => {
+            if descending_order {
+                (max_checkpoint.saturating_sub(limit - 1), max_checkpoint)
+            } else {
+                (0, std::cmp::min(limit - 1, max_checkpoint))
+            }
+        }
+    };
+
+    if descending_order {
+        (start_index..=end_index).rev().collect()
+    } else {
+        (start_index..=end_index).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_checkpoint_numbers() {
+        let cursor = Some(10);
+        let limit = 5;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![9, 8, 7, 6, 5]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_descending_no_cursor() {
+        let cursor = None;
+        let limit = 5;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![15, 14, 13, 12, 11]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_no_cursor() {
+        let cursor = None;
+        let limit = 5;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_with_cursor() {
+        let cursor = Some(10);
+        let limit = 5;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, vec![11, 12, 13, 14, 15]);
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_ascending_limit_exceeds_max() {
+        let cursor = None;
+        let limit = 20;
+        let descending_order = false;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, (0..=15).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_calculate_checkpoint_numbers_descending_limit_exceeds_max() {
+        let cursor = None;
+        let limit = 20;
+        let descending_order = true;
+        let max_checkpoint = 15;
+
+        let checkpoint_numbers =
+            calculate_checkpoint_numbers(cursor, limit, descending_order, max_checkpoint);
+
+        assert_eq!(checkpoint_numbers, (0..=15).rev().collect::<Vec<_>>());
+    }
+}
+
 #[cfg(msim)]
-pub mod sui_framework_injection {
+pub mod sui_system_injection {
     use std::cell::RefCell;
 
     use super::*;
@@ -3311,36 +3600,36 @@ pub mod sui_framework_injection {
 
     pub fn get_bytes(name: AuthorityName) -> Vec<Vec<u8>> {
         OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => sui_framework::get_sui_framework_bytes(),
+            FrameworkOverrideConfig::Default => SuiSystem::as_bytes(),
             FrameworkOverrideConfig::Global(framework) => compiled_modules_to_bytes(framework),
             FrameworkOverrideConfig::PerValidator(func) => func(name)
                 .map(|fw| compiled_modules_to_bytes(&fw))
-                .unwrap_or_else(sui_framework::get_sui_framework_bytes),
+                .unwrap_or_else(SuiSystem::as_bytes),
         })
     }
 
     pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
         OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => sui_framework::get_sui_framework(),
+            FrameworkOverrideConfig::Default => SuiSystem::as_modules(),
             FrameworkOverrideConfig::Global(framework) => framework.clone(),
             FrameworkOverrideConfig::PerValidator(func) => {
-                func(name).unwrap_or_else(sui_framework::get_sui_framework)
+                func(name).unwrap_or_else(SuiSystem::as_modules)
             }
         })
     }
 }
 
 #[cfg(not(msim))]
-pub mod sui_framework_injection {
+pub mod sui_system_injection {
     use move_binary_format::CompiledModule;
 
     use super::*;
 
     pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
-        sui_framework::get_sui_framework_bytes()
+        SuiSystem::as_bytes()
     }
 
     pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
-        sui_framework::get_sui_framework()
+        SuiSystem::as_modules()
     }
 }

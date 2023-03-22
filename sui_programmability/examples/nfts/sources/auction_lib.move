@@ -118,10 +118,10 @@ module nfts::auction_lib {
             } = option::extract(bid_data);
 
             send_balance(funds, owner, ctx);
-            transfer::transfer(item, highest_bidder);
+            transfer::public_transfer(item, highest_bidder);
         } else {
             // no bids placed - send the item back to the original owner
-            transfer::transfer(item, owner);
+            transfer::public_transfer(item, owner);
         };
     }
 
@@ -152,7 +152,7 @@ module nfts::auction_lib {
 
     /// Helper for the most common operation - wrapping a balance and sending it
     fun send_balance(balance: Balance<SUI>, to: address, ctx: &mut TxContext) {
-        transfer::transfer(coin::from_balance(balance, ctx), to)
+        transfer::public_transfer(coin::from_balance(balance, ctx), to)
     }
 
     /// exposes transfer::transfer

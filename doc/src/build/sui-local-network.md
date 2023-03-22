@@ -2,17 +2,51 @@
 title: Create a local Sui network
 ---
 
-To test your dApps against the latest changes to Sui, or to prepare for new features ahead of the next Devnet or Testnet release, you can test on a local network using the `sui-test-validator` binary. This binary starts a single-node cluster with Full node and faucet capabilities.
+Use a Sui local network to test your dApps against the latest changes to Sui, and to prepare for the next Sui release to the Devnet or Testnet network. To set up a local network, Sui provides the `sui-test-validator` binary. The `sui-test-validator` starts a local network that includes a Sui Full node, a Sui validator, and a Sui faucet. You can use the included faucet to get test SUI to use on the local network.
 
-## Prerequisite
+## Prerequisites
 
-[Install](../build/install.md) the required libraries if not already installed.
+Install the necessary [prerequisites](../build/install.md#prerequisites) for Sui.
 
 ## Install Sui
 
-You can install Sui from your local repository or from the remote repository. If you build from your local source, you have the benefit of being able to run a local Sui Explorer and Sui Wallet.
+Use the steps in this section to install the `sui-test-validator` to run a local network. To install Sui to build or for other purposes, use the steps in the [Install Sui](install.md) topic.
 
-To run from your local source, clone the repository locally (or get latest, if already cloned). Then, run `cargo build` from the `sui` directory:
+If you previously installed Sui, do one of the following:
+ * Use the same branch for the commands in this topic that you used to install Sui
+ * Install Sui again using the branch you intend to use for your local network
+
+You have two options to install Sui:
+ * Clone the Sui GitHub repository locally, and then install Sui from your local drive
+ * Install Sui directly from the remote Sui repository.
+
+If you clone the repository and install Sui from your local drive, you can also start a local Sui Explorer and Sui Wallet that works with your local network.
+ 
+When you install `sui-test-validator` but don't have libpq installed, you might see the following message:
+
+`ld: library not found for -lpq`
+
+To resolve this, use Brew to install `libpq` with the following command: 
+
+```shell
+brew install libpq
+```
+
+Also add the path to your profile:
+
+```
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`
+```
+
+If you still have an issue, run the following command:
+
+```shell
+brew link --force libpq
+```
+
+### Install Sui locally
+
+Use the following command to clone the Sui repo, change to the Sui folder after the clone completes, and then use cargo to install the `sui-test-validator` and `sui` binaries from your local drive.
 
 ```bash
 # Clone the repository
@@ -23,25 +57,31 @@ cd sui
 cargo build --bin sui-test-validator --bin sui
 ```
 
-To use remote code, `cargo install` Sui directly from the remote repository. The following example uses the `main` branch, but you can set other branches as needed (e.g., `--branch devnet`, `--branch testnet`, and so on) to target different network versions.
+### Install Sui from GitHub
+
+Use the following command to install Sui directly from the Sui GitHub repository:
 
 ```bash
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch main sui-test-validator sui
 ```
 
-## Running local network
+Note that the command uses the `main` branch of the Sui repository. To use a different branch, change the value for the `--branch` switch. For example, to use the `devnet` branch, specify `--branch devnet`.
 
-To run a local network with validators and a faucet, open a Terminal or Console window at the `sui` root directory. Use the following command to run `sui-test-validator`, setting `RUST_LOG` to `consensus=off`:
+## Start the local network
+
+To start the local network, run the following command from the `sui` root folder.
 
 ```bash
 RUST_LOG="consensus=off" cargo run --bin sui-test-validator
 ```
 
-**Note** The state for `sui-test-validator` is currently not persistent, i.e., it will always start from a fresh state upon restart.
+The command starts the `sui-test-validator`. The `RUST_LOG`=`consensus=off` turns off consensus for the local network.
 
-You can customize your local Sui network by passing values to the following flags for the `sui-test-validator` command:
+**Important:** Each time you start the `sui-test-validator`, the network starts as a new network with no previous data. The local network is not persistent.
 
-```bash
+To customize your local Sui network, such as changing the port used, include additional parameters in the command to start `sui-test-validator`:
+
+```
 OPTIONS:
         --epoch-duration-ms <EPOCH_DURATION_MS>
             The duration for epochs (defaults to one minute) [default: 60000]
@@ -55,23 +95,93 @@ OPTIONS:
 
 Use `sui-validator-test --help` to see these options in your console.
 
-### Making faucet requests
+### Access your local Full node
 
-To get gas coins for an address, open a new Terminal or Console window or tab. Make a cURL request and specify the address to receive the coins. Use the `sui client active-address` command to get the current active address, if needed.
+Use the following command to retrieve the total transaction count from your local network:
 
 ```bash
-curl --location --request POST 'http://127.0.0.1:9123/gas' \
+curl --location --request POST 'http://127.0.0.1:9000' \
 --header 'Content-Type: application/json' \
 --data-raw '{
-    "FixedAmountRequest": {
-        "recipient": "0x<ADDRESS>"
-    }
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTotalTransactionNumber",
+  "params": []
 }'
 ```
 
 If successful, the response resembles the following:
 
 ```bash
+{
+    "jsonrpc": "2.0",
+    "result": 168,
+    "id": 1
+}
+```
+
+## Connect the Sui Client CLI to your local network
+
+You can use the Sui Client CLI with any Sui network. By default it connects to Sui Devnet. To connect to your local network, create a new environment alias named `local` that sets the RPC URL the client uses to your local network.
+
+```shell
+sui client new-env --alias local --rpc http://127.0.0.1:9000
+```
+
+Next, use the following command to set the active environment to the new `local` environment you created.
+
+```
+sui client switch --env local
+```
+
+The command returns:
+
+`Active environment switched to [local]`
+
+You can check the current active environment with the following command:
+
+```
+sui client active-env
+```
+
+The command returns:
+
+`local`
+
+## Show the current active address
+
+The Sui Client CLI uses the active address for command if you don't specify one. Use the following command to show the active address on your local network.
+
+```
+sui client active-address
+```
+
+The command returns an address:
+
+`0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de`
+
+Use the active address to get test SUI to use on your local network. Use the `sui client addresses` command to see all of the addresses on your local network.
+
+**Note:** The address returned when you run the command is unique and does not match the one used in this example.
+
+## Use the local faucet
+
+Transactions on your local network require SUI coins to pay for gas fees just like other networks. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui Wallet](#set-up-a-local-sui-wallet). You can use the address for the local Sui Wallet with the faucet.
+
+Use the following cURL command to get test coins from the local faucet. 
+```bash
+curl --location --request POST 'http://127.0.0.1:9123/gas' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "FixedAmountRequest": {
+        "recipient": "0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"
+    }
+}'
+```
+
+If successful, the response resembles the following:
+
+```
 {
     "transferredGasObjects": [
         {
@@ -104,61 +214,94 @@ If successful, the response resembles the following:
 }
 ```
 
-### Accessing Full node
+### Check the gas coin objects for the active address
 
-You can access your Full node using cURL:
-
-```bash
-curl --location --request POST 'http://127.0.0.1:9000' \
---header 'Content-Type: application/json' \
---data-raw '{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "sui_getTotalTransactionNumber",
-  "params": []
-}'
+After yoo get coins from the faucet, use the following command to view the coin objects for the address: 
+```shell
+sui client gas
 ```
 
-If successful, the return resembles the following:
+The response resembles the following, but with different IDs:
+```
+                             Object ID                              |  Gas Value
+--------------------------------------------------------------------------------
+ 0x1d790713c1c3441a307782597c088f11230c47e609af2cec97f393123ea4de45 |  200000000
+ 0x20c1d5ad2e8693953fca09fd2fec0fbc52a787e0a0f77725220d36a09a5b312d |  200000000
+ 0x236714566110f5624516faa0da215ad29f8daa611e8b651d1e972168207567b2 |  200000000
+ 0xc81f30256bb04ad84bc4a92017cffd7c1f98286e028fa504d8515ad72ddd1088 |  200000000
+ 0xf61c8b21b305cc8e062b3a37de8c3a37583e17f437a449a2ab42321d019aeeb4 |  200000000
 
-```bash
-{
-    "jsonrpc": "2.0",
-    "result": 168,
-    "id": 1
-}
 ```
 
-## Setup local Sui Explorer
+## Install Sui Wallet and Sui Explorer locally 
 
-While [https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local) is compatible with the local network, it might not have all the latest features that are available in the `main` branch of the Sui repository. To run `explorer` locally, open a Terminal or Console window in the `sui` directory (install [pnpm](https://pnpm.io/installation) first if you don't already have it):
+To install and use the apps locally, you must first install [pnpm](https://pnpm.io/installation). Use the instructions appropriate for your operating system.
+
+After you install `pnpm`, use the following command to install the required dependencies in your workspace:
+```shell
+pnpm install
+```
+
+After the installation completes, run the following command to install Sui Wallet and Sui Explorer:
+```shell
+pnpm turbo build
+```
+
+If you encounter an error from turbo build, confirm that there is no `package-lock.json`. If the file exists, remove it and then run the command again.
+
+### Set up Sui Explorer on your local network
+
+To connect the live Sui Explorer to your local network, open the URL:[https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local). The live version of Sui Explorer may not include recent updates added to the `main` branch of the Sui repo. To use Sui Explorer that includes the most recent updates, install and run Sui Explorer from your local clone of the Sui repo.
+
+Run the following command from the `sui` root folder:
+
+**Note:** To run the command you have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
 
 ```bash
 pnpm explorer dev
 ```
 
-After running the command, you can open a browser to [http://localhost:3000/](http://localhost:3000/) to access your local version of Sui Explorer.
+After the command completes, open your local Sui Explorer at the following URL: [http://localhost:3000/](http://localhost:3000/).
 
-For more details, see [https://github.com/MystenLabs/sui/tree/main/apps/explorer](https://github.com/MystenLabs/sui/tree/main/apps/explorer).
+For more details about Sui Explorer, see the [Explorer README](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md#set-up).
 
-## Set up local Sui Wallet
+## Set up a local Sui Wallet
 
-Similar to local Sui Explorer, you can also setup a local Sui Wallet. Open a Terminal or Console window or tab at the `sui` root directory and use the `wallet start` command (install [pnpm](https://pnpm.io/installation) first if you don't already have it):
+You can also use a local Sui Wallet to test with your local network. You can then see transactions executed from your local Sui Wallet on your local Sui Explorer.
+
+**Note:** To run the command you have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
+
+Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
 ```bash
 pnpm wallet start
 ```
 
-**Tips** You can set the default environment to use your local network with https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables so that you don't have to switch network manually.
+Follow [this guide](https://github.com/MystenLabs/sui/blob/main/apps/wallet/README.md#install-the-extension-to-chrome) to load your locally built wallet to chrome
 
-For more details, reference [https://github.com/MystenLabs/sui/tree/main/apps/wallet](https://github.com/MystenLabs/sui/tree/main/apps/wallet).
+**Note** You can set the default environment for the wallet to use so that you don't have to switch network manually. For details, see [https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables](https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables). 
 
-## Generating example data
+## Generate example data
 
-Open a Terminal or Console window or tab at the `sui` root directory. From there, run the TypeScript SDK end to end test against the local network to generate example data to the network (install [pnpm](https://pnpm.io/installation) first if you don't already have it):
+Use the TypeScript SDK to add example data to your network. 
+
+**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
+
+Run the following command from the `sui` root folder: 
 
 ```bash
 pnpm sdk test:e2e
 ```
+For additional information about example data for testing, see [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
 
-For more details, refer to [https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing](https://github.com/MystenLabs/sui/tree/main/sdk/typescript#testing).
+## Troubleshooting
+
+If you do not use [Node.js 18](https://nodejs.org/de/blog/announcements/v18-release-announce), you might see the following message:
+ 
+`Retrying requesting from faucet: Retry failed: fetch is not defined`
+
+To resolve this, switch or update to Node.js 18 and then try again. 
+
+## Test with the Sui TypeScript SDK
+
+The published version of the Sui TypeScript SDK might be an earlier version than the version of Sui you installed for your local network. To make sure you're using the latest version of the SDK, use the `experimental`-tagged version (for example, `0.0.0-experimental-20230317184920`) in the [Current Tags](https://www.npmjs.com/package/@mysten/sui.js/v/0.0.0-experimental-20230127130009?activeTab=versions) section of the Sui NPM registry.

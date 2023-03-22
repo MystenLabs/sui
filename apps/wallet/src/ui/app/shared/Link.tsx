@@ -9,13 +9,17 @@ import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 const styles = cva(
     [
         'transition flex flex-nowrap items-center justify-center outline-none gap-1 w-full',
-        'no-underline bg-transparent p-0 border-none',
+        'bg-transparent p-0 border-none',
         'active:opacity-70',
         'disabled:opacity-40',
         'cursor-pointer group',
     ],
     {
         variants: {
+            underline: {
+                none: 'no-underline',
+                hover: 'no-underline hover:underline',
+            },
             color: {
                 steelDark: [
                     'text-steel-dark hover:text-steel-darker focus:text-steel-darker disabled:text-steel-dark',
@@ -72,12 +76,13 @@ export const Link = forwardRef(
             color,
             weight,
             size = 'bodySmall',
+            underline = 'none',
             ...otherProps
         }: LinkProps,
         ref: Ref<HTMLAnchorElement | HTMLButtonElement>
     ) => (
         <ButtonOrLink
-            className={styles({ color, weight, size })}
+            className={styles({ color, weight, size, underline })}
             {...otherProps}
             ref={ref}
         >
