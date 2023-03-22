@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::governance_test_utils {
+module sui_system::governance_test_utils {
     use sui::address;
     use sui::balance;
     use sui::object;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::staking_pool::{Self, StakedSui, StakingPool};
+    use sui_system::staking_pool::{Self, StakedSui, StakingPool};
     use sui::test_utils::assert_eq;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::{Self, Validator};
-    use sui::sui_system::{Self, SuiSystemState};
+    use sui_system::validator::{Self, Validator};
+    use sui_system::sui_system::{Self, SuiSystemState};
     use sui::test_scenario::{Self, Scenario};
-    use sui::validator_set;
+    use sui_system::validator_set;
     use std::option;
     use std::vector;
 

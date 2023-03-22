@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 use sui_config::genesis::GenesisValidatorInfo;
-use sui_framework::{SuiFramework, SystemPackage};
+use sui_framework::{SuiSystem, SystemPackage};
 use sui_types::{base_types::SuiAddress, multiaddr::Multiaddr};
 
 use crate::client_commands::{write_transaction_response, WalletContext};
@@ -298,7 +298,7 @@ async fn call_0x5(
     let gas_obj_ref = get_gas_obj_ref(sender, sui_client, minimal_gas_budget).await?;
     let tx_data = TransactionData::new_move_call(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],

@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::validator_set {
+module sui_system::validator_set {
     use std::option::{Self, Option};
     use std::vector;
 
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::{Self, Validator, staking_pool_id, sui_address};
-    use sui::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
-    use sui::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
+    use sui_system::validator::{Self, Validator, staking_pool_id, sui_address};
+    use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
+    use sui_system::staking_pool::{PoolTokenExchangeRate, StakedSui, pool_id};
     use sui::object::{Self, ID};
     use sui::priority_queue as pq;
     use sui::vec_map::{Self, VecMap};
@@ -18,20 +18,20 @@ module sui::validator_set {
     use sui::table::{Self, Table};
     use sui::event;
     use sui::table_vec::{Self, TableVec};
-    use sui::voting_power;
-    use sui::validator_wrapper::ValidatorWrapper;
-    use sui::validator_wrapper;
+    use sui_system::voting_power;
+    use sui_system::validator_wrapper::ValidatorWrapper;
+    use sui_system::validator_wrapper;
     use sui::bag::Bag;
     use sui::bag;
 
-    friend sui::genesis;
-    friend sui::sui_system_state_inner;
+    friend sui_system::genesis;
+    friend sui_system::sui_system_state_inner;
 
     #[test_only]
-    friend sui::validator_set_tests;
+    friend sui_system::validator_set_tests;
 
     #[test_only]
-    friend sui::stake_tests;
+    friend sui_system::stake_tests;
 
     struct ValidatorSet has store {
         /// Total amount of stake from all active validators at the beginning of the epoch.

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::stake_subsidy {
+module sui_system::stake_subsidy {
     use sui::balance::{Self, Balance};
     use sui::math;
     use sui::sui::SUI;
@@ -9,7 +9,7 @@ module sui::stake_subsidy {
     use sui::bag;
     use sui::tx_context::TxContext;
 
-    friend sui::sui_system_state_inner;
+    friend sui_system::sui_system_state_inner;
 
     struct StakeSubsidy has store {
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.

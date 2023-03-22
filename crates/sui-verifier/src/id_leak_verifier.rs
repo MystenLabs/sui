@@ -33,7 +33,7 @@ use sui_types::{
     error::{ExecutionError, VMMVerifierErrorSubStatusCode},
     id::OBJECT_MODULE_NAME,
     sui_system_state::SUI_SYSTEM_MODULE_NAME,
-    SUI_FRAMEWORK_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
@@ -61,7 +61,7 @@ const TS_NEW_OBJECT: FunctionIdent = (
     ident_str!("new_object"),
 );
 const SUI_SYSTEM_CREATE: FunctionIdent = (
-    &SUI_FRAMEWORK_ADDRESS,
+    &SUI_SYSTEM_ADDRESS,
     SUI_SYSTEM_MODULE_NAME,
     ident_str!("create"),
 );

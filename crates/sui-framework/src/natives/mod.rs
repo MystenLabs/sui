@@ -17,7 +17,7 @@ mod validator;
 use crate::make_native;
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_core_types::identifier::Identifier;
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
 use move_vm_types::{
@@ -26,6 +26,7 @@ use move_vm_types::{
 };
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
@@ -278,11 +279,8 @@ impl NativesCostTable {
     }
 }
 
-pub fn all_natives(
-    move_stdlib_addr: AccountAddress,
-    sui_framework_addr: AccountAddress,
-) -> NativeFunctionTable {
-    let sui_natives: &[(&str, &str, NativeFunction)] = &[
+pub fn all_natives() -> NativeFunctionTable {
+    let sui_framework_natives: &[(&str, &str, NativeFunction)] = &[
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
@@ -467,11 +465,6 @@ pub fn all_natives(
             "is_one_time_witness",
             make_native!(types::is_one_time_witness),
         ),
-        (
-            "validator",
-            "validate_metadata_bcs",
-            make_native!(validator::validate_metadata_bcs),
-        ),
         ("test_utils", "destroy", make_native!(test_utils::destroy)),
         (
             "test_utils",
@@ -479,24 +472,42 @@ pub fn all_natives(
             make_native!(test_utils::create_one_time_witness),
         ),
     ];
-    sui_natives
+    let sui_framework_natives_iter =
+        sui_framework_natives
+            .iter()
+            .cloned()
+            .map(|(module_name, func_name, func)| {
+                (
+                    SUI_FRAMEWORK_ADDRESS,
+                    Identifier::new(module_name).unwrap(),
+                    Identifier::new(func_name).unwrap(),
+                    func,
+                )
+            });
+    let sui_system_natives: &[(&str, &str, NativeFunction)] = &[(
+        "validator",
+        "validate_metadata_bcs",
+        make_native!(validator::validate_metadata_bcs),
+    )];
+    sui_system_natives
         .iter()
         .cloned()
         .map(|(module_name, func_name, func)| {
             (
-                sui_framework_addr,
+                SUI_SYSTEM_ADDRESS,
                 Identifier::new(module_name).unwrap(),
                 Identifier::new(func_name).unwrap(),
                 func,
             )
         })
+        .chain(sui_framework_natives_iter)
         .chain(move_stdlib::natives::all_natives(
-            move_stdlib_addr,
+            MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             GasParameters::zeros(),
         ))
         .chain(move_stdlib::natives::nursery_natives(
-            move_stdlib_addr,
+            MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             NurseryGasParameters::zeros(),
         ))

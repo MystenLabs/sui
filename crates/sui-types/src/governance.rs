@@ -11,7 +11,7 @@ use crate::committee::EpochId;
 use crate::error::SuiError;
 use crate::id::{ID, UID};
 use crate::object::{Data, Object};
-use crate::SUI_FRAMEWORK_ADDRESS;
+use crate::SUI_SYSTEM_ADDRESS;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -37,7 +37,7 @@ pub struct StakedSui {
 impl StakedSui {
     pub fn type_() -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: SUI_SYSTEM_ADDRESS,
             module: STAKING_POOL_MODULE_NAME.to_owned(),
             name: STAKED_SUI_STRUCT_NAME.to_owned(),
             type_params: vec![],
@@ -45,7 +45,7 @@ impl StakedSui {
     }
 
     pub fn is_staked_sui(s: &StructTag) -> bool {
-        s.address == SUI_FRAMEWORK_ADDRESS
+        s.address == SUI_SYSTEM_ADDRESS
             && s.module.as_ident_str() == STAKING_POOL_MODULE_NAME
             && s.name.as_ident_str() == STAKED_SUI_STRUCT_NAME
             && s.type_params.is_empty()

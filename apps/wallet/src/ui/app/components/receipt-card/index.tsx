@@ -77,11 +77,11 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const showGasSummary = isSuccessful && isSender && gasTotal;
     const showSponsorInfo = !isSuccessful && isSender && isSponsoredTransaction;
     const stakedTxn = events?.find(
-        ({ type }) => type === '0x2::validator::StakingRequestEvent'
+        ({ type }) => type === '0x3::validator::StakingRequestEvent'
     );
 
     const unstakeTxn = events?.find(
-        ({ type }) => type === '0x2::validator::UnstakingRequestEvent'
+        ({ type }) => type === '0x3::validator::UnstakingRequestEvent'
     );
 
     let txnGasSummary: JSX.Element | undefined;

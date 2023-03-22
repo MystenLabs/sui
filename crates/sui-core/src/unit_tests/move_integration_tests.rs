@@ -2793,11 +2793,11 @@ async fn test_generate_lock_file() {
 
         [[move.package]]
         name = "MoveStdlib"
-        source = { local = "../../../../../sui-framework/deps/move-stdlib" }
+        source = { local = "../../../../../sui-framework/packages/move-stdlib" }
 
         [[move.package]]
         name = "Sui"
-        source = { local = "../../../../../sui-framework" }
+        source = { local = "../../../../../sui-framework/packages/sui-framework" }
 
         dependencies = [
           { name = "MoveStdlib" },

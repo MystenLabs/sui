@@ -3,7 +3,7 @@ name = "object_wrapping"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../../../../sui-framework" }
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
 object_wrapping = "0x0"

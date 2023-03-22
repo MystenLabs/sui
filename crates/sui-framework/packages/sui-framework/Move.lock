@@ -9,4 +9,4 @@ dependencies = [
 
 [[move.package]]
 name = "MoveStdlib"
-source = { local = "deps/move-stdlib" }
+source = { local = "../move-stdlib" }

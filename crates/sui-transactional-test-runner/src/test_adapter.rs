@@ -41,7 +41,6 @@ use sui_framework::{
     make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::clock::Clock;
 use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
 use sui_types::messages::CallArg;
@@ -61,6 +60,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
@@ -118,15 +118,6 @@ pub fn clone_genesis_packages() -> Vec<Object> {
 
 pub fn clone_genesis_objects() -> Vec<Object> {
     GENESIS.objects.clone()
-}
-
-pub fn get_framework_object_ref() -> ObjectRef {
-    GENESIS
-        .packages
-        .iter()
-        .find(|o| o.id() == SUI_FRAMEWORK_ADDRESS.into())
-        .unwrap()
-        .compute_object_reference()
 }
 
 /// Create and return objects wrapping the genesis modules for sui
@@ -228,8 +219,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             named_address_mapping.insert(name, addr);
         }
 
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let native_functions = sui_framework::natives::all_natives();
         let mut objects = clone_genesis_packages();
         objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
@@ -990,20 +980,36 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "sui_system".to_string(),
+        NumericalAddress::new(
+            SUI_SYSTEM_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
 pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
+    let sui_system_sources: String = {
+        let mut buf = sui_files.to_path_buf();
+        buf.push("packages");
+        buf.push("sui-system");
+        buf.push("sources");
+        buf.to_string_lossy().to_string()
+    };
     let sui_sources: String = {
         let mut buf = sui_files.to_path_buf();
+        buf.push("packages");
+        buf.push("sui-framework");
         buf.push("sources");
         buf.to_string_lossy().to_string()
     };
     let sui_deps = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("deps");
+        buf.push("packages");
         buf.push("move-stdlib");
         buf.push("sources");
         buf.to_string_lossy().to_string()
@@ -1011,7 +1017,7 @@ pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: vec![sui_sources, sui_deps],
+            paths: vec![sui_system_sources, sui_sources, sui_deps],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,

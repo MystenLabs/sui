@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::validator_tests {
+module sui_system::validator_tests {
     use sui::sui::SUI;
     use sui::test_scenario;
     use sui::url;
     use std::string::Self;
-    use sui::validator::{Self, Validator};
+    use sui_system::validator::{Self, Validator};
     use sui::tx_context::TxContext;
     use sui::balance::Balance;
     use std::option;
     use std::ascii;
     use sui::coin::{Self, Coin};
     use sui::balance;
-    use sui::staking_pool::{Self, StakedSui};
+    use sui_system::staking_pool::{Self, StakedSui};
     use std::vector;
     use sui::test_utils;
     use sui::bag;
@@ -443,7 +443,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EInvalidProofOfPossession)]
+    #[expected_failure(abort_code = sui_system::validator::EInvalidProofOfPossession)]
     #[test]
     fun test_validator_update_metadata_invalid_proof_of_possession() {
         let sender = VALID_ADDRESS;
@@ -467,7 +467,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidNetPubkey)]
+    #[expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetPubkey)]
     #[test]
     fun test_validator_update_metadata_invalid_network_key() {
         let sender = VALID_ADDRESS;
@@ -491,7 +491,7 @@ module sui::validator_tests {
     }
 
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerPubkey)]
+    #[expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerPubkey)]
     #[test]
     fun test_validator_update_metadata_invalid_worker_key() {
         let sender = VALID_ADDRESS;
@@ -514,7 +514,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidNetAddr)]
+    #[expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_network_addr() {
         let sender = VALID_ADDRESS;
@@ -537,7 +537,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidPrimaryAddr)]
+    #[expected_failure(abort_code = sui_system::validator::EMetadataInvalidPrimaryAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_consensus_addr() {
         let sender = VALID_ADDRESS;
@@ -560,7 +560,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidWorkerAddr)]
+    #[expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_worker_addr() {
         let sender = VALID_ADDRESS;
@@ -583,7 +583,7 @@ module sui::validator_tests {
         test_scenario::end(scenario_val);
     }
 
-    #[expected_failure(abort_code = sui::validator::EMetadataInvalidP2pAddr)]
+    #[expected_failure(abort_code = sui_system::validator::EMetadataInvalidP2pAddr)]
     #[test]
     fun test_validator_update_metadata_invalid_p2p_address() {
         let sender = VALID_ADDRESS;

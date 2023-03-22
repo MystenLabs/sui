@@ -56,7 +56,7 @@ describe('Transaction Serialization and deserialization', () => {
     const tx = new Transaction();
     const coin = coins[2].details as SuiObjectData;
     tx.moveCall({
-      target: '0x2::sui_system::request_add_stake',
+      target: '0x3::sui_system::request_add_stake',
       arguments: [
         tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
         tx.object(coin.objectId),

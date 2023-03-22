@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::rewards_distribution_tests {
+module sui_system::rewards_distribution_tests {
     use sui::test_scenario::{Self, Scenario};
-    use sui::sui_system::{Self, SuiSystemState};
+    use sui_system::sui_system::{Self, SuiSystemState};
 
-    use sui::validator_cap::UnverifiedValidatorOperationCap;
-    use sui::governance_test_utils::{
+    use sui_system::validator_cap::UnverifiedValidatorOperationCap;
+    use sui_system::governance_test_utils::{
         Self,
         advance_epoch,
         advance_epoch_with_reward_amounts,
