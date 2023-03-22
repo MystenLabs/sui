@@ -30,7 +30,6 @@ use sui_types::messages::{
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
 
-use sui_simulator::anemo::PeerId;
 use sui_types::storage::ParentSync;
 
 use tracing::{debug, error, instrument};
@@ -45,10 +44,10 @@ pub struct ConsensusHandler<T> {
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    /// Mappings used for logging and metrics
-    authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
     committee: Committee,
+    /// Mappings used for logging and metrics
+    authority_names_to_hostnames: HashMap<AuthorityName, String>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -66,7 +65,7 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
+        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
@@ -80,7 +79,7 @@ impl<T> ConsensusHandler<T> {
             parent_sync_store,
             low_scoring_authorities,
             committee,
-            authority_names_to_peer_ids,
+            authority_names_to_hostnames,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
@@ -147,7 +146,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             self.low_scoring_authorities.clone(),
             &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
-            self.authority_names_to_peer_ids.clone(),
+            self.authority_names_to_hostnames.clone(),
             &self.metrics,
         );
 
