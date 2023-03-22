@@ -18,13 +18,13 @@ use color_eyre::eyre::{Context, Result};
 
 mod benchmark;
 mod client;
-mod config;
 mod display;
 mod error;
 mod logs;
 mod measurement;
 mod orchestrator;
 mod plot;
+mod protocol;
 mod settings;
 mod ssh;
 mod testbed;

@@ -13,7 +13,9 @@ use prettytable::{row, Table};
 use prometheus_parse::Scrape;
 use serde::{Deserialize, Serialize};
 
-use crate::{benchmark::BenchmarkParameters, display, settings::Settings};
+use crate::{
+    benchmark::BenchmarkParameters, display, protocol::ProtocolMetrics, settings::Settings,
+};
 
 /// The identifier of prometheus latency buckets.
 type BucketId = String;
@@ -35,14 +37,14 @@ pub struct Measurement {
 
 impl Measurement {
     // Make a new measurement from the text exposed by prometheus.
-    pub fn from_prometheus(text: &str) -> Self {
+    pub fn from_prometheus<M: ProtocolMetrics>(text: &str) -> Self {
         let br = std::io::BufReader::new(text.as_bytes());
         let parsed = Scrape::parse(br.lines()).unwrap();
 
         let buckets: HashMap<_, _> = parsed
             .samples
             .iter()
-            .find(|x| x.metric == "latency_s")
+            .find(|x| x.metric == M::LATENCY_BUCKETS)
             .map(|x| match &x.value {
                 prometheus_parse::Value::Histogram(values) => values
                     .iter()
@@ -59,7 +61,7 @@ impl Measurement {
         let sum = parsed
             .samples
             .iter()
-            .find(|x| x.metric == "latency_s_sum")
+            .find(|x| x.metric == M::LATENCY_SUM)
             .map(|x| match x.value {
                 prometheus_parse::Value::Untyped(value) => Duration::from_secs_f64(value),
                 _ => panic!("Unexpected scraped value"),
@@ -69,7 +71,7 @@ impl Measurement {
         let count = parsed
             .samples
             .iter()
-            .find(|x| x.metric == "latency_s_count")
+            .find(|x| x.metric == M::TOTAL_TRANSACTIONS)
             .map(|x| match x.value {
                 prometheus_parse::Value::Untyped(value) => value as usize,
                 _ => panic!("Unexpected scraped value"),
@@ -79,7 +81,7 @@ impl Measurement {
         let squared_sum = parsed
             .samples
             .iter()
-            .find(|x| x.metric == "latency_squared_s")
+            .find(|x| x.metric == M::LATENCY_SQUARED_SUM)
             .map(|x| match x.value {
                 prometheus_parse::Value::Counter(value) => Duration::from_secs_f64(value),
                 _ => panic!("Unexpected scraped value"),
@@ -89,7 +91,7 @@ impl Measurement {
         let timestamp = parsed
             .samples
             .iter()
-            .find(|x| x.metric == "benchmark_duration")
+            .find(|x| x.metric == M::BENCHMARK_DURATION)
             .map(|x| match x.value {
                 prometheus_parse::Value::Counter(value) => Duration::from_secs(value as u64),
                 _ => panic!("Unexpected scraped value"),
@@ -291,7 +293,7 @@ impl MeasurementsCollection {
 mod test {
     use std::{collections::HashMap, time::Duration};
 
-    use crate::settings::Settings;
+    use crate::{protocol::test_protocol_metrics::TestProtocolMetrics, settings::Settings};
 
     use super::{BenchmarkParameters, Measurement, MeasurementsCollection};
 
@@ -362,7 +364,7 @@ mod test {
             latency_squared_s{workload="transfer_object"} 952.8160642745289
         "#;
 
-        let measurement = Measurement::from_prometheus(report);
+        let measurement = Measurement::from_prometheus::<TestProtocolMetrics>(report);
         let settings = Settings::new_for_test();
         let mut aggregator = MeasurementsCollection::new(&settings, BenchmarkParameters::default());
         let scraper_id = 1;

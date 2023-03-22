@@ -14,11 +14,11 @@ use tokio::time::{self, Instant};
 use crate::{
     benchmark::{BenchmarkParameters, BenchmarkParametersGenerator},
     client::Instance,
-    config::Config,
     display, ensure,
     error::{TestbedError, TestbedResult},
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
+    protocol::{self, sui::SuiProtocol},
     settings::Settings,
     ssh::{CommandStatus, SshCommand, SshConnectionManager},
 };
@@ -230,8 +230,8 @@ impl Orchestrator {
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         // TODO: There should be no need to generate these files locally; we can generate them
         // directly on the remote machines.
-        let mut config = Config::new(&instances);
-        config.print_files();
+        let mut config = SuiProtocol::new(&self.settings);
+        config.print_files(&instances);
 
         // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
         for (i, instance) in instances.iter().enumerate() {
@@ -245,7 +245,7 @@ impl Orchestrator {
                 .with_timeout(&Some(Duration::from_secs(180)));
 
             // Upload all configuration files.
-            for source in config.files() {
+            for source in config.configuration_files() {
                 let destination = source.file_name().expect("Config file is directory");
                 let mut file = File::open(&source).expect("Cannot open config file");
                 let mut buf = Vec::new();
@@ -254,7 +254,8 @@ impl Orchestrator {
             }
 
             // Generate the genesis files.
-            let command = ["source $HOME/.cargo/env", &config.genesis_command()].join(" && ");
+            let command =
+                ["source $HOME/.cargo/env", &config.genesis_config_command()].join(" && ");
             let repo_name = self.settings.repository_name();
             connection.execute_from_path(command, repo_name)?;
         }
@@ -269,6 +270,7 @@ impl Orchestrator {
 
         // Kill all tmux servers and delete the nodes dbs. Optionally clear logs.
         let mut path = self.settings.working_dir.clone();
+        path.push("sui_config");
         path.push("*_db");
         let mut command = vec![
             "(tmux kill-server || true)".into(),
@@ -296,7 +298,7 @@ impl Orchestrator {
         let instances = self.select_instances(parameters)?;
 
         // Deploy the committee.
-        let listen_addresses = Config::new(&instances).listen_addresses;
+        let listen_addresses = SuiProtocol::make_listen_addresses(&instances);
         let working_dir = self.settings.working_dir.clone();
         let command = move |i: usize| -> String {
             let mut config_path = working_dir.clone();
@@ -345,8 +347,8 @@ impl Orchestrator {
             let mut genesis = working_dir.clone();
             genesis.push("sui_config");
             genesis.push("genesis.blob");
-            let gas_id = Config::gas_object_id_offsets(committee_size)[i].clone();
-            let keystore = format!("~/{}", Config::GAS_KEYSTORE_FILE);
+            let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
+            let keystore = format!("~/{}", protocol::sui::GAS_KEYSTORE_FILE);
 
             let run = [
                 "cargo run --release --bin stress --",
@@ -410,7 +412,7 @@ impl Orchestrator {
                 .execute(instances.iter(), &ssh_command)
                 .await?;
             for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                let measurement = Measurement::from_prometheus(stdout);
+                let measurement = Measurement::from_prometheus::<SuiProtocol>(stdout);
                 aggregator.add(i, measurement);
             }
 
