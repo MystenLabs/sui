@@ -13,7 +13,8 @@ module sui_system::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-    use sui_system::sui_system_state_inner::{Self, SuiSystemStateInner};
+    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInner};
+    use sui_system::stake_subsidy::StakeSubsidy;
     use sui::vec_set::VecSet;
     use std::option;
     use sui::table::Table;
@@ -42,46 +43,20 @@ module sui_system::sui_system {
     public(friend) fun create(
         id: UID,
         validators: vector<Validator>,
-        stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
         epoch_start_timestamp_ms: u64,
-        epoch_duration_ms: u64,
-
-        // Stake Subsidy parameters
-        stake_subsidy_start_epoch: u64,
-        stake_subsidy_initial_distribution_amount: u64,
-        stake_subsidy_period_length: u64,
-        stake_subsidy_decrease_rate: u16,
-
-        // Validator committee parameters
-        max_validator_count: u64,
-        min_validator_joining_stake: u64,
-        validator_low_stake_threshold: u64,
-        validator_very_low_stake_threshold: u64,
-        validator_low_stake_grace_period: u64,
+        parameters: SystemParameters,
+        stake_subsidy: StakeSubsidy,
         ctx: &mut TxContext,
     ) {
         let system_state = sui_system_state_inner::create(
             validators,
-            stake_subsidy_fund,
             storage_fund,
             protocol_version,
             epoch_start_timestamp_ms,
-            epoch_duration_ms,
-
-            // Stake Subsidy parameters
-            stake_subsidy_start_epoch,
-            stake_subsidy_initial_distribution_amount,
-            stake_subsidy_period_length,
-            stake_subsidy_decrease_rate,
-
-            // Validator committee parameters
-            max_validator_count,
-            min_validator_joining_stake,
-            validator_low_stake_threshold,
-            validator_very_low_stake_threshold,
-            validator_low_stake_grace_period,
+            parameters,
+            stake_subsidy,
             ctx,
         );
         let version = sui_system_state_inner::system_state_version(&system_state);
