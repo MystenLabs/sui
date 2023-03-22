@@ -3,7 +3,7 @@ title: Write Smart Contracts with Sui Move
 ---
 
 Welcome to the Sui tutorial for building smart contracts with [Sui Move](../learn/why-move).
-This tutorial provides a brief explanation of the Move language and includes concrete examples to demonstrate how you can use Move in Sui.
+This tutorial provides a brief explanation of the Sui Move language, and includes concrete examples to demonstrate how you can use Move in Sui.
 
 
 ## About Sui Move
