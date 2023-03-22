@@ -23,15 +23,17 @@ export function GasFees({ sender, transaction }: Props) {
 
     const isSponsored =
         transactionData?.gasConfig.owner &&
-        transactionData?.sender !== transactionData?.gasConfig.owner;
+        transactionData.sender !== transactionData.gasConfig.owner;
 
     return (
         <SummaryCard
             header="Estimated Gas Fees"
             badge={
-                <div className="bg-white text-success px-1.5 py-0.5 text-captionSmallExtra rounded-full font-medium uppercase">
-                    Sponsored
-                </div>
+                isSponsored ? (
+                    <div className="bg-white text-success px-1.5 py-0.5 text-captionSmallExtra rounded-full font-medium uppercase">
+                        Sponsored
+                    </div>
+                ) : null
             }
             initialExpanded
         >
