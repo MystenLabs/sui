@@ -31,7 +31,7 @@ fn make_clients(
 
     let mut authority_clients = BTreeMap::new();
 
-    for validator in genesis.validator_set() {
+    for validator in genesis.validator_set_for_tooling() {
         let metadata = validator.verified_metadata();
         let channel = net_config
             .connect_lazy(&metadata.net_address)

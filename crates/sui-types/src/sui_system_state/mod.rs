@@ -87,7 +87,9 @@ pub type SuiValidatorGenesis = ValidatorV1;
 impl SuiSystemState {
     /// Always return the version that we will be using for genesis.
     /// Genesis always uses this version regardless of the current version.
-    pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {
+    /// Note that since it's possible for the actual genesis of the network to diverge from the
+    /// genesis of the latest Rust code, it's important that we only use this for tooling purposes.
+    pub fn into_genesis_version_for_tooling(self) -> SuiSystemStateInnerGenesis {
         match self {
             SuiSystemState::V1(inner) => inner,
         }
