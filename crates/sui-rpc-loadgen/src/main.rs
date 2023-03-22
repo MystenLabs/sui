@@ -73,6 +73,11 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "multi-get-transactions")]
+    MultiGetTransactions {
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
 }
 
 fn get_keypair() -> Result<(SuiAddress, String)> {

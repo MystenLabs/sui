@@ -67,6 +67,13 @@ impl Command {
         }
     }
 
+    pub fn new_multi_get_transactions() -> Self {
+        Self {
+            data: CommandData::MultiGetTransactions(MultiGetTransactions {}),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
