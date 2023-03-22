@@ -17,10 +17,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
-    storage::{
-        BackingPackageStore, ChildObjectResolver, LinkageInitializer, ObjectChange, ParentSync,
-        Storage,
-    },
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 pub trait StorageView<E: std::fmt::Debug>:
@@ -31,8 +28,6 @@ pub trait StorageView<E: std::fmt::Debug>:
     + Storage
     + ParentSync
     + ChildObjectResolver
-    + LinkageInitializer
-    + LinkageResolver<Error = E>
 {
 }
 impl<
@@ -43,9 +38,7 @@ impl<
             + BackingPackageStore
             + Storage
             + ParentSync
-            + ChildObjectResolver
-            + LinkageInitializer
-            + LinkageResolver<Error = E>,
+            + ChildObjectResolver,
     > StorageView<E> for T
 {
 }

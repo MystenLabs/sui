@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-};
+use std::{collections::BTreeMap, fmt};
 
 use move_binary_format::{
     access::ModuleAccess,
@@ -55,11 +52,11 @@ use sui_verifier::{
 };
 
 use crate::{
-    adapter::{generate_package_id, substitute_package_id},
+    adapter::{generate_package_id, new_session_with_extensions, substitute_package_id},
     execution_mode::ExecutionMode,
 };
 
-use super::{context::*, types::*};
+use super::{context::*, storage_context::StorageContext, types::*};
 
 pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
@@ -71,16 +68,6 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     pt: ProgrammableTransaction,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
-
-    let mut move_packages = BTreeMap::new();
-    for (idx, command) in commands.clone().into_iter().enumerate() {
-        if let Command::MoveCall(move_call) = &command {
-            // we have to do it here to avoid borrowing problems (state_view is both stored in
-            // context as immutable reference below and used mutably here)
-            let running_pkg = fetch_package(state_view, &move_call.package)?;
-            move_packages.insert(idx, running_pkg);
-        }
-    }
     let mut context = ExecutionContext::new(
         protocol_config,
         vm,
@@ -93,9 +80,6 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
-        if let Some(running_pkg) = move_packages.get(&idx) {
-            state_view.init(running_pkg.clone());
-        }
         execute_command::<_, _, Mode>(&mut context, &mut mode_results, command)
             .map_err(|e| e.with_command_index(idx))?
     }
@@ -133,11 +117,15 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             let elem_ty = context
                 .session
+                .as_ref()
+                .unwrap()
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
             let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
                 .session
+                .as_ref()
+                .unwrap()
                 .get_type_abilities(&ty)
                 .map_err(|e| context.convert_vm_error(e))?;
             // BCS layout for any empty vector should be the same
@@ -169,6 +157,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             let elem_ty = context
                 .session
+                .as_ref()
+                .unwrap()
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
             for (idx, arg) in arg_iter {
@@ -181,6 +171,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
                 .session
+                .as_ref()
+                .unwrap()
                 .get_type_abilities(&ty)
                 .map_err(|e| context.convert_vm_error(e))?;
             vec![Value::Raw(
@@ -439,7 +431,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let dependencies = fetch_packages(context.state_view, &dep_ids)?;
+    let dependencies = fetch_packages(context, &dep_ids)?;
 
     // new_package also initializes type origin table in the package object
     let package_id = context.new_package(modules, &dependencies, None)?;
@@ -498,6 +490,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
         let ticket_type = context
             .session
+            .as_ref()
+            .unwrap()
             .load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
             .map_err(|e| context.convert_vm_error(e))?;
         check_param_type::<_, _, Mode>(context, 0, &ticket_val, &ticket_type)?;
@@ -536,7 +530,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
 
     // Check that this package ID points to a package and get the package we're upgrading.
-    let current_package = fetch_package(context.state_view, &upgrade_ticket.package.bytes)?;
+    let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
     // Run the move + sui verifier on the modules and publish them into the cache.
     // NB: this will substitute in the original package id for the `self` address in all of these modules.
@@ -554,7 +548,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     )?;
 
     // Read the package dependencies.
-    let dependency_packages = fetch_packages(context.state_view, &dep_ids)?;
+    let dependency_packages = fetch_packages(context, &dep_ids)?;
 
     let upgraded_object_id = context.upgrade_package(
         &current_package,
@@ -564,6 +558,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
     let upgrade_receipt_type = context
         .session
+        .as_ref()
+        .unwrap()
         .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -639,10 +635,10 @@ fn check_compatibility<'a>(
 }
 
 fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
-    state_view: &S,
+    context: &'a ExecutionContext<E, S>,
     package_id: &ObjectID,
 ) -> Result<MovePackage, ExecutionError> {
-    let mut fetched_packages = fetch_packages(state_view, vec![package_id])?;
+    let mut fetched_packages = fetch_packages(context, &vec![*package_id])?;
     assert_invariant!(
         fetched_packages.len() == 1,
         "Number of fetched packages must match the number of package object IDs if successful."
@@ -656,11 +652,10 @@ fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
 }
 
 fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
-    state_view: &S,
-    package_ids: impl IntoIterator<Item = &'a ObjectID>,
+    context: &'a ExecutionContext<E, S>,
+    package_ids: &'a [ObjectID],
 ) -> Result<Vec<MovePackage>, ExecutionError> {
-    let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-    match state_view.get_packages(package_ids) {
+    match context.state_view.get_packages(package_ids) {
         Err(e) => Err(ExecutionError::new_with_source(
             ExecutionErrorKind::PublishUpgradeMissingDependency,
             e,
@@ -701,17 +696,40 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
             serialized_arguments.push(context.tx_context.to_vec());
         }
     }
-    // script visibility checked manually for entry points
-    let mut result = context
-        .session
-        .execute_function_bypass_visibility(
-            module_id,
-            function,
-            type_arguments,
-            serialized_arguments,
-            context.gas_status.create_move_gas_status(),
-        )
+    let old_session = context.session.take().unwrap();
+
+    let (_, _, native_context_extensions) = old_session
+        .finish_with_extensions()
         .map_err(|e| context.convert_vm_error(e))?;
+    let mut move_call_session_extensions = None;
+    let mut move_call_result = None;
+    {
+        let running_pkg = fetch_package(context, &(*module_id.address()).into()).unwrap();
+        let storage_context = StorageContext::new(context.state_view, running_pkg);
+
+        let mut move_call_session =
+            new_session_with_extensions(context.vm, &storage_context, native_context_extensions);
+
+        // script visibility checked manually for entry points
+
+        let mut result = move_call_session
+            .execute_function_bypass_visibility(
+                module_id,
+                function,
+                type_arguments,
+                serialized_arguments,
+                context.gas_status.create_move_gas_status(),
+            )
+            .map_err(|e| context.convert_vm_error(e))?;
+        move_call_result = Some(result);
+        let (_, _, native_context_extensions) = move_call_session.finish_with_extensions().unwrap();
+        move_call_session_extensions = Some(native_context_extensions);
+    }
+    context.session = Some(new_session_with_extensions(
+        context.vm,
+        context.state_view,
+        move_call_session_extensions.unwrap(),
+    ));
 
     // When this function is used during publishing, it
     // may be executed several times, with objects being
@@ -720,6 +738,7 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     // reflects what happened each time we call into the
     // Move VM (e.g. to account for the number of created
     // objects).
+    let mut result = move_call_result.unwrap();
     if tx_context_kind == TxContextKind::Mutable {
         let (_, ctx_bytes, _) = result.mutable_reference_outputs.pop().unwrap();
         let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).unwrap();
@@ -795,6 +814,8 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
         .collect();
     context
         .session
+        .as_mut()
+        .unwrap()
         .publish_module_bundle(
             new_module_bytes,
             AccountAddress::from(package_id),
@@ -863,6 +884,8 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
     for (idx, ty) in type_arguments.iter().enumerate() {
         context
             .session
+            .as_ref()
+            .unwrap()
             .load_type(ty)
             .map_err(|e| context.convert_type_argument_error(idx, e))?;
     }
@@ -870,9 +893,12 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         // the session is weird and does not load the module on publishing. This is a temporary
         // work around, since loading the function through the session will cause the module
         // to be loaded through the sessions data store.
-        let result = context
-            .session
-            .load_function(module_id, function, type_arguments);
+        let result =
+            context
+                .session
+                .as_ref()
+                .unwrap()
+                .load_function(module_id, function, type_arguments);
         assert_invariant!(
             result.is_ok(),
             "The modules init should be able to be loaded"
@@ -924,6 +950,8 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
     };
     let signature = context
         .session
+        .as_ref()
+        .unwrap()
         .load_function(module_id, function, type_arguments)
         .map_err(|e| context.convert_vm_error(e))?;
     let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
@@ -1004,6 +1032,8 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
             };
             let abilities = context
                 .session
+                .as_ref()
+                .unwrap()
                 .get_type_abilities(return_type)
                 .map_err(|e| context.convert_vm_error(e))?;
             Ok(match return_type {
@@ -1012,6 +1042,8 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
                 Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
                     let type_tag = context
                         .session
+                        .as_ref()
+                        .unwrap()
                         .get_type_tag(return_type)
                         .map_err(|e| context.convert_vm_error(e))?;
                     let TypeTag::Struct(struct_tag) = type_tag else {
@@ -1059,6 +1091,8 @@ fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
         for ty in type_arguments {
             let abilities = context
                 .session
+                .as_ref()
+                .unwrap()
                 .get_type_abilities(ty)
                 .map_err(|e| context.convert_vm_error(e))?;
             if !abilities.has_store() {
@@ -1152,6 +1186,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 } else {
                     let abilities = context
                         .session
+                        .as_ref()
+                        .unwrap()
                         .get_type_abilities(inner)
                         .map_err(|e| context.convert_vm_error(e))?;
                     ValueKind::Raw((**inner).clone(), abilities)
@@ -1229,6 +1265,8 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         Value::Object(obj) => {
             obj_ty = context
                 .session
+                .as_ref()
+                .unwrap()
                 .load_type(&obj.type_.clone().into())
                 .map_err(|e| context.convert_vm_error(e))?;
             &obj_ty
@@ -1267,7 +1305,7 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
         _ => return Ok(TxContextKind::None),
     };
     let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
-    let Some(s) = context.session.get_struct_type(*idx) else {
+    let Some(s) = context.session.as_ref().unwrap().get_struct_type(*idx) else {
         invariant_violation!("Loaded struct not found")
     };
     let (module_addr, module_name, struct_name) = get_struct_ident(&s);
@@ -1309,7 +1347,7 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
         Type::StructInstantiation(idx, targs) => {
-            let Some(s) = context.session.get_struct_type(*idx) else {
+            let Some(s) = context.session.as_ref().unwrap().get_struct_type(*idx) else {
                 invariant_violation!("Loaded struct not found")
             };
             let resolved_struct = get_struct_ident(&s);
@@ -1322,7 +1360,7 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
             }
         }
         Type::Struct(idx) => {
-            let Some(s) = context.session.get_struct_type(*idx) else {
+            let Some(s) = context.session.as_ref().unwrap().get_struct_type(*idx) else {
                 invariant_violation!("Loaded struct not found")
             };
             let resolved_struct = get_struct_ident(&s);

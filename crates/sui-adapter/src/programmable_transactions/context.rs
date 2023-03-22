@@ -48,7 +48,7 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     /// The gas status used for metering
     pub gas_status: &'a mut SuiGasStatus<'b>,
     /// The session used for interacting with Move types and calls
-    pub session: Session<'state, 'vm, S>,
+    pub session: Option<Session<'state, 'vm, S>>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
     /// Newly published packages
@@ -137,7 +137,7 @@ where
         let session = new_session(
             vm,
             state_view,
-            object_owner_map,
+            object_owner_map.clone(),
             !gas_status.is_unmetered(),
             protocol_config,
         );
@@ -147,7 +147,7 @@ where
             state_view,
             tx_context,
             gas_status,
-            session,
+            session: Some(session),
             gas,
             inputs,
             results: vec![],
@@ -162,7 +162,12 @@ where
     /// Create a new ID and update the state
     pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
         let object_id = self.tx_context.fresh_id();
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = self
+            .session
+            .as_mut()
+            .unwrap()
+            .get_native_extensions()
+            .get_mut();
         object_runtime
             .new_id(object_id)
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
@@ -171,7 +176,12 @@ where
 
     /// Delete an ID and update the state
     pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = self
+            .session
+            .as_mut()
+            .unwrap()
+            .get_native_extensions()
+            .get_mut();
         object_runtime
             .delete_id(object_id)
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
@@ -185,7 +195,12 @@ where
         function: FunctionDefinitionIndex,
         last_offset: CodeOffset,
     ) -> Result<(), ExecutionError> {
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = self
+            .session
+            .as_mut()
+            .unwrap()
+            .get_native_extensions()
+            .get_mut();
         let events = object_runtime.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.protocol_config.max_num_event_emit();
@@ -200,6 +215,8 @@ where
             .map(|(tag, value)| {
                 let layout = self
                     .session
+                    .as_ref()
+                    .unwrap()
                     .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
                 let bytes = value.simple_serialize(&layout).unwrap();
                 Ok((module_id.clone(), tag, bytes))
@@ -506,6 +523,7 @@ where
         }
 
         let (change_set, events, mut native_context_extensions) = session
+            .unwrap()
             .finish_with_extensions()
             .map_err(|e| convert_vm_error(e, vm, state_view))?;
         // Sui Move programs should never touch global state, so resources should be empty

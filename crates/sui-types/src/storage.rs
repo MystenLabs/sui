@@ -89,9 +89,9 @@ pub trait BackingPackageStore {
     /// Returns Ok(<object for each package id in `package_ids`>) if all package IDs in
     /// `package_id` were found. If any package in `package_ids` was not found it returns Err(<list
     /// of any package ids that are unable to be found>).
-    fn get_package_objects<'a>(
+    fn get_package_objects(
         &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+        package_ids: &[ObjectID],
     ) -> SuiResult<PackageFetchResults<Object>> {
         let package_objects: Vec<Result<Object, ObjectID>> = package_ids
             .into_iter()
@@ -110,9 +110,9 @@ pub trait BackingPackageStore {
             Ok(Ok(fetched))
         }
     }
-    fn get_packages<'a>(
+    fn get_packages(
         &self,
-        package_ids: impl IntoIterator<Item = &'a ObjectID>,
+        package_ids: &[ObjectID],
     ) -> SuiResult<PackageFetchResults<MovePackage>> {
         let objects = self.get_package_objects(package_ids)?;
         Ok(objects.and_then(|objects| {
@@ -705,38 +705,4 @@ pub trait LinkageResolver {
 
     /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error>;
-}
-
-impl<S: LinkageResolver<Error = SuiError>> LinkageResolver for &S {
-    type Error = SuiError;
-
-    fn link_context(&self) -> AccountAddress {
-        LinkageResolver::link_context(*self)
-    }
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        LinkageResolver::relocate(*self, module_id)
-    }
-}
-
-impl<S: LinkageResolver<Error = SuiError>> LinkageResolver for &mut S {
-    type Error = SuiError;
-
-    fn link_context(&self) -> AccountAddress {
-        LinkageResolver::link_context(*self)
-    }
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        LinkageResolver::relocate(*self, module_id)
-    }
-}
-
-/// Initialize linkage information. The input is the ID of a package containing a function used as
-/// an entry point to programmable transaction's Move call command.
-pub trait LinkageInitializer {
-    fn init(&mut self, running_pkg: MovePackage);
-}
-
-impl<S: LinkageInitializer> LinkageInitializer for &mut S {
-    fn init(&mut self, running_pkg: MovePackage) {
-        LinkageInitializer::init(*self, running_pkg);
-    }
 }

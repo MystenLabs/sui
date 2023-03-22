@@ -47,6 +47,7 @@ use sui_types::sui_system_state::{
     get_sui_system_state, get_sui_system_state_version, get_sui_system_state_wrapper,
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
 };
+use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
@@ -54,10 +55,6 @@ use sui_types::{
     committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
-};
-use sui_types::{
-    storage_context::StorageContext,
-    temporary_store::{InnerTemporaryStore, TemporaryStore},
 };
 use tracing::trace;
 
@@ -1175,14 +1172,12 @@ fn process_package(
         })
         .collect();
 
-    let temporary_store = TemporaryStore::new(
+    let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(loaded_dependencies),
         ctx.digest(),
         protocol_config,
     );
-    let mut storage_context = StorageContext::new(temporary_store);
-
     let mut gas_status = SuiGasStatus::new_unmetered();
     let module_bytes = modules
         .into_iter()
@@ -1201,7 +1196,7 @@ fn process_package(
     programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
         protocol_config,
         vm,
-        &mut storage_context,
+        &mut temporary_store,
         ctx,
         &mut gas_status,
         None,
@@ -1210,7 +1205,7 @@ fn process_package(
 
     let InnerTemporaryStore {
         written, deleted, ..
-    } = storage_context.into_temp_store().into_inner();
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -1229,14 +1224,12 @@ pub fn generate_genesis_system_object(
     let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::new(
         genesis_chain_parameters.protocol_version,
     ));
-    let temporary_store = TemporaryStore::new(
+    let mut temporary_store = TemporaryStore::new(
         &*store,
         InputObjects::new(vec![]),
         genesis_digest,
         &protocol_config,
     );
-
-    let mut storage_context = StorageContext::new(temporary_store);
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -1292,7 +1285,7 @@ pub fn generate_genesis_system_object(
     programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
         &protocol_config,
         move_vm,
-        &mut storage_context,
+        &mut temporary_store,
         genesis_ctx,
         &mut SuiGasStatus::new_unmetered(),
         None,
@@ -1301,7 +1294,7 @@ pub fn generate_genesis_system_object(
 
     let InnerTemporaryStore {
         written, deleted, ..
-    } = storage_context.into_temp_store().into_inner();
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
