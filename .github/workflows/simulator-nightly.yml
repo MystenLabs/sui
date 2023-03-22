@@ -45,7 +45,6 @@ jobs:
     - name: Environment clean
       run: |
         cd ~/sui && cargo clean && git restore Cargo.lock
-        sudo rm -rf /tmp/*.*
 
     - name: Tmpfs clean
       run: |
@@ -70,7 +69,7 @@ jobs:
   notify:
     name: Notify
     needs: [simtest]
-    runs-on: [self-hosted, simtest-01]
+    runs-on: [subuntu-ghcloud]
     if: always() # always notify
 
     steps:
