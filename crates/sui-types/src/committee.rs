@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{random_committee_key_pairs, sha3_hash, AuthorityKeyPair, AuthorityPublicKey};
+use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
-use crate::messages::CommitteeInfo;
+use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
@@ -31,59 +31,37 @@ pub type CommitteeDigest = [u8; 32];
 #[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Committee {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
+    // TODO: Remove and replace with constant.
     pub total_votes: StakeUnit,
-    #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
-    #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
-    #[serde(skip)]
+    // TODO: This is no longer needed. This file needs a cleanup since we removed the optional
+    // cached expanded keys.
     loaded: bool,
 }
 
 impl Committee {
-    pub fn new(
-        epoch: EpochId,
-        protocol_version: ProtocolVersion,
-        voting_rights: BTreeMap<AuthorityName, StakeUnit>,
-    ) -> SuiResult<Self> {
+    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, StakeUnit>) -> Self {
         let mut voting_rights: Vec<(AuthorityName, StakeUnit)> =
             voting_rights.iter().map(|(a, s)| (*a, *s)).collect();
 
-        fp_ensure!(
-            // Actual committee size is enforced in sui_system.move.
-            // This is just to ensure that choose_multiple_weighted can't fail.
-            voting_rights.len() < u32::MAX.try_into().unwrap(),
-            SuiError::InvalidCommittee("committee has too many members".into())
-        );
-
-        fp_ensure!(
-            !voting_rights.is_empty(),
-            SuiError::InvalidCommittee("committee has 0 members".into())
-        );
-
-        fp_ensure!(
-            voting_rights.iter().any(|(_, s)| *s != 0),
-            SuiError::InvalidCommittee(
-                "at least one committee member must have non-zero stake.".into()
-            )
-        );
+        assert!(!voting_rights.is_empty());
+        assert!(voting_rights.iter().any(|(_, s)| *s != 0));
 
         voting_rights.sort_by_key(|(a, _)| *a);
         let total_votes = voting_rights.iter().map(|(_, votes)| *votes).sum();
 
         let (expanded_keys, index_map) = Self::load_inner(&voting_rights);
 
-        Ok(Committee {
+        Committee {
             epoch,
-            protocol_version,
             voting_rights,
             total_votes,
             expanded_keys,
             index_map,
             loaded: true,
-        })
+        }
     }
 
     // We call this if these have not yet been computed
@@ -95,9 +73,14 @@ impl Committee {
     ) {
         let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
-            // TODO: Verify all code path to make sure we always have valid public keys.
-            // e.g. when a new validator is registering themself on-chain.
-            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
+            .map(|(addr, _)| {
+                (
+                    *addr,
+                    (*addr)
+                        .try_into()
+                        .expect("Validator pubkey is always verified on-chain"),
+                )
+            })
             .collect();
 
         let index_map: HashMap<AuthorityName, usize> = voting_rights
@@ -134,13 +117,15 @@ impl Committee {
         self.epoch
     }
 
-    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<&AuthorityPublicKey> {
+        debug_assert_eq!(self.expanded_keys.len(), self.voting_rights.len());
         match self.expanded_keys.get(authority) {
-            // TODO: Check if this is unnecessary copying.
-            Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            Some(v) => Ok(v),
+            None => Err(SuiError::InvalidCommittee(format!(
+                "Authority #{} not found, committee size {}",
+                authority,
+                self.expanded_keys.len()
+            ))),
         }
     }
 
@@ -296,36 +281,26 @@ impl Committee {
     }
 
     // ===== Testing-only methods =====
-
-    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
-    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
-        let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
+    //
+    pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs_of_size(size)
+            .into_iter()
+            .collect();
         let committee = Self::new(
             0,
-            ProtocolVersion::MIN,
             key_pairs
                 .iter()
                 .map(|key| {
                     (AuthorityName::from(key.public()), /* voting right */ 1)
                 })
                 .collect(),
-        )
-        .unwrap();
+        );
         (committee, key_pairs)
     }
-}
 
-impl TryFrom<CommitteeInfo> for Committee {
-    type Error = SuiError;
-    fn try_from(committee_info: CommitteeInfo) -> Result<Self, Self::Error> {
-        Self::new(
-            committee_info.epoch,
-            committee_info.protocol_version,
-            committee_info
-                .committee_info
-                .into_iter()
-                .collect::<BTreeMap<_, _>>(),
-        )
+    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
+    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
+        Self::new_simple_test_committee_of_size(4)
     }
 }
 
@@ -366,23 +341,29 @@ pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CommitteeWithNetAddresses {
-    pub committee: Committee,
-    pub net_addresses: BTreeMap<AuthorityName, Vec<u8>>,
+pub struct NetworkMetadata {
+    pub network_address: Multiaddr,
+    pub narwhal_primary_address: Multiaddr,
 }
 
-impl CommitteeWithNetAddresses {
-    pub fn digest(&self) -> CommitteeDigest {
-        sha3_hash(self)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommitteeWithNetworkMetadata {
+    pub committee: Committee,
+    pub network_metadata: BTreeMap<AuthorityName, NetworkMetadata>,
+}
+
+impl CommitteeWithNetworkMetadata {
+    pub fn epoch(&self) -> EpochId {
+        self.committee.epoch()
     }
 }
 
-impl Display for CommitteeWithNetAddresses {
+impl Display for CommitteeWithNetworkMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CommitteeWithNetAddresses (committee={}, net_addresses={:?})",
-            self.committee, self.net_addresses
+            "CommitteeWithNetworkMetadata (committee={}, network_metadata={:?})",
+            self.committee, self.network_metadata
         )
     }
 }
@@ -407,7 +388,7 @@ mod test {
         authorities.insert(a2, 1);
         authorities.insert(a3, 1);
 
-        let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
+        let committee = Committee::new(0, authorities);
 
         assert_eq!(committee.shuffle_by_stake(None, None).len(), 3);
 
@@ -458,7 +439,7 @@ mod test {
         authorities.insert(a2, 1);
         authorities.insert(a3, 1);
         authorities.insert(a4, 1);
-        let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
+        let committee = Committee::new(0, authorities);
         let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
         assert_eq!(
             committee.robust_value(items.into_iter(), committee.quorum_threshold()),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use consensus::bullshark::Bullshark;
+use consensus::consensus::ConsensusRound;
 use consensus::metrics::ConsensusMetrics;
 use consensus::Consensus;
 use fastcrypto::hash::Hash;
@@ -16,7 +17,7 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{cluster::Cluster, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 
-use types::{Certificate, PreSubscribedBroadcastSender, TransactionProto};
+use types::{Certificate, PreSubscribedBroadcastSender, Round, TransactionProto};
 
 #[tokio::test]
 async fn test_recovery() {
@@ -51,21 +52,24 @@ async fn test_recovery() {
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = test_utils::test_channel!(1);
-    let (tx_consensus_round_updates, _rx_consensus_round_updates) = watch::channel(0);
+    let (tx_consensus_round_updates, _rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
-    let gc_depth = 50;
+    const GC_DEPTH: Round = 50;
+    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let bullshark = Bullshark::new(
         committee.clone(),
         consensus_store.clone(),
-        gc_depth,
         metrics.clone(),
+        NUM_SUB_DAGS_PER_SCHEDULE,
     );
 
     let _consensus_handle = Consensus::spawn(
         committee,
+        GC_DEPTH,
         consensus_store.clone(),
         certificate_store.clone(),
         tx_shutdown.subscribe(),
@@ -164,7 +168,7 @@ async fn test_internal_consensus_output() {
         let tx = string_transaction(i);
 
         // serialise and send
-        let tr = bincode::serialize(&tx).unwrap();
+        let tr = bcs::to_bytes(&tx).unwrap();
         let txn = TransactionProto {
             transaction: Bytes::from(tr),
         };
@@ -178,7 +182,7 @@ async fn test_internal_consensus_output() {
         let result = receiver.recv().await.unwrap();
 
         // deserialise transaction
-        let output_transaction = bincode::deserialize::<String>(&result).unwrap();
+        let output_transaction = bcs::from_bytes::<String>(&result).unwrap();
 
         // we always remove the first transaction and check with the one
         // sequenced. We want the transactions to be sequenced in the

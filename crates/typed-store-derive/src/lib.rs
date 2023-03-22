@@ -328,14 +328,14 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
         "std::fmt::Debug + serde::Serialize + for<'de> serde::de::Deserialize<'de>";
     let generics_bounds_token: proc_macro2::TokenStream = generics_bounds.parse().unwrap();
 
-    let config_struct_name_str = format!("{}Configurator", name);
+    let config_struct_name_str = format!("{name}Configurator");
     let config_struct_name: proc_macro2::TokenStream = config_struct_name_str.parse().unwrap();
 
-    let intermediate_db_map_struct_name_str = format!("{}IntermediateDBMapStructPrimary", name);
+    let intermediate_db_map_struct_name_str = format!("{name}IntermediateDBMapStructPrimary");
     let intermediate_db_map_struct_name: proc_macro2::TokenStream =
         intermediate_db_map_struct_name_str.parse().unwrap();
 
-    let secondary_db_map_struct_name_str = format!("{}ReadOnly", name);
+    let secondary_db_map_struct_name_str = format!("{name}ReadOnly");
     let secondary_db_map_struct_name: proc_macro2::TokenStream =
         secondary_db_map_struct_name_str.parse().unwrap();
 
@@ -688,15 +688,15 @@ pub fn derive_sallydb_general(input: TokenStream) -> TokenStream {
         "std::fmt::Debug + serde::Serialize + for<'de> serde::de::Deserialize<'de>";
     let generics_bounds_token: proc_macro2::TokenStream = generics_bounds.parse().unwrap();
 
-    let config_struct_name_str = format!("{}SallyConfigurator", name);
+    let config_struct_name_str = format!("{name}SallyConfigurator");
     let sally_config_struct_name: proc_macro2::TokenStream =
         config_struct_name_str.parse().unwrap();
 
-    let intermediate_db_map_struct_name_str = format!("{}Primary", name);
+    let intermediate_db_map_struct_name_str = format!("{name}Primary");
     let intermediate_db_map_struct_name: proc_macro2::TokenStream =
         intermediate_db_map_struct_name_str.parse().unwrap();
 
-    let secondary_db_map_struct_name_str = format!("{}ReadOnly", name);
+    let secondary_db_map_struct_name_str = format!("{name}ReadOnly");
     let secondary_db_map_struct_name: proc_macro2::TokenStream =
         secondary_db_map_struct_name_str.parse().unwrap();
 

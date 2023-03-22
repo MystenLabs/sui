@@ -37,7 +37,7 @@ module examples::peace_guardian {
     /// code is called only once. With `Witness` pattern it is
     /// often the best practice.
     fun init(ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             guardian::create_guardian(PEACE {}, ctx),
             tx_context::sender(ctx)
         )

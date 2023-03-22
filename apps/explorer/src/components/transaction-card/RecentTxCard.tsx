@@ -1,24 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
+import { ArrowRight12 } from '@mysten/icons';
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
-import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
 import Pagination from '../pagination/Pagination';
 import {
-    type TxnData,
     genTableDataFromTxData,
     getDataOnTxDigests,
+    type TxnData,
 } from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
 
-import { useRpc } from '~/hooks/useRpc';
+import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { Banner } from '~/ui/Banner';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -27,7 +28,6 @@ import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
-const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
 const DEFAULT_PAGINATION_TYPE = 'more button';
 
@@ -37,7 +37,7 @@ const TRANSACTION_POLL_TIME = TRANSACTION_POLL_TIME_SECONDS * 1000;
 
 const AUTO_REFRESH_ID = 'auto-refresh';
 
-type PaginationType = 'more button' | 'pagination' | 'none';
+export type PaginationType = 'more button' | 'pagination' | 'none';
 
 function generateStartEndRange(
     txCount: number,
@@ -54,7 +54,7 @@ function generateStartEndRange(
     };
 }
 
-// TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
+// TODO: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
     rpc: JsonRpcProvider,
     totalTx: number,
@@ -63,8 +63,8 @@ async function getRecentTransactions(
 ): Promise<TxnData[]> {
     // Get the latest transactions
     // Instead of getRecentTransactions, use getTransactionCount
-    // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
-    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
+    // then use getTransactionDigestsInRangeDeprecated using the totalTx as the start totalTx sequence number - txNum as the end sequence number
+    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRangeDeprecated
     const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
         generateStartEndRange(totalTx, txNum, pageNum);
 
@@ -73,12 +73,13 @@ async function getRecentTransactions(
     if (endGatewayTxSeqNumber < 0) {
         throw new Error('Invalid transaction number');
     }
-    const transactionDigests = await rpc.getTransactionDigestsInRange(
+    // TODO: migrate this to `getTransactions`
+    const transactionDigests = await rpc.getTransactionDigestsInRangeDeprecated(
         startGatewayTxSeqNumber,
         endGatewayTxSeqNumber
     );
 
-    // result returned by getTransactionDigestsInRange is in ascending order
+    // result returned by getTransactionDigestsInRangeDeprecated is in ascending order
     const transactionData = await getDataOnTxDigests(
         rpc,
         [...transactionDigests].reverse()
@@ -91,18 +92,16 @@ async function getRecentTransactions(
 type Props = {
     paginationtype?: PaginationType;
     txPerPage?: number;
-    truncateLength?: number;
 };
 
 // TODO: Remove this when we refactor pagiantion:
-const statusToLoadState: Record<QueryStatus, string> = {
+export const statusToLoadState: Record<QueryStatus, string> = {
     error: 'fail',
     loading: 'pending',
     success: 'loaded',
 };
 
 export function LatestTxCard({
-    truncateLength = TRUNCATE_LENGTH,
     paginationtype = DEFAULT_PAGINATION_TYPE,
     txPerPage: initialTxPerPage,
 }: Props) {
@@ -111,7 +110,7 @@ export function LatestTxCard({
         initialTxPerPage || NUMBER_OF_TX_PER_PAGE
     );
 
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const [searchParams, setSearchParams] = useSearchParamsMerged();
 
     const [pageIndex, setPageIndex] = useState(
@@ -160,9 +159,9 @@ export function LatestTxCard({
     const recentTx = useMemo(
         () =>
             transactionQuery.data
-                ? genTableDataFromTxData(transactionQuery.data, truncateLength)
+                ? genTableDataFromTxData(transactionQuery.data)
                 : null,
-        [transactionQuery.data, truncateLength]
+        [transactionQuery.data]
     );
 
     const stats = {
@@ -203,7 +202,7 @@ export function LatestTxCard({
                         <Link to="/transactions">
                             <div className="flex items-center gap-2">
                                 More Transactions{' '}
-                                <ArrowRight fill="currentColor" />
+                                <ArrowRight12 fill="currentColor" />
                             </div>
                         </Link>
                     </div>
@@ -230,11 +229,13 @@ export function LatestTxCard({
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
             <TabGroup size="lg">
-                <div className="relative">
+                <div className="relative flex items-center">
                     <TabList>
                         <Tab>Transactions</Tab>
+                        <Tab>Checkpoints</Tab>
                     </TabList>
-                    <div className="absolute inset-y-0 right-0 -top-1">
+
+                    <div className="absolute inset-y-0 right-0 text-2xl">
                         <PlayPause
                             paused={paused}
                             onChange={handlePauseChange}
@@ -251,18 +252,16 @@ export function LatestTxCard({
                             />
                         ) : (
                             <PlaceholderTable
-                                rowCount={15}
+                                rowCount={txPerPage}
                                 rowHeight="16px"
                                 colHeadings={[
-                                    'Time',
-                                    'Type',
                                     'Transaction ID',
-                                    'Addresses',
+                                    'Sender',
                                     'Amount',
                                     'Gas',
+                                    'Time',
                                 ]}
                                 colWidths={[
-                                    '85px',
                                     '100px',
                                     '120px',
                                     '204px',
@@ -273,6 +272,14 @@ export function LatestTxCard({
                         )}
                         {paginationtype !== 'none' &&
                             PaginationWithStatsOrStatsWithLink}
+                    </TabPanel>
+                    <TabPanel>
+                        <CheckpointsTable
+                            initialItemsPerPage={NUMBER_OF_TX_PER_PAGE}
+                            refetchInterval={TRANSACTION_POLL_TIME}
+                            shouldRefetch={!paused}
+                            paginationType={paginationtype}
+                        />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>

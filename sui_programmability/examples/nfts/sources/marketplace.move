@@ -98,7 +98,7 @@ module nfts::marketplace {
         ctx: &mut TxContext
     ) {
         let item = delist<T, COIN>(marketplace, item_id, ctx);
-        transfer::transfer(item, tx_context::sender(ctx));
+        transfer::public_transfer(item, tx_context::sender(ctx));
     }
 
     /// Purchase an item using a known Listing. Payment is done in Coin<C>.
@@ -140,7 +140,7 @@ module nfts::marketplace {
         paid: Coin<COIN>,
         ctx: &mut TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             buy<T, COIN>(marketplace, item_id, paid),
             tx_context::sender(ctx)
         )
@@ -159,7 +159,7 @@ module nfts::marketplace {
         marketplace: &mut Marketplace<COIN>,
         ctx: &mut TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             take_profits(marketplace, ctx),
             tx_context::sender(ctx)
         )
@@ -195,14 +195,14 @@ module nfts::marketplaceTests {
     fun mint_some_coin(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
         let coin = coin::mint_for_testing<SUI>(1000, test_scenario::ctx(scenario));
-        transfer::transfer(coin, BUYER);
+        transfer::public_transfer(coin, BUYER);
     }
 
     /// Mint Kitty NFT and send it to SELLER.
     fun mint_kitty(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, ADMIN);
         let nft = Kitty { id: object::new(test_scenario::ctx(scenario)), kitty_id: 1 };
-        transfer::transfer(nft, SELLER);
+        transfer::public_transfer(nft, SELLER);
     }
 
     // TODO(dyn-child) redo test with dynamic child object loading

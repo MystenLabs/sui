@@ -12,7 +12,9 @@ import { SignatureScheme } from './signature';
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 
 /**
- * Ed25519 Keypair data
+ * Ed25519 Keypair data. The publickey is the 32-byte public key and
+ * the secretkey is 64-byte, where the first 32 bytes is the secret
+ * key and the last 32 bytes is the public key.
  */
 export interface Ed25519KeypairData {
   publicKey: Uint8Array;
@@ -130,10 +132,13 @@ export class Ed25519Keypair implements Keypair {
     return Ed25519Keypair.fromSecretKey(key);
   }
 
+  /**
+   * This returns an exported keypair object, the private key field is the pure 32-byte seed.
+   */
   export(): ExportedKeypair {
     return {
       schema: 'ED25519',
-      privateKey: toB64(this.keypair.secretKey),
+      privateKey: toB64(this.keypair.secretKey.slice(0, PRIVATE_KEY_SIZE)),
     };
   }
 }

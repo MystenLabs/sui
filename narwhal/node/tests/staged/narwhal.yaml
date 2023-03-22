@@ -46,10 +46,6 @@ Header:
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-    - signature:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -58,10 +54,6 @@ HeaderDigest:
 Metadata:
   STRUCT:
     - created_at: U64
-ReconfigureNotification:
-  ENUM:
-    0:
-      Shutdown: UNIT
 WorkerIndex:
   NEWTYPESTRUCT:
     MAP:
@@ -74,8 +66,8 @@ WorkerInfo:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
-    - transactions: BYTES
-    - worker_address: BYTES
+    - transactions: STR
+    - worker_address: STR
 WorkerOthersBatchMessage:
   STRUCT:
     - digest:
@@ -88,10 +80,6 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
-WorkerReconfigureMessage:
-  STRUCT:
-    - message:
-        TYPENAME: ReconfigureNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:
@@ -101,4 +89,5 @@ WorkerSynchronizeMessage:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 96
+    - is_certified: BOOL
 

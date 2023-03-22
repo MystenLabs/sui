@@ -24,13 +24,15 @@ export function useScorecardHistory(scorecardId?: string | null) {
 
       // It's very likely to have duplicates in the `txIds`; so we need to
       // filter them out and pass a unique set.
-      const txIds = await provider.getTransactionsForObject(scorecardId);
-      const txs = await provider.getTransactionWithEffectsBatch(
-        Array.from(new Set(txIds))
+      const txIds = await provider.queryTransactionsForObjectDeprecated(
+        scorecardId
       );
+      const txs = await provider.multiGetTransactions({
+        digests: Array.from(new Set(txIds)),
+      });
 
       return txs
-        .reduce((acc: any[], tx) => acc.concat(tx.effects.events || []), [])
+        .reduce((acc: any[], tx) => acc.concat(tx.events || []), [])
         .filter(
           (evt) => "moveEvent" in evt && evt.moveEvent.type == SCORECARD_UPDATED
         )

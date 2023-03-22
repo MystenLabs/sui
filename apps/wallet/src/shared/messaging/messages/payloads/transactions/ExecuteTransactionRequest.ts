@@ -1,25 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type SuiSignTransactionInput,
-    type SuiSignAndExecuteTransactionOptions,
-} from '@mysten/wallet-standard';
+import { type SuiSignTransactionInput } from '@mysten/wallet-standard';
 
+import { type TransactionDataType } from './ApprovalRequest';
 import { isBasePayload } from '_payloads';
 
-import type { MoveCallTransaction, SignableTransaction } from '@mysten/sui.js';
+import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
-
-export type TransactionDataType =
-    | {
-          type: 'v2';
-          justSign?: boolean;
-          data: SignableTransaction;
-          options?: SuiSignAndExecuteTransactionOptions;
-      }
-    | { type: 'move-call'; data: MoveCallTransaction }
-    | { type: 'serialized-move-call'; data: string };
 
 export interface ExecuteTransactionRequest extends BasePayload {
     type: 'execute-transaction-request';
@@ -34,9 +22,17 @@ export function isExecuteTransactionRequest(
     );
 }
 
+export type SuiSignTransactionSerialized = Omit<
+    SuiSignTransactionInput,
+    'transaction' | 'account'
+> & {
+    transaction: string;
+    account: SuiAddress;
+};
+
 export interface SignTransactionRequest extends BasePayload {
     type: 'sign-transaction-request';
-    transaction: SuiSignTransactionInput;
+    transaction: SuiSignTransactionSerialized;
 }
 
 export function isSignTransactionRequest(

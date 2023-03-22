@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::MoveTypeTagTrait;
 use crate::{base_types::ObjectID, SUI_FRAMEWORK_ADDRESS};
+use move_core_types::language_storage::TypeTag;
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
@@ -11,7 +13,8 @@ use move_core_types::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const OBJECT_MODULE_NAME: &IdentStr = ident_str!("object");
+pub const OBJECT_MODULE_NAME_STR: &str = "object";
+pub const OBJECT_MODULE_NAME: &IdentStr = ident_str!(OBJECT_MODULE_NAME_STR);
 pub const UID_STRUCT_NAME: &IdentStr = ident_str!("UID");
 pub const ID_STRUCT_NAME: &IdentStr = ident_str!("ID");
 
@@ -31,7 +34,7 @@ pub struct ID {
 impl UID {
     pub fn new(bytes: ObjectID) -> Self {
         Self {
-            id: { ID { bytes } },
+            id: { ID::new(bytes) },
         }
     }
 
@@ -64,6 +67,10 @@ impl UID {
 }
 
 impl ID {
+    pub fn new(object_id: ObjectID) -> Self {
+        Self { bytes: object_id }
+    }
+
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
@@ -81,5 +88,11 @@ impl ID {
                 MoveTypeLayout::Address,
             )],
         }
+    }
+}
+
+impl MoveTypeTagTrait for ID {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Struct(Box::new(Self::type_()))
     }
 }

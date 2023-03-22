@@ -254,6 +254,7 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub total_checkpoint_handler_error: IntCounter,
     pub db_write_request_latency: Histogram,
     pub full_node_read_request_latency: Histogram,
+    pub subscription_process_latency: Histogram,
 }
 
 impl IndexerCheckpointHandlerMetrics {
@@ -293,6 +294,13 @@ impl IndexerCheckpointHandlerMetrics {
             full_node_read_request_latency: register_histogram_with_registry!(
                 "checkpoint_full_node_read_request_latency",
                 "Time spent in waiting for a new checkpoint from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            subscription_process_latency: register_histogram_with_registry!(
+                "subscription_processing_latency",
+                "Time spent in process Websocket subscription",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

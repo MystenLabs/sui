@@ -2,11 +2,146 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use eyre::{eyre, Result};
-use multiaddr::{Multiaddr, Protocol};
 use std::{
     borrow::Cow,
     net::{IpAddr, SocketAddr},
 };
+
+pub use ::multiaddr::Error;
+pub use ::multiaddr::Protocol;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Multiaddr(::multiaddr::Multiaddr);
+
+impl Multiaddr {
+    pub fn empty() -> Self {
+        Self(::multiaddr::Multiaddr::empty())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_internal(inner: ::multiaddr::Multiaddr) -> Self {
+        Self(inner)
+    }
+
+    pub(crate) fn iter(&self) -> ::multiaddr::Iter<'_> {
+        self.0.iter()
+    }
+
+    pub fn pop<'a>(&mut self) -> Option<Protocol<'a>> {
+        self.0.pop()
+    }
+
+    pub fn push(&mut self, p: Protocol<'_>) {
+        self.0.push(p)
+    }
+
+    pub fn replace<'a, F>(&self, at: usize, by: F) -> Option<Multiaddr>
+    where
+        F: FnOnce(&Protocol<'_>) -> Option<Protocol<'a>>,
+    {
+        self.0.replace(at, by).map(Self)
+    }
+
+    /// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into an anemo
+    /// address
+    pub fn to_anemo_address(&self) -> Result<anemo::types::Address, &'static str> {
+        let mut iter = self.iter();
+
+        match (iter.next(), iter.next()) {
+            (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Ok((ipaddr, port).into()),
+            (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Ok((ipaddr, port).into()),
+            (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
+                Ok((hostname.as_ref(), port).into())
+            }
+
+            _ => {
+                tracing::warn!("unsupported p2p multiaddr: '{self}'");
+                Err("invalid address")
+            }
+        }
+    }
+
+    pub fn udp_multiaddr_to_listen_address(&self) -> Option<std::net::SocketAddr> {
+        let mut iter = self.iter();
+
+        match (iter.next(), iter.next()) {
+            (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
+            (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => Some((ipaddr, port).into()),
+
+            (Some(Protocol::Dns(_)), Some(Protocol::Udp(port))) => {
+                Some((std::net::Ipv4Addr::UNSPECIFIED, port).into())
+            }
+
+            _ => None,
+        }
+    }
+
+    /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
+    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
+    pub fn zero_ip_multi_address(&self) -> Self {
+        let mut new_address = ::multiaddr::Multiaddr::empty();
+        for component in &self.0 {
+            match component {
+                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
+                    std::net::Ipv4Addr::new(0, 0, 0, 0),
+                )),
+                c => new_address.push(c),
+            }
+        }
+        Self(new_address)
+    }
+}
+
+impl std::fmt::Display for Multiaddr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::str::FromStr for Multiaddr {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ::multiaddr::Multiaddr::from_str(s).map(Self)
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Multiaddr {
+    type Error = Error;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl TryFrom<String> for Multiaddr {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl serde::Serialize for Multiaddr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Multiaddr {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse()
+            .map(Self)
+            .map_err(|e| serde::de::Error::custom(e.to_string()))
+    }
+}
 
 // Converts a /ip{4,6}/-/tcp/-[/-] Multiaddr to SocketAddr.
 // Useful when an external library only accepts SocketAddr, e.g. to start a local server.
@@ -132,17 +267,17 @@ pub(crate) fn parse_unix(address: &Multiaddr) -> Result<(Cow<'_, str>, &'static 
 
 #[cfg(test)]
 mod test {
-    use super::to_socket_addr;
+    use super::{to_socket_addr, Multiaddr};
     use multiaddr::multiaddr;
 
     #[test]
     fn test_to_socket_addr_basic() {
-        let multi_addr_ipv4 = multiaddr!(Ip4([127, 0, 0, 1]), Tcp(10500u16));
+        let multi_addr_ipv4 = Multiaddr(multiaddr!(Ip4([127, 0, 0, 1]), Tcp(10500u16)));
         let socket_addr_ipv4 =
             to_socket_addr(&multi_addr_ipv4).expect("Couldn't convert to socket addr");
         assert_eq!(socket_addr_ipv4.to_string(), "127.0.0.1:10500");
 
-        let multi_addr_ipv6 = multiaddr!(Ip6([172, 0, 0, 1, 1, 1, 1, 1]), Tcp(10500u16));
+        let multi_addr_ipv6 = Multiaddr(multiaddr!(Ip6([172, 0, 0, 1, 1, 1, 1, 1]), Tcp(10500u16)));
         let socket_addr_ipv6 =
             to_socket_addr(&multi_addr_ipv6).expect("Couldn't convert to socket addr");
         assert_eq!(socket_addr_ipv6.to_string(), "[ac::1:1:1:1:1]:10500");
@@ -150,7 +285,7 @@ mod test {
 
     #[test]
     fn test_to_socket_addr_unsupported_protocol() {
-        let multi_addr_dns = multiaddr!(Dnsaddr("mysten.sui"), Tcp(10500u16));
+        let multi_addr_dns = Multiaddr(multiaddr!(Dnsaddr("mysten.sui"), Tcp(10500u16)));
         let _ = to_socket_addr(&multi_addr_dns).expect_err("DNS is unsupported");
     }
 }

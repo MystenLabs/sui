@@ -1,86 +1,87 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { calculateAPY } from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { calculateAPY } from '../calculateAPY';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { calculateStakeShare } from '../calculateStakeShare';
+import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
+import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { STATE_OBJECT } from '../usePendingDelegation';
+import { useSystemState } from '../useSystemState';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { validatorsFields } from '../validatorsFields';
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetObject, useAppSelector } from '_hooks';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 type ValidatorFormDetailProps = {
     validatorAddress: string;
     unstake?: boolean;
-    stakedId?: string | null;
 };
 
 export function ValidatorFormDetail({
     validatorAddress,
     unstake,
-    stakedId,
 }: ValidatorFormDetailProps) {
-    const accountAddress = useAppSelector(({ account }) => account.address);
+    const accountAddress = useActiveAddress();
 
     const [searchParams] = useSearchParams();
     const stakeIdParams = searchParams.get('staked');
     const {
-        data: validators,
+        data: system,
         isLoading: loadingValidators,
         isError: errorValidators,
-    } = useGetObject(STATE_OBJECT);
+    } = useSystemState();
 
     const {
-        data: allDelegation,
+        data: stakeData,
         isLoading,
         isError,
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
-    const validatorsData = validatorsFields(validators);
-
     const validatorData = useMemo(() => {
-        if (!validatorsData) return null;
-        return validatorsData.validators.fields.active_validators.find(
-            (av) => av.fields.metadata.fields.sui_address === validatorAddress
+        if (!system) return null;
+        return system.activeValidators.find(
+            (av) => av.suiAddress === validatorAddress
         );
-    }, [validatorAddress, validatorsData]);
+    }, [validatorAddress, system]);
 
-    const totalValidatorStake =
-        validatorData?.fields.delegation_staking_pool.fields.sui_balance || 0;
+    //TODO: verify this is the correct validator stake balance
+    const totalValidatorStake = validatorData?.stakingPoolSuiBalance || 0;
 
     const totalStake = useMemo(() => {
-        if (!allDelegation) return 0n;
-        let totalActiveStake = 0n;
+        if (!stakeData) return 0n;
+        return unstake
+            ? getStakeSuiBySuiId(stakeData, stakeIdParams)
+            : getTokenStakeSuiForValidator(stakeData, validatorAddress);
+    }, [stakeData, stakeIdParams, unstake, validatorAddress]);
 
-        if (stakeIdParams) {
-            const balance =
-                allDelegation.find(
-                    ({ staked_sui }) => staked_sui.id.id === stakeIdParams
-                )?.staked_sui.principal.value || 0;
-            return BigInt(balance);
-        }
+    const totalValidatorsStake = useMemo(() => {
+        if (!system) return 0;
+        return system.activeValidators.reduce(
+            (acc, curr) => (acc += BigInt(curr.stakingPoolSuiBalance)),
+            0n
+        );
+    }, [system]);
 
-        allDelegation.forEach((event) => {
-            if (event.staked_sui.validator_address === validatorAddress) {
-                totalActiveStake += BigInt(event.staked_sui.principal.value);
-            }
-        });
-        return totalActiveStake;
-    }, [allDelegation, validatorAddress, stakeIdParams]);
+    const totalStakePercentage = useMemo(() => {
+        if (!system || !stakeData) return 0;
+        return calculateStakeShare(
+            getTokenStakeSuiForValidator(stakeData, validatorAddress),
+            BigInt(totalValidatorsStake)
+        );
+    }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
     const apy = useMemo(() => {
-        if (!validatorData || !validatorsData) return 0;
-        return calculateAPY(validatorData, +validatorsData.epoch);
-    }, [validatorData, validatorsData]);
+        if (!validatorData || !system) return 0;
+        return calculateAPY(validatorData, +system.epoch);
+    }, [validatorData, system]);
 
     if (isLoading || loadingValidators) {
         return (
@@ -108,7 +109,7 @@ export function ValidatorFormDetail({
                 <Card
                     titleDivider
                     header={
-                        <div className="flex py-2.5 gap-2 items-center">
+                        <div className="flex py-2.5 px-3.75 gap-2 items-center">
                             <ValidatorLogo
                                 validatorAddress={validatorAddress}
                                 iconSize="sm"
@@ -136,7 +137,7 @@ export function ValidatorFormDetail({
                     }
                 >
                     <div className="divide-x flex divide-solid divide-gray-45 divide-y-0 flex-col gap-3.5">
-                        <div className="flex gap-2 items-center justify-between ">
+                        <div className="flex gap-2 items-center justify-between">
                             <div className="flex gap-1 items-baseline text-steel">
                                 <Text
                                     variant="body"
@@ -156,6 +157,29 @@ export function ValidatorFormDetail({
                                 {apy > 0 ? `${apy}%` : '--'}
                             </Text>
                         </div>
+                        <div className="flex gap-2 items-center justify-between">
+                            <div className="flex gap-1 items-baseline text-steel">
+                                <Text
+                                    variant="body"
+                                    weight="medium"
+                                    color="steel-darker"
+                                >
+                                    Staking Share
+                                </Text>
+                                <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
+                            </div>
+
+                            <Text
+                                variant="body"
+                                weight="semibold"
+                                color="gray-90"
+                            >
+                                {totalStakePercentage > 0
+                                    ? `${totalStakePercentage}%`
+                                    : '--'}
+                            </Text>
+                        </div>
+
                         {!unstake && (
                             <div className="flex gap-2 items-center justify-between mb-3.5">
                                 <div className="flex gap-1 items-baseline text-steel">

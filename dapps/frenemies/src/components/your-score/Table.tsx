@@ -6,10 +6,7 @@ import { ReactNode } from "react";
 import { ROUND_OFFSET } from "../../config";
 import { useScorecard } from "../../network/queries/scorecard";
 import { useScorecardHistory } from "../../network/queries/scorecard-history";
-import {
-  convertToString,
-  useValidators,
-} from "../../network/queries/sui-system";
+import { useValidators } from "../../network/queries/sui-system";
 import { Leaderboard, ScorecardUpdatedEvent } from "../../network/types";
 import { formatGoal } from "../../utils/format";
 import { Logo } from "../Validators/Logo";
@@ -86,13 +83,12 @@ export function Table({ data, round, leaderboard }: Props) {
                   <Cell>
                     <div className="flex items-center gap-2">
                       <Logo
-                        src={convertToString(validatorMeta?.image_url)}
+                        src={validatorMeta?.image_url}
                         size="sm"
-                        label={convertToString(validatorMeta?.name) || ""}
+                        label={validatorMeta?.name || ""}
                         circle
                       />
-                      {convertToString(validatorMeta?.name) ||
-                        formatAddress(validator)}
+                      {validatorMeta?.name || formatAddress(validator)}
                     </div>
                   </Cell>
                   <Cell>{evt.epochScore !== 0 ? "Achieved" : "Failed"}</Cell>

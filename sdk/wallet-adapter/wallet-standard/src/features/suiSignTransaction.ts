@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SignableTransaction, SignedTransaction } from "@mysten/sui.js";
+import type { SignedTransaction, Transaction } from "@mysten/sui.js";
+import type { IdentifierString, WalletAccount } from "@wallet-standard/core";
 
 /** The latest API version of the signTransaction API. */
-export type SuiSignTransactionVersion = "1.0.0";
+export type SuiSignTransactionVersion = "2.0.0";
 
 /**
  * A Wallet Standard feature for signing a transaction, and returning the
@@ -25,12 +26,10 @@ export type SuiSignTransactionMethod = (
 
 /** Input for signing transactions. */
 export interface SuiSignTransactionInput {
-  transaction: SignableTransaction;
-  options?: SuiSignTransactionOptions;
+  transaction: Transaction;
+  account: WalletAccount;
+  chain: IdentifierString;
 }
 
 /** Output of signing transactions. */
 export interface SuiSignTransactionOutput extends SignedTransaction {}
-
-/** Options for signing transactions. */
-export interface SuiSignTransactionOptions {}

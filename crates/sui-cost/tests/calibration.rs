@@ -8,7 +8,7 @@ use move_cli::base::reroot_path;
 use move_disassembler::disassembler::Disassembler;
 use move_package::BuildConfig;
 
-const TEST_MODULE_DATA_DIR: &str = "../sui-framework/tests";
+const TEST_MODULE_DATA_DIR: &str = "../sui-framework/packages/sui-framework/tests";
 
 // Execute every entry function in Move framework and examples and ensure costs don't change
 // To review snapshot changes, and fix snapshot differences,
@@ -45,7 +45,7 @@ fn disassemble_test_module(name: String) -> anyhow::Result<String> {
 
     let rerooted_path = reroot_path(Some(path))?;
 
-    let package = config.compile_package(&rerooted_path, &mut Vec::new())?;
+    let package = config.compile_package(&rerooted_path, &mut std::io::sink())?;
     let needle_package = package_name
         .as_deref()
         .unwrap_or(package.compiled_package_info.package_name.as_str());

@@ -1,251 +1,73 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinFormat, useFormatCoin } from '@mysten/core';
 import {
-    getMoveCallTransaction,
-    getPublishTransaction,
-    getTransactionKindName,
-    getTransactions,
-    getTransactionSender,
-    getTransferObjectTransaction,
-    getTransactionSignature,
-    getMovePackageContent,
-    getObjectId,
-    SUI_TYPE_ARG,
-    getExecutionStatusType,
-    getTotalGasUsed,
     getExecutionStatusError,
-    type SuiTransactionResponse,
+    getExecutionStatusType,
     getGasData,
+    getTotalGasUsed,
     getTransactionDigest,
+    getTransactionKind,
+    getTransactionKindName,
+    getTransactionSender,
+    type ProgrammableTransaction,
+    SUI_TYPE_ARG,
+    type SuiTransactionResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 
-import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import {
-    eventToDisplay,
-    getAddressesLinks,
-} from '../../components/events/eventDisplay';
-import Longtext from '../../components/longtext/Longtext';
-import ModulesWrapper from '../../components/module/ModulesWrapper';
-// TODO: (Jibz) Create a new pagination component
+// import {
+//     eventToDisplay,
+//     getAddressesLinks,
+// } from '../../components/events/eventDisplay';
 import Pagination from '../../components/pagination/Pagination';
-import {
-    type LinkObj,
-    TxAddresses,
-} from '../../components/transaction-card/TxCardUtils';
 import { getAmount } from '../../utils/getAmount';
+import { Signatures } from './Signatures';
 import TxLinks from './TxLinks';
-
-import type { Category } from './TransactionResultType';
-import type { TransactionKindName, SuiTransactionKind } from '@mysten/sui.js';
-import type { ReactNode } from 'react';
 
 import styles from './TransactionResult.module.css';
 
-import { CoinFormat, useFormatCoin } from '~/hooks/useFormatCoin';
+import { ProgrammableTransactionView } from '~/pages/transaction-result/programmable-transaction-view';
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
-import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
+import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
 import { ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
-import { SenderRecipient } from '~/ui/SenderRecipient';
 import { StatAmount } from '~/ui/StatAmount';
 import { TableHeader } from '~/ui/TableHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 import { Tooltip } from '~/ui/Tooltip';
+import {
+    RecipientTransactionAddresses,
+    SenderTransactionAddress,
+    SponsorTransactionAddress,
+} from '~/ui/TransactionAddressSection';
 import { ReactComponent as ChevronDownIcon } from '~/ui/icons/chevron_down.svg';
-import { LinkWithQuery } from '~/ui/utils/LinkWithQuery';
 
 const MAX_RECIPIENTS_PER_PAGE = 10;
 
 function generateMutatedCreated(tx: SuiTransactionResponse) {
     return [
-        ...(tx.effects.mutated?.length
+        ...(tx.effects!.mutated?.length
             ? [
                   {
                       label: 'Updated',
-                      links: tx.effects.mutated.map((item) => item.reference),
+                      links: tx.effects!.mutated.map((item) => item.reference),
                   },
               ]
             : []),
-        ...(tx.effects.created?.length
+        ...(tx.effects!.created?.length
             ? [
                   {
                       label: 'Created',
-                      links: tx.effects.created?.map((item) => item.reference),
+                      links: tx.effects!.created?.map((item) => item.reference),
                   },
               ]
             : []),
     ];
-}
-
-function formatByTransactionKind(
-    kind: TransactionKindName | undefined,
-    data: SuiTransactionKind,
-    sender: string
-) {
-    switch (kind) {
-        case 'TransferObject':
-            const transfer = getTransferObjectTransaction(data)!;
-            return {
-                title: 'Transfer',
-                sender: {
-                    value: sender,
-                    link: true,
-                    category: 'address',
-                },
-                objectId: {
-                    value: transfer.objectRef.objectId,
-                    link: true,
-                    category: 'object',
-                },
-                recipient: {
-                    value: transfer.recipient,
-                    category: 'address',
-                    link: true,
-                },
-            };
-        case 'Call':
-            const moveCall = getMoveCallTransaction(data)!;
-            return {
-                title: 'Call',
-                sender: {
-                    value: sender,
-                    link: true,
-                    category: 'address',
-                },
-                package: {
-                    // TODO: Simplify after v0.24.0 launched everywhere, when
-                    // moveCall.package is always an ObjectID (a string)
-                    value:
-                        typeof moveCall.package === 'string'
-                            ? moveCall.package
-                            : getObjectId(moveCall.package),
-                    link: true,
-                    category: 'object',
-                },
-                module: {
-                    value: moveCall.module,
-                },
-                function: {
-                    value: moveCall.function,
-                },
-                arguments: {
-                    value: moveCall.arguments,
-                    list: true,
-                },
-                typeArguments: {
-                    value: moveCall.typeArguments,
-                    list: true,
-                },
-            };
-        case 'Publish':
-            const publish = getPublishTransaction(data)!;
-            return {
-                title: 'publish',
-                module: {
-                    value: Object.entries(getMovePackageContent(publish)!),
-                },
-                ...(sender
-                    ? {
-                          sender: {
-                              value: sender,
-                              link: true,
-                              category: 'address',
-                          },
-                      }
-                    : {}),
-            };
-
-        default:
-            return {};
-    }
-}
-
-type TxItemView = {
-    title: string;
-    titleStyle?: string;
-    content: {
-        label?: string | number | any;
-        value: ReactNode;
-        link?: boolean;
-        category?: string;
-        monotypeClass?: boolean;
-        href?: string;
-    }[];
-};
-
-function ItemView({ data }: { data: TxItemView }) {
-    return (
-        <div className={styles.itemView}>
-            <div
-                className={
-                    data.titleStyle
-                        ? styles[data.titleStyle]
-                        : styles.itemviewtitle
-                }
-            >
-                {data.title}
-            </div>
-            <div className={styles.itemviewcontent}>
-                {data.content.map((item, index) => {
-                    // handle sender -> recipient display in one line
-                    let links: LinkObj[] = [];
-                    let label = item.label;
-                    if (Array.isArray(item)) {
-                        links = getAddressesLinks(item);
-                        label = 'Sender, Recipient';
-                    }
-
-                    return (
-                        <div
-                            key={index}
-                            className={clsx(
-                                styles.itemviewcontentitem,
-                                label && styles.singleitem
-                            )}
-                        >
-                            {label && (
-                                <div className={styles.itemviewcontentlabel}>
-                                    {label}
-                                </div>
-                            )}
-                            <div
-                                className={clsx(
-                                    styles.itemviewcontentvalue,
-                                    item.monotypeClass && styles.mono
-                                )}
-                            >
-                                {links.length > 1 && (
-                                    <TxAddresses content={links} />
-                                )}
-                                {item.link ? (
-                                    <Longtext
-                                        text={item.value as string}
-                                        category={item.category as Category}
-                                        isLink
-                                        copyButton="16"
-                                    />
-                                ) : item.href ? (
-                                    <LinkWithQuery
-                                        to={item.href}
-                                        className={styles.customhreflink}
-                                    >
-                                        {item.value}
-                                    </LinkWithQuery>
-                                ) : (
-                                    item.value
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
 }
 
 function GasAmount({
@@ -292,15 +114,13 @@ function GasAmount({
     );
 }
 
-function TransactionView({
+export function TransactionView({
     transaction,
 }: {
     transaction: SuiTransactionResponse;
 }) {
-    const [txnDetails] = getTransactions(transaction);
-    const txKindName = getTransactionKindName(txnDetails);
-    const sender = getTransactionSender(transaction);
-    const gasUsed = transaction?.effects.gasUsed;
+    const sender = getTransactionSender(transaction)!;
+    const gasUsed = transaction?.effects!.gasUsed;
 
     const [gasFeesExpanded, setGasFeesExpanded] = useState(false);
 
@@ -332,108 +152,61 @@ function TransactionView({
         coinTransfer?.[0]?.coinType
     );
 
-    const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
-    const txEventData = transaction.effects.events?.map(eventToDisplay);
+    // const txKindData = formatByTransactionKind(txKindName, txnDetails, sender);
+    // const txEventData = transaction.events?.map(eventToDisplay);
 
-    let eventTitles: [string, string][] = [];
-    const txEventDisplay = txEventData?.map((ed, index) => {
-        if (!ed) return <div />;
+    // MUSTFIX(chris): re-enable event display
+    // let eventTitles: [string, string][] = [];
+    // const txEventDisplay = txEventData?.map((ed, index) => {
+    //     if (!ed) return <div />;
 
-        let key = ed.top.title + index;
-        eventTitles.push([ed.top.title, key]);
-        return (
-            <div className={styles.txgridcomponent} key={key}>
-                <ItemView data={ed.top as TxItemView} />
-                {ed.fields && <ItemView data={ed.fields as TxItemView} />}
-            </div>
-        );
-    });
+    //     let key = ed.top.title + index;
+    //     eventTitles.push([ed.top.title, key]);
+    //     return (
+    //         <div className={styles.txgridcomponent} key={key}>
+    //             <ItemView data={ed.top as TxItemView} />
+    //             {ed.fields && <ItemView data={ed.fields as TxItemView} />}
+    //         </div>
+    //     );
+    // });
 
-    let eventTitlesDisplay = eventTitles.map(([title, key]) => (
-        <div key={key} className={styles.eventtitle}>
-            {title}
-        </div>
-    ));
-
-    const transactionSignatureData = {
-        title: 'Transaction Signatures',
-        content: [
-            {
-                label: 'Signature',
-                value: getTransactionSignature(transaction),
-                monotypeClass: true,
-            },
-        ],
-    };
+    // let eventTitlesDisplay = eventTitles.map(([title, key]) => (
+    //     <div key={key} className={styles.eventtitle}>
+    //         {title}
+    //     </div>
+    // ));
 
     const createdMutateData = generateMutatedCreated(transaction);
 
-    const typearguments =
-        txKindData.title === 'Call' && txKindData.package
-            ? {
-                  title: 'Package Details',
-                  content: [
-                      {
-                          label: 'Package ID',
-                          monotypeClass: true,
-                          link: true,
-                          category: 'object',
-                          value: txKindData.package.value,
-                      },
-                      {
-                          label: 'Module',
-                          monotypeClass: true,
-                          value: txKindData.module.value,
-                          href: `/object/${txKindData.package.value}?module=${txKindData.module.value}`,
-                      },
-                      {
-                          label: 'Function',
-                          monotypeClass: true,
-                          value: txKindData.function.value,
-                      },
-                      {
-                          label: 'Argument',
-                          monotypeClass: true,
-                          value: JSON.stringify(txKindData.arguments.value),
-                      },
-                  ],
-              }
-            : false;
-
-    if (typearguments && txKindData.typeArguments?.value) {
-        typearguments.content.push({
-            label: 'Type Arguments',
-            monotypeClass: true,
-            value: JSON.stringify(txKindData.typeArguments.value),
-        });
-    }
-
-    const modules =
-        txKindData?.module?.value && Array.isArray(txKindData?.module?.value)
-            ? {
-                  title: 'Modules',
-                  content: txKindData?.module?.value,
-              }
-            : false;
-
-    const hasEvents = txEventData && txEventData.length > 0;
+    // MUSTFIX(chris): re-enable event display
+    // const hasEvents = txEventData && txEventData.length > 0;
+    const hasEvents = false;
 
     const txError = getExecutionStatusError(transaction);
 
-    const gasData = getGasData(transaction);
-
+    const gasData = getGasData(transaction)!;
     const gasPrice = gasData.price || 1;
     const gasPayment = gasData.payment;
     const gasBudget = gasData.budget;
+    const gasOwner = gasData.owner;
+    const isSponsoredTransaction = gasOwner !== sender;
 
-    const timestamp = transaction.timestamp_ms || transaction.timestampMs;
+    const timestamp = transaction.timestampMs;
+    const transactionKindName = getTransactionKindName(
+        getTransactionKind(transaction)!
+    );
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
             <div className="mt-5 mb-10">
                 <PageHeader
-                    type={txKindName}
+                    type="Transaction"
                     title={getTransactionDigest(transaction)}
+                    subtitle={
+                        transactionKindName !== 'ProgrammableTransaction'
+                            ? transactionKindName
+                            : undefined
+                    }
                     status={getExecutionStatusType(transaction)}
                 />
                 {txError && (
@@ -455,17 +228,6 @@ function TransactionView({
                             // TODO: Change to test ID
                             id={getTransactionDigest(transaction)}
                         >
-                            {typearguments && (
-                                <section
-                                    className={clsx([
-                                        styles.txcomponent,
-                                        styles.txgridcolspan2,
-                                        styles.packagedetails,
-                                    ])}
-                                >
-                                    <ItemView data={typearguments} />
-                                </section>
-                            )}
                             <section
                                 className={clsx([
                                     styles.txcomponent,
@@ -491,12 +253,23 @@ function TransactionView({
                                         </div>
                                     )
                                 )}
-
-                                <SenderRecipient
-                                    sender={sender}
-                                    transferCoin={!!coinTransfer}
-                                    recipients={recipients}
-                                />
+                                {isSponsoredTransaction && (
+                                    <div className="mt-10">
+                                        <SponsorTransactionAddress
+                                            sponsor={gasOwner}
+                                        />
+                                    </div>
+                                )}
+                                <div className="mt-10">
+                                    <SenderTransactionAddress sender={sender} />
+                                </div>
+                                {recipients.length > 0 && (
+                                    <div className="mt-10">
+                                        <RecipientTransactionAddresses
+                                            recipients={recipients}
+                                        />
+                                    </div>
+                                )}
                                 <div className="mt-5 flex w-full max-w-lg">
                                     {totalRecipientsCount >
                                         MAX_RECIPIENTS_PER_PAGE && (
@@ -526,36 +299,38 @@ function TransactionView({
                                     ))}
                                 </div>
                             </section>
-
-                            {modules && (
-                                <section
-                                    className={clsx([
-                                        styles.txcomponent,
-                                        styles.txgridcolspan3,
-                                    ])}
-                                >
-                                    <ErrorBoundary>
-                                        <ModulesWrapper
-                                            id={txKindData.objectId?.value}
-                                            data={modules}
-                                        />
-                                    </ErrorBoundary>
-                                </section>
-                            )}
                         </div>
+
+                        {transactionKindName === 'ProgrammableTransaction' && (
+                            <ProgrammableTransactionView
+                                transaction={
+                                    transaction.transaction!.data
+                                        .transaction as ProgrammableTransaction
+                                }
+                            />
+                        )}
+
                         <div data-testid="gas-breakdown" className="mt-8">
-                            <TableHeader>Gas & Storage Fees</TableHeader>
+                            <TableHeader
+                                subText={
+                                    isSponsoredTransaction
+                                        ? '(Paid by Sponsor)'
+                                        : undefined
+                                }
+                            >
+                                Gas & Storage Fees
+                            </TableHeader>
 
                             <DescriptionList>
                                 <DescriptionItem title="Gas Payment">
                                     <ObjectLink
-                                        noTruncate
-                                        objectId={gasPayment.objectId}
+                                        // TODO: support multiple gas coins
+                                        objectId={gasPayment[0].objectId}
                                     />
                                 </DescriptionItem>
 
                                 <DescriptionItem title="Gas Budget">
-                                    <GasAmount amount={gasBudget * gasPrice} />
+                                    <GasAmount amount={gasBudget} />
                                 </DescriptionItem>
 
                                 {gasFeesExpanded && (
@@ -626,7 +401,7 @@ function TransactionView({
                             </DescriptionList>
                         </div>
                     </TabPanel>
-                    {hasEvents && (
+                    {/* {hasEvents && (
                         <TabPanel>
                             <div className={styles.txevents}>
                                 <div className={styles.txeventsleft}>
@@ -637,16 +412,12 @@ function TransactionView({
                                 </div>
                             </div>
                         </TabPanel>
-                    )}
+                    )} */}
                     <TabPanel>
-                        <div className={styles.txgridcomponent}>
-                            <ItemView data={transactionSignatureData} />
-                        </div>
+                        <Signatures transaction={transaction} />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
         </div>
     );
 }
-
-export default TransactionView;

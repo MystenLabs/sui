@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests modules cannot use transfer functions outside of the defining module
+// tests modules cannot use transfer internal functions outside of the defining module
 
 //# init --addresses a=0x0 test=0x0
 

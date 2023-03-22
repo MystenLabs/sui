@@ -5,8 +5,8 @@ import { WalletAdapterProvider } from "@mysten/wallet-adapter-base";
 import {
   isStandardWalletAdapterCompatibleWallet,
   StandardWalletAdapterWallet,
-  DEPRECATED_getWallets,
   Wallets,
+  getWallets,
 } from "@mysten/wallet-standard";
 import { StandardWalletAdapter } from "./StandardWalletAdapter";
 import mitt, { Emitter } from "mitt";
@@ -17,15 +17,21 @@ type Events = {
 
 export { StandardWalletAdapter };
 
+// These are the default features that the adapter will check for:
+export const DEFAULT_FEATURES: (keyof StandardWalletAdapterWallet["features"])[] =
+  ["sui:signAndExecuteTransaction"];
+
 export class WalletStandardAdapterProvider implements WalletAdapterProvider {
   #wallets: Wallets;
   #adapters: Map<StandardWalletAdapterWallet, StandardWalletAdapter>;
   #events: Emitter<Events>;
+  #features: string[];
 
-  constructor() {
+  constructor({ features }: { features?: string[] } = {}) {
     this.#adapters = new Map();
-    this.#wallets = DEPRECATED_getWallets();
+    this.#wallets = getWallets();
     this.#events = mitt();
+    this.#features = features ?? DEFAULT_FEATURES;
 
     this.#wallets.on("register", () => {
       this.#events.emit("changed");
@@ -39,7 +45,9 @@ export class WalletStandardAdapterProvider implements WalletAdapterProvider {
   get() {
     const filtered = this.#wallets
       .get()
-      .filter(isStandardWalletAdapterCompatibleWallet);
+      .filter((wallet) =>
+        isStandardWalletAdapterCompatibleWallet(wallet, this.#features)
+      ) as StandardWalletAdapterWallet[];
 
     filtered.forEach((wallet) => {
       if (!this.#adapters.has(wallet)) {

@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { type PaginatedEvents, type EventId } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import { useRpc } from './useRpc';
-
-export const VALIDATORS_EVENTS_QUERY = '0x2::validator_set::ValidatorEpochInfo';
+export const VALIDATORS_EVENTS_QUERY = '0x3::validator_set::ValidatorEpochInfo';
 
 type GetValidatorsEvent = {
     cursor?: EventId | null;
@@ -20,7 +19,7 @@ export function useGetValidatorsEvents({
     limit,
     order,
 }: GetValidatorsEvent): UseQueryResult<PaginatedEvents> {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const eventCursor = cursor || null;
     const eventLimit = limit || null;
 
@@ -29,12 +28,12 @@ export function useGetValidatorsEvents({
     const response = useQuery(
         ['validatorEvents', limit],
         () =>
-            rpc.getEvents(
-                { MoveEvent: VALIDATORS_EVENTS_QUERY },
-                eventCursor,
-                eventLimit,
-                order
-            ),
+            rpc.queryEvents({
+                query: { MoveEventType: VALIDATORS_EVENTS_QUERY },
+                cursor: eventCursor?.txDigest,
+                limit: eventLimit,
+                order,
+            }),
         { enabled: !!limit }
     );
 

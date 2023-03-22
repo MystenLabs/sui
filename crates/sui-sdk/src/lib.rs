@@ -22,11 +22,12 @@ use sui_json_rpc::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
 pub use sui_json_rpc_types as rpc_types;
-use sui_json_rpc_types::{GetRawObjectDataResponse, SuiObjectInfo};
+use sui_json_rpc_types::{
+    CheckpointId, ObjectsPage, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+};
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress};
-
 pub mod apis;
 pub mod error;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
@@ -165,6 +166,7 @@ impl SuiClientBuilder {
     }
 }
 
+/// Use [SuiClientBuilder] to build a SuiClient
 #[derive(Clone)]
 pub struct SuiClient {
     api: Arc<RpcClient>,
@@ -199,22 +201,6 @@ struct ServerInfo {
 }
 
 impl SuiClient {
-    #[deprecated(since = "0.23.0", note = "Please use `SuiClientBuilder` instead.")]
-    pub async fn new(
-        http_url: &str,
-        ws_url: Option<&str>,
-        request_timeout: Option<Duration>,
-    ) -> Result<Self, Error> {
-        let mut builder = SuiClientBuilder::default();
-        if let Some(ws_url) = ws_url {
-            builder = builder.ws_url(ws_url);
-        }
-        if let Some(request_timeout) = request_timeout {
-            builder = builder.request_timeout(request_timeout);
-        }
-        builder.build(http_url).await
-    }
-
     pub fn available_rpc_methods(&self) -> &Vec<String> {
         &self.api.info.rpc_methods
     }
@@ -263,18 +249,25 @@ impl SuiClient {
 
 #[async_trait]
 impl DataReader for ReadApi {
-    async fn get_objects_owned_by_address(
+    async fn get_owned_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<SuiObjectInfo>, anyhow::Error> {
-        Ok(self.get_objects_owned_by_address(address).await?)
+        query: Option<SuiObjectResponseQuery>,
+        cursor: Option<ObjectID>,
+        limit: Option<usize>,
+        checkpoint: Option<CheckpointId>,
+    ) -> Result<ObjectsPage, anyhow::Error> {
+        Ok(self
+            .get_owned_objects(address, query, cursor, limit, checkpoint)
+            .await?)
     }
 
-    async fn get_object(
+    async fn get_object_with_options(
         &self,
         object_id: ObjectID,
-    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
-        Ok(self.get_object(object_id).await?)
+        options: SuiObjectDataOptions,
+    ) -> Result<SuiObjectResponse, anyhow::Error> {
+        Ok(self.get_object_with_options(object_id, options).await?)
     }
 
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {

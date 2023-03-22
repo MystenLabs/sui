@@ -6,11 +6,10 @@ use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use futures::StreamExt;
-use std::collections::HashMap;
 
+use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
-use sui_types::governance::DelegationStatus;
 
 use crate::errors::Error;
 use crate::types::{
@@ -61,60 +60,54 @@ async fn get_sub_account_balances(
     client: &SuiClient,
     address: SuiAddress,
 ) -> Result<Vec<Amount>, Error> {
-    let balances: HashMap<_, u128> = match account_type {
-        SubAccountType::DelegatedSui => {
-            let delegations = client
-                .governance_api()
-                .get_delegated_stakes(address)
-                .await?;
-            delegations
-                .into_iter()
-                .fold(HashMap::new(), |mut balances, delegation| {
-                    if let DelegationStatus::Active(_) = delegation.delegation_status {
-                        *balances
-                            .entry(delegation.staked_sui.sui_token_lock())
-                            .or_default() += delegation.staked_sui.principal() as u128;
+    let mut amounts = match account_type {
+        SubAccountType::Stake => {
+            let delegations = client.governance_api().get_stakes(address).await?;
+            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
+                for stake in &stakes.stakes {
+                    if let StakeStatus::Active { .. } = stake.status {
+                        amounts.push(Amount::new_stake(
+                            stake.principal as i128,
+                            stake.staked_sui_id,
+                            stakes.validator_address,
+                        ));
                     }
-                    balances
-                })
+                }
+                amounts
+            })
         }
-        SubAccountType::PendingDelegation => {
-            let delegations = client
-                .governance_api()
-                .get_delegated_stakes(address)
-                .await?;
-            delegations
-                .into_iter()
-                .fold(HashMap::new(), |mut balances, delegation| {
-                    if let DelegationStatus::Pending = delegation.delegation_status {
-                        *balances
-                            .entry(delegation.staked_sui.sui_token_lock())
-                            .or_default() += delegation.staked_sui.principal() as u128;
+        SubAccountType::PendingStake => {
+            let delegations = client.governance_api().get_stakes(address).await?;
+            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
+                for stake in &stakes.stakes {
+                    if let StakeStatus::Pending = stake.status {
+                        amounts.push(Amount::new_stake(
+                            stake.principal as i128,
+                            stake.staked_sui_id,
+                            stakes.validator_address,
+                        ));
                     }
-                    balances
-                })
+                }
+                amounts
+            })
         }
-        SubAccountType::LockedSui => {
-            let sui_balance = client.coin_read_api().get_balance(address, None).await?;
-            sui_balance
-                .locked_balance
-                .into_iter()
-                .map(|(lock, amount)| (Some(lock), amount))
-                .collect()
+
+        SubAccountType::EstimatedReward => {
+            let delegations = client.governance_api().get_stakes(address).await?;
+            delegations.into_iter().fold(vec![], |mut amounts, stakes| {
+                for stake in &stakes.stakes {
+                    if let StakeStatus::Active { estimated_reward } = stake.status {
+                        amounts.push(Amount::new_stake(
+                            estimated_reward as i128,
+                            stake.staked_sui_id,
+                            stakes.validator_address,
+                        ));
+                    }
+                }
+                amounts
+            })
         }
     };
-
-    let mut amounts = balances
-        .into_iter()
-        .map(|(lock, balance)| {
-            if let Some(lock) = lock {
-                // Safe to cast to i128 as total issued SUI will be less then u64.
-                Amount::new_locked(lock, balance as i128)
-            } else {
-                Amount::new(balance as i128)
-            }
-        })
-        .collect::<Vec<_>>();
 
     // Make sure there are always one amount returned
     if amounts.is_empty() {

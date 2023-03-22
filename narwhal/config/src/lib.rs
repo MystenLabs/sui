@@ -9,10 +9,9 @@
 )]
 #![allow(clippy::mutable_key_type)]
 
-use arc_swap::ArcSwap;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::traits::EncodeDecodeBase64;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -20,7 +19,6 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
     num::NonZeroU32,
-    sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
@@ -135,29 +133,43 @@ pub struct Parameters {
     pub min_header_delay: Duration,
 
     /// The depth of the garbage collection (Denominated in number of rounds).
+    #[serde(default = "Parameters::default_gc_depth")]
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_sync_retry_delay"
+    )]
     pub sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-request. These nodes
     /// are picked at random from the committee.
+    #[serde(default = "Parameters::default_sync_retry_nodes")]
     pub sync_retry_nodes: usize,
     /// The preferred batch size. The workers seal a batch of transactions when it reaches this size.
     /// Denominated in bytes.
+    #[serde(default = "Parameters::default_batch_size")]
     pub batch_size: usize,
     /// The delay after which the workers seal a batch of transactions, even if `max_batch_size`
     /// is not reached.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_max_batch_delay"
+    )]
     pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
+    #[serde(default = "BlockSynchronizerParameters::default")]
     pub block_synchronizer: BlockSynchronizerParameters,
     /// The parameters for the Consensus API gRPC server
+    #[serde(default = "ConsensusAPIGrpcParameters::default")]
     pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
+    #[serde(default = "Parameters::default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
     /// Properties for the prometheus metrics
+    #[serde(default = "PrometheusMetricsParameters::default")]
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
+    #[serde(default = "NetworkAdminServerParameters::default")]
     pub network_admin_server: NetworkAdminServerParameters,
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]
@@ -531,8 +543,6 @@ pub struct WorkerInfo {
     pub worker_address: Multiaddr,
 }
 
-pub type SharedWorkerCache = Arc<ArcSwap<WorkerCache>>;
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WorkerIndex(pub BTreeMap<WorkerId, WorkerInfo>);
 
@@ -542,12 +552,6 @@ pub struct WorkerCache {
     pub workers: BTreeMap<PublicKey, WorkerIndex>,
     /// The epoch number for workers
     pub epoch: Epoch,
-}
-
-impl From<WorkerCache> for SharedWorkerCache {
-    fn from(worker_cache: WorkerCache) -> Self {
-        Arc::new(ArcSwap::from_pointee(worker_cache))
-    }
 }
 
 impl std::fmt::Display for WorkerIndex {
@@ -684,20 +688,12 @@ pub struct Authority {
     pub network_key: NetworkPublicKey,
 }
 
-pub type SharedCommittee = Arc<ArcSwap<Committee>>;
-
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Committee {
     /// The authorities of epoch.
     pub authorities: BTreeMap<PublicKey, Authority>,
     /// The epoch number of this committee
     pub epoch: Epoch,
-}
-
-impl From<Committee> for SharedCommittee {
-    fn from(committee: Committee) -> Self {
-        Arc::new(ArcSwap::from_pointee(committee))
-    }
 }
 
 impl std::fmt::Display for Committee {

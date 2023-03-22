@@ -5,8 +5,8 @@
 
 //# init --accounts A B
 
-//# view-object 100
+//# view-object 103
 
-//# transfer-object 100 --sender A --recipient B
+//# transfer-object 103 --sender A --recipient B
 
-//# view-object 100
+//# view-object 103

@@ -77,7 +77,7 @@ module frenemies::leaderboard {
 
     fun init(ctx: &mut TxContext) {
         let epoch = tx_context::epoch(ctx);
-        transfer::share_object(
+        transfer::public_share_object(
             Leaderboard {
                 id: object::new(ctx),
                 top_scores: vector[],
@@ -86,7 +86,7 @@ module frenemies::leaderboard {
                 start_epoch: epoch,
             }
         );
-        transfer::transfer(
+        transfer::public_transfer(
             AdminCap { id: object::new(ctx) },
             tx_context::sender(ctx)
         )
@@ -257,7 +257,7 @@ module frenemies::leaderboard {
         while (i < num_validators) {
             let validator = vector::borrow(validators, i);
             let addr = validator::sui_address(validator);
-            let stake = validator::total_stake(validator) + validator::pending_stake_amount(validator) - validator::pending_withdraw(validator);
+            let stake = validator::total_stake(validator) + validator::pending_stake_amount(validator) - validator::pending_stake_withdraw_amount(validator);
             validator_insertion_sort(&mut next_epoch_stakes, Validator { addr, stake });
             i = i + 1
         };

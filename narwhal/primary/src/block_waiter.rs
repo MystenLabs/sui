@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::handler::Handler;
 use anyhow::Result;
-use config::SharedWorkerCache;
+use config::WorkerCache;
 use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::{
@@ -41,7 +41,7 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
     name: PublicKey,
 
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
 
     /// Network driver allowing to send messages.
     worker_network: anemo::Network,
@@ -56,7 +56,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     #[must_use]
     pub fn new(
         name: PublicKey,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         worker_network: anemo::Network,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
     ) -> BlockWaiter<SynchronizerHandler> {
@@ -130,7 +130,6 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                 debug!("Sending batch {batch_digest} request to worker id {worker_id}");
                 let worker_name = self
                     .worker_cache
-                    .load()
                     .worker(&self.name, worker_id)
                     .expect("Worker id not found")
                     .name;

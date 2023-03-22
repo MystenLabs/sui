@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+anemo.workspace = true
 anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.88"
@@ -23,6 +24,8 @@ bip32 = "0.4.0"
 prettytable-rs = "0.10.0"
 git-version = "0.3.5"
 const-str = "0.5.3"
+rand = "0.8.5"
+inquire = "0.6.0"
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
@@ -37,6 +40,7 @@ sui-keys = { path = "../sui-keys" }
 sui-source-validation = { path = "../sui-source-validation" }
 sui-move = { path = "../sui-move", features = ["all"] }
 sui-protocol-config = { path = "../sui-protocol-config" }
+shared-crypto = { path = "../shared-crypto" }
 
 fastcrypto.workspace = true
 
@@ -48,21 +52,11 @@ shell-words = "1.1.0"
 rocksdb = "0.20.1"
 
 tempfile = "3.3.0"
-narwhal-executor = { path = "../../narwhal/executor" }
 telemetry-subscribers.workspace = true
-typed-store.workspace = true
-typed-store-derive.workspace = true
-mysten-network.workspace = true
 
 move-core-types.workspace = true
-move-prover.workspace = true
-move-prover-boogie-backend.workspace = true
-move-stackless-bytecode.workspace = true
-move-unit-test.workspace = true
-move-cli.workspace = true
 move-package.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-multiaddr = "0.17.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"
@@ -71,19 +65,30 @@ jemalloc-ctl = "^0.5"
 tempfile = "3.3.0"
 futures = "0.3.23"
 prometheus = "0.13.3"
+fs_extra = "1.2.0"
 
 jsonrpsee = { version = "0.16.2", features = ["jsonrpsee-core"] }
 
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
+expect-test = "1.4.0"
+move-binary-format.workspace = true
 move-package.workspace = true
 sui-core = { path = "../sui-core" }
+sui-json-rpc = { path = "../sui-json-rpc" }
 sui-node = { path = "../sui-node" }
 sui-macros = { path = "../sui-macros" }
 sui-simulator = { path = "../sui-simulator" }
 mysten-metrics = { path = "../mysten-metrics" }
+sui-tool = { path = "../sui-tool" }
 
 assert_cmd = "2.0.6"
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
+
+
+[[example]]
+name = "generate-genesis-checkpoint"
+path = "src/generate_genesis_checkpoint.rs"
+test = false

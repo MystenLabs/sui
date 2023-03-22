@@ -4,7 +4,9 @@ use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
 use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding};
+use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs;
 use std::path::{Path, PathBuf};
 use sui_keys::key_derive::generate_new_key;
@@ -12,16 +14,14 @@ use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
     write_keypair_to_file,
 };
-use sui_types::crypto::{PublicKey, Signature};
-use sui_types::intent::{Intent, IntentMessage};
+use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{DefaultHash, PublicKey, Signature};
 use sui_types::messages::TransactionData;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::signature::GenericSignature;
 use tracing::info;
-
-use sui_keys::keystore::{AccountKeystore, Keystore};
-use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -135,6 +135,10 @@ impl KeyToolCommand {
                     Ok(keypair) => {
                         println!("Public Key: {}", keypair.public().encode_base64());
                         println!("Flag: {}", keypair.public().flag());
+                        if let PublicKey::Ed25519(public_key) = keypair.public() {
+                            let peer_id = anemo::PeerId(public_key.0.into());
+                            println!("PeerId: {}", peer_id);
+                        }
                     }
                     Err(_) => {
                         let res = read_authority_keypair_from_file(&file);
@@ -184,10 +188,13 @@ impl KeyToolCommand {
                     })?)?;
                 let intent_msg = IntentMessage::new(intent, msg);
                 println!(
-                    "Intent message to sign: {:?}",
+                    "Raw intent message: {:?}",
                     Base64::encode(bcs::to_bytes(&intent_msg)?)
                 );
-
+                let mut hasher = DefaultHash::default();
+                hasher.update(bcs::to_bytes(&intent_msg)?);
+                let digest = hasher.finalize().digest;
+                println!("Digest to sign: {:?}", Base64::encode(digest));
                 let sui_signature =
                     keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
                 println!(

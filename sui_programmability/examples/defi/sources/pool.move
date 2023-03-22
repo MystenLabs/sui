@@ -130,7 +130,7 @@ module defi::pool {
     entry fun swap_sui_<P, T>(
         pool: &mut Pool<P, T>, sui: Coin<SUI>, ctx: &mut TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             swap_sui(pool, sui, ctx),
             tx_context::sender(ctx)
         )
@@ -166,7 +166,7 @@ module defi::pool {
     entry fun swap_token_<P, T>(
         pool: &mut Pool<P, T>, token: Coin<T>, ctx: &mut TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             swap_token(pool, token, ctx),
             tx_context::sender(ctx)
         )
@@ -200,7 +200,7 @@ module defi::pool {
     entry fun add_liquidity_<P, T>(
         pool: &mut Pool<P, T>, sui: Coin<SUI>, token: Coin<T>, ctx: &mut TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             add_liquidity(pool, sui, token, ctx),
             tx_context::sender(ctx)
         );
@@ -247,8 +247,8 @@ module defi::pool {
         let (sui, token) = remove_liquidity(pool, lsp, ctx);
         let sender = tx_context::sender(ctx);
 
-        transfer::transfer(sui, sender);
-        transfer::transfer(token, sender);
+        transfer::public_transfer(sui, sender);
+        transfer::public_transfer(token, sender);
     }
 
     /// Remove liquidity from the `Pool` by burning `Coin<LSP>`.
@@ -345,10 +345,10 @@ module defi::pool {
 /// ```
 module defi::pool_tests {
     use sui::sui::SUI;
-    use sui::coin::{mint_for_testing as mint, destroy_for_testing as burn};
-    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx}
-    ;
+    use sui::coin::{Self, Coin, mint_for_testing as mint};
+    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use defi::pool::{Self, Pool, LSP};
+    use sui::test_utils;
 
     /// Gonna be our test token.
     struct BEEP {}
@@ -397,6 +397,13 @@ module defi::pool_tests {
         let scenario = scenario();
         test_math_(&mut scenario);
         test::end(scenario);
+    }
+
+    #[test_only]
+    fun burn<T>(x: Coin<T>): u64 {
+        let value = coin::value(&x);
+        test_utils::destroy(x);
+        value
     }
 
     /// Init a Pool with a 1_000_000 BEEP and 1_000_000_000 SUI;

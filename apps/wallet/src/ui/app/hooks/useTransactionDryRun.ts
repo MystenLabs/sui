@@ -1,25 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress, type Transaction } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
 import { useSigner } from '_hooks';
 
-import type { SignerWithProvider } from '@mysten/sui.js';
-
-export type TransactionDryRun = Parameters<
-    SignerWithProvider['dryRunTransaction']
->['0'];
-
-export function useTransactionDryRun(txData: TransactionDryRun) {
-    const signer = useSigner();
+export function useTransactionDryRun(
+    sender: SuiAddress | undefined,
+    transaction: Transaction
+) {
+    const signer = useSigner(sender);
     const response = useQuery({
-        queryKey: ['executeDryRunTxn', txData],
-        queryFn: async () => {
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            return signer!.dryRunTransaction(txData);
+        queryKey: ['dryRunTransaction', transaction.serialize()],
+        queryFn: () => {
+            return signer.dryRunTransaction({ transaction });
         },
-        enabled: !!signer,
     });
     return response;
 }

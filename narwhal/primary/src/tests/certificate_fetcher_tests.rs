@@ -7,7 +7,7 @@ use crate::{
 use anemo::async_trait;
 use anyhow::Result;
 use config::{Epoch, WorkerId};
-use crypto::{PublicKey, Signature};
+use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -18,6 +18,7 @@ use storage::CertificateStore;
 use storage::NodeStorage;
 use tokio::sync::oneshot;
 
+use consensus::consensus::ConsensusRound;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
@@ -133,14 +134,13 @@ struct BadHeader {
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
-    pub signature: Signature,
     pub metadata: Metadata,
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_basic() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let fake_primary = fixture.authorities().nth(1).unwrap();
@@ -164,7 +164,8 @@ async fn fetch_certificates_basic() {
     let payload_store = store.payload_store.clone();
 
     // Signal rounds
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Make a synchronizer for certificates.
@@ -184,7 +185,7 @@ async fn fetch_certificates_basic() {
         metrics.clone(),
     ));
 
-    let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
+    let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
     let fake_route =
         anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(NetworkProxy {
             request: tx_fetch_req,
@@ -208,7 +209,6 @@ async fn fetch_certificates_basic() {
         client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
-        gc_depth,
         tx_shutdown.subscribe(),
         rx_certificate_fetcher,
         synchronizer.clone(),
@@ -237,7 +237,7 @@ async fn fetch_certificates_basic() {
 
     // Avoid any sort of missing payload by pre-populating the batch
     for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload.iter()) {
-        payload_store.async_write((*digest, *worker_id), 0u8).await;
+        payload_store.write(digest, worker_id).unwrap();
     }
 
     let total_certificates = fixture.authorities().count() * rounds as usize;
@@ -259,9 +259,10 @@ async fn fetch_certificates_basic() {
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
     assert!(!synchronizer
-        .check_parents(&certificates[target_index].clone())
+        .get_missing_parents(&certificates[target_index].clone())
         .await
-        .unwrap());
+        .unwrap()
+        .is_empty());
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();

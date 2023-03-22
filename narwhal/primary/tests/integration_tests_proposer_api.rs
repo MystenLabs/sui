@@ -3,16 +3,18 @@
 
 use bytes::Bytes;
 use config::{Epoch, Parameters};
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::{KeyPair, PublicKey};
 use fastcrypto::{
     hash::Hash,
-    traits::{InsecureDefault, KeyPair as _, ToFromBytes},
+    traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
+use rand::thread_rng;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -34,12 +36,14 @@ async fn test_rounds_errors() {
     // GIVEN keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
     let network_keypair = author.network_keypair().copy();
     let name = keypair.public().clone();
+
+    let other_keypair = KeyPair::generate(&mut thread_rng());
 
     struct TestCase {
         public_key: Bytes,
@@ -56,7 +60,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(PublicKey::insecure_default().as_bytes().to_vec()),
+            public_key: Bytes::from(other_keypair.public().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },
@@ -80,7 +84,8 @@ async fn test_rounds_errors() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -163,7 +168,7 @@ async fn test_rounds_return_successful_response() {
     // GIVEN keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
@@ -182,7 +187,8 @@ async fn test_rounds_return_successful_response() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -270,7 +276,7 @@ async fn test_rounds_return_successful_response() {
 async fn test_node_read_causal_signed_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
@@ -349,7 +355,8 @@ async fn test_node_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -385,7 +392,8 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) = watch::channel(0);
+    let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 

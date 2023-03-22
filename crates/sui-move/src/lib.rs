@@ -11,6 +11,8 @@ use std::path::PathBuf;
 
 #[cfg(feature = "build")]
 pub mod build;
+#[cfg(feature = "calibrate")]
+mod cost_calib;
 #[cfg(feature = "coverage")]
 pub mod coverage;
 #[cfg(feature = "disassemble")]
@@ -85,7 +87,7 @@ pub fn execute_move_command(
         }
         #[cfg(feature = "calibrate")]
         Command::CalibrateCosts(c) => {
-            sui_framework::cost_calib::run_calibration(c.runs, c.summarize);
+            cost_calib::run_calibration(c.runs, c.summarize);
             Ok(())
         }
     }

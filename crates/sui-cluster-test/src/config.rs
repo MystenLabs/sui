@@ -22,6 +22,14 @@ pub struct ClusterTestOpt {
     pub faucet_address: Option<String>,
     #[clap(long)]
     pub fullnode_address: Option<String>,
+    #[clap(long)]
+    pub epoch_duration_ms: Option<u64>,
+    /// URL for the indexer RPC server
+    #[clap(long)]
+    pub indexer_address: Option<String>,
+    /// URL for the Indexer Postgres DB
+    #[clap(long)]
+    pub pg_address: Option<String>,
 }
 
 impl ClusterTestOpt {
@@ -30,6 +38,9 @@ impl ClusterTestOpt {
             env: Env::NewLocal,
             faucet_address: None,
             fullnode_address: None,
+            epoch_duration_ms: None,
+            indexer_address: None,
+            pg_address: None,
         }
     }
 }

@@ -27,7 +27,7 @@ export class Window {
             url: this._url,
             focused: true,
             width: 360,
-            height: 595,
+            height: 623,
             type: 'popup',
             top: top,
             left: Math.floor(left + width - 450),

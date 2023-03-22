@@ -1,34 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFormatCoin } from '@mysten/core';
+import { X12 } from '@mysten/icons';
 import {
+    type ExecutionStatusType,
     getExecutionStatusType,
     getTotalGasUsed,
-    getTransactions,
     getTransactionDigest,
+    getTransactionKind,
     getTransactionKindName,
-    getTransferObjectTransaction,
-    getTransferSuiTransaction,
-    SUI_TYPE_ARG,
-    type GetTxnDigestsResponse,
-    type ExecutionStatusType,
-    type TransactionKindName,
-    type JsonRpcProvider,
     getTransactionSender,
-    formatDigest,
-    formatAddress,
+    type GetTxnDigestsResponse,
+    type JsonRpcProvider,
+    SUI_TYPE_ARG,
+    type TransactionKindName,
 } from '@mysten/sui.js';
-import { Fragment } from 'react';
+import clsx from 'clsx';
+import { type ReactNode } from 'react';
 
-import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import { getAmount } from '../../utils/getAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
 
-import { useFormatCoin } from '~/hooks/useFormatCoin';
-import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
-import { TransactionType } from '~/ui/TransactionType';
+import { AddressLink, TransactionLink } from '~/ui/InternalLink';
 
 export type TxnData = {
     To?: string;
@@ -40,14 +36,6 @@ export type TxnData = {
     kind: TransactionKindName | undefined;
     From: string;
     timestamp_ms?: number;
-};
-
-type Category = 'object' | 'transaction' | 'address';
-
-export type LinkObj = {
-    url: string;
-    name?: string;
-    category?: Category;
 };
 
 export function SuiAmount({
@@ -73,98 +61,90 @@ export function SuiAmount({
     return <span className={styles.suiamount}>--</span>;
 }
 
-export function TxAddresses({ content }: { content: LinkObj[] }) {
+function TxTableHeader({ label }: { label: string }) {
+    return <div className="pl-3">{label}</div>;
+}
+
+export function TxTableCol({
+    isHighlightedOnHover,
+    isFirstCol,
+    children,
+}: {
+    isHighlightedOnHover?: boolean;
+    isFirstCol?: boolean;
+    children: ReactNode;
+}) {
     return (
-        <section className={styles.addresses}>
-            {content.map((itm, idx) => (
-                <Fragment key={idx + itm.url}>
-                    {itm.category === 'address' ? (
-                        <AddressLink address={itm.url} />
-                    ) : itm.category === 'object' ? (
-                        <ObjectLink objectId={itm.url} />
-                    ) : (
-                        <TransactionLink digest={itm.url} />
-                    )}
-                    {idx !== content.length - 1 && <ContentArrowRight />}
-                </Fragment>
-            ))}
-        </section>
+        <div
+            className={clsx(
+                'flex h-full items-center rounded',
+                !isFirstCol && 'px-3',
+                isHighlightedOnHover && 'hover:bg-sui-light'
+            )}
+        >
+            {children}
+        </div>
     );
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (
-    results: TxnData[],
-    truncateLength: number
-) => ({
+export const genTableDataFromTxData = (results: TxnData[]) => ({
     data: results.map((txn) => ({
-        date: <TxTimeType timestamp={txn.timestamp_ms} />,
+        date: (
+            <TxTableCol>
+                <TxTimeType timestamp={txn.timestamp_ms} />
+            </TxTableCol>
+        ),
         transactionId: (
-            <TxAddresses
-                content={[
-                    {
-                        url: txn.txId,
-                        name: formatDigest(txn.txId),
-                        category: 'transaction',
-                    },
-                ]}
-            />
+            <TxTableCol isFirstCol isHighlightedOnHover>
+                <TransactionLink
+                    digest={txn.txId}
+                    before={
+                        txn.status === 'success' ? (
+                            <div className="h-2 w-2 rounded-full bg-success" />
+                        ) : (
+                            <X12 className="text-issue-dark" />
+                        )
+                    }
+                />
+            </TxTableCol>
         ),
-        addresses: (
-            <TxAddresses
-                content={[
-                    {
-                        url: txn.From,
-                        name: formatAddress(txn.From),
-                        category: 'address',
-                    },
-                    ...(txn.To
-                        ? [
-                              {
-                                  url: txn.To,
-                                  name: formatAddress(txn.To),
-                                  category: 'address',
-                              } as const,
-                          ]
-                        : []),
-                ]}
-            />
+        amounts: (
+            <TxTableCol>
+                <SuiAmount amount={txn.suiAmount} />
+            </TxTableCol>
         ),
-        txTypes: (
-            <TransactionType
-                isSuccess={txn.status === 'success'}
-                type={txn.kind}
-            />
+        gas: (
+            <TxTableCol>
+                <SuiAmount amount={txn.txGas} />
+            </TxTableCol>
         ),
-        amounts: <SuiAmount amount={txn.suiAmount} />,
-        gas: <SuiAmount amount={txn.txGas} />,
+        sender: (
+            <TxTableCol isHighlightedOnHover>
+                <AddressLink address={txn.From} />
+            </TxTableCol>
+        ),
     })),
     columns: [
         {
-            header: 'Time',
-            accessorKey: 'date',
-        },
-        {
-            header: 'Type',
-            accessorKey: 'txTypes',
-        },
-        {
-            header: () => (
-                <div className={styles.addresses}>Transaction ID</div>
-            ),
+            header: 'Transaction ID',
             accessorKey: 'transactionId',
         },
         {
-            header: () => <div className={styles.addresses}>Addresses</div>,
-            accessorKey: 'addresses',
+            header: () => <TxTableHeader label="Sender" />,
+            accessorKey: 'sender',
         },
         {
-            header: 'Amount',
+            header: () => <TxTableHeader label="Amount" />,
             accessorKey: 'amounts',
         },
         {
-            header: 'Gas',
+            header: () => <TxTableHeader label="Gas" />,
             accessorKey: 'gas',
+        },
+        {
+            header: () => <TxTableHeader label="Time" />,
+            accessorKey: 'date',
         },
     ],
 });
@@ -175,54 +155,54 @@ export const getDataOnTxDigests = (
     rpc: JsonRpcProvider,
     transactions: GetTxnDigestsResponse
 ) =>
-    rpc.getTransactionWithEffectsBatch(dedupe(transactions)).then((txEffs) =>
-        txEffs
-            .map((txEff) => {
-                const digest = transactions.filter(
-                    (transactionId) =>
-                        transactionId === getTransactionDigest(txEff)
-                )[0];
-                // TODO: handle multiple transactions
-                const txns = getTransactions(txEff);
-                if (txns.length > 1) {
-                    console.error(
-                        'Handling multiple transactions is not yet supported',
-                        txEff
-                    );
-                    return null;
-                }
-                const txn = txns[0];
-                const txKind = getTransactionKindName(txn);
-                const recipient =
-                    getTransferObjectTransaction(txn)?.recipient ||
-                    getTransferSuiTransaction(txn)?.recipient;
+    rpc
+        .multiGetTransactions({
+            digests: dedupe(transactions),
+            options: {
+                showInput: true,
+                showEffects: true,
+                showEvents: true,
+            },
+        })
+        .then((txEffs) =>
+            txEffs
+                .map((txEff) => {
+                    const digest = transactions.filter(
+                        (transactionId) =>
+                            transactionId === getTransactionDigest(txEff)
+                    )[0];
+                    const txn = getTransactionKind(txEff)!;
+                    const txKind = getTransactionKindName(txn);
+                    const recipient = null;
+                    //     getTransferObjectTransaction(txn)?.recipient ||
+                    //     getTransferSuiTransaction(txn)?.recipient;
 
-                const transfer = getAmount({
-                    txnData: txEff,
-                    suiCoinOnly: true,
-                })[0];
+                    const transfer = getAmount({
+                        txnData: txEff,
+                        suiCoinOnly: true,
+                    })[0];
 
-                // use only absolute value of sui amount
-                const suiAmount = transfer?.amount
-                    ? Math.abs(transfer.amount)
-                    : null;
+                    // use only absolute value of sui amount
+                    const suiAmount = transfer?.amount
+                        ? Math.abs(transfer.amount)
+                        : null;
 
-                return {
-                    txId: digest,
-                    status: getExecutionStatusType(txEff)!,
-                    txGas: getTotalGasUsed(txEff),
-                    suiAmount,
-                    coinType: transfer?.coinType || null,
-                    kind: txKind,
-                    From: getTransactionSender(txEff),
-                    timestamp_ms: txEff.timestamp_ms || txEff.timestampMs,
-                    ...(recipient
-                        ? {
-                              To: recipient,
-                          }
-                        : {}),
-                };
-            })
-            // Remove failed transactions
-            .filter((itm) => itm)
-    );
+                    return {
+                        txId: digest,
+                        status: getExecutionStatusType(txEff)!,
+                        txGas: getTotalGasUsed(txEff),
+                        suiAmount,
+                        coinType: transfer?.coinType || null,
+                        kind: txKind,
+                        From: getTransactionSender(txEff),
+                        timestamp_ms: txEff.timestampMs,
+                        ...(recipient
+                            ? {
+                                  To: recipient,
+                              }
+                            : {}),
+                    };
+                })
+                // Remove failed transactions
+                .filter((itm) => itm)
+        );

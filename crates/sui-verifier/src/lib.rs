@@ -23,6 +23,7 @@ use sui_types::{
 };
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
+pub const TEST_SCENARIO_MODULE_NAME: &str = "test_scenario";
 
 fn verification_failure(error: String) -> ExecutionError {
     ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationError, error)

@@ -4,16 +4,19 @@
 
 use anemo::async_trait;
 use config::{
-    utils::get_available_port, Authority, Committee, Epoch, SharedWorkerCache, Stake, WorkerCache,
-    WorkerId, WorkerIndex, WorkerInfo,
+    utils::get_available_port, Authority, Committee, Epoch, Stake, WorkerCache, WorkerId,
+    WorkerIndex, WorkerInfo,
 };
-use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use crypto::{
+    to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
+    PublicKey, PublicKeyBytes, Signature,
+};
 use fastcrypto::{
-    hash::{Digest, Hash as _},
-    traits::{AllowedRng, KeyPair as _, Signer as _},
+    hash::Hash as _,
+    traits::{AllowedRng, KeyPair as _},
 };
 use indexmap::IndexMap;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{
     rngs::{OsRng, StdRng},
     thread_rng, Rng, SeedableRng,
@@ -26,7 +29,7 @@ use std::{
 };
 use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
-use store::{reopen, rocks, rocks::DBMap, Store};
+use store::{reopen, rocks, rocks::DBMap};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
@@ -37,7 +40,7 @@ use types::{
     PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, SequenceNumber,
     TimestampMs, Transaction, Vote, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -136,7 +139,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     .expect("Failed creating database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<PublicKey, Round>,
+        LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 
@@ -181,7 +184,7 @@ impl PrimaryToPrimaryMockServer {
         network_keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (Receiver<SendCertificateRequest>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
         let (sender, receiver) = channel(1);
         let service = PrimaryToPrimaryServer::new(Self { sender });
 
@@ -206,7 +209,9 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
 
         self.sender.send(message).await.unwrap();
 
-        Ok(anemo::Response::new(SendCertificateResponse {}))
+        Ok(anemo::Response::new(SendCertificateResponse {
+            accepted: true,
+        }))
     }
 
     async fn request_vote(
@@ -238,7 +243,6 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
 
 pub struct PrimaryToWorkerMockServer {
     // TODO: refactor tests to use mockall for this.
-    msg_sender: Sender<WorkerReconfigureMessage>,
     synchronize_sender: Sender<WorkerSynchronizeMessage>,
 }
 
@@ -246,18 +250,10 @@ impl PrimaryToWorkerMockServer {
     pub fn spawn(
         keypair: NetworkKeyPair,
         address: Multiaddr,
-    ) -> (
-        Receiver<WorkerReconfigureMessage>,
-        Receiver<WorkerSynchronizeMessage>,
-        anemo::Network,
-    ) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
-        let (msg_sender, msg_receiver) = channel(1);
+    ) -> (Receiver<WorkerSynchronizeMessage>, anemo::Network) {
+        let addr = address.to_anemo_address().unwrap();
         let (synchronize_sender, synchronize_receiver) = channel(1);
-        let service = PrimaryToWorkerServer::new(Self {
-            msg_sender,
-            synchronize_sender,
-        });
+        let service = PrimaryToWorkerServer::new(Self { synchronize_sender });
 
         let routes = anemo::Router::new().add_rpc_service(service);
         let network = anemo::Network::bind(addr)
@@ -266,20 +262,12 @@ impl PrimaryToWorkerMockServer {
             .start(routes)
             .unwrap();
         info!("starting network on: {}", network.local_addr());
-        (msg_receiver, synchronize_receiver, network)
+        (synchronize_receiver, network)
     }
 }
 
 #[async_trait]
 impl PrimaryToWorker for PrimaryToWorkerMockServer {
-    async fn reconfigure(
-        &self,
-        request: anemo::Request<WorkerReconfigureMessage>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
-        let message = request.into_body();
-        self.msg_sender.send(message).await.unwrap();
-        Ok(anemo::Response::new(()))
-    }
     async fn synchronize(
         &self,
         request: anemo::Request<WorkerSynchronizeMessage>,
@@ -307,7 +295,7 @@ impl WorkerToWorkerMockServer {
         keypair: NetworkKeyPair,
         address: Multiaddr,
     ) -> (Receiver<WorkerBatchMessage>, anemo::Network) {
-        let addr = network::multiaddr_to_address(&address).unwrap();
+        let addr = address.to_anemo_address().unwrap();
         let (batch_sender, batch_receiver) = channel(1);
         let service = WorkerToWorkerServer::new(Self { batch_sender });
 
@@ -376,16 +364,15 @@ pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
 
 const BATCHES_CF: &str = "batches";
 
-pub fn open_batch_store() -> Store<BatchDigest, Batch> {
-    let db = DBMap::<BatchDigest, Batch>::open(
+pub fn open_batch_store() -> DBMap<BatchDigest, Batch> {
+    DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
         Some(BATCHES_CF),
         &ReadWriteOptions::default(),
     )
-    .unwrap();
-    Store::new(db)
+    .unwrap()
 }
 
 // Creates one certificate per authority starting and finishing at the specified rounds (inclusive).
@@ -471,6 +458,84 @@ pub fn make_certificates(
     rounds_of_certificates(range, initial_parents, keys, failure_probability, generator)
 }
 
+// Creates certificates for the provided rounds but also having slow nodes.
+// `range`: the rounds for which we intend to create the certificates for
+// `initial_parents`: the parents to use when start creating the certificates
+// `keys`: the authorities for which it will create certificates for
+// `slow_nodes`: the authorities which are considered slow. Being a slow authority means that we will
+//  still create certificates for them on each round, but no other authority from higher round will refer
+// to those certificates. The number (by stake) of slow_nodes can not be > f , as otherwise no valid graph will be
+// produced.
+pub fn make_certificates_with_slow_nodes(
+    committee: &Committee,
+    range: RangeInclusive<Round>,
+    initial_parents: Vec<Certificate>,
+    keys: &[PublicKey],
+    slow_nodes: &[(PublicKey, f64)],
+) -> (VecDeque<Certificate>, Vec<Certificate>) {
+    // ensure provided slow nodes do not account > f
+    let slow_nodes_stake: Stake = slow_nodes
+        .iter()
+        .map(|(key, _)| committee.authorities.get(key).unwrap().stake)
+        .sum();
+
+    assert!(slow_nodes_stake < committee.validity_threshold());
+
+    let mut certificates = VecDeque::new();
+    let mut parents = initial_parents;
+    let mut next_parents = Vec::new();
+
+    for round in range {
+        next_parents.clear();
+        for name in keys {
+            let this_cert_parents =
+                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes);
+            let (_, certificate) =
+                mock_certificate(committee, name.clone(), round, this_cert_parents);
+            certificates.push_back(certificate.clone());
+            next_parents.push(certificate);
+        }
+        parents = next_parents.clone();
+    }
+    (certificates, next_parents)
+}
+
+// Returns the parents that should be used as part of a newly created certificate.
+// The `slow_nodes` parameter is used to dictate which parents to exclude and not use. The slow
+// node will not be used under some probability which is provided as part of the tuple.
+// If probability to use it is 0.0, then the parent node will NEVER be used.
+// If probability to use it is 1.0, then the parent node will ALWAYS be used.
+// We always make sure to include our "own" certificate, thus the `name` property is needed.
+fn this_cert_parents_with_slow_nodes(
+    name: &PublicKey,
+    ancestors: Vec<Certificate>,
+    slow_nodes: &[(PublicKey, f64)],
+) -> BTreeSet<CertificateDigest> {
+    let mut parents = BTreeSet::new();
+    for parent in ancestors {
+        // Identify if the parent is within the slow nodes - and is not the same author as the
+        // one we want to create the certificate for.
+        if let Some((_, inclusion_probability)) = slow_nodes
+            .iter()
+            .find(|(key, _)| *key != *name && *key == parent.header.author)
+        {
+            let f: f64 = thread_rng().gen_range(0_f64..1_f64);
+
+            // if we are within the probability to include the node,
+            // then we add it as parent.
+            if f < *inclusion_probability {
+                parents.insert(parent.digest());
+            }
+        } else {
+            // just add it directly as it is not within the slow nodes or we are the
+            // same author.
+            parents.insert(parent.digest());
+        }
+    }
+
+    parents
+}
+
 // make rounds worth of unsigned certificates with the sampled number of parents
 pub fn make_certificates_with_epoch(
     committee: &Committee,
@@ -544,7 +609,7 @@ pub fn mock_certificate_with_epoch(
         .epoch(epoch)
         .parents(parents)
         .payload(fixture_payload(1))
-        .build(&KeyPair::generate(&mut rand::thread_rng()))
+        .build()
         .unwrap();
     let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
     (certificate.digest(), certificate)
@@ -558,22 +623,21 @@ pub fn mock_signed_certificate(
     parents: BTreeSet<CertificateDigest>,
     committee: &Committee,
 ) -> (CertificateDigest, Certificate) {
-    let author = signers.iter().find(|kp| *kp.public() == origin).unwrap();
     let header_builder = HeaderBuilder::default()
-        .author(origin.clone())
+        .author(origin)
         .payload(fixture_payload(1))
         .round(round)
         .epoch(0)
         .parents(parents);
 
-    let header = header_builder.build(author).unwrap();
+    let header = header_builder.build().unwrap();
 
     let cert = Certificate::new_unsigned(committee, header.clone(), Vec::new()).unwrap();
 
     let mut votes = Vec::new();
     for signer in signers {
         let pk = signer.public();
-        let sig = signer.sign(Digest::from(cert.digest()).as_ref());
+        let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
         votes.push((pk.clone(), sig))
     }
     let cert = Certificate::new(committee, header, votes).unwrap();
@@ -695,10 +759,6 @@ impl CommitteeFixture {
         }
     }
 
-    pub fn shared_worker_cache(&self) -> SharedWorkerCache {
-        self.worker_cache().into()
-    }
-
     // pub fn header(&self, author: PublicKey) -> Header {
     // Currently sign with the last authority
     pub fn header(&self) -> Header {
@@ -739,7 +799,7 @@ impl CommitteeFixture {
                     .epoch(0)
                     .parents(parents.clone())
                     .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-                    .build(a.keypair())
+                    .build()
                     .unwrap()
             })
             .collect();
@@ -804,7 +864,7 @@ impl AuthorityFixture {
     }
 
     pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
-        anemo::Network::bind(network::multiaddr_to_address(&self.address).unwrap())
+        anemo::Network::bind(self.address.to_anemo_address().unwrap())
             .server_name("narwhal")
             .private_key(self.network_keypair().private().0.to_bytes())
             .start(router)
@@ -854,7 +914,7 @@ impl AuthorityFixture {
     pub fn header(&self, committee: &Committee) -> Header {
         self.header_builder(committee)
             .payload(Default::default())
-            .build(&self.keypair)
+            .build()
             .unwrap()
     }
 
@@ -862,7 +922,7 @@ impl AuthorityFixture {
         self.header_builder(committee)
             .payload(Default::default())
             .round(round)
-            .build(&self.keypair)
+            .build()
             .unwrap()
     }
 
@@ -930,7 +990,7 @@ impl WorkerFixture {
     }
 
     pub fn new_network(&self, router: anemo::Router) -> anemo::Network {
-        anemo::Network::bind(network::multiaddr_to_address(&self.info().worker_address).unwrap())
+        anemo::Network::bind(self.info().worker_address.to_anemo_address().unwrap())
             .server_name("narwhal")
             .private_key(self.keypair().private().0.to_bytes())
             .start(router)
@@ -965,7 +1025,7 @@ impl WorkerFixture {
 }
 
 pub fn test_network(keypair: NetworkKeyPair, address: &Multiaddr) -> anemo::Network {
-    let address = network::multiaddr_to_address(address).unwrap();
+    let address = address.to_anemo_address().unwrap();
     let network_key = keypair.private().0.to_bytes();
     anemo::Network::bind(address)
         .server_name("narwhal")

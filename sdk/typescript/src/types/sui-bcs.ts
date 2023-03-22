@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+import {
+  BCS,
+  EnumTypeDefinition,
+  getSuiMoveConfig,
+  StructTypeDefinition,
+} from '@mysten/bcs';
 import { SuiObjectRef } from './objects';
 import { RpcApiVersion } from './version';
 
@@ -20,80 +25,6 @@ function registerUTF8String(bcs: BCS) {
 }
 
 /**
- * Transaction type used for transferring objects.
- * For this transaction to be executed, and `SuiObjectRef` should be queried
- * upfront and used as a parameter.
- */
-export type TransferObjectTx = {
-  TransferObject: {
-    recipient: string;
-    object_ref: SuiObjectRef;
-  };
-};
-
-/**
- * Transaction type used for transferring Sui.
- */
-export type TransferSuiTx = {
-  TransferSui: {
-    recipient: string;
-    amount: { Some: number } | { None: null };
-  };
-};
-
-/**
- * Transaction type used for Pay transaction.
- */
-export type PayTx = {
-  Pay: {
-    coins: SuiObjectRef[];
-    recipients: string[];
-    amounts: number[];
-  };
-};
-
-export type PaySuiTx = {
-  PaySui: {
-    coins: SuiObjectRef[];
-    recipients: string[];
-    amounts: number[];
-  };
-};
-
-export type PayAllSuiTx = {
-  PayAllSui: {
-    coins: SuiObjectRef[];
-    recipient: string;
-  };
-};
-
-/**
- * Transaction type used for publishing Move modules to the Sui.
- * Should be already compiled using `sui-move`, example:
- * ```
- * $ sui-move build
- * $ cat build/project_name/bytecode_modules/module.mv
- * ```
- * In JS:
- * ```
- * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv');
- * let bytes = Array.from(bytes);
- * let modules = [ bytes ];
- *
- * // ... publish logic ...
- * ```
- *
- * Each module should be represented as a sequence of bytes.
- */
-export type PublishTx = {
-  Publish: {
-    modules: ArrayLike<ArrayLike<number>>;
-  };
-};
-
-// ========== Move Call Tx ===========
-
-/**
  * A reference to a shared object.
  */
 export type SharedObjectRef = {
@@ -101,21 +32,10 @@ export type SharedObjectRef = {
   objectId: string;
 
   /** The version the object was shared at */
-  initialSharedVersion: number;
+  initialSharedVersion: number | string;
 
   /** Whether reference is mutable */
   mutable: boolean;
-};
-
-/**
- * A reference to a shared object from 0.23.0.
- */
-export type SharedObjectRef_23 = {
-  /** Hex code as string representing the object id */
-  objectId: string;
-
-  /** The version the object was shared at */
-  initialSharedVersion: number;
 };
 
 /**
@@ -123,7 +43,7 @@ export type SharedObjectRef_23 = {
  */
 export type ObjectArg =
   | { ImmOrOwned: SuiObjectRef }
-  | { Shared: SharedObjectRef | SharedObjectRef_23 };
+  | { Shared: SharedObjectRef };
 
 /**
  * A pure argument.
@@ -156,10 +76,7 @@ export function isPureArg(arg: any): arg is PureArg {
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
-export type CallArg =
-  | PureArg
-  | { Object: ObjectArg }
-  | { ObjVec: ArrayLike<ObjectArg> };
+export type CallArg = PureArg | { Object: ObjectArg };
 
 /**
  * Kind of a TypeTag which is represented by a Move type identifier.
@@ -187,49 +104,13 @@ export type TypeTag =
   | { u32: null }
   | { u256: null };
 
-/**
- * Transaction type used for calling Move modules' functions.
- * Should be crafted carefully, because the order of type parameters and
- * arguments matters.
- */
-export type MoveCallTx = {
-  Call: {
-    // TODO: restrict to just `string` once 0.24.0 is deployed in
-    // devnet and testnet
-    package: string | SuiObjectRef;
-    module: string;
-    function: string;
-    typeArguments: TypeTag[];
-    arguments: CallArg[];
-  };
-};
-
 // ========== TransactionData ===========
-
-export type Transaction =
-  | MoveCallTx
-  | PayTx
-  | PaySuiTx
-  | PayAllSuiTx
-  | PublishTx
-  | TransferObjectTx
-  | TransferSuiTx;
-
-/**
- * Transaction kind - either Batch or Single.
- *
- * Can be improved to change serialization automatically based on
- * the passed value (single Transaction or an array).
- */
-export type TransactionKind =
-  | { Single: Transaction }
-  | { Batch: Transaction[] };
 
 /**
  * The GasData to be used in the transaction.
  */
 export type GasData = {
-  payment: SuiObjectRef;
+  payment: SuiObjectRef[];
   owner: string; // Gas Object's owner
   price: number;
   budget: number;
@@ -242,33 +123,24 @@ export type GasData = {
  */
 export type TransactionExpiration = { None: null } | { Epoch: number };
 
-/**
- * The TransactionData to be signed and sent to the RPC service.
- *
- * Field `sender` is made optional as it can be added during the signing
- * process and there's no need to define it sooner.
- *
- * Field `expiration` is made optional as it is defaulted to `None`.
- */
-export type TransactionData = {
-  sender?: string;
-  kind: TransactionKind;
-  gasData: GasData;
-  expiration?: TransactionExpiration;
+// Move name of the Vector type.
+const VECTOR = 'vector';
+
+// Imported to explicitly tell typescript that types match
+type TypeSchema = {
+  structs?: { [key: string]: StructTypeDefinition };
+  enums?: { [key: string]: EnumTypeDefinition };
+  aliases?: { [key: string]: string };
 };
 
-export const TRANSACTION_DATA_TYPE_TAG = Array.from('TransactionData::').map(
-  (e) => e.charCodeAt(0),
-);
+const TransactionDataV1 = {
+  kind: 'TransactionKind',
+  sender: BCS.ADDRESS,
+  gasData: 'GasData',
+  expiration: 'TransactionExpiration',
+};
 
-export function deserializeTransactionBytesToTransactionData(
-  bcs: BCS,
-  bytes: Uint8Array,
-): TransactionData {
-  return bcs.de('TransactionData', bytes);
-}
-
-const BCS_SPEC = {
+const BCS_SPEC: TypeSchema = {
   enums: {
     'Option<T>': {
       None: null,
@@ -279,9 +151,9 @@ const BCS_SPEC = {
       Shared: 'SharedObjectRef',
     },
     CallArg: {
-      Pure: 'vector<u8>',
+      Pure: [VECTOR, BCS.U8],
       Object: 'ObjectArg',
-      ObjVec: 'vector<ObjectArg>',
+      ObjVec: [VECTOR, 'ObjectArg'],
     },
     TypeTag: {
       bool: null,
@@ -296,22 +168,20 @@ const BCS_SPEC = {
       u32: null,
       u256: null,
     },
-    Transaction: {
-      TransferObject: 'TransferObjectTx',
-      Publish: 'PublishTx',
-      Call: 'MoveCallTx',
-      TransferSui: 'TransferSuiTx',
-      Pay: 'PayTx',
-      PaySui: 'PaySuiTx',
-      PayAllSui: 'PayAllSuiTx',
-    },
     TransactionKind: {
-      Single: 'Transaction',
-      Batch: 'vector<Transaction>',
+      // can not be called from sui.js; dummy placement
+      // to set the enum counter right for ProgrammableTransact
+      ProgrammableTransaction: 'ProgrammableTransaction',
+      ChangeEpoch: null,
+      Genesis: null,
+      ConsensusCommitPrologue: null,
     },
     TransactionExpiration: {
       None: null,
       Epoch: BCS.U64,
+    },
+    TransactionData: {
+      V1: 'TransactionDataV1',
     },
   },
   structs: {
@@ -319,31 +189,6 @@ const BCS_SPEC = {
       objectId: BCS.ADDRESS,
       version: BCS.U64,
       digest: 'ObjectDigest',
-    },
-    TransferObjectTx: {
-      recipient: BCS.ADDRESS,
-      object_ref: 'SuiObjectRef',
-    },
-    PayTx: {
-      coins: 'vector<SuiObjectRef>',
-      recipients: 'vector<address>',
-      amounts: 'vector<u64>',
-    },
-    PaySuiTx: {
-      coins: 'vector<SuiObjectRef>',
-      recipients: 'vector<address>',
-      amounts: 'vector<u64>',
-    },
-    PayAllSuiTx: {
-      coins: 'vector<SuiObjectRef>',
-      recipient: BCS.ADDRESS,
-    },
-    TransferSuiTx: {
-      recipient: BCS.ADDRESS,
-      amount: 'Option<u64>',
-    },
-    PublishTx: {
-      modules: 'vector<vector<u8>>',
     },
     SharedObjectRef: {
       objectId: BCS.ADDRESS,
@@ -354,23 +199,10 @@ const BCS_SPEC = {
       address: BCS.ADDRESS,
       module: BCS.STRING,
       name: BCS.STRING,
-      typeParams: 'vector<TypeTag>',
-    },
-    MoveCallTx: {
-      package: BCS.ADDRESS,
-      module: BCS.STRING,
-      function: BCS.STRING,
-      typeArguments: 'vector<TypeTag>',
-      arguments: 'vector<CallArg>',
-    },
-    TransactionData: {
-      kind: 'TransactionKind',
-      sender: BCS.ADDRESS,
-      gasData: 'GasData',
-      expiration: 'TransactionExpiration',
+      typeParams: [VECTOR, 'TypeTag'],
     },
     GasData: {
-      payment: 'SuiObjectRef',
+      payment: [VECTOR, 'SuiObjectRef'],
       owner: BCS.ADDRESS,
       price: BCS.U64,
       budget: BCS.U64,
@@ -378,46 +210,19 @@ const BCS_SPEC = {
     // Signed transaction data needed to generate transaction digest.
     SenderSignedData: {
       data: 'TransactionData',
-      txSignatures: 'vector<vector<u8>>',
+      txSignatures: [VECTOR, [VECTOR, BCS.U8]],
     },
+    TransactionDataV1,
   },
   aliases: {
-    ObjectDigest: BCS.BASE64,
-  },
-};
-
-// for version <= 0.27.0
-const BCS_0_27_SPEC = {
-  structs: {
-    ...BCS_SPEC.structs,
-    TransactionData: {
-      kind: 'TransactionKind',
-      sender: BCS.ADDRESS,
-      gasData: 'GasData',
-    },
-    SenderSignedData: {
-      data: 'TransactionData',
-      txSignature: 'vector<u8>',
-    },
-  },
-  enums: BCS_SPEC.enums,
-  aliases: {
-    ObjectDigest: BCS.BASE64,
+    ObjectDigest: BCS.BASE58,
   },
 };
 
 const bcs = new BCS({ ...getSuiMoveConfig(), types: BCS_SPEC });
 registerUTF8String(bcs);
 
-// ========== Backward Compatibility (remove after v0.24 deploys) ===========
-const bcs_0_27 = new BCS({ ...getSuiMoveConfig(), types: BCS_0_27_SPEC });
-registerUTF8String(bcs_0_27);
-
-export function bcsForVersion(v?: RpcApiVersion) {
-  if (v?.major === 0 && v?.minor <= 27) {
-    return bcs_0_27;
-  }
-
+export function bcsForVersion(_v?: RpcApiVersion) {
   return bcs;
 }
 

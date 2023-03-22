@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getCreatedObjects } from '@mysten/sui.js';
 import { test, expect } from '@playwright/test';
 
-import { getCreatedObjects } from '@mysten/sui.js';
 import { faucet, mint } from './utils/localnet';
 
 test('can be reached through URL', async ({ page }) => {
@@ -28,7 +28,7 @@ test.describe('Owned Objects', () => {
         await expect(page).toHaveURL(`/object/${nft.reference.objectId}`);
 
         // Find a reference to the owning address:
-        await page.getByText(address).click();
+        await page.getByText(address.slice(0, 4)).click();
         await expect(page).toHaveURL(`/address/0x${address}`);
     });
 });

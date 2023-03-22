@@ -34,6 +34,27 @@ struct Args {
     /// Port to start the Sui faucet on
     #[clap(long, default_value = "9123")]
     faucet_port: u16,
+
+    /// Port to start the Indexer RPC server on
+    #[clap(long, default_value = "9124")]
+    indexer_rpc_port: u16,
+
+    /// Port for the Indexer Postgres DB
+    /// 5432 is the default port for postgres on Mac
+    #[clap(long, default_value = "5432")]
+    pg_port: u16,
+
+    /// Hostname for the Indexer Postgres DB
+    #[clap(long, default_value = "localhost")]
+    pg_host: String,
+
+    /// The duration for epochs (defaults to one minute)
+    #[clap(long, default_value = "60000")]
+    epoch_duration_ms: u64,
+
+    /// if we should run indexer
+    #[clap(long, takes_value = false)]
+    pub with_indexer: bool,
 }
 
 #[tokio::main]
@@ -43,17 +64,38 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
+    let Args {
+        fullnode_rpc_port,
+        indexer_rpc_port,
+        pg_port,
+        pg_host,
+        epoch_duration_ms,
+        faucet_port,
+        with_indexer,
+    } = args;
 
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
-        fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
+        fullnode_address: Some(format!("127.0.0.1:{}", fullnode_rpc_port)),
+        indexer_address: with_indexer.then_some(format!("127.0.0.1:{}", indexer_rpc_port)),
+        pg_address: with_indexer.then_some(format!(
+            "postgres://postgres@{pg_host}:{pg_port}/sui_indexer"
+        )),
         faucet_address: None,
+        epoch_duration_ms: Some(epoch_duration_ms),
     })
     .await?;
 
     println!("Fullnode RPC URL: {}", cluster.fullnode_url());
 
-    start_faucet(&cluster, args.faucet_port).await?;
+    if with_indexer {
+        println!(
+            "Indexer RPC URL: {}",
+            cluster.indexer_url().clone().unwrap_or_default()
+        );
+    }
+
+    start_faucet(&cluster, faucet_port).await?;
 
     Ok(())
 }

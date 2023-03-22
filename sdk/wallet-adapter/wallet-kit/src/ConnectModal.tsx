@@ -65,7 +65,7 @@ const LeftPanel = styled("div", {
   flex: 1,
   "@md": {
     flex: 0,
-    width: 240,
+    minWidth: 240,
   },
 
   variants: {
@@ -104,11 +104,6 @@ const ConnectionText = styled("div", {
     isError: false,
   },
 });
-
-export interface ConnectModalProps {
-  open: boolean;
-  onClose(): void;
-}
 
 const MobileInfoButton = styled("button", {
   background: "$backgroundAccent",

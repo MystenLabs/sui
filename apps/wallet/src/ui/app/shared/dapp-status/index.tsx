@@ -13,6 +13,7 @@ import { ChevronDown12, Dot12 } from '@mysten/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { ButtonConnectedTo } from '../ButtonConnectedTo';
 import { appDisconnect } from './actions';
 import Loading from '_components/loading';
@@ -42,6 +43,7 @@ function DappStatus() {
         [activeOriginUrl]
     );
     const isConnected = useAppSelector(dappStatusSelector);
+    const activeAddress = useActiveAddress();
     const [disconnecting, setDisconnecting] = useState(false);
     const [visible, setVisible] = useState(false);
     const onHandleClick = useCallback(
@@ -74,14 +76,17 @@ function DappStatus() {
         }),
     ]);
     const onHandleDisconnect = useCallback(async () => {
-        if (!disconnecting && isConnected && activeOriginUrl) {
+        if (!disconnecting && isConnected && activeOriginUrl && activeAddress) {
             trackEvent('AppDisconnect', {
                 props: { source: 'Header' },
             });
             setDisconnecting(true);
             try {
                 await dispatch(
-                    appDisconnect({ origin: activeOriginUrl })
+                    appDisconnect({
+                        origin: activeOriginUrl,
+                        accounts: [activeAddress],
+                    })
                 ).unwrap();
                 setVisible(false);
             } catch (e) {
@@ -90,7 +95,7 @@ function DappStatus() {
                 setDisconnecting(false);
             }
         }
-    }, [disconnecting, isConnected, activeOriginUrl, dispatch]);
+    }, [disconnecting, isConnected, activeOriginUrl, activeAddress, dispatch]);
     if (!isConnected) {
         return null;
     }

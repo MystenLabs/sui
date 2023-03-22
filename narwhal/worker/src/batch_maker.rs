@@ -5,11 +5,11 @@ use crate::metrics::WorkerMetrics;
 #[cfg(feature = "trace_transaction")]
 use byteorder::{BigEndian, ReadBytesExt};
 use fastcrypto::hash::Hash;
-use futures::stream::FuturesOrdered;
-use store::Store;
+use futures::stream::FuturesUnordered;
+use store::{rocks::DBMap, Map};
 
 use config::WorkerId;
-use tracing::error;
+use tracing::{debug, error};
 
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
@@ -30,7 +30,7 @@ use types::{
 };
 
 // The number of batches to store / transmit in parallel.
-pub const MAX_PARALLEL_BATCH: usize = 25;
+pub const MAX_PARALLEL_BATCH: usize = 100;
 
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]
@@ -41,7 +41,7 @@ pub struct BatchMaker {
     // Our worker's id.
     id: WorkerId,
     /// The preferred batch size (in bytes).
-    batch_size: usize,
+    batch_size_limit: usize,
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
     /// Receiver for shutdown.
@@ -49,44 +49,44 @@ pub struct BatchMaker {
     /// Channel to receive transactions from the network.
     rx_batch_maker: Receiver<(Transaction, TxResponse)>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+    tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
     /// Metrics handler
     node_metrics: Arc<WorkerMetrics>,
     /// The timestamp of the batch creation.
     /// Average resident time in the batch would be ~ (batch seal time - creation time) / 2
     batch_start_timestamp: Instant,
     /// The batch store to store our own batches.
-    store: Store<BatchDigest, Batch>,
+    store: DBMap<BatchDigest, Batch>,
     // Output channel to send out batches' digests.
-    tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
+    tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
 }
 
 impl BatchMaker {
     #[must_use]
     pub fn spawn(
         id: WorkerId,
-        batch_size: usize,
+        batch_size_limit: usize,
         max_batch_delay: Duration,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
-        tx_message: Sender<(Batch, Option<tokio::sync::oneshot::Sender<()>>)>,
+        tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
         node_metrics: Arc<WorkerMetrics>,
-        store: Store<BatchDigest, Batch>,
-        tx_digest: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
+        store: DBMap<BatchDigest, Batch>,
+        tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
                 Self {
                     id,
-                    batch_size,
+                    batch_size_limit,
                     max_batch_delay,
                     rx_shutdown,
                     rx_batch_maker,
-                    tx_message,
+                    tx_quorum_waiter,
                     batch_start_timestamp: Instant::now(),
                     node_metrics,
                     store,
-                    tx_digest,
+                    tx_our_batch,
                 }
                 .run()
                 .await;
@@ -104,7 +104,7 @@ impl BatchMaker {
         let mut current_responses = Vec::new();
         let mut current_batch_size = 0;
 
-        let mut batch_pipeline = FuturesOrdered::new();
+        let mut batch_pipeline = FuturesUnordered::new();
 
         loop {
             tokio::select! {
@@ -116,9 +116,9 @@ impl BatchMaker {
                     current_batch_size += transaction.len();
                     current_batch.transactions.push(transaction);
                     current_responses.push(response_sender);
-                    if current_batch_size >= self.batch_size {
+                    if current_batch_size >= self.batch_size_limit {
                         if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
-                            batch_pipeline.push_back(seal);
+                            batch_pipeline.push(seal);
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
@@ -135,7 +135,7 @@ impl BatchMaker {
                 () = &mut timer => {
                     if !current_batch.transactions.is_empty() {
                         if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
-                            batch_pipeline.push_back(seal);
+                            batch_pipeline.push(seal);
                         }
                         self.node_metrics.parallel_worker_batches.set(batch_pipeline.len() as i64);
 
@@ -232,8 +232,8 @@ impl BatchMaker {
         // Send the batch through the deliver channel for further processing.
         let (notify_done, done_sending) = tokio::sync::oneshot::channel();
         if self
-            .tx_message
-            .send((batch.clone(), Some(notify_done)))
+            .tx_quorum_waiter
+            .send((batch.clone(), notify_done))
             .await
             .is_err()
         {
@@ -251,7 +251,7 @@ impl BatchMaker {
         );
 
         // we are deliberately measuring this after the sending to the downstream
-        // channel tx_message as the operation is blocking and affects any further
+        // channel tx_quorum_waiter as the operation is blocking and affects any further
         // batch creation.
         self.node_metrics
             .created_batch_latency
@@ -261,7 +261,7 @@ impl BatchMaker {
         // Clone things to not capture self
         let store = self.store.clone();
         let worker_id = self.id;
-        let tx_digest = self.tx_digest.clone();
+        let tx_our_batch = self.tx_our_batch.clone();
 
         // The batch has been sealed so we can officially set its creation time
         // for latency calculations.
@@ -272,7 +272,7 @@ impl BatchMaker {
             // Now save it to disk
             let digest = batch.digest();
 
-            if let Err(e) = store.sync_write(digest, batch).await {
+            if let Err(e) = store.insert(&digest, &batch) {
                 error!("Store failed with error: {:?}", e);
                 return;
             }
@@ -292,13 +292,13 @@ impl BatchMaker {
                 worker_id,
                 metadata,
             };
-            if tx_digest
+            if tx_our_batch
                 .send((message, Some(primary_response)))
                 .await
                 .is_err()
             {
-                tracing::debug!("{}", DagError::ShuttingDown);
-                return; // Error is fatal.
+                debug!("Failed to send created batch to primary. Shutting down.");
+                return;
             };
 
             // Wait for a primary response

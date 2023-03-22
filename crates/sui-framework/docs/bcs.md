@@ -234,7 +234,7 @@ Read address from the bcs-serialized bytes.
 <pre><code><b>public</b> <b>fun</b> <a href="bcs.md#0x2_bcs_peel_address">peel_address</a>(<a href="">bcs</a>: &<b>mut</b> <a href="bcs.md#0x2_bcs_BCS">BCS</a>): <b>address</b> {
     <b>assert</b>!(v::length(&<a href="">bcs</a>.bytes) &gt;= <a href="_length">address::length</a>(), <a href="bcs.md#0x2_bcs_EOutOfRange">EOutOfRange</a>);
     <b>let</b> (addr_bytes, i) = (v::empty(), 0);
-    <b>while</b> (i &lt; 20) {
+    <b>while</b> (i &lt; <a href="_length">address::length</a>()) {
         v::push_back(&<b>mut</b> addr_bytes, v::pop_back(&<b>mut</b> <a href="">bcs</a>.bytes));
         i = i + 1;
     };

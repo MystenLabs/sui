@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRpcClient } from '@mysten/core';
 import { useIsMutating, useMutation } from '@tanstack/react-query';
 
-import useAppSelector from '../../hooks/useAppSelector';
-import { useRpc } from '../../hooks/useRpc';
+import { useActiveAddress } from '../../hooks/useActiveAddress';
 
 export function useFaucetMutation() {
-    const api = useRpc();
-    const address = useAppSelector(({ account: { address } }) => address);
+    const api = useRpcClient();
+    const address = useActiveAddress();
     const mutationKey = ['faucet-request-tokens', address];
     const mutation = useMutation({
         mutationKey,
@@ -16,12 +16,12 @@ export function useFaucetMutation() {
             if (!address) {
                 throw new Error('Failed, wallet address not found.');
             }
-            const { error, transferred_gas_objects } =
+            const { error, transferredGasObjects } =
                 await api.requestSuiFromFaucet(address);
             if (error) {
                 throw new Error(error);
             }
-            return transferred_gas_objects.reduce(
+            return transferredGasObjects.reduce(
                 (total, { amount }) => total + amount,
                 0
             );

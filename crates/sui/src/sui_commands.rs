@@ -10,6 +10,7 @@ use anyhow::{anyhow, bail};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
+use sui_framework_build::compiled_package::SuiPackageHooks;
 use tracing::info;
 
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_KEYSTORE_FILENAME};
@@ -25,8 +26,10 @@ use sui_types::crypto::{SignatureScheme, SuiKeyPair};
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{SuiClientConfig, SuiEnv};
 use crate::console::start_console;
+use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
+use crate::validator_commands::SuiValidatorCommand;
 use sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
@@ -62,6 +65,8 @@ pub enum SuiCommand {
         working_dir: Option<PathBuf>,
         #[clap(short, long, help = "Forces overwriting existing configuration")]
         force: bool,
+        #[clap(long = "epoch-duration-ms")]
+        epoch_duration_ms: Option<u64>,
     },
     GenesisCeremony(Ceremony),
     /// Sui keystore tool.
@@ -91,6 +96,22 @@ pub enum SuiCommand {
         /// Return command outputs in json format.
         #[clap(long, global = true)]
         json: bool,
+        #[clap(short = 'y', long = "yes")]
+        accept_defaults: bool,
+    },
+    /// A tool for validators and validator candidates.
+    #[clap(name = "validator")]
+    Validator {
+        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+        #[clap(long = "client.config")]
+        config: Option<PathBuf>,
+        #[clap(subcommand)]
+        cmd: Option<SuiValidatorCommand>,
+        /// Return command outputs in json format.
+        #[clap(long, global = true)]
+        json: bool,
+        #[clap(short = 'y', long = "yes")]
+        accept_defaults: bool,
     },
 
     /// Tool to build and test Move applications.
@@ -106,10 +127,17 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: sui_move::Command,
     },
+
+    /// Tool for Fire Drill
+    FireDrill {
+        #[clap(subcommand)]
+        fire_drill: FireDrill,
+    },
 }
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
+        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
         match self {
             SuiCommand::Start {
                 config,
@@ -117,7 +145,7 @@ impl SuiCommand {
             } => {
                 // Auto genesis if path is none and sui directory doesn't exists.
                 if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-                    genesis(None, None, None, false).await?;
+                    genesis(None, None, None, false, None).await?;
                 }
 
                 // Load the config of the Sui authority.
@@ -192,7 +220,17 @@ impl SuiCommand {
                 force,
                 from_config,
                 write_config,
-            } => genesis(from_config, write_config, working_dir, force).await,
+                epoch_duration_ms,
+            } => {
+                genesis(
+                    from_config,
+                    write_config,
+                    working_dir,
+                    force,
+                    epoch_duration_ms,
+                )
+                .await
+            }
             SuiCommand::GenesisCeremony(cmd) => run(cmd),
             SuiCommand::KeyTool { keystore_path, cmd } => {
                 let keystore_path =
@@ -202,13 +240,18 @@ impl SuiCommand {
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config).await?;
+                prompt_if_no_config(&config, false).await?;
                 let context = WalletContext::new(&config, None).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
-            SuiCommand::Client { config, cmd, json } => {
+            SuiCommand::Client {
+                config,
+                cmd,
+                json,
+                accept_defaults,
+            } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config_path).await?;
+                prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None).await?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
@@ -220,11 +263,31 @@ impl SuiCommand {
                 }
                 Ok(())
             }
+            SuiCommand::Validator {
+                config,
+                cmd,
+                json,
+                accept_defaults,
+            } => {
+                let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config_path, accept_defaults).await?;
+                let mut context = WalletContext::new(&config_path, None).await?;
+                if let Some(cmd) = cmd {
+                    cmd.execute(&mut context).await?.print(!json);
+                } else {
+                    // Print help
+                    let mut app: Command = SuiCommand::command();
+                    app.build();
+                    app.find_subcommand_mut("validator").unwrap().print_help()?;
+                }
+                Ok(())
+            }
             SuiCommand::Move {
                 package_path,
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
+            SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
         }
     }
 }
@@ -234,6 +297,7 @@ async fn genesis(
     write_config: Option<PathBuf>,
     working_dir: Option<PathBuf>,
     force: bool,
+    epoch_duration_ms: Option<u64>,
 ) -> Result<(), anyhow::Error> {
     let sui_config_dir = &match working_dir {
         // if a directory is specified, it must exist (it
@@ -291,7 +355,7 @@ async fn genesis(
                 })?;
             }
         } else if files.len() != 2 || !client_path.exists() || !keystore_path.exists() {
-            bail!("Cannot run genesis with non-empty Sui config directory {}, please use --force/-f option to remove existing configuration", sui_config_dir.to_str().unwrap());
+            bail!("Cannot run genesis with non-empty Sui config directory {}, please use the --force/-f option to remove the existing configuration", sui_config_dir.to_str().unwrap());
         }
     }
 
@@ -317,13 +381,17 @@ async fn genesis(
     }
 
     let validator_info = genesis_conf.validator_config_info.take();
+    let builder = ConfigBuilder::new(sui_config_dir);
+    if let Some(epoch_duration_ms) = epoch_duration_ms {
+        genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
+    }
     let mut network_config = if let Some(validators) = validator_info {
-        ConfigBuilder::new(sui_config_dir)
+        builder
             .initial_accounts_config(genesis_conf)
             .with_validators(validators)
             .build()
     } else {
-        ConfigBuilder::new(sui_config_dir)
+        builder
             .committee_size(NonZeroUsize::new(genesis_conf.committee_size).unwrap())
             .initial_accounts_config(genesis_conf)
             .build()
@@ -390,7 +458,10 @@ async fn genesis(
     Ok(())
 }
 
-async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
+async fn prompt_if_no_config(
+    wallet_conf_path: &Path,
+    accept_defaults: bool,
+) -> Result<(), anyhow::Error> {
     // Prompt user for connect to devnet fullnode if config does not exist.
     if !wallet_conf_path.exists() {
         let env = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
@@ -400,13 +471,25 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 ws: None,
             }),
             None => {
-                print!(
-                    "Config file [{:?}] doesn't exist, do you want to connect to a Sui full node server [yN]?",
-                    wallet_conf_path
-                );
-                if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
-                    print!("Sui full node server url (Default to Sui DevNet if not specified) : ");
-                    let url = read_line()?;
+                if accept_defaults {
+                    print!("Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.", wallet_conf_path);
+                } else {
+                    print!(
+                        "Config file [{:?}] doesn't exist, do you want to connect to a Sui Full node server [y/N]?",
+                        wallet_conf_path
+                    );
+                }
+                if accept_defaults
+                    || matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y")
+                {
+                    let url = if accept_defaults {
+                        String::new()
+                    } else {
+                        print!(
+                            "Sui Full node server URL (Defaults to Sui Devnet if not specified) : "
+                        );
+                        read_line()?
+                    };
                     Some(if url.trim().is_empty() {
                         SuiEnv::devnet()
                     } else {
@@ -435,10 +518,14 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-            println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1:");
-            let key_scheme = match SignatureScheme::from_flag(read_line()?.trim()) {
-                Ok(s) => s,
-                Err(e) => return Err(anyhow!("{e}")),
+            let key_scheme = if accept_defaults {
+                SignatureScheme::ED25519
+            } else {
+                println!("Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):");
+                match SignatureScheme::from_flag(read_line()?.trim()) {
+                    Ok(s) => s,
+                    Err(e) => return Err(anyhow!("{e}")),
+                }
             };
             let (new_address, phrase, scheme) =
                 keystore.generate_and_add_new_key(key_scheme, None)?;

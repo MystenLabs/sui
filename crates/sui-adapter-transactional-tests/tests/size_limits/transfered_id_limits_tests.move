@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test limts on number of transferd IDs 
+// Test limts on number of transferd IDs
 
 //# init --addresses Test=0x0
 
@@ -21,7 +21,7 @@ module Test::M1 {
     public entry fun transfer_n_ids(n: u64, ctx: &mut TxContext) {
         let i = 0;
         while (i < n) {
-            transfer::transfer(
+            transfer::public_transfer(
                 Obj {
                     id: object::new(ctx)
                 },
@@ -33,17 +33,16 @@ module Test::M1 {
 }
 
 // transfer below transfer count limit should succeed
-//# run Test::M1::transfer_n_ids --args 1
+//# run Test::M1::transfer_n_ids --args 1 --gas-budget 1000000
 
 // transfer below transfer count limit should succeed
-//# run Test::M1::transfer_n_ids --args 256
+//# run Test::M1::transfer_n_ids --args 256 --gas-budget 1000000
 
 // run at run count limit should succeed
-//# run Test::M1::transfer_n_ids --args 2048
+//# run Test::M1::transfer_n_ids --args 2048 --gas-budget 1000000
 
 // run above run count limit should fail
-//# run Test::M1::transfer_n_ids --args 2049
+//# run Test::M1::transfer_n_ids --args 2049 --gas-budget 1000000
 
 // run above run count limit should fail
-//# run Test::M1::transfer_n_ids --args 4096
-
+//# run Test::M1::transfer_n_ids --args 4096 --gas-budget 1000000

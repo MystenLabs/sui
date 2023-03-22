@@ -42,7 +42,7 @@ pub struct Opts {
     pub primary_gas_id: String,
     #[clap(long, default_value = "5000", global = true)]
     pub primary_gas_objects: u64,
-    #[clap(long, default_value = "1000", global = true)]
+    #[clap(long, default_value = "500", global = true)]
     pub gas_request_chunk_size: u64,
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
@@ -82,12 +82,6 @@ pub struct Opts {
     /// Whether or no to download TXes during follow
     #[clap(long, global = true)]
     pub download_txes: bool,
-    /// Run in disjoint_mode when we don't want different workloads
-    /// to interfere with each other. This mode is useful when
-    /// we don't want backoff to penalize all workloads even if only
-    /// one (or some) is slow.
-    #[clap(long, parse(try_from_str), default_value = "true", global = true)]
-    pub disjoint_mode: bool,
     /// Number of transactions or duration to
     /// run the benchmark for. Default set to
     /// "unbounded" i.e. benchmark runs forever
@@ -136,10 +130,26 @@ pub enum RunSpec {
     // will likely change in future to support
     // more representative workloads.
     Bench {
+        // ----- workloads ----
         // relative weight of shared counter
         // transaction in the benchmark workload
         #[clap(long, default_value = "0")]
         shared_counter: u32,
+        // relative weight of transfer object
+        // transactions in the benchmark workload
+        #[clap(long, default_value = "1")]
+        transfer_object: u32,
+        // relative weight of delegation transactions in the benchmark workload
+        #[clap(long, default_value = "0")]
+        delegation: u32,
+        // relative weight of batch payment transactions in the benchmark workload
+        #[clap(long, default_value = "0")]
+        batch_payment: u32,
+        // relative weight of adversarial transactions in the benchmark workload
+        #[clap(long, default_value = "0")]
+        adversarial: u32,
+
+        // --- workload-specific options --- (TODO: use subcommands or similar)
         // 100 for max hotness i.e all requests target
         // just the same shared counter, 0 for no hotness
         // i.e. all requests target a different shared
@@ -148,13 +158,11 @@ pub enum RunSpec {
         // total_shared_counters = max(1, qps * (1.0 - hotness/100.0))
         #[clap(long, default_value = "50")]
         shared_counter_hotness_factor: u32,
-        // relative weight of transfer object
-        // transactions in the benchmark workload
-        #[clap(long, default_value = "1")]
-        transfer_object: u32,
-        // relative weight of delegation transactions in the benchmark workload
-        #[clap(long, default_value = "0")]
-        delegation: u32,
+        // batch size use for batch payment workload
+        #[clap(long, default_value = "15")]
+        batch_payment_size: u32,
+
+        // --- generic options ---
         // Target qps
         #[clap(long, default_value = "1000", global = true)]
         target_qps: u64,

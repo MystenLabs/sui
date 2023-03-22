@@ -2,31 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  ConnectFeature,
-  DisconnectFeature,
-  EventsFeature,
+  StandardConnectFeature,
+  StandardDisconnectFeature,
+  StandardEventsFeature,
   Wallet,
   WalletWithFeatures,
 } from "@wallet-standard/core";
 import { SuiFeatures } from "./features";
 
 export type StandardWalletAdapterWallet = WalletWithFeatures<
-  ConnectFeature &
-    EventsFeature &
+  StandardConnectFeature &
+    StandardEventsFeature &
     SuiFeatures &
     // Disconnect is an optional feature:
-    Partial<DisconnectFeature>
+    Partial<StandardDisconnectFeature>
 >;
 
-// TODO: Enable filtering by subset of features:
+// These features are absolutely required for wallets to function in the Sui ecosystem.
+// Eventually, as wallets have more consistent support of features, we may want to extend this list.
+const REQUIRED_FEATURES: (keyof StandardWalletAdapterWallet["features"])[] = [
+  "standard:connect",
+  "standard:events",
+];
+
 export function isStandardWalletAdapterCompatibleWallet(
-  wallet: Wallet
+  wallet: Wallet,
+  features: string[] = []
 ): wallet is StandardWalletAdapterWallet {
-  return (
-    "standard:connect" in wallet.features &&
-    "standard:events" in wallet.features &&
-    // TODO: Enable once ecosystem wallets adopt this:
-    // "sui:signTransaction" in wallet.features &&
-    "sui:signAndExecuteTransaction" in wallet.features
+  return [...REQUIRED_FEATURES, ...features].every(
+    (feature) => feature in wallet.features
   );
 }

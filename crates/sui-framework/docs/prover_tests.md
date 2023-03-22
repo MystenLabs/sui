@@ -64,7 +64,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_transfer">simple_transfer</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a>, recipient: <b>address</b>) {
-    sui::transfer::transfer(o, recipient);
+    sui::transfer::public_transfer(o, recipient);
 }
 </code></pre>
 
@@ -101,7 +101,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_share">simple_share</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a>) {
-    sui::transfer::share_object(o)
+    sui::transfer::public_share_object(o)
 }
 </code></pre>
 
@@ -138,7 +138,7 @@
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="prover_tests.md#0x2_prover_tests_simple_freeze">simple_freeze</a>(o: <a href="prover_tests.md#0x2_prover_tests_Obj">Obj</a>) {
-    sui::transfer::freeze_object(o)
+    sui::transfer::public_freeze_object(o)
 }
 </code></pre>
 

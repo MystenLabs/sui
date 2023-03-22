@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
+use async_trait::async_trait;
 use bytes::Bytes;
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{
     encoding::{Encoding, Hex},
@@ -28,13 +30,14 @@ use types::{
 // A test validator that rejects every transaction / batch
 #[derive(Clone)]
 struct NilTxValidator;
+#[async_trait]
 impl TransactionValidator for NilTxValidator {
     type Error = eyre::Report;
 
     fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
         eyre::bail!("Invalid transaction");
     }
-    fn validate_batch(&self, _txs: &Batch) -> Result<(), Self::Error> {
+    async fn validate_batch(&self, _txs: &Batch) -> Result<(), Self::Error> {
         eyre::bail!("Invalid batch");
     }
 }
@@ -43,7 +46,7 @@ impl TransactionValidator for NilTxValidator {
 async fn reject_invalid_clients_transactions() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
@@ -56,7 +59,7 @@ async fn reject_invalid_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+    let batch_store = rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
@@ -64,7 +67,6 @@ async fn reject_invalid_clients_transactions() {
         &ReadWriteOptions::default(),
     )
     .unwrap();
-    let store = Store::new(db);
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
@@ -80,7 +82,7 @@ async fn reject_invalid_clients_transactions() {
         worker_cache.clone(),
         parameters,
         NilTxValidator,
-        store,
+        batch_store,
         metrics,
         &mut tx_shutdown,
     );
@@ -88,11 +90,7 @@ async fn reject_invalid_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .transactions;
+    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
@@ -105,7 +103,7 @@ async fn reject_invalid_clients_transactions() {
     let res = client.submit_transaction(txn).await;
     assert!(res.is_err());
 
-    let worker_pk = worker_cache.load().worker(&name, &worker_id).unwrap().name;
+    let worker_pk = worker_cache.worker(&name, &worker_id).unwrap().name;
 
     let batch = batch();
     let batch_message = WorkerBatchMessage {
@@ -121,7 +119,7 @@ async fn reject_invalid_clients_transactions() {
     );
     // ensure that the networks are connected
     network
-        .connect(network::multiaddr_to_address(&myself.info().worker_address).unwrap())
+        .connect(myself.info().worker_address.to_anemo_address().unwrap())
         .await
         .unwrap();
     let peer = network.peer(PeerId(worker_pk.0.to_bytes())).unwrap();
@@ -137,7 +135,7 @@ async fn reject_invalid_clients_transactions() {
 async fn handle_clients_transactions() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
@@ -150,7 +148,7 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let db = rocks::DBMap::<BatchDigest, Batch>::open(
+    let batch_store = rocks::DBMap::<BatchDigest, Batch>::open(
         temp_dir(),
         MetricConf::default(),
         None,
@@ -158,7 +156,6 @@ async fn handle_clients_transactions() {
         &ReadWriteOptions::default(),
     )
     .unwrap();
-    let store = Store::new(db);
 
     let registry = Registry::new();
     let metrics = initialise_metrics(&registry);
@@ -174,7 +171,7 @@ async fn handle_clients_transactions() {
         worker_cache.clone(),
         parameters,
         TrivialTransactionValidator::default(),
-        store,
+        batch_store,
         metrics,
         &mut tx_shutdown,
     );
@@ -215,11 +212,7 @@ async fn handle_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .transactions;
+    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let client = TransactionsClient::new(channel);
@@ -259,7 +252,7 @@ async fn get_network_peers_from_admin_server() {
     };
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let authority_1 = fixture.authorities().next().unwrap();
     let name_1 = authority_1.public_key();
     let signer_1 = authority_1.keypair().copy();
@@ -273,7 +266,8 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -394,7 +388,8 @@ async fn get_network_peers_from_admin_server() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));

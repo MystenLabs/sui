@@ -9,8 +9,9 @@ use crate::{
 };
 use bincode::Options;
 use config::{Committee, Parameters, WorkerId};
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::{PublicKey, PublicKeyBytes};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -26,11 +27,10 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::CertificateStore;
-use storage::NodeStorage;
 use storage::PayloadToken;
+use storage::{CertificateStore, VoteDigestStore};
+use storage::{NodeStorage, PayloadStore};
 use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
-use store::Store;
 use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{oneshot, watch},
@@ -53,7 +53,7 @@ async fn get_network_peers_from_admin_server() {
     };
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let authority_1 = fixture.authorities().next().unwrap();
     let name_1 = authority_1.public_key();
     let signer_1 = authority_1.keypair().copy();
@@ -80,7 +80,8 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
@@ -203,7 +204,8 @@ async fn get_network_peers_from_admin_server() {
         )
         .unwrap(),
     );
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -289,7 +291,7 @@ async fn get_network_peers_from_admin_server() {
 }
 
 #[tokio::test]
-async fn test_request_vote_missing_parents() {
+async fn test_request_vote_send_missing_parents() {
     telemetry_subscribers::init_for_testing();
     const NUM_PARENTS: usize = 10;
     let fixture = CommitteeFixture::builder()
@@ -300,7 +302,7 @@ async fn test_request_vote_missing_parents() {
     let author = fixture.authorities().nth(2).unwrap();
     let target_name = target.public_key();
     let author_name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(target.network_keypair(), target.address());
@@ -309,7 +311,8 @@ async fn test_request_vote_missing_parents() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -337,7 +340,7 @@ async fn test_request_vote_missing_parents() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -352,31 +355,31 @@ async fn test_request_vote_missing_parents() {
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=3, &genesis, &committee, keys.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
-    let round_1_certs = all_certificates[..NUM_PARENTS].to_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
     let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
-    // Write some certificates from round 2 into the store, and leave out the rest to test
-    // headers with some parents but not all available. All round 1 certificates should be written
-    // into the storage as well as parents of round 2 certificates. But to test phase 2 they are
-    // left out for now.
-    for cert in round_2_parents {
-        certificate_store.write(cert.clone()).unwrap();
-        for (digest, (worker_id, _)) in cert.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
-        }
-    }
-
-    // TEST PHASE 1: Handler should report missing parent certificates to caller.
+    // Create a test header.
     let test_header = author
         .header_builder(&fixture.committee())
         .author(author_name)
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
+
+    // Write some certificates from round 2 into the store, and leave out the rest to test
+    // headers with some parents but not all available. Round 1 certificates should be written
+    // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
+    for cert in round_2_parents {
+        for (digest, (worker_id, _)) in &cert.header.payload {
+            payload_store.write(digest, worker_id).unwrap();
+        }
+        certificate_store.write(cert.clone()).unwrap();
+    }
+
+    // TEST PHASE 1: Handler should report missing parent certificates to caller.
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
@@ -429,21 +432,129 @@ async fn test_request_vote_missing_parents() {
     );
 
     // TODO: inject error for handling parents.
+}
 
-    // TEST PHASE 3: Handler should process missing certificates and succeed.
-    // Reset narwhal round.
-    let _ = tx_narwhal_round_updates.send(1);
-    // Populate round 1 certificates so the missing round 2 parents can be accepted.
+#[tokio::test]
+async fn test_request_vote_accept_missing_parents() {
+    telemetry_subscribers::init_for_testing();
+    const NUM_PARENTS: usize = 10;
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(NUM_PARENTS).unwrap())
+        .build();
+    let target = fixture.authorities().next().unwrap();
+    let author = fixture.authorities().nth(2).unwrap();
+    let target_name = target.public_key();
+    let author_name = author.public_key();
+    let worker_cache = fixture.worker_cache();
+    let signature_service = SignatureService::new(target.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let network = test_utils::test_network(target.network_keypair(), target.address());
+
+    let (header_store, certificate_store, payload_store) = create_db_stores();
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
+    let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+    let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
+
+    let synchronizer = Arc::new(Synchronizer::new(
+        target_name.clone(),
+        fixture.committee(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates,
+        rx_synchronizer_network,
+        None,
+        metrics.clone(),
+    ));
+    let handler = PrimaryReceiverHandler {
+        name: target_name.clone(),
+        committee: fixture.committee(),
+        worker_cache: worker_cache.clone(),
+        synchronizer: synchronizer.clone(),
+        signature_service,
+        header_store: header_store.clone(),
+        certificate_store: certificate_store.clone(),
+        payload_store: payload_store.clone(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
+        rx_narwhal_round_updates,
+        metrics: metrics.clone(),
+    };
+
+    // Make some mock certificates that are parents of our new header.
+    let committee: Committee = fixture.committee();
+    let genesis = Certificate::genesis(&committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, keys.as_slice());
+    let all_certificates = certificates.into_iter().collect_vec();
+    let round_1_certs = all_certificates[..NUM_PARENTS].to_vec();
+    let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
+    let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
+    let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
+
+    // Create a test header.
+    let test_header = author
+        .header_builder(&fixture.committee())
+        .author(author_name)
+        .round(3)
+        .parents(round_2_certs.iter().map(|c| c.digest()).collect())
+        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+        .build()
+        .unwrap();
+
+    // Populate all round 1 certificates and some round 2 certificates into the storage.
+    // The new header will have some round 2 certificates missing as parents, but these parents
+    // should be able to get accepted.
     for cert in round_1_certs {
-        certificate_store.write(cert.clone()).unwrap();
-        for (digest, (worker_id, _)) in cert.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+        for (digest, (worker_id, _)) in &cert.header.payload {
+            payload_store.write(digest, worker_id).unwrap();
         }
+        certificate_store.write(cert.clone()).unwrap();
     }
-    // Populate header payload so they don't have to be retrieved.
+    for cert in round_2_parents {
+        for (digest, (worker_id, _)) in &cert.header.payload {
+            payload_store.write(digest, worker_id).unwrap();
+        }
+        certificate_store.write(cert.clone()).unwrap();
+    }
+    // Populate new header payload so they don't have to be retrieved.
     for (digest, (worker_id, _)) in &test_header.payload {
-        payload_store.async_write((*digest, *worker_id), 1).await;
+        payload_store.write(digest, worker_id).unwrap();
     }
+
+    // TEST PHASE 1: Handler should report missing parent certificates to caller.
+    let mut request = anemo::Request::new(RequestVoteRequest {
+        header: test_header.clone(),
+        parents: Vec::new(),
+    });
+    assert!(request
+        .extensions_mut()
+        .insert(network.downgrade())
+        .is_none());
+    assert!(request
+        .extensions_mut()
+        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
+        .is_none());
+    let result = handler.request_vote(request).await;
+
+    let expected_missing: HashSet<_> = round_2_missing.iter().map(|c| c.digest()).collect();
+    let received_missing: HashSet<_> = result.unwrap().into_body().missing.into_iter().collect();
+    assert_eq!(expected_missing, received_missing);
+
+    // TEST PHASE 2: Handler should process missing parent certificates and succeed.
+    let _ = tx_narwhal_round_updates.send(1);
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
         parents: round_2_missing.clone(),
@@ -468,7 +579,7 @@ async fn test_request_vote_missing_batches() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -480,7 +591,8 @@ async fn test_request_vote_missing_batches() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -508,7 +620,7 @@ async fn test_request_vote_missing_batches() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -519,7 +631,7 @@ async fn test_request_vote_missing_batches() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -527,8 +639,8 @@ async fn test_request_vote_missing_batches() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+        for (digest, (worker_id, _)) in &certificate.header.payload {
+            payload_store.write(digest, worker_id).unwrap();
         }
     }
     let test_header = author
@@ -536,7 +648,7 @@ async fn test_request_vote_missing_batches() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let test_digests: HashSet<_> = test_header
         .payload
@@ -560,7 +672,7 @@ async fn test_request_vote_missing_batches() {
         .return_once(|_| Ok(anemo::Response::new(())));
     let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -592,7 +704,7 @@ async fn test_request_vote_already_voted() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -604,7 +716,8 @@ async fn test_request_vote_already_voted() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -632,7 +745,7 @@ async fn test_request_vote_already_voted() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -643,7 +756,7 @@ async fn test_request_vote_already_voted() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -651,8 +764,8 @@ async fn test_request_vote_already_voted() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+        for (digest, (worker_id, _)) in &certificate.header.payload {
+            payload_store.write(digest, worker_id).unwrap();
         }
     }
 
@@ -666,7 +779,7 @@ async fn test_request_vote_already_voted() {
         .returning(|_| Ok(anemo::Response::new(())));
     let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -679,7 +792,7 @@ async fn test_request_vote_already_voted() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -722,7 +835,7 @@ async fn test_request_vote_already_voted() {
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build(author.keypair())
+        .build()
         .unwrap();
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -752,7 +865,7 @@ async fn test_fetch_certificates_handler() {
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
     let name = fixture.authorities().next().unwrap().public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -761,7 +874,8 @@ async fn test_fetch_certificates_handler() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -789,7 +903,7 @@ async fn test_fetch_certificates_handler() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -888,6 +1002,7 @@ async fn test_fetch_certificates_handler() {
                 authorities
                     .clone()
                     .into_iter()
+                    .map(|a| PublicKeyBytes::from(&a))
                     .zip(
                         skip_rounds_vec
                             .into_iter()
@@ -919,7 +1034,7 @@ async fn test_process_payload_availability_success() {
         .build();
     let author = fixture.authorities().next().unwrap();
     let name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -928,7 +1043,8 @@ async fn test_process_payload_availability_success() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -956,7 +1072,7 @@ async fn test_process_payload_availability_success() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -969,7 +1085,7 @@ async fn test_process_payload_availability_success() {
         let header = author
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -984,8 +1100,8 @@ async fn test_process_payload_availability_success() {
             // write the certificate
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload {
-                payload_store.async_write((digest, worker_id), 1).await;
+            for (digest, (worker_id, _)) in &certificate.header.payload {
+                payload_store.write(digest, worker_id).unwrap();
             }
         } else {
             missing_certificates.insert(digest);
@@ -1051,8 +1167,8 @@ async fn test_process_payload_availability_when_failures() {
         payload_map,
     ) = store::reopen!(&rocksdb,
         test_utils::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKey), CertificateDigest>,
-        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKey, Round), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
         test_utils::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     let certificate_store = CertificateStore::new(
@@ -1060,7 +1176,7 @@ async fn test_process_payload_availability_when_failures() {
         certificate_digest_by_round_map,
         certificate_digest_by_origin_map,
     );
-    let payload_store: Store<(BatchDigest, WorkerId), PayloadToken> = Store::new(payload_map);
+    let payload_store = PayloadStore::new(payload_map);
 
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
@@ -1069,7 +1185,7 @@ async fn test_process_payload_availability_when_failures() {
     let committee = fixture.committee();
     let author = fixture.authorities().next().unwrap();
     let name = author.public_key();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -1078,7 +1194,8 @@ async fn test_process_payload_availability_when_failures() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1106,7 +1223,7 @@ async fn test_process_payload_availability_when_failures() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -1117,7 +1234,7 @@ async fn test_process_payload_availability_when_failures() {
         let header = author
             .header_builder(&committee)
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(author.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1133,7 +1250,7 @@ async fn test_process_payload_availability_when_failures() {
             .expect("Couldn't serialise key");
 
         // Just serialise the "false" value
-        let dummy_value = bincode::serialize(false.borrow()).expect("Couldn't serialise value");
+        let dummy_value = bcs::to_bytes(false.borrow()).expect("Couldn't serialise value");
 
         rocksdb
             .put_cf(
@@ -1164,7 +1281,7 @@ async fn test_request_vote_created_at_in_future() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
@@ -1176,7 +1293,8 @@ async fn test_request_vote_created_at_in_future() {
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
     let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(1u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
     let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
@@ -1204,7 +1322,7 @@ async fn test_request_vote_created_at_in_future() {
         header_store: header_store.clone(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
-        vote_digest_store: crate::common::create_test_vote_store(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
         rx_narwhal_round_updates,
         metrics: metrics.clone(),
     };
@@ -1215,7 +1333,7 @@ async fn test_request_vote_created_at_in_future() {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
 
         let certificate = fixture.certificate(&header);
@@ -1223,8 +1341,8 @@ async fn test_request_vote_created_at_in_future() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload {
-            payload_store.async_write((digest, worker_id), 1).await;
+        for (digest, (worker_id, _)) in &certificate.header.payload {
+            payload_store.write(digest, worker_id).unwrap();
         }
     }
 
@@ -1238,7 +1356,7 @@ async fn test_request_vote_created_at_in_future() {
         .returning(|_| Ok(anemo::Response::new(())));
     let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
     let _worker_network = worker.new_network(routes);
-    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let address = worker_address.to_anemo_address().unwrap();
     let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
         .connect_with_peer_id(address, peer_id)
@@ -1256,7 +1374,7 @@ async fn test_request_vote_created_at_in_future() {
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
@@ -1286,7 +1404,7 @@ async fn test_request_vote_created_at_in_future() {
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
         .created_at(created_at)
-        .build(author.keypair())
+        .build()
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {

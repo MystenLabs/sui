@@ -2,295 +2,312 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::errors::IndexerError;
+use crate::models::owners::OwnerType;
 use crate::schema::objects;
-use crate::schema::objects::dsl::{
-    object_id as object_id_column, object_status as object_status_column, objects as objects_table,
-    version as version_column,
-};
-use crate::PgPoolConnection;
-
-use diesel::pg::upsert::excluded;
+use crate::schema::sql_types::BcsBytes;
+use diesel::deserialize::FromSql;
+use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
-use diesel::result::Error;
-use std::collections::BTreeMap;
-use sui_json_rpc_types::SuiEvent;
-use sui_types::object::Owner;
+use diesel::serialize::{Output, ToSql, WriteTuple};
+use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
+use diesel::SqlType;
+use diesel_derive_enum::DbEnum;
+use move_bytecode_utils::module_cache::GetModule;
+use std::{collections::BTreeMap, str::FromStr};
+use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
+use sui_types::digests::TransactionDigest;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::move_package::MovePackage;
+use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
 
-#[derive(Queryable, Debug, Identifiable)]
-#[diesel(primary_key(object_id))]
+const OBJECT: &str = "object";
+
+// NOTE: please add updating statement like below in pg_indexer_store.rs,
+// if new columns are added here:
+// objects::epoch.eq(excluded(objects::epoch))
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone)]
+#[diesel(table_name = objects, primary_key(object_id))]
 pub struct Object {
-    pub id: i64,
+    // epoch id in which this object got update.
+    pub epoch: i64,
+    // checkpoint seq number in which this object got update.
+    pub checkpoint: i64,
     pub object_id: String,
     pub version: i64,
-    pub owner_type: String,
+    pub object_digest: String,
+    pub owner_type: OwnerType,
     pub owner_address: Option<String>,
     pub initial_shared_version: Option<i64>,
-    pub package_id: String,
-    pub transaction_module: String,
-    pub object_type: Option<String>,
-    pub object_status: String,
+    pub previous_transaction: String,
+    pub object_type: String,
+    pub object_status: ObjectStatus,
+    pub has_public_transfer: bool,
+    pub storage_rebate: i64,
+    pub bcs: Vec<NamedBcsBytes>,
+}
+#[derive(SqlType, Debug, Clone)]
+#[diesel(sql_type = crate::schema::sql_types::BcsBytes)]
+pub struct NamedBcsBytes(pub String, pub Vec<u8>);
+
+impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
+        WriteTuple::<(VarChar, Bytea)>::write_tuple(&(self.0.clone(), self.1.clone()), out)
+    }
 }
 
-#[derive(Insertable, Debug)]
-#[diesel(table_name = objects)]
-pub struct NewObject {
+impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
+    fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
+        let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
+        Ok(NamedBcsBytes(name, data))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeletedObject {
+    // epoch id in which this object got deleted.
+    pub epoch: i64,
+    // checkpoint seq number in which this object got deleted.
+    pub checkpoint: i64,
     pub object_id: String,
     pub version: i64,
-    pub owner_type: String,
-    pub owner_address: Option<String>,
-    pub initial_shared_version: Option<i64>,
-    pub package_id: String,
-    pub transaction_module: String,
-    pub object_type: Option<String>,
-    pub object_status: String,
+    pub object_digest: String,
+    pub owner_type: OwnerType,
+    pub previous_transaction: String,
+    pub object_type: String,
+    pub object_status: ObjectStatus,
+    pub has_public_transfer: bool,
 }
 
-pub fn commit_new_objects(
-    pg_pool_conn: &mut PgPoolConnection,
-    new_objects: Vec<NewObject>,
-) -> Result<usize, IndexerError> {
-    if new_objects.is_empty() {
-        return Ok(0);
+impl From<DeletedObject> for Object {
+    fn from(o: DeletedObject) -> Self {
+        Object {
+            epoch: o.epoch,
+            checkpoint: o.checkpoint,
+            object_id: o.object_id,
+            version: o.version,
+            object_digest: o.object_digest,
+            owner_type: o.owner_type,
+            owner_address: None,
+            initial_shared_version: None,
+            previous_transaction: o.previous_transaction,
+            object_type: o.object_type,
+            object_status: o.object_status,
+            has_public_transfer: o.has_public_transfer,
+            storage_rebate: 0,
+            bcs: vec![],
+        }
     }
-    let new_obj_commit_result = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-            diesel::insert_into(objects::table)
-                .values(&new_objects)
-                .on_conflict(object_id_column)
-                .do_nothing()
-                .execute(conn)
-        });
-
-    new_obj_commit_result.map_err(|e| {
-        IndexerError::PostgresWriteError(format!(
-            "Failed inserting new objects into database with objects {:?} and error: {:?}",
-            new_objects, e
-        ))
-    })
 }
 
-pub fn commit_object_transfers(
-    pg_pool_conn: &mut PgPoolConnection,
-    object_transfers: Vec<NewObject>,
-) -> Result<usize, IndexerError> {
-    if object_transfers.is_empty() {
-        return Ok(0);
-    }
-
-    let obj_transfer_commit_result = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-            diesel::insert_into(objects::table)
-                .values(&object_transfers)
-                .on_conflict(object_id_column)
-                .do_nothing()
-                .execute(conn)
-        });
-
-    obj_transfer_commit_result.map_err(|e| {
-        IndexerError::PostgresWriteError(format!(
-            "Failed inserting object transfers into database with objects {:?} and error: {:?}",
-            object_transfers, e
-        ))
-    })
+#[derive(DbEnum, Debug, Clone, Copy)]
+#[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
+pub enum ObjectStatus {
+    Created,
+    Mutated,
+    Deleted,
+    Wrapped,
+    Unwrapped,
+    UnwrappedThenDeleted,
 }
 
-// Multi-row update is not supported by Diesel, see https://github.com/diesel-rs/diesel/discussions/2879
-// even though Postgres can do it via UPDATE ... FROM.
-// As a work-around, this function will read all related rows into memory, update the columns and upsert back to DB.
-pub fn commit_object_mutations(
-    pg_pool_conn: &mut PgPoolConnection,
-    object_mutations: Vec<(String, (i64, String))>,
-) -> Result<usize, IndexerError> {
-    if object_mutations.is_empty() {
-        return Ok(0);
+impl Object {
+    pub fn from(
+        epoch: &EpochId,
+        checkpoint: &CheckpointSequenceNumber,
+        status: &ObjectStatus,
+        o: &SuiObjectData,
+    ) -> Self {
+        let (owner_type, owner_address, initial_shared_version) =
+            owner_to_owner_info(&o.owner.expect("Expect the owner type to be non-empty"));
+
+        let (has_public_transfer, bcs) =
+            match o.bcs.clone().expect("Expect BCS data to be non-empty") {
+                SuiRawData::MoveObject(o) => (
+                    o.has_public_transfer,
+                    vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
+                ),
+                SuiRawData::Package(p) => (
+                    false,
+                    p.module_map
+                        .into_iter()
+                        .map(|(k, v)| NamedBcsBytes(k, v))
+                        .collect(),
+                ),
+            };
+
+        Object {
+            epoch: *epoch as i64,
+            checkpoint: *checkpoint as i64,
+            object_id: o.object_id.to_string(),
+            version: o.version.value() as i64,
+            object_digest: o.digest.base58_encode(),
+            owner_type,
+            owner_address,
+            initial_shared_version,
+            previous_transaction: o
+                .previous_transaction
+                .expect("Expect previous transaction to be non-empty")
+                .base58_encode(),
+            object_type: o
+                .type_
+                .as_ref()
+                .expect("Expect the object type to be non-empty")
+                .to_string(),
+            object_status: *status,
+            has_public_transfer,
+            storage_rebate: o.storage_rebate.unwrap_or_default() as i64,
+            bcs,
+        }
     }
-    let object_map = BTreeMap::from_iter(object_mutations.into_iter());
-    let object_ids: Vec<String> = object_map.keys().cloned().collect();
 
-    let obj_read_result: Result<Vec<Object>, Error> = pg_pool_conn
-        .build_transaction()
-        .read_only()
-        .run::<_, Error, _>(|conn| {
-        objects_table
-            .filter(object_id_column.eq_any(object_ids))
-            .load::<Object>(conn)
-    });
-
-    let objs = obj_read_result.map_err(|e| {
-        IndexerError::PostgresReadError(format!(
-            "Failed reading selected objects from database for object mutations with error: {:?}",
-            e
-        ))
-    })?;
-    let updated_new_objs: Vec<NewObject> = objs
-        .into_iter()
-        .map(|obj| {
-            let updates = object_map.get(&obj.object_id);
-            let (mut version, mut status) = (obj.version, obj.object_status);
-            if let Some((new_version, new_status)) = updates {
-                version = *new_version;
-                status = new_status.clone();
+    pub fn try_into_object_read(
+        self,
+        module_cache: &impl GetModule,
+    ) -> Result<ObjectRead, IndexerError> {
+        Ok(match self.object_status {
+            ObjectStatus::Deleted | ObjectStatus::UnwrappedThenDeleted => {
+                ObjectRead::Deleted(self.get_object_ref()?)
             }
-            NewObject {
-                object_id: obj.object_id,
-                version,
-                owner_type: obj.owner_type,
-                owner_address: obj.owner_address,
-                initial_shared_version: obj.initial_shared_version,
-                package_id: obj.package_id,
-                transaction_module: obj.transaction_module,
-                object_type: obj.object_type,
-                object_status: status,
+            _ => {
+                let oref = self.get_object_ref()?;
+                let object: sui_types::object::Object = self.try_into()?;
+                let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
+                ObjectRead::Exists(oref, object, layout)
             }
         })
-        .collect();
-
-    let obj_mutation_commit_result = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-            diesel::insert_into(objects::table)
-                .values(&updated_new_objs)
-                .on_conflict(object_id_column)
-                .do_update()
-                .set((
-                    version_column.eq(excluded(version_column)),
-                    object_status_column.eq(excluded(object_status_column)),
-                ))
-                .execute(conn)
-        });
-
-    obj_mutation_commit_result.map_err(|e| IndexerError::PostgresWriteError(
-        format!("Failed writing object mutations to Postgres DB with mutations updated_new_objs {:?} and error: {:?} ", updated_new_objs, e) ))
-}
-
-pub fn commit_object_deletions(
-    pg_pool_conn: &mut PgPoolConnection,
-    object_deletions: Vec<String>,
-) -> Result<usize, IndexerError> {
-    if object_deletions.is_empty() {
-        return Ok(0);
     }
 
-    let obj_deletion_commit_result = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-            diesel::update(objects::table.filter(object_id_column.eq_any(object_deletions.clone())))
-                .set(object_status_column.eq(DELETED_STATUS.to_string()))
-                .execute(conn)
-        });
+    pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
+        let object_id = self.object_id.parse()?;
+        let digest = self.object_digest.parse().map_err(|e| {
+            IndexerError::SerdeError(format!(
+                "Failed to parse object digest: {}, error: {}",
+                self.object_digest, e
+            ))
+        })?;
+        Ok((object_id, (self.version as u64).into(), digest))
+    }
+}
 
-    obj_deletion_commit_result.map_err(|e| {
-        IndexerError::PostgresWriteError(format!(
-            "Failed writing object deletions to Postgres DB with IDs {:?} and error: {:?} ",
-            object_deletions, e
-        ))
-    })
+impl TryFrom<Object> for sui_types::object::Object {
+    type Error = IndexerError;
+
+    fn try_from(o: Object) -> Result<Self, Self::Error> {
+        let object_type = ObjectType::from_str(&o.object_type)?;
+        let object_id = ObjectID::from_str(&o.object_id)?;
+        let version = SequenceNumber::from_u64(o.version as u64);
+        let owner = match o.owner_type {
+            OwnerType::AddressOwner => Owner::AddressOwner(SuiAddress::from_str(
+                &o.owner_address.expect("Owner address should not be empty."),
+            )?),
+            OwnerType::ObjectOwner => Owner::ObjectOwner(SuiAddress::from_str(
+                &o.owner_address.expect("Owner address should not be empty."),
+            )?),
+            OwnerType::Shared => Owner::Shared {
+                initial_shared_version: SequenceNumber::from_u64(
+                    o.initial_shared_version
+                        .expect("Shared version should not be empty.") as u64,
+                ),
+            },
+            OwnerType::Immutable => Owner::Immutable,
+        };
+        let previous_transaction = TransactionDigest::from_str(&o.previous_transaction)?;
+
+        Ok(match object_type {
+            ObjectType::Package => {
+                let modules = o
+                    .bcs
+                    .into_iter()
+                    .map(|NamedBcsBytes(name, bytes)| (name, bytes))
+                    .collect();
+                // Ok to unwrap, package size is safe guarded by the full node, we are not limiting size when reading back from DB.
+                let package = MovePackage::new(
+                    object_id,
+                    version,
+                    modules,
+                    u64::MAX,
+                    // TODO: these represent internal data needed for Move code execution and as
+                    // long as this MovePackage does not find its way to the Move adapter (which is
+                    // the assumption here) they can remain uninitialized though we could consider
+                    // storing them in the database and properly initializing here for completeness
+                    Vec::new(),
+                    BTreeMap::new(),
+                )
+                .unwrap();
+                sui_types::object::Object {
+                    data: Data::Package(package),
+                    owner,
+                    previous_transaction,
+                    storage_rebate: o.storage_rebate as u64,
+                }
+            }
+            // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
+            ObjectType::Struct(object_type) => unsafe {
+                let content = o
+                    .bcs
+                    .first()
+                    .expect("BCS content should not be empty")
+                    .1
+                    .clone();
+                // Ok to unwrap, object size is safe guarded by the full node, we are not limiting size when reading back from DB.
+                let object = MoveObject::new_from_execution_with_limit(
+                    object_type,
+                    o.has_public_transfer,
+                    version,
+                    content,
+                    u64::MAX,
+                )
+                .unwrap();
+
+                sui_types::object::Object {
+                    data: Data::Move(object),
+                    owner,
+                    previous_transaction,
+                    storage_rebate: o.storage_rebate as u64,
+                }
+            },
+        })
+    }
+}
+
+impl DeletedObject {
+    pub fn from(
+        epoch: &EpochId,
+        checkpoint: &CheckpointSequenceNumber,
+        oref: &SuiObjectRef,
+        previous_tx: &TransactionDigest,
+        status: ObjectStatus,
+    ) -> Self {
+        Self {
+            epoch: *epoch as i64,
+            checkpoint: *checkpoint as i64,
+            object_id: oref.object_id.to_string(),
+            version: oref.version.value() as i64,
+            // DeleteObject is use for upsert only, this value will not be inserted into the DB
+            // this dummy value is use to satisfy non null constrain.
+            object_digest: "DELETED".to_string(),
+            owner_type: OwnerType::AddressOwner,
+            previous_transaction: previous_tx.base58_encode(),
+            object_type: "DELETED".to_string(),
+            object_status: status,
+            has_public_transfer: false,
+        }
+    }
 }
 
 // return owner_type, owner_address and initial_shared_version
-fn owner_to_owner_info(owner: &Owner) -> (String, Option<String>, Option<i64>) {
+pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<String>, Option<i64>) {
     match owner {
-        Owner::AddressOwner(address) => {
-            ("AddressOwner".to_string(), Some(address.to_string()), None)
-        }
-        Owner::ObjectOwner(address) => ("ObjectOwner".to_string(), Some(address.to_string()), None),
+        Owner::AddressOwner(address) => (OwnerType::AddressOwner, Some(address.to_string()), None),
+        Owner::ObjectOwner(address) => (OwnerType::ObjectOwner, Some(address.to_string()), None),
         Owner::Shared {
             initial_shared_version,
         } => (
-            "Shared".to_string(),
+            OwnerType::Shared,
             None,
             Some(initial_shared_version.value() as i64),
         ),
-        Owner::Immutable => ("Immutable".to_string(), None, None),
+        Owner::Immutable => (OwnerType::Immutable, None, None),
     }
-}
-
-const CREATED_STATUS: &str = "CREATED";
-const MUTATED_STATUS: &str = "MUTATED";
-const TRANSFERRED_STATUS: &str = "TRANSFERRED";
-const DELETED_STATUS: &str = "DELETED";
-
-pub fn commit_objects_from_events(
-    pg_pool_conn: &mut PgPoolConnection,
-    events: Vec<SuiEvent>,
-) -> Result<(), IndexerError> {
-    let mut new_objects = vec![];
-    let mut object_transfers = vec![];
-    let mut object_mutations = vec![];
-    let mut object_deletions = vec![];
-
-    for e in events.into_iter() {
-        match e {
-            SuiEvent::NewObject {
-                package_id,
-                transaction_module,
-                sender: _,
-                recipient,
-                object_type,
-                object_id,
-                version,
-            } => {
-                let (owner_type, owner_address, initial_shared_version) =
-                    owner_to_owner_info(&recipient);
-                new_objects.push(NewObject {
-                    object_id: object_id.to_string(),
-                    version: version.value() as i64,
-                    owner_type,
-                    owner_address,
-                    initial_shared_version,
-                    package_id: package_id.to_string(),
-                    transaction_module,
-                    object_type: Some(object_type),
-                    object_status: CREATED_STATUS.to_string(),
-                });
-            }
-            SuiEvent::TransferObject {
-                package_id,
-                transaction_module,
-                sender: _,
-                recipient,
-                object_type,
-                object_id,
-                version,
-            } => {
-                let (owner_type, owner_address, initial_shared_version) =
-                    owner_to_owner_info(&recipient);
-                object_transfers.push(NewObject {
-                    object_id: object_id.to_string(),
-                    version: version.value() as i64,
-                    owner_type,
-                    owner_address,
-                    initial_shared_version,
-                    package_id: package_id.to_string(),
-                    transaction_module,
-                    object_type: Some(object_type),
-                    object_status: TRANSFERRED_STATUS.to_string(),
-                });
-            }
-            SuiEvent::MutateObject {
-                object_id, version, ..
-            } => {
-                object_mutations.push((
-                    object_id.to_string(),
-                    (version.value() as i64, MUTATED_STATUS.to_string()),
-                ));
-            }
-            SuiEvent::DeleteObject { object_id, .. } => {
-                object_deletions.push(object_id.to_string());
-            }
-            _ => {}
-        }
-    }
-    commit_new_objects(pg_pool_conn, new_objects)?;
-    commit_object_transfers(pg_pool_conn, object_transfers)?;
-    commit_object_mutations(pg_pool_conn, object_mutations)?;
-    commit_object_deletions(pg_pool_conn, object_deletions)?;
-
-    Ok(())
 }

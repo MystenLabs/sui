@@ -7,14 +7,14 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    BigInt, RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
 };
 
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
-#[open_rpc(namespace = "sui", tag = "Transaction Builder API")]
-#[rpc(server, client, namespace = "sui")]
+#[open_rpc(namespace = "unsafe", tag = "Transaction Builder API")]
+#[rpc(server, client, namespace = "unsafe")]
 pub trait TransactionBuilder {
     /// Create an unsigned transaction to transfer an object from one address to another. The object's type
     /// must allow public transfers
@@ -63,7 +63,7 @@ pub trait TransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -89,7 +89,7 @@ pub trait TransactionBuilder {
         /// the recipients' addresses, the length of this vector must be the same as amounts.
         recipients: Vec<SuiAddress>,
         /// the amounts to be transferred to recipients, following the same order
-        amounts: Vec<u64>,
+        amounts: Vec<BigInt>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
@@ -138,14 +138,16 @@ pub trait TransactionBuilder {
         execution_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create an unsigned transaction to publish Move module.
+    /// Create an unsigned transaction to publish a Move package.
     #[method(name = "publish")]
     async fn publish(
         &self,
         /// the transaction signer's Sui address
         sender: SuiAddress,
-        /// the compiled bytes of a move module, the
+        /// the compiled bytes of a Move package
         compiled_modules: Vec<Base64>,
+        /// a list of transitive dependency addresses that this set of modules depends on.
+        dependencies: Vec<ObjectID>,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
@@ -216,15 +218,15 @@ pub trait TransactionBuilder {
         txn_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Add delegated stake to a validator's staking pool using multiple coins and amount.
-    #[method(name = "requestAddDelegation")]
-    async fn request_add_delegation(
+    /// Add stake to a validator's staking pool using multiple coins and amount.
+    #[method(name = "requestAddStake")]
+    async fn request_add_stake(
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// Coin<SUI> or LockedCoin<SUI> object to delegate
+        /// Coin<SUI> or LockedCoin<SUI> object to stake
         coins: Vec<ObjectID>,
-        /// delegation amount
+        /// stake amount
         amount: Option<u64>,
         /// the validator's Sui address
         validator: SuiAddress,
@@ -234,14 +236,12 @@ pub trait TransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Withdraw a delegation from a validator's staking pool.
-    #[method(name = "requestWithdrawDelegation")]
-    async fn request_withdraw_delegation(
+    /// Withdraw stake from a validator's staking pool.
+    #[method(name = "requestWithdrawStake")]
+    async fn request_withdraw_stake(
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// Delegation object ID
-        delegation: ObjectID,
         /// StakedSui object ID
         staked_sui: ObjectID,
         /// gas object to be used in this transaction, node will pick one from the signer's possession if not provided

@@ -51,26 +51,32 @@ impl Prove {
                         (
                             sui_framework_address_concat_string("::transfer"),
                             "transfer_instances".to_string(),
+                            true,
                         ),
                         (
                             sui_framework_address_concat_string("::object"),
                             "object_instances".to_string(),
+                            true,
                         ),
                         (
                             sui_framework_address_concat_string("::event"),
                             "sui_event_instances".to_string(),
+                            true,
                         ),
                         (
                             sui_framework_address_concat_string("::types"),
                             "sui_types_instances".to_string(),
+                            true,
                         ),
                         (
                             sui_framework_address_concat_string("::dynamic_field"),
                             "dynamic_field_instances".to_string(),
+                            false,
                         ),
                         (
                             sui_framework_address_concat_string("::prover"),
                             "prover_instances".to_string(),
+                            true,
                         ),
                     ],
                 });

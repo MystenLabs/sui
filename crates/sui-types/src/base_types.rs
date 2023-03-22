@@ -2,34 +2,55 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::coin::Coin;
+use crate::coin::CoinMetadata;
+use crate::coin::LockedCoin;
+use crate::coin::COIN_MODULE_NAME;
+use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
 use crate::crypto::{
-    AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SignatureScheme,
-    SuiPublicKey, SuiSignature,
+    AuthorityPublicKeyBytes, DefaultHash, KeypairTraits, PublicKey, SignatureScheme, SuiPublicKey,
+    SuiSignature,
 };
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
+use crate::dynamic_field::DynamicFieldInfo;
+use crate::dynamic_field::DynamicFieldType;
 use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::error::{ExecutionError, SuiResult};
 use crate::gas_coin::GasCoin;
+use crate::gas_coin::GAS;
+use crate::governance::StakedSui;
+use crate::governance::STAKED_SUI_STRUCT_NAME;
+use crate::governance::STAKING_POOL_MODULE_NAME;
+use crate::messages::Transaction;
+use crate::messages::TransactionEffects;
+use crate::messages::TransactionEffectsAPI;
+use crate::messages::VerifiedTransaction;
+use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
+use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
+use crate::SUI_FRAMEWORK_ADDRESS;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::hash::{HashFunction, Sha3_256};
+use fastcrypto::hash::HashFunction;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shared_crypto::intent::HashingIntentScope;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
@@ -88,13 +109,230 @@ pub fn random_object_ref() -> ObjectRef {
     )
 }
 
+/// Wrapper around StructTag with a space-efficient representation for common types like coins
+/// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win
+#[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Deserialize, Serialize, Hash)]
+pub enum MoveObjectType {
+    /// A type that is not 0x2::coin::Coin<T>
+    Other(StructTag),
+    /// A SUI coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
+    GasCoin,
+    /// A record of a staked SUI coin (i.e., 0x3::staking_pool::StakedSui)
+    StakedSui,
+    /// A non-SUI coin type (i.e., 0x2::coin::Coin<T> where T != 0x2::sui::SUI)
+    Coin(TypeTag),
+    // NOTE: if adding a new type here, and there are existing on-chain objects of that
+    // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
+    // to make sure the new type and Other(_) are interpreted consistently.
+}
+
+impl MoveObjectType {
+    pub fn address(&self) -> AccountAddress {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => {
+                SUI_FRAMEWORK_ADDRESS
+            }
+            MoveObjectType::Other(s) => s.address,
+        }
+    }
+
+    pub fn module(&self) -> &IdentStr {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => COIN_MODULE_NAME,
+            MoveObjectType::StakedSui => STAKING_POOL_MODULE_NAME,
+            MoveObjectType::Other(s) => &s.module,
+        }
+    }
+
+    pub fn name(&self) -> &IdentStr {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => COIN_STRUCT_NAME,
+            MoveObjectType::StakedSui => STAKED_SUI_STRUCT_NAME,
+            MoveObjectType::Other(s) => &s.name,
+        }
+    }
+
+    pub fn type_params(&self) -> Vec<TypeTag> {
+        match self {
+            MoveObjectType::GasCoin => vec![GAS::type_tag()],
+            MoveObjectType::StakedSui => vec![],
+            MoveObjectType::Coin(inner) => vec![inner.clone()],
+            MoveObjectType::Other(s) => s.type_params.clone(),
+        }
+    }
+
+    pub fn into_type_params(self) -> Vec<TypeTag> {
+        match self {
+            MoveObjectType::GasCoin => vec![GAS::type_tag()],
+            MoveObjectType::StakedSui => vec![],
+            MoveObjectType::Coin(inner) => vec![inner],
+            MoveObjectType::Other(s) => s.type_params,
+        }
+    }
+
+    pub fn module_id(&self) -> ModuleId {
+        ModuleId::new(self.address(), self.module().to_owned())
+    }
+
+    pub fn size_for_gas_metering(&self) -> usize {
+        // unwraps safe because a `StructTag` cannot fail to serialize
+        match self {
+            MoveObjectType::GasCoin => 1,
+            MoveObjectType::StakedSui => 1,
+            MoveObjectType::Coin(inner) => bcs::serialized_size(inner).unwrap() + 1,
+            MoveObjectType::Other(s) => bcs::serialized_size(s).unwrap() + 1,
+        }
+    }
+
+    /// Return true if `self` is 0x2::coin::Coin<T> for some T (note: T can be SUI)
+    pub fn is_coin(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => true,
+            MoveObjectType::StakedSui | MoveObjectType::Other(_) => false,
+        }
+    }
+
+    /// Return true if `self` is 0x2::coin::Coin<0x2::sui::SUI>
+    pub fn is_gas_coin(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin => true,
+            MoveObjectType::StakedSui | MoveObjectType::Coin(_) | MoveObjectType::Other(_) => false,
+        }
+    }
+
+    pub fn is_staked_sui(&self) -> bool {
+        match self {
+            MoveObjectType::StakedSui => true,
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) | MoveObjectType::Other(_) => false,
+        }
+    }
+
+    pub fn is_locked_coin(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
+            MoveObjectType::Other(s) => LockedCoin::is_locked_coin(s),
+        }
+    }
+
+    pub fn is_coin_metadata(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
+            MoveObjectType::Other(s) => CoinMetadata::is_coin_metadata(s),
+        }
+    }
+
+    pub fn is_dynamic_field(&self) -> bool {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
+            MoveObjectType::Other(s) => DynamicFieldInfo::is_dynamic_field(s),
+        }
+    }
+
+    pub fn try_extract_field_name(&self, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
+        match self {
+            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => {
+                Err(SuiError::ObjectDeserializationError {
+                    error: "Error extracting dynamic object name from Coin object".to_string(),
+                })
+            }
+            MoveObjectType::Other(s) => DynamicFieldInfo::try_extract_field_name(s, type_),
+        }
+    }
+
+    pub fn is(&self, s: &StructTag) -> bool {
+        match self {
+            MoveObjectType::GasCoin => GasCoin::is_gas_coin(s),
+            MoveObjectType::StakedSui => StakedSui::is_staked_sui(s),
+            MoveObjectType::Coin(inner) => {
+                Coin::is_coin(s) && s.type_params.len() == 1 && inner == &s.type_params[0]
+            }
+            MoveObjectType::Other(o) => s == o,
+        }
+    }
+
+    pub fn matches_type_fuzzy_generics(&self, other_type: &Self) -> bool {
+        self.address() == other_type.address()
+            && self.module() == other_type.module()
+            && self.name() == other_type.name()
+            // MUSTFIX: is_empty() looks like a bug here. I think the intention is to support "fuzzy matching" where `get_move_objects`
+            // leaves type_params unspecified, but I don't actually see any call sites taking advantage of this
+            && (self.type_params().is_empty() || self.type_params() == other_type.type_params())
+    }
+}
+
+impl From<StructTag> for MoveObjectType {
+    fn from(mut s: StructTag) -> Self {
+        if GasCoin::is_gas_coin(&s) {
+            MoveObjectType::GasCoin
+        } else if Coin::is_coin(&s) {
+            // unwrap safe because a coin has exactly one type parameter
+            MoveObjectType::Coin(s.type_params.pop().unwrap())
+        } else if StakedSui::is_staked_sui(&s) {
+            MoveObjectType::StakedSui
+        } else {
+            MoveObjectType::Other(s)
+        }
+    }
+}
+
+impl From<MoveObjectType> for StructTag {
+    fn from(o: MoveObjectType) -> Self {
+        match o {
+            MoveObjectType::GasCoin => GasCoin::type_(),
+            MoveObjectType::StakedSui => StakedSui::type_(),
+            MoveObjectType::Coin(inner) => Coin::type_(inner),
+            MoveObjectType::Other(s) => s,
+        }
+    }
+}
+
+impl From<MoveObjectType> for TypeTag {
+    fn from(o: MoveObjectType) -> TypeTag {
+        let s: StructTag = o.into();
+        TypeTag::Struct(Box::new(s))
+    }
+}
+
 /// Type of a Sui object
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum ObjectType {
     /// Move package containing one or more bytecode modules
     Package,
-    /// A Move struct of the given
-    Struct(StructTag),
+    /// A Move struct of the given type
+    Struct(MoveObjectType),
+}
+
+impl From<&Object> for ObjectType {
+    fn from(o: &Object) -> Self {
+        o.data
+            .type_()
+            .map(|t| ObjectType::Struct(t.clone()))
+            .unwrap_or(ObjectType::Package)
+    }
+}
+
+impl TryFrom<ObjectType> for StructTag {
+    type Error = anyhow::Error;
+
+    fn try_from(o: ObjectType) -> Result<Self, anyhow::Error> {
+        match o {
+            ObjectType::Package => Err(anyhow!("Cannot create StructTag from Package")),
+            ObjectType::Struct(move_object_type) => Ok(move_object_type.into()),
+        }
+    }
+}
+
+impl FromStr for ObjectType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.to_lowercase() == PACKAGE {
+            Ok(ObjectType::Package)
+        } else {
+            let tag = parse_sui_struct_tag(s)?;
+            Ok(ObjectType::Struct(MoveObjectType::from(tag)))
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -110,26 +348,21 @@ pub struct ObjectInfo {
 impl ObjectInfo {
     pub fn new(oref: &ObjectRef, o: &Object) -> Self {
         let (object_id, version, digest) = *oref;
-        let type_ = o
-            .data
-            .type_()
-            .map(|tag| ObjectType::Struct(tag.clone()))
-            .unwrap_or(ObjectType::Package);
         Self {
             object_id,
             version,
             digest,
-            type_,
+            type_: o.into(),
             owner: o.owner,
             previous_transaction: o.previous_transaction,
         }
     }
 }
-
+const PACKAGE: &str = "package";
 impl ObjectType {
     pub fn is_gas_coin(&self) -> bool {
         match self {
-            ObjectType::Struct(s) => s == &GasCoin::type_(),
+            ObjectType::Struct(s) => s.is_gas_coin(),
             ObjectType::Package => false,
         }
     }
@@ -220,54 +453,32 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&AuthorityPublicKeyBytes> for SuiAddress {
-    fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
-        let mut hasher = Sha3_256::default();
-        hasher.update([AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
-        hasher.update(pkb);
-        let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
-    }
-}
-
 impl<T: SuiPublicKey> From<&T> for SuiAddress {
     fn from(pk: &T) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([T::SIGNATURE_SCHEME.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
 impl From<&PublicKey> for SuiAddress {
     fn from(pk: &PublicKey) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([pk.flag()]);
         hasher.update(pk);
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
 /// A MultiSig address is the first 20 bytes of the hash of
 /// `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n`
-/// of all participating public keys and its weight.  
+/// of all participating public keys and its weight.
 impl From<MultiSigPublicKey> for SuiAddress {
     fn from(multisig_pk: MultiSigPublicKey) -> Self {
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::MultiSig.flag()]);
         hasher.update(multisig_pk.threshold().to_le_bytes());
         multisig_pk.pubkeys().iter().for_each(|(pk, w)| {
@@ -276,11 +487,7 @@ impl From<MultiSigPublicKey> for SuiAddress {
             hasher.update(w.to_le_bytes());
         });
         let g_arr = hasher.finalize();
-
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        // OK to access slice because Sha3_256 should never be shorter than SUI_ADDRESS_LENGTH.
-        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
-        SuiAddress(res)
+        SuiAddress(g_arr.digest)
     }
 }
 
@@ -343,6 +550,60 @@ impl ExecutionDigests {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
+pub struct ExecutionData {
+    pub transaction: Transaction,
+    pub effects: TransactionEffects,
+}
+
+impl ExecutionData {
+    pub fn new(transaction: Transaction, effects: TransactionEffects) -> ExecutionData {
+        debug_assert_eq!(transaction.digest(), effects.transaction_digest());
+        Self {
+            transaction,
+            effects,
+        }
+    }
+
+    pub fn digests(&self) -> ExecutionDigests {
+        self.effects.execution_digests()
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct VerifiedExecutionData {
+    pub transaction: VerifiedTransaction,
+    pub effects: TransactionEffects,
+}
+
+impl VerifiedExecutionData {
+    pub fn new(transaction: VerifiedTransaction, effects: TransactionEffects) -> Self {
+        debug_assert_eq!(transaction.digest(), effects.transaction_digest());
+        Self {
+            transaction,
+            effects,
+        }
+    }
+
+    pub fn new_unchecked(data: ExecutionData) -> Self {
+        Self {
+            transaction: VerifiedTransaction::new_unchecked(data.transaction),
+            effects: data.effects,
+        }
+    }
+
+    pub fn into_inner(self) -> ExecutionData {
+        ExecutionData {
+            transaction: self.transaction.into_inner(),
+            effects: self.effects,
+        }
+    }
+
+    pub fn digests(&self) -> ExecutionDigests {
+        self.effects.execution_digests()
+    }
+}
+
 pub const STD_OPTION_MODULE_NAME: &IdentStr = ident_str!("option");
 pub const STD_OPTION_STRUCT_NAME: &IdentStr = ident_str!("Option");
 
@@ -363,6 +624,8 @@ pub struct TxContext {
     digest: Vec<u8>,
     /// The current epoch number
     epoch: EpochId,
+    /// Timestamp that the epoch started at
+    epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
 }
@@ -373,6 +636,7 @@ impl TxContext {
             sender: AccountAddress::new(sender.0),
             digest: digest.into_inner().to_vec(),
             epoch: epoch_data.epoch_id(),
+            epoch_timestamp_ms: epoch_data.epoch_start_timestamp(),
             ids_created: 0,
         }
     }
@@ -411,7 +675,10 @@ impl TxContext {
             || self.digest != other.digest
             || other.ids_created < self.ids_created
         {
-            return Err(ExecutionErrorKind::InvalidTransactionUpdate.into());
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::InvariantViolation,
+                "Immutable fields for TxContext changed",
+            ));
         }
         self.ids_created = other.ids_created;
         Ok(())
@@ -513,9 +780,19 @@ impl SequenceNumber {
         SequenceNumber(u)
     }
 
+    pub fn increment(&mut self) {
+        assert_ne!(self.0, u64::MAX);
+        self.0 += 1;
+    }
+
     pub fn increment_to(&mut self, next: SequenceNumber) {
         debug_assert!(*self < next, "Not an increment: {} to {}", self, next);
         *self = next;
+    }
+
+    pub fn decrement(&mut self) {
+        assert_ne!(self.0, 0);
+        self.0 -= 1;
     }
 
     pub fn decrement_to(&mut self, prev: SequenceNumber) {
@@ -568,6 +845,11 @@ impl ObjectID {
         Self(AccountAddress::new(obj_id))
     }
 
+    /// Const fn variant of <ObjectID as From<AccountAddress>>::from
+    pub const fn from_address(addr: AccountAddress) -> Self {
+        Self(addr)
+    }
+
     /// Random ObjectID
     pub fn random() -> Self {
         Self::from(AccountAddress::random())
@@ -613,15 +895,14 @@ impl ObjectID {
     /// Create an ObjectID from `TransactionDigest` and `creation_num`.
     /// Caller is responsible for ensuring that `creation_num` is fresh
     pub fn derive_id(digest: TransactionDigest, creation_num: u64) -> Self {
-        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
-
-        let mut hasher = Sha3_256::default();
+        let mut hasher = DefaultHash::default();
+        hasher.update([HashingIntentScope::RegularObjectId as u8]);
         hasher.update(digest);
         hasher.update(creation_num.to_le_bytes());
         let hash = hasher.finalize();
 
         // truncate into an ObjectID.
-        // OK to access slice because Sha3_256 should never be shorter than ObjectID::LENGTH.
+        // OK to access slice because digest should never be shorter than ObjectID::LENGTH.
         ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap()
     }
 
@@ -690,6 +971,12 @@ impl ObjectID {
         }
         Ok(ret)
     }
+
+    /// Returns the full hex string with 0x prefix without removing trailing 0s. Prefer this
+    /// over [fn to_hex_literal] if the string needs to be fully preserved.
+    pub fn to_hex_uncompressed(&self) -> String {
+        format!("0x{:x}", self)
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, thiserror::Error)]
@@ -755,10 +1042,17 @@ impl fmt::Display for ObjectID {
     }
 }
 
+impl fmt::Display for MoveObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        let s: StructTag = self.clone().into();
+        write!(f, "{}", s)
+    }
+}
+
 impl fmt::Display for ObjectType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ObjectType::Package => write!(f, "Package"),
+            ObjectType::Package => write!(f, "{}", PACKAGE),
             ObjectType::Struct(t) => write!(f, "{}", t),
         }
     }

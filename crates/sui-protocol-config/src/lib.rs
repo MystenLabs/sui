@@ -3,15 +3,22 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
-pub const MIN_PROTOCOL_VERSION: u64 = 1;
-pub const MAX_PROTOCOL_VERSION: u64 = 1;
+const MIN_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 1;
 
-#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+// Record history of protocol version allocations here:
+//
+// Version 1: Original version.
+
+#[derive(
+    Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
+)]
 pub struct ProtocolVersion(u64);
 
 impl ProtocolVersion {
@@ -28,13 +35,13 @@ impl ProtocolVersion {
 
     // We create one additional "fake" version in simulator builds so that we can test upgrades.
     #[cfg(msim)]
-    const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
+    pub const MAX_ALLOWED: Self = Self(MAX_PROTOCOL_VERSION + 1);
 
     pub fn new(v: u64) -> Self {
         Self(v)
     }
 
-    pub fn as_u64(&self) -> u64 {
+    pub const fn as_u64(&self) -> u64 {
         self.0
     }
 
@@ -42,6 +49,12 @@ impl ProtocolVersion {
     // universally appropriate default value.
     pub fn max() -> Self {
         Self::MAX
+    }
+}
+
+impl From<u64> for ProtocolVersion {
+    fn from(v: u64) -> Self {
+        Self::new(v)
     }
 }
 
@@ -62,10 +75,10 @@ impl std::ops::Add<u64> for ProtocolVersion {
 /// Models the set of protocol versions supported by a validator.
 /// The `sui-node` binary will always use the SYSTEM_DEFAULT constant, but for testing we need
 /// to be able to inject arbitrary versions into SuiNode.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SupportedProtocolVersions {
-    min: ProtocolVersion,
-    max: ProtocolVersion,
+    pub min: ProtocolVersion,
+    pub max: ProtocolVersion,
 }
 
 impl SupportedProtocolVersions {
@@ -74,15 +87,33 @@ impl SupportedProtocolVersions {
         max: ProtocolVersion::MAX,
     };
 
-    pub fn new_for_testing(min: u64, max: u64) -> Self {
+    /// Use by VersionedProtocolMessage implementors to describe in which range of versions a
+    /// message variant is supported.
+    pub fn new_for_message(min: u64, max: u64) -> Self {
         let min = ProtocolVersion::new(min);
         let max = ProtocolVersion::new(max);
+        Self { min, max }
+    }
+
+    pub fn new_for_testing(min: u64, max: u64) -> Self {
+        let min = min.into();
+        let max = max.into();
         Self { min, max }
     }
 
     pub fn is_version_supported(&self, v: ProtocolVersion) -> bool {
         v.0 >= self.min.0 && v.0 <= self.max.0
     }
+}
+
+pub struct Error(pub String);
+
+/// Records on/off feature flags that may vary at each protocol version.
+#[derive(Default, Clone, Serialize)]
+struct FeatureFlags {
+    // Add feature flags here, e.g.:
+    // new_protocol_feature: bool,
+    package_upgrades: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -102,8 +133,50 @@ impl SupportedProtocolVersions {
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
-#[derive(Clone)]
+#[skip_serializing_none]
+#[derive(Clone, Serialize)]
 pub struct ProtocolConfig {
+    pub version: ProtocolVersion,
+
+    feature_flags: FeatureFlags,
+
+    // ==== Transaction input limits ====
+    /// Maximum serialized size of a transaction (in bytes).
+    // NOTE: This value should be kept in sync with the corresponding value in
+    // sdk/typescript/src/builder/TransactionData.ts
+    max_tx_size_bytes: Option<u64>,
+
+    /// Maximum number of input objects.
+    max_input_objects: Option<u64>,
+
+    /// Maximum size of serialized transaction effects.
+    max_serialized_tx_effects_size_bytes: Option<u64>,
+
+    /// Maximum size of serialized transaction effects for system transactions.
+    max_serialized_tx_effects_size_bytes_system_tx: Option<u64>,
+
+    /// Maximum number of gas payment objects for a transaction.
+    max_gas_payment_objects: Option<u32>,
+
+    /// Maximum number of modules in a Publish transaction.
+    max_modules_in_publish: Option<u32>,
+
+    /// Maximum number of arguments in a move call or a ProgrammableTransaction's
+    /// TransferObjects command.
+    max_arguments: Option<u32>,
+
+    /// Maximum number of total type arguments, computed recursively.
+    max_type_arguments: Option<u32>,
+
+    /// Maximum depth of an individual type argument.
+    max_type_argument_depth: Option<u32>,
+
+    /// Maximum size of a Pure CallArg.
+    max_pure_argument_size: Option<u32>,
+
+    /// Maximum number of Commands in a ProgrammableTransaction.
+    max_programmable_tx_commands: Option<u32>,
+
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
@@ -119,52 +192,77 @@ pub struct ProtocolConfig {
     max_tx_gas: Option<u64>,
 
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
-    max_loop_depth: Option<usize>,
+    max_loop_depth: Option<u64>,
 
     /// Maximum number of type arguments that can be bound to generic type parameters. Enforced by the Move bytecode verifier.
-    max_generic_instantiation_length: Option<usize>,
+    max_generic_instantiation_length: Option<u64>,
 
     /// Maximum number of parameters that a Move function can have. Enforced by the Move bytecode verifier.
-    max_function_parameters: Option<usize>,
+    max_function_parameters: Option<u64>,
 
     /// Maximum number of basic blocks that a Move function can have. Enforced by the Move bytecode verifier.
-    max_basic_blocks: Option<usize>,
+    max_basic_blocks: Option<u64>,
 
     /// Maximum stack size value. Enforced by the Move bytecode verifier.
-    max_value_stack_size: Option<usize>,
+    max_value_stack_size: Option<u64>,
 
     /// Maximum number of "type nodes", a metric for how big a SignatureToken will be when expanded into a fully qualified type. Enforced by the Move bytecode verifier.
-    max_type_nodes: Option<usize>,
+    max_type_nodes: Option<u64>,
 
     /// Maximum number of push instructions in one function. Enforced by the Move bytecode verifier.
-    max_push_size: Option<usize>,
+    max_push_size: Option<u64>,
 
     /// Maximum number of struct definitions in a module. Enforced by the Move bytecode verifier.
-    max_struct_definitions: Option<usize>,
+    max_struct_definitions: Option<u64>,
 
     /// Maximum number of function definitions in a module. Enforced by the Move bytecode verifier.
-    max_function_definitions: Option<usize>,
+    max_function_definitions: Option<u64>,
 
     /// Maximum number of fields allowed in a struct definition. Enforced by the Move bytecode verifier.
-    max_fields_in_struct: Option<usize>,
+    max_fields_in_struct: Option<u64>,
 
     /// Maximum dependency depth. Enforced by the Move linker when loading dependent modules.
-    max_dependency_depth: Option<usize>,
+    max_dependency_depth: Option<u64>,
 
     /// Maximum number of Move events that a single transaction can emit. Enforced by the VM during execution.
     max_num_event_emit: Option<u64>,
 
     /// Maximum number of new IDs that a single transaction can create. Enforced by the VM during execution.
-    max_num_new_move_object_ids: Option<usize>,
+    max_num_new_move_object_ids: Option<u64>,
+
+    /// Maximum number of new IDs that a single system transaction can create. Enforced by the VM during execution.
+    max_num_new_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum number of IDs that a single transaction can delete. Enforced by the VM during execution.
-    max_num_deleted_move_object_ids: Option<usize>,
+    max_num_deleted_move_object_ids: Option<u64>,
+
+    /// Maximum number of IDs that a single system transaction can delete. Enforced by the VM during execution.
+    max_num_deleted_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum number of IDs that a single transaction can transfer. Enforced by the VM during execution.
-    max_num_transfered_move_object_ids: Option<usize>,
+    max_num_transferred_move_object_ids: Option<u64>,
+
+    /// Maximum number of IDs that a single system transaction can transfer. Enforced by the VM during execution.
+    max_num_transferred_move_object_ids_system_tx: Option<u64>,
 
     /// Maximum size of a Move user event. Enforced by the VM during execution.
     max_event_emit_size: Option<u64>,
+
+    /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
+    max_move_vector_len: Option<u64>,
+
+    // === Object runtime internal operation limits ====
+    /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_cached_objects: Option<u64>,
+
+    /// Maximum number of cached objects in the object runtime ObjectStore in system transaction. Enforced by object runtime during execution
+    object_runtime_max_num_cached_objects_system_tx: Option<u64>,
+
+    /// Maximum number of stored objects accessed by object runtime ObjectStore. Enforced by object runtime during execution
+    object_runtime_max_num_store_entries: Option<u64>,
+
+    /// Maximum number of stored objects accessed by object runtime ObjectStore in system transaction. Enforced by object runtime during execution
+    object_runtime_max_num_store_entries_system_tx: Option<u64>,
 
     // === Execution gas costs ====
     // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
@@ -227,24 +325,182 @@ pub struct ProtocolConfig {
     /// In basis point.
     reward_slashing_rate: Option<u64>,
 
-    /// The stake subsidy we mint each epoch is 0.01% of the total stake.
-    /// In basis point.
-    stake_subsidy_rate: Option<u64>,
-
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
 
     /// === Core Protocol ===
 
     /// Max number of transactions per checkpoint.
-    /// Note that this is constant and not a config as validators must have this set to the same value, otherwise they *will* fork
-    max_transactions_per_checkpoint: Option<usize>,
+    /// Note that this is a protocol constant and not a config as validators must have this set to
+    /// the same value, otherwise they *will* fork.
+    max_transactions_per_checkpoint: Option<u64>,
+
+    /// Max size of a checkpoint in bytes.
+    /// Note that this is a protocol constant and not a config as validators must have this set to
+    /// the same value, otherwise they *will* fork.
+    max_checkpoint_size_bytes: Option<u64>,
+
+    /// A protocol upgrade always requires 2f+1 stake to agree. We support a buffer of additional
+    /// stake (as a fraction of f, expressed in basis points) that is required before an upgrade
+    /// can happen automatically. 10000bps would indicate that complete unanimity is required (all
+    /// 3f+1 must vote), while 0bps would indicate that 2f+1 is sufficient.
+    buffer_stake_for_protocol_upgrade_bps: Option<u64>,
+
+    // === Native Function Costs ===
+
+    // `address` module
+    // Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
+    address_from_bytes_cost_base: Option<u64>,
+    // Cost params for the Move native function `address::to_u256(address): u256`
+    address_to_u256_cost_base: Option<u64>,
+    // Cost params for the Move native function `address::from_u256(u256): address`
+    address_from_u256_cost_base: Option<u64>,
+
+    // `dynamic_field` module
+    // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
+    dynamic_field_hash_type_and_key_cost_base: Option<u64>,
+    dynamic_field_hash_type_and_key_type_cost_per_byte: Option<u64>,
+    dynamic_field_hash_type_and_key_value_cost_per_byte: Option<u64>,
+    dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Option<u64>,
+    // Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
+    dynamic_field_add_child_object_cost_base: Option<u64>,
+    dynamic_field_add_child_object_type_cost_per_byte: Option<u64>,
+    dynamic_field_add_child_object_value_cost_per_byte: Option<u64>,
+    dynamic_field_add_child_object_struct_tag_cost_per_byte: Option<u64>,
+    // Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
+    dynamic_field_borrow_child_object_cost_base: Option<u64>,
+    dynamic_field_borrow_child_object_child_ref_cost_per_byte: Option<u64>,
+    dynamic_field_borrow_child_object_type_cost_per_byte: Option<u64>,
+    // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
+    dynamic_field_remove_child_object_cost_base: Option<u64>,
+    dynamic_field_remove_child_object_child_cost_per_byte: Option<u64>,
+    dynamic_field_remove_child_object_type_cost_per_byte: Option<u64>,
+    // Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
+    dynamic_field_has_child_object_cost_base: Option<u64>,
+    // Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
+    dynamic_field_has_child_object_with_ty_cost_base: Option<u64>,
+    dynamic_field_has_child_object_with_ty_type_cost_per_byte: Option<u64>,
+    dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Option<u64>,
+
+    // `event` module
+    // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+    event_emit_cost_base: Option<u64>,
+    event_emit_value_size_derivation_cost_per_byte: Option<u64>,
+    event_emit_tag_size_derivation_cost_per_byte: Option<u64>,
+    event_emit_output_cost_per_byte: Option<u64>,
+
+    //  `object` module
+    // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
+    object_borrow_uid_cost_base: Option<u64>,
+    // Cost params for the Move native function `delete_impl(id: address)`
+    object_delete_impl_cost_base: Option<u64>,
+    // Cost params for the Move native function `record_new_uid(id: address)`
+    object_record_new_uid_cost_base: Option<u64>,
+
+    // Transfer
+    // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+    transfer_transfer_internal_cost_base: Option<u64>,
+    // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
+    transfer_freeze_object_cost_base: Option<u64>,
+    // Cost params for the Move native function `share_object<T: key>(obj: T)`
+    transfer_share_object_cost_base: Option<u64>,
+
+    // TxContext
+    // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+    tx_context_derive_id_cost_base: Option<u64>,
+
+    // Types
+    // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
+    types_is_one_time_witness_cost_base: Option<u64>,
+    types_is_one_time_witness_type_tag_cost_per_byte: Option<u64>,
+    types_is_one_time_witness_type_cost_per_byte: Option<u64>,
+
+    // Validator
+    // Cost params for the Move native function `validate_metadata_bcs(metadata: vector<u8>)`
+    validator_validate_metadata_cost_base: Option<u64>,
+    validator_validate_metadata_data_cost_per_byte: Option<u64>,
+
+    // Crypto natives
+    // ed25519
+    ed25519_ed25519_verify_cost_base: Option<u64>,
+    ed25519_ed25519_verify_msg_cost_per_byte: Option<u64>,
+    ed25519_ed25519_verify_msg_cost_per_block: Option<u64>,
+
+    // hash::blake2b256
+    hash_blake2b256_cost_base: Option<u64>,
+    hash_blake2b256_data_cost_per_byte: Option<u64>,
+    hash_blake2b256_data_cost_per_block: Option<u64>,
+    // hash::keccak256
+    hash_keccak256_cost_base: Option<u64>,
+    hash_keccak256_data_cost_per_byte: Option<u64>,
+    hash_keccak256_data_cost_per_block: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
 
+// feature flags
+impl ProtocolConfig {
+    // Add checks for feature flag support here, e.g.:
+    // pub fn check_new_protocol_feature_supported(&self) -> Result<(), Error> {
+    //     if self.feature_flags.new_protocol_feature_supported {
+    //         Ok(())
+    //     } else {
+    //         Err(Error(format!(
+    //             "new_protocol_feature is not supported at {:?}",
+    //             self.version
+    //         )))
+    //     }
+    // }
+
+    pub fn check_package_upgrades_supported(&self) -> Result<(), Error> {
+        if self.feature_flags.package_upgrades {
+            Ok(())
+        } else {
+            Err(Error(format!(
+                "package upgrades are not supported at {:?}",
+                self.version
+            )))
+        }
+    }
+}
+
 // getters
 impl ProtocolConfig {
+    pub fn max_tx_size_bytes(&self) -> u64 {
+        self.max_tx_size_bytes.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_input_objects(&self) -> u64 {
+        self.max_input_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_serialized_tx_effects_size_bytes_system_tx(&self) -> u64 {
+        self.max_serialized_tx_effects_size_bytes_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_gas_payment_objects(&self) -> u32 {
+        self.max_gas_payment_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_modules_in_publish(&self) -> u32 {
+        self.max_modules_in_publish.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_arguments(&self) -> u32 {
+        self.max_arguments.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_type_arguments(&self) -> u32 {
+        self.max_type_arguments.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_type_argument_depth(&self) -> u32 {
+        self.max_type_argument_depth.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_pure_argument_size(&self) -> u32 {
+        self.max_pure_argument_size.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_programmable_tx_commands(&self) -> u32 {
+        self.max_programmable_tx_commands.expect(CONSTANT_ERR_MSG)
+    }
     pub fn move_binary_format_version(&self) -> u32 {
         self.move_binary_format_version.expect(CONSTANT_ERR_MSG)
     }
@@ -257,56 +513,87 @@ impl ProtocolConfig {
     pub fn max_tx_gas(&self) -> u64 {
         self.max_tx_gas.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_loop_depth(&self) -> usize {
+    pub fn max_loop_depth(&self) -> u64 {
         self.max_loop_depth.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_generic_instantiation_length(&self) -> usize {
+    pub fn max_generic_instantiation_length(&self) -> u64 {
         self.max_generic_instantiation_length
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_function_parameters(&self) -> usize {
+    pub fn max_function_parameters(&self) -> u64 {
         self.max_function_parameters.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_basic_blocks(&self) -> usize {
+    pub fn max_basic_blocks(&self) -> u64 {
         self.max_basic_blocks.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_value_stack_size(&self) -> usize {
+    pub fn max_value_stack_size(&self) -> u64 {
         self.max_value_stack_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_type_nodes(&self) -> usize {
+    pub fn max_type_nodes(&self) -> u64 {
         self.max_type_nodes.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_push_size(&self) -> usize {
+    pub fn max_push_size(&self) -> u64 {
         self.max_push_size.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_struct_definitions(&self) -> usize {
+    pub fn max_struct_definitions(&self) -> u64 {
         self.max_struct_definitions.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_function_definitions(&self) -> usize {
+    pub fn max_function_definitions(&self) -> u64 {
         self.max_function_definitions.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_fields_in_struct(&self) -> usize {
+    pub fn max_fields_in_struct(&self) -> u64 {
         self.max_fields_in_struct.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_dependency_depth(&self) -> usize {
+    pub fn max_dependency_depth(&self) -> u64 {
         self.max_dependency_depth.expect(CONSTANT_ERR_MSG)
     }
     pub fn max_num_event_emit(&self) -> u64 {
         self.max_num_event_emit.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_new_move_object_ids(&self) -> usize {
+    pub fn max_num_new_move_object_ids(&self) -> u64 {
         self.max_num_new_move_object_ids.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_deleted_move_object_ids(&self) -> usize {
+    pub fn max_num_new_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_new_move_object_ids_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_num_deleted_move_object_ids(&self) -> u64 {
         self.max_num_deleted_move_object_ids
             .expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_num_transfered_move_object_ids(&self) -> usize {
-        self.max_num_transfered_move_object_ids
+    pub fn max_num_deleted_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_deleted_move_object_ids_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_num_transferred_move_object_ids(&self) -> u64 {
+        self.max_num_transferred_move_object_ids
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_num_transferred_move_object_ids_system_tx(&self) -> u64 {
+        self.max_num_transferred_move_object_ids_system_tx
             .expect(CONSTANT_ERR_MSG)
     }
     pub fn max_event_emit_size(&self) -> u64 {
         self.max_event_emit_size.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_move_vector_len(&self) -> u64 {
+        self.max_move_vector_len.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_cached_objects(&self) -> u64 {
+        self.object_runtime_max_num_cached_objects
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_store_entries(&self) -> u64 {
+        self.object_runtime_max_num_store_entries
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_cached_objects_system_tx(&self) -> u64 {
+        self.object_runtime_max_num_cached_objects_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_runtime_max_num_store_entries_system_tx(&self) -> u64 {
+        self.object_runtime_max_num_store_entries_system_tx
+            .expect(CONSTANT_ERR_MSG)
     }
     pub fn base_tx_cost_fixed(&self) -> u64 {
         self.base_tx_cost_fixed.expect(CONSTANT_ERR_MSG)
@@ -351,21 +638,214 @@ impl ProtocolConfig {
     pub fn reward_slashing_rate(&self) -> u64 {
         self.reward_slashing_rate.expect(CONSTANT_ERR_MSG)
     }
-    pub fn stake_subsidy_rate(&self) -> u64 {
-        self.stake_subsidy_rate.expect(CONSTANT_ERR_MSG)
-    }
     pub fn storage_gas_price(&self) -> u64 {
         self.storage_gas_price.expect(CONSTANT_ERR_MSG)
     }
-    pub fn max_transactions_per_checkpoint(&self) -> usize {
+    pub fn max_transactions_per_checkpoint(&self) -> u64 {
         self.max_transactions_per_checkpoint
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_checkpoint_size_bytes(&self) -> u64 {
+        self.max_checkpoint_size_bytes.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn buffer_stake_for_protocol_upgrade_bps(&self) -> u64 {
+        self.buffer_stake_for_protocol_upgrade_bps
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn address_from_bytes_cost_base(&self) -> u64 {
+        self.address_from_bytes_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn address_to_u256_cost_base(&self) -> u64 {
+        self.address_to_u256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn address_from_u256_cost_base(&self) -> u64 {
+        self.address_from_u256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_hash_type_and_key_cost_base(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_hash_type_and_key_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_hash_type_and_key_value_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_value_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_hash_type_and_key_type_tag_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_hash_type_and_key_type_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_add_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_add_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_add_child_object_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_add_child_object_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_add_child_object_value_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_add_child_object_value_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_add_child_object_struct_tag_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_add_child_object_struct_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_borrow_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_borrow_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_borrow_child_object_child_ref_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_borrow_child_object_child_ref_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_borrow_child_object_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_borrow_child_object_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_remove_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_remove_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_remove_child_object_child_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_remove_child_object_child_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_remove_child_object_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_remove_child_object_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_has_child_object_cost_base(&self) -> u64 {
+        self.dynamic_field_has_child_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn dynamic_field_has_child_object_with_ty_cost_base(&self) -> u64 {
+        self.dynamic_field_has_child_object_with_ty_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_has_child_object_with_ty_type_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_has_child_object_with_ty_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte(&self) -> u64 {
+        self.dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn event_emit_cost_base(&self) -> u64 {
+        self.event_emit_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn event_emit_value_size_derivation_cost_per_byte(&self) -> u64 {
+        self.event_emit_value_size_derivation_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn event_emit_tag_size_derivation_cost_per_byte(&self) -> u64 {
+        self.event_emit_tag_size_derivation_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn event_emit_output_cost_per_byte(&self) -> u64 {
+        self.event_emit_output_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn object_borrow_uid_cost_base(&self) -> u64 {
+        self.object_borrow_uid_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_delete_impl_cost_base(&self) -> u64 {
+        self.object_delete_impl_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn object_record_new_uid_cost_base(&self) -> u64 {
+        self.object_record_new_uid_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn transfer_transfer_internal_cost_base(&self) -> u64 {
+        self.transfer_transfer_internal_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn transfer_freeze_object_cost_base(&self) -> u64 {
+        self.transfer_freeze_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn transfer_share_object_cost_base(&self) -> u64 {
+        self.transfer_share_object_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn tx_context_derive_id_cost_base(&self) -> u64 {
+        self.tx_context_derive_id_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn types_is_one_time_witness_cost_base(&self) -> u64 {
+        self.types_is_one_time_witness_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn types_is_one_time_witness_type_tag_cost_per_byte(&self) -> u64 {
+        self.types_is_one_time_witness_type_tag_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn types_is_one_time_witness_type_cost_per_byte(&self) -> u64 {
+        self.types_is_one_time_witness_type_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn validator_validate_metadata_cost_base(&self) -> u64 {
+        self.validator_validate_metadata_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn validator_validate_metadata_data_cost_per_byte(&self) -> u64 {
+        self.validator_validate_metadata_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ed25519_ed25519_verify_cost_base(&self) -> u64 {
+        self.ed25519_ed25519_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ed25519_ed25519_verify_msg_cost_per_byte(&self) -> u64 {
+        self.ed25519_ed25519_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ed25519_ed25519_verify_msg_cost_per_block(&self) -> u64 {
+        self.ed25519_ed25519_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_cost_base(&self) -> u64 {
+        self.hash_blake2b256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_data_cost_per_byte(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_blake2b256_data_cost_per_block(&self) -> u64 {
+        self.hash_blake2b256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_cost_base(&self) -> u64 {
+        self.hash_keccak256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_byte(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hash_keccak256_data_cost_per_block(&self) -> u64 {
+        self.hash_keccak256_data_cost_per_block
             .expect(CONSTANT_ERR_MSG)
     }
 
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
-    // pub fn new_constant(&self) -> usize {
+    // pub fn new_constant(&self) -> u64 {
     //     self.new_constant.expect(CONSTANT_ERR_MSG)
     // }
 }
@@ -387,12 +867,13 @@ impl ProtocolConfig {
         assert!(version.0 >= ProtocolVersion::MIN.0, "{:?}", version);
         assert!(version.0 <= ProtocolVersion::MAX_ALLOWED.0, "{:?}", version);
 
-        let ret = Self::get_for_version_impl(version);
+        let mut ret = Self::get_for_version_impl(version);
+        ret.version = version;
 
         CONFIG_OVERRIDE.with(|ovr| {
             if let Some(override_fn) = &*ovr.borrow() {
                 warn!(
-                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests"
+                    "overriding ProtocolConfig settings with custom settings (you should not see this log outside of tests)"
                 );
                 override_fn(version, ret)
             } else {
@@ -454,10 +935,28 @@ impl ProtocolConfig {
         // To change the values here you must create a new protocol version with the new values!
         match version.0 {
             1 => Self {
+                // will be overwritten before being returned
+                version,
+
+                // All flags are disabled in V1
+                feature_flags: Default::default(),
+
+                max_tx_size_bytes: Some(128 * 1024),
+                // We need this number to be at least 100x less than `max_serialized_tx_effects_size_bytes`otherwise effects can be huge
+                max_input_objects: Some(2048),
+                max_serialized_tx_effects_size_bytes: Some(512 * 1024),
+                max_serialized_tx_effects_size_bytes_system_tx: Some(512 * 1024 * 16),
+                max_gas_payment_objects: Some(256),
+                max_modules_in_publish: Some(128),
+                max_arguments: Some(512),
+                max_type_arguments: Some(16),
+                max_type_argument_depth: Some(16),
+                max_pure_argument_size: Some(16 * 1024),
+                max_programmable_tx_commands: Some(1024),
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
-                max_tx_gas: Some(1_000_000_000),
+                max_tx_gas: Some(10_000_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),
@@ -471,9 +970,17 @@ impl ProtocolConfig {
                 max_dependency_depth: Some(100),
                 max_num_event_emit: Some(256),
                 max_num_new_move_object_ids: Some(2048),
+                max_num_new_move_object_ids_system_tx: Some(2048 * 16),
                 max_num_deleted_move_object_ids: Some(2048),
-                max_num_transfered_move_object_ids: Some(2048),
-                max_event_emit_size: Some(256 * 1024),
+                max_num_deleted_move_object_ids_system_tx: Some(2048 * 16),
+                max_num_transferred_move_object_ids: Some(2048),
+                max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
+                max_event_emit_size: Some(250 * 1024),
+                max_move_vector_len: Some(256 * 1024),
+                object_runtime_max_num_cached_objects: Some(1000),
+                object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
+                object_runtime_max_num_store_entries: Some(1000),
+                object_runtime_max_num_store_entries_system_tx: Some(1000 * 16),
                 base_tx_cost_fixed: Some(110_000),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
@@ -487,9 +994,100 @@ impl ProtocolConfig {
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
-                stake_subsidy_rate: Some(1),
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
+                max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
+                // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
+                // TODO: tune based on experience in testnet
+                buffer_stake_for_protocol_upgrade_bps: Some(7500),
+
+                /// === Native Function Costs ===
+                // `address` module
+                // Cost params for the Move native function `address::from_bytes(bytes: vector<u8>)`
+                address_from_bytes_cost_base: Some(52),
+                // Cost params for the Move native function `address::to_u256(address): u256`
+                address_to_u256_cost_base: Some(52),
+                // Cost params for the Move native function `address::from_u256(u256): address`
+                address_from_u256_cost_base: Some(52),
+
+                // `dynamic_field` module
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                dynamic_field_hash_type_and_key_cost_base: Some(52),
+                dynamic_field_hash_type_and_key_type_cost_per_byte: Some(0),
+                dynamic_field_hash_type_and_key_value_cost_per_byte: Some(0),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Some(0),
+                // Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
+                dynamic_field_add_child_object_cost_base: Some(52),
+                dynamic_field_add_child_object_type_cost_per_byte: Some(0),
+                dynamic_field_add_child_object_value_cost_per_byte: Some(0),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: Some(0),
+                // Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
+                dynamic_field_borrow_child_object_cost_base: Some(52),
+                dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(0),
+                dynamic_field_borrow_child_object_type_cost_per_byte: Some(0),
+                 // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
+                dynamic_field_remove_child_object_cost_base: Some(52),
+                dynamic_field_remove_child_object_child_cost_per_byte: Some(0),
+                dynamic_field_remove_child_object_type_cost_per_byte: Some(0),
+                // Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
+                dynamic_field_has_child_object_cost_base: Some(52),
+                // Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
+                dynamic_field_has_child_object_with_ty_cost_base: Some(52),
+                dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(0),
+                dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(0),
+
+                // `event` module
+                // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
+                event_emit_cost_base: Some(52),
+                event_emit_value_size_derivation_cost_per_byte: Some(0),
+                event_emit_tag_size_derivation_cost_per_byte: Some(0),
+                event_emit_output_cost_per_byte:Some(0),
+
+                //  `object` module
+                // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
+                object_borrow_uid_cost_base: Some(52),
+                // Cost params for the Move native function `delete_impl(id: address)`
+                object_delete_impl_cost_base: Some(52),
+                // Cost params for the Move native function `record_new_uid(id: address)`
+                object_record_new_uid_cost_base: Some(52),
+
+                // `transfer` module
+                // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+                transfer_transfer_internal_cost_base: Some(52),
+                // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
+                transfer_freeze_object_cost_base: Some(52),
+                // Cost params for the Move native function `share_object<T: key>(obj: T)`
+                transfer_share_object_cost_base: Some(52),
+
+                // `tx_context` module
+                // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
+                tx_context_derive_id_cost_base: Some(52),
+
+                // `types` module
+                // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
+                types_is_one_time_witness_cost_base: Some(52),
+                types_is_one_time_witness_type_tag_cost_per_byte: Some(0),
+                types_is_one_time_witness_type_cost_per_byte: Some(0),
+
+                // `validator` module
+                // Cost params for the Move native function `validate_metadata_bcs(metadata: vector<u8>)`
+                validator_validate_metadata_cost_base: Some(52),
+                validator_validate_metadata_data_cost_per_byte: Some(0),
+
+                // Crypto
+                // ed25519
+                ed25519_ed25519_verify_cost_base: Some(52),
+                ed25519_ed25519_verify_msg_cost_per_byte: Some(0),
+                ed25519_ed25519_verify_msg_cost_per_block: Some(0),
+                // hash::blake2b256
+                hash_blake2b256_cost_base: Some(52),
+                hash_blake2b256_data_cost_per_byte: Some(0),
+                hash_blake2b256_data_cost_per_block: Some(0),
+                // hash::keccak256
+                hash_keccak256_cost_base: Some(52),
+                hash_keccak256_data_cost_per_byte: Some(0),
+                hash_keccak256_data_cost_per_block: Some(0),
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -508,7 +1106,7 @@ impl ProtocolConfig {
             //
             //     // Pull in everything else from the previous version to avoid unintentional
             //     // changes.
-            //     ..get_for_version_impl(version - 1)
+            //     ..Self::get_for_version_impl(version - 1)
             // },
             _ => panic!("unsupported version {:?}", version),
         }
@@ -531,8 +1129,14 @@ impl ProtocolConfig {
 
 // Setters for tests
 impl ProtocolConfig {
-    pub fn set_max_function_definitions_for_testing(&mut self, m: usize) {
+    pub fn set_max_function_definitions_for_testing(&mut self, m: u64) {
         self.max_function_definitions = Some(m)
+    }
+    pub fn set_buffer_stake_for_protocol_upgrade_bps_for_testing(&mut self, b: u64) {
+        self.buffer_stake_for_protocol_upgrade_bps = Some(b)
+    }
+    pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
+        self.feature_flags.package_upgrades = val
     }
 }
 
@@ -551,5 +1155,125 @@ impl Drop for OverrideGuard {
         CONFIG_OVERRIDE.with(|ovr| {
             *ovr.borrow_mut() = None;
         });
+    }
+}
+
+/// Defines which limit got crossed.
+/// The value which crossed the limit and value of the limit crossed are embedded
+#[derive(PartialEq, Eq)]
+pub enum LimitThresholdCrossed {
+    None,
+    Soft(u128, u128),
+    Hard(u128, u128),
+}
+
+/// Convenience function for comparing limit ranges
+/// V::MAX must be at >= U::MAX and T::MAX
+pub fn check_limit_in_range<T: Into<V>, U: Into<V>, V: PartialOrd + Into<u128>>(
+    x: T,
+    soft_limit: U,
+    hard_limit: V,
+) -> LimitThresholdCrossed {
+    let x: V = x.into();
+    let soft_limit: V = soft_limit.into();
+
+    debug_assert!(soft_limit <= hard_limit);
+
+    // It is important to preserve this comparison order because if soft_limit == hard_limit
+    // we want LimitThresholdCrossed::Hard
+    if x >= hard_limit {
+        LimitThresholdCrossed::Hard(x.into(), hard_limit.into())
+    } else if x < soft_limit {
+        LimitThresholdCrossed::None
+    } else {
+        LimitThresholdCrossed::Soft(x.into(), soft_limit.into())
+    }
+}
+
+#[macro_export]
+macro_rules! check_limit {
+    ($x:expr, $hard:expr) => {
+        check_limit!($x, $hard, $hard)
+    };
+    ($x:expr, $soft:expr, $hard:expr) => {
+        check_limit_in_range($x as u64, $soft, $hard)
+    };
+}
+
+/// Used to check which limits were crossed if the TX is metered (not system tx)
+/// Args are: is_metered, value_to_check, metered_limit, unmetered_limit
+/// metered_limit is always less than or equal to unmetered_hard_limit
+#[macro_export]
+macro_rules! check_limit_by_meter {
+    ($is_metered:expr, $x:expr, $metered_limit:expr, $unmetered_hard_limit:expr) => {{
+        // If this is metered, we use the metered_limit limit as the upper bound
+        let h = if $is_metered {
+            $metered_limit
+        } else {
+            // Unmetered gets more headroom
+            $unmetered_hard_limit
+        };
+        use sui_protocol_config::check_limit_in_range;
+        check_limit_in_range($x as u64, $metered_limit, h)
+    }};
+}
+
+#[cfg(all(test, not(msim)))]
+mod test {
+    use super::*;
+    use insta::assert_yaml_snapshot;
+
+    #[test]
+    fn snaphost_tests() {
+        println!("\n============================================================================");
+        println!("!                                                                          !");
+        println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
+        println!("! (it is actually ok to update them up until mainnet launches)             !");
+        println!("!                                                                          !");
+        println!("============================================================================\n");
+        for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
+            let cur = ProtocolVersion::new(i);
+            assert_yaml_snapshot!(
+                format!("version_{}", cur.as_u64()),
+                ProtocolConfig::get_for_version(cur)
+            );
+        }
+    }
+    #[test]
+    fn limit_range_fn_test() {
+        let low = 100u32;
+        let high = 10000u64;
+
+        assert!(check_limit!(1u8, low, high) == LimitThresholdCrossed::None);
+        assert!(matches!(
+            check_limit!(255u16, low, high),
+            LimitThresholdCrossed::Soft(255u128, 100)
+        ));
+        // This wont compile because lossy
+        //assert!(check_limit!(100000000u128, low, high) == LimitThresholdCrossed::None);
+        // This wont compile because lossy
+        //assert!(check_limit!(100000000usize, low, high) == LimitThresholdCrossed::None);
+
+        assert!(matches!(
+            check_limit!(2550000u64, low, high),
+            LimitThresholdCrossed::Hard(2550000, 10000)
+        ));
+
+        assert!(matches!(
+            check_limit!(2550000u64, high, high),
+            LimitThresholdCrossed::Hard(2550000, 10000)
+        ));
+
+        assert!(matches!(
+            check_limit!(1u8, high),
+            LimitThresholdCrossed::None
+        ));
+
+        assert!(check_limit!(255u16, high) == LimitThresholdCrossed::None);
+
+        assert!(matches!(
+            check_limit!(2550000u64, high),
+            LimitThresholdCrossed::Hard(2550000, 10000)
+        ));
     }
 }

@@ -93,14 +93,6 @@ where
                 )),
             );
         }
-        if let Some(limit) = state_sync_config.get_transaction_and_effects_rate_limit {
-            state_sync_server = state_sync_server.add_layer_for_get_transaction_and_effects(
-                InboundRequestLayer::new(rate_limit::RateLimitLayer::new(
-                    governor::Quota::per_second(limit),
-                    rate_limit::WaitMode::Block,
-                )),
-            );
-        }
 
         (builder, state_sync_server)
     }

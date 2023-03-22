@@ -86,7 +86,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for TestDBIter<'a, K
             };
             if let Some((raw_key, raw_value)) = resp {
                 let key: K = config.deserialize(raw_key).ok().unwrap();
-                let value: V = bincode::deserialize(raw_value).ok().unwrap();
+                let value: V = bcs::from_bytes(raw_value).ok().unwrap();
                 out = Some((key, value));
             }
         });
@@ -204,7 +204,7 @@ impl<'a, V: DeserializeOwned> Iterator for TestDBValues<'a, V> {
         let mut out: Option<Self::Item> = None;
         self.with_mut(|fields| {
             if let Some((_, raw_value)) = fields.iter.next() {
-                let value: V = bincode::deserialize(raw_value).ok().unwrap();
+                let value: V = bcs::from_bytes(raw_value).ok().unwrap();
                 out = Some(value);
             }
         });
@@ -232,7 +232,7 @@ where
         let raw_key = be_fix_int_ser(key)?;
         let locked = self.rows.read().unwrap();
         let res = locked.get(&raw_key);
-        Ok(res.map(|raw_value| bincode::deserialize(raw_value).ok().unwrap()))
+        Ok(res.map(|raw_value| bcs::from_bytes(raw_value).ok().unwrap()))
     }
 
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -244,7 +244,7 @@ where
 
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error> {
         let raw_key = be_fix_int_ser(key)?;
-        let raw_value = bincode::serialize(value)?;
+        let raw_value = bcs::to_bytes(value)?;
         let mut locked = self.rows.write().unwrap();
         locked.insert(raw_key, raw_value);
         Ok(())
@@ -470,7 +470,7 @@ impl TestDBWriteBatch {
                 .map(|(key, value)| {
                     (
                         be_fix_int_ser(&key.borrow()).unwrap(),
-                        bincode::serialize(&value.borrow()).unwrap(),
+                        bcs::to_bytes(&value.borrow()).unwrap(),
                     )
                 })
                 .collect(),
@@ -519,10 +519,7 @@ mod test {
             .expect("Failed to get_raw_bytes")
             .unwrap();
 
-        assert_eq!(
-            bincode::serialize(&"123456789".to_string()).unwrap(),
-            val_bytes
-        );
+        assert_eq!(bcs::to_bytes(&"123456789".to_string()).unwrap(), val_bytes);
         assert_eq!(
             None,
             db.get_raw_bytes(&000000000)

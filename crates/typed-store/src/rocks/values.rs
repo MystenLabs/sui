@@ -26,11 +26,10 @@ impl<'a, V: DeserializeOwned> Iterator for Values<'a, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.db_iter.valid() {
-            let value = self.db_iter.key().and_then(|_| {
-                self.db_iter
-                    .value()
-                    .and_then(|v| bincode::deserialize(v).ok())
-            });
+            let value = self
+                .db_iter
+                .key()
+                .and_then(|_| self.db_iter.value().and_then(|v| bcs::from_bytes(v).ok()));
 
             self.db_iter.next();
             value

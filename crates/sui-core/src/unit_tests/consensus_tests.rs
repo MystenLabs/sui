@@ -6,12 +6,12 @@ use crate::authority::{authority_tests::init_state_with_objects, AuthorityState}
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
-use multiaddr::Multiaddr;
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::crypto::deterministic_random_account_key;
+use sui_types::multiaddr::Multiaddr;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use sui_types::{
@@ -39,6 +39,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
     let (sender, keypair) = deterministic_random_account_key();
 
     let mut certificates = Vec::new();
@@ -67,13 +68,14 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
             ],
             /* max_gas */ 10_000,
-        );
+        )
+        .unwrap();
 
         let transaction = to_sender_signed_transaction(data, &keypair);
 
         // Submit the transaction and assemble a certificate.
         let response = authority
-            .handle_transaction(transaction.clone())
+            .handle_transaction(&epoch_store, transaction.clone())
             .await
             .unwrap();
         let vote = response.status.into_signed_for_testing();
@@ -110,18 +112,24 @@ async fn submit_transaction_to_consensus_adapter() {
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
             epoch_store
-                .handle_consensus_transaction(
+                .process_consensus_transaction(
                     VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.transaction_manager(),
                     self.0.db(),
                 )
-                .await
+                .await?;
+            Ok(())
         }
     }
     // Make a new consensus adapter instance.
-    let adapter =
-        ConsensusAdapter::new(Box::new(SubmitDirectly(state.clone())), state.name, metrics);
+    let adapter = Arc::new(ConsensusAdapter::new(
+        Box::new(SubmitDirectly(state.clone())),
+        state.name,
+        Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+        100_000,
+        100_000,
+        metrics,
+    ));
 
     // Submit the transaction and ensure the adapter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

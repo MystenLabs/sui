@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getExecutionStatusType,
-    getTransactionKindName,
-    getTransactions,
-    getTransactionSender,
-} from '@mysten/sui.js';
+import { useRpcClient } from '@mysten/core';
+import { getExecutionStatusType } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate } from 'react-router-dom';
@@ -16,23 +12,30 @@ import { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import ReceiptCard from '_components/receipt-card';
-import { checkStakingTxn } from '_helpers';
-import { useRpc, useAppSelector } from '_hooks';
+import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
 function ReceiptPage() {
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
-    const activeAddress = useAppSelector(({ account: { address } }) => address);
+    const activeAddress = useActiveAddress();
 
     // get tx results from url params
     const transactionId = searchParams.get('txdigest');
     const fromParam = searchParams.get('from');
-    const rpc = useRpc();
+    const rpc = useRpcClient();
 
     const { data, isLoading, isError } = useQuery(
         ['transactions-by-id', transactionId],
         async () => {
-            return rpc.getTransactionWithEffects(transactionId!);
+            return rpc.getTransaction({
+                digest: transactionId!,
+                options: {
+                    showObjectChanges: true,
+                    showInput: true,
+                    showEffects: true,
+                    showEvents: true,
+                },
+            });
         },
         { enabled: !!transactionId, retry: 8 }
     );
@@ -46,27 +49,9 @@ function ReceiptPage() {
     const pageTitle = useMemo(() => {
         if (data) {
             const executionStatus = getExecutionStatusType(data);
-            const [transaction] = getTransactions(data);
 
-            const txnKind = getTransactionKindName(transaction);
-            const stakingTxn = checkStakingTxn(data);
-
-            const isTransfer =
-                txnKind === 'PaySui' ||
-                txnKind === 'TransferSui' ||
-                txnKind === 'PayAllSui' ||
-                txnKind === 'TransferObject' ||
-                txnKind === 'Pay';
-
-            const isSender = activeAddress === getTransactionSender(data);
-
-            const transferName = isTransfer
-                ? isSender
-                    ? 'Sent Successfully'
-                    : 'Received Successfully'
-                : stakingTxn
-                ? `${stakingTxn} Successfully`
-                : 'Move Call';
+            // TODO: Infer out better name:
+            const transferName = 'Transaction';
 
             return `${
                 executionStatus === 'success'
@@ -76,7 +61,7 @@ function ReceiptPage() {
         }
 
         return 'Transaction Failed';
-    }, [activeAddress, data]);
+    }, [/*activeAddress,*/ data]);
 
     if (!transactionId || !activeAddress) {
         return <Navigate to="/transactions" replace={true} />;

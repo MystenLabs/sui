@@ -2,46 +2,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { RawSigner, SuiEventEnvelope } from '../../src';
-import {
-  DEFAULT_GAS_BUDGET,
-  DEFAULT_RECIPIENT,
-  setup,
-  TestToolbox,
-} from './utils/setup';
+import { SuiEvent, Transaction } from '../../src';
+import { setup, TestToolbox } from './utils/setup';
 
 describe('Event Subscription API', () => {
   let toolbox: TestToolbox;
-  let signer: RawSigner;
 
   beforeAll(async () => {
     toolbox = await setup();
-    signer = new RawSigner(toolbox.keypair, toolbox.provider);
   });
 
-  const mockCallback = vi.fn((_: SuiEventEnvelope) =>
-    expect(true).toBeTruthy(),
-  );
+  const mockCallback = vi.fn((_: SuiEvent) => expect(true).toBeTruthy());
 
   it('Subscribe to events', async () => {
-    const subscriptionId = await toolbox.provider.subscribeEvent(
-      { SenderAddress: toolbox.address() },
-      mockCallback,
-    );
-
-    const inputCoins = await toolbox.provider.getGasObjectsOwnedByAddress(
-      toolbox.address(),
-    );
-
-    await signer.payAllSui({
-      inputCoins: inputCoins.map((o) => o.objectId),
-      recipient: DEFAULT_RECIPIENT,
-      gasBudget: DEFAULT_GAS_BUDGET,
+    const subscriptionId = await toolbox.provider.subscribeEvent({
+      filter: { Sender: toolbox.address() },
+      onMessage: mockCallback,
     });
 
-    const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent(
-      subscriptionId,
-    );
+    const tx = new Transaction();
+    tx.moveCall({
+      target: '0x2::devnet_nft::mint',
+      arguments: [
+        tx.pure('Example NFT'),
+        tx.pure('An NFT created by the wallet Command Line Tool'),
+        tx.pure(
+          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+        ),
+      ],
+    });
+    await toolbox.signer.signAndExecuteTransaction({
+      transaction: tx,
+      requestType: 'WaitForLocalExecution',
+    });
+
+    const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent({
+      id: subscriptionId,
+    });
     expect(subFoundAndRemoved).toBeTruthy();
     expect(mockCallback).toHaveBeenCalled();
   });

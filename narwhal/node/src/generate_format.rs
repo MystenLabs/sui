@@ -6,15 +6,14 @@ use fastcrypto::{
     hash::Hash,
     traits::{KeyPair as _, Signer},
 };
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, HeaderBuilder, HeaderDigest, Metadata,
-    ReconfigureNotification, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerReconfigureMessage, WorkerSynchronizeMessage,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
 fn get_registry() -> Result<Registry> {
@@ -82,7 +81,7 @@ fn get_registry() -> Result<Registry> {
                 .collect(),
         )
         .parents(certificates.iter().map(|x| x.digest()).collect())
-        .build(&kp)
+        .build()
         .unwrap();
 
     let worker_pk = network_keys[0].public().clone();
@@ -123,15 +122,12 @@ fn get_registry() -> Result<Registry> {
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
         target: pk,
+        is_certified: true,
     };
 
-    let shutdown = WorkerReconfigureMessage {
-        message: ReconfigureNotification::Shutdown,
-    };
     tracer.trace_value(&mut samples, &our_batch)?;
     tracer.trace_value(&mut samples, &others_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
-    tracer.trace_value(&mut samples, &shutdown)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Batch>(&samples)?;

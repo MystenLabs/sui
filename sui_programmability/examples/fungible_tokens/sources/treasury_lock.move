@@ -61,7 +61,7 @@ module fungible_tokens::treasury_lock {
 
     /// Entry function. Creates a new `TreasuryLock` for `TreasuryCap`. Invokes `new_lock`.
     public entry fun new_lock_<T>(cap: TreasuryCap<T>, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             new_lock(cap, ctx),
             tx_context::sender(ctx)
         )
@@ -85,7 +85,7 @@ module fungible_tokens::treasury_lock {
     public fun create_and_transfer_mint_cap<T>(
         cap: &LockAdminCap<T>, max_mint_per_epoch: u64, recipient: address, ctx: &mut TxContext
     ) {
-        transfer::transfer(
+        transfer::public_transfer(
             create_mint_cap(cap, max_mint_per_epoch, ctx),
             recipient
         )
@@ -159,7 +159,7 @@ module fungible_tokens::treasury_lock {
         ctx: &mut TxContext
     ) {
         let balance = mint_balance(lock, cap, amount, ctx);
-        transfer::transfer(
+        transfer::public_transfer(
             coin::from_balance(balance, ctx),
             recipient
         )
@@ -174,6 +174,7 @@ module fungible_tokens::treasury_lock_tests {
     use sui::transfer;
     use sui::coin;
     use sui::object::{Self};
+    use sui::test_utils;
     use fungible_tokens::treasury_lock::{Self, TreasuryLock, LockAdminCap, MintCap, create_and_transfer_mint_cap, new_lock, mint_balance};
 
     const ADMIN: address = @0xABBA;
@@ -189,10 +190,11 @@ module fungible_tokens::treasury_lock_tests {
         // create a currency and lock it
         test_scenario::next_tx(scenario, ADMIN);
         {
-            let (treasury, metadata) = coin::create_currency(TREASURY_LOCK_TESTS {}, 0, b"", b"", b"", option::none(), test_scenario::ctx(scenario));
-            transfer::freeze_object(metadata);
+            let treasury_lock_tests = test_utils::create_one_time_witness<TREASURY_LOCK_TESTS>();
+            let (treasury, metadata) = coin::create_currency(treasury_lock_tests, 0, b"", b"", b"", option::none(), test_scenario::ctx(scenario));
+            transfer::public_freeze_object(metadata);
             let admin_cap = new_lock(treasury, test_scenario::ctx(scenario));
-            transfer::transfer(
+            transfer::public_transfer(
                 admin_cap,
                 ADMIN
             )
@@ -239,7 +241,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 300);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 300, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -259,7 +261,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 300);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 300, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -271,7 +273,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 200);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 200, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -282,7 +284,7 @@ module fungible_tokens::treasury_lock_tests {
         {
             let balance = user_mint_balance(scenario, 1);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -301,7 +303,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 300);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 300, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -312,7 +314,7 @@ module fungible_tokens::treasury_lock_tests {
         {
             let balance = user_mint_balance(scenario, 300);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -339,7 +341,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 100);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 100, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -366,7 +368,7 @@ module fungible_tokens::treasury_lock_tests {
         {
             let balance = user_mint_balance(scenario, 100);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -391,7 +393,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 100);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 100, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );
@@ -435,7 +437,7 @@ module fungible_tokens::treasury_lock_tests {
             let balance = user_mint_balance(scenario, 100);
             assert!(balance::value<TREASURY_LOCK_TESTS>(&balance) == 100, 0);
 
-            transfer::transfer(
+            transfer::public_transfer(
                 coin::from_balance(balance, test_scenario::ctx(scenario)),
                 USER
             );

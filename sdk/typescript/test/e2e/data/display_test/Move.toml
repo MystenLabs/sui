@@ -1,0 +1,12 @@
+[package]
+name = "display_test"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../../crates/sui-framework/packages/sui-framework" }
+# Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
+# CI. The local dep is an unmodified version of the upstream stdlib
+MoveStdlib = { local = "../../../../../../crates/sui-framework/packages/move-stdlib" }
+
+[addresses]
+display_test =  "0x0"

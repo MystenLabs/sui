@@ -7,6 +7,7 @@ CREATE TABLE checkpoints (
     -- derived from EndOfEpochData
     next_epoch_committee TEXT,
     next_epoch_protocol_version BIGINT,
+    end_of_epoch_data TEXT,
     -- derived from GasCostSummary
     total_gas_cost BIGINT NOT NULL,
     total_computation_cost BIGINT NOT NULL,
@@ -25,9 +26,3 @@ CREATE TABLE checkpoints (
 CREATE INDEX checkpoints_epoch ON checkpoints (epoch);
 CREATE INDEX checkpoints_timestamp ON checkpoints (timestamp_ms_str);
 CREATE INDEX checkpoints_checkpoint_digest ON checkpoints (checkpoint_digest);
-
-CREATE TABLE checkpoint_logs (
-    next_cursor_sequence_number BIGINT PRIMARY KEY
-);
-
-INSERT INTO checkpoint_logs (next_cursor_sequence_number) VALUES (0);

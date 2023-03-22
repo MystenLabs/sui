@@ -2,25 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_store::LockDetails;
+use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
 use std::path::Path;
-use sui_storage::default_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
+use sui_types::digests::TransactionEventsDigest;
+use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
+use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
+use typed_store::rocks::{
+    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
+use crate::authority::authority_store_types::{
+    MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper,
+    StoreObjectWrapper,
+};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
-
-const CURRENT_EPOCH_KEY: u64 = 0;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
+    /// State is represented by `StoreObject` enum, which is either a move module, a move object, or
+    /// a pointer to an object stored in the `indirect_move_objects` table.
     ///
     /// Note that while this map can store all versions of an object, we will eventually
     /// prune old object versions from the db.
@@ -31,7 +40,10 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
-    pub(crate) objects: DBMap<ObjectKey, Object>,
+    pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
+
+    #[default_options_override_fn = "indirect_move_objects_table_default_config"]
+    pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -40,7 +52,7 @@ pub struct AuthorityPerpetualTables {
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
-    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
+    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetailsWrapper>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
@@ -53,6 +65,7 @@ pub struct AuthorityPerpetualTables {
     ///
     /// When an object is deleted we include an entry into this table for its next version and
     /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
+    /// TODO: Replace this table with a tombstone eventually.
     pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
@@ -71,7 +84,14 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
+    // Currently this is needed in the validator for returning events during process certificates.
+    // We could potentially remove this if we decided not to provide events in the execution path.
+    // TODO: Figure out what to do with this table in the long run.
+    // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
+    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+
     /// When transaction is executed via checkpoint executor, we store association here
+    /// TODO: Eventually be able to prune this table.
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
@@ -80,11 +100,11 @@ pub struct AuthorityPerpetualTables {
     // and never changed
     pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
-    /// A singleton table that stores the current epoch number. This is used only for the purpose of
-    /// crash recovery so that when we restart we know which epoch we are at. This is needed because
-    /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.
-    /// This number should match the epoch of the per-epoch table in the authority store.
-    current_epoch: DBMap<u64, u64>,
+    /// Parameters of the system fixed at the epoch start
+    pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+
+    /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
+    pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 }
 
 impl AuthorityPerpetualTables {
@@ -105,44 +125,6 @@ impl AuthorityPerpetualTables {
         Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
     }
 
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj_entry = self
-            .objects
-            .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
-
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
-            _ => Ok(None),
-        }
-    }
-
     // This is used by indexer to find the correct version of dynamic field child object.
     // We do not store the version of the child object, but because of lamport timestamp,
     // we know the child must have version number less then or eq to the parent.
@@ -156,7 +138,19 @@ impl AuthorityPerpetualTables {
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
-        iter.reverse().next().map(|(_, o)| o)
+        iter.reverse().next().and_then(|(_, o)| self.object(o).ok())
+    }
+
+    pub fn object(&self, store_object: StoreObjectWrapper) -> Result<Object, SuiError> {
+        let store_object = store_object.migrate().into_inner();
+        let indirect_object = match store_object.data {
+            StoreData::IndirectObject(ref metadata) => self
+                .indirect_move_objects
+                .get(&metadata.digest)?
+                .map(|o| o.migrate().into_inner()),
+            _ => None,
+        };
+        MigratedStoreObjectPair(store_object, indirect_object).try_into()
     }
 
     pub fn get_latest_parent_entry(
@@ -178,29 +172,38 @@ impl AuthorityPerpetualTables {
         }))
     }
 
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        let sui_system_object = self
-            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Ok(result)
-    }
-
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         Ok(self
-            .current_epoch
-            .get(&CURRENT_EPOCH_KEY)?
-            .expect("Must have current epoch."))
+            .epoch_start_configuration
+            .get(&())?
+            .expect("Must have current epoch.")
+            .epoch_start_state()
+            .epoch())
     }
 
-    pub fn set_recovery_epoch(&self, epoch: EpochId) -> SuiResult {
-        self.current_epoch.insert(&CURRENT_EPOCH_KEY, &epoch)?;
+    pub async fn set_epoch_start_configuration(
+        &self,
+        epoch_start_configuration: &EpochStartConfiguration,
+    ) -> SuiResult {
+        let mut wb = self.epoch_start_configuration.batch();
+        wb = wb.insert_batch(
+            &self.epoch_start_configuration,
+            std::iter::once(((), epoch_start_configuration)),
+        )?;
+        wb.write()?;
         Ok(())
+    }
+
+    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        Ok(self.pruned_checkpoint.get(&())?.unwrap_or_default())
+    }
+
+    pub fn set_highest_pruned_checkpoint(
+        &self,
+        wb: DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult<DBBatch> {
+        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
@@ -216,6 +219,50 @@ impl AuthorityPerpetualTables {
         LiveSetIter {
             iter: self.parent_sync.keys(),
             prev: None,
+        }
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        // This checkpoints the entire db and not just objects table
+        self.objects
+            .checkpoint_db(path)
+            .map_err(SuiError::StorageError)
+    }
+}
+
+impl ObjectStore for AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        let obj = match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
+            _ => return Ok(None),
+        };
+
+        // Note that the two reads in this function are (obviously) not atomic, and the
+        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
+        // last, so that the write to self.parent_sync gets the last word.
+        // Such race is ok because, even if the reads were atomic, calls to this function would still
+        // race with object deletions (the object could be deleted between when the function is
+        // called and when the first read takes place, which would be indistinguishable to the
+        // caller with the case in which the object is deleted in between the two reads).
+        let parent_entry = self.get_latest_parent_entry(*object_id)?;
+
+        match parent_entry {
+            None => {
+                error!(
+                    ?object_id,
+                    "Object is missing parent_sync entry, data store is inconsistent"
+                );
+                Ok(None)
+            }
+            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(self.object(obj)?)),
+            _ => Ok(None),
         }
     }
 }
@@ -235,13 +282,13 @@ impl Iterator for LiveSetIter<'_> {
                 self.prev = Some(next);
 
                 match prev {
-                    Some(prev) if prev.0 != next.0 && prev.2.is_alive() => return Some(prev),
+                    Some(prev) if prev.0 != next.0 && !prev.2.is_deleted() => return Some(prev),
                     _ => continue,
                 }
             }
 
             return match self.prev {
-                Some(prev) if prev.2.is_alive() => {
+                Some(prev) if !prev.2.is_deleted() => {
                     self.prev = None;
                     Some(prev)
                 }
@@ -253,10 +300,11 @@ impl Iterator for LiveSetIter<'_> {
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
+
 fn objects_table_default_config() -> DBOptions {
-    let db_options = default_db_options(None, None).1;
+    let db_options = point_lookup_db_options();
     DBOptions {
         options: db_options.options,
         rw_options: ReadWriteOptions {
@@ -264,9 +312,24 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
+
 fn transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
+
 fn effects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
+}
+
+fn indirect_move_objects_table_default_config() -> DBOptions {
+    let mut options = point_lookup_db_options();
+    options.options.set_merge_operator(
+        "refcount operator",
+        reference_count_merge_operator,
+        reference_count_merge_operator,
+    );
+    options
+        .options
+        .set_compaction_filter("empty filter", empty_compaction_filter);
+    options
 }

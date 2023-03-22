@@ -6,24 +6,32 @@ use crate::certificate_proof::CertificateProof;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signer,
+    AuthorityStrongQuorumSignInfo, EmptySignInfo, Signer,
 };
 use crate::error::SuiResult;
+use crate::messages::VersionedProtocolMessage;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use sui_protocol_config::ProtocolConfig;
 
 pub trait Message {
     type DigestType: Clone + Debug;
+    const SCOPE: IntentScope;
+
+    fn scope(&self) -> IntentScope {
+        Self::SCOPE
+    }
 
     fn digest(&self) -> Self::DigestType;
 
     /// Verify the internal data consistency of this message.
     /// In some cases, such as user signed transaction, we also need
     /// to verify the user signature here.
-    fn verify(&self) -> SuiResult;
+    fn verify(&self, signature_epoch: Option<EpochId>) -> SuiResult;
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
@@ -74,12 +82,22 @@ impl<T: Message, S> Envelope<T, S> {
         &self.auth_signature
     }
 
+    pub fn auth_sig_mut_for_testing(&mut self) -> &mut S {
+        &mut self.auth_signature
+    }
+
     pub fn digest(&self) -> &T::DigestType {
         self.digest.get_or_init(|| self.data.digest())
     }
 
     pub fn data_mut_for_testing(&mut self) -> &mut T {
         &mut self.data
+    }
+}
+
+impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for Envelope<T, S> {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        self.data.check_version_supported(protocol_config)
     }
 }
 
@@ -99,7 +117,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     }
 
     pub fn verify_signature(&self) -> SuiResult {
-        self.data.verify()
+        self.data.verify(None)
     }
 
     pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
@@ -112,7 +130,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
 
 impl<T> Envelope<T, AuthoritySignInfo>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Serialize,
 {
     pub fn new(
         epoch: EpochId,
@@ -120,7 +138,7 @@ where
         secret: &dyn Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> Self {
-        let auth_signature = AuthoritySignInfo::new(epoch, &data, authority, secret);
+        let auth_signature = Self::sign(epoch, &data, secret, authority);
         Self {
             digest: OnceCell::new(),
             data,
@@ -128,13 +146,32 @@ where
         }
     }
 
+    pub fn sign(
+        epoch: EpochId,
+        data: &T,
+        secret: &dyn Signer<AuthoritySignature>,
+        authority: AuthorityName,
+    ) -> AuthoritySignInfo {
+        AuthoritySignInfo::new(
+            epoch,
+            &data,
+            Intent::default().with_scope(T::SCOPE),
+            authority,
+            secret,
+        )
+    }
+
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
     }
 
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify()?;
-        self.auth_signature.verify(self.data(), committee)
+        self.data.verify(Some(self.auth_sig().epoch))?;
+        self.auth_signature.verify_secure(
+            self.data(),
+            Intent::default().with_scope(T::SCOPE),
+            committee,
+        )
     }
 
     pub fn verify(
@@ -150,7 +187,7 @@ where
 
 impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
 where
-    T: Message + Signable<Vec<u8>>,
+    T: Message + Serialize,
 {
     pub fn new(
         data: T,
@@ -175,8 +212,12 @@ where
     // TODO: Eventually we should remove all calls to verify_signature
     // and make sure they all call verify to avoid repeated verifications.
     pub fn verify_signature(&self, committee: &Committee) -> SuiResult {
-        self.data.verify()?;
-        self.auth_signature.verify(self.data(), committee)
+        self.data.verify(Some(self.auth_sig().epoch))?;
+        self.auth_signature.verify_secure(
+            self.data(),
+            Intent::default().with_scope(T::SCOPE),
+            committee,
+        )
     }
 
     pub fn verify(
@@ -286,6 +327,12 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
     }
 }
 
+impl<T: Message + VersionedProtocolMessage, S> VersionedProtocolMessage for VerifiedEnvelope<T, S> {
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        self.inner().check_version_supported(protocol_config)
+    }
+}
+
 /// After deserialization, a TrustedTransactionEnvelope can be turned back into a
 /// VerifiedTransactionEnvelope.
 impl<T: Message, S> From<TrustedEnvelope<T, S>> for VerifiedEnvelope<T, S> {
@@ -379,6 +426,20 @@ impl<T: Message> VerifiedEnvelope<T, CertificateProof> {
             digest,
             data,
             auth_signature: CertificateProof::new_from_checkpoint(epoch, checkpoint),
+        })
+    }
+
+    pub fn new_system(transaction: VerifiedEnvelope<T, EmptySignInfo>, epoch: EpochId) -> Self {
+        let inner = transaction.into_inner();
+        let Envelope {
+            digest,
+            data,
+            auth_signature: _,
+        } = inner;
+        VerifiedEnvelope::new_unchecked(Envelope {
+            digest,
+            data,
+            auth_signature: CertificateProof::new_system(epoch),
         })
     }
 

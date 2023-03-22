@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, IntGauge, IntGaugeVec,
-    Registry,
-};
+use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::sync::Arc;
 
 pub struct EpochMetrics {
@@ -72,11 +69,13 @@ pub struct EpochMetrics {
     // TODO: This needs to be reported properly.
     pub epoch_first_checkpoint_ready_time_since_epoch_begin_ms: IntGauge,
 
-    /// Tallying rule scores for all validators this epoch.
-    pub tallying_rule_scores: IntGaugeVec,
-
     /// Whether we are running in safe mode where reward distribution and tokenomics are disabled.
     pub is_safe_mode: IntGauge,
+
+    /// When building the last checkpoint of the epoch, we execute advance epoch transaction once
+    /// without committing results to the store. It's useful to know whether this execution leads
+    /// to safe_mode, since in theory the result could be different from checkpoint executor.
+    pub checkpoint_builder_advance_epoch_is_safe_mode: IntGauge,
 }
 
 impl EpochMetrics {
@@ -149,15 +148,14 @@ impl EpochMetrics {
                 "Time interval from when the epoch opens at new epoch to the first checkpoint is created locally",
                 registry
             ).unwrap(),
-            tallying_rule_scores: register_int_gauge_vec_with_registry!(
-                "tallying_rule_scores",
-                "Tallying rule scores for validators each epoch",
-                &["validator", "epoch"],
-                registry
-            ).unwrap(),
             is_safe_mode: register_int_gauge_with_registry!(
                 "is_safe_mode",
                 "Whether we are running in safe mode",
+                registry,
+            ).unwrap(),
+            checkpoint_builder_advance_epoch_is_safe_mode: register_int_gauge_with_registry!(
+                "checkpoint_builder_advance_epoch_is_safe_mode",
+                "Whether the advance epoch execution leads to safe mode while building the last checkpoint",
                 registry,
             ).unwrap(),
         };

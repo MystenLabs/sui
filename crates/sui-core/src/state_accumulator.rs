@@ -2,18 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_metrics::monitored_scope;
+use serde::Serialize;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
+use sui_types::digests::ObjectDigest;
+use sui_types::storage::ObjectKey;
 use tracing::debug;
 use typed_store::Map;
 
+use std::collections::HashSet;
 use std::sync::Arc;
-use sui_types::base_types::ObjectDigest;
 
-use fastcrypto::hash::{Digest, MultisetHash};
+use fastcrypto::hash::MultisetHash;
 use sui_types::accumulator::Accumulator;
 use sui_types::error::SuiResult;
-use sui_types::messages::TransactionEffects;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
 use typed_store::rocks::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -21,6 +25,25 @@ use crate::authority::AuthorityStore;
 
 pub struct StateAccumulator {
     authority_store: Arc<AuthorityStore>,
+}
+
+/// Serializable representation of the ObjectRef of an
+/// object that has been wrapped
+#[derive(Serialize)]
+struct WrappedObject {
+    id: ObjectID,
+    wrapped_at: SequenceNumber,
+    digest: ObjectDigest,
+}
+
+impl WrappedObject {
+    fn new(id: ObjectID, wrapped_at: SequenceNumber) -> Self {
+        Self {
+            id,
+            wrapped_at,
+            digest: ObjectDigest::OBJECT_DIGEST_WRAPPED,
+        }
+    }
 }
 
 impl StateAccumulator {
@@ -43,43 +66,76 @@ impl StateAccumulator {
 
         let mut acc = Accumulator::default();
 
+        // process insertions to the set
         acc.insert_all(
             effects
                 .iter()
                 .flat_map(|fx| {
-                    fx.created
-                        .clone()
-                        .into_iter()
-                        .map(|(obj_ref, _)| obj_ref.2)
-                        .collect::<Vec<ObjectDigest>>()
-                })
-                .collect::<Vec<ObjectDigest>>(),
-        );
-        acc.remove_all(
-            effects
-                .iter()
-                .flat_map(|fx| {
-                    fx.deleted
-                        .clone()
-                        .into_iter()
-                        .map(|obj_ref| obj_ref.2)
+                    fx.created()
+                        .iter()
+                        .map(|(oref, _)| oref.2)
+                        .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
+                        .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
                         .collect::<Vec<ObjectDigest>>()
                 })
                 .collect::<Vec<ObjectDigest>>(),
         );
 
-        // TODO almost certainly not currectly handling "mutated" effects.
+        // insert wrapped tombstones. We use a custom struct in order to contain the tombstone
+        // against the object id and sequence number, as the tombstone by itself is not unique.
         acc.insert_all(
             effects
                 .iter()
                 .flat_map(|fx| {
-                    fx.mutated
-                        .clone()
-                        .into_iter()
-                        .map(|(obj_ref, _)| obj_ref.2)
+                    fx.wrapped()
+                        .iter()
+                        .map(|oref| {
+                            bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
+                                .unwrap()
+                                .to_vec()
+                        })
+                        .collect::<Vec<Vec<u8>>>()
+                })
+                .collect::<Vec<Vec<u8>>>(),
+        );
+
+        // get all modified_at_versions for the fx
+        let modified_at_version_keys = effects
+            .iter()
+            .flat_map(|fx| {
+                fx.modified_at_versions()
+                    .iter()
+                    .map(|(id, seq_num)| ObjectKey(*id, *seq_num))
+                    .collect::<Vec<ObjectKey>>()
+            })
+            .collect::<HashSet<ObjectKey>>();
+
+        let modified_at_digests = self
+            .authority_store
+            .perpetual_tables
+            .parent_sync
+            .iter()
+            .filter_map(|(tup, _tx_digest)| {
+                if modified_at_version_keys.contains(&ObjectKey(tup.0, tup.1)) {
+                    Some(tup.2)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<ObjectDigest>>();
+
+        // process removals from the set
+        acc.remove_all(
+            effects
+                .iter()
+                .flat_map(|fx| {
+                    fx.deleted()
+                        .iter()
+                        .map(|oref| oref.2)
+                        .chain(modified_at_digests.clone().into_iter())
                         .collect::<Vec<ObjectDigest>>()
                 })
-                .collect::<Vec<ObjectDigest>>(),
+                .collect::<HashSet<ObjectDigest>>(),
         );
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
@@ -158,6 +214,7 @@ impl StateAccumulator {
             .expect("Failed to notify read checkpoint state digests");
 
         accumulators.append(&mut remaining_accumulators);
+
         assert!(accumulators.len() == (last_checkpoint_of_epoch - next_to_accumulate + 1) as usize);
 
         for acc in accumulators {
@@ -176,15 +233,36 @@ impl StateAccumulator {
         Ok(root_state_hash)
     }
 
+    pub fn accumulate_live_object_set(&self) -> Accumulator {
+        let mut acc = Accumulator::default();
+        for oref in self.authority_store.iter_live_object_set() {
+            if oref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED {
+                acc.insert(
+                    bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
+                        .expect("Failed to serialize WrappedObject"),
+                );
+            } else {
+                acc.insert(oref.2);
+            }
+        }
+        acc
+    }
+
+    pub fn digest_live_object_set(&self) -> ECMHLiveObjectSetDigest {
+        let acc = self.accumulate_live_object_set();
+        acc.digest().into()
+    }
+
     pub async fn digest_epoch(
         &self,
         epoch: &EpochId,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
-    ) -> Result<Digest<32>, TypedStoreError> {
+    ) -> Result<ECMHLiveObjectSetDigest, TypedStoreError> {
         Ok(self
             .accumulate_epoch(epoch, last_checkpoint_of_epoch, epoch_store)
             .await?
-            .digest())
+            .digest()
+            .into())
     }
 }

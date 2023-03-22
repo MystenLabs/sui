@@ -59,16 +59,14 @@ export function AccountSelector() {
                         leaveFrom="transform scale-100 opacity-100"
                         leaveTo="transform scale-75 opacity-0"
                     >
-                        <Popover.Panel className="absolute left-1/2 -translate-x-1/2 w-50 drop-shadow-accountModal mt-2 z-0 rounded-md bg-white">
+                        <Popover.Panel className="absolute left-1/2 -translate-x-1/2 w-60 drop-shadow-accountModal mt-2 z-0 rounded-md bg-white">
                             <div className="absolute w-3 h-3 bg-white -top-1 left-1/2 -translate-x-1/2 rotate-45" />
-                            <div className="relative px-1.25 my-1.25 max-h-80 overflow-y-auto max-w-full z-10">
+                            <div className="relative px-1.25 max-h-80 overflow-y-auto max-w-full z-10">
                                 <AccountList
-                                    onAccountSelected={async (
-                                        selectedAddress
-                                    ) => {
-                                        if (selectedAddress !== activeAddress) {
+                                    onAccountSelected={async ({ address }) => {
+                                        if (address !== activeAddress) {
                                             await backgroundClient.selectAccount(
-                                                selectedAddress
+                                                address
                                             );
                                         }
                                         close();

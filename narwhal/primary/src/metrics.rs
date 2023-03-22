@@ -64,21 +64,17 @@ pub struct PrimaryChannelMetrics {
     pub tx_others_digests: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`
     pub tx_our_digests: IntGauge,
-    /// occupancy of the channel from the `primary::Core` to the `primary::Proposer`
+    /// occupancy of the channel from the `primary::Synchronizer` to the `primary::Proposer`
     pub tx_parents: IntGauge,
-    /// occupancy of the channel from the `primary::Proposer` to the `primary::Core`
+    /// occupancy of the channel from the `primary::Proposer` to the `primary::Certifier`
     pub tx_headers: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher: IntGauge,
     /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands: IntGauge,
-    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
-    pub tx_state_handler: IntGauge,
-    /// occupancy of the channel from the reconfigure notification to most components.
-    pub tx_reconfigure: IntGauge,
-    /// occupancy of the channel from the `Consensus` to the `primary::Core`
+    /// occupancy of the channel from the `Consensus` to the `primary::StateHandler`
     pub tx_committed_certificates: IntGauge,
-    /// occupancy of the channel from the `primary::Core` to the `Consensus`
+    /// occupancy of the channel from the `primary::Synchronizer` to the `Consensus`
     pub tx_new_certificates: IntGauge,
     /// occupancy of the channel signaling own committed headers
     pub tx_commited_own_headers: IntGauge,
@@ -88,9 +84,9 @@ pub struct PrimaryChannelMetrics {
     pub tx_others_digests_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`
     pub tx_our_digests_total: IntCounter,
-    /// total received on channel from the `primary::Core` to the `primary::Proposer`
+    /// total received on channel from the `primary::Synchronizer` to the `primary::Proposer`
     pub tx_parents_total: IntCounter,
-    /// total received on channel from the `primary::Proposer` to the `primary::Core`
+    /// total received on channel from the `primary::Proposer` to the `primary::Certifier`
     pub tx_headers_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
     pub tx_certificate_fetcher_total: IntCounter,
@@ -98,11 +94,9 @@ pub struct PrimaryChannelMetrics {
     pub tx_block_synchronizer_commands_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler_total: IntCounter,
-    /// total received on channel from the reconfigure notification to most components.
-    pub tx_reconfigure_total: IntCounter,
-    /// total received on channel from the `Consensus` to the `primary::Core`
+    /// total received on channel from the `Consensus` to the `primary::StateHandler`
     pub tx_committed_certificates_total: IntCounter,
-    /// total received on channel from the `primary::Core` to the `Consensus`
+    /// total received on channel from the `primary::Synchronizer` to the `Consensus`
     pub tx_new_certificates_total: IntCounter,
     /// total received on the channel signaling own committed headers
     pub tx_commited_own_headers_total: IntCounter,
@@ -113,23 +107,23 @@ impl PrimaryChannelMetrics {
     // load-bearing, see `replace_registered_committed_certificates_metric`.
     pub const NAME_COMMITTED_CERTS: &'static str = "tx_committed_certificates";
     pub const DESC_COMMITTED_CERTS: &'static str =
-        "occupancy of the channel from the `Consensus` to the `primary::Core`";
+        "occupancy of the channel from the `Consensus` to the `primary::StateHandler`";
     // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
     // load-bearing, see `replace_registered_new_certificates_metric`.
     pub const NAME_NEW_CERTS: &'static str = "tx_new_certificates";
     pub const DESC_NEW_CERTS: &'static str =
-        "occupancy of the channel from the `primary::Core` to the `Consensus`";
+        "occupancy of the channel from the `primary::Synchronizer` to the `Consensus`";
 
     // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
     // load-bearing, see `replace_registered_committed_certificates_metric`.
     pub const NAME_COMMITTED_CERTS_TOTAL: &'static str = "tx_committed_certificates_total";
     pub const DESC_COMMITTED_CERTS_TOTAL: &'static str =
-        "total received on channel from the `Consensus` to the `primary::Core`";
+        "total received on channel from the `Consensus` to the `primary::StateHandler`";
     // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
     // load-bearing, see `replace_registered_new_certificates_metric`.
     pub const NAME_NEW_CERTS_TOTAL: &'static str = "tx_new_certificates_total";
     pub const DESC_NEW_CERTS_TOTAL: &'static str =
-        "total received on channel from the `primary::Core` to the `Consensus`";
+        "total received on channel from the `primary::Synchronizer` to the `Consensus`";
 
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -145,12 +139,12 @@ impl PrimaryChannelMetrics {
             ).unwrap(),
             tx_parents: register_int_gauge_with_registry!(
                 "tx_parents",
-                "occupancy of the channel from the `primary::Core` to the `primary::Proposer`",
+                "occupancy of the channel from the `primary::Synchronizer` to the `primary::Proposer`",
                 registry
             ).unwrap(),
             tx_headers: register_int_gauge_with_registry!(
                 "tx_headers",
-                "occupancy of the channel from the `primary::Proposer` to the `primary::Core`",
+                "occupancy of the channel from the `primary::Proposer` to the `primary::Certifier`",
                 registry
             ).unwrap(),
             tx_certificate_fetcher: register_int_gauge_with_registry!(
@@ -161,16 +155,6 @@ impl PrimaryChannelMetrics {
             tx_block_synchronizer_commands: register_int_gauge_with_registry!(
                 "tx_block_synchronizer_commands",
                 "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
-                registry
-            ).unwrap(),
-            tx_state_handler: register_int_gauge_with_registry!(
-                "tx_state_handler",
-                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
-                registry
-            ).unwrap(),
-            tx_reconfigure: register_int_gauge_with_registry!(
-                "tx_reconfigure",
-                "occupancy of the channel from the reconfigure notification to most components.",
                 registry
             ).unwrap(),
             tx_committed_certificates: register_int_gauge_with_registry!(
@@ -202,12 +186,12 @@ impl PrimaryChannelMetrics {
             ).unwrap(),
             tx_parents_total: register_int_counter_with_registry!(
                 "tx_parents_total",
-                "total received on channel from the `primary::Core` to the `primary::Proposer`",
+                "total received on channel from the `primary::Synchronizer` to the `primary::Proposer`",
                 registry
             ).unwrap(),
             tx_headers_total: register_int_counter_with_registry!(
                 "tx_headers_total",
-                "total received on channel from the `primary::Proposer` to the `primary::Core`",
+                "total received on channel from the `primary::Proposer` to the `primary::Certifier`",
                 registry
             ).unwrap(),
             tx_certificate_fetcher_total: register_int_counter_with_registry!(
@@ -223,11 +207,6 @@ impl PrimaryChannelMetrics {
             tx_state_handler_total: register_int_counter_with_registry!(
                 "tx_state_handler_total",
                 "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
-                registry
-            ).unwrap(),
-            tx_reconfigure_total: register_int_counter_with_registry!(
-                "tx_reconfigure_total",
-                "total received on channel from the reconfigure notification to most components.",
                 registry
             ).unwrap(),
             tx_committed_certificates_total: register_int_counter_with_registry!(
@@ -300,12 +279,14 @@ pub struct PrimaryMetrics {
     pub certificates_processed: IntCounterVec,
     /// count number of certificates that the node suspended their processing
     pub certificates_suspended: IntCounterVec,
+    /// number of certificates that are currently suspended.
+    pub certificates_currently_suspended: IntGauge,
     /// count number of duplicate certificates that the node processed (others + own)
     pub duplicate_certificates_processed: IntCounter,
-    /// Latency to perform a garbage collection in core module
-    pub gc_core_latency: Histogram,
     /// The current Narwhal round in proposer
     pub current_round: IntGauge,
+    /// Latency distribution for generating proposals
+    pub proposal_latency: HistogramVec,
     /// The highest Narwhal round of certificates that have been accepted.
     pub highest_processed_round: IntGaugeVec,
     /// The highest Narwhal round that has been received.
@@ -327,6 +308,10 @@ pub struct PrimaryMetrics {
     /// The latency of a batch between the time it has been
     /// created and until it has been included to a header proposal.
     pub proposer_batch_latency: Histogram,
+    /// The number of headers being resent because they will not get committed.
+    pub proposer_resend_headers: IntCounter,
+    /// The number of batches being resent because they will not get committed.
+    pub proposer_resend_batches: IntCounter,
     /// Time it takes for a header to be materialised to a certificate
     pub header_to_certificate_latency: Histogram,
 }
@@ -394,15 +379,15 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
-            duplicate_certificates_processed: register_int_counter_with_registry!(
-                "duplicate_certificates_processed",
-                "Number of certificates that node processed (others + own)",
+            certificates_currently_suspended: register_int_gauge_with_registry!(
+                "certificates_currently_suspended",
+                "Number of certificates that are suspended in memory",
                 registry
             )
             .unwrap(),
-            gc_core_latency: register_histogram_with_registry!(
-                "gc_core_latency",
-                "Latency of a the garbage collection process for core module",
+            duplicate_certificates_processed: register_int_counter_with_registry!(
+                "duplicate_certificates_processed",
+                "Number of certificates that node processed (others + own)",
                 registry
             )
             .unwrap(),
@@ -412,6 +397,13 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            proposal_latency: register_histogram_vec_with_registry!(
+                "proposal_latency",
+                "Time distribution between node proposals",
+                &["reason"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             highest_received_round: register_int_gauge_vec_with_registry!(
                 "highest_received_round",
                 "Highest round received by the primary",
@@ -467,6 +459,16 @@ impl PrimaryMetrics {
                 "proposer_batch_latency",
                 "The latency of a batch between the time it has been created and until it has been included to a header proposal.",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
+            proposer_resend_headers: register_int_counter_with_registry!(
+                "proposer_resend_headers",
+                "The number of headers being resent because they will not get committed.",
+                registry
+            ).unwrap(),
+            proposer_resend_batches: register_int_counter_with_registry!(
+                "proposer_resend_batches",
+                "The number of batches being resent because they will not get committed.",
                 registry
             ).unwrap(),
             header_to_certificate_latency: register_histogram_with_registry!(

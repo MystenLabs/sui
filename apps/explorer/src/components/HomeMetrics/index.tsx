@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { formatAmount, roundFloat, useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 
 import { MetricGroup } from './MetricGroup';
@@ -9,11 +10,9 @@ import { MetricGroup } from './MetricGroup';
 import { useNetwork } from '~/context';
 import { useAppsBackend } from '~/hooks/useAppsBackend';
 import { useGetSystemObject } from '~/hooks/useGetObject';
-import { useRpc } from '~/hooks/useRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats, type StatsProps } from '~/ui/Stats';
-import { formatAmount } from '~/utils/formatAmount';
 import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 interface CountsResponse {
@@ -26,10 +25,6 @@ interface CountsResponse {
 interface TPSCheckpointResponse {
     tps: number;
     checkpoint: string;
-}
-
-function roundFloat(number: number, decimals: number) {
-    return parseFloat(number.toFixed(decimals));
 }
 
 // Simple wrapper around stats to avoid text wrapping:
@@ -48,7 +43,7 @@ export function HomeMetrics() {
     const request = useAppsBackend();
     const { data: systemData } = useGetSystemObject();
 
-    const rpc = useRpc();
+    const rpc = useRpcClient();
     const { data: gasData } = useQuery(['reference-gas-price'], () =>
         rpc.getReferenceGasPrice()
     );

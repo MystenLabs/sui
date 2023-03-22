@@ -1,23 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CopyNew24 } from '@mysten/icons';
-import { type TransactionKindName } from '@mysten/sui.js';
+import { CopyNew24, Flag16, Nft16 } from '@mysten/icons';
 import toast from 'react-hot-toast';
 
 import { Badge } from './Badge';
 import { Heading } from './Heading';
-import { ReactComponent as ImageIcon } from './icons/image.svg';
 import { ReactComponent as SenderIcon } from './icons/sender.svg';
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
-import { ReactComponent as ChangeEpochIcon } from './icons/transactions/changeEpoch.svg';
-import { ReactComponent as PayIcon } from './icons/transactions/pay.svg';
-import { ReactComponent as PublishIcon } from './icons/transactions/publish.svg';
-import { ReactComponent as TransferObjectIcon } from './icons/transactions/transferObject.svg';
-import { ReactComponent as TransferSuiIcon } from './icons/transactions/transferSui.svg';
 
 export type PageHeaderType =
-    | TransactionKindName
+    | 'Transaction'
+    | 'Checkpoint'
     | 'Address'
     | 'Object'
     | 'Package';
@@ -30,16 +24,9 @@ export interface PageHeaderProps {
 }
 
 const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
-    Call: CallIcon,
-    ChangeEpoch: ChangeEpochIcon,
-    Pay: PayIcon,
-    // TODO: replace with SUI specific icon if needed
-    PaySui: PayIcon,
-    PayAllSui: PayIcon,
-    Publish: PublishIcon,
-    TransferObject: TransferObjectIcon,
-    TransferSui: TransferSuiIcon,
-    Object: ImageIcon,
+    Transaction: CallIcon,
+    Checkpoint: Flag16,
+    Object: Nft16,
     Package: CallIcon,
     Address: () => (
         <SenderIcon
@@ -62,7 +49,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
     return (
         <div data-testid="pageheader">
             <div className="mb-3 flex items-center gap-2">
-                {Icon && <Icon className="text-steel" />}
+                {Icon && <Icon className="text-steel-dark" />}
                 <Heading variant="heading4/semibold" color="steel-darker">
                     {type}
                 </Heading>
@@ -89,8 +76,6 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                     >
                         <span className="sr-only">Copy</span>
                         <CopyNew24 aria-hidden="true" />
-                        {/* <Copy12 aria-hidden="true" /> */}
-                        {/* <CopyIcon aria-hidden="true" /> */}
                     </button>
                 </div>
 

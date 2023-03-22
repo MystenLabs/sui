@@ -61,7 +61,12 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-            match self.fullnode_client.read_api().get_sui_system_state().await {
+            match self
+                .fullnode_client
+                .governance_api()
+                .get_latest_sui_system_state()
+                .await
+            {
                 Ok(sui_system_state) => {
                     let epoch_id = sui_system_state.epoch;
                     if epoch_id > quorum_driver.current_epoch() {
@@ -76,9 +81,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                                 // Safe to unwrap, checked above
                                 Committee::new(
                                     committee.epoch,
-                                    committee.protocol_version,
-                                    BTreeMap::from_iter(committee.committee_info.into_iter())).unwrap_or_else(
-                                    |e| panic!("Can't create a valid Committee given info returned from Full Node: {:?}", e)
+                                    BTreeMap::from_iter(committee.validators.into_iter()),
                                 )
                             }
                             other => {
@@ -90,8 +93,8 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             }
                         };
                         let _ = self.committee_store.insert_new_committee(&new_committee);
-                        match AuthorityAggregator::new_from_system_state(
-                            &sui_system_state,
+                        match AuthorityAggregator::new_from_committee(
+                            sui_system_state.get_sui_committee_for_benchmarking(),
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
                             self.auth_agg_metrics.clone(),

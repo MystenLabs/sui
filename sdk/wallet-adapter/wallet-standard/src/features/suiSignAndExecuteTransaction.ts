@@ -3,12 +3,13 @@
 
 import type {
   ExecuteTransactionRequestType,
-  SignableTransaction,
   SuiTransactionResponse,
+  SuiTransactionResponseOptions,
 } from "@mysten/sui.js";
+import type { SuiSignTransactionInput } from "./suiSignTransaction";
 
 /** The latest API version of the signAndExecuteTransaction API. */
-export type SuiSignAndExecuteTransactionVersion = "1.1.0";
+export type SuiSignAndExecuteTransactionVersion = "2.0.0";
 
 /**
  * A Wallet Standard feature for signing a transaction, and submitting it to the
@@ -29,16 +30,17 @@ export type SuiSignAndExecuteTransactionMethod = (
 ) => Promise<SuiSignAndExecuteTransactionOutput>;
 
 /** Input for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionInput {
-  transaction: SignableTransaction;
-  options?: SuiSignAndExecuteTransactionOptions;
+export interface SuiSignAndExecuteTransactionInput
+  extends SuiSignTransactionInput {
+  /**
+   * `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
+   * Defaults to `WaitForLocalExecution` if options.showEffects or options.showEvents is true
+   */
+  requestType?: ExecuteTransactionRequestType;
+  /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
+  options?: SuiTransactionResponseOptions;
 }
 
 /** Output of signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionOutput
   extends SuiTransactionResponse {}
-
-/** Options for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionOptions {
-  requestType?: ExecuteTransactionRequestType;
-}

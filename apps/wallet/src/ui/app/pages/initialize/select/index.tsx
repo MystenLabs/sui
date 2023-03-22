@@ -34,7 +34,7 @@ const SelectPage = () => {
                 {selections.map((aSelection) => (
                     <div
                         className={
-                            'bg-alice-blue flex flex-col flex-nowrap items-center gap-3 text-center rounded-15 py-10 px-7.5 max-w-popup-width shadow-wallet-content'
+                            'bg-sui-lightest flex flex-col flex-nowrap items-center gap-3 text-center rounded-15 py-10 px-7.5 max-w-popup-width shadow-wallet-content'
                         }
                         key={aSelection.url}
                     >

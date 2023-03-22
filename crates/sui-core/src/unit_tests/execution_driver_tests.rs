@@ -19,7 +19,9 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use sui_types::error::SuiResult;
-use sui_types::messages::{TransactionEffects, VerifiedCertificate, VerifiedTransaction};
+use sui_types::messages::{
+    TransactionEffects, TransactionEffectsAPI, VerifiedCertificate, VerifiedTransaction,
+};
 use sui_types::object::{Object, Owner};
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -315,7 +317,7 @@ async fn test_transaction_manager() {
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx1)
             .await;
     executed_owned_certs.push(cert);
-    let mut owned_object_ref = effects1.created[0].0;
+    let mut owned_object_ref = effects1.created()[0].0;
 
     // Initialize a shared counter, re-using gas_ref_0 so it has to execute after tx1.
     let gas_ref = get_latest_ref(authority_clients[0], gas_objects[0][0].id()).await;
@@ -324,7 +326,7 @@ async fn test_transaction_manager() {
         execute_owned_on_first_three_authorities(&authority_clients, &aggregator.committee, &tx2)
             .await;
     executed_owned_certs.push(cert);
-    let (mut shared_counter_ref, owner) = effects2.created[0];
+    let (mut shared_counter_ref, owner) = effects2.created()[0];
     let shared_counter_initial_version = if let Owner::Shared {
         initial_shared_version,
     } = owner
@@ -366,7 +368,7 @@ async fn test_transaction_manager() {
         )
         .await;
         executed_owned_certs.push(cert);
-        owned_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
+        owned_object_ref = effects.mutated_excluding_gas().first().unwrap().0;
 
         let gas_ref = get_latest_ref(
             authority_clients[source_index],
@@ -389,7 +391,7 @@ async fn test_transaction_manager() {
         )
         .await;
         executed_shared_certs.push(cert);
-        shared_counter_ref = effects.mutated_excluding_gas().next().unwrap().0;
+        shared_counter_ref = effects.mutated_excluding_gas().first().unwrap().0;
     }
 
     // ---- Execute transactions in reverse dependency order on the last authority.
@@ -497,7 +499,7 @@ async fn test_per_object_overload() {
         .unwrap()
         .pop()
         .unwrap();
-    let (shared_counter_ref, owner) = create_counter_effects.created[0];
+    let (shared_counter_ref, owner) = create_counter_effects.created()[0];
     let Owner::Shared {
         initial_shared_version: shared_counter_initial_version
     } = owner else {
@@ -510,8 +512,6 @@ async fn test_per_object_overload() {
     sleep(Duration::from_secs(1)).await;
 
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
-    let mut shared_txns = Vec::new();
-    let mut shared_certs = Vec::new();
     // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
     // txn is needed.
     let num_txns = MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH + 1;
@@ -537,8 +537,6 @@ async fn test_per_object_overload() {
             send_consensus(authority, &shared_cert).await;
         }
         send_consensus(&authorities[3], &shared_cert).await;
-        shared_txns.push(shared_txn);
-        shared_certs.push(shared_cert);
     }
 
     // Trying to sign a new transaction would now fail.

@@ -8,6 +8,8 @@ pub use msim::*;
 pub use anemo;
 pub use anemo_tower;
 pub use fastcrypto;
+pub use lru;
+pub use move_package;
 pub use narwhal_network;
 pub use sui_framework;
 pub use sui_framework_build;
@@ -105,4 +107,9 @@ pub mod configs {
 #[macro_export]
 macro_rules! return_if_killed {
     () => {};
+}
+
+#[cfg(msim)]
+pub fn current_simnode_id() -> msim::task::NodeId {
+    msim::runtime::NodeHandle::current().id()
 }

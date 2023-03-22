@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowUpRight12 } from '@mysten/icons';
-import { toB64, type MoveActiveValidator } from '@mysten/sui.js';
-import { useMemo } from 'react';
+import { type SuiValidatorSummary } from '@mysten/sui.js';
 
 import { StakeButton } from './StakeButton';
 
@@ -12,37 +11,17 @@ import { Heading } from '~/ui/Heading';
 import { ImageIcon } from '~/ui/ImageIcon';
 import { AddressLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
-import { getName } from '~/utils/getName';
 
 type ValidatorMetaProps = {
-    validatorData: MoveActiveValidator;
+    validatorData: SuiValidatorSummary;
 };
 
 export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
-    const metadata = validatorData.fields.metadata.fields;
-
-    const validatorName = useMemo(() => getName(metadata.name), [metadata]);
-
-    const validatorPublicKey = useMemo(
-        () => toB64(new Uint8Array(metadata.pubkey_bytes)),
-        [metadata]
-    );
-
-    // NOTE: We only support the string-encoded metadata fields, which will become the only encoding soon:
-    const logo =
-        !metadata.image_url || typeof metadata.image_url !== 'string'
-            ? null
-            : metadata.image_url;
-
-    const description =
-        !metadata.description || typeof metadata.description !== 'string'
-            ? null
-            : metadata.description;
-
-    const projectUrl =
-        !metadata.project_url || typeof metadata.project_url !== 'string'
-            ? null
-            : metadata.project_url;
+    const validatorPublicKey = validatorData.protocolPubkeyBytes;
+    const validatorName = validatorData.name;
+    const logo = validatorData.imageUrl;
+    const description = validatorData.description;
+    const projectUrl = validatorData.projectUrl;
 
     return (
         <>
@@ -87,14 +66,12 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                     </DescriptionItem>
                     <DescriptionItem title="Address">
                         <AddressLink
-                            address={
-                                validatorData.fields.metadata.fields.sui_address
-                            }
+                            address={validatorData.suiAddress}
                             noTruncate
                         />
                     </DescriptionItem>
                     <DescriptionItem title="Public Key">
-                        <Text variant="p1/medium" color="gray-90">
+                        <Text variant="p1/medium" color="steel-darker">
                             {validatorPublicKey}
                         </Text>
                     </DescriptionItem>

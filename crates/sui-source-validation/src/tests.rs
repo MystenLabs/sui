@@ -347,7 +347,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
     let client = context.get_client().await?;
     let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
 
-    let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000005"];
+    let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"];
     expected.assert_eq(
         &verifier
             .verify_package_deps(&a_pkg.package)
@@ -562,9 +562,10 @@ async fn publish_package(
     sender: SuiAddress,
     package: impl AsRef<Path>,
 ) -> ObjectRef {
-    let package_bytes =
-        compile_package(package).get_package_bytes(/* with_unpublished_deps */ false);
-    publish_package_with_wallet(context, sender, package_bytes).await
+    let package = compile_package(package);
+    let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ false);
+    let package_deps = package.get_dependency_original_package_ids();
+    publish_package_with_wallet(context, sender, package_bytes, package_deps).await
 }
 
 /// Compile and publish package at absolute path `package` to chain, along with its unpublished
@@ -574,9 +575,10 @@ async fn publish_package_and_deps(
     sender: SuiAddress,
     package: impl AsRef<Path>,
 ) -> ObjectRef {
-    let package_bytes =
-        compile_package(package).get_package_bytes(/* with_unpublished_deps */ true);
-    publish_package_with_wallet(context, sender, package_bytes).await
+    let package = compile_package(package);
+    let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ true);
+    let package_deps = package.get_dependency_original_package_ids();
+    publish_package_with_wallet(context, sender, package_bytes, package_deps).await
 }
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's

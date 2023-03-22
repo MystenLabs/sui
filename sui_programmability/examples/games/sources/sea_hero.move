@@ -112,7 +112,7 @@ module games::sea_hero {
         };
         admin.monsters_created = admin.monsters_created + 1;
 
-        transfer::transfer(monster, recipient)
+        transfer::public_transfer(monster, recipient)
     }
 
     /// Reward a hero will reap from slaying this monster

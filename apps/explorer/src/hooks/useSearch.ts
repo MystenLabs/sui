@@ -1,20 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useFeature } from '@growthbook/growthbook-react';
+import { useRpcClient } from '@mysten/core';
 import {
     isValidTransactionDigest,
     isValidSuiAddress,
     isValidSuiObjectId,
     normalizeSuiObjectId,
     is,
-    SuiObject,
+    SuiObjectData,
     type JsonRpcProvider,
     getTransactionDigest,
 } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
 
-import { useRpc } from '~/hooks/useRpc';
-import { isGenesisLibAddress } from '~/utils/api/searchUtil';
+import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
+
+const isGenesisLibAddress = (value: string): boolean =>
+    /^(0x|0X)0{0,39}[12]$/.test(value);
 
 type Result = {
     label: string;
@@ -27,7 +31,7 @@ const getResultsForTransaction = async (
 ) => {
     if (!isValidTransactionDigest(query)) return null;
 
-    const txdata = await rpc.getTransactionWithEffects(query);
+    const txdata = await rpc.getTransaction({ digest: query });
     return {
         label: 'transaction',
         results: [
@@ -44,19 +48,38 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
     const normalized = normalizeSuiObjectId(query);
     if (!isValidSuiObjectId(normalized)) return null;
 
-    const { details, status } = await rpc.getObject(normalized);
-    if (is(details, SuiObject) && status === 'Exists') {
+    const { details, status } = await rpc.getObject({ id: normalized });
+    if (is(details, SuiObjectData) && status === 'Exists') {
         return {
             label: 'object',
             results: [
                 {
-                    id: details.reference.objectId,
-                    label: details.reference.objectId,
+                    id: details.objectId,
+                    label: details.objectId,
                     type: 'object',
                 },
             ],
         };
     }
+
+    return null;
+};
+
+const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
+    const { digest } = await rpc.getCheckpoint({ id: query });
+    if (digest) {
+        return {
+            label: 'checkpoint',
+            results: [
+                {
+                    id: digest,
+                    label: digest,
+                    type: 'checkpoint',
+                },
+            ],
+        };
+    }
+
     return null;
 };
 
@@ -66,9 +89,13 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
         return null;
 
     const [from, to] = await Promise.all([
-        rpc.getTransactions({ FromAddress: normalized }, null, 1),
-        rpc.getTransactions({ ToAddress: normalized }, null, 1),
+        rpc.queryTransactions({
+            filter: { FromAddress: normalized },
+            limit: 1,
+        }),
+        rpc.queryTransactions({ filter: { ToAddress: normalized }, limit: 1 }),
     ]);
+
     if (from.data?.length || to.data?.length) {
         return {
             label: 'address',
@@ -81,22 +108,33 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
             ],
         };
     }
+
     return null;
 };
 
 export function useSearch(query: string) {
-    const rpc = useRpc();
+    const rpc = useRpcClient();
+    const checkpointsEnabled = useFeature(
+        GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS
+    ).on;
 
     return useQuery(
         ['search', query],
         async () => {
-            const results = await Promise.all([
-                getResultsForTransaction(rpc, query),
-                getResultsForAddress(rpc, query),
-                getResultsForObject(rpc, query),
-            ]);
+            const results = (
+                await Promise.allSettled([
+                    getResultsForTransaction(rpc, query),
+                    ...(checkpointsEnabled
+                        ? [getResultsForCheckpoint(rpc, query)]
+                        : []),
+                    getResultsForAddress(rpc, query),
+                    getResultsForObject(rpc, query),
+                ])
+            ).filter(
+                (r) => r.status === 'fulfilled' && r.value
+            ) as PromiseFulfilledResult<Result>[];
 
-            return results.filter(Boolean) as Result[];
+            return results.map(({ value }) => value);
         },
         {
             enabled: !!query,

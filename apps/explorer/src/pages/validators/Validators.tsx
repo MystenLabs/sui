@@ -1,22 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    is,
-    SuiObject,
-    type MoveSuiSystemObjectFields,
-    type MoveActiveValidator,
-    type SuiEventEnvelope,
-} from '@mysten/sui.js';
+import { calculateAPY, roundFloat } from '@mysten/core';
+import { type SuiSystemStateSummary, type SuiEvent } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
-import { calculateAPY } from '~/components/validator/calculateAPY';
-import { useGetObject } from '~/hooks/useGetObject';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
-import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -27,50 +20,41 @@ import { Stats } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { TableHeader } from '~/ui/TableHeader';
 import { Text } from '~/ui/Text';
-import { getName } from '~/utils/getName';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
-import { roundFloat } from '~/utils/roundFloat';
 
 const APY_DECIMALS = 3;
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-function validatorsTableData(
-    validators: MoveActiveValidator[],
-    epoch: number,
-    validatorsEvents: SuiEventEnvelope[]
+export function validatorsTableData(
+    systemState: SuiSystemStateSummary,
+    validatorEvents: SuiEvent[]
 ) {
     return {
-        data: validators.map((validator, index) => {
-            const validatorName = getName(
-                validator.fields.metadata.fields.name
-            );
-            const delegatedStake =
-                +validator.fields.delegation_staking_pool.fields.sui_balance;
-            const selfStake = +validator.fields.stake_amount;
-            const totalStake = selfStake + delegatedStake;
-            const img =
-                validator.fields.metadata.fields.image_url &&
-                typeof validator.fields.metadata.fields.image_url === 'string'
-                    ? validator.fields.metadata.fields.image_url
-                    : null;
+        data: systemState.activeValidators.map((validator) => {
+            const validatorName = validator.name;
+            const totalStake = validator.stakingPoolSuiBalance;
+            const img = validator.imageUrl;
 
             const event = getValidatorMoveEvent(
-                validatorsEvents,
-                validator.fields.metadata.fields.sui_address
+                validatorEvents,
+                validator.suiAddress
             );
-
             return {
                 name: {
                     name: validatorName,
-                    logo: validator.fields.metadata.fields.image_url,
+                    logo: validator.imageUrl,
                 },
                 stake: totalStake,
-                apy: calculateAPY(validator, epoch),
-                commission: +validator.fields.commission_rate / 100,
+                apy: calculateAPY(validator, systemState.epoch),
+                nextEpochGasPrice: validator.nextEpochGasPrice,
+                commission: +validator.commissionRate / 100,
                 img: img,
-                address: validator.fields.metadata.fields.sui_address,
-                lastReward: event?.fields.stake_rewards || 0,
+                address: validator.suiAddress,
+                lastReward: event?.stake_rewards || 0,
+                atRisk: systemState.atRiskValidators.some(
+                    ([address]) => address === validator.suiAddress
+                ),
             };
         }),
         columns: [
@@ -130,6 +114,12 @@ function validatorsTableData(
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
             },
             {
+                header: 'Next Epoch Gas Price',
+                accessorKey: 'nextEpochGasPrice',
+                enableSorting: true,
+                cell: (props: any) => <StakeColumn stake={props.getValue()} />,
+            },
+            {
                 header: 'APY',
                 accessorKey: 'apy',
                 cell: (props: any) => {
@@ -167,25 +157,32 @@ function validatorsTableData(
                     );
                 },
             },
+            {
+                header: 'Status',
+                accessorKey: 'atRisk',
+                cell: (props: any) => {
+                    const atRisk = props.getValue();
+                    return atRisk ? (
+                        <Text color="issue" variant="bodySmall/medium">
+                            At Risk
+                        </Text>
+                    ) : (
+                        <Text variant="bodySmall/medium" color="steel-darker">
+                            Active
+                        </Text>
+                    );
+                },
+            },
         ],
     };
 }
 
 function ValidatorPageResult() {
-    const { data, isLoading, isSuccess, isError } =
-        useGetObject(VALIDATORS_OBJECT_ID);
-
-    const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as MoveSuiSystemObjectFields)
-            : null;
+    const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
     const numberOfValidators = useMemo(
-        () =>
-            validatorsData?.validators.fields.active_validators.length || null,
-        [validatorsData]
+        () => data?.activeValidators.length || null,
+        [data]
     );
 
     const {
@@ -198,57 +195,44 @@ function ValidatorPageResult() {
     });
 
     const totalStaked = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!data) return 0;
+        const validators = data.activeValidators;
 
         return validators.reduce(
-            (acc, cur) =>
-                acc +
-                +cur.fields.delegation_staking_pool.fields.sui_balance +
-                +cur.fields.stake_amount,
+            (acc, cur) => acc + +cur.stakingPoolSuiBalance,
             0
         );
-    }, [validatorsData]);
+    }, [data]);
 
     const averageAPY = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!data) return 0;
+        const validators = data.activeValidators;
 
         const validatorsApy = validators.map((av) =>
-            calculateAPY(av, +validatorsData.epoch)
+            calculateAPY(av, +data.epoch)
         );
         return roundFloat(
             validatorsApy.reduce((acc, cur) => acc + cur, 0) /
                 validatorsApy.length,
             APY_DECIMALS
         );
-    }, [validatorsData]);
+    }, [data]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
         if (!validatorEvents) return 0;
         let totalRewards = 0;
 
-        validatorEvents.data.forEach(({ event }) => {
-            if ('moveEvent' in event) {
-                const { moveEvent } = event;
-                totalRewards += +moveEvent.fields.stake_rewards;
-            }
+        validatorEvents.data.forEach(({ parsedJson }) => {
+            totalRewards += +parsedJson!.stake_rewards;
         });
 
         return totalRewards;
     }, [validatorEvents]);
 
     const validatorsTable = useMemo(() => {
-        if (!validatorsData || !validatorEvents) return null;
-
-        const validators = validatorsData.validators.fields.active_validators;
-
-        return validatorsTableData(
-            validators,
-            +validatorsData.epoch,
-            validatorEvents.data
-        );
-    }, [validatorEvents, validatorsData]);
+        if (!data || !validatorEvents) return null;
+        return validatorsTableData(data, validatorEvents.data);
+    }, [validatorEvents, data]);
 
     const defaultSorting = [{ id: 'stake', desc: false }];
 
@@ -262,10 +246,6 @@ function ValidatorPageResult() {
 
     return (
         <div>
-            <Heading as="h1" variant="heading2/bold">
-                Validators
-            </Heading>
-
             <div className="mt-8 grid gap-5 md:grid-cols-2">
                 <Card spacing="lg">
                     <div className="flex w-full basis-full flex-col gap-8">

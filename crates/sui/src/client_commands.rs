@@ -26,25 +26,29 @@ use prettytable::{row, table};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sui_framework::build_move_package;
+use sui_move::build::resolve_lock_file_path;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::error::SuiError;
 
-use sui_framework_build::compiled_package::BuildConfig;
-use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiExecutionStatus;
-use sui_json_rpc_types::{
-    DynamicFieldPage, GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiRawData,
-    SuiTransactionResponse,
+use shared_crypto::intent::Intent;
+use sui_framework_build::compiled_package::{
+    build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
+    gather_dependencies, root_published_at, BuildConfig, CompiledPackage, PackageDependencies,
 };
-use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
+use sui_json::SuiJsonValue;
+use sui_json_rpc_types::{
+    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiRawData, SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
+};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::intent::Intent;
+use sui_types::move_package::UpgradeCap;
 use sui_types::signature::GenericSignature;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress},
     gas_coin::GasCoin,
     messages::TransactionData,
     messages::{Transaction, VerifiedTransaction},
@@ -118,6 +122,45 @@ pub enum SuiClientCommands {
             default_value = "."
         )]
         package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+
+        /// Gas budget for running module initializers
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Publish the package without checking whether compiling dependencies from source results
+        /// in bytecode matching the dependencies found on-chain.
+        #[clap(long)]
+        skip_dependency_verification: bool,
+
+        /// Also publish transitive dependencies that have not already been published.
+        #[clap(long)]
+        with_unpublished_dependencies: bool,
+    },
+
+    /// Upgrade Move modules
+    #[clap(name = "upgrade")]
+    Upgrade {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// ID of the upgrade capability for the package being upgraded.
+        #[clap(long)]
+        upgrade_capability: ObjectID,
 
         /// Package build options
         #[clap(flatten)]
@@ -462,6 +505,81 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
+            SuiClientCommands::Upgrade {
+                package_path,
+                upgrade_capability,
+                build_config,
+                gas,
+                gas_budget,
+                skip_dependency_verification,
+                with_unpublished_dependencies,
+            } => {
+                let sender = context.try_get_object_owner(&gas).await?;
+                let sender = sender.unwrap_or(context.active_address()?);
+
+                let client = context.get_client().await?;
+                let (dependencies, compiled_modules, compiled_package, package_id) =
+                    compile_package(
+                        &client,
+                        build_config,
+                        package_path,
+                        with_unpublished_dependencies,
+                        skip_dependency_verification,
+                    )
+                    .await?;
+
+                let SuiObjectResponse::Exists(data) = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_object_with_options(upgrade_capability, SuiObjectDataOptions::default().with_bcs().with_owner())
+                    .await? else {
+                        return Err(anyhow!("Could not find upgrade capability at {upgrade_capability}"))
+                    };
+
+                let upgrade_cap: UpgradeCap = data
+                    .bcs
+                    .ok_or_else(|| {
+                        anyhow!("Fetch upgrade capability object but no data was returned")
+                    })?
+                    .try_as_move()
+                    .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
+                    .deserialize()?;
+                // We keep the existing policy -- no fancy policies or changing the upgrade
+                // policy at the moment. To change the policy you can call a Move function in the
+                // `package` module to change this policy.
+                let upgrade_policy = upgrade_cap.policy;
+                let package_digest =
+                    compiled_package.get_package_digest(with_unpublished_dependencies);
+
+                let data = client
+                    .transaction_builder()
+                    .upgrade(
+                        sender,
+                        package_id.unwrap(),
+                        compiled_modules,
+                        dependencies.published.into_values().collect(),
+                        upgrade_capability,
+                        upgrade_policy,
+                        package_digest.to_vec(),
+                        gas,
+                        gas_budget,
+                    )
+                    .await?;
+                let signature =
+                    context
+                        .config
+                        .keystore
+                        .sign_secure(&sender, &data, Intent::default())?;
+                let response = context
+                    .execute_transaction(
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
+                    )
+                    .await?;
+
+                SuiClientCommandResult::Upgrade(response)
+            }
             SuiClientCommands::Publish {
                 package_path,
                 gas,
@@ -473,49 +591,25 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let compiled_package = build_move_package(
-                    &package_path,
-                    BuildConfig {
-                        config: build_config,
-                        run_bytecode_verifier: true,
-                        print_diags_to_stderr: true,
-                    },
-                )?;
-
-                if !compiled_package.is_framework() {
-                    if let Some(already_published) = compiled_package.published_root_module() {
-                        return Err(SuiError::ModulePublishFailure {
-                            error: format!(
-                                "Modules must all have 0x0 as their addresses. \
-                                 Violated by module {:?}",
-                                already_published.self_id(),
-                            ),
-                        }
-                        .into());
-                    }
-                }
-
                 let client = context.get_client().await?;
-                let compiled_modules =
-                    compiled_package.get_package_bytes(with_unpublished_dependencies);
-
-                if !skip_dependency_verification {
-                    BytecodeSourceVerifier::new(client.read_api(), false)
-                        .verify_package_deps(&compiled_package.package)
-                        .await?;
-                    eprintln!(
-                        "{}",
-                        "Successfully verified dependencies on-chain against source."
-                            .bold()
-                            .green(),
-                    );
-                } else {
-                    eprintln!("{}", "Skipping dependency verification".bold().yellow());
-                }
+                let (dependencies, compiled_modules, _, _) = compile_package(
+                    &client,
+                    build_config,
+                    package_path,
+                    with_unpublished_dependencies,
+                    skip_dependency_verification,
+                )
+                .await?;
 
                 let data = client
                     .transaction_builder()
-                    .publish(sender, compiled_modules, gas, gas_budget)
+                    .publish(
+                        sender,
+                        compiled_modules,
+                        dependencies.published.into_values().collect(),
+                        gas,
+                        gas_budget,
+                    )
                     .await?;
                 let signature =
                     context
@@ -536,10 +630,16 @@ impl SuiClientCommands {
                 // Fetch the object ref
                 let client = context.get_client().await?;
                 if !bcs {
-                    let object_read = client.read_api().get_parsed_object(id).await?;
+                    let object_read = client
+                        .read_api()
+                        .get_object_with_options(id, SuiObjectDataOptions::full_content())
+                        .await?;
                     SuiClientCommandResult::Object(object_read)
                 } else {
-                    let raw_object_read = client.read_api().get_object(id).await?;
+                    let raw_object_read = client
+                        .read_api()
+                        .get_object_with_options(id, SuiObjectDataOptions::bcs_lossless())
+                        .await?;
                     SuiClientCommandResult::RawObject(raw_object_read)
                 }
             }
@@ -594,10 +694,15 @@ impl SuiClientCommands {
                             .verify()?,
                     )
                     .await?;
-                let effects = &response.effects;
+                let effects = response.effects.as_ref().ok_or_else(|| {
+                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                })?;
                 let time_total = time_start.elapsed().as_micros();
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error transferring object: {:#?}", effects.status));
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!(
+                        "Error transferring object: {:#?}",
+                        effects.status()
+                    ));
                 }
                 SuiClientCommandResult::Transfer(time_total, response)
             }
@@ -626,9 +731,11 @@ impl SuiClientCommands {
                             .verify()?,
                     )
                     .await?;
-                let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status));
+                let effects = response.effects.as_ref().ok_or_else(|| {
+                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                })?;
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error transferring SUI: {:#?}", effects.status()));
                 }
                 SuiClientCommandResult::TransferSui(response)
             }
@@ -673,11 +780,13 @@ impl SuiClientCommands {
                             .verify()?,
                     )
                     .await?;
-                let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                let effects = response.effects.as_ref().ok_or_else(|| {
+                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                })?;
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing Pay transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::Pay(response)
@@ -722,11 +831,13 @@ impl SuiClientCommands {
                             .verify()?,
                     )
                     .await?;
-                let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                let effects = response.effects.as_ref().ok_or_else(|| {
+                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                })?;
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PaySui transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::PaySui(response)
@@ -759,11 +870,13 @@ impl SuiClientCommands {
                             .verify()?,
                     )
                     .await?;
-                let effects = &response.effects;
-                if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
+                let effects = response.effects.as_ref().ok_or_else(|| {
+                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                })?;
+                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
                         "Error executing PayAllSui transaction: {:#?}",
-                        effects.status
+                        effects.status()
                     ));
                 }
                 SuiClientCommandResult::PayAllSui(response)
@@ -779,9 +892,17 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let address_object = client
                     .read_api()
-                    .get_objects_owned_by_address(address)
+                    .get_owned_objects(
+                        address,
+                        Some(SuiObjectResponseQuery::new_with_options(
+                            SuiObjectDataOptions::full_content(),
+                        )),
+                        None,
+                        None,
+                        None,
+                    )
                     .await?;
-                SuiClientCommandResult::Objects(address_object)
+                SuiClientCommandResult::Objects(address_object.data)
             }
 
             SuiClientCommands::NewAddress {
@@ -801,7 +922,7 @@ impl SuiClientCommands {
                     .await?
                     .iter()
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
-                    .map(|(_val, object, _object_ref)| GasCoin::try_from(object).unwrap())
+                    .map(|(_val, object)| GasCoin::try_from(object).unwrap())
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
@@ -921,13 +1042,17 @@ impl SuiClientCommands {
                 .await?;
                 let nft_id = response
                     .effects
-                    .created
+                    .ok_or_else(|| anyhow!("Failed to fetch transaction effects"))?
+                    .created()
                     .first()
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
                 let client = context.get_client().await?;
-                let object_read = client.read_api().get_parsed_object(nft_id).await?;
+                let object_read = client
+                    .read_api()
+                    .get_object_with_options(nft_id, SuiObjectDataOptions::full_content())
+                    .await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
 
@@ -1023,6 +1148,9 @@ impl SuiClientCommands {
                     ));
                 }
 
+                let build_config =
+                    resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+
                 let compiled_package = build_move_package(
                     &package_path,
                     BuildConfig {
@@ -1060,6 +1188,71 @@ impl SuiClientCommands {
     }
 }
 
+async fn compile_package(
+    client: &SuiClient,
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+    with_unpublished_dependencies: bool,
+    skip_dependency_verification: bool,
+) -> Result<
+    (
+        PackageDependencies,
+        Vec<Vec<u8>>,
+        CompiledPackage,
+        Option<ObjectID>,
+    ),
+    anemo::Error,
+> {
+    let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+    let run_bytecode_verifier = true;
+    let print_diags_to_stderr = true;
+    let config = BuildConfig {
+        config,
+        run_bytecode_verifier,
+        print_diags_to_stderr,
+    };
+    let resolution_graph = config.resolution_graph(&package_path)?;
+    let dependencies = gather_dependencies(&resolution_graph);
+    let package_id = root_published_at(&resolution_graph);
+    check_invalid_dependencies(&dependencies.invalid)?;
+    if !with_unpublished_dependencies {
+        check_unpublished_dependencies(&dependencies.unpublished)?;
+    };
+    let compiled_package = build_from_resolution_graph(
+        package_path,
+        resolution_graph,
+        run_bytecode_verifier,
+        print_diags_to_stderr,
+    )?;
+    if !compiled_package.is_system_package() {
+        if let Some(already_published) = compiled_package.published_root_module() {
+            return Err(SuiError::ModulePublishFailure {
+                error: format!(
+                    "Modules must all have 0x0 as their addresses. \
+                           Violated by module {:?}",
+                    already_published.self_id(),
+                ),
+            }
+            .into());
+        }
+    }
+    let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
+    if !skip_dependency_verification {
+        BytecodeSourceVerifier::new(client.read_api(), false)
+            .verify_package_deps(&compiled_package.package)
+            .await?;
+        eprintln!(
+            "{}",
+            "Successfully verified dependencies on-chain against source."
+                .bold()
+                .green(),
+        );
+    } else {
+        eprintln!("{}", "Skipping dependency verification".bold().yellow());
+    }
+    Ok((dependencies, compiled_modules, compiled_package, package_id))
+}
+
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
@@ -1072,10 +1265,10 @@ impl WalletContext {
         request_timeout: Option<std::time::Duration>,
     ) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
-            err.context(format!(
-                "Cannot open wallet config file at {:?}",
+            anyhow!(
+                "Cannot open wallet config file at {:?}. Err: {err}",
                 config_path
-            ))
+            )
         })?;
 
         let config = config.persisted(config_path);
@@ -1099,10 +1292,9 @@ impl WalletContext {
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout)
                 .await?;
-
             if let Err(e) = client.check_api_version() {
                 warn!("{e}");
-                println!("{}", format!("[warn] {e}").yellow().bold());
+                eprintln!("{}", format!("[warn] {e}").yellow().bold());
             }
             self.client.write().await.insert(client).clone()
         })
@@ -1127,35 +1319,55 @@ impl WalletContext {
     }
 
     /// Get the latest object reference given a object id
-    pub async fn get_object_ref(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
         let client = self.get_client().await?;
-        Ok(client.read_api().get_object(object_id).await?)
+        Ok(client
+            .read_api()
+            .get_object_with_options(object_id, SuiObjectDataOptions::new())
+            .await?
+            .into_object()?
+            .object_ref())
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
         let client = self.get_client().await?;
-        let object_refs = client
+        let objects = client
             .read_api()
-            .get_objects_owned_by_address(address)
-            .await?;
-
+            .get_owned_objects(
+                address,
+                Some(SuiObjectResponseQuery::new_with_options(
+                    SuiObjectDataOptions::full_content(),
+                )),
+                None,
+                None,
+                None,
+            )
+            .await?
+            .data;
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
-        for oref in object_refs {
-            let response = client.read_api().get_parsed_object(oref.object_id).await?;
-            match response {
-                GetObjectDataResponse::Exists(o) => {
-                    if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
+
+        let oref_ids = objects
+            .into_iter()
+            .map(|o| o.object().unwrap().object_id)
+            .collect();
+
+        let responses = client
+            .read_api()
+            .multi_get_object_with_options(oref_ids, SuiObjectDataOptions::full_content())
+            .await?;
+
+        for object in responses {
+            match object {
+                SuiObjectResponse::Exists(o) => {
+                    if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o, oref));
+                        values_objects.push((gas_coin.value(), o.clone()));
                     }
                 }
                 _ => continue,
@@ -1167,8 +1379,15 @@ impl WalletContext {
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
         let client = self.get_client().await?;
-        let object = client.read_api().get_object(*id).await?.into_object()?;
-        Ok(object.owner.get_owner_address()?)
+        let object = client
+            .read_api()
+            .get_object_with_options(*id, SuiObjectDataOptions::new().with_owner())
+            .await?
+            .into_object()?;
+        Ok(object
+            .owner
+            .ok_or_else(|| anyhow!("Owner field is None"))?
+            .get_owner_address()?)
     }
 
     pub async fn try_get_object_owner(
@@ -1188,9 +1407,9 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
+    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
-            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
+            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
                 return Ok((o.0, o.1));
             }
         }
@@ -1208,6 +1427,13 @@ impl WalletContext {
             .quorum_driver()
             .execute_transaction(
                 tx,
+                SuiTransactionResponseOptions::new()
+                    .with_effects()
+                    .with_events()
+                    .with_input()
+                    .with_events()
+                    .with_object_changes()
+                    .with_balance_changes(),
                 Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?)
@@ -1218,7 +1444,8 @@ impl Display for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            SuiClientCommandResult::Publish(response) => {
+            SuiClientCommandResult::Upgrade(response)
+            | SuiClientCommandResult::Publish(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
             SuiClientCommandResult::Object(object_read) => {
@@ -1227,11 +1454,11 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
-                    Ok(v) => match &v.data {
-                        SuiRawData::MoveObject(o) => {
+                    Ok(v) => match &v.bcs {
+                        Some(SuiRawData::MoveObject(o)) => {
                             format!("{:?}\nNumber of bytes: {}", o.bcs_bytes, o.bcs_bytes.len())
                         }
-                        SuiRawData::Package(p) => {
+                        Some(SuiRawData::Package(p)) => {
                             let mut temp = String::new();
                             let mut bcs_bytes = 0usize;
                             for m in &p.module_map {
@@ -1240,6 +1467,7 @@ impl Display for SuiClientCommandResult {
                             }
                             format!("{}Number of bytes: {}", temp, bcs_bytes)
                         }
+                        None => "Bcs field is None".to_string().red().to_string(),
                     },
                     Err(err) => format!("{err}").red().to_string(),
                 };
@@ -1282,20 +1510,24 @@ impl Display for SuiClientCommandResult {
                 )?;
                 writeln!(writer, "{}", ["-"; 165].join(""))?;
                 for oref in object_refs {
-                    let owner_type = match oref.owner {
-                        Owner::AddressOwner(_) => "AddressOwner",
-                        Owner::ObjectOwner(_) => "object_owner",
-                        Owner::Shared { .. } => "Shared",
-                        Owner::Immutable => "Immutable",
+                    let obj = oref.clone().into_object().unwrap();
+
+                    let owner_type = match obj.owner {
+                        Some(Owner::AddressOwner(_)) => "AddressOwner",
+                        Some(Owner::ObjectOwner(_)) => "object_owner",
+                        Some(Owner::Shared { .. }) => "Shared",
+                        Some(Owner::Immutable) => "Immutable",
+                        None => "None",
                     };
+
                     writeln!(
                         writer,
                         " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
-                        oref.object_id,
-                        oref.version.value(),
-                        Base64::encode(oref.digest),
+                        obj.object_id,
+                        obj.version.value(),
+                        Base64::encode(obj.digest),
                         owner_type,
-                        oref.type_
+                        format!("{:?}", obj.type_)
                     )?
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
@@ -1343,13 +1575,13 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
-                writeln!(writer, " {0: ^42} | {1: ^11}", "Object ID", "Gas Value")?;
+                writeln!(writer, " {0: ^66} | {1: ^11}", "Object ID", "Gas Value")?;
                 writeln!(
                     writer,
-                    "----------------------------------------------------------------------"
+                    "----------------------------------------------------------------------------------"
                 )?;
                 for gas in gases {
-                    writeln!(writer, " {0: ^42} | {1: ^11}", gas.id(), gas.value())?;
+                    writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
             SuiClientCommandResult::SplitCoin(response) => {
@@ -1448,9 +1680,12 @@ pub async fn call_move(
     let transaction = Transaction::from_data(data, Intent::default(), vec![signature]).verify()?;
 
     let response = context.execute_transaction(transaction).await?;
-    let effects = &response.effects;
-    if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
-        return Err(anyhow!("Error calling module: {:#?}", effects.status));
+    let effects = response
+        .effects
+        .as_ref()
+        .ok_or_else(|| anyhow!("Effects from SuiTransactionResult should not be empty"))?;
+    if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+        return Err(anyhow!("Error calling module: {:#?}", effects.status()));
     }
     Ok(response)
 }
@@ -1475,12 +1710,35 @@ fn unwrap_or<'a>(val: &'a Option<String>, default: &'a str) -> &'a str {
     }
 }
 
-fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
+// TODOD(chris): only print out the full response when `--verbose` is provided
+pub fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
     let mut writer = String::new();
+    writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
+    writeln!(writer, "{}", response.digest)?;
     writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
-    write!(writer, "{}", response.transaction)?;
+    if let Some(t) = &response.transaction {
+        writeln!(writer, "{}", t)?;
+    }
+
     writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
-    write!(writer, "{}", response.effects)?;
+    if let Some(e) = &response.effects {
+        writeln!(writer, "{}", e)?;
+    }
+
+    writeln!(writer, "{}", "----- Events ----".bold())?;
+    if let Some(e) = &response.events {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
+
+    writeln!(writer, "{}", "----- Object changes ----".bold())?;
+    if let Some(e) = &response.object_changes {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
+
+    writeln!(writer, "{}", "----- Balance changes ----".bold())?;
+    if let Some(e) = &response.balance_changes {
+        writeln!(writer, "{:#?}", json!(e))?;
+    }
     Ok(writer)
 }
 
@@ -1527,10 +1785,11 @@ impl SuiClientCommandResult {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
+    Upgrade(SuiTransactionResponse),
     Publish(SuiTransactionResponse),
     VerifySource,
-    Object(GetObjectDataResponse),
-    RawObject(GetRawObjectDataResponse),
+    Object(SuiObjectResponse),
+    RawObject(SuiObjectResponse),
     Call(SuiTransactionResponse),
     Transfer(
         // Skipping serialisation for elapsed time.
@@ -1542,7 +1801,7 @@ pub enum SuiClientCommandResult {
     PaySui(SuiTransactionResponse),
     PayAllSui(SuiTransactionResponse),
     Addresses(Vec<SuiAddress>, Option<SuiAddress>),
-    Objects(Vec<SuiObjectInfo>),
+    Objects(Vec<SuiObjectResponse>),
     DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
@@ -1553,7 +1812,7 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
-    CreateExampleNFT(GetObjectDataResponse),
+    CreateExampleNFT(SuiObjectResponse),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     DeserializeTx(TransactionData),

@@ -6,13 +6,14 @@ use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
 use std::net::IpAddr;
 use std::time::Duration;
-use sui_config::{builder::ConfigBuilder, NetworkConfig, NodeConfig, ValidatorInfo};
+use sui_config::{builder::ConfigBuilder, NetworkConfig, NodeConfig};
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::authority_client::NetworkAuthorityClient;
 pub use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::TEST_COMMITTEE_SIZE;
 use sui_types::messages::ObjectInfoRequest;
+use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Object;
 
 /// The default network buffer size of a test authority.
@@ -40,12 +41,21 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     configs
 }
 
-pub fn test_authority_configs_with_objects(objects: Vec<Object>) -> (NetworkConfig, Vec<Object>) {
+pub fn test_authority_configs_with_objects<I: IntoIterator<Item = Object> + Clone>(
+    objects: I,
+) -> (NetworkConfig, Vec<Object>) {
+    test_and_configure_authority_configs_with_objects(TEST_COMMITTEE_SIZE, objects)
+}
+
+pub fn test_and_configure_authority_configs_with_objects<I: IntoIterator<Item = Object> + Clone>(
+    committee_size: usize,
+    objects: I,
+) -> (NetworkConfig, Vec<Object>) {
     let config_dir = tempfile::tempdir().unwrap().into_path();
     let rng = StdRng::from_seed([0; 32]);
     let mut configs = ConfigBuilder::new(&config_dir)
         .rng(rng)
-        .committee_size(TEST_COMMITTEE_SIZE.try_into().unwrap())
+        .committee_size(committee_size.try_into().unwrap())
         .with_objects(objects.clone())
         .build();
 
@@ -113,24 +123,11 @@ pub async fn start_node(config: &NodeConfig, registry_service: RegistryService) 
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
-pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNodeHandle>
-where
-    I: IntoIterator<Item = Object> + Clone,
-{
+pub async fn spawn_test_authorities(config: &NetworkConfig) -> Vec<SuiNodeHandle> {
     let mut handles = Vec::new();
     for validator in config.validator_configs() {
         let registry_service = RegistryService::new(Registry::new());
         let node = start_node(validator, registry_service).await;
-        let objects = objects.clone();
-
-        node.with_async(|node| async move {
-            let state = node.state();
-            for o in objects {
-                state.insert_genesis_object(o).await
-            }
-        })
-        .await;
-
         handles.push(node);
     }
     handles
@@ -160,12 +157,12 @@ pub async fn spawn_fullnode(config: &NetworkConfig, rpc_port: Option<u16>) -> Su
 }
 
 /// Get a network client to communicate with the consensus.
-pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
-    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
+pub fn get_client(net_address: &Multiaddr) -> NetworkAuthorityClient {
+    NetworkAuthorityClient::connect_lazy(net_address).unwrap()
 }
 
-pub async fn get_object(config: &ValidatorInfo, object_id: ObjectID) -> Object {
-    get_client(config)
+pub async fn get_object(net_address: &Multiaddr, object_id: ObjectID) -> Object {
+    get_client(net_address)
         .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
             object_id, None,
         ))

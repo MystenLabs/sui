@@ -22,7 +22,6 @@ The Sui network is designed so that a single $ReferencePrice$ exists throughout 
 
 More generally, Sui’s gas price mechanism is intended to make the $ReferencePrice$ a credible anchor for users to use when submitting transactions to the network. Providing reasonable confidence that transactions submitted with gas prices at or close to the reference price will be executed in a timely manner. This is achieved through three core steps:
 
-
 <a name="gas-price-survey"></a>
 * _Gas Price Survey_ - A validatory-wide survey is conducted at the beginning of each epoch, and every validator submits their reservation price. That is, each validator states the minimum gas price at which they are willing to process transactions. The protocol orders these quotes and chooses the 2/3's percentile by stake as the reference price. The gas price survey’s goal is to set a reference price under which a [quorum](../architecture/validators.md#quorums) of validators are willing to promptly process transactions.
 
@@ -34,13 +33,11 @@ More generally, Sui’s gas price mechanism is intended to make the $ReferencePr
 
 In sum, the gas price mechanism has two main forces: the tallying rule incentivizes validators to honor the quotes submitted during the gas survey, while the distribution rule incentivizes validators to submit low reservations prices. The interaction of these two forces delivers a mechanism encouraging validators to set a low network-level reference gas price – but not too low since they face penalties if they cannot honor their quotes. In other words, the gas price mechanism encourages a healthy competition for fair prices.
 
-
 ## Storage gas prices
 
 The storage gas price $StoragePrice$ captures the costs of covering one unit of storage in perpetuity, in SUI units. This price is set through governance proposals and is updated infrequently. The goal is to ensure Sui users pay for their use of on-chain data storage by depositing these fees into the storage fund and then redistributing these fees to future validators. In contrast to the computation gas price, storage prices are fixed and common for all transactions both within an epoch and across epochs until the storage price is updated.
 
 The $StoragePrice$ is set exogenously through the governance proposal with the goal of targeting the off-chain dollar cost of data storage. In the long run, as the costs of storage fall due to technological improvements and the dollar price of the SUI token evolves, governance proposals will update the price in order to reflect the new dollar target price.
-
 
 ## Gas prices as a coordination mechanism
 

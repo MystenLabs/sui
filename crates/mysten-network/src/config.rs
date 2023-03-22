@@ -4,9 +4,9 @@ use crate::metrics::{DefaultMetricsCallbackProvider, MetricsCallbackProvider};
 use crate::{
     client::{connect_lazy_with_config, connect_with_config},
     server::ServerBuilder,
+    Multiaddr,
 };
 use eyre::Result;
-use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tonic::transport::Channel;

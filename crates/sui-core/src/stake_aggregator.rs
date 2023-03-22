@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::Serialize;
+use shared_crypto::intent::Intent;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
-use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo};
+use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait};
 use sui_types::error::SuiError;
+use sui_types::message_envelope::{Envelope, Message};
+use tracing::warn;
 
 /// StakeAggregator allows us to keep track of the total stake of a set of validators.
 /// STRENGTH indicates whether we want a strong quorum (2f+1) or a weak quorum (f+1).
@@ -67,7 +71,10 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
             if self.total_votes >= self.committee.threshold::<STRENGTH>() {
                 InsertResult::QuorumReached(())
             } else {
-                InsertResult::NotEnoughVotes
+                InsertResult::NotEnoughVotes {
+                    bad_votes: 0,
+                    bad_authorities: vec![],
+                }
             }
         } else {
             InsertResult::Failed {
@@ -97,10 +104,11 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     /// Insert an authority signature. This is the primary way to use the aggregator and a few
     /// dedicated checks are performed to make sure things work.
     /// If quorum is reached, we return AuthorityQuorumSignInfo directly.
-    pub fn insert(
+    pub fn insert<T: Message + Serialize>(
         &mut self,
-        sig: AuthoritySignInfo,
+        envelope: Envelope<T, AuthoritySignInfo>,
     ) -> InsertResult<AuthorityQuorumSignInfo<STRENGTH>> {
+        let (data, sig) = envelope.into_data_and_sig();
         if self.committee.epoch != sig.epoch {
             return InsertResult::Failed {
                 error: SuiError::WrongEpoch {
@@ -115,21 +123,75 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                     self.data.values().cloned().collect(),
                     self.committee(),
                 ) {
-                    Ok(aggregated) => InsertResult::QuorumReached(aggregated),
+                    Ok(aggregated) => {
+                        match aggregated.verify_secure(
+                            &data,
+                            Intent::default().with_scope(T::SCOPE),
+                            self.committee(),
+                        ) {
+                            // In the happy path, the aggregated signature verifies ok and no need to verify
+                            // individual.
+                            Ok(_) => InsertResult::QuorumReached(aggregated),
+                            Err(_) => {
+                                // If the aggregated signature fails to verify, fallback to iterating through
+                                // all signatures and verify individually. Decrement total votes and continue
+                                // to find new authority for signature to reach the quorum.
+                                //
+                                // TODO(joyqvq): It is possible for the aggregated signature to fail every time
+                                // when the latest one single signature fails to verify repeatedly, and trigger
+                                // this for loop to run. This can be optimized by caching single sig verification
+                                // result only verify the net new ones.
+                                let mut bad_votes = 0;
+                                let mut bad_authorities = vec![];
+                                for (name, sig) in &self.data.clone() {
+                                    if let Err(err) = sig.verify_secure(
+                                        &data,
+                                        Intent::default().with_scope(T::SCOPE),
+                                        self.committee(),
+                                    ) {
+                                        // TODO(joyqvq): Currently, the aggregator cannot do much with an authority that
+                                        // always returns an invalid signature other than saving to errors in state. It
+                                        // is possible to add the authority to a denylist or  punish the byzantine authority.
+                                        warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
+                                        self.data.remove(name);
+                                        let votes = self.committee.weight(name);
+                                        self.total_votes -= votes;
+                                        bad_votes += votes;
+                                        bad_authorities.push(*name);
+                                    }
+                                }
+                                InsertResult::NotEnoughVotes {
+                                    bad_votes,
+                                    bad_authorities,
+                                }
+                            }
+                        }
+                    }
                     Err(error) => InsertResult::Failed { error },
                 }
             }
             // The following is necessary to change the template type of InsertResult.
             InsertResult::Failed { error } => InsertResult::Failed { error },
-            InsertResult::NotEnoughVotes => InsertResult::NotEnoughVotes,
+            InsertResult::NotEnoughVotes {
+                bad_votes,
+                bad_authorities,
+            } => InsertResult::NotEnoughVotes {
+                bad_votes,
+                bad_authorities,
+            },
         }
     }
 }
 
 pub enum InsertResult<CertT> {
     QuorumReached(CertT),
-    Failed { error: SuiError },
-    NotEnoughVotes,
+    Failed {
+        error: SuiError,
+    },
+    NotEnoughVotes {
+        bad_votes: u64,
+        bad_authorities: Vec<AuthorityName>,
+    },
 }
 
 impl<CertT> InsertResult<CertT> {
@@ -171,23 +233,22 @@ impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH> {
 impl<K, V, const STRENGTH: bool> MultiStakeAggregator<K, V, STRENGTH>
 where
     K: Hash + Eq,
-    V: Clone,
+    V: Message + Serialize + Clone,
 {
     pub fn insert(
         &mut self,
         k: K,
-        v: &V,
-        sig: AuthoritySignInfo,
+        envelope: Envelope<V, AuthoritySignInfo>,
     ) -> InsertResult<AuthorityQuorumSignInfo<STRENGTH>> {
         if let Some(entry) = self.stake_maps.get_mut(&k) {
-            entry.1.insert(sig)
+            entry.1.insert(envelope)
         } else {
             let mut new_entry = StakeAggregator::new(self.committee.clone());
-            let result = new_entry.insert(sig);
+            let result = new_entry.insert(envelope.clone());
             if !matches!(result, InsertResult::Failed { .. }) {
                 // This is very important: ensure that if the insert fails, we don't even add the
                 // new entry to the map.
-                self.stake_maps.insert(k, (v.clone(), new_entry));
+                self.stake_maps.insert(k, (envelope.into_data(), new_entry));
             }
             result
         }

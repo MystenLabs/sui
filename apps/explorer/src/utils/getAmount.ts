@@ -1,41 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getPaySuiTransaction,
-    getPayTransaction,
-    getTransferSuiTransaction,
-    getTransferObjectTransaction,
-    getTransactionKindName,
-    getTransactionSender,
-    getTransactions,
-    SUI_TYPE_ARG,
-} from '@mysten/sui.js';
+import { getTransactionKind, SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import type {
     SuiTransactionKind,
     TransactionEffects,
     SuiTransactionResponse,
-    SuiEvent,
+    TransactionEvents,
 } from '@mysten/sui.js';
 
-const getCoinType = (
-    txEffects: TransactionEffects | null,
-    address: string
-): string | null => {
-    if (!txEffects) return null;
+// const getCoinType = (
+//     events: TransactionEvents | null,
+//     address: string
+// ): string | null => {
+//     if (!events) return null;
 
-    const events = txEffects?.events || [];
-    const coinType = events
-        ?.map((event: SuiEvent) => {
-            const data = Object.values(event).find(
-                (itm) => itm?.owner?.AddressOwner === address
-            );
-            return data?.coinType;
-        })
-        .filter(Boolean);
-    return coinType?.[0] ? coinType[0] : null;
-};
+//     const coinType = events
+//         ?.map((event: SuiEvent) => {
+//             const data = Object.values(event).find(
+//                 (itm) => itm?.owner?.AddressOwner === address
+//             );
+//             return data?.coinType;
+//         })
+//         .filter(Boolean);
+//     return coinType?.[0] ? coinType[0] : null;
+// };
 
 type FormattedBalance = {
     amount?: number | null;
@@ -46,95 +36,53 @@ type FormattedBalance = {
 // For TransferObject, TransferSui, Pay, PaySui, transactions get the amount from the transfer data
 export function getTransfersAmount(
     txnData: SuiTransactionKind,
-    txnEffect?: TransactionEffects
+    txnEffect?: TransactionEffects,
+    events?: TransactionEvents
 ): FormattedBalance[] | null {
-    const txKindName = getTransactionKindName(txnData);
-    if (txKindName === 'TransferObject') {
-        const txn = getTransferObjectTransaction(txnData);
-        return txn?.recipient
-            ? [
-                  {
-                      address: txn?.recipient,
-                  },
-              ]
-            : null;
-    }
-
-    if (txKindName === 'TransferSui') {
-        const txn = getTransferSuiTransaction(txnData);
-        return txn?.recipient
-            ? [
-                  {
-                      address: txn.recipient,
-                      amount: txn?.amount,
-                      coinType:
-                          txnEffect && getCoinType(txnEffect, txn.recipient),
-                  },
-              ]
-            : null;
-    }
-
-    const payData = getPaySuiTransaction(txnData) ?? getPayTransaction(txnData);
-
-    const amountByRecipient = payData?.recipients.reduce(
-        (acc, recipient, index) => ({
-            ...acc,
-            [recipient]: {
-                amount:
-                    payData.amounts[index] +
-                    (recipient in acc ? acc[recipient].amount : 0),
-
-                // for PaySuiTransaction the coinType is SUI
-                coinType:
-                    txKindName === 'PaySui'
-                        ? SUI_TYPE_ARG
-                        : getCoinType(txnEffect || null, recipient),
-                address: recipient,
-            },
-        }),
-        {} as {
-            [key: string]: {
-                amount: number;
-                coinType: string | null;
-                address: string;
-            };
-        }
-    );
-    return amountByRecipient ? Object.values(amountByRecipient) : null;
+    // TODO: Rebuild this for programmable trnasactions.
+    return null;
 }
 
 // Get transaction amount from coinBalanceChange event for Call Txn
 // Aggregate coinBalanceChange by coinType and address
-function getTxnAmountFromCoinBalanceEvent(
-    txEffects: TransactionEffects,
-    address: string
-): FormattedBalance[] {
-    const events = txEffects?.events || [];
-    const coinsMeta = {} as { [coinType: string]: FormattedBalance };
+// MUSTFIX(chris): Use the CoinBalanceChanges in effects instead
+// function getTxnAmountFromCoinBalanceEvent(
+//     events: TransactionEvents,
+//     address: string
+// ): FormattedBalance[] {
+//     const coinsMeta = {} as { [coinType: string]: FormattedBalance };
 
-    events.forEach((event) => {
-        if (
-            'coinBalanceChange' in event &&
-            event?.coinBalanceChange?.changeType &&
-            ['Receive', 'Pay'].includes(event?.coinBalanceChange?.changeType) &&
-            event?.coinBalanceChange?.transactionModule !== 'gas'
-        ) {
-            const { coinBalanceChange } = event;
-            const { coinType, amount, owner, sender } = coinBalanceChange;
-            const { AddressOwner } = owner as { AddressOwner: string };
-            if (AddressOwner === address || address === sender) {
-                coinsMeta[`${AddressOwner}${coinType}`] = {
-                    amount:
-                        (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
-                        amount,
-                    coinType: coinType,
-                    address: AddressOwner,
-                };
-            }
-        }
-    });
-    return Object.values(coinsMeta);
-}
+//     events.forEach((event) => {
+//         if (
+//             event.type === 'coinBalanceChange' &&
+//             event?.content?.changeType &&
+//             ['Receive', 'Pay'].includes(event?.content?.changeType)
+//         ) {
+//             const coinBalanceChange = getCoinBalanceChangeEvent(event)!;
+//             const { coinType, amount, owner, sender } = coinBalanceChange;
+
+//             const AddressOwner =
+//                 owner !== 'Immutable' && 'AddressOwner' in owner
+//                     ? owner.AddressOwner
+//                     : null;
+
+//             // ChangeEpoch txn includes coinBalanceChange event for other addresses
+//             if (
+//                 AddressOwner === address ||
+//                 (address === sender && AddressOwner)
+//             ) {
+//                 coinsMeta[`${AddressOwner}${coinType}`] = {
+//                     amount:
+//                         (coinsMeta[`${AddressOwner}${coinType}`]?.amount || 0) +
+//                         +amount,
+//                     coinType: coinType,
+//                     address: AddressOwner,
+//                 };
+//             }
+//         }
+//     });
+//     return Object.values(coinsMeta);
+// }
 
 // Get the amount from events and transfer data
 // optional flag to get only SUI coin type for table view
@@ -146,11 +94,15 @@ export function getAmount({
     suiCoinOnly?: boolean;
 }) {
     const { effects } = txnData;
-    const txnDetails = getTransactions(txnData)[0];
-    const sender = getTransactionSender(txnData);
+    const txnDetails = getTransactionKind(txnData)!;
+    // MUSTFIX(chris): Fix this
+    // const sender = getTransactionSender(txnData);
     const suiTransfer = getTransfersAmount(txnDetails, effects);
-    const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(effects, sender);
-    const transfers = suiTransfer || coinBalanceChange;
+    // const coinBalanceChange = getTxnAmountFromCoinBalanceEvent(
+    //     events!,
+    //     sender!
+    // );
+    const transfers = suiTransfer || [];
     if (suiCoinOnly) {
         return transfers?.filter(({ coinType }) => coinType === SUI_TYPE_ARG);
     }

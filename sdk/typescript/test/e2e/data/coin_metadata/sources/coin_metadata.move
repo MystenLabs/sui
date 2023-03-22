@@ -12,7 +12,7 @@ module coin_metadata::test {
 
     fun init(witness: TEST, ctx: &mut TxContext) {
         let (treasury_cap, metadata) = coin::create_currency<TEST>(
-            witness, 
+            witness,
             2,
             b"TEST",
             b"Test Coin",
@@ -24,7 +24,7 @@ module coin_metadata::test {
         coin::mint_and_transfer<TEST>(&mut treasury_cap, 5, tx_context::sender(ctx), ctx);
         coin::mint_and_transfer<TEST>(&mut treasury_cap, 6, tx_context::sender(ctx), ctx);
 
-        transfer::share_object(metadata);
-        transfer::share_object(treasury_cap)
+        transfer::public_share_object(metadata);
+        transfer::public_share_object(treasury_cap)
     }
 }

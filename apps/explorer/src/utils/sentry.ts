@@ -12,7 +12,9 @@ import {
 } from 'react-router-dom';
 
 const SENTRY_ENABLED = import.meta.env.PROD;
-const SENTRY_SAMPLE_RATE = 0.02;
+const SENTRY_SAMPLE_RATE = import.meta.env.VITE_SENTRY_SAMPLE_RATE
+    ? parseFloat(import.meta.env.VITE_SENTRY_SAMPLE_RATE)
+    : 1;
 
 Sentry.init({
     enabled: SENTRY_ENABLED,
@@ -31,7 +33,7 @@ Sentry.init({
             ),
         }),
     ],
-    tracesSampleRate: import.meta.env.PROD ? SENTRY_SAMPLE_RATE : 1,
+    tracesSampleRate: SENTRY_SAMPLE_RATE,
     beforeSend(event) {
         try {
             // Filter out any code from unknown sources:

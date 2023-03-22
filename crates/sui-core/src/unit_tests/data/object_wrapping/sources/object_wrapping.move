@@ -17,7 +17,7 @@ module object_wrapping::object_wrapping {
     }
 
     public entry fun create_child(ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             Child {
                 id: object::new(ctx),
             },
@@ -41,7 +41,7 @@ module object_wrapping::object_wrapping {
 
     public entry fun extract_child(parent: &mut Parent, ctx: &mut TxContext) {
         let child = option::extract(&mut parent.child);
-        transfer::transfer(
+        transfer::public_transfer(
             child,
             tx_context::sender(ctx),
         )

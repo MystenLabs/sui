@@ -13,10 +13,12 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 
+use shared_crypto::intent::Intent;
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
-    rpc_types::SuiData,
+    rpc_types::{SuiData, SuiTransactionEffectsAPI},
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
@@ -24,7 +26,6 @@ use sui_sdk::{
     },
     SuiClient, SuiClientBuilder,
 };
-use sui_types::intent::Intent;
 use sui_types::messages::ExecuteTransactionRequestType;
 
 #[tokio::main]
@@ -104,6 +105,7 @@ impl TicTacToe {
             .execute_transaction(
                 Transaction::from_data(create_game_call, Intent::default(), vec![signature])
                     .verify()?,
+                SuiTransactionResponseOptions::full_content(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -113,7 +115,9 @@ impl TicTacToe {
         // We know `create_game` move function will create 1 object.
         let game_id = response
             .effects
-            .created
+            .as_ref()
+            .unwrap()
+            .created()
             .first()
             .unwrap()
             .reference
@@ -200,6 +204,7 @@ impl TicTacToe {
                 .execute_transaction(
                     Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
                         .verify()?,
+                    SuiTransactionResponseOptions::new().with_effects(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await?;
@@ -207,7 +212,7 @@ impl TicTacToe {
             assert!(response.confirmed_local_execution.unwrap());
 
             // Print any execution error.
-            let status = response.effects.status;
+            let status = response.effects.as_ref().unwrap().status();
             if status.is_err() {
                 eprintln!("{:?}", status);
             }
@@ -239,10 +244,16 @@ impl TicTacToe {
     // Retrieve the latest game state from the server.
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
-        let current_game = self.client.read_api().get_object(game_id).await?;
+        let current_game = self
+            .client
+            .read_api()
+            .get_object_with_options(game_id, SuiObjectDataOptions::new().with_bcs())
+            .await?;
         current_game
             .object()?
-            .data
+            .bcs
+            .as_ref()
+            .unwrap()
             .try_as_move()
             .unwrap()
             .deserialize()

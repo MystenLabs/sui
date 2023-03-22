@@ -73,7 +73,7 @@ module games::sea_hero_helper {
         object::delete(id);
         let owner_reward = sea_hero::slay(hero, monster);
         let helper_reward = coin::take(&mut owner_reward, helper_reward, ctx);
-        transfer::transfer(coin::from_balance(owner_reward, ctx), monster_owner);
+        transfer::public_transfer(coin::from_balance(owner_reward, ctx), monster_owner);
         helper_reward
     }
 
@@ -87,7 +87,7 @@ module games::sea_hero_helper {
             helper_reward: _
         } = wrapper;
         object::delete(id);
-        transfer::transfer(monster, monster_owner)
+        transfer::public_transfer(monster, monster_owner)
     }
 
     /// Return the number of coins that `wrapper.owner` will earn if the

@@ -16,13 +16,13 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
+use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_sdk::rpc_types::Checkpoint;
 use sui_sdk::SuiClient;
-use sui_storage::default_db_options;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tracing::{debug, error, info, warn};
-use typed_store::rocks::{DBMap, DBOptions, MetricConf};
+use typed_store::rocks::{point_lookup_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
 use typed_store::Map;
@@ -232,11 +232,20 @@ impl CheckpointBlockProvider {
         let hash = checkpoint.digest;
         let mut transactions = vec![];
         for digest in checkpoint.transactions.iter() {
-            let tx = self.client.read_api().get_transaction(*digest).await?;
+            let tx = self
+                .client
+                .read_api()
+                .get_transaction_with_options(
+                    *digest,
+                    SuiTransactionResponseOptions::new()
+                        .with_input()
+                        .with_effects()
+                        .with_balance_changes()
+                        .with_events(),
+                )
+                .await?;
             transactions.push(Transaction {
-                transaction_identifier: TransactionIdentifier {
-                    hash: tx.effects.transaction_digest,
-                },
+                transaction_identifier: TransactionIdentifier { hash: tx.digest },
                 operations: Operations::try_from(tx)?,
                 related_transactions: vec![],
                 metadata: None,
@@ -302,7 +311,7 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     OperationType::SuiBalanceChange
                     | OperationType::Gas
                     | OperationType::PaySui
-                    | OperationType::Delegation => {
+                    | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
                             *changes.entry(addr.address).or_default() += amount.value
                         }
@@ -338,5 +347,5 @@ impl CheckpointIndexStore {
 }
 
 fn default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }

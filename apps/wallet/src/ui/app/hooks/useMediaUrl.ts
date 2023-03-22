@@ -3,12 +3,12 @@
 
 import { useMemo } from 'react';
 
-import type { SuiData } from '@mysten/sui.js';
+import type { SuiParsedData } from '@mysten/sui.js';
 
 export const parseIpfsUrl = (ipfsUrl: string) =>
     ipfsUrl.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/');
 
-export default function useMediaUrl(objData: SuiData | null) {
+export default function useMediaUrl(objData: SuiParsedData | null) {
     const { fields } = (objData?.dataType === 'moveObject' && objData) || {};
     return useMemo(() => {
         if (fields) {

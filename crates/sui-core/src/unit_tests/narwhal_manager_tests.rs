@@ -7,13 +7,15 @@ use bytes::Bytes;
 use fastcrypto::bls12381;
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
-use narwhal_config::{Epoch, SharedWorkerCache};
+use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
 use narwhal_types::{ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use test_utils::authority::test_and_configure_authority_configs;
 use tokio::sync::broadcast;
 use tokio::time::{interval, sleep};
@@ -42,12 +44,11 @@ impl ExecutionState for NoOpExecutionState {
 
 async fn send_transactions(
     name: &bls12381::min_sig::BLS12381PublicKey,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     epoch: Epoch,
     mut rx_shutdown: broadcast::Receiver<()>,
 ) {
     let target = worker_cache
-        .load()
         .worker(name, /* id */ &0)
         .expect("Our key or worker id is not in the worker cache")
         .transactions;
@@ -98,12 +99,13 @@ async fn test_narwhal_manager() {
             AuthorityState::new_for_testing(genesis_committee, &secret, None, genesis).await;
 
         let system_state = state
-            .get_sui_system_state_object()
-            .expect("Reading Sui system state object cannot fail");
+            .get_sui_system_state_object_for_testing()
+            .expect("Reading Sui system state object cannot fail")
+            .into_epoch_start_state();
 
         let transactions_addr = &config.consensus_config.as_ref().unwrap().address;
-        let narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-        let worker_cache = system_state.get_current_epoch_narwhal_worker_cache(transactions_addr);
+        let narwhal_committee = system_state.get_narwhal_committee();
+        let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
         let execution_state = Arc::new(NoOpExecutionState {
             epoch: narwhal_committee.epoch,
@@ -123,11 +125,10 @@ async fn test_narwhal_manager() {
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);
 
         // start narwhal
-        let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
-                shared_worker_cache.clone(),
+                worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
             )
@@ -146,7 +147,7 @@ async fn test_narwhal_manager() {
         tokio::spawn(async move {
             send_transactions(
                 &name,
-                shared_worker_cache,
+                worker_cache.clone(),
                 narwhal_committee.epoch,
                 rx_shutdown,
             )
@@ -174,12 +175,11 @@ async fn test_narwhal_manager() {
             .is_empty());
 
         let system_state = state
-            .get_sui_system_state_object()
-            .expect("Reading Sui system state object cannot fail");
-
-        let mut narwhal_committee = system_state.get_current_epoch_narwhal_committee();
-        let mut worker_cache =
-            system_state.get_current_epoch_narwhal_worker_cache(&transactions_addr);
+            .get_sui_system_state_object_for_testing()
+            .expect("Reading Sui system state object cannot fail")
+            .into_epoch_start_state();
+        let mut narwhal_committee = system_state.get_narwhal_committee();
+        let mut worker_cache = system_state.get_narwhal_worker_cache(&transactions_addr);
 
         // advance epoch
         narwhal_committee.epoch = 1;
@@ -190,11 +190,10 @@ async fn test_narwhal_manager() {
         });
 
         // start narwhal with advanced epoch
-        let shared_worker_cache = SharedWorkerCache::from(worker_cache.clone());
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
-                shared_worker_cache.clone(),
+                worker_cache.clone(),
                 Arc::new(execution_state.clone()),
                 TrivialTransactionValidator::default(),
             )
@@ -205,7 +204,7 @@ async fn test_narwhal_manager() {
         tokio::spawn(async move {
             send_transactions(
                 &name,
-                shared_worker_cache,
+                worker_cache.clone(),
                 narwhal_committee.epoch,
                 rx_shutdown,
             )

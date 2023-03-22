@@ -4,7 +4,8 @@
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Network;
 use config::Committee;
-use crypto::{NetworkPublicKey, PublicKey};
+use consensus::consensus::ConsensusRound;
+use crypto::{NetworkPublicKey, PublicKey, PublicKeyBytes};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
@@ -59,10 +60,8 @@ pub(crate) struct CertificateFetcher {
     committee: Committee,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
-    /// Receiver for signal of round changes. Used for calculating gc_round.
-    rx_consensus_round_updates: watch::Receiver<u64>,
-    /// The depth of the garbage collector.
-    gc_depth: Round,
+    /// Receiver for signal of round changes.
+    rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
     /// Receiver for shutdown.
     rx_shutdown: ConditionalBroadcastReceiver,
     /// Receives certificates with missing parents from the `Synchronizer`.
@@ -97,8 +96,7 @@ impl CertificateFetcher {
         committee: Committee,
         network: anemo::Network,
         certificate_store: CertificateStore,
-        rx_consensus_round_updates: watch::Receiver<u64>,
-        gc_depth: Round,
+        rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
         rx_shutdown: ConditionalBroadcastReceiver,
         rx_certificate_fetcher: Receiver<Certificate>,
         synchronizer: Arc<Synchronizer>,
@@ -118,7 +116,6 @@ impl CertificateFetcher {
                     committee,
                     certificate_store,
                     rx_consensus_round_updates,
-                    gc_depth,
                     rx_shutdown,
                     rx_certificate_fetcher,
                     targets: BTreeMap::new(),
@@ -170,7 +167,7 @@ impl CertificateFetcher {
                             // Otherwise, continue to update fetch targets.
                         }
                         Err(e) => {
-                            // If this happens, it is most likely due to bincode serialization error.
+                            // If this happens, it is most likely due to serialization error.
                             error!("Failed to read latest round for {}: {}", header.author, e);
                             continue;
                         }
@@ -211,11 +208,11 @@ impl CertificateFetcher {
         // Skip fetching certificates at or below the gc round.
         let gc_round = self.gc_round();
         // Skip fetching certificates that already exist locally.
-        let mut written_rounds = BTreeMap::<PublicKey, BTreeSet<Round>>::new();
+        let mut written_rounds = BTreeMap::<PublicKeyBytes, BTreeSet<Round>>::new();
         for (origin, _) in self.committee.authorities() {
             // Initialize written_rounds for all authorities, because the handler only sends back
             // certificates for the set of authorities here.
-            written_rounds.insert(origin.clone(), BTreeSet::new());
+            written_rounds.insert(PublicKeyBytes::from(origin), BTreeSet::new());
         }
         // NOTE: origins_after_round() is inclusive.
         match self.certificate_store.origins_after_round(gc_round + 1) {
@@ -233,10 +230,13 @@ impl CertificateFetcher {
         };
 
         self.targets.retain(|origin, target_round| {
-            let last_written_round = written_rounds.get(origin).map_or(gc_round, |rounds| {
-                // TODO: switch to last() after it stabilizes for BTreeSet.
-                rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
-            });
+            let last_written_round =
+                written_rounds
+                    .get(&PublicKeyBytes::from(origin))
+                    .map_or(gc_round, |rounds| {
+                        // TODO: switch to last() after it stabilizes for BTreeSet.
+                        rounds.iter().rev().next().unwrap_or(&gc_round).to_owned()
+                    });
             // Drop sync target when cert store already has an equal or higher round for the origin.
             // This applies GC to targets as well.
             //
@@ -282,10 +282,7 @@ impl CertificateFetcher {
     }
 
     fn gc_round(&self) -> Round {
-        self.rx_consensus_round_updates
-            .borrow()
-            .to_owned()
-            .saturating_sub(self.gc_depth)
+        self.rx_consensus_round_updates.borrow().gc_round
     }
 }
 
@@ -295,7 +292,7 @@ async fn run_fetch_task(
     state: Arc<CertificateFetcherState>,
     committee: Committee,
     gc_round: Round,
-    written_rounds: BTreeMap<PublicKey, BTreeSet<Round>>,
+    written_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>>,
 ) -> DagResult<()> {
     // Send request to fetch certificates.
     let request = FetchCertificatesRequest::default()
@@ -435,16 +432,14 @@ async fn process_certificates_helper(
     for task in verify_tasks {
         let certificates = task.await.map_err(|_| DagError::Canceled)??;
         for cert in certificates {
-            match synchronizer
-                .try_accept_sanitized_certificate(cert, network)
+            if let Err(e) = synchronizer
+                .try_accept_fetched_certificate(cert, network)
                 .await
             {
-                Ok(()) => continue,
-                // It is possible that subsequent certificates are above GC round,
+                // It is possible that subsequent certificates are useful,
                 // so not stopping early.
-                Err(DagError::TooOld(_, _, _)) => continue,
-                result => return result,
-            };
+                warn!("Failed to accept fetched certificate: {e}");
+            }
         }
     }
 

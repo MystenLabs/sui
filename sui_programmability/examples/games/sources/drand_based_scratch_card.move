@@ -31,7 +31,7 @@ module games::drand_based_scratch_card {
     use sui::digest;
     use sui::hmac::hmac_sha3_256;
     use sui::object::{Self, ID, UID};
-    use sui::randomness::safe_selection;
+
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -116,8 +116,8 @@ module games::drand_based_scratch_card {
             id: object::new(ctx),
             game_id: object::id(game),
         };
-        transfer::transfer(coin, game.creator);
-        transfer::transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(coin, game.creator);
+        transfer::public_transfer(ticket, tx_context::sender(ctx));
     }
 
     public entry fun evaluate(
@@ -135,14 +135,14 @@ module games::drand_based_scratch_card {
         // devastating, but for similar games it might be.)
         let random_key = drand_lib::derive_randomness(drand_sig);
         let randomness = hmac_sha3_256(&random_key, &object::id_to_bytes(&object::id(&ticket)));
-        let is_winner = (safe_selection(game.reward_factor, &digest::sha3_256_digest_to_bytes(&randomness)) == 0);
+        let is_winner = (drand_lib::safe_selection(game.reward_factor, &digest::sha3_256_digest_to_bytes(&randomness)) == 0);
 
         if (is_winner) {
             let winner = Winner {
                 id: object::new(ctx),
                 game_id: object::id(game),
             };
-            transfer::transfer(winner, tx_context::sender(ctx));
+            transfer::public_transfer(winner, tx_context::sender(ctx));
         };
         // Delete the ticket.
         let Ticket { id, game_id:  _} = ticket;
@@ -153,7 +153,7 @@ module games::drand_based_scratch_card {
         assert!(winner.game_id == reward.game_id, EInvalidTicket);
         let full_balance = balance::value(&reward.balance);
         if (full_balance > 0) {
-            transfer::transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
+            transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
         };
         let Winner { id, game_id:  _} = winner;
         object::delete(id);
@@ -167,7 +167,7 @@ module games::drand_based_scratch_card {
         // x+2 or x+3.
         assert!(game.base_epoch + 3 < tx_context::epoch(ctx), ETooSoonToRedeem);
         let full_balance = balance::value(&reward.balance);
-        transfer::transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
+        transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
     }
 
     public entry fun delete_ticket(ticket: Ticket) {

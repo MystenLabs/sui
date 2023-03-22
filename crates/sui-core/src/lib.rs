@@ -12,29 +12,37 @@ pub mod checkpoints;
 pub mod consensus_adapter;
 pub mod consensus_handler;
 pub mod consensus_validator;
+pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
+mod math;
 pub mod metrics;
-mod module_cache_gauge;
+pub mod module_cache_metrics;
 pub mod narwhal_manager;
-mod notify_once;
 pub mod quorum_driver;
 pub mod safe_client;
+mod scoring_decision;
 mod stake_aggregator;
 pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
-pub mod tbls;
 pub mod test_utils;
 pub mod transaction_input_checker;
 mod transaction_manager;
 pub mod transaction_orchestrator;
-pub mod validator_info;
 
+#[cfg(test)]
+#[path = "unit_tests/move_package_tests.rs"]
+mod move_package_tests;
+#[cfg(test)]
+#[path = "unit_tests/move_package_upgrade_tests.rs"]
+mod move_package_upgrade_tests;
 #[cfg(test)]
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
 pub mod test_authority_clients;
+
+pub mod batch_bls_verifier;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -5,24 +5,27 @@ use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use fastcrypto::encoding::{Encoding, Hex};
-use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use sui_config::{
-    genesis::{Builder, GenesisTuple},
+    genesis::{Builder, UnsignedGenesis},
     SUI_GENESIS_FILENAME,
 };
+use sui_types::multiaddr::Multiaddr;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     committee::ProtocolVersion,
     crypto::{
         generate_proof_of_possession, AuthorityKeyPair, KeypairTraits, NetworkKeyPair, SuiKeyPair,
     },
+    message_envelope::Message,
     object::Object,
 };
 
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
 };
+
+use crate::genesis_inspector::examine_genesis_checkpoint;
 
 #[derive(Parser)]
 pub struct Ceremony {
@@ -84,6 +87,8 @@ pub enum CeremonyCommand {
 
     BuildUnsignedCheckpoint,
 
+    ExamineGenesisCheckpoint,
+
     VerifyAndSign {
         #[clap(long)]
         key_file: PathBuf,
@@ -136,10 +141,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     name,
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
-                    account_key: account_keypair.public(),
+                    account_address: SuiAddress::from(&account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    stake: 1,
-                    delegation: 0,
                     gas_price: 1,
                     commission_rate: 0,
                     network_address,
@@ -171,14 +174,25 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::BuildUnsignedCheckpoint => {
             let mut builder = Builder::load(&dir)?;
-            let GenesisTuple(_, unsigned_checkpoint, ..) =
-                builder.build_unsigned_genesis_checkpoint();
+            let UnsignedGenesis { checkpoint, .. } = builder.build_unsigned_genesis_checkpoint();
             println!(
                 "Successfully built unsigned checkpoint: {}",
-                unsigned_checkpoint.digest()
+                checkpoint.digest()
             );
 
             builder.save(dir)?;
+        }
+
+        CeremonyCommand::ExamineGenesisCheckpoint => {
+            let builder = Builder::load(&dir)?;
+
+            let Some(unsigned_genesis) = builder.unsigned_genesis_checkpoint() else {
+                return Err(anyhow::anyhow!(
+                    "Unable to examine genesis checkpoint; it hasn't been built yet"
+                ));
+            };
+
+            examine_genesis_checkpoint(unsigned_genesis);
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {
@@ -196,7 +210,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             }
 
             builder = builder.add_validator_signature(&keypair);
-            let checkpoint = builder.unsigned_genesis_checkpoint().unwrap().1;
+            let UnsignedGenesis { checkpoint, .. } = builder.unsigned_genesis_checkpoint().unwrap();
             builder.save(dir)?;
 
             println!(
@@ -215,8 +229,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
             println!("Successfully built {SUI_GENESIS_FILENAME}");
             println!(
-                "{SUI_GENESIS_FILENAME} sha3-256: {}",
-                Hex::encode(genesis.sha3())
+                "{SUI_GENESIS_FILENAME} blake2b-256: {}",
+                Hex::encode(genesis.hash())
             );
         }
     }
@@ -262,10 +276,8 @@ mod test {
                     name: format!("validator-{i}"),
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
-                    account_key: account_keypair.public().clone().into(),
+                    account_address: SuiAddress::from(account_keypair.public()),
                     network_key: network_keypair.public().clone(),
-                    stake: 1,
-                    delegation: 0,
                     gas_price: 1,
                     commission_rate: 0,
                     network_address: utils::new_tcp_network_address(),

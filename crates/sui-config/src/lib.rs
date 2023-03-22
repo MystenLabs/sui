@@ -7,7 +7,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use sui_types::committee::StakeUnit;
 use tracing::trace;
 
 pub mod builder;
@@ -35,7 +34,6 @@ pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
 pub const CONSENSUS_DB_NAME: &str = "consensus_db";
 pub const FULL_NODE_DB_PATH: &str = "full_node_db";
 
-const DEFAULT_STAKE: StakeUnit = 100000000000000;
 const DEFAULT_GAS_PRICE: u64 = 1;
 const DEFAULT_COMMISSION_RATE: u64 = 0;
 

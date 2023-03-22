@@ -16,7 +16,9 @@ use tracing::warn;
 pub use scopeguard;
 use uuid::Uuid;
 
+mod guards;
 pub mod histogram;
+pub use guards::*;
 
 #[derive(Debug)]
 pub struct Metrics {

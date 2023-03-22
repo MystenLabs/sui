@@ -1,25 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { blake2b } from '@noble/hashes/blake2b';
 import { Keypair } from '../cryptography/keypair';
 import {
   SerializedSignature,
   toSerializedSignature,
 } from '../cryptography/signature';
-import { Provider } from '../providers/provider';
+import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { SuiAddress } from '../types';
 import { SignerWithProvider } from './signer-with-provider';
-import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
 export class RawSigner extends SignerWithProvider {
   private readonly keypair: Keypair;
 
-  constructor(
-    keypair: Keypair,
-    provider?: Provider,
-    serializer?: TxnDataSerializer,
-  ) {
-    super(provider, serializer);
+  constructor(keypair: Keypair, provider: JsonRpcProvider) {
+    super(provider);
     this.keypair = keypair;
   }
 
@@ -29,7 +25,8 @@ export class RawSigner extends SignerWithProvider {
 
   async signData(data: Uint8Array): Promise<SerializedSignature> {
     const pubkey = this.keypair.getPublicKey();
-    const signature = this.keypair.signData(data, false);
+    const digest = blake2b(data, { dkLen: 32 });
+    const signature = this.keypair.signData(digest, false);
     const signatureScheme = this.keypair.getKeyScheme();
 
     return toSerializedSignature({
@@ -39,7 +36,7 @@ export class RawSigner extends SignerWithProvider {
     });
   }
 
-  connect(provider: Provider): SignerWithProvider {
+  connect(provider: JsonRpcProvider): SignerWithProvider {
     return new RawSigner(this.keypair, provider);
   }
 }
