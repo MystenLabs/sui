@@ -40,10 +40,10 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
                 let threads = chunks.iter().map(|chunk| {
                     s.spawn(|| {
                         for digest in &**chunk {
-                            if cache.is_cert_verified(digest) {
+                            if cache.is_cached(digest) {
                                 continue;
                             } else {
-                                cache.cache_cert_verified(*digest);
+                                cache.cache_digest(*digest);
                             }
                         }
                     })
