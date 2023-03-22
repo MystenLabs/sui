@@ -60,6 +60,7 @@ be used to implement application-specific transfer rules.
 -  [Function `item_count`](#0x2_kiosk_item_count)
 -  [Function `profits_amount`](#0x2_kiosk_profits_amount)
 -  [Function `profits_mut`](#0x2_kiosk_profits_mut)
+-  [Function `has_item`](#0x2_kiosk_has_item)
 -  [Function `purchase_cap_kiosk`](#0x2_kiosk_purchase_cap_kiosk)
 -  [Function `purchase_cap_item`](#0x2_kiosk_purchase_cap_item)
 -  [Function `purchase_cap_min_price`](#0x2_kiosk_purchase_cap_min_price)
@@ -1007,6 +1008,31 @@ Get mutable access to <code>profits</code> - useful for extendability.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_profits_mut">profits_mut</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> Balance&lt;SUI&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.profits
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_has_item"></a>
+
+## Function `has_item`
+
+Check whether the an item is present in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item_id: <a href="object.md#0x2_object_ID">object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item_id: ID): bool {
+    dof::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: item_id })
 }
 </code></pre>
 
