@@ -285,6 +285,8 @@ pub struct PrimaryMetrics {
     pub duplicate_certificates_processed: IntCounter,
     /// The current Narwhal round in proposer
     pub current_round: IntGauge,
+    /// Latency distribution for generating proposals
+    pub proposal_latency: HistogramVec,
     /// The highest Narwhal round of certificates that have been accepted.
     pub highest_processed_round: IntGaugeVec,
     /// The highest Narwhal round that has been received.
@@ -395,6 +397,13 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            proposal_latency: register_histogram_vec_with_registry!(
+                "proposal_latency",
+                "Time distribution between node proposals",
+                &["reason"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             highest_received_round: register_int_gauge_vec_with_registry!(
                 "highest_received_round",
                 "Highest round received by the primary",
