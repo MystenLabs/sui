@@ -24,7 +24,7 @@ export function useDeriveLedgerAccounts(
     const { suiLedgerClient } = useSuiLedgerClient();
 
     return useQuery(
-        ['derive-ledger-accounts', suiLedgerClient?.transport.deviceModel?.id],
+        ['derive-ledger-accounts'],
         () => {
             if (!suiLedgerClient) {
                 throw new Error(
@@ -36,7 +36,14 @@ export function useDeriveLedgerAccounts(
                 numAccountsToDerive
             );
         },
-        useQueryOptions
+        {
+            ...useQueryOptions,
+            // NOTE: Unfortunately for security purposes, there's no way to uniquely identify a
+            // Ledger device without making a request to the Sui application and returning some
+            // unique identifier (or a public key which should guarantee uniqueness). Since we
+            // can't provide a unique query key, we'll disable caching entirely.
+            cacheTime: 0,
+        }
     );
 }
 
