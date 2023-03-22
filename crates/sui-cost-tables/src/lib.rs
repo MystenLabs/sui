@@ -4,15 +4,15 @@
 pub mod natives_tables;
 
 #[cfg(not(feature = "tiered-gas"))]
-pub mod bytecode_tables;
+pub mod bytecode_based;
 #[cfg(not(feature = "tiered-gas"))]
-pub mod units_types;
+pub use bytecode_based::tables as bytecode_tables;
+#[cfg(not(feature = "tiered-gas"))]
+pub use bytecode_based::units_types;
 
 #[cfg(feature = "tiered-gas")]
-pub mod tiered_tables;
+pub mod tier_based;
 #[cfg(feature = "tiered-gas")]
-pub use tiered_tables as bytecode_tables;
+pub use tier_based::tables as bytecode_tables;
 #[cfg(feature = "tiered-gas")]
-pub mod tiered_units_types;
-#[cfg(feature = "tiered-gas")]
-pub use tiered_units_types as units_types;
+pub use tier_based::units_types;

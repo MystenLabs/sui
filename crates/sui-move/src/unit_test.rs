@@ -24,7 +24,7 @@ use sui_types::{
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
-const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 
 #[derive(Parser)]
 pub struct Test {

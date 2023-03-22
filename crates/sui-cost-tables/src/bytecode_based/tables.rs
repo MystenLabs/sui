@@ -15,7 +15,7 @@ use move_vm_types::gas::{GasMeter, SimpleInstruction};
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
 
-use crate::units_types::{CostTable, Gas, GasCost};
+use crate::bytecode_based::units_types::{CostTable, Gas, GasCost};
 use move_binary_format::{
     file_format::{
         Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,

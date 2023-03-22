@@ -14,7 +14,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::views::{TypeView, ValueView};
 use once_cell::sync::Lazy;
 
-use crate::units_types::{CostTable, Gas, GasCost};
+use crate::tier_based::units_types::{CostTable, Gas, GasCost};
 
 /// VM flat fee
 pub const VM_FLAT_FEE: Gas = Gas::new(8_000);
@@ -666,30 +666,39 @@ pub fn unit_cost_schedule() -> CostTable {
 pub fn initial_cost_schedule() -> CostTable {
     let instruction_tiers: BTreeMap<u64, u64> = vec![
         (0, 1),
-        (1000, 2),
-        (2000, 4),
-        (2500, 16),
-        (3000, 256), // After this all instructions get charged this amount.
+        (3000, 2),
+        (6000, 3),
+        (8000, 5),
+        (9000, 9),
+        (9500, 16),
+        (10000, 29),
+        (10500, 50),
     ]
     .into_iter()
     .collect();
 
     let stack_height_tiers: BTreeMap<u64, u64> = vec![
         (0, 1),
-        (200, 2),
-        (400, 4),
-        (800, 16),
-        (1200, 256), // After this all increases to the stack height get charged this amount.
+        (400, 2),
+        (800, 3),
+        (1200, 5),
+        (1500, 9),
+        (1800, 16),
+        (2000, 29),
+        (2200, 50),
     ]
     .into_iter()
     .collect();
 
     let stack_size_tiers: BTreeMap<u64, u64> = vec![
         (0, 1),
-        (5000, 2),
-        (7000, 4),
-        (10000, 16),
-        (15000, 256), // After this all increases to the stack height get charged this amount.
+        (2000, 2),
+        (5000, 3),
+        (8000, 5),
+        (10000, 9),
+        (11000, 16),
+        (11500, 29),
+        (11500, 50),
     ]
     .into_iter()
     .collect();
