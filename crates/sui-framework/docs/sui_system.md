@@ -61,6 +61,7 @@
 <b>use</b> <a href="">0x2::transfer</a>;
 <b>use</b> <a href="">0x2::tx_context</a>;
 <b>use</b> <a href="">0x2::vec_set</a>;
+<b>use</b> <a href="stake_subsidy.md#0x3_stake_subsidy">0x3::stake_subsidy</a>;
 <b>use</b> <a href="staking_pool.md#0x3_staking_pool">0x3::staking_pool</a>;
 <b>use</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner">0x3::sui_system_state_inner</a>;
 <b>use</b> <a href="validator.md#0x3_validator">0x3::validator</a>;
@@ -110,7 +111,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x3_sui_system_create">create</a>(id: <a href="_UID">object::UID</a>, validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, stake_subsidy_start_epoch: u64, stake_subsidy_initial_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, max_validator_count: u64, min_validator_joining_stake: u64, validator_low_stake_threshold: u64, validator_very_low_stake_threshold: u64, validator_low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x3_sui_system_create">create</a>(id: <a href="_UID">object::UID</a>, validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">sui_system_state_inner::SystemParameters</a>, <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -122,46 +123,20 @@ This function will be called only once in genesis.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system.md#0x3_sui_system_create">create</a>(
     id: UID,
     validators: <a href="">vector</a>&lt;Validator&gt;,
-    stake_subsidy_fund: Balance&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
     protocol_version: u64,
     epoch_start_timestamp_ms: u64,
-    epoch_duration_ms: u64,
-
-    // Stake Subsidy parameters
-    stake_subsidy_start_epoch: u64,
-    stake_subsidy_initial_distribution_amount: u64,
-    stake_subsidy_period_length: u64,
-    stake_subsidy_decrease_rate: u16,
-
-    // Validator committee parameters
-    max_validator_count: u64,
-    min_validator_joining_stake: u64,
-    validator_low_stake_threshold: u64,
-    validator_very_low_stake_threshold: u64,
-    validator_low_stake_grace_period: u64,
+    parameters: SystemParameters,
+    <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: StakeSubsidy,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> system_state = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">sui_system_state_inner::create</a>(
         validators,
-        stake_subsidy_fund,
         storage_fund,
         protocol_version,
         epoch_start_timestamp_ms,
-        epoch_duration_ms,
-
-        // Stake Subsidy parameters
-        stake_subsidy_start_epoch,
-        stake_subsidy_initial_distribution_amount,
-        stake_subsidy_period_length,
-        stake_subsidy_decrease_rate,
-
-        // Validator committee parameters
-        max_validator_count,
-        min_validator_joining_stake,
-        validator_low_stake_threshold,
-        validator_very_low_stake_threshold,
-        validator_low_stake_grace_period,
+        parameters,
+        <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>,
         ctx,
     );
     <b>let</b> version = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(&system_state);

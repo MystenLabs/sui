@@ -9,7 +9,6 @@
 -  [Struct `GenesisChainParameters`](#0x3_genesis_GenesisChainParameters)
 -  [Struct `TokenDistributionSchedule`](#0x3_genesis_TokenDistributionSchedule)
 -  [Struct `TokenAllocation`](#0x3_genesis_TokenAllocation)
--  [Constants](#@Constants_0)
 -  [Function `create`](#0x3_genesis_create)
 -  [Function `allocate_tokens`](#0x3_genesis_allocate_tokens)
 -  [Function `activate_validators`](#0x3_genesis_activate_validators)
@@ -22,7 +21,9 @@
 <b>use</b> <a href="">0x2::object</a>;
 <b>use</b> <a href="">0x2::sui</a>;
 <b>use</b> <a href="">0x2::tx_context</a>;
+<b>use</b> <a href="stake_subsidy.md#0x3_stake_subsidy">0x3::stake_subsidy</a>;
 <b>use</b> <a href="sui_system.md#0x3_sui_system">0x3::sui_system</a>;
+<b>use</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner">0x3::sui_system_state_inner</a>;
 <b>use</b> <a href="validator.md#0x3_validator">0x3::validator</a>;
 <b>use</b> <a href="validator_set.md#0x3_validator_set">0x3::validator_set</a>;
 </code></pre>
@@ -305,21 +306,6 @@
 
 </details>
 
-<a name="@Constants_0"></a>
-
-## Constants
-
-
-<a name="0x3_genesis_INIT_STAKE_SUBSIDY_AMOUNT"></a>
-
-Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).
-
-
-<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>: u64 = 1000000000000000;
-</code></pre>
-
-
-
 <a name="0x3_genesis_create"></a>
 
 ## Function `create`
@@ -424,20 +410,9 @@ all the information we need in the system.
     // Activate all validators
     <a href="genesis.md#0x3_genesis_activate_validators">activate_validators</a>(&<b>mut</b> validators);
 
-    <a href="sui_system.md#0x3_sui_system_create">sui_system::create</a>(
-        sui_system_state_id,
-        validators,
-        subsidy_fund,
-        storage_fund,
-        genesis_chain_parameters.protocol_version,
-        genesis_chain_parameters.chain_start_timestamp_ms,
+    <b>let</b> system_parameters = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create_system_parameters">sui_system_state_inner::create_system_parameters</a>(
         genesis_chain_parameters.epoch_duration_ms,
-
-        // Stake Subsidy parameters
         genesis_chain_parameters.stake_subsidy_start_epoch,
-        genesis_chain_parameters.stake_subsidy_initial_distribution_amount,
-        genesis_chain_parameters.stake_subsidy_period_length,
-        genesis_chain_parameters.stake_subsidy_decrease_rate,
 
         // Validator committee parameters
         genesis_chain_parameters.max_validator_count,
@@ -445,6 +420,26 @@ all the information we need in the system.
         genesis_chain_parameters.validator_low_stake_threshold,
         genesis_chain_parameters.validator_very_low_stake_threshold,
         genesis_chain_parameters.validator_low_stake_grace_period,
+
+        ctx,
+    );
+
+    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = <a href="stake_subsidy.md#0x3_stake_subsidy_create">stake_subsidy::create</a>(
+        subsidy_fund,
+        genesis_chain_parameters.stake_subsidy_initial_distribution_amount,
+        genesis_chain_parameters.stake_subsidy_period_length,
+        genesis_chain_parameters.stake_subsidy_decrease_rate,
+        ctx,
+    );
+
+    <a href="sui_system.md#0x3_sui_system_create">sui_system::create</a>(
+        sui_system_state_id,
+        validators,
+        storage_fund,
+        genesis_chain_parameters.protocol_version,
+        genesis_chain_parameters.chain_start_timestamp_ms,
+        system_parameters,
+        <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>,
         ctx,
     );
 }
