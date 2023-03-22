@@ -33,6 +33,7 @@ module sui::voting_power_tests {
         check(vector[1, 2], vector[5_000, 5_000], ctx);
         check(vector[1, 1, 1], vector[3_333, 3_333, 3_334], ctx);
         check(vector[1, 1, 2], vector[3_333, 3_333, 3_334], ctx);
+        check(vector[1, 2, 3, 4], vector[2_500, 2_500, 2_500, 2_500], ctx);
         check(vector[1, 1, 1, 1], vector[2_500, 2_500, 2_500, 2_500], ctx);
         check(vector[1, 1, 1, 1, 1, 1], vector[1666, 1666, 1667, 1667, 1667, 1667], ctx);
         check(vector[1, 1, 1, 1, 1, 1, 1], vector[1428, 1428, 1428, 1429, 1429, 1429, 1429], ctx);
