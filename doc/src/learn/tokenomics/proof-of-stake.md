@@ -6,7 +6,7 @@ The Sui platform relies on Delegated Proof-of-Stake to determine the set of vali
 
 ## SUI token staking
 
-Within each epoch, operations are processed by a fixed set of validators, each with a specific amount of stake from SUI token holders. A validator's share of total stake is relevant in that it determines each validator’s share of voting power for processing transactions. Staking SUI implies the SUI tokens are locked for the entire epoch. SUI token holders are free to unstake their SUI or to change their selected validator when the epoch changes.
+Within each epoch, operations are processed by a fixed set of validators, each with a specific amount of stake from SUI token holders. A validator's share of total stake is relevant in that it determines each validator’s share of voting power for processing transactions. Staking SUI implies the SUI tokens are locked for the entire epoch. SUI token holders are free to withdraw their SUI or to change their selected validator when the epoch changes.
 
 ## Economic model
 
