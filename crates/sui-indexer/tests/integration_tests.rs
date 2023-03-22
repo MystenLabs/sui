@@ -7,6 +7,7 @@ pub mod pg_integration_test {
     use std::env;
     use std::str::FromStr;
 
+    use diesel::RunQueryDsl;
     use futures::future::join_all;
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
     use move_core_types::ident_str;
@@ -16,9 +17,12 @@ pub mod pg_integration_test {
 
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
+    use sui_indexer::models::objects::{Object, ObjectStatus};
+    use sui_indexer::models::owners::OwnerType;
+    use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
     use sui_indexer::test_utils::start_test_indexer;
-    use sui_indexer::IndexerConfig;
+    use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
@@ -706,6 +710,69 @@ pub mod pg_integration_test {
         drop(test_cluster);
     }
 
+    #[tokio::test]
+    async fn pg_parameter_limit_test() {
+        // Helps clear/build the database
+        start_test_cluster(None).await;
+
+        let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
+        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
+        let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
+        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
+        let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
+        let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
+
+        let lot_of_data = (1..10000)
+            .into_iter()
+            .map(|_| Object {
+                epoch: 0,
+                checkpoint: 0,
+                object_id: ObjectID::random().to_string(),
+                version: 0,
+                object_digest: "".to_string(),
+                owner_type: OwnerType::AddressOwner,
+                owner_address: None,
+                initial_shared_version: None,
+                previous_transaction: "".to_string(),
+                object_type: "".to_string(),
+                object_status: ObjectStatus::Created,
+                has_public_transfer: false,
+                storage_rebate: 0,
+                bcs: vec![],
+            })
+            .collect::<Vec<_>>();
+
+        // this should fail because of the parameter limit
+        let result = pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| {
+                diesel::insert_into(objects::table)
+                    .values(&lot_of_data)
+                    .on_conflict_do_nothing()
+                    .execute(conn)
+            });
+
+        assert!(result.is_err());
+
+        // this should pass, we can chunk up the data but they can still be transactional.
+        let result: Result<(), IndexerError> = pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| {
+                for chunk in lot_of_data.chunks(1000) {
+                    diesel::insert_into(objects::table)
+                        .values(chunk)
+                        .on_conflict_do_nothing()
+                        .execute(conn)?;
+                }
+                Ok(())
+            });
+        assert!(result.is_ok());
+    }
+
     async fn start_test_cluster(
         epoch_duration_ms: Option<u64>,
     ) -> (
@@ -715,9 +782,9 @@ pub mod pg_integration_test {
         JoinHandle<Result<(), IndexerError>>,
     ) {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
-        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32771".into());
+        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
         let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
-        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}/sui_indexer");
+        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
 
         let test_cluster = if let Some(epoch) = epoch_duration_ms {
             TestClusterBuilder::new()
