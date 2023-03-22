@@ -14,6 +14,7 @@ import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
 import { ToS_LINK } from '_shared/constants';
+import { ArrowRight16 } from '@mysten/icons';
 
 const CreatePage = () => {
     const dispatch = useAppDispatch();
@@ -87,12 +88,7 @@ const CreatePage = () => {
                             size="tall"
                             text="Create Wallet"
                             loading={isSubmitting}
-                            after={
-                                <Icon
-                                    icon={SuiIcons.ArrowRight}
-                                    className="font-thin text-subtitle"
-                                />
-                            }
+                            after={<ArrowRight16 />}
                         />
                     </Form>
                 )}

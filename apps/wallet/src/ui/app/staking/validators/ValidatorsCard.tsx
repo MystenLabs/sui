@@ -140,10 +140,9 @@ export function ValidatorsCard() {
                 </Content>
                 <Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
                     <Button
-                        target="_self"
                         size="tall"
                         variant="secondary"
-                        href="#new"
+                        to="#new"
                         disabled={!stakingEnabled}
                         before={
                             <Icon

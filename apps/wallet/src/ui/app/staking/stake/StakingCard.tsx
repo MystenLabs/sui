@@ -346,8 +346,7 @@ function StakingCard() {
                                 <Button
                                     size="tall"
                                     variant="secondary"
-                                    href="#/stake"
-                                    target="_self"
+                                    to="/stake"
                                     disabled={isSubmitting}
                                     before={
                                         <Icon
