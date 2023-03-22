@@ -9,7 +9,7 @@ use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 
 use rand::seq::SliceRandom;
-use std::{collections::HashSet, time::Duration};
+use std::{cmp::min, collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
 use tracing::{debug, info, trace, warn};
@@ -83,29 +83,26 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         request: anemo::Request<RequestBatchesRequest>,
     ) -> Result<anemo::Response<RequestBatchesResponse>, anemo::rpc::Status> {
         const MAX_REQUEST_BATCHES_RESPONSE_SIZE: usize = 6_000_000;
-        const MAX_BATCH_DIGESTS: usize = 100;
-        let mut remaining_batch_digests = Vec::new();
+        const MAX_REQUEST_BATCH_DIGESTS: usize = 1_000;
 
-        let limited_batch_digests = request
-            .into_body()
-            .batch_digests
-            .into_iter()
-            .take(MAX_BATCH_DIGESTS)
+        let mut digests_to_fetch = request.into_body().batch_digests;
+        let mut remaining_batch_digests = digests_to_fetch
+            .drain(min(MAX_REQUEST_BATCH_DIGESTS, digests_to_fetch.len())..)
             .collect::<Vec<_>>();
 
-        let fetched_batches = self.store.multi_get(limited_batch_digests).map_err(|e| {
+        let stored_batches = self.store.multi_get(digests_to_fetch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to read from batch store: {e:?}"))
         })?;
 
         let mut total_size = 0;
         let mut batches = Vec::new();
-        for fetched_batch in fetched_batches.into_iter().flatten() {
-            let batch_size = fetched_batch.size();
+        for stored_batch in stored_batches.into_iter().flatten() {
+            let batch_size = stored_batch.size();
             if total_size + batch_size <= MAX_REQUEST_BATCHES_RESPONSE_SIZE {
-                batches.push(fetched_batch);
+                batches.push(stored_batch);
                 total_size += batch_size;
             } else {
-                remaining_batch_digests.push(fetched_batch.digest());
+                remaining_batch_digests.push(stored_batch.digest());
             }
         }
 
