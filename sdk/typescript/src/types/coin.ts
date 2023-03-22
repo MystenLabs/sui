@@ -39,7 +39,7 @@ export type PaginatedCoins = Infer<typeof PaginatedCoins>;
 export const CoinBalance = object({
   coinType: string(),
   coinObjectCount: number(),
-  totalBalance: number(),
+  totalBalance: string(),
   lockedBalance: object({
     epochId: optional(number()),
     number: optional(number()),

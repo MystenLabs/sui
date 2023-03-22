@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::fmt::{self, Display, Formatter};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use serde_with::{serde_as, DisplayFromStr};
 use sui_types::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
 };
@@ -16,6 +18,33 @@ use sui_types::object::Object;
 
 use crate::Page;
 
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
+/// Type for de/serializing u128 to string
+pub struct BigBigInt(
+    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "String")]
+    u128,
+);
+
+impl From<BigBigInt> for u128 {
+    fn from(x: BigBigInt) -> u128 {
+        x.0
+    }
+}
+
+impl From<u128> for BigBigInt {
+    fn from(v: u128) -> BigBigInt {
+        BigBigInt(v)
+    }
+}
+
+impl Display for BigBigInt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub type CoinPage = Page<Coin, ObjectID>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -23,7 +52,7 @@ pub type CoinPage = Page<Coin, ObjectID>;
 pub struct Balance {
     pub coin_type: String,
     pub coin_object_count: usize,
-    pub total_balance: u128,
+    pub total_balance: BigBigInt,
     pub locked_balance: HashMap<EpochId, u128>,
 }
 

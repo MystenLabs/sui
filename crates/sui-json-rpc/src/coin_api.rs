@@ -12,7 +12,7 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use tracing::debug;
 
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_types::{Balance, Coin as SuiCoin};
+use sui_json_rpc_types::{Balance, BigBigInt, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
@@ -231,7 +231,7 @@ impl CoinReadApiServer for CoinReadApi {
         Ok(Balance {
             coin_type: coin_type.unwrap().to_string(),
             coin_object_count,
-            total_balance,
+            total_balance: total_balance.into(),
             locked_balance,
         })
     }
@@ -246,13 +246,15 @@ impl CoinReadApiServer for CoinReadApi {
             let balance = balances.entry(coin.coin_type.clone()).or_insert(Balance {
                 coin_type: coin.coin_type,
                 coin_object_count: 0,
-                total_balance: 0,
+                total_balance: 0.into(),
                 locked_balance: Default::default(),
             });
             if let Some(lock) = coin.locked_until_epoch {
                 *balance.locked_balance.entry(lock).or_default() += coin.balance as u128
             } else {
-                balance.total_balance += coin.balance as u128;
+                let total_balance: u128 =
+                    <u128>::from(balance.total_balance) + coin.balance as u128;
+                balance.total_balance = <BigBigInt>::from(total_balance);
             }
             balance.coin_object_count += 1;
         }

@@ -353,7 +353,7 @@ async fn test_get_balance() -> Result<(), anyhow::Error> {
 
     let result: Balance = http_client.get_balance(*address, None).await?;
     assert_eq!("0x2::sui::SUI", result.coin_type);
-    assert_eq!(500000000000000, result.total_balance);
+    assert_eq!(500000000000000, <u128>::from(result.total_balance));
     assert_eq!(5, result.coin_object_count);
 
     Ok(())
