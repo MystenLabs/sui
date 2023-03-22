@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{AuthorityIdentifier, BlockSynchronizerParameters, Committee, Parameters, WorkerId};
+use config::{AuthorityIdentifier, BlockSynchronizerParameters, Committee, Parameters};
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{hash::Hash, traits::KeyPair as _};

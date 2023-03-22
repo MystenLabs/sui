@@ -9,8 +9,8 @@ use crate::{
 use bytes::Bytes;
 use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
-    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
-    NarwhalAuthoritySignature, PublicKey, Signature, AggregateSignatureBytes
+    to_intent_message, AggregateSignature, AggregateSignatureBytes,
+    NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, PublicKey, Signature,
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;

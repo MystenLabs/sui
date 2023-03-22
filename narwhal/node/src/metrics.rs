@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use axum::{http::StatusCode, routing::get, Extension, Router};
 use config::{AuthorityIdentifier, WorkerId};
-use multiaddr::Multiaddr;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::multiaddr::{to_socket_addr, Multiaddr};
 use prometheus::{Registry, TextEncoder};

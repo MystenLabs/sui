@@ -8703,6 +8703,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
+ "narwhal-crypto",
  "narwhal-executor",
  "narwhal-node",
  "narwhal-test-utils",

@@ -10,7 +10,6 @@ use crate::{
 use config::{AuthorityIdentifier, Committee};
 use consensus::dag::Dag;
 
-use multiaddr::Multiaddr;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::Multiaddr;
 use std::{sync::Arc, time::Duration};

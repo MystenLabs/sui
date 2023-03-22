@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use dashmap::DashMap;
 use fastcrypto::hash::Hash;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
 

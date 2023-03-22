@@ -69,8 +69,11 @@ async fn test_successful_headers_synchronization() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary_by_id(&id).unwrap()).unwrap();
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -211,8 +214,11 @@ async fn test_successful_payload_synchronization() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary_by_id(&id).unwrap()).unwrap();
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -381,8 +387,11 @@ async fn test_timeout_while_waiting_for_certificates() {
         })
         .collect();
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary_by_id(&id).unwrap()).unwrap();
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -476,9 +485,11 @@ async fn test_reply_with_certificates_already_in_storage() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary_by_id(&authority_id).unwrap()).unwrap();
-
+    let own_address = committee
+        .primary_by_id(&authority_id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -577,9 +588,11 @@ async fn test_reply_with_payload_already_in_storage() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary_by_id(&id).unwrap()).unwrap();
-
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -682,9 +695,11 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary_by_id(&authority_id).unwrap()).unwrap();
-
+    let own_address = committee
+        .primary_by_id(&authority_id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)

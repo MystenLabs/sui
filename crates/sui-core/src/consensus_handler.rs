@@ -25,7 +25,6 @@ use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::committee::Committee;
 use sui_types::messages::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     VerifiedExecutableTransaction, VerifiedTransaction,
@@ -46,19 +45,16 @@ pub struct ConsensusHandler<T> {
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    /// The committee used to do stake computations for deciding set of low scoring authorities
-    committee: Arc<Committee>,
     /// Mappings used for logging and metrics
     authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
+    /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
+    committee: Committee,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: Mutex<LruCache<SequencedConsensusTransactionKey, ()>>,
     transaction_scheduler: AsyncTransactionScheduler,
-    /// Narwhal committee is used to derive the Narwhal's Certificate authority public key from the
-    /// corresponding authority id.
-    committee: Committee,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -70,10 +66,9 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        committee: Arc<Committee>,
         authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
-        metrics: Arc<AuthorityMetrics>,
         committee: Committee,
+        metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         let last_seen = Mutex::new(Default::default());
         let transaction_scheduler =
@@ -91,7 +86,6 @@ impl<T> ConsensusHandler<T> {
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
             )),
             transaction_scheduler,
-            committee,
         }
     }
 }
@@ -151,7 +145,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
-            self.committee.clone(),
+            &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
             self.authority_names_to_peer_ids.clone(),
             &self.metrics,

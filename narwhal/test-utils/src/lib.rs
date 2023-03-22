@@ -9,7 +9,7 @@ use config::{
 };
 use crypto::{
     to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
-    PublicKey, PublicKeyBytes, Signature,
+    PublicKey, Signature,
 };
 use fastcrypto::{
     hash::Hash as _,
@@ -17,7 +17,6 @@ use fastcrypto::{
 };
 use indexmap::IndexMap;
 use mysten_network::Multiaddr;
-use multiaddr::Multiaddr;
 use once_cell::sync::OnceCell;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -141,11 +140,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     .expect("Failed creating database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-<<<<<<< HEAD
-        LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
-=======
         LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
->>>>>>> 6512c9c297 ([refactor] making Committee keep a PublicKey mapping)
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 
@@ -441,8 +436,7 @@ fn rounds_of_certificates(
         for id in ids {
             let this_cert_parents = this_cert_parents(&parents, failure_probability);
 
-            let (digest, certificate) =
-                make_one_certificate(id.clone(), round, this_cert_parents);
+            let (digest, certificate) = make_one_certificate(id.clone(), round, this_cert_parents);
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }

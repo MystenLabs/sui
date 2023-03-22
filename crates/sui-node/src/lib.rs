@@ -594,7 +594,6 @@ impl SuiNode {
             state_sync_handle,
             narwhal_manager,
             narwhal_epoch_data_remover,
-            committee,
             accumulator,
             connection_monitor_status,
             validator_server_handle,
@@ -613,7 +612,6 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
-        committee: Arc<Committee>,
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         validator_server_handle: JoinHandle<Result<()>>,
@@ -647,13 +645,12 @@ impl SuiNode {
             state.transaction_manager().clone(),
             state.db(),
             low_scoring_authorities,
-            committee,
             connection_monitor_status
                 .authority_names_to_peer_ids
                 .load()
                 .clone(),
-            state.metrics.clone(),
             committee.clone(),
+            state.metrics.clone(),
         ));
 
         let transactions_addr = &config
@@ -991,7 +988,6 @@ impl SuiNode {
                             self.state_sync.clone(),
                             narwhal_manager,
                             narwhal_epoch_data_remover,
-                            Arc::new(next_epoch_committee.clone()),
                             self.accumulator.clone(),
                             self.connection_monitor_status.clone(),
                             validator_server_handle,

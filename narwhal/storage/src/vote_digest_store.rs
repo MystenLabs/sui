@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::AuthorityIdentifier;
 use crate::NodeStorage;
-use crypto::PublicKey;
+use config::AuthorityIdentifier;
 use store::reopen;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{rocks::DBMap, Map, TypedStoreError};
@@ -41,7 +40,10 @@ impl VoteDigestStore {
     }
 
     /// Read the vote info based on the provided corresponding header author key
-    pub fn read(&self, header_author: &AuthorityIdentifier) -> Result<Option<VoteInfo>, TypedStoreError> {
+    pub fn read(
+        &self,
+        header_author: &AuthorityIdentifier,
+    ) -> Result<Option<VoteInfo>, TypedStoreError> {
         self.store.get(header_author)
     }
 }

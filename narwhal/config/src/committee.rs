@@ -5,7 +5,7 @@
 use crate::{CommitteeUpdateError, ConfigError, Epoch, Stake};
 use crypto::{NetworkPublicKey, PublicKey, PublicKeyBytes};
 use fastcrypto::traits::EncodeDecodeBase64;
-use multiaddr::Multiaddr;
+use mysten_network::Multiaddr;
 use mysten_util_mem::MallocSizeOf;
 use once_cell::sync::OnceCell;
 use rand::rngs::StdRng;
@@ -396,7 +396,7 @@ mod tests {
     use crate::{Authority, Committee};
     use crypto::{KeyPair, NetworkKeyPair, PublicKey};
     use fastcrypto::traits::KeyPair as _;
-    use multiaddr::Multiaddr;
+    use mysten_network::Multiaddr;
     use rand::thread_rng;
     use std::collections::BTreeMap;
 

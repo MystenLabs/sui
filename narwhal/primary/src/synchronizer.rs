@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{rpc::Status, Network, Request, Response};
-use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache, WorkerId};
+use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
 use crypto::NetworkPublicKey;

@@ -168,7 +168,7 @@ async fn accept_suspended_certificates() {
         .authorities()
         .map(|a| (a.id(), a.keypair().copy()))
         .collect();
-    let (certificates, _next_parents) =
+    let (certificates, next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
 
