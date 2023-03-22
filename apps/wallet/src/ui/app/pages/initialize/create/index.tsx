@@ -10,7 +10,6 @@ import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
-import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
@@ -86,11 +85,8 @@ const CreatePage = () => {
                             type="submit"
                             disabled={!isValid || isSubmitting}
                             size="tall"
-                            text={
-                                <Loading loading={isSubmitting}>
-                                    Create Wallet
-                                </Loading>
-                            }
+                            text="Create Wallet"
+                            loading={isSubmitting}
                             after={
                                 <Icon
                                     icon={SuiIcons.ArrowRight}

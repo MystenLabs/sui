@@ -142,7 +142,7 @@ export function ValidatorsCard() {
                     <Button
                         size="tall"
                         variant="secondary"
-                        href="new"
+                        href="#new"
                         disabled={!stakingEnabled}
                         before={
                             <Icon

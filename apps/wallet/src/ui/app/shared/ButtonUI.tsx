@@ -110,6 +110,7 @@ export interface ButtonProps
     before?: ReactNode;
     after?: ReactNode;
     text?: ReactNode;
+    loading?: boolean;
 }
 
 export const Button = forwardRef(
@@ -117,6 +118,7 @@ export const Button = forwardRef(
         {
             variant = 'primary',
             size = 'narrow',
+            loading = false,
             before,
             after,
             text,
@@ -129,6 +131,7 @@ export const Button = forwardRef(
                 ref={ref}
                 className={styles({ variant, size })}
                 {...otherProps}
+                loading={loading}
             >
                 {before ? (
                     <div className={iconStyles({ variant })}>{before}</div>

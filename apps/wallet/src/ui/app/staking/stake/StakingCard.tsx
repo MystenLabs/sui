@@ -37,7 +37,6 @@ import { Collapse } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
@@ -367,15 +366,8 @@ function StakingCard() {
                                         isSubmitting ||
                                         (unstake && !delegationId)
                                     }
-                                    text={
-                                        isSubmitting ? (
-                                            <LoadingIndicator color="inherit" />
-                                        ) : unstake ? (
-                                            'Unstake Now'
-                                        ) : (
-                                            'Stake Now'
-                                        )
-                                    }
+                                    loading={isSubmitting}
+                                    text={unstake ? 'Unstake Now' : 'Stake Now'}
                                 />
                             </Menu>
                         </BottomMenuLayout>
