@@ -9,6 +9,7 @@ import Loading from '_components/loading';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 import { usePageView } from '_shared/utils';
+import BackupPage from '_pages/initialize/backup';
 
 interface Props {
     disableNavigation?: boolean;
