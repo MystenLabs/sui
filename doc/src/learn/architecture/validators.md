@@ -4,11 +4,13 @@ title: Validators
 
 The Sui network is operated by a set of independent *validators*, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines operated by the same entity). A validator participates in the network by handling read and write requests sent by clients. This section focuses on the latter.
 
+To learn how to set up and run a Sui Validator node, including how staking and rewards work, see [Sui Validator Node](../build/validator-node.md).
+
 Sui uses Delegated Proof-of-Stake (DPoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing stake and staking rewards in case of misbehavior.
 
 ## Epochs
 
-Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as staking/unstaking, and distribution of staking rewards are also processed at epoch boundaries.
+Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network and their voting power is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of validators as the operators. Besides validator set changes, tokenomics operations such as staking/un-staking, and distribution of staking rewards are also processed at epoch boundaries.
 
 ## Quorums
 
