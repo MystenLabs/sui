@@ -155,7 +155,7 @@ Sui Client CLI includes 1 address by default. You can create new addresses for t
 ### Create a new account address
 
 ```shell
-sui client new-address Secp256k1
+sui client new-address secp256k1
 ```
 
 You must specify the key scheme, one of `ed25519` or `secp256k1` or `secp256r1`.
@@ -203,7 +203,7 @@ sui client objects 0x338567a5fe29132d68fade5172870d8ac1b607fd00eaace1e0aa42896d7
 To view more information about an object, use the `object` command and specify the `objectId`.
 
 ```shell
-sui client object <ID>
+sui client object <OBJECT_ID>
 ```
 
 The result shows some basic information about the object, the owner,
@@ -223,7 +223,7 @@ id: 0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d
 To view the JSON representation of the object, include `--json` in the command.
 
 ```shell
-sui client object <ID> --json
+sui client object <OBJECT_ID> --json
 ```
 
 The response resembles the following:
@@ -400,7 +400,7 @@ Use the `objects` command to view the new coin objects.
 sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
 ```
 
-The following example splits a coin into three equal parts. To split a coin evenly, don't include the `--amount` argument in the command.
+The following example splits a coin into three equal parts. To split a coin evenly, run the command without the `--amount` argument.
 
 ```shell
 sui client split-coin --coin-id 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --count 3 --gas-budget 1000
