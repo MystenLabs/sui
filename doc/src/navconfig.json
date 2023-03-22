@@ -130,6 +130,10 @@
 				"fileName": "build/sui-local-network"
 			},
 			{
+				"label": "Sui Object Display Standard",
+				"fileName": "build/sui-object-display"
+			},
+			{
 				"label": "Create Smart Contracts with Move",
 				"fileName": "build/move/index",
 				"title": "Smart Contracts with Move",
