@@ -61,6 +61,8 @@
 -  [Function `pool_token_exchange_rate_at_epoch`](#0x3_validator_pool_token_exchange_rate_at_epoch)
 -  [Function `staking_pool_id`](#0x3_validator_staking_pool_id)
 -  [Function `is_duplicate`](#0x3_validator_is_duplicate)
+-  [Function `is_equal_some_and_value`](#0x3_validator_is_equal_some_and_value)
+-  [Function `is_equal_some`](#0x3_validator_is_equal_some)
 -  [Function `new_unverified_validator_operation_cap_and_transfer`](#0x3_validator_new_unverified_validator_operation_cap_and_transfer)
 -  [Function `update_name`](#0x3_validator_update_name)
 -  [Function `update_description`](#0x3_validator_update_description)
@@ -693,8 +695,7 @@ Intended validator is not a candidate one.
         <a href="_length">vector::length</a>(&net_address) &lt;= 128
             && <a href="_length">vector::length</a>(&p2p_address) &lt;= 128
             && <a href="_length">vector::length</a>(&name) &lt;= 128
-            && <a href="_length">vector::length</a>(&description) &lt;= 150
-            && <a href="_length">vector::length</a>(&protocol_pubkey_bytes) &lt;= 128,
+            && <a href="_length">vector::length</a>(&description) &lt;= 150,
         0
     );
     <b>assert</b>!(<a href="validator.md#0x3_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
@@ -716,6 +717,7 @@ Intended validator is not a candidate one.
         <a href="_new">bag::new</a>(ctx),
     );
 
+    // Checks that the keys & addresses & PoP are valid.
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&metadata);
 
     <a href="validator.md#0x3_validator_new_from_metadata">new_from_metadata</a>(
@@ -2021,6 +2023,90 @@ Set the voting power of this validator, called only from validator_set.
         // || self.metadata.net_address == other.metadata.net_address
         // || self.metadata.p2p_address == other.metadata.p2p_address
         || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
+        || self.metadata.network_pubkey_bytes == other.metadata.network_pubkey_bytes
+        || self.metadata.network_pubkey_bytes == other.metadata.worker_pubkey_bytes
+        || self.metadata.worker_pubkey_bytes == other.metadata.worker_pubkey_bytes
+        || self.metadata.worker_pubkey_bytes == other.metadata.network_pubkey_bytes
+        // All next epoch parameters.
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_net_address, &other.metadata.next_epoch_net_address)
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_p2p_address, &other.metadata.next_epoch_p2p_address)
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_protocol_pubkey_bytes, &other.metadata.next_epoch_protocol_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_network_pubkey_bytes, &other.metadata.next_epoch_network_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_network_pubkey_bytes, &other.metadata.next_epoch_worker_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_worker_pubkey_bytes, &other.metadata.next_epoch_worker_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>(&self.metadata.next_epoch_worker_pubkey_bytes, &other.metadata.next_epoch_network_pubkey_bytes)
+        // My next epoch parameters <b>with</b> other current epoch parameters.
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_net_address, &other.metadata.net_address)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_p2p_address, &other.metadata.p2p_address)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_protocol_pubkey_bytes, &other.metadata.protocol_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_network_pubkey_bytes, &other.metadata.network_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_network_pubkey_bytes, &other.metadata.worker_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_worker_pubkey_bytes, &other.metadata.worker_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&self.metadata.next_epoch_worker_pubkey_bytes, &other.metadata.network_pubkey_bytes)
+        // Other next epoch parameters <b>with</b> my current epoch parameters.
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_net_address, &self.metadata.net_address)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_p2p_address, &self.metadata.p2p_address)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_protocol_pubkey_bytes, &self.metadata.protocol_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_network_pubkey_bytes, &self.metadata.network_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_network_pubkey_bytes, &self.metadata.worker_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_worker_pubkey_bytes, &self.metadata.worker_pubkey_bytes)
+        || <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>(&other.metadata.next_epoch_worker_pubkey_bytes, &self.metadata.network_pubkey_bytes)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_is_equal_some_and_value"></a>
+
+## Function `is_equal_some_and_value`
+
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>&lt;T&gt;(a: &<a href="_Option">option::Option</a>&lt;T&gt;, b: &T): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>&lt;T&gt;(a: &Option&lt;T&gt;, b: &T): bool {
+    <b>if</b> (<a href="_is_none">option::is_none</a>(a)) {
+        <b>false</b>
+    } <b>else</b> {
+        <a href="_borrow">option::borrow</a>(a) == b
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_is_equal_some"></a>
+
+## Function `is_equal_some`
+
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>&lt;T&gt;(a: &<a href="_Option">option::Option</a>&lt;T&gt;, b: &<a href="_Option">option::Option</a>&lt;T&gt;): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>&lt;T&gt;(a: &Option&lt;T&gt;, b: &Option&lt;T&gt;): bool {
+    <b>if</b> (<a href="_is_none">option::is_none</a>(a) || <a href="_is_none">option::is_none</a>(b)) {
+        <b>false</b>
+    } <b>else</b> {
+        <a href="_borrow">option::borrow</a>(a) == <a href="_borrow">option::borrow</a>(b)
+    }
 }
 </code></pre>
 

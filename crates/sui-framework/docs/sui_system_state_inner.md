@@ -1283,6 +1283,8 @@ The change will only take effects starting from the next epoch.
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <b>let</b> network_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(network_address));
     <a href="validator.md#0x3_validator_update_next_epoch_network_address">validator::update_next_epoch_network_address</a>(<a href="validator.md#0x3_validator">validator</a>, network_address);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1346,6 +1348,8 @@ The change will only take effects starting from the next epoch.
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <b>let</b> p2p_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address));
     <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">validator::update_next_epoch_p2p_address</a>(<a href="validator.md#0x3_validator">validator</a>, p2p_address);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1535,6 +1539,8 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <a href="validator.md#0x3_validator_update_next_epoch_protocol_pubkey">validator::update_next_epoch_protocol_pubkey</a>(<a href="validator.md#0x3_validator">validator</a>, protocol_pubkey, proof_of_possession);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1597,6 +1603,8 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <a href="validator.md#0x3_validator_update_next_epoch_worker_pubkey">validator::update_next_epoch_worker_pubkey</a>(<a href="validator.md#0x3_validator">validator</a>, worker_pubkey);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1658,6 +1666,8 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <a href="validator.md#0x3_validator_update_next_epoch_network_pubkey">validator::update_next_epoch_network_pubkey</a>(<a href="validator.md#0x3_validator">validator</a>, network_pubkey);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
