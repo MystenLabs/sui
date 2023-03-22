@@ -28,8 +28,6 @@ use crate::TransactionValidator;
 #[path = "tests/handlers_tests.rs"]
 pub mod handlers_tests;
 
-pub const MAX_REQUEST_BATCHES_RESPONSE_SIZE: usize = 6_000_000;
-
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
 pub struct WorkerReceiverHandler<V> {
@@ -84,8 +82,18 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         &self,
         request: anemo::Request<RequestBatchesRequest>,
     ) -> Result<anemo::Response<RequestBatchesResponse>, anemo::rpc::Status> {
-        let batch_digests = request.into_body().batches;
-        let fetched_batches = self.store.multi_get(batch_digests).map_err(|e| {
+        const MAX_REQUEST_BATCHES_RESPONSE_SIZE: usize = 6_000_000;
+        const MAX_BATCH_DIGESTS: usize = 100;
+        let mut remaining_batch_digests = Vec::new();
+
+        let limited_batch_digests = request
+            .into_body()
+            .batch_digests
+            .into_iter()
+            .take(MAX_BATCH_DIGESTS)
+            .collect::<Vec<_>>();
+
+        let fetched_batches = self.store.multi_get(limited_batch_digests).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to read from batch store: {e:?}"))
         })?;
 
@@ -97,11 +105,14 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
                 batches.push(fetched_batch);
                 total_size += batch_size;
             } else {
-                break;
+                remaining_batch_digests.push(fetched_batch.digest());
             }
         }
 
-        Ok(anemo::Response::new(RequestBatchesResponse { batches }))
+        Ok(anemo::Response::new(RequestBatchesResponse {
+            batches,
+            remaining_batch_digests,
+        }))
     }
 }
 

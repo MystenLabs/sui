@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use prometheus::{
-    default_registry, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    default_registry, register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 
 // buckets defined in seconds
@@ -45,18 +46,8 @@ pub struct ExecutorMetrics {
     /// Latency for time taken to fetch all batches for committed subdag
     /// either from local or remote worker.
     pub batch_fetch_for_committed_subdag_total_latency: Histogram,
-    /// The number of successful local batch fetches
-    pub successful_local_batch_fetch: IntCounter,
-    /// The number of failed local batch fetches
-    pub failed_local_batch_fetch: IntGauge,
-    /// The number of local batch fetch timeouts
-    pub local_batch_fetch_timeout: IntGauge,
-    /// The number of successful remote batch fetches
-    pub successful_remote_batch_fetch: IntGauge,
-    /// The number of failed remote batch fetches
-    pub failed_remote_batch_fetch: IntGauge,
-    /// The number of remote batch fetch timeouts
-    pub remote_batch_fetch_timeout: IntGauge,
+    /// Counter of remote/local batch fetch statuses.
+    pub subscriber_batch_fetch: IntCounterVec,
 }
 
 impl ExecutorMetrics {
@@ -100,11 +91,6 @@ impl ExecutorMetrics {
                 registry
             )
             .unwrap(),
-            successful_local_batch_fetch: register_int_counter_with_registry!(
-                "successful_local_batch_fetch",
-                "The number of successful local batch fetches",
-                registry
-            ).unwrap(),
             subscriber_processed_batches: register_int_counter_with_registry!(
                 "subscriber_processed_batches",
                 "Number of batches processed by subscriber",
@@ -137,31 +123,12 @@ impl ExecutorMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            failed_local_batch_fetch: register_int_gauge_with_registry!(
-                "failed_local_batch_fetch",
-                "The number of pending remote calls to request_batch",
+            subscriber_batch_fetch: register_int_counter_vec_with_registry!(
+                "subscriber_batch_fetch",
+                "Counter of remote/local batch fetch statuses",
+                &["source", "status"],
                 registry
             ).unwrap(),
-            local_batch_fetch_timeout: register_int_gauge_with_registry!(
-                "local_batch_fetch_timeout",
-                "The number of pending remote calls to request_batch",
-                registry
-            ).unwrap(),
-            successful_remote_batch_fetch: register_int_gauge_with_registry!(
-                "successful_remote_batch_fetch",
-                "The number of successful remote batch fetches",
-                registry
-            ).unwrap(),
-            failed_remote_batch_fetch: register_int_gauge_with_registry!(
-                "failed_remote_batch_fetch",
-                "The number of failed remote batch fetches",
-                registry
-            ).unwrap(),
-            remote_batch_fetch_timeout: register_int_gauge_with_registry!(
-                "remote_batch_fetch_timeout",
-                "The number of remote batch fetch timeouts",
-                registry
-            ).unwrap()
         }
     }
 }

@@ -7,7 +7,7 @@ use crypto::NetworkPublicKey;
 use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse,
+    GetCertificatesRequest, GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -89,6 +89,6 @@ pub trait WorkerRpc {
     async fn request_batches(
         &self,
         peer: NetworkPublicKey,
-        digests: Vec<BatchDigest>,
-    ) -> Result<Vec<Batch>>;
+        request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
+    ) -> Result<RequestBatchesResponse>;
 }

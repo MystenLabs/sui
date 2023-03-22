@@ -30,12 +30,15 @@ pub struct RequestBatchResponse {
 /// Used by primary to bulk request batches.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestBatchesRequest {
-    pub batches: Vec<BatchDigest>,
+    pub batch_digests: Vec<BatchDigest>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestBatchesResponse {
     pub batches: Vec<Batch>,
+    /// The remaining batch digests that were found but were unable to fit in
+    /// the original request.
+    pub remaining_batch_digests: Vec<BatchDigest>,
 }
 
 pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
