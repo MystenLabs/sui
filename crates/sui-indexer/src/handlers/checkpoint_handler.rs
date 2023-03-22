@@ -365,7 +365,7 @@ where
             .collect();
 
         // Index epoch
-        let epoch_index = if checkpoint.epoch == 0 && checkpoint.sequence_number == 0 {
+        let epoch_index = if checkpoint.epoch == 0 && <u64>::from(checkpoint.sequence_number) == 0 {
             // very first epoch
             let system_state = get_sui_system_state(data)?;
             let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
@@ -414,7 +414,7 @@ where
                 last_epoch: Some(DBEpochInfo {
                     epoch: system_state.epoch as i64 - 1,
                     first_checkpoint_id: 0,
-                    last_checkpoint_id: Some(checkpoint.sequence_number as i64),
+                    last_checkpoint_id: Some(<u64>::from(checkpoint.sequence_number) as i64),
                     epoch_start_timestamp: 0,
                     epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
                     epoch_total_transactions: 0,
@@ -432,7 +432,7 @@ where
                 }),
                 new_epoch: DBEpochInfo {
                     epoch: system_state.epoch as i64,
-                    first_checkpoint_id: checkpoint.sequence_number as i64 + 1,
+                    first_checkpoint_id: <u64>::from(checkpoint.sequence_number) as i64 + 1,
                     epoch_start_timestamp: system_state.epoch_start_timestamp_ms as i64,
                     ..Default::default()
                 },
