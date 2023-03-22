@@ -48,11 +48,7 @@ function EpochDetail() {
     if (isLoading || validatorsEventsLoading) return <LoadingSpinner />;
     if (!data || !validatorEvents) return null;
 
-    const validatorsTable = validatorsTableData(
-        data.activeValidators,
-        data.epoch,
-        validatorEvents?.data
-    );
+    const validatorsTable = validatorsTableData(data, validatorEvents.data);
 
     return (
         <div className="flex flex-col space-y-16">
