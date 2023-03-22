@@ -21,14 +21,15 @@ use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature};
 use crate::storage::{DeleteKind, WriteKind};
 use crate::{
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_SYSTEM_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
+use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
@@ -1331,6 +1332,71 @@ impl TransactionData {
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
+    }
+
+    pub fn new_upgrade(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        package_id: ObjectID,
+        modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
+        (upgrade_capability, capability_owner): (ObjectRef, Owner),
+        upgrade_policy: u8,
+        digest: Vec<u8>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> anyhow::Result<Self> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let capability_arg = match capability_owner {
+                Owner::AddressOwner(_) => ObjectArg::ImmOrOwnedObject(upgrade_capability),
+                Owner::Shared {
+                    initial_shared_version,
+                } => ObjectArg::SharedObject {
+                    id: upgrade_capability.0,
+                    initial_shared_version,
+                    mutable: true,
+                },
+                Owner::Immutable => {
+                    return Err(anyhow::anyhow!(
+                        "Upgrade capability is stored immutably and cannot be used for upgrades"
+                    ))
+                }
+                // If the capability is owned by an object, then the module defining the owning
+                // object gets to decide how the upgrade capability should be used.
+                Owner::ObjectOwner(_) => {
+                    return Err(anyhow::anyhow!("Upgrade capability controlled by object"))
+                }
+            };
+            builder.obj(capability_arg).unwrap();
+            let upgrade_arg = builder.pure(upgrade_policy).unwrap();
+            let digest_arg = builder.pure(digest).unwrap();
+            let upgrade_ticket = builder.programmable_move_call(
+                SUI_FRAMEWORK_OBJECT_ID,
+                ident_str!("package").to_owned(),
+                ident_str!("authorize_upgrade").to_owned(),
+                vec![],
+                vec![Argument::Input(0), upgrade_arg, digest_arg],
+            );
+            let upgrade_receipt = builder.upgrade(package_id, upgrade_ticket, dep_ids, modules);
+
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_OBJECT_ID,
+                ident_str!("package").to_owned(),
+                ident_str!("commit_upgrade").to_owned(),
+                vec![],
+                vec![Argument::Input(0), upgrade_receipt],
+            );
+
+            builder.finish()
+        };
+        Ok(Self::new_programmable(
+            sender,
+            vec![gas_payment],
+            pt,
+            gas_budget,
+            gas_price,
+        ))
     }
 
     pub fn new_programmable_with_dummy_gas_price(

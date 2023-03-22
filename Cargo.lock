@@ -8467,6 +8467,7 @@ dependencies = [
  "const-str",
  "expect-test",
  "fastcrypto",
+ "fs_extra",
  "futures",
  "git-version",
  "inquire",
