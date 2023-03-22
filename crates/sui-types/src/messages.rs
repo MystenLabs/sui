@@ -10,7 +10,7 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
-use crate::digests::{CertificateDigest, TransactionEventsDigest};
+use crate::digests::{Digest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
@@ -1649,11 +1649,11 @@ impl SenderSignedData {
         &mut self.inner_mut().tx_signatures
     }
 
-    fn sender_signed_data_digest(&self) -> Self::DigestType {
+    pub fn full_message_digest(&self) -> Digest {
         let mut digest = DefaultHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
-        Self::DigestType::new(hash.into())
+        hash.into()
     }
 }
 
@@ -1901,16 +1901,12 @@ pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, Authorit
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransaction {
-    pub fn certificate_digest(&self) -> CertificateDigest {
+    pub fn full_message_digest(&self) -> Digest {
         let mut digest = DefaultHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
-        CertificateDigest::new(hash.into())
+        hash.into()
     }
-
-    // pub fn verify_sender_signatures(&self) -> SuiResult {
-    //     self.data().verify(None)
-    // }
 }
 
 pub type TxCertAndSignedEffects = (

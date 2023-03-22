@@ -70,6 +70,12 @@ impl From<[u8; 32]> for Digest {
     }
 }
 
+impl From<fastcrypto::hash::Digest<32>> for Digest {
+    fn from(digest: fastcrypto::hash::Digest<32>) -> Self {
+        Self::new(digest.digest)
+    }
+}
+
 impl fmt::Display for Digest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO avoid the allocation
@@ -277,30 +283,6 @@ impl fmt::LowerHex for CheckpointContentsDigest {
 impl fmt::UpperHex for CheckpointContentsDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::UpperHex::fmt(&self.0, f)
-    }
-}
-
-/// A digest of a cerificate, which commits to the signatures as well as the tx.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CertificateDigest(Digest);
-
-impl CertificateDigest {
-    pub const fn new(digest: [u8; 32]) -> Self {
-        Self(Digest::new(digest))
-    }
-
-    pub fn random() -> Self {
-        Self(Digest::random())
-    }
-
-    pub fn to_digest(self) -> Digest {
-        self.0
-    }
-}
-
-impl fmt::Debug for CertificateDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("CertificateDigest").field(&self.0).finish()
     }
 }
 

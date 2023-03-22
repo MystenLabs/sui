@@ -15,6 +15,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::message_envelope::VerifiedEnvelope;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::*, messages::*};
@@ -263,9 +264,13 @@ impl ValidatorService {
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
-        let transaction = transaction.verify().tap_err(|_| {
-            metrics.signature_errors.inc();
-        })?;
+        epoch_store
+            .batch_verifier
+            .verify_tx(&transaction.data())
+            .tap_err(|_| {
+                metrics.signature_errors.inc();
+            })?;
+        let transaction = VerifiedTransaction::new_from_verified(transaction);
         tx_verif_metrics_guard.stop_and_record();
 
         let tx_digest = transaction.digest();

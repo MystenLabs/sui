@@ -1280,7 +1280,7 @@ fn test_certificate_digest() {
     let mut cert = make_cert(&t1);
     let orig = cert.clone();
 
-    let digest = cert.certificate_digest();
+    let digest = cert.full_message_digest();
 
     // mutating a tx sig changes the digest.
     *cert
@@ -1288,7 +1288,7 @@ fn test_certificate_digest() {
         .tx_signatures_mut_for_testing()
         .get_mut(0)
         .unwrap() = t2.tx_signatures()[0].clone();
-    assert_ne!(digest, cert.certificate_digest());
+    assert_ne!(digest, cert.full_message_digest());
 
     // mutating intent changes the digest
     cert = orig.clone();
@@ -1296,17 +1296,17 @@ fn test_certificate_digest() {
         .intent_message_mut_for_testing()
         .intent
         .scope = IntentScope::TransactionEffects;
-    assert_ne!(digest, cert.certificate_digest());
+    assert_ne!(digest, cert.full_message_digest());
 
     // mutating signature epoch changes digest
     cert = orig.clone();
     cert.auth_sig_mut_for_testing().epoch = 42;
-    assert_ne!(digest, cert.certificate_digest());
+    assert_ne!(digest, cert.full_message_digest());
 
     // mutating signature changes digest
     cert = orig;
     *cert.auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
-    assert_ne!(digest, cert.certificate_digest());
+    assert_ne!(digest, cert.full_message_digest());
 }
 
 // Use this to ensure that our approximation for components used in effects size are not smaller than expected
