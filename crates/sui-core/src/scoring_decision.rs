@@ -7,13 +7,14 @@ use arc_swap::ArcSwap;
 use narwhal_types::ReputationScores;
 use std::collections::HashMap;
 use std::sync::Arc;
+use sui_simulator::anemo::PeerId;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
 use tracing::{info, warn};
 
 // TODO: migrate these values to config
-const MAD_DIVISOR: f64 = 0.65;
-const CUTOFF_VALUE: f64 = 9.0;
+const MAD_DIVISOR: f64 = 0.7;
+const CUTOFF_VALUE: f64 = 6.0;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -28,10 +29,11 @@ const CUTOFF_VALUE: f64 = 9.0;
 /// details. This calculates a the median of the data, then the absolute deviations from the median
 /// for each authority, or the difference between the median and the score value. We then take the
 /// median of those absolute deviations for each authority, which is called the median absolute deviation (MAD).
-/// Once we have that value, if any authority's absolute deviation / ( MAD / C) < -K then it is deemed
-/// to be a low-value outlier. The values of C and K can be tweaked to change the sensitivity to outliers.
-/// They were chosen based on trial and error to produce reasonable results for score values in the
-/// order of magnitude of 100s. If you increase fractional value C and decrease K you will see more values
+/// Once we have that value, if any authority's absolute deviation / ( MAD / MAD_DIVISOR) < -CUTOFF_VALUE
+/// then it is deemed to be a low-value outlier. The values of MAD_DIVISOR and CUTOFF_VALUE can be
+/// tweaked to change the sensitivity to outliers. They were chosen based on trial and error to
+/// produce reasonable results for score values in the order of magnitude of 100s.
+/// If you increase fractional value MAD_DIVISOR and decrease CUTOFF_VALUE you will see more values
 /// being included as outliers. As the scores get higher in value, outlier sensitivity tends to
 /// decrease using this method.
 ///
@@ -45,6 +47,7 @@ pub fn update_low_scoring_authorities(
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     committee: Arc<Committee>,
     reputation_scores: ReputationScores,
+    authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
     metrics: &Arc<AuthorityMetrics>,
 ) {
     if !reputation_scores.final_of_schedule {
@@ -92,11 +95,14 @@ pub fn update_low_scoring_authorities(
         .iter()
         .for_each(|(a, s)| {
             let name = AuthorityName::from(a);
-            info!("authority {} has score {}", name, s);
-            metrics
-                .consensus_handler_scores
-                .with_label_values(&[&format!("{:?}", name)])
-                .set(*s as i64);
+            if let Some(peer_id) = authority_names_to_peer_ids.get(&name) {
+                info!("authority {} has score {}", peer_id, s);
+
+                metrics
+                    .consensus_handler_scores
+                    .with_label_values(&[&format!("{:?}", peer_id)])
+                    .set(*s as i64);
+            }
         });
 
     info!("{:?} low scoring authorities calculated", len_low_scoring);
@@ -108,7 +114,10 @@ pub fn update_low_scoring_authorities(
             .get(authority)
             .unwrap();
         final_low_scoring_map.insert(name, score);
-        info!("low scoring authority {} has score {}", name, score);
+
+        if let Some(peer_id) = authority_names_to_peer_ids.get(&name) {
+            info!("low scoring authority {} has score {}", peer_id, score);
+        }
     }
 
     // make sure the rest have at least quorum
@@ -152,6 +161,7 @@ pub fn test_update_low_scoring_authorities() {
     let committee = Arc::new(Committee::new(0, authorities));
 
     let low_scoring = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
+    let peer_id_map = Arc::new(HashMap::new());
 
     let mut inner = HashMap::new();
     inner.insert(a1, 50);
@@ -169,6 +179,7 @@ pub fn test_update_low_scoring_authorities() {
         low_scoring.clone(),
         committee.clone(),
         reputation_scores_1,
+        peer_id_map.clone(),
         &metrics,
     );
     assert_eq!(*low_scoring.load().get(&a1).unwrap(), 50_u64);
@@ -189,6 +200,7 @@ pub fn test_update_low_scoring_authorities() {
         low_scoring.clone(),
         committee.clone(),
         reputation_scores,
+        peer_id_map.clone(),
         &metrics,
     );
     assert_eq!(*low_scoring.load().get(&a4).unwrap(), 155_u64);
@@ -199,7 +211,7 @@ pub fn test_update_low_scoring_authorities() {
     scores.insert(sec1.public().clone(), 207_u64);
     scores.insert(sec2.public().clone(), 211_u64);
     scores.insert(sec3.public().clone(), 207_u64);
-    scores.insert(sec4.public().clone(), 180_u64);
+    scores.insert(sec4.public().clone(), 190_u64);
     let reputation_scores = ReputationScores {
         scores_per_authority: scores,
         final_of_schedule: true,
@@ -209,6 +221,7 @@ pub fn test_update_low_scoring_authorities() {
         low_scoring.clone(),
         committee.clone(),
         reputation_scores,
+        peer_id_map.clone(),
         &metrics,
     );
     assert_eq!(low_scoring.load().len(), 0);
@@ -227,6 +240,7 @@ pub fn test_update_low_scoring_authorities() {
         low_scoring.clone(),
         committee.clone(),
         reputation_scores,
+        peer_id_map.clone(),
         &metrics,
     );
     assert_eq!(low_scoring.load().len(), 0);
@@ -244,8 +258,9 @@ pub fn test_update_low_scoring_authorities() {
 
     update_low_scoring_authorities(
         low_scoring.clone(),
-        committee.clone(),
+        committee,
         reputation_scores,
+        peer_id_map.clone(),
         &metrics,
     );
     assert_eq!(low_scoring.load().len(), 0);
@@ -288,6 +303,7 @@ pub fn test_update_low_scoring_authorities() {
         low_scoring.clone(),
         committee.clone(),
         reputation_scores,
+        peer_id_map.clone(),
         &metrics,
     );
     assert_eq!(low_scoring.load().len(), 0);
@@ -298,7 +314,13 @@ pub fn test_update_low_scoring_authorities() {
         scores_per_authority: scores,
         final_of_schedule: true,
     };
-    update_low_scoring_authorities(low_scoring.clone(), committee, reputation_scores, &metrics);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee,
+        reputation_scores,
+        peer_id_map,
+        &metrics,
+    );
     assert_eq!(
         *low_scoring.load().get(&authority_names[final_idx]).unwrap(),
         40_u64
@@ -353,21 +375,27 @@ pub fn test_update_low_scoring_authorities_with_down_node() {
 
     // there is a low outlier in the non zero scores, exclude it as well as down nodes
     let mut scores = HashMap::new();
-    scores.insert(sec1.public().clone(), 45_u64);
-    scores.insert(sec2.public().clone(), 49_u64);
-    scores.insert(sec3.public().clone(), 55_u64);
-    scores.insert(sec4.public().clone(), 15_u64);
+    scores.insert(sec1.public().clone(), 350_u64);
+    scores.insert(sec2.public().clone(), 390_u64);
+    scores.insert(sec3.public().clone(), 350_u64);
+    scores.insert(sec4.public().clone(), 50_u64);
     scores.insert(sec5.public().clone(), 0_u64); // down node
-    scores.insert(sec6.public().clone(), 50_u64);
-    scores.insert(sec7.public().clone(), 54_u64);
-    scores.insert(sec8.public().clone(), 51_u64);
+    scores.insert(sec6.public().clone(), 300_u64);
+    scores.insert(sec7.public().clone(), 340_u64);
+    scores.insert(sec8.public().clone(), 310_u64);
     let reputation_scores = ReputationScores {
         scores_per_authority: scores,
         final_of_schedule: true,
     };
 
-    update_low_scoring_authorities(low_scoring.clone(), committee, reputation_scores, &metrics);
-    assert_eq!(*low_scoring.load().get(&a4).unwrap(), 15_u64);
+    update_low_scoring_authorities(
+        low_scoring.clone(),
+        committee,
+        reputation_scores,
+        Arc::new(HashMap::new()),
+        &metrics,
+    );
+    assert_eq!(*low_scoring.load().get(&a4).unwrap(), 50_u64);
     assert_eq!(*low_scoring.load().get(&a5).unwrap(), 0_u64);
     assert_eq!(low_scoring.load().len(), 2);
 }
