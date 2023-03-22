@@ -79,7 +79,7 @@ impl AuthorityServer {
         _consensus_address: Multiaddr,
     ) -> Self {
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Box::new(LazyNarwhalClient {}),
+            Box::new(LazyNarwhalClient::new(address.clone())),
             state.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             100_000,

@@ -58,7 +58,7 @@ impl<V: TransactionValidator> TxServer<V> {
 
         //create and initialize local client
         let local_client = LocalNarwhalClient::new(self.tx_batch_maker.clone());
-        LocalNarwhalClient::set(local_client.clone());
+        LocalNarwhalClient::set_global(self.address.clone(), local_client.clone());
 
         // create the handler
         let tx_handler = TxReceiverHandler {

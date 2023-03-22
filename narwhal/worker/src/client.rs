@@ -1,10 +1,21 @@
-use std::sync::Arc;
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwapOption;
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    net::Ipv4Addr,
+    sync::{Arc, Mutex},
+};
+
+use arc_swap::ArcSwap;
+use mysten_network::{multiaddr::Protocol, Multiaddr};
 use thiserror::Error;
 use types::{metered_channel::Sender, Transaction, TxResponse};
 
-static LOCAL_NARWHAL_CLIENT: ArcSwapOption<LocalNarwhalClient> = ArcSwapOption::const_empty();
+/// Uses a map to allow running multiple Narwhal instances in the same process.
+/// TODO: after Rust 1.66, use BTreeMap::new() instead of wrapping it in an Option.
+static LOCAL_NARWHAL_CLIENTS: Mutex<Option<BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>>> =
+    Mutex::new(None);
 
 /// The maximum allowed size of transactions into Narwhal.
 pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
@@ -33,14 +44,30 @@ impl LocalNarwhalClient {
         Arc::new(Self { tx_batch_maker })
     }
 
-    /// Sets the global instance of LocalNarwhalClient.
-    pub fn set(instance: Arc<Self>) {
-        LOCAL_NARWHAL_CLIENT.store(Some(instance));
+    /// Sets the instance of LocalNarwhalClient for the local address.
+    /// Address is only used as the key.
+    pub fn set_global(addr: Multiaddr, instance: Arc<Self>) {
+        let addr = Self::canonicalize_address_key(addr);
+        let mut clients = LOCAL_NARWHAL_CLIENTS.lock().unwrap();
+        if clients.is_none() {
+            *clients = Some(BTreeMap::new());
+        }
+        match clients.as_mut().unwrap().entry(addr) {
+            Entry::Vacant(entry) => {
+                entry.insert(Arc::new(ArcSwap::from(instance)));
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().store(instance);
+            }
+        };
     }
 
-    /// Gets the global instance of LocalNarwhalClient.
-    pub fn get() -> Option<Arc<Self>> {
-        LOCAL_NARWHAL_CLIENT.load_full()
+    /// Gets the instance of LocalNarwhalClient for the local address.
+    /// Address is only used as the key.
+    pub fn get_global(addr: &Multiaddr) -> Option<Arc<ArcSwap<Self>>> {
+        let addr = Self::canonicalize_address_key(addr.clone());
+        let clients = LOCAL_NARWHAL_CLIENTS.lock().unwrap();
+        clients.as_ref()?.get(&addr).cloned()
     }
 
     /// Submits a transaction to the local Narwhal worker.
@@ -63,5 +90,13 @@ impl LocalNarwhalClient {
             .map_err(|_| NarwhalError::TransactionNotIncludedInHeader)?;
 
         Ok(())
+    }
+
+    /// Ensure getter and setter use the same key for the same network address.
+    /// This is needed because TxServer serves from 0.0.0.0.
+    fn canonicalize_address_key(address: Multiaddr) -> Multiaddr {
+        address
+            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
+            .unwrap()
     }
 }

@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
+use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
 use narwhal_worker::LocalNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
@@ -37,7 +38,7 @@ use sui_types::{
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time::{self, sleep};
+use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -186,19 +187,40 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
 }
 
 /// A Narwhal client that instantiates lazily into LocalNarwhalClient.
-pub struct LazyNarwhalClient {}
+pub struct LazyNarwhalClient {
+    /// First ArcSwapOption handles initializing the connection to Narwhal the first time.
+    /// Second ArcSwap handles epoch changes of Narwhal.
+    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
+    addr: Multiaddr,
+}
 
 impl LazyNarwhalClient {
-    async fn get() -> Arc<LocalNarwhalClient> {
-        loop {
-            match LocalNarwhalClient::get() {
-                Some(c) => return c,
-                None => {
-                    sleep(Duration::from_millis(100)).await;
-                    continue;
-                }
-            };
+    pub fn new(addr: Multiaddr) -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+            addr,
         }
+    }
+
+    async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
+        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
+        // Retries should only happen on process start.
+        if let Ok(client) = timeout(Duration::from_secs(30), async {
+            loop {
+                match LocalNarwhalClient::get_global(&self.addr) {
+                    Some(c) => return c,
+                    None => {
+                        sleep(Duration::from_millis(100)).await;
+                        continue;
+                    }
+                };
+            }
+        })
+        .await
+        {
+            return client;
+        }
+        panic!("Timed out waiting for Narwhal to start on {}!", self.addr);
     }
 }
 
@@ -213,7 +235,16 @@ impl SubmitToConsensus for LazyNarwhalClient {
             bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
         // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
         // Narwhal shuts down, so there should be no correctness issue.
-        let client = Self::get().await;
+        let client = {
+            let c = self.client.load();
+            if c.is_some() {
+                c
+            } else {
+                self.client.store(Some(self.get().await));
+                self.client.load()
+            }
+        };
+        let client = client.as_ref().unwrap().load();
         client
             .submit_transaction(transaction)
             .await
