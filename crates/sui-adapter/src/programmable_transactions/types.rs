@@ -247,9 +247,8 @@ impl ObjectValue {
         )
     }
 
-    /// # Safety:
-    /// We must have the Type is the coin type,
-    /// but we are unable to check it at this spot
+    /// # Safety
+    /// We must have the Type is the coin type, but we are unable to check it at this spot
     pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
         Self {
             type_,
