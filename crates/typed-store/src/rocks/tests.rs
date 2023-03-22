@@ -837,10 +837,10 @@ async fn test_transaction_read_your_write() {
             .unwrap(),
         vec![Some("11".to_string()), None]
     );
-    let keys: Vec<String> = tx.keys(&db).into_iter().map(|x| x.unwrap()).collect();
+    let keys: Vec<String> = tx.keys(&db).collect();
     assert_eq!(keys, vec![key1.to_string()]);
-    let values: Vec<_> = tx.values(&db).into_iter().collect();
-    assert_eq!(values, vec![Ok("11".to_string())]);
+    let values: Vec<_> = tx.values(&db).collect();
+    assert_eq!(values, vec!["11".to_string()]);
     assert!(tx.commit().is_ok());
 }
 

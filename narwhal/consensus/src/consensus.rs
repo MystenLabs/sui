@@ -515,11 +515,11 @@ mod tests {
         }
         assert_eq!(state.dag.len(), 20);
         // 18 & 19 are round 10
-        state.update(&certs.get(18).unwrap(), 2);
+        state.update(certs.get(18).unwrap(), 2);
         // all of _kp1 up to round 10 are gone, last committed round = 10
         // GC depth = 2, so rounds 1-7 are gone completely (r + 2 < 10) -> 13 left
         assert_eq!(state.dag.len(), 13);
-        state.update(&certs.get(19).unwrap(), 2);
+        state.update(certs.get(19).unwrap(), 2);
         // after this, also all of _kp2 up to round 10 are gone
         // still 10 rounds in DAG
         assert_eq!(state.dag.len(), 10);
@@ -546,11 +546,11 @@ mod tests {
         }
         assert_eq!(state.dag.len(), 20);
         // 18 & 19 are round 10
-        state.update(&certs.get(18).unwrap(), 20);
+        state.update(certs.get(18).unwrap(), 20);
         // all of _kp1 up to round 10 are gone, and at GC depth 20, none of _kp2 are gone, so still 20 rounds in DAG
         assert_eq!(state.dag.len(), 20);
         // after this, also all of _kp2 up to round 10 are gone
-        state.update(&certs.get(19).unwrap(), 20);
+        state.update(certs.get(19).unwrap(), 20);
         assert_eq!(state.dag.len(), 10);
         // still 10 rounds in DAG
     }
