@@ -658,20 +658,20 @@ fn get_unexecuted_transactions(
         .expect("Failed to get checkpoint txes from store")
         .into_iter()
         .enumerate()
-        .filter_map(|(i, tx)| {
-            // filter out change epoch tx, it is handled specially in check_epoch_last_checkpoint
+        .map(|(i, tx)| {
             let tx = tx.unwrap_or_else(||
                 panic!(
                     "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
                     unexecuted_txns[i]
                 )
             );
+            // change epoch tx is handled specially in check_epoch_last_checkpoint
             assert!(!tx.data().intent_message().value.is_change_epoch_tx());
-            Some(VerifiedExecutableTransaction::new_from_checkpoint(
+            VerifiedExecutableTransaction::new_from_checkpoint(
                 tx,
                 epoch_store.epoch(),
                 *checkpoint_sequence,
-            ))
+            )
         })
         .collect();
 
