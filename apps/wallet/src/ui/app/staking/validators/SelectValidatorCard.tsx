@@ -8,8 +8,8 @@ import { useState, useMemo } from 'react';
 import { calculateStakeShare } from '../calculateStakeShare';
 import { useSystemState } from '../useSystemState';
 import { ValidatorListItem } from './ValidatorListItem';
+import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
@@ -184,19 +184,20 @@ export function SelectValidatorCard() {
                     className="w-full px-0 pb-5 mx-0 -bottom-5"
                 >
                     <Button
-                        size="large"
-                        mode="primary"
-                        href={`/stake/new?address=${encodeURIComponent(
+                        size="tall"
+                        variant="primary"
+                        href={`#/stake/new?address=${encodeURIComponent(
                             selectedValidator
                         )}`}
-                        className="w-full"
-                    >
-                        Select Amount
-                        <Icon
-                            icon={SuiIcons.ArrowRight}
-                            className="text-captionSmall text-white font-normal"
-                        />
-                    </Button>
+                        target="_self"
+                        text="Select Amount"
+                        after={
+                            <Icon
+                                icon={SuiIcons.ArrowRight}
+                                className="text-captionSmall text-white font-normal"
+                            />
+                        }
+                    />
                 </Menu>
             )}
         </div>
