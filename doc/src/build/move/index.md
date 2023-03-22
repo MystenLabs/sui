@@ -65,7 +65,7 @@ For example, if you have a published package "P", you cannot publish an entirely
 
 While you can't name different packages the same, you can upgrade a package on chain with updated code using the same package name.  
 
-In addition to having a presence at the source code level, as discussed in [Move code organization](#move-code-organization), a
+In addition to having a presence at the source code level, as discussed in [Sui Move code organization](#move-code-organization), a
 package in Sui is also a Sui object and must have a unique numeric ID in addition to a unique name, which is assigned in the manifest file:
 
 ```
