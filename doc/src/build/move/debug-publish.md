@@ -42,22 +42,22 @@ include a special _initializer function_ that runs at publication time. The goal
 
 While the `sui move` command does not support publishing explicitly, you can still test module initializers using the testing framework by dedicating the first transaction to executing the initializer function.
 
-Continuing the fantasy game example, the `init` function should create a Forge object. 
+Continuing the fantasy game example, the `init` function should create a `Forge` object. 
 
 ``` rust
-    // module initializer to be executed when this module is published
+    // Module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         let admin = Forge {
             id: object::new(ctx),
             swords_created: 0,
         };
-        // transfer the forge object to the module/package publisher
+        // Transfer the Forge object to the module/package publisher
         // (presumably the game admin)
         transfer::transfer(admin, tx_context::sender(ctx));
     }
 ```
 
-The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a Forge object. To test this functionality, modify the `sword_create` function to take the forge as a parameter and to update the number of
+The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, modify the `sword_create` function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 
 ``` rust
@@ -99,7 +99,7 @@ Now, create a function to test the module initialization:
 
 ```
 
-As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `forge` object has been created and properly initialized.
+As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `Forge` object has been created and properly initialized.
 
 If you try to run tests on the whole package at this point, you encounter compilation errors in the existing tests because of the
 `sword_create` function signature change. The changes required for the tests to run again is an exercise left for you. If you need help, you can refer to the source code for the package (with all the tests properly adjusted) in [my_module.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/my_module.move).
