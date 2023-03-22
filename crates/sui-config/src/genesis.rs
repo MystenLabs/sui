@@ -44,8 +44,8 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemStateInnerGenesis,
-    SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
+    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateTrait,
+    SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::{
@@ -133,8 +133,11 @@ impl Genesis {
         0
     }
 
-    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
-        self.sui_system_object().validators.active_validators
+    pub fn validator_set_for_tooling(&self) -> Vec<SuiValidatorGenesis> {
+        self.sui_system_object()
+            .into_genesis_version_for_tooling()
+            .validators
+            .active_validators
     }
 
     pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
@@ -151,10 +154,8 @@ impl Genesis {
             .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
-        get_sui_system_state(&self.objects())
-            .expect("Sui System State object must always exist")
-            .into_genesis_version()
+    pub fn sui_system_object(&self) -> SuiSystemState {
+        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 
     pub fn clock(&self) -> Clock {
@@ -316,19 +317,13 @@ impl UnsignedGenesis {
         0
     }
 
-    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
-        self.sui_system_object().validators.active_validators
-    }
-
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
         get_sui_system_state_wrapper(&self.objects())
             .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
-        get_sui_system_state(&self.objects())
-            .expect("Sui System State object must always exist")
-            .into_genesis_version()
+    pub fn sui_system_object(&self) -> SuiSystemState {
+        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 }
 
@@ -697,13 +692,15 @@ impl Builder {
         };
 
         // Verify that all the validators were properly created onchain
-        let system_object = genesis.sui_system_object();
-        assert_eq!(system_object.epoch, 0);
+        let system_object = genesis
+            .sui_system_object()
+            .into_genesis_version_for_tooling();
+        assert_eq!(system_object.epoch(), 0);
 
         for (validator, onchain_validator) in validators
             .iter()
             .map(|genesis_info| &genesis_info.info)
-            .zip(system_object.validators.active_validators.iter())
+            .zip(system_object.validators.active_validators)
         {
             let metadata = onchain_validator.verified_metadata();
             assert_eq!(validator.sui_address(), metadata.sui_address);

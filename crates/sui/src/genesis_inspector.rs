@@ -27,7 +27,9 @@ const STR_VALIDATORS: &str = "Validators";
 
 #[allow(clippy::or_fun_call)]
 pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
-    let system_object = genesis.sui_system_object();
+    let system_object = genesis
+        .sui_system_object()
+        .into_genesis_version_for_tooling();
 
     // Prepare Validator info
     let validator_set = &system_object.validators.active_validators;
