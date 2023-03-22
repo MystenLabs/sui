@@ -19,7 +19,7 @@ The basic set of properties suggested includes:
 **image_url** - A URL or a blob with the image for the object. 
 **project_url** - A link to a website associated with the object or creator.  
 **creator** - A string that indicates the object creator. 
-An example Sui Hero module
+### An example Sui Hero module
 The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`. 
 The following represents the template the `init` function defines:
 
