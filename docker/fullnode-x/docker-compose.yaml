@@ -18,6 +18,7 @@ services:
       # don't use debug, it generates volumes of data.
     image: sui-node:latest
     command: /opt/sui/entry.sh
+    restart: unless-stopped
     # populate your local ./fullnode/config/ directory with fullnode.yaml and genesis.blob for the network you want to use.
     volumes:
       - ./fullnode:/opt/sui
@@ -34,6 +35,7 @@ services:
       dockerfile: ./docker/sui-indexer/Dockerfile
     image: sui-indexer:latest
     command: /opt/sui/indexer.sh
+    restart: unless-stopped
     volumes:
       - ./indexer:/opt/sui
     environment:
@@ -46,9 +48,13 @@ services:
         published: 9000
         protocol: tcp
       - 9184
+    depends_on:
+      - postgres
+      - fullnode
 
   postgres:
     image: postgres:15
+    restart: unless-stopped
     environment:
       - POSTGRES_PASSWORD=admin
     ports:
