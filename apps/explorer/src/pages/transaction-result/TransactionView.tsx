@@ -33,7 +33,7 @@ import { ProgrammableTransactionView } from '~/pages/transaction-result/programm
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
-import { ObjectLink } from '~/ui/InternalLink';
+import { CheckpointSequenceLink, ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
 import { StatAmount } from '~/ui/StatAmount';
 import { TableHeader } from '~/ui/TableHeader';
@@ -308,6 +308,22 @@ export function TransactionView({
                                         .transaction as ProgrammableTransaction
                                 }
                             />
+                        )}
+
+                        {transaction.checkpoint && (
+                            <section className="py-12">
+                                <TableHeader>Checkpoint Detail</TableHeader>
+                                <div className="pt-4">
+                                    <DescriptionItem title="Checkpoint Seq. Number">
+                                        <CheckpointSequenceLink
+                                            noTruncate
+                                            sequence={String(
+                                                transaction.checkpoint
+                                            )}
+                                        />
+                                    </DescriptionItem>
+                                </div>
+                            </section>
                         )}
 
                         <div data-testid="gas-breakdown" className="mt-8">
