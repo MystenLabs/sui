@@ -11,7 +11,7 @@ First, make sure that you have the latest TypeScript SDK installed.
 We’ll start by constructing a transaction to send Sui. If you are familiar with the legacy transaction types, this is similar to a `paySui` transaction. You can start constructing transactions by importing the `Transaction` class, and constructing it:
 
 ```tsx
-import { Transaction } from '@mysten/sui.js';
+import { Transaction } from "@mysten/sui.js";
 const tx = new Transaction();
 ```
 
@@ -20,10 +20,10 @@ Using this, you can then add commands to this transaction.
 ```tsx
 // Create a new coin with balance 100, based on the coins used as gas payment.
 // You can define any balance here.
-const coin = tx.splitCoin(tx.gas, tx.pure(100));
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
 
 // Transfer the split coin to a specific address.
-tx.transferObjects([coin], tx.pure('0xSomeSuiAddress'));
+tx.transferObjects([coin], tx.pure("0xSomeSuiAddress"));
 ```
 
 Note that you can attach multiple of the same command type to a transaction as well. For example, we can get a list of transfers, and iterate over them to transfer coins to each of them:
@@ -39,10 +39,15 @@ const transfers: Transfer[] = getTransfers();
 
 const tx = new Transaction();
 
-// Create commands for each transfer
-transfers.forEach((transfer) => {
-  const coin = tx.splitCoin(tx.gas, tx.pure(transfer.amount));
-  tx.transferObjects([coin], tx.pure(transfer.to));
+// First, split the gas coin into multiple coins:
+const coins = tx.splitCoins(
+  tx.gas,
+  transfers.map((transfer) => tx.pure(transfer.amount))
+);
+
+// Next, create a transfer command for each coin:
+transfers.forEach((transfer, index) => {
+  tx.transferObjects([coins[index]], tx.pure(transfer.to));
 });
 ```
 
@@ -71,16 +76,16 @@ Inputs are how you provide external values to transactions. For example, definin
 
 The following commands are available:
 
-- `tx.splitCoin(coin, amount)` - Creates a new coin with the defined amount, split from the provided coin. Returns the coin so that it can be used in subsequent commands.
-    - Example: `tx.splitCoin(tx.gas, tx.pure(100))`
+- `tx.splitCoins(coin, amounts)` - Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent commands.
+  - Example: `tx.splitCoins(tx.gas, [tx.pure(100), tx.pure(200)])`
 - `tx.mergeCoins(destinationCoin, sourceCoins)` - Merges the sourceCoins into the destinationCoin.
-    - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
+  - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
 - `tx.transferObjects(objects, address)` - Transfers a list of objects to the specified address.
-    - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure(myAddress))`
+  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure(myAddress))`
 - `tx.moveCall({ target, arguments, typeArguments  })` - Executes a move call. Returns whatever the Sui Move call returns.
-    - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure(name), tx.pure(description), tx.pure(image)] })`
+  - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure(name), tx.pure(description), tx.pure(image)] })`
 - `tx.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a `moveCall`. This is required as there’s no way to define a vector as an input.
-    - Example: `tx.makeMoveVec({ objects: [tx.object(id1), tx.object(id2)] })`
+  - Example: `tx.makeMoveVec({ objects: [tx.object(id1), tx.object(id2)] })`
 - `tx.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability object.
 
 ## Passing command results as arguments
@@ -89,7 +94,7 @@ You can use the result of a command as an argument in a subsequent command. Each
 
 ```tsx
 // Split a coin object off of the gas object:
-const coin = tx.splitCoin(tx.gas, tx.pure(100);
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
 // Transfer the resulting coin object:
 tx.transferObjects([coin], tx.pure(address));
 ```
@@ -98,11 +103,11 @@ When a command returns multiple results, you can access the result at a specific
 
 ```tsx
 // Destructuring (preferred, as it gives you logical local names):
-const [nft1, nft2] = tx.moveCall({ target: '0x2::nft::mint_many' });
+const [nft1, nft2] = tx.moveCall({ target: "0x2::nft::mint_many" });
 tx.transferObjects([nft1, nft2], tx.pure(address));
 
 // Array indexes:
-const mintMany = tx.moveCall({ target: '0x2::nft::mint_many' });
+const mintMany = tx.moveCall({ target: "0x2::nft::mint_many" });
 tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
 ```
 
@@ -140,7 +145,7 @@ const tx = Transaction.from(bytes);
 In the event that you want to build a transaction offline (i.e. with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```tsx
-import { Inputs } from '@mysten/sui.js';
+import { Inputs } from "@mysten/sui.js";
 
 // For pure values:
 tx.pure(pureValueAsBytes);
@@ -194,7 +199,6 @@ The Wallet Standard interface has been updated to support the `Transaction` kind
 
 To serialize a transaction for sending to a wallet, we recommend using the `tx.serialize()` function, which returns an opaque string representation of the transaction that can be passed from the wallet standard dapp context to your wallet. This can then be converted back into a `Transaction` using `Transaction.from()`.
 
-
 **Important:** The transaction should not be built from bytes in the dApp code. Using `serialize` instead of `build` allows you to build the transaction bytes within the wallet itself. This allows the wallet to perform gas logic and coin selection as needed.
 
 ```tsx
@@ -215,7 +219,7 @@ function handleSignRequest(input) {
 
 ## Sponsored Transactions
 
-The transaction builder can support sponsored transaction by using the `onlyTransactionKind` flag when building the transaction. 
+The transaction builder can support sponsored transaction by using the `onlyTransactionKind` flag when building the transaction.
 
 ```tsx
 const tx = new Transaction();
