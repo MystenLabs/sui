@@ -13,8 +13,8 @@ use sui_types::base_types::AuthorityName;
 use tracing::{info, warn};
 
 // TODO: migrate these values to config
-const MAD_DIVISOR: f64 = 0.7;
-const CUTOFF_VALUE: f64 = 6.0;
+const MAD_DIVISOR: f64 = 1.2;
+const CUTOFF_VALUE: f64 = 3.0;
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -33,9 +33,9 @@ const CUTOFF_VALUE: f64 = 6.0;
 /// then it is deemed to be a low-value outlier. The values of MAD_DIVISOR and CUTOFF_VALUE can be
 /// tweaked to change the sensitivity to outliers. They were chosen based on trial and error to
 /// produce reasonable results for score values in the order of magnitude of 100s.
-/// If you increase fractional value MAD_DIVISOR and decrease CUTOFF_VALUE you will see more values
-/// being included as outliers. As the scores get higher in value, outlier sensitivity tends to
-/// decrease using this method.
+/// If you increase MAD_DIVISOR you decrease sensitivity to the spread of data and if you increase
+/// CUTOFF_VALUE you will see less values being included as outliers. As the scores get higher in
+/// value, outlier sensitivity tends to decrease using this method.
 ///
 /// If we find that we have rated enough validators as low scoring such that we no longer have
 /// quorum with the remaining validators, then we either need to update this method's parameters,
@@ -81,11 +81,15 @@ pub fn update_low_scoring_authorities(
     let mut final_low_scoring_map = HashMap::new();
 
     let mut score_list = vec![];
+    let mut nonzero_scores = vec![];
     for (score, _stake) in scores_per_authority.values() {
         score_list.push(*score as f64);
+        if score != &0_u64 {
+            nonzero_scores.push(*score as f64);
+        }
     }
 
-    let median_value = median(&score_list);
+    let median_value = median(&nonzero_scores);
     let mut deviations = vec![];
     let mut abs_deviations = vec![];
     for (i, _) in score_list.clone().iter().enumerate() {
@@ -321,7 +325,7 @@ mod tests {
             low_scoring.clone(),
             &committee,
             reputation_scores,
-            peer_id_map,
+            peer_id_map.clone(),
             &metrics,
         );
 
@@ -410,5 +414,53 @@ mod tests {
         }
 
         Arc::new(committee_builder.build())
+    }
+
+    #[test]
+    pub fn test_update_low_scoring_authorities_with_large_score_variance() {
+        // test with large cluster
+        let num_nodes = 50;
+        let final_idx = num_nodes - 1;
+
+        let committee = generate_committee(num_nodes);
+        let authorities: Vec<Authority> = committee.authorities().cloned().collect();
+
+        let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
+        let mut scores = HashMap::new();
+
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+
+        // scores clustered between 100 - 300
+        for (i, authority) in authorities.iter().enumerate().take(num_nodes - 1) {
+            let score_add = i * 5;
+
+            scores.insert(
+                authority.id(),
+                100_u64 + (std::cmp::min(score_add as u64, 200)),
+            );
+        }
+        // the outliers
+        let outlier_id = authorities[final_idx].id();
+        scores.insert(outlier_id, 50_u64);
+        let outlier_id = authorities[final_idx - 1].id();
+        scores.insert(outlier_id, 40_u64);
+        let outlier_id = authorities[final_idx - 2].id();
+        scores.insert(outlier_id, 0_u64);
+
+        let reputation_scores = ReputationScores {
+            scores_per_authority: scores.clone(),
+            final_of_schedule: true,
+        };
+
+        let peer_id_map = Arc::new(HashMap::new());
+        update_low_scoring_authorities(
+            low_scoring.clone(),
+            &committee,
+            reputation_scores,
+            peer_id_map,
+            &metrics,
+        );
+
+        assert_eq!(low_scoring.load().len(), 3);
     }
 }
