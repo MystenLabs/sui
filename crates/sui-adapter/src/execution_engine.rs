@@ -29,9 +29,7 @@ use sui_types::messages::{
     TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
-use sui_types::sui_system_state::{
-    get_sui_system_state_version, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME,
-};
+use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -58,7 +56,6 @@ pub struct AdvanceEpochParams {
     pub storage_fund_reinvest_rate: u64,
     pub reward_slashing_rate: u64,
     pub epoch_start_timestamp_ms: u64,
-    pub new_system_state_version: u64,
 }
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
@@ -363,7 +360,6 @@ pub fn construct_advance_epoch_pt(
         CallArg::Pure(bcs::to_bytes(&params.storage_fund_reinvest_rate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.reward_slashing_rate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap()),
-        CallArg::Pure(bcs::to_bytes(&params.new_system_state_version).unwrap()),
     ]
     .into_iter()
     .map(|a| builder.input(a))
@@ -464,7 +460,6 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         storage_fund_reinvest_rate: protocol_config.storage_fund_reinvest_rate(),
         reward_slashing_rate: protocol_config.reward_slashing_rate(),
         epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
-        new_system_state_version: get_sui_system_state_version(change_epoch.protocol_version),
     };
     let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
     let result = programmable_transactions::execution::execute::<_, _, execution_mode::System>(

@@ -291,7 +291,7 @@ module sui_system::rewards_distribution_tests {
         test_scenario::next_tx(scenario, @0x0);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         // Check that we have the right amount of SUI in the staking pool.
-        assert_eq(sui_system::validator_stake_amount(&system_state, VALIDATOR_ADDR_1), 140 * 23);
+        assert_eq(sui_system::validator_stake_amount(&mut system_state, VALIDATOR_ADDR_1), 140 * 23);
         test_scenario::return_shared(system_state);
 
         // Withdraw all stakes at once.
@@ -318,7 +318,7 @@ module sui_system::rewards_distribution_tests {
         test_scenario::next_tx(scenario, @0x0);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         // Since all the stakes are gone the pool is empty except for the validator's original stake.
-        assert_eq(sui_system::validator_stake_amount(&system_state, VALIDATOR_ADDR_1), 140);
+        assert_eq(sui_system::validator_stake_amount(&mut system_state, VALIDATOR_ADDR_1), 140);
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario_val);
     }

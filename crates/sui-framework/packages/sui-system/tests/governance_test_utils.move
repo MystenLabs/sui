@@ -123,7 +123,7 @@ module sui_system::governance_test_utils {
         let ctx = test_scenario::ctx(scenario);
 
         let storage_rebate = sui_system::advance_epoch_for_testing(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, stoarge_rebate, 0, 0, 0, 1, ctx,
+            &mut system_state, new_epoch, 1, storage_charge, computation_charge, stoarge_rebate, 0, 0, 0, ctx,
         );
         test_scenario::return_shared(system_state);
         test_scenario::next_epoch(scenario, @0x0);
@@ -150,7 +150,7 @@ module sui_system::governance_test_utils {
         let ctx = test_scenario::ctx(scenario);
 
         let storage_rebate = sui_system::advance_epoch_for_testing(
-            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, 1, ctx
+            &mut system_state, new_epoch, 1, storage_charge, computation_charge, 0, 0, reward_slashing_rate, 0, ctx
         );
         test_utils::destroy(storage_rebate);
         test_scenario::return_shared(system_state);
@@ -301,7 +301,7 @@ module sui_system::governance_test_utils {
 
             test_scenario::next_tx(scenario, validator_addr);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-            let stake_plus_rewards = stake_plus_current_rewards_for_validator(validator_addr, &system_state, scenario);
+            let stake_plus_rewards = stake_plus_current_rewards_for_validator(validator_addr, &mut system_state, scenario);
             assert_eq(stake_plus_rewards, amount);
             test_scenario::return_shared(system_state);
             i = i + 1;
@@ -329,7 +329,7 @@ module sui_system::governance_test_utils {
             let amount = *vector::borrow(&stake_amounts, i);
             test_scenario::next_tx(scenario, validator_addr);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-            let non_self_stake_amount = sui_system::validator_stake_amount(&mut system_state, validator_addr) - stake_plus_current_rewards_for_validator(validator_addr, &system_state, scenario);
+            let non_self_stake_amount = sui_system::validator_stake_amount(&mut system_state, validator_addr) - stake_plus_current_rewards_for_validator(validator_addr, &mut system_state, scenario);
             assert!(non_self_stake_amount == amount, 0);
             test_scenario::return_shared(system_state);
             i = i + 1;
@@ -337,7 +337,7 @@ module sui_system::governance_test_utils {
     }
 
     /// Return the rewards for the validator at `addr` in terms of SUI.
-    public fun stake_plus_current_rewards_for_validator(addr: address, system_state: &SuiSystemState, scenario: &mut Scenario): u64 {
+    public fun stake_plus_current_rewards_for_validator(addr: address, system_state: &mut SuiSystemState, scenario: &mut Scenario): u64 {
         let validator_ref = validator_set::get_active_validator_ref(sui_system::validators(system_state), addr);
         let amount = stake_plus_current_rewards(addr, validator::get_staking_pool_ref(validator_ref), scenario);
         amount

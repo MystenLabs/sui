@@ -164,10 +164,11 @@ module sui_system::sui_system_state_inner {
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
+        // This type is fixed as it's created at genesis. It should not be updated during type upgrade.
         let system_state = SuiSystemStateInner {
             epoch: 0,
             protocol_version,
-            system_state_version: SYSTEM_STATE_VERSION_V1,
+            system_state_version: genesis_system_state_version(),
             validators,
             storage_fund,
             parameters,
@@ -847,6 +848,12 @@ module sui_system::sui_system_state_inner {
         self.system_state_version
     }
 
+    /// This function always return the genesis system state version, which is used to create the system state in genesis.
+    /// It should never change for a given network.
+    public(friend) fun genesis_system_state_version(): u64 {
+        SYSTEM_STATE_VERSION_V1
+    }
+
     /// Returns unix timestamp of the start of current epoch
     public(friend) fun epoch_start_timestamp_ms(self: &SuiSystemStateInner): u64 {
         self.epoch_start_timestamp_ms
@@ -883,18 +890,6 @@ module sui_system::sui_system_state_inner {
 
     public(friend) fun get_storage_fund_balance(self: &SuiSystemStateInner): u64 {
         balance::value(&self.storage_fund)
-    }
-
-    public(friend) fun upgrade_system_state(
-        self: SuiSystemStateInner,
-        new_system_state_version: u64,
-        _ctx: &mut TxContext,
-    ): SuiSystemStateInner {
-        // Whenever we upgrade the system state version, we will have to first
-        // ship a framework upgrade that introduces a new system state type, and make this
-        // function generate such type from the old state.
-        self.system_state_version = new_system_state_version;
-        self
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::ObjectID;
-use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
+use crate::committee::{CommitteeWithNetworkMetadata, EpochId};
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
@@ -205,10 +205,6 @@ where
             version
         ))),
     }
-}
-
-pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
-    INIT_SYSTEM_STATE_VERSION
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]
