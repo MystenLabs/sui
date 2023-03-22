@@ -42,6 +42,7 @@ pub enum StakeStatus {
     Active {
         estimated_reward: u64,
     },
+    Unstaked,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

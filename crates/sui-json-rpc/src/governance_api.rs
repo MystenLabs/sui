@@ -16,9 +16,10 @@ use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::governance::StakedSui;
 use sui_types::id::ID;
+use sui_types::object::ObjectRead;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -48,17 +49,40 @@ impl GovernanceReadApi {
         &self,
         staked_sui_id: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, Error> {
-        let stakes = futures::future::try_join_all(
+        let stakes_read = futures::future::try_join_all(
             staked_sui_id
                 .iter()
-                .map(|id| self.state.get_move_object::<StakedSui>(id)),
+                .map(|id| self.state.get_object_read(id)),
         )
         .await?;
-        if stakes.is_empty() {
+        if stakes_read.is_empty() {
             return Ok(vec![]);
         }
 
-        self.get_delegated_stakes(stakes).await
+        let mut stakes_exist: Vec<StakedSui> = vec![];
+        let mut stakes_deleted: Vec<StakedSui> = vec![];
+
+        for stake in stakes_read.into_iter() {
+            match stake {
+                ObjectRead::Exists(_, o, _) => stakes_exist.push(StakedSui::try_from(&o)?),
+                ObjectRead::Deleted(oref) => stakes_deleted.push(StakedSui::try_from(
+                    &self
+                        .state
+                        .database
+                        .find_object_lt_or_eq_version(oref.0, oref.1)
+                        .unwrap(),
+                )?),
+                ObjectRead::NotExists(id) => {
+                    return Err(Error::UserInputError(UserInputError::ObjectNotFound {
+                        object_id: id,
+                        version: None,
+                    }))
+                }
+            }
+        }
+        let mut stakes = self.get_delegated_stakes(stakes_exist, false).await?;
+        stakes.extend(self.get_delegated_stakes(stakes_deleted, true).await?);
+        Ok(stakes)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
@@ -67,12 +91,13 @@ impl GovernanceReadApi {
             return Ok(vec![]);
         }
 
-        self.get_delegated_stakes(stakes).await
+        self.get_delegated_stakes(stakes, false).await
     }
 
     async fn get_delegated_stakes(
         &self,
         stakes: Vec<StakedSui>,
+        deleted: bool,
     ) -> Result<Vec<DelegatedStake>, Error> {
         let pools = stakes
             .into_iter()
@@ -103,7 +128,9 @@ impl GovernanceReadApi {
 
             let mut delegations = vec![];
             for stake in stakes {
-                let status = if system_state.epoch >= stake.activation_epoch() {
+                let status = if deleted {
+                    StakeStatus::Unstaked
+                } else if system_state.epoch >= stake.activation_epoch() {
                     let estimated_reward = if let (Some(rate_table), Some(current_rate)) =
                         (&rate_table, &current_rate)
                     {

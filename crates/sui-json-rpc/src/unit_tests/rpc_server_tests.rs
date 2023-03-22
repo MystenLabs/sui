@@ -4,6 +4,7 @@
 use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::api::{
     CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
@@ -29,6 +30,7 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
+use tokio::time::sleep;
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
@@ -725,6 +727,105 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         staked_sui[0].stakes[0].staked_sui_id,
         staked_sui_copy[0].stakes[0].staked_sui_id
     );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_unstaking() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(500)
+        .build()
+        .await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let objects: ObjectsPage = http_client
+        .get_owned_objects(
+            *address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+            None,
+        )
+        .await?;
+    assert_eq!(5, objects.data.len());
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+
+    let coin = objects.data[0].object()?.object_id;
+    // Delegate some SUI
+    let transaction_bytes: TransactionBytes = http_client
+        .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signatures,
+            Some(SuiTransactionResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let staked_sui_copy = http_client
+        .get_stakes_by_ids(vec![staked_sui[0].stakes[0].staked_sui_id])
+        .await?;
+    println!("{:?}", staked_sui_copy[0].stakes[0].status);
+
+    let transaction_bytes: TransactionBytes = http_client
+        .request_withdraw_stake(
+            *address,
+            staked_sui_copy[0].stakes[0].staked_sui_id,
+            None,
+            100000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .execute_transaction(
+            tx_bytes,
+            signatures,
+            Some(SuiTransactionResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    sleep(Duration::from_millis(1000)).await;
+
+    let staked_sui_copy = http_client
+        .get_stakes_by_ids(vec![staked_sui[0].stakes[0].staked_sui_id])
+        .await?;
+    println!("{:?}", staked_sui_copy[0].stakes[0].status);
     Ok(())
 }
 
