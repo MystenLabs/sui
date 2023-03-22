@@ -19,9 +19,9 @@ The basic set of properties suggested includes:
 **image_url** - A URL or a blob with the image for the object. 
 **project_url** - A link to a website associated with the object or creator.  
 **creator** - A string that indicates the object creator. 
-An example Sui Hero module
+### An example Sui Hero module
 The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`. 
-The template defined in the init function can be represented as:
+The following represents the template the `init` function defines:
 
 ```rust
 {
@@ -174,15 +174,15 @@ id: UID }
 
 ## Typical objects with data duplication 
 
-A common case with in-game items is a large number of similar objects grouped by some criteria. It is important to optimize their size and the cost to mint and update them. Typically, a game uses a single source image or URL per group or item criteria. Storing the source image inside of every object is not optimal. 
+A common case with in-game items is to have a large number of similar objects grouped by some criteria. It is important to optimize their size and the cost to mint and update them. Typically, a game uses a single source image or URL per group or item criteria. Storing the source image inside of every object is not optimal. 
 In some cases, in-game items are minted by users when a game allows them or when they purchase an in-game item. To enable this, some IPFS/Arweave metadata must be created and stored in advance. This requires additional logic that is usually not related to the in-game properties of the item.
 
 The following example demonstrates how to create a Capy:
 
 ```rust
 module capy::capy_items {
-   /// A wearable Capy Item. For some items there can be an
-   /// unlimited supply. And items with the same name are identical
+   /// A wearable Capy item. For some items there can be an
+   /// unlimited supply. And items with the same name are identical.
    struct CapyItem has key, store {
 id: UID,
        name: String
@@ -196,7 +196,7 @@ Sui Capys use dynamic image generation. When a Capy is born, its attributes dete
 
 To implement this, the Capys game API service refreshes the image in response to a user-initiated change. The URL for a Capy is a template with the `capy.id`. But storing the full URL - as well as other fields in the Capy object due to their diverse population - also leads to users paying for excess storage and increased gas fees. 
 
-The following example demonstrates to implement dynamic image generation:
+The following example demonstrates how to implement dynamic image generation:
 
 ```rust
 module capy::capy {
