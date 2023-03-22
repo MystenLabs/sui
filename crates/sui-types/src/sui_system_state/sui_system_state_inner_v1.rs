@@ -139,6 +139,10 @@ impl ValidatorMetadataV1 {
         let worker_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
+        if worker_pubkey == network_pubkey {
+            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        }
+
         let net_address = Multiaddr::try_from(self.net_address.clone())
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
 
@@ -209,6 +213,11 @@ impl ValidatorMetadataV1 {
                         .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?,
                 )),
             }?;
+        if next_epoch_network_pubkey.is_some()
+            && next_epoch_network_pubkey == next_epoch_worker_pubkey
+        {
+            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        }
 
         let next_epoch_net_address = match self.next_epoch_net_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
