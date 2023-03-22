@@ -33,7 +33,7 @@ describe('Test Object Display Standard', () => {
     );
     expect(display).toEqual({
       age: '10',
-      buyer: `0x${toolbox.address()}`,
+      buyer: toolbox.address(),
       creator: 'Chris',
       description: `Unique Boar from the Boars collection with First Boar and ${boarId}`,
       img_url: 'https://get-a-boar.com/first.png',

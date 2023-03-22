@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519PublicKey, normalizeSuiAddress } from '@mysten/sui.js';
+import { Ed25519PublicKey } from '@mysten/sui.js';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
@@ -59,7 +59,7 @@ async function deriveAccountsFromLedger(
             derivationPath
         );
         const publicKey = new Ed25519PublicKey(publicKeyResult.publicKey);
-        const suiAddress = normalizeSuiAddress(publicKey.toSuiAddress());
+        const suiAddress = publicKey.toSuiAddress();
         ledgerAccounts.push({
             type: AccountType.LEDGER,
             address: suiAddress,

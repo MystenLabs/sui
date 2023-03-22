@@ -37,7 +37,6 @@ function SignaturePanel({
                 </DescriptionItem>
                 <DescriptionItem title="Address">
                     <Text variant="p1/medium" color="steel-darker">
-                        0x
                         {signature.pubKey.toSuiAddress()}
                     </Text>
                 </DescriptionItem>
@@ -57,8 +56,7 @@ function getSignatureFromAddress(
 ) {
     return signatures.find(
         (signature) =>
-            normalizeSuiAddress(signature.pubKey.toSuiAddress()) ===
-            normalizeSuiAddress(suiAddress)
+            signature.pubKey.toSuiAddress() === normalizeSuiAddress(suiAddress)
     );
 }
 
