@@ -28,11 +28,13 @@ import {
 } from './utils/transaction';
 import { createValidationSchema } from './utils/validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import { Collapse } from '_app/shared/collapse';
+import { Text } from '_app/shared/text';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
@@ -40,8 +42,6 @@ import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
-import { Button } from '_src/ui/app/shared/ButtonUI';
-import { Text } from '_src/ui/app/shared/text';
 
 import type { FormikHelpers } from 'formik';
 

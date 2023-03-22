@@ -5,16 +5,16 @@ import { Formik, Form, Field } from 'formik';
 import { useNavigate } from 'react-router-dom';
 
 import { createMnemonicValidation } from './validation';
+import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
+import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
 import { ToS_LINK } from '_shared/constants';
-import Loading from '_src/ui/app/components/loading';
-import { Button } from '_src/ui/app/shared/ButtonUI';
 
 const CreatePage = () => {
     const dispatch = useAppDispatch();
