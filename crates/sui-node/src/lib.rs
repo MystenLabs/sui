@@ -560,7 +560,7 @@ impl SuiNode {
             &committee,
             consensus_config,
             state.name,
-            connection_monitor_status,
+            connection_monitor_status.clone(),
             &registry_service.default_registry(),
         ));
         let narwhal_manager =
@@ -595,6 +595,7 @@ impl SuiNode {
             narwhal_epoch_data_remover,
             committee,
             accumulator,
+            connection_monitor_status,
             validator_server_handle,
             checkpoint_metrics,
             sui_tx_validator_metrics,
@@ -613,6 +614,7 @@ impl SuiNode {
         narwhal_epoch_data_remover: EpochDataRemover,
         committee: Arc<Committee>,
         accumulator: Arc<StateAccumulator>,
+        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -642,6 +644,10 @@ impl SuiNode {
             state.db(),
             low_scoring_authorities,
             committee,
+            connection_monitor_status
+                .authority_names_to_peer_ids
+                .load()
+                .clone(),
             state.metrics.clone(),
         ));
 
@@ -970,6 +976,7 @@ impl SuiNode {
                             narwhal_epoch_data_remover,
                             Arc::new(next_epoch_committee.clone()),
                             self.accumulator.clone(),
+                            self.connection_monitor_status.clone(),
                             validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
