@@ -14,6 +14,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { ArrowRight16 } from '@mysten/icons';
 
 type SortKeys = 'name' | 'stakeShare' | 'apy';
 const sortKeys: Record<SortKeys, string> = {
@@ -186,17 +187,11 @@ export function SelectValidatorCard() {
                     <Button
                         size="tall"
                         variant="primary"
-                        href={`#/stake/new?address=${encodeURIComponent(
+                        to={`/stake/new?address=${encodeURIComponent(
                             selectedValidator
                         )}`}
-                        target="_self"
                         text="Select Amount"
-                        after={
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className="text-captionSmall text-white font-normal"
-                            />
-                        }
+                        after={<ArrowRight16 />}
                     />
                 </Menu>
             )}

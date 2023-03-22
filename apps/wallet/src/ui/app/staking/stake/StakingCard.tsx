@@ -35,7 +35,6 @@ import BottomMenuLayout, {
 } from '_app/shared/bottom-menu-layout';
 import { Collapse } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
-import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
@@ -43,6 +42,7 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { FormikHelpers } from 'formik';
+import { ArrowLeft16 } from '@mysten/icons';
 
 const initialValues = {
     amount: '',
@@ -348,12 +348,7 @@ function StakingCard() {
                                     variant="secondary"
                                     to="/stake"
                                     disabled={isSubmitting}
-                                    before={
-                                        <Icon
-                                            icon={SuiIcons.ArrowLeft}
-                                            className="text-body text-gray-65 font-normal"
-                                        />
-                                    }
+                                    before={<ArrowLeft16 />}
                                     text="Back"
                                 />
                                 <Button
