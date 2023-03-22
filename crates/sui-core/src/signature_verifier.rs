@@ -8,6 +8,7 @@ use lru::LruCache;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
+use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::{
     committee::Committee,
@@ -79,29 +80,43 @@ impl CertBuffer {
     }
 }
 
-pub struct BatchCertificateVerifier {
+/// Verifies signatures in ways that faster than verifying each signature individually.
+/// - BLS signatures - caching and batch verification.
+/// - Ed25519 signatures - caching.
+///
+/// Caching of verified digests is optimized for the happy flow:
+/// - tx signatures - cached if verified directly, but not if verified as part of a tx cert (since
+///   the tx cert is cached already).
+/// - tx certs - cached when verified.
+/// If a tx cert is cached already we don't need to verify its tx sigs since we never insert a tx
+/// cert unless we verified its tx sigs.
+///
+pub struct SignatureVerifier {
     committee: Arc<Committee>,
-    cache: VerifiedCertificateCache,
+    certificate_cache: VerifiedDigestCache<CertificateDigest>,
 
     queue: Mutex<CertBuffer>,
-    pub metrics: Arc<BatchCertificateVerifierMetrics>,
+    pub metrics: Arc<VerifiedDigestCacheMetrics>,
 }
 
-impl BatchCertificateVerifier {
+impl SignatureVerifier {
     pub fn new_with_batch_size(
         committee: Arc<Committee>,
         batch_size: usize,
-        metrics: Arc<BatchCertificateVerifierMetrics>,
+        metrics: Arc<VerifiedDigestCacheMetrics>,
     ) -> Self {
         Self {
             committee,
-            cache: VerifiedCertificateCache::new(metrics.clone()),
+            certificate_cache: VerifiedDigestCache::new(
+                metrics.certificate_signatures_cache_hits.clone(),
+                metrics.certificate_signatures_cache_evictions.clone(),
+            ),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
         }
     }
 
-    pub fn new(committee: Arc<Committee>, metrics: Arc<BatchCertificateVerifierMetrics>) -> Self {
+    pub fn new(committee: Arc<Committee>, metrics: Arc<VerifiedDigestCacheMetrics>) -> Self {
         Self::new_with_batch_size(committee, MAX_BATCH_SIZE, metrics)
     }
 
@@ -113,15 +128,14 @@ impl BatchCertificateVerifier {
     ) -> SuiResult {
         let certs: Vec<_> = certs
             .into_iter()
-            .filter(|cert| !self.cache.is_cert_verified(&cert.certificate_digest()))
+            .filter(|cert| !self.certificate_cache.is_cached(&cert.certificate_digest()))
             .collect();
 
         // Note: this verifies user sigs
         batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints).tap_ok(
             |_| {
-                self.cache.cache_certs_verified(
-                    certs.into_iter().map(|c| c.certificate_digest()).collect(),
-                )
+                self.certificate_cache
+                    .cache_digests(certs.into_iter().map(|c| c.certificate_digest()).collect())
             },
         )
     }
@@ -129,12 +143,12 @@ impl BatchCertificateVerifier {
     /// Verifies one cert asynchronously, in a batch.
     pub async fn verify_cert(&self, cert: CertifiedTransaction) -> SuiResult<VerifiedCertificate> {
         let cert_digest = cert.certificate_digest();
-        if self.cache.is_cert_verified(&cert_digest) {
+        if self.certificate_cache.is_cached(&cert_digest) {
             return Ok(VerifiedCertificate::new_unchecked(cert));
         }
         self.verify_cert_skip_cache(cert)
             .await
-            .tap_ok(|_| self.cache.cache_cert_verified(cert_digest))
+            .tap_ok(|_| self.certificate_cache.cache_digest(cert_digest))
     }
 
     /// exposed as a public method for the benchmarks
@@ -224,7 +238,7 @@ impl BatchCertificateVerifier {
 
     fn process_queue_sync(
         committee: Arc<Committee>,
-        metrics: Arc<BatchCertificateVerifierMetrics>,
+        metrics: Arc<VerifiedDigestCacheMetrics>,
         buffer: CertBuffer,
     ) {
         let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
@@ -251,7 +265,7 @@ impl BatchCertificateVerifier {
     }
 }
 
-pub struct BatchCertificateVerifierMetrics {
+pub struct VerifiedDigestCacheMetrics {
     certificate_signatures_cache_hits: IntCounter,
     certificate_signatures_cache_evictions: IntCounter,
     timeouts: IntCounter,
@@ -261,7 +275,7 @@ pub struct BatchCertificateVerifierMetrics {
     total_failed_certs: IntCounter,
 }
 
-impl BatchCertificateVerifierMetrics {
+impl VerifiedDigestCacheMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             certificate_signatures_cache_hits: register_int_counter_with_registry!(
@@ -390,46 +404,48 @@ fn batch_verify_certificates_impl(
 // on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
 const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
 
-pub struct VerifiedCertificateCache {
-    inner: RwLock<LruCache<CertificateDigest, ()>>,
-    metrics: Arc<BatchCertificateVerifierMetrics>,
+pub struct VerifiedDigestCache<D> {
+    inner: RwLock<LruCache<D, ()>>,
+    cache_hits_counter: IntCounter,
+    cache_evictions_counter: IntCounter,
 }
 
-impl VerifiedCertificateCache {
-    pub fn new(metrics: Arc<BatchCertificateVerifierMetrics>) -> Self {
+impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
+    pub fn new(cache_hits_counter: IntCounter, cache_evictions_counter: IntCounter) -> Self {
         Self {
             inner: RwLock::new(LruCache::new(
                 std::num::NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
             )),
-            metrics,
+            cache_hits_counter,
+            cache_evictions_counter,
         }
     }
 
-    pub fn is_cert_verified(&self, digest: &CertificateDigest) -> bool {
+    pub fn is_cached(&self, digest: &D) -> bool {
         let inner = self.inner.read();
         if inner.contains(digest) {
-            self.metrics.certificate_signatures_cache_hits.inc();
+            self.cache_hits_counter.inc();
             true
         } else {
             false
         }
     }
 
-    pub fn cache_cert_verified(&self, digest: CertificateDigest) {
+    pub fn cache_digest(&self, digest: D) {
         let mut inner = self.inner.write();
         if let Some(old) = inner.push(digest, ()) {
             if old.0 != digest {
-                self.metrics.certificate_signatures_cache_evictions.inc();
+                self.cache_evictions_counter.inc();
             }
         }
     }
 
-    pub fn cache_certs_verified(&self, digests: Vec<CertificateDigest>) {
+    pub fn cache_digests(&self, digests: Vec<D>) {
         let mut inner = self.inner.write();
         digests.into_iter().for_each(|d| {
             if let Some(old) = inner.push(d, ()) {
                 if old.0 != d {
-                    self.metrics.certificate_signatures_cache_evictions.inc();
+                    self.cache_evictions_counter.inc();
                 }
             }
         });

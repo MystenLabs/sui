@@ -362,7 +362,10 @@ impl ValidatorService {
         let certificate = {
             let certificate = {
                 let _timer = metrics.cert_verification_latency.start_timer();
-                epoch_store.batch_verifier.verify_cert(certificate).await?
+                epoch_store
+                    .signature_verifier
+                    .verify_cert(certificate)
+                    .await?
             };
 
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();

@@ -3,7 +3,7 @@
 
 use criterion::*;
 
-use sui_core::batch_bls_verifier::{BatchCertificateVerifierMetrics, VerifiedCertificateCache};
+use sui_core::signature_verifier::{VerifiedCertificateCache, VerifiedDigestCacheMetrics};
 use sui_types::digests::CertificateDigest;
 
 use criterion::Criterion;
@@ -25,7 +25,7 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
     assert_eq!(chunks.len(), cpus);
 
     let registry = prometheus::Registry::new();
-    let metrics = BatchCertificateVerifierMetrics::new(&registry);
+    let metrics = VerifiedDigestCacheMetrics::new(&registry);
     let cache = VerifiedCertificateCache::new(metrics);
 
     let mut group = c.benchmark_group("digest-caching");
