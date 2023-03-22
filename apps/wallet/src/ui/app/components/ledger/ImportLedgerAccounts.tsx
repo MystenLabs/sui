@@ -43,20 +43,18 @@ export function ImportLedgerAccounts() {
     } = useDeriveLedgerAccounts({
         numAccountsToDerive: numLedgerAccountsToDeriveByDefault,
         select: (ledgerAccounts) => {
-            const existingAccountAddresses = existingAccounts.map(
-                (account) => account.address
+            return ledgerAccounts.filter(
+                ({ address }) =>
+                    !existingAccounts.some(
+                        (account) => account.address === address
+                    )
             );
-            return ledgerAccounts.filter(({ address }) => {
-                return !existingAccountAddresses.includes(address);
-            });
         },
         onError: (error) => {
             if (error instanceof LockedDeviceError) {
                 toast.error('Your device is locked. Unlock it and try again.');
             } else {
-                toast.error(
-                    'Make sure you have the Sui application open on your Ledger device.'
-                );
+                toast.error('Make sure the Sui app is open on your device.');
             }
             navigate(accountsUrl, { replace: true });
         },
