@@ -514,7 +514,7 @@ impl ConsensusAdapter {
                 let total_wait = i * WARN_DELAY_S;
                 warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
             }
-        }));
+        }), format!("{:?}", transaction_key));
         if let Some(processed_waiter) = processed_waiter {
             debug!("Submitting {transaction_key:?} to consensus");
 
@@ -725,7 +725,7 @@ impl ReconfigurationInitiator for Arc<ConsensusAdapter> {
     }
 }
 
-struct CancelOnDrop<T>(JoinHandle<T>);
+struct CancelOnDrop<T>(JoinHandle<T>, String);
 
 impl<T> Deref for CancelOnDrop<T> {
     type Target = JoinHandle<T>;
@@ -737,6 +737,7 @@ impl<T> Deref for CancelOnDrop<T> {
 
 impl<T> Drop for CancelOnDrop<T> {
     fn drop(&mut self) {
+        info!("Cancelled {}", self.1);
         self.0.abort();
     }
 }
