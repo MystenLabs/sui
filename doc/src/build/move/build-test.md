@@ -103,8 +103,7 @@ error[E06001]: unused value without 'drop'
 
 The error message contains all the necessary information to debug the code. The faulty code is meant to highlight one of the Move language's safety features.
 
-The `Sword` struct represents a game asset that digitally mimicks a real-world item. Obviously, a real sword cannot simply disappear (though it can be explicitly
-destroyed), but there is no such restriction on a digital one. In fact, this is exactly what's happening in the test function - you create an instance of a `Sword` struct that simply disappears at the end of the function call. If you saw something disappear before your eyes, you'd be dumbfounded, too. 
+The `Sword` struct represents a game asset that digitally mimics a real-world item. Obviously, a real sword cannot simply disappear (though it can be explicitly destroyed), but there is no such restriction on a digital one. In fact, this is exactly what's happening in the test function - you create an instance of a `Sword` struct that simply disappears at the end of the function call. If you saw something disappear before your eyes, you'd be dumbfounded, too. 
 
 One of the solutions (as suggested in the error message), is to add the `drop` ability to the definition of the `Sword` struct, which would allow instances of this struct to disappear (be *dropped*). The ability to drop a valuable asset is not a desirable asset property in this case, so another solution is needed. Another way to solve this problem is to transfer ownership of the sword.
 
