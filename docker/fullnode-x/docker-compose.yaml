@@ -61,7 +61,7 @@ services:
       - target: 5432
         published: 5432
     volumes:
-      - db-data:/var/lib/postgres/data
+      - ./postgres:/var/lib/postgres/data
 
 volumes:
   db-data:
