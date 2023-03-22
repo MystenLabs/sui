@@ -89,7 +89,7 @@ impl Payload for AdversarialTestPayload {
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        let payload_type: AdversarialPayloadType = AdversarialPayloadType::EventSize; //rand::random();
+        let payload_type: AdversarialPayloadType = rand::random();
 
         let gas_budget = self.system_state_observer.protocol_config.max_tx_gas();
         let mut payload_args =

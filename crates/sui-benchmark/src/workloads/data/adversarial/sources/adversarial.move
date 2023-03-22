@@ -46,16 +46,12 @@ module adversarial::adversarial {
         s
     }
 
-    public fun create_max_size_object(size: u64, ctx: &mut TxContext): S {
-        create_object_with_size(size, ctx)
-    }
-
-    /// Create `n` max size objects and transfer them to the tx sender
-    public fun create_max_size_owned_objects(n: u64, size: u64, ctx: &mut TxContext) {
+    /// Create `n` owned objects of size `size` and transfer them to the tx sender
+    public fun create_owned_objects(n: u64, size: u64, ctx: &mut TxContext) {
         let i = 0;
         let sender = tx_context::sender(ctx);
         while (i < n) {
-            transfer::public_transfer(create_max_size_object(size, ctx), sender);
+            transfer::public_transfer(create_object_with_size(size, ctx), sender);
             i = i + 1
         }
     }
@@ -120,11 +116,11 @@ module adversarial::adversarial {
         }
     }
 
-    /// Create `n` max size objects and share them
+    /// Create `n` objects of size `size` and share them
     public fun create_shared_objects(n: u64, size: u64, ctx: &mut TxContext) {
         let i = 0;
         while (i < n) {
-            transfer::public_share_object(create_max_size_object(ctx));
+            transfer::public_share_object(create_object_with_size(size, ctx));
             i = i + 1
         }
     }
