@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Activity } from '../../components/Activity';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
 const TRANSACTIONS_LIMIT = 20;
 
@@ -14,7 +14,7 @@ function Transactions() {
             className="mx-auto"
         >
             <ErrorBoundary>
-                <LatestTxCard initialLimit={TRANSACTIONS_LIMIT} />
+                <Activity initialLimit={TRANSACTIONS_LIMIT} />
             </ErrorBoundary>
         </div>
     );

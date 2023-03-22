@@ -5,8 +5,8 @@ import { lazy, Suspense } from 'react';
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 // import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
-import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
+import { Activity } from '~/components/Activity';
 import { HomeMetrics } from '~/components/HomeMetrics';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
@@ -27,7 +27,7 @@ function Home() {
                 </ErrorBoundary>
 
                 <ErrorBoundary>
-                    <LatestTxCard
+                    <Activity
                         initialLimit={TRANSACTIONS_LIMIT}
                         disablePagination
                     />

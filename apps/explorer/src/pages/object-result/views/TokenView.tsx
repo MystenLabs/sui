@@ -19,7 +19,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import TxForID from '~/components/transaction-card/TxForID';
+import TxForID from '~/components/transactions/TxForID';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';

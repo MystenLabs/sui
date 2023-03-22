@@ -16,20 +16,20 @@ export interface PaginationProps {
     onNext(): void;
 }
 
-interface PaginationResponse {
-    nextCursor: string | null;
+export interface PaginationResponse<Cursor = string> {
+    nextCursor: Cursor | null;
     hasNextPage: boolean;
 }
 
-export function usePaginationStack() {
-    const [stack, setStack] = useState<string[]>([]);
+export function usePaginationStack<Cursor = string>() {
+    const [stack, setStack] = useState<Cursor[]>([]);
 
     return {
         cursor: stack.at(-1),
         props({
             hasNextPage = false,
             nextCursor = null,
-        }: Partial<PaginationResponse> = {}): PaginationProps {
+        }: Partial<PaginationResponse<Cursor>> = {}): PaginationProps {
             return {
                 hasPrev: stack.length > 0,
                 hasNext: hasNextPage,

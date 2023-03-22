@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
     genTableDataFromTxData,
     getDataOnTxDigests,
-} from '~/components/transaction-card/TxCardUtils';
+} from '~/components/transactions/TxCardUtils';
 import { TableCard } from '~/ui/TableCard';
 
 export function CheckpointTransactions({
