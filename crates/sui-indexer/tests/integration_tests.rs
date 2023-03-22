@@ -773,6 +773,7 @@ pub mod pg_integration_test {
         assert!(result.is_ok());
     }
 
+    #[tokio::test]
     async fn test_get_transaction_with_options() -> Result<(), anyhow::Error> {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
