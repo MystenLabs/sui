@@ -73,7 +73,7 @@ package in Sui is also a Sui object and must have a unique numeric ID in additio
 sui = "0x2"
 ```
 
-### Move structs
+### Sui Move structs
 
 The `Coin` module defines the `Coin` struct type that you can use to represent different types of user-defined coins as Sui objects:
 
