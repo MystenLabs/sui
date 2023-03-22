@@ -6,6 +6,8 @@ mod rosetta_client;
 use crate::rosetta_client::RosettaEndpoint;
 use rosetta_client::{get_random_sui, start_rosetta_test_server};
 use serde_json::json;
+
+use sui_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
@@ -150,7 +152,10 @@ async fn test_get_staked_sui() {
         .call(RosettaEndpoint::Balance, &request)
         .await;
     assert_eq!(1, response.balances.len());
-    assert_eq!(500000000000000, response.balances[0].value);
+    assert_eq!(
+        (DEFAULT_GAS_AMOUNT * DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT as u64) as i128,
+        response.balances[0].value
+    );
 
     let request = AccountBalanceRequest {
         network_identifier: network_identifier.clone(),

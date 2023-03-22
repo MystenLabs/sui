@@ -38,6 +38,41 @@ pub enum SuiObjectResponse {
     Deleted(SuiObjectRef),
 }
 
+impl SuiObjectResponse {
+    pub fn move_object_bcs(&self) -> Option<&Vec<u8>> {
+        match self {
+            SuiObjectResponse::Exists(data) => match &data.bcs {
+                Some(SuiRawData::MoveObject(obj)) => Some(&obj.bcs_bytes),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+    pub fn owner(&self) -> Option<Owner> {
+        match self {
+            SuiObjectResponse::Exists(e) => e.owner,
+            SuiObjectResponse::NotExists(_) => None,
+            SuiObjectResponse::Deleted(_) => None,
+        }
+    }
+
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            SuiObjectResponse::Exists(e) => e.object_id,
+            SuiObjectResponse::NotExists(ne) => *ne,
+            SuiObjectResponse::Deleted(d) => d.object_id,
+        }
+    }
+
+    pub fn object_ref_if_exists(&self) -> Option<ObjectRef> {
+        match self {
+            SuiObjectResponse::Exists(e) => Some(e.object_ref()),
+            SuiObjectResponse::NotExists(_) => None,
+            SuiObjectResponse::Deleted(_) => None,
+        }
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", rename = "ObjectData")]

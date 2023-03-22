@@ -225,10 +225,10 @@ fn default_gas_value() -> u64 {
     DEFAULT_GAS_AMOUNT
 }
 
-const DEFAULT_GAS_AMOUNT: u64 = 100000000000000;
+pub const DEFAULT_GAS_AMOUNT: u64 = 30_000_000_000_000_000;
 const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
 const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
-const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
+pub const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
     pub fn for_local_testing() -> Self {

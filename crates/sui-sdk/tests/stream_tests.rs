@@ -4,6 +4,8 @@
 use futures::StreamExt;
 use std::future;
 use sui::client_commands::SuiClientCommands;
+use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_json_rpc_types::{EventFilter, SuiTransactionResponseQuery};
 use sui_sdk::{SuiClientBuilder, SUI_COIN_TYPE};
 use test_utils::network::TestClusterBuilder;
@@ -111,7 +113,10 @@ async fn test_coins_stream() -> Result<(), anyhow::Error> {
         .fold(0u128, |acc, coin| async move { acc + coin.balance as u128 })
         .await;
 
-    assert_eq!(500000000000000, amount);
+    assert_eq!(
+        (DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT as u64 * DEFAULT_GAS_AMOUNT) as u128,
+        amount
+    );
 
     let mut total = 0u128;
 
@@ -119,7 +124,7 @@ async fn test_coins_stream() -> Result<(), anyhow::Error> {
         .coin_read_api()
         .get_coins_stream(address, Some(SUI_COIN_TYPE.to_string()))
         .take_while(|coin| {
-            let ready = future::ready(total < 300000000000000);
+            let ready = future::ready(total < DEFAULT_GAS_AMOUNT as u128 * 3);
             total += coin.balance as u128;
             ready
         })
