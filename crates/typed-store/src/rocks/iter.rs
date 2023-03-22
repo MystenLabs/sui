@@ -54,6 +54,11 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
                 .db_iter
                 .value()
                 .expect("Valid iterator failed to get value");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_get_bytes
+                .with_label_values(&[&self.cf])
+                .observe((raw_key.len() + raw_value.len()) as f64);
             let key = config.deserialize(raw_key).ok();
             let value = bcs::from_bytes(raw_value).ok();
             if self.iter_bytes_sample_interval.sample() {
