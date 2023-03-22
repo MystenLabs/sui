@@ -192,9 +192,9 @@ mod tests {
             epoch_start_timestamp_ms: 123456,
             stake_subsidy_start_epoch: 123456,
             epoch_duration_ms: 123456789,
-            stake_subsidy_epoch_counter: 1,
+            stake_subsidy_distribution_counter: 1,
             stake_subsidy_balance: 1,
-            stake_subsidy_current_epoch_amount: 1,
+            stake_subsidy_current_distribution_amount: 1,
             total_stake: 1,
             active_validators: vec![SuiValidatorSummary {
                 sui_address: SuiAddress::random_for_testing_only(),
@@ -248,6 +248,13 @@ mod tests {
             validator_candidates_size: 1,
             at_risk_validators: vec![],
             validator_report_records: vec![],
+            max_validator_count: 150,
+            min_validator_joining_stake: 1,
+            validator_low_stake_threshold: 1,
+            validator_very_low_stake_threshold: 0,
+            validator_low_stake_grace_period: 7,
+            stake_subsidy_period_length: 30,
+            stake_subsidy_decrease_rate: 10000,
         };
 
         #[derive(Debug, Serialize, Deserialize)]

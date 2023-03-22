@@ -68,7 +68,7 @@ function EpochDetail() {
                 <EpochStats label="Rewards">
                     <Stats label="Stake Subsidies" tooltip="Stake Subsidies">
                         <SuiAmount
-                            amount={data.stakeSubsidyCurrentEpochAmount}
+                            amount={data.stakeSubsidyCurrentDistributionAmount}
                         />
                     </Stats>
                     <Stats label="Total Rewards" tooltip="Total Rewards">

@@ -6172,6 +6172,8 @@
           "epochStartTimestampMs",
           "inactivePoolsId",
           "inactivePoolsSize",
+          "maxValidatorCount",
+          "minValidatorJoiningStake",
           "pendingActiveValidatorsId",
           "pendingActiveValidatorsSize",
           "pendingRemovals",
@@ -6179,8 +6181,10 @@
           "referenceGasPrice",
           "safeMode",
           "stakeSubsidyBalance",
-          "stakeSubsidyCurrentEpochAmount",
-          "stakeSubsidyEpochCounter",
+          "stakeSubsidyCurrentDistributionAmount",
+          "stakeSubsidyDecreaseRate",
+          "stakeSubsidyDistributionCounter",
+          "stakeSubsidyPeriodLength",
           "stakeSubsidyStartEpoch",
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
@@ -6189,7 +6193,10 @@
           "totalStake",
           "validatorCandidatesId",
           "validatorCandidatesSize",
-          "validatorReportRecords"
+          "validatorLowStakeGracePeriod",
+          "validatorLowStakeThreshold",
+          "validatorReportRecords",
+          "validatorVeryLowStakeThreshold"
         ],
         "properties": {
           "activeValidators": {
@@ -6250,6 +6257,18 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "maxValidatorCount": {
+            "description": "Maximum number of active validators at any moment. We do not allow the number of validators in any epoch to go above this.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "minValidatorJoiningStake": {
+            "description": "Lower-bound on the amount of stake required to become a validator.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "pendingActiveValidatorsId": {
             "description": "ID of the object that contains the list of new validators that will join at the end of the epoch.",
             "allOf": [
@@ -6295,20 +6314,32 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "stakeSubsidyCurrentEpochAmount": {
+          "stakeSubsidyCurrentDistributionAmount": {
             "description": "The amount of stake subsidy to be drawn down per epoch. This amount decays and decreases over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stakeSubsidyEpochCounter": {
+          "stakeSubsidyDecreaseRate": {
+            "description": "The rate at which the distribution amount decays at the end of each period. Expressed in basis points.",
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "stakeSubsidyDistributionCounter": {
             "description": "This counter may be different from the current epoch number if in some epochs we decide to skip the subsidy.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
+          "stakeSubsidyPeriodLength": {
+            "description": "Number of distributions to occur before the distribution amount decays.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "stakeSubsidyStartEpoch": {
-            "description": "The starting epoch in which various on-chain governance features take effect.",
+            "description": "The starting epoch in which stake subsidies start being paid out",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6359,6 +6390,18 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "validatorLowStakeGracePeriod": {
+            "description": "A validator can have stake below `validator_low_stake_threshold` for this many epochs before being kicked out.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validatorLowStakeThreshold": {
+            "description": "Validators with stake amount below `validator_low_stake_threshold` are considered to have low stake and will be escorted out of the validator set after being below this threshold for more than `validator_low_stake_grace_period` number of epochs.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "validatorReportRecords": {
             "description": "A map storing the records of validator reporting each other.",
             "type": "array",
@@ -6378,6 +6421,12 @@
               "maxItems": 2,
               "minItems": 2
             }
+          },
+          "validatorVeryLowStakeThreshold": {
+            "description": "Validators with stake below `validator_very_low_stake_threshold` will be removed immediately at epoch change, no grace period.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
