@@ -282,13 +282,13 @@ impl Iterator for LiveSetIter<'_> {
                 self.prev = Some(next);
 
                 match prev {
-                    Some(prev) if prev.0 != next.0 && prev.2.is_alive() => return Some(prev),
+                    Some(prev) if prev.0 != next.0 && !prev.2.is_deleted() => return Some(prev),
                     _ => continue,
                 }
             }
 
             return match self.prev {
-                Some(prev) if prev.2.is_alive() => {
+                Some(prev) if !prev.2.is_deleted() => {
                     self.prev = None;
                     Some(prev)
                 }

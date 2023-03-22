@@ -1015,23 +1015,11 @@ impl SuiNode {
                     )
                 } else {
                     // was a fullnode, still a fullnode
-                    let live_object_set = self
-                        .state
-                        .database
-                        .iter_live_object_set()
-                        .map(|oref| oref.2);
-                    let mut acc = sui_types::accumulator::Accumulator::default();
-                    fastcrypto::hash::MultisetHash::insert_all(&mut acc, live_object_set);
-
-                    let live_object_set_hash = fastcrypto::hash::MultisetHash::digest(&acc);
-
-                    let root_state_hash = self
-                        .state
-                        .database
-                        .get_root_state_hash(cur_epoch_store.epoch())
-                        .expect("Retrieving root state hash cannot fail");
-
-                    let is_inconsistent = root_state_hash != live_object_set_hash;
+                    let is_inconsistent = self.check_is_consistent_state(
+                        self.accumulator.clone(),
+                        cur_epoch_store.epoch(),
+                        false,
+                    );
                     checkpoint_executor.set_inconsistent_state(is_inconsistent);
 
                     None
@@ -1040,6 +1028,31 @@ impl SuiNode {
             *self.validator_components.lock().await = new_validator_components;
             info!("Reconfiguration finished");
         }
+    }
+
+    fn check_is_consistent_state(
+        &self,
+        accumulator: Arc<StateAccumulator>,
+        epoch: EpochId,
+        panic: bool,
+    ) -> bool {
+        let live_object_set_hash = accumulator.digest_live_object_set();
+
+        let root_state_hash = self
+            .state
+            .database
+            .get_root_state_hash(epoch)
+            .expect("Retrieving root state hash cannot fail");
+
+        let is_inconsistent = root_state_hash != live_object_set_hash;
+        if is_inconsistent && panic {
+            panic!(
+                "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                root_state_hash, live_object_set_hash
+            );
+        }
+
+        is_inconsistent
     }
 
     async fn reconfigure_state(
