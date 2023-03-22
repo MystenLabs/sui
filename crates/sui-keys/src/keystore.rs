@@ -175,8 +175,12 @@ impl AccountKeystore for FileBasedKeystore {
 impl FileBasedKeystore {
     pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
-            let reader = BufReader::new(File::open(path)?);
-            let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
+            let reader = BufReader::new(
+                File::open(path)
+                    .map_err(|e| anyhow!("Can't open FileBasedKeystore from {:?}: {e}", path))?,
+            );
+            let kp_strings: Vec<String> = serde_json::from_reader(reader)
+                .map_err(|e| anyhow!("Can't deserialize FileBasedKeystore from {:?}: {e}", path))?;
             kp_strings
                 .iter()
                 .map(|kpstr| {
