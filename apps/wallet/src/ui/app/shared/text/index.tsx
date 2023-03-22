@@ -54,10 +54,6 @@ const textStyles = cva([], {
             true: 'truncate',
             false: '',
         },
-        multilineTruncate: {
-            true: 'line-clamp-3 hover:line-clamp-none break-words',
-            false: '',
-        },
         mono: {
             true: 'font-mono',
             false: 'font-sans',

@@ -8,4 +8,3 @@ export * from './hooks/useTimeAgo';
 export * from './utils/formatAmount';
 export * from './utils/calculateAPY';
 export * from './utils/roundFloat';
-export * from './utils/nftStandard';

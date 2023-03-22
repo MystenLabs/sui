@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type LinkData } from '@mysten/core';
+import cl from 'classnames';
 import { type ReactNode } from 'react';
 
+import { type LinkData } from '_src/ui/app/hooks/useGetNFTMeta';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -43,25 +44,28 @@ export function LabelValueItem({
                     {label}
                 </Text>
             </div>
-            <div className="max-w-[60%] text-end">
-                <Text
-                    color="steel-darker"
-                    weight="medium"
-                    truncate={!multiline}
-                    multilineTruncate={multiline}
-                >
-                    {href && display ? (
-                        <Link
-                            color="suiDark"
-                            weight="medium"
-                            size="body"
-                            href={href}
-                            text={display}
-                        />
-                    ) : (
-                        display
-                    )}
-                </Text>
+            <div
+                className={cl('max-w-[60%] break-words text-end', {
+                    'line-clamp-3 hover:line-clamp-none': multiline,
+                })}
+            >
+                {href && display ? (
+                    <Link
+                        color="suiDark"
+                        weight="medium"
+                        size="body"
+                        href={href}
+                        text={display}
+                    />
+                ) : (
+                    <Text
+                        color="steel-darker"
+                        weight="medium"
+                        truncate={!multiline}
+                    >
+                        {display}
+                    </Text>
+                )}
             </div>
         </div>
     );
