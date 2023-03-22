@@ -12,7 +12,7 @@ use fastcrypto::error::FastCryptoError;
 use move_binary_format::{access::ModuleAccess, errors::VMError};
 use move_binary_format::{errors::Location, file_format::FunctionDefinitionIndex};
 use move_core_types::{
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -685,7 +685,7 @@ impl From<ExecutionErrorKind> for ExecutionError {
 pub fn convert_vm_error<
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + LinkageResolver<Error = E>,
 >(
     error: VMError,
     vm: &'r MoveVM,

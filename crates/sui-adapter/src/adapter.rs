@@ -18,7 +18,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
@@ -89,7 +89,10 @@ pub fn new_session<
     'v,
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + ChildObjectResolver,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + LinkageResolver<Error = E>
+        + ChildObjectResolver,
 >(
     vm: &'v MoveVM,
     state_view: &'r S,
