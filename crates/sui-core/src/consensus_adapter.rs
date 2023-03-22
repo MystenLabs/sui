@@ -8,8 +8,7 @@ use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
-use narwhal_types::TransactionProto;
-use narwhal_types::TransactionsClient;
+use narwhal_types::{TransactionProto, TransactionsClient};
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
@@ -309,9 +308,8 @@ impl ConsensusAdapter {
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
                 let delay_step = latency * 3 / 2;
-                const MAX_DELAY_MUL: usize = 10;
                 (
-                    delay_step * std::cmp::min(position, MAX_DELAY_MUL) as u32,
+                    delay_step * position as u32,
                     position,
                     mapped_to_low_scoring,
                 )
