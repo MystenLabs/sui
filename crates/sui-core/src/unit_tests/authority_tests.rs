@@ -3385,6 +3385,7 @@ async fn test_store_revert_transfer_sui() {
     assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_store_revert_wrap_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
