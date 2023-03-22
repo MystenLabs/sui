@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { LedgerSigner } from '../LedgerSigner';
 import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './useAccounts';
 import { useActiveAccount } from './useActiveAccount';
@@ -16,19 +17,19 @@ export function useSigner(address?: SuiAddress) {
         ? existingAccounts.find((account) => account.address === address)
         : activeAccount;
 
-    const { initializeLedgerSignerInstance } = useSuiLedgerClient();
+    const { connectToLedger } = useSuiLedgerClient();
     const { api, background } = thunkExtras;
 
     if (!signerAccount) {
         throw new Error("Can't find account for the signer address");
     }
 
-    return async () => {
-        if (signerAccount.type === AccountType.LEDGER) {
-            return await initializeLedgerSignerInstance(
-                signerAccount.derivationPath
-            );
-        }
-        return api.getSignerInstance(signerAccount, background);
-    };
+    if (signerAccount.type === AccountType.LEDGER) {
+        return new LedgerSigner(
+            connectToLedger,
+            signerAccount.derivationPath,
+            api.instance.fullNode
+        );
+    }
+    return api.getSignerInstance(signerAccount, background);
 }

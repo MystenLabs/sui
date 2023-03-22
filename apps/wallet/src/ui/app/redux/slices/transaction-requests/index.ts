@@ -14,12 +14,6 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
-import {
-    AccountType,
-    type SerializedAccount,
-} from '_src/background/keyring/Account';
-import { type LedgerSigner } from '_src/ui/app/LedgerSigner';
-
 import type { SuiTransactionResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
@@ -43,22 +37,14 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        accountForTransaction: SerializedAccount;
-        initializeLedgerSignerInstance: (
-            derivationPath: string
-        ) => Promise<LedgerSigner>;
+        signer: SignerWithProvider;
     },
     AppThunkConfig
 >(
     'respond-to-transaction-request',
     async (
-        {
-            txRequestID,
-            approved,
-            accountForTransaction,
-            initializeLedgerSignerInstance,
-        },
-        { extra: { background, api }, getState }
+        { txRequestID, approved, signer },
+        { extra: { background }, getState }
     ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
@@ -70,18 +56,6 @@ export const respondToTransactionRequest = createAsyncThunk<
             undefined;
         let txResultError: string | undefined;
         if (approved) {
-            let signer: SignerWithProvider | undefined;
-            if (accountForTransaction.type === AccountType.LEDGER) {
-                signer = await initializeLedgerSignerInstance(
-                    accountForTransaction.derivationPath
-                );
-            } else {
-                signer = api.getSignerInstance(
-                    accountForTransaction,
-                    background
-                );
-            }
-
             try {
                 if (txRequest.tx.type === 'sign-message') {
                     txResult = await signer.signMessage({
