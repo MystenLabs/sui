@@ -196,7 +196,7 @@ module sui_system::stake_tests {
     fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
+        set_up_sui_system_state_with_storage_fund(scenario);
 
         governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
 
@@ -209,8 +209,8 @@ module sui_system::stake_tests {
         );
 
         if (should_distribute_rewards) {
-            // advance the epoch and set rewards at 10 SUI for each 100 SUI staked.
-            governance_test_utils::advance_epoch_with_reward_amounts(0, 40, scenario);
+            // Each validator pool gets 30 MIST and each validator gets an additional 10 MIST.
+            governance_test_utils::advance_epoch_with_reward_amounts(0, 80, scenario);
         } else {
             governance_test_utils::advance_epoch(scenario);
         };
@@ -219,10 +219,8 @@ module sui_system::stake_tests {
 
         governance_test_utils::advance_epoch(scenario);
 
-        // 110 = stake + rewards for that stake
-        // 5 = validator rewards
-        let reward_amt = if (should_distribute_rewards) 10 * MIST_PER_SUI else 0;
-        let validator_reward_amt = if (should_distribute_rewards) 5 * MIST_PER_SUI else 0;
+        let reward_amt = if (should_distribute_rewards) 15 * MIST_PER_SUI else 0;
+        let validator_reward_amt = if (should_distribute_rewards) 10 * MIST_PER_SUI else 0;
 
         // Make sure stake withdrawal happens
         test_scenario::next_tx(scenario, STAKER_ADDR_1);
@@ -264,7 +262,7 @@ module sui_system::stake_tests {
     fun test_earns_rewards_at_last_epoch() {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
+        set_up_sui_system_state_with_storage_fund(scenario);
 
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
 
@@ -274,12 +272,12 @@ module sui_system::stake_tests {
 
         // Add some rewards after the validator requests to leave. Since the validator is still active
         // this epoch, they should get the rewards from this epoch.
-        advance_epoch_with_reward_amounts(0, 40, scenario);
+        advance_epoch_with_reward_amounts(0, 80, scenario);
 
-        // Each 100 MIST of stake gets 10 MIST and validators shares the 10 MIST from the storage fund
-        // so validator gets another 5 MIST.
-        let reward_amt = 10 * MIST_PER_SUI;
-        let validator_reward_amt = 5 * MIST_PER_SUI;
+        // Each validator pool gets 30 MIST and validators shares the 20 MIST from the storage fund
+        // so validator gets another 10 MIST.
+        let reward_amt = 15 * MIST_PER_SUI;
+        let validator_reward_amt = 10 * MIST_PER_SUI;
 
         // Make sure stake withdrawal happens
         test_scenario::next_tx(scenario, STAKER_ADDR_1);
@@ -391,15 +389,15 @@ module sui_system::stake_tests {
     fun test_add_preactive_remove_active() {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
+        set_up_sui_system_state_with_storage_fund(scenario);
 
         add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
         // Delegate 100 SUI to the preactive validator
         stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
-        advance_epoch_with_reward_amounts(0, 450, scenario);
-        // At this point we got the following distribution of SUI:
-        // V1: 250, V2: 250, storage fund: 250
+        advance_epoch_with_reward_amounts(0, 300, scenario);
+        // At this point we got the following distribution of stake:
+        // V1: 250, V2: 250, storage fund: 100
 
         stake_with(STAKER_ADDR_2, NEW_VALIDATOR_ADDR, 50, scenario);
         stake_with(STAKER_ADDR_3, NEW_VALIDATOR_ADDR, 100, scenario);
@@ -407,19 +405,26 @@ module sui_system::stake_tests {
         // Now the preactive becomes active
         add_validator(NEW_VALIDATOR_ADDR, scenario);
         advance_epoch(scenario);
-        // At this point we got the following distribution of SUI
-        // V1: 250, V2: 250, storage fund: 250, NewVal: 250
 
-        advance_epoch_with_reward_amounts(0, 100, scenario);
-        // At this point we got the following distribution of SUI
-        // V1: 275, V2: 275, storage fund: 275, NewVal: 275
+        // At this point we got the following distribution of stake:
+        // V1: 250, V2: 250, V3: 250, storage fund: 100
 
-        // Although staker 1 and 3 stake in different epochs, they earn the same rewards as long as they unstake
+        advance_epoch_with_reward_amounts(0, 85, scenario);
+
+        // staker 1 and 3 unstake from the validator and earns about 2/5 * (85 - 10) * 1/3 = 10 SUI each.
+        // Although they stake in different epochs, they earn the same rewards as long as they unstake
         // in the same epoch because the validator was preactive when they staked.
+        // So they will both get slightly more than 110 SUI in total balance.
         unstake(STAKER_ADDR_1, 0, scenario);
-        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 110 * MIST_PER_SUI);
+        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 110002000000);
         unstake(STAKER_ADDR_3, 0, scenario);
-        assert_eq(total_sui_balance(STAKER_ADDR_3, scenario), 110 * MIST_PER_SUI);
+        assert_eq(total_sui_balance(STAKER_ADDR_3, scenario), 110002000000);
+
+        advance_epoch_with_reward_amounts(0, 85, scenario);
+        unstake(STAKER_ADDR_2, 0, scenario);
+        // staker 2 earns about 5 SUI from the previous epoch and 24-ish from this one
+        // so in total she has about 50 + 5 + 24 = 79 SUI.
+        assert_eq(total_sui_balance(STAKER_ADDR_2, scenario), 78862939078);
 
         test_scenario::end(scenario_val);
     }
@@ -432,14 +437,16 @@ module sui_system::stake_tests {
 
         add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
-        // Delegate 100 MIST to the preactive validator
+        // Delegate 100 SUI to the preactive validator
         stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
 
         // Now the preactive becomes active
         add_validator(NEW_VALIDATOR_ADDR, scenario);
         advance_epoch(scenario);
 
-        advance_epoch_with_reward_amounts(0, 80, scenario); // staker 1 earns 20 MIST here.
+        // staker 1 earns a bit greater than 30 SUI here. A bit greater because the new validator's voting power
+        // is slightly greater than 1/3 of the total voting power.
+        advance_epoch_with_reward_amounts(0, 90, scenario);
 
         // And now the validator leaves the validator set.
         remove_validator(NEW_VALIDATOR_ADDR, scenario);
@@ -447,7 +454,7 @@ module sui_system::stake_tests {
         advance_epoch(scenario);
 
         unstake(STAKER_ADDR_1, 0, scenario);
-        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 100 * MIST_PER_SUI + 20 * MIST_PER_SUI);
+        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 130006000000);
 
         test_scenario::end(scenario_val);
     }
@@ -491,23 +498,40 @@ module sui_system::stake_tests {
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
         advance_epoch(scenario);
         advance_epoch_with_reward_amounts(0, 40, scenario);
-        // At this point we got the following distribution of SUI:
-        // V1: 220, V2: 110, storage fund: 110
-
         advance_epoch_safe_mode(scenario);
 
-        advance_epoch_with_reward_amounts(0, 80, scenario);
-        // At this point we got the following distribution of SUI:
-        // V1: 260, V2: 130, storage fund: 130
+        stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_1, 50, scenario);
+
+        advance_epoch_safe_mode(scenario);
+        advance_epoch(scenario);
+        // The first stake gets 10-ish SUI and the second one gets 4-ish SUI here.
+        // 4 because staker 2 accounts for slightly less than 1/5 of validator 1's stake
+        // so she gets slightly less than 1/5 * 25 = 5 in rewards.
+        advance_epoch_with_reward_amounts(0, 50, scenario);
         advance_epoch_safe_mode(scenario);
 
         unstake(STAKER_ADDR_1, 0, scenario);
-        // 100 principal + 30 rewards
-        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 130 * MIST_PER_SUI);
+        // 100 principal + ~20 rewards in SUI
+        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 120185185185);
+
+        unstake(STAKER_ADDR_2, 0, scenario);
+        // 50 principal + ~4 rewards in SUI
+        assert_eq(total_sui_balance(STAKER_ADDR_2, scenario), 54629629629);
+
         test_scenario::end(scenario_val);
     }
 
     fun set_up_sui_system_state(scenario: &mut Scenario) {
+        let ctx = test_scenario::ctx(scenario);
+
+        let validators = vector[
+            create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx),
+            create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx)
+        ];
+        create_sui_system_state_for_testing(validators, 0, 0, ctx);
+    }
+
+    fun set_up_sui_system_state_with_storage_fund(scenario: &mut Scenario) {
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[

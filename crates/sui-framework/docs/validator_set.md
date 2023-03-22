@@ -58,7 +58,7 @@
 -  [Function `calculate_total_stakes`](#0x3_validator_set_calculate_total_stakes)
 -  [Function `adjust_stake_and_gas_price`](#0x3_validator_set_adjust_stake_and_gas_price)
 -  [Function `compute_reward_adjustments`](#0x3_validator_set_compute_reward_adjustments)
--  [Function `compute_slashed_validators_and_total_stake`](#0x3_validator_set_compute_slashed_validators_and_total_stake)
+-  [Function `compute_slashed_validators`](#0x3_validator_set_compute_slashed_validators)
 -  [Function `compute_unadjusted_reward_distribution`](#0x3_validator_set_compute_unadjusted_reward_distribution)
 -  [Function `compute_adjusted_reward_distribution`](#0x3_validator_set_compute_adjusted_reward_distribution)
 -  [Function `distribute_reward`](#0x3_validator_set_distribute_reward)
@@ -926,23 +926,21 @@ It does the following things:
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = <a href="_epoch">tx_context::epoch</a>(ctx) + 1;
-    <b>let</b> total_stake = self.total_stake;
+    <b>let</b> total_voting_power = <a href="voting_power.md#0x3_voting_power_total_voting_power">voting_power::total_voting_power</a>();
 
     // Compute the reward distribution without taking into account the tallying rule slashing.
     <b>let</b> (unadjusted_staking_reward_amounts, unadjusted_storage_fund_reward_amounts) = <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(
         &self.active_validators,
-        total_stake,
+        total_voting_power,
         <a href="_value">balance::value</a>(computation_reward),
         <a href="_value">balance::value</a>(storage_fund_reward),
     );
 
     // Use the tallying rule report records for the epoch <b>to</b> compute validators that will be
-    // punished and the sum of their stakes.
-    <b>let</b> (slashed_validators, total_slashed_validator_stake) =
-        <a href="validator_set.md#0x3_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(
-            self,
-            *validator_report_records,
-        );
+    // punished.
+    <b>let</b> slashed_validators = <a href="validator_set.md#0x3_validator_set_compute_slashed_validators">compute_slashed_validators</a>(self, *validator_report_records);
+
+    <b>let</b> total_slashed_validator_voting_power = <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(&self.active_validators, &slashed_validators);
 
     // Compute the reward adjustments of slashed validators, <b>to</b> be taken into
     // account in adjusted reward computation.
@@ -962,8 +960,8 @@ It does the following things:
     // make sure we are using the current epoch's stake information <b>to</b> compute reward distribution.
     <b>let</b> (adjusted_staking_reward_amounts, adjusted_storage_fund_reward_amounts) = <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(
         &self.active_validators,
-        total_stake,
-        total_slashed_validator_stake,
+        total_voting_power,
+        total_slashed_validator_voting_power,
         unadjusted_staking_reward_amounts,
         unadjusted_storage_fund_reward_amounts,
         total_staking_reward_adjustment,
@@ -2331,15 +2329,15 @@ as well as storage fund rewards.
 
 </details>
 
-<a name="0x3_validator_set_compute_slashed_validators_and_total_stake"></a>
+<a name="0x3_validator_set_compute_slashed_validators"></a>
 
-## Function `compute_slashed_validators_and_total_stake`
+## Function `compute_slashed_validators`
 
 Process the validator report records of the epoch and return the addresses of the
 non-performant validators according to the input threshold.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_report_records: <a href="_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_slashed_validators">compute_slashed_validators</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_report_records: <a href="_VecMap">vec_map::VecMap</a>&lt;<b>address</b>, <a href="_VecSet">vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;): <a href="">vector</a>&lt;<b>address</b>&gt;
 </code></pre>
 
 
@@ -2348,12 +2346,11 @@ non-performant validators according to the input threshold.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_slashed_validators_and_total_stake">compute_slashed_validators_and_total_stake</a>(
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_slashed_validators">compute_slashed_validators</a>(
     self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>,
     validator_report_records: VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
-): (<a href="">vector</a>&lt;<b>address</b>&gt;, u64) {
+): <a href="">vector</a>&lt;<b>address</b>&gt; {
     <b>let</b> slashed_validators = <a href="">vector</a>[];
-    <b>let</b> sum_of_stake = 0;
     <b>while</b> (!<a href="_is_empty">vec_map::is_empty</a>(&validator_report_records)) {
         <b>let</b> (validator_address, reporters) = <a href="_pop">vec_map::pop</a>(&<b>mut</b> validator_report_records);
         <b>assert</b>!(
@@ -2364,11 +2361,10 @@ non-performant validators according to the input threshold.
         // passed the slashing threshold.
         <b>let</b> reporter_votes = <a href="validator_set.md#0x3_validator_set_sum_voting_power_by_addresses">sum_voting_power_by_addresses</a>(&self.active_validators, &<a href="_into_keys">vec_set::into_keys</a>(reporters));
         <b>if</b> (reporter_votes &gt;= <a href="voting_power.md#0x3_voting_power_quorum_threshold">voting_power::quorum_threshold</a>()) {
-            sum_of_stake = sum_of_stake + <a href="validator_set.md#0x3_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self, validator_address);
             <a href="_push_back">vector::push_back</a>(&<b>mut</b> slashed_validators, validator_address);
         }
     };
-    (slashed_validators, sum_of_stake)
+    slashed_validators
 }
 </code></pre>
 
@@ -2386,7 +2382,7 @@ account the tallyig rule results.
 Returns the unadjusted amounts of staking reward and storage fund reward for each validator.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_stake: u64, total_staking_reward: u64, total_storage_fund_reward: u64): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_voting_power: u64, total_staking_reward: u64, total_storage_fund_reward: u64): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;)
 </code></pre>
 
 
@@ -2397,7 +2393,7 @@ Returns the unadjusted amounts of staking reward and storage fund reward for eac
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(
     validators: &<a href="">vector</a>&lt;Validator&gt;,
-    total_stake: u64,
+    total_voting_power: u64,
     total_staking_reward: u64,
     total_storage_fund_reward: u64,
 ): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;) {
@@ -2411,8 +2407,8 @@ Returns the unadjusted amounts of staking reward and storage fund reward for eac
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_staking_reward`.
         // Use u128 <b>to</b> avoid multiplication overflow.
-        <b>let</b> stake_amount: u128 = (<a href="validator.md#0x3_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x3_validator">validator</a>) <b>as</b> u128);
-        <b>let</b> reward_amount = stake_amount * (total_staking_reward <b>as</b> u128) / (total_stake <b>as</b> u128);
+        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a>: u128 = (<a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(<a href="validator.md#0x3_validator">validator</a>) <b>as</b> u128);
+        <b>let</b> reward_amount = <a href="voting_power.md#0x3_voting_power">voting_power</a> * (total_staking_reward <b>as</b> u128) / (total_voting_power <b>as</b> u128);
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> staking_reward_amounts, (reward_amount <b>as</b> u64));
         // Storage fund's share of the rewards are equally distributed among validators.
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> storage_fund_reward_amounts, storage_fund_reward_per_validator);
@@ -2435,7 +2431,7 @@ Returns the staking rewards each validator gets and the storage fund rewards eac
 The staking rewards are shared with the stakers while the storage fund ones are not.
 
 
-<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_stake: u64, total_slashed_validator_stake: u64, unadjusted_staking_reward_amounts: <a href="">vector</a>&lt;u64&gt;, unadjusted_storage_fund_reward_amounts: <a href="">vector</a>&lt;u64&gt;, total_staking_reward_adjustment: u64, individual_staking_reward_adjustments: <a href="_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;, total_storage_fund_reward_adjustment: u64, individual_storage_fund_reward_adjustments: <a href="_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;)
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, total_voting_power: u64, total_slashed_validator_voting_power: u64, unadjusted_staking_reward_amounts: <a href="">vector</a>&lt;u64&gt;, unadjusted_storage_fund_reward_amounts: <a href="">vector</a>&lt;u64&gt;, total_staking_reward_adjustment: u64, individual_staking_reward_adjustments: <a href="_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;, total_storage_fund_reward_adjustment: u64, individual_storage_fund_reward_adjustments: <a href="_VecMap">vec_map::VecMap</a>&lt;u64, u64&gt;): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;)
 </code></pre>
 
 
@@ -2446,8 +2442,8 @@ The staking rewards are shared with the stakers while the storage fund ones are 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>(
     validators: &<a href="">vector</a>&lt;Validator&gt;,
-    total_stake: u64,
-    total_slashed_validator_stake: u64,
+    total_voting_power: u64,
+    total_slashed_validator_voting_power: u64,
     unadjusted_staking_reward_amounts: <a href="">vector</a>&lt;u64&gt;,
     unadjusted_storage_fund_reward_amounts: <a href="">vector</a>&lt;u64&gt;,
     total_staking_reward_adjustment: u64,
@@ -2455,7 +2451,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     total_storage_fund_reward_adjustment: u64,
     individual_storage_fund_reward_adjustments: VecMap&lt;u64, u64&gt;,
 ): (<a href="">vector</a>&lt;u64&gt;, <a href="">vector</a>&lt;u64&gt;) {
-    <b>let</b> total_unslashed_validator_stake = total_stake - total_slashed_validator_stake;
+    <b>let</b> total_unslashed_validator_voting_power = total_voting_power - total_slashed_validator_voting_power;
     <b>let</b> adjusted_staking_reward_amounts = <a href="_empty">vector::empty</a>();
     <b>let</b> adjusted_storage_fund_reward_amounts = <a href="_empty">vector::empty</a>();
 
@@ -2468,7 +2464,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_reward`.
         // Use u128 <b>to</b> avoid multiplication overflow.
-        <b>let</b> stake_amount: u128 = (<a href="validator.md#0x3_validator_total_stake_amount">validator::total_stake_amount</a>(<a href="validator.md#0x3_validator">validator</a>) <b>as</b> u128);
+        <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a>: u128 = (<a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(<a href="validator.md#0x3_validator">validator</a>) <b>as</b> u128);
 
         // Compute adjusted staking reward.
         <b>let</b> unadjusted_staking_reward_amount = *<a href="_borrow">vector::borrow</a>(&unadjusted_staking_reward_amounts, i);
@@ -2480,8 +2476,8 @@ The staking rewards are shared with the stakers while the storage fund ones are 
             } <b>else</b> {
                 // Otherwise the slashed rewards should be distributed among the unslashed
                 // validators so add the corresponding adjustment.
-                <b>let</b> adjustment = (total_staking_reward_adjustment <b>as</b> u128) * stake_amount
-                               / (total_unslashed_validator_stake <b>as</b> u128);
+                <b>let</b> adjustment = (total_staking_reward_adjustment <b>as</b> u128) * <a href="voting_power.md#0x3_voting_power">voting_power</a>
+                               / (total_unslashed_validator_voting_power <b>as</b> u128);
                 unadjusted_staking_reward_amount + (adjustment <b>as</b> u64)
             };
         <a href="_push_back">vector::push_back</a>(&<b>mut</b> adjusted_staking_reward_amounts, adjusted_staking_reward_amount);
