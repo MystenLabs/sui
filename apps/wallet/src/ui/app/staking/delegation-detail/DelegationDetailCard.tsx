@@ -20,6 +20,7 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { useGetInactiveValidators } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -76,9 +77,12 @@ export function DelegationDetailCard({
         staked: stakedId,
     }).toString()}`;
 
-    const commission = validatorData
-        ? Number(validatorData.commissionRate) / 100
-        : 0;
+    const { data: inActiveValidatorsIds } = useGetInactiveValidators(
+        system?.inactivePoolsId
+    );
+
+    const inActiveValidator = inActiveValidatorsIds.length;
+    const commission = validatorData ? Number(validatorData.commissionRate) / 100 : 0;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
     if (isLoading || loadingValidators) {
@@ -106,6 +110,13 @@ export function DelegationDetailCard({
             <BottomMenuLayout>
                 <Content>
                     <div className="justify-center w-full flex flex-col items-center">
+                        {inActiveValidator ? (
+                            <Alert className="mb-3">
+                                Unstake SUI from this inactive validator and
+                                stake on an active validator to start earning
+                                rewards again.
+                            </Alert>
+                        ) : null}
                         <div className="w-full flex">
                             <Card
                                 header={
@@ -198,14 +209,14 @@ export function DelegationDetailCard({
                             </Card>
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
-                            <Button
+                        {!inActiveValidator ? (<Button
                                 size="tall"
                                 variant="outline"
                                 to={stakeByValidatorAddress}
                                 before={<StakeAdd16 />}
                                 text="Stake SUI"
                                 disabled={!stakingEnabled}
-                            />
+                            />) : null}
 
                             {Boolean(totalStake) && delegationId && (
                                 <Button

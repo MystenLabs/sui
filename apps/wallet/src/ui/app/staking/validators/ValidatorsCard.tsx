@@ -20,6 +20,7 @@ import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { useGetInactiveValidators } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
@@ -40,14 +41,22 @@ export function ValidatorsCard() {
         return getAllStakeSui(delegatedStake);
     }, [delegatedStake]);
 
+    const { data: inActiveStakingPoolID } = useGetInactiveValidators(
+        system?.inactivePoolsId
+    );
+
     const delegations = useMemo(() => {
         return delegatedStake?.flatMap((delegation) => {
             return delegation.stakes.map((d) => ({
                 ...d,
+                // flag any inactive validator for the stakeSui object
+                inactiveValidator: inActiveStakingPoolID?.includes(
+                    delegation.stakingPool
+                ),
                 validatorAddress: delegation.validatorAddress,
             }));
         });
-    }, [delegatedStake]);
+    }, [delegatedStake, inActiveStakingPoolID]);
 
     // Get total rewards for all delegations
     const totalEarnTokenReward = useMemo(() => {
@@ -92,6 +101,29 @@ export function ValidatorsCard() {
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
+                        {inActiveStakingPoolID?.length ? (
+                            <Alert className="mb-3">
+                                Unstake SUI from the inactive validators and
+                                stake on an active validator to start earning
+                                rewards again.
+                            </Alert>
+                        ) : null}
+                        <div className="grid grid-cols-2 gap-2.5 mb-4">
+                            {system &&
+                                delegations
+                                    ?.filter(
+                                        ({ inactiveValidator }) =>
+                                            inactiveValidator
+                                    )
+                                    .map((delegation) => (
+                                        <StakeCard
+                                            delegationObject={delegation}
+                                            currentEpoch={Number(system.epoch)}
+                                            key={delegation.stakedSuiId}
+                                            inactiveValidator
+                                        />
+                                    ))}
+                        </div>
                         <Card
                             padding="none"
                             header={
@@ -128,13 +160,18 @@ export function ValidatorsCard() {
 
                         <div className="grid grid-cols-2 gap-2.5 mt-4">
                             {system &&
-                                delegations?.map((delegation) => (
-                                    <StakeCard
-                                        delegationObject={delegation}
-                                        currentEpoch={Number(system.epoch)}
-                                        key={delegation.stakedSuiId}
-                                    />
-                                ))}
+                                delegations
+                                    ?.filter(
+                                        ({ inactiveValidator }) =>
+                                            !inactiveValidator
+                                    )
+                                    .map((delegation) => (
+                                        <StakeCard
+                                            delegationObject={delegation}
+                                            currentEpoch={Number(system.epoch)}
+                                            key={delegation.stakedSuiId}
+                                        />
+                                    ))}
                         </div>
                     </div>
                 </Content>
