@@ -1,41 +1,41 @@
 
-<a name="0x2_genesis"></a>
+<a name="0x3_genesis"></a>
 
-# Module `0x2::genesis`
+# Module `0x3::genesis`
 
 
 
--  [Struct `GenesisValidatorMetadata`](#0x2_genesis_GenesisValidatorMetadata)
--  [Struct `GenesisChainParameters`](#0x2_genesis_GenesisChainParameters)
--  [Struct `TokenDistributionSchedule`](#0x2_genesis_TokenDistributionSchedule)
--  [Struct `TokenAllocation`](#0x2_genesis_TokenAllocation)
+-  [Struct `GenesisValidatorMetadata`](#0x3_genesis_GenesisValidatorMetadata)
+-  [Struct `GenesisChainParameters`](#0x3_genesis_GenesisChainParameters)
+-  [Struct `TokenDistributionSchedule`](#0x3_genesis_TokenDistributionSchedule)
+-  [Struct `TokenAllocation`](#0x3_genesis_TokenAllocation)
 -  [Constants](#@Constants_0)
--  [Function `create`](#0x2_genesis_create)
--  [Function `allocate_tokens`](#0x2_genesis_allocate_tokens)
--  [Function `activate_validators`](#0x2_genesis_activate_validators)
+-  [Function `create`](#0x3_genesis_create)
+-  [Function `allocate_tokens`](#0x3_genesis_allocate_tokens)
+-  [Function `activate_validators`](#0x3_genesis_activate_validators)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::vector</a>;
-<b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
-<b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
-<b>use</b> <a href="sui_system.md#0x2_sui_system">0x2::sui_system</a>;
-<b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
-<b>use</b> <a href="validator.md#0x2_validator">0x2::validator</a>;
-<b>use</b> <a href="validator_set.md#0x2_validator_set">0x2::validator_set</a>;
+<b>use</b> <a href="">0x2::balance</a>;
+<b>use</b> <a href="">0x2::coin</a>;
+<b>use</b> <a href="">0x2::object</a>;
+<b>use</b> <a href="">0x2::sui</a>;
+<b>use</b> <a href="">0x2::tx_context</a>;
+<b>use</b> <a href="sui_system.md#0x3_sui_system">0x3::sui_system</a>;
+<b>use</b> <a href="validator.md#0x3_validator">0x3::validator</a>;
+<b>use</b> <a href="validator_set.md#0x3_validator_set">0x3::validator_set</a>;
 </code></pre>
 
 
 
-<a name="0x2_genesis_GenesisValidatorMetadata"></a>
+<a name="0x3_genesis_GenesisValidatorMetadata"></a>
 
 ## Struct `GenesisValidatorMetadata`
 
 
 
-<pre><code><b>struct</b> <a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -140,13 +140,13 @@
 
 </details>
 
-<a name="0x2_genesis_GenesisChainParameters"></a>
+<a name="0x3_genesis_GenesisChainParameters"></a>
 
 ## Struct `GenesisChainParameters`
 
 
 
-<pre><code><b>struct</b> <a href="genesis.md#0x2_genesis_GenesisChainParameters">GenesisChainParameters</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="genesis.md#0x3_genesis_GenesisChainParameters">GenesisChainParameters</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -156,6 +156,18 @@
 
 
 <dl>
+<dt>
+<code>protocol_version: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>system_state_version: u64</code>
+</dt>
+<dd>
+
+</dd>
 <dt>
 <code>governance_start_epoch: u64</code>
 </dt>
@@ -174,18 +186,36 @@
 <dd>
 
 </dd>
+<dt>
+<code>initial_stake_subsidy_distribution_amount: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_subsidy_period_length: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake_subsidy_decrease_rate: u16</code>
+</dt>
+<dd>
+
+</dd>
 </dl>
 
 
 </details>
 
-<a name="0x2_genesis_TokenDistributionSchedule"></a>
+<a name="0x3_genesis_TokenDistributionSchedule"></a>
 
 ## Struct `TokenDistributionSchedule`
 
 
 
-<pre><code><b>struct</b> <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a>
+<pre><code><b>struct</b> <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a>
 </code></pre>
 
 
@@ -202,7 +232,7 @@
 
 </dd>
 <dt>
-<code>allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_TokenAllocation">genesis::TokenAllocation</a>&gt;</code>
+<code>allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_TokenAllocation">genesis::TokenAllocation</a>&gt;</code>
 </dt>
 <dd>
 
@@ -212,13 +242,13 @@
 
 </details>
 
-<a name="0x2_genesis_TokenAllocation"></a>
+<a name="0x3_genesis_TokenAllocation"></a>
 
 ## Struct `TokenAllocation`
 
 
 
-<pre><code><b>struct</b> <a href="genesis.md#0x2_genesis_TokenAllocation">TokenAllocation</a>
+<pre><code><b>struct</b> <a href="genesis.md#0x3_genesis_TokenAllocation">TokenAllocation</a>
 </code></pre>
 
 
@@ -256,17 +286,17 @@
 ## Constants
 
 
-<a name="0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT"></a>
+<a name="0x3_genesis_INIT_STAKE_SUBSIDY_AMOUNT"></a>
 
 Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).
 
 
-<pre><code><b>const</b> <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>: u64 = 1000000000000000;
+<pre><code><b>const</b> <a href="genesis.md#0x3_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>: u64 = 1000000000000000;
 </code></pre>
 
 
 
-<a name="0x2_genesis_create"></a>
+<a name="0x3_genesis_create"></a>
 
 ## Function `create`
 
@@ -275,7 +305,7 @@ It will create a singleton SuiSystemState object, which contains
 all the information we need in the system.
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(sui_system_state_id: <a href="object.md#0x2_object_UID">object::UID</a>, sui_supply: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, genesis_chain_parameters: <a href="genesis.md#0x2_genesis_GenesisChainParameters">genesis::GenesisChainParameters</a>, genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">genesis::GenesisValidatorMetadata</a>&gt;, token_distribution_schedule: <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">genesis::TokenDistributionSchedule</a>, protocol_version: u64, system_state_version: u64, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_create">create</a>(sui_system_state_id: <a href="_UID">object::UID</a>, sui_supply: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, genesis_chain_parameters: <a href="genesis.md#0x3_genesis_GenesisChainParameters">genesis::GenesisChainParameters</a>, genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">genesis::GenesisValidatorMetadata</a>&gt;, token_distribution_schedule: <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">genesis::TokenDistributionSchedule</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -284,36 +314,34 @@ all the information we need in the system.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_create">create</a>(
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_create">create</a>(
     sui_system_state_id: UID,
     sui_supply: Balance&lt;SUI&gt;,
-    genesis_chain_parameters: <a href="genesis.md#0x2_genesis_GenesisChainParameters">GenesisChainParameters</a>,
-    genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a>&gt;,
-    token_distribution_schedule: <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a>,
-    protocol_version: u64,
-    system_state_version: u64,
+    genesis_chain_parameters: <a href="genesis.md#0x3_genesis_GenesisChainParameters">GenesisChainParameters</a>,
+    genesis_validators: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a>&gt;,
+    token_distribution_schedule: <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    // Ensure this is only called at <a href="genesis.md#0x2_genesis">genesis</a>
-    <b>assert</b>!(<a href="tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, 0);
+    // Ensure this is only called at <a href="genesis.md#0x3_genesis">genesis</a>
+    <b>assert</b>!(<a href="_epoch">tx_context::epoch</a>(ctx) == 0, 0);
 
-    <b>let</b> <a href="genesis.md#0x2_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a> {
+    <b>let</b> <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a> {
         stake_subsidy_fund_mist,
         allocations,
     } = token_distribution_schedule;
 
-    <b>let</b> subsidy_fund = <a href="balance.md#0x2_balance_split">balance::split</a>(
+    <b>let</b> subsidy_fund = <a href="_split">balance::split</a>(
         &<b>mut</b> sui_supply,
         stake_subsidy_fund_mist,
     );
-    <b>let</b> storage_fund = <a href="balance.md#0x2_balance_zero">balance::zero</a>();
+    <b>let</b> storage_fund = <a href="_zero">balance::zero</a>();
 
     // Create all the `Validator` structs
     <b>let</b> validators = <a href="_empty">vector::empty</a>();
     <b>let</b> count = <a href="_length">vector::length</a>(&genesis_validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; count) {
-        <b>let</b> <a href="genesis.md#0x2_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a> {
+        <b>let</b> <a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a> {
             name,
             description,
             image_url,
@@ -331,7 +359,7 @@ all the information we need in the system.
             worker_address,
         } = *<a href="_borrow">vector::borrow</a>(&genesis_validators, i);
 
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator.md#0x2_validator_new">validator::new</a>(
+        <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator.md#0x3_validator_new">validator::new</a>(
             sui_address,
             protocol_public_key,
             network_public_key,
@@ -350,19 +378,19 @@ all the information we need in the system.
             ctx
         );
 
-        // Ensure that each <a href="validator.md#0x2_validator">validator</a> is unique
+        // Ensure that each <a href="validator.md#0x3_validator">validator</a> is unique
         <b>assert</b>!(
-            !<a href="validator_set.md#0x2_validator_set_is_duplicate_validator">validator_set::is_duplicate_validator</a>(&validators, &<a href="validator.md#0x2_validator">validator</a>),
+            !<a href="validator_set.md#0x3_validator_set_is_duplicate_validator">validator_set::is_duplicate_validator</a>(&validators, &<a href="validator.md#0x3_validator">validator</a>),
             2,
         );
 
-        <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x2_validator">validator</a>);
+        <a href="_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x3_validator">validator</a>);
 
         i = i + 1;
     };
 
     // Allocate tokens and staking operations
-    <a href="genesis.md#0x2_genesis_allocate_tokens">allocate_tokens</a>(
+    <a href="genesis.md#0x3_genesis_allocate_tokens">allocate_tokens</a>(
         sui_supply,
         allocations,
         &<b>mut</b> validators,
@@ -370,19 +398,21 @@ all the information we need in the system.
     );
 
     // Activate all validators
-    <a href="genesis.md#0x2_genesis_activate_validators">activate_validators</a>(&<b>mut</b> validators);
+    <a href="genesis.md#0x3_genesis_activate_validators">activate_validators</a>(&<b>mut</b> validators);
 
-    <a href="sui_system.md#0x2_sui_system_create">sui_system::create</a>(
+    <a href="sui_system.md#0x3_sui_system_create">sui_system::create</a>(
         sui_system_state_id,
         validators,
         subsidy_fund,
         storage_fund,
+        genesis_chain_parameters.protocol_version,
+        genesis_chain_parameters.system_state_version,
         genesis_chain_parameters.governance_start_epoch,
-        <a href="genesis.md#0x2_genesis_INIT_STAKE_SUBSIDY_AMOUNT">INIT_STAKE_SUBSIDY_AMOUNT</a>,
-        protocol_version,
-        system_state_version,
         genesis_chain_parameters.chain_start_timestamp_ms,
         genesis_chain_parameters.epoch_duration_ms,
+        genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
+        genesis_chain_parameters.stake_subsidy_period_length,
+        genesis_chain_parameters.stake_subsidy_decrease_rate,
         ctx,
     );
 }
@@ -392,13 +422,13 @@ all the information we need in the system.
 
 </details>
 
-<a name="0x2_genesis_allocate_tokens"></a>
+<a name="0x3_genesis_allocate_tokens"></a>
 
 ## Function `allocate_tokens`
 
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_allocate_tokens">allocate_tokens</a>(sui_supply: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_TokenAllocation">genesis::TokenAllocation</a>&gt;, validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_allocate_tokens">allocate_tokens</a>(sui_supply: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_TokenAllocation">genesis::TokenAllocation</a>&gt;, validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -407,34 +437,34 @@ all the information we need in the system.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_allocate_tokens">allocate_tokens</a>(
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_allocate_tokens">allocate_tokens</a>(
     sui_supply: Balance&lt;SUI&gt;,
-    allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x2_genesis_TokenAllocation">TokenAllocation</a>&gt;,
+    allocations: <a href="">vector</a>&lt;<a href="genesis.md#0x3_genesis_TokenAllocation">TokenAllocation</a>&gt;,
     validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
 
     <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&allocations)) {
-        <b>let</b> <a href="genesis.md#0x2_genesis_TokenAllocation">TokenAllocation</a> {
+        <b>let</b> <a href="genesis.md#0x3_genesis_TokenAllocation">TokenAllocation</a> {
             recipient_address,
             amount_mist,
             staked_with_validator,
         } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> allocations);
 
-        <b>let</b> allocation_balance = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, amount_mist);
+        <b>let</b> allocation_balance = <a href="_split">balance::split</a>(&<b>mut</b> sui_supply, amount_mist);
 
         <b>if</b> (<a href="_is_some">option::is_some</a>(&staked_with_validator)) {
             <b>let</b> validator_address = <a href="_destroy_some">option::destroy_some</a>(staked_with_validator);
-            <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="validator_set.md#0x2_validator_set_get_validator_mut">validator_set::get_validator_mut</a>(validators, validator_address);
-            <a href="validator.md#0x2_validator_request_add_stake_at_genesis">validator::request_add_stake_at_genesis</a>(
-                <a href="validator.md#0x2_validator">validator</a>,
+            <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut">validator_set::get_validator_mut</a>(validators, validator_address);
+            <a href="validator.md#0x3_validator_request_add_stake_at_genesis">validator::request_add_stake_at_genesis</a>(
+                <a href="validator.md#0x3_validator">validator</a>,
                 allocation_balance,
                 recipient_address,
                 ctx
             );
         } <b>else</b> {
-            <a href="sui.md#0x2_sui_transfer">sui::transfer</a>(
-                <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(allocation_balance, ctx),
+            <a href="_transfer">sui::transfer</a>(
+                <a href="_from_balance">coin::from_balance</a>(allocation_balance, ctx),
                 recipient_address,
             );
         };
@@ -443,7 +473,7 @@ all the information we need in the system.
 
     // Provided allocations must fully allocate the sui_supply and there
     // should be none left at this point.
-    <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(sui_supply);
+    <a href="_destroy_zero">balance::destroy_zero</a>(sui_supply);
 }
 </code></pre>
 
@@ -451,13 +481,13 @@ all the information we need in the system.
 
 </details>
 
-<a name="0x2_genesis_activate_validators"></a>
+<a name="0x3_genesis_activate_validators"></a>
 
 ## Function `activate_validators`
 
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_activate_validators">activate_validators</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x2_validator_Validator">validator::Validator</a>&gt;)
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_activate_validators">activate_validators</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;)
 </code></pre>
 
 
@@ -466,13 +496,13 @@ all the information we need in the system.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="genesis.md#0x2_genesis_activate_validators">activate_validators</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;) {
-    // Activate all <a href="genesis.md#0x2_genesis">genesis</a> validators
+<pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_activate_validators">activate_validators</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;) {
+    // Activate all <a href="genesis.md#0x3_genesis">genesis</a> validators
     <b>let</b> count = <a href="_length">vector::length</a>(validators);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; count) {
-        <b>let</b> <a href="validator.md#0x2_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
-        <a href="validator.md#0x2_validator_activate">validator::activate</a>(<a href="validator.md#0x2_validator">validator</a>, 0);
+        <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);
+        <a href="validator.md#0x3_validator_activate">validator::activate</a>(<a href="validator.md#0x3_validator">validator</a>, 0);
 
         i = i + 1;
     };

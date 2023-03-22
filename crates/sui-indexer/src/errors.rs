@@ -3,9 +3,10 @@
 
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
+use thiserror::Error;
+
 use sui_types::base_types::ObjectIDParseError;
 use sui_types::error::SuiError;
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum IndexerError {
@@ -36,6 +37,9 @@ pub enum IndexerError {
     #[error("Indexer failed to read PostgresDB with error: `{0}`")]
     PostgresReadError(String),
 
+    #[error("Indexer failed to reset PostgresDB with error: `{0}`")]
+    PostgresResetError(String),
+
     #[error("Indexer failed to commit changes to PostgresDB with error: `{0}`")]
     PostgresWriteError(String),
 
@@ -60,32 +64,23 @@ pub enum IndexerError {
     #[error(transparent)]
     SuiError(#[from] SuiError),
 
+    #[error(transparent)]
+    BcsError(#[from] bcs::Error),
+
     #[error("Invalid argument with error: `{0}`")]
     InvalidArgumentError(String),
+
+    #[error("`{0}`: `{1}`")]
+    ErrorWithContext(String, Box<IndexerError>),
 }
 
-impl IndexerError {
-    pub fn name(&self) -> String {
-        match self {
-            IndexerError::FullNodeReadingError(_) => "FullNodeReadingError".into(),
-            IndexerError::PostgresReadError(_) => "PostgresReadError".into(),
-            IndexerError::PostgresWriteError(_) => "PostgresWriteError".into(),
-            IndexerError::InsertableParsingError(_) => "InsertableParsingError".into(),
-            IndexerError::DateTimeParsingError(_) => "DateTimeParsingError".into(),
-            IndexerError::ObjectMutationNotAvailable => "ObjectMutationNotAvailable".into(),
-            IndexerError::EventDeserializationError(_) => "EventDeserializationError".into(),
-            IndexerError::PgConnectionPoolInitError(_) => "PgConnectionPoolInitError".into(),
-            IndexerError::RpcClientInitError(_) => "RpcClientInitError".into(),
-            IndexerError::PgPoolConnectionError(_) => "PgPoolConnectionError".into(),
-            IndexerError::JsonRpcServerError(_) => "JsonRpcServerError".into(),
-            IndexerError::SerdeError(_) => "SerdeError".into(),
-            IndexerError::NotImplementedError(_) => "NotImplementedError".into(),
-            IndexerError::PostgresError(_) => "PostgresError".into(),
-            IndexerError::UncategorizedError(_) => "UncategorizedError".into(),
-            IndexerError::ObjectIdParseError(_) => "ObjectIdParseError".into(),
-            IndexerError::SuiError(_) => "SuiError".into(),
-            IndexerError::InvalidArgumentError(_) => "InvalidArgumentError".into(),
-        }
+pub trait Context<T> {
+    fn context(self, context: &str) -> Result<T, IndexerError>;
+}
+
+impl<T> Context<T> for Result<T, IndexerError> {
+    fn context(self, context: &str) -> Result<T, IndexerError> {
+        self.map_err(|e| IndexerError::ErrorWithContext(context.to_string(), Box::new(e)))
     }
 }
 

@@ -12,7 +12,7 @@ const SvgPaginationPrev24 = (props: SVGProps<SVGSVGElement>) => (
   >
     <path
       d="M14.521 6.807 6.61 11.122a1 1 0 0 0 0 1.756l7.912 4.315A1 1 0 0 0 16 16.315v-8.63a1 1 0 0 0-1.479-.878Z"
-      stroke="#007195"
+      stroke="currentColor"
     />
   </svg>
 );

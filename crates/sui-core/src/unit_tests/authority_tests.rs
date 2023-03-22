@@ -1418,7 +1418,10 @@ async fn test_transfer_package() {
         .await
         .unwrap()
         .unwrap();
-    let package_object_ref = authority_state.get_framework_object_ref().await.unwrap();
+    let package_object_ref = authority_state
+        .get_sui_system_package_object_ref()
+        .await
+        .unwrap();
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
         sender,
@@ -2005,7 +2008,7 @@ async fn test_transaction_expiration() {
     let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let mut expired_data = data.clone();
 
-    *expired_data.expiration_mut() = TransactionExpiration::Epoch(0);
+    *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
     let expired_transaction = to_sender_signed_transaction(expired_data, &sender_key);
     let result = authority_state
         .handle_transaction(&epoch_store, expired_transaction)
@@ -2014,7 +2017,7 @@ async fn test_transaction_expiration() {
     assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
 
     // Non expired transaction signed without issue
-    *data.expiration_mut() = TransactionExpiration::Epoch(10);
+    *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
     let transaction = to_sender_signed_transaction(data, &sender_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3172,15 +3175,12 @@ async fn test_sui_system_state_nop_upgrade() {
     use sui_adapter::execution_engine::{construct_advance_epoch_pt, AdvanceEpochParams};
     use sui_adapter::programmable_transactions;
     use sui_types::sui_system_state::SUI_SYSTEM_STATE_TESTING_VERSION1;
-    use sui_types::{
-        MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-    };
+    use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 
     let authority_state = init_state().await;
 
     let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MIN);
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let native_functions = sui_framework::natives::all_natives();
     let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
         .expect("We defined natives to not fail here");
     let mut temporary_store = TemporaryStore::new(

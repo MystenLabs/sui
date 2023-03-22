@@ -30,11 +30,16 @@ use tracing::info;
 // Vote to close epoch 2 early
 //
 //   $ curl -X POST 'http://127.0.0.1:1337/force-close-epoch?epoch=2'
+//
+// View current all capabilities from all authorities that have been received by this node:
+//
+//   $ curl 'http://127.0.0.1:1337/capabilities'
 
 const LOGGING_ROUTE: &str = "/logging";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
 const CLEAR_BUFFER_STAKE_ROUTE: &str = "/clear-override-buffer-stake";
 const FORCE_CLOSE_EPOCH: &str = "/force-close-epoch";
+const CAPABILITIES: &str = "/capabilities";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -51,6 +56,7 @@ pub fn start_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHa
 
     let app = Router::new()
         .route(LOGGING_ROUTE, get(get_filter))
+        .route(CAPABILITIES, get(capabilities))
         .route(LOGGING_ROUTE, post(set_filter))
         .route(
             SET_BUFFER_STAKE_ROUTE,
@@ -96,6 +102,18 @@ async fn set_filter(
         }
         Err(err) => (StatusCode::BAD_REQUEST, err.to_string()),
     }
+}
+
+async fn capabilities(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
+    let capabilities = epoch_store.get_capabilities();
+
+    let mut output = String::new();
+    for capability in &capabilities {
+        output.push_str(&format!("{:?}\n", capability));
+    }
+
+    (StatusCode::OK, output)
 }
 
 #[derive(Deserialize)]

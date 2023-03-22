@@ -15,7 +15,7 @@ use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_framework::{SuiFramework, SystemPackage};
+use sui_framework::{SuiSystem, SystemPackage};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress};
@@ -487,7 +487,7 @@ async fn test_inactive_validator_pool_read() {
 
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         address,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],
@@ -515,12 +515,10 @@ async fn test_inactive_validator_pool_read() {
             .state()
             .get_sui_system_state_object_for_testing()
             .unwrap();
-        let version = system_state.version();
         let inactive_pool_id = system_state
             .into_sui_system_state_summary()
             .inactive_pools_id;
         let validator = get_validator_from_table(
-            version,
             node.state().db().as_ref(),
             inactive_pool_id,
             &ID::new(staking_pool_id),
@@ -958,7 +956,7 @@ async fn execute_join_committee_txes(
     // Step 1: Add the new node as a validator candidate.
     let candidate_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
@@ -997,7 +995,7 @@ async fn execute_join_committee_txes(
     // Step 2: Give the candidate enough stake.
     let stake_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_stake").to_owned(),
         vec![],
@@ -1023,7 +1021,7 @@ async fn execute_join_committee_txes(
     // Step 3: Convert the candidate to an active valdiator.
     let activation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator").to_owned(),
         vec![],
@@ -1052,7 +1050,7 @@ async fn execute_leave_committee_txes(
 ) -> CertifiedTransactionEffects {
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         node_config.sui_address(),
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],

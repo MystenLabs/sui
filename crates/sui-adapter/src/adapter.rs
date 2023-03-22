@@ -18,7 +18,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
@@ -68,7 +68,12 @@ pub fn new_move_vm(
                 max_fields_in_struct: Some(protocol_config.max_fields_in_struct() as usize),
                 max_function_definitions: Some(protocol_config.max_function_definitions() as usize),
                 max_struct_definitions: Some(protocol_config.max_struct_definitions() as usize),
-                max_constant_vector_len: protocol_config.max_move_vector_len(),
+                max_constant_vector_len: Some(protocol_config.max_move_vector_len()),
+                max_back_edges_per_function: None,
+                max_back_edges_per_module: None,
+                max_basic_blocks_in_script: None,
+                max_per_fun_meter_units: None,
+                max_per_mod_meter_units: None,
             },
             max_binary_format_version: protocol_config.move_binary_format_version(),
             paranoid_type_checks: false,
@@ -84,7 +89,10 @@ pub fn new_session<
     'v,
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + ChildObjectResolver,
+    S: ResourceResolver<Error = E>
+        + ModuleResolver<Error = E>
+        + LinkageResolver<Error = E>
+        + ChildObjectResolver,
 >(
     vm: &'v MoveVM,
     state_view: &'r S,

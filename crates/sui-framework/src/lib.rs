@@ -12,7 +12,7 @@ use sui_types::{
     error::SuiResult,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 pub mod natives;
@@ -87,6 +87,20 @@ define_system_package!(
     [MoveStdlib]
 );
 
+define_system_package!(
+    SUI_SYSTEM_ADDRESS,
+    SuiSystem,
+    "sui-system",
+    [MoveStdlib, SuiFramework]
+);
+
+define_system_package!(
+    SUI_SYSTEM_ADDRESS,
+    SuiSystemTest,
+    "sui-system-test",
+    [MoveStdlib, SuiFramework]
+);
+
 /// Trait exposing all the various properties of a system package in a variety of different forms,
 /// of increasing levels of abstraction
 pub trait SystemPackage {
@@ -100,24 +114,35 @@ pub trait SystemPackage {
 }
 
 pub fn system_package_ids() -> Vec<ObjectID> {
-    vec![MoveStdlib::ID, SuiFramework::ID]
+    vec![MoveStdlib::ID, SuiFramework::ID, SuiSystem::ID]
 }
 
 pub fn make_system_modules() -> Vec<Vec<CompiledModule>> {
-    vec![MoveStdlib::as_modules(), SuiFramework::as_modules()]
+    vec![
+        MoveStdlib::as_modules(),
+        SuiFramework::as_modules(),
+        SuiSystem::as_modules(),
+    ]
 }
 
 pub fn make_system_packages() -> Vec<MovePackage> {
-    vec![MoveStdlib::as_package(), SuiFramework::as_package()]
+    vec![
+        MoveStdlib::as_package(),
+        SuiFramework::as_package(),
+        SuiSystem::as_package(),
+    ]
 }
 
 pub fn make_system_objects() -> Vec<Object> {
-    vec![MoveStdlib::as_object(), SuiFramework::as_object()]
+    vec![
+        MoveStdlib::as_object(),
+        SuiFramework::as_object(),
+        SuiSystem::as_object(),
+    ]
 }
 
 pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
-// TODO: remove these in favor of new costs
 pub fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
 }
@@ -126,16 +151,8 @@ pub fn legacy_emit_cost() -> InternalGas {
     InternalGas::new(52)
 }
 
-pub fn legacy_create_signer_cost() -> InternalGas {
-    InternalGas::new(24)
-}
-
 pub fn legacy_empty_cost() -> InternalGas {
     InternalGas::new(84)
-}
-
-pub fn legacy_length_cost() -> InternalGas {
-    InternalGas::new(98)
 }
 
 /// Wrapper of the build command that verifies the framework version. Should eventually be removed once we can

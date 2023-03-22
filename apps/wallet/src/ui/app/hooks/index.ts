@@ -26,3 +26,4 @@ export { useGetCoins } from './useGetCoins';
 export * from './useSigner';
 export * from './useOriginbyteNft';
 export * from './useTransactionData';
+export * from './useActiveAddress';

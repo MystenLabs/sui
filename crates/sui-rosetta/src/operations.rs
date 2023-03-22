@@ -27,7 +27,7 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
@@ -240,16 +240,39 @@ impl Operations {
                 .get(i as usize)
                 .and_then(|inner| inner.get(j as usize))
         }
-        fn split_coin(inputs: &[SuiCallArg], amount: SuiArgument) -> Option<Vec<KnownValue>> {
-            let amount: u64 = match amount {
-                SuiArgument::Input(i) => {
-                    u64::from_str(inputs[i as usize].pure()?.to_json_value().as_str()?).ok()?
+        fn split_coins(
+            inputs: &[SuiCallArg],
+            known_results: &[Vec<KnownValue>],
+            coin: SuiArgument,
+            amounts: &[SuiArgument],
+        ) -> Option<Vec<KnownValue>> {
+            match coin {
+                SuiArgument::Result(i) => {
+                    let KnownValue::GasCoin(_) = resolve_result(known_results, i, 0)?;
                 }
-                SuiArgument::GasCoin | SuiArgument::Result(_) | SuiArgument::NestedResult(_, _) => {
-                    return None
+                SuiArgument::NestedResult(i, j) => {
+                    let KnownValue::GasCoin(_) = resolve_result(known_results, i, j)?;
                 }
+                SuiArgument::GasCoin => (),
+                // Might not be a SUI coin
+                SuiArgument::Input(_) => return None,
             };
-            Some(vec![KnownValue::GasCoin(amount)])
+            let amounts = amounts
+                .iter()
+                .map(|amount| {
+                    let value: u64 = match *amount {
+                        SuiArgument::Input(i) => {
+                            u64::from_str(inputs[i as usize].pure()?.to_json_value().as_str()?)
+                                .ok()?
+                        }
+                        SuiArgument::GasCoin
+                        | SuiArgument::Result(_)
+                        | SuiArgument::NestedResult(_, _) => return None,
+                    };
+                    Some(KnownValue::GasCoin(value))
+                })
+                .collect::<Option<_>>()?;
+            Some(amounts)
         }
         fn transfer_object(
             aggregated_recipients: &mut HashMap<SuiAddress, u64>,
@@ -299,7 +322,7 @@ impl Operations {
                     let (some_amount, validator) = match validator {
                         // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
                         // We use the position of the validator arg as a indicator of if the rosetta stake
-                        // transaction is staking the whole wallet or not, if staking whole wallet, 
+                        // transaction is staking the whole wallet or not, if staking whole wallet,
                         // we have to omit the amount value in the final operation output.
                         SuiArgument::Input(i) => (*i==1, inputs[*i as usize].pure().map(|v|v.to_sui_address()).transpose()),
                         _=> return Ok(None),
@@ -341,7 +364,9 @@ impl Operations {
         let mut stake_ids = vec![];
         for command in commands {
             let result = match command {
-                SuiCommand::SplitCoin(_, amount) => split_coin(inputs, *amount),
+                SuiCommand::SplitCoins(coin, amounts) => {
+                    split_coins(inputs, &known_results, *coin, amounts)
+                }
                 SuiCommand::TransferObjects(objs, addr) => transfer_object(
                     &mut aggregated_recipients,
                     inputs,
@@ -415,13 +440,13 @@ impl Operations {
     }
 
     fn is_stake_call(tx: &SuiProgrammableMoveCall) -> bool {
-        tx.package == SUI_FRAMEWORK_OBJECT_ID
+        tx.package == SUI_SYSTEM_PACKAGE_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
             && tx.function == ADD_STAKE_FUN_NAME.as_str()
     }
 
     fn is_unstake_call(tx: &SuiProgrammableMoveCall) -> bool {
-        tx.package == SUI_FRAMEWORK_OBJECT_ID
+        tx.package == SUI_SYSTEM_PACKAGE_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
             && tx.function == WITHDRAW_STAKE_FUN_NAME.as_str()
     }
@@ -565,7 +590,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
 }
 
 fn is_unstake_event(tag: &StructTag) -> bool {
-    tag.address == SUI_FRAMEWORK_ADDRESS
+    tag.address == SUI_SYSTEM_ADDRESS
         && tag.module.as_ident_str() == ident_str!("validator")
         && tag.name.as_ident_str() == ident_str!("UnstakingRequestEvent")
 }

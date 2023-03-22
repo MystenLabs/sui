@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  extractMutableReference,
   extractStructTag,
   ID_STRUCT_NAME,
   isValidSuiAddress,
@@ -50,7 +49,6 @@ const isSameStruct = (a: any, b: any) =>
 export function isTxContext(param: SuiMoveNormalizedType): boolean {
   const struct = extractStructTag(param)?.Struct;
   return (
-    extractMutableReference(param) != null &&
     struct?.address === '0x2' &&
     struct?.module === 'tx_context' &&
     struct?.name === 'TxContext'

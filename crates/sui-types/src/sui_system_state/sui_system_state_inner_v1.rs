@@ -444,9 +444,23 @@ impl SuiSystemStateInnerV1 {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct StakeSubsidyV1 {
-    pub epoch_counter: u64,
+    /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
     pub balance: Balance,
-    pub current_epoch_amount: u64,
+
+    /// Count of the number of times stake subsidies have been distributed.
+    pub distribution_counter: u64,
+
+    /// The amount of stake subsidy to be drawn down per distribution.
+    /// This amount decays and decreases over time.
+    pub current_distribution_amount: u64,
+
+    /// Number of distributions to occur before the distribution amount decays.
+    pub stake_subsidy_period_length: u64,
+
+    /// The rate at which the distribution amount decays at the end of each
+    /// period. Expressed in basis points.
+    pub stake_subsidy_decrease_rate: u16,
+
     pub extra_fields: Bag,
 }
 
@@ -585,9 +599,11 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 },
             stake_subsidy:
                 StakeSubsidyV1 {
-                    epoch_counter: stake_subsidy_epoch_counter,
                     balance: stake_subsidy_balance,
-                    current_epoch_amount: stake_subsidy_current_epoch_amount,
+                    distribution_counter: stake_subsidy_epoch_counter,
+                    current_distribution_amount: stake_subsidy_current_epoch_amount,
+                    stake_subsidy_period_length: _,
+                    stake_subsidy_decrease_rate: _,
                     extra_fields: _,
                 },
             safe_mode,
@@ -661,9 +677,11 @@ impl Default for SuiSystemStateInnerV1 {
             reference_gas_price: 1,
             validator_report_records: VecMap { contents: vec![] },
             stake_subsidy: StakeSubsidyV1 {
-                epoch_counter: 0,
                 balance: Balance::new(0),
-                current_epoch_amount: 0,
+                distribution_counter: 0,
+                current_distribution_amount: 0,
+                stake_subsidy_period_length: 1,
+                stake_subsidy_decrease_rate: 0,
                 extra_fields: Default::default(),
             },
             safe_mode: false,

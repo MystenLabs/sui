@@ -23,7 +23,6 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::NetworkPublicKey;
-use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
@@ -220,9 +219,11 @@ pub struct ConsensusConfig {
     // For example, this could be used to connect to co-located workers over a private LAN address.
     pub internal_worker_address: Option<Multiaddr>,
 
-    // Timeout to retry sending transaction to consensus internally.
-    // Default to 60s.
-    pub timeout_secs: Option<u64>,
+    // Maximum number of pending transactions to submit to consensus, including those
+    // in submission wait.
+    // Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
+    // Default to 100_000.
+    pub max_pending_transactions: Option<usize>,
 
     pub narwhal_config: ConsensusParameters,
 }
@@ -234,6 +235,10 @@ impl ConsensusConfig {
 
     pub fn db_path(&self) -> &Path {
         &self.db_path
+    }
+
+    pub fn max_pending_transactions(&self) -> usize {
+        self.max_pending_transactions.unwrap_or(100_000)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
@@ -350,7 +355,7 @@ pub struct DBCheckpointConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub account_key: AccountsPublicKey,
+    pub account_address: SuiAddress,
     pub protocol_key: AuthorityPublicKeyBytes,
     pub worker_key: NetworkPublicKey,
     pub network_key: NetworkPublicKey,
@@ -371,7 +376,7 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        self.account_key().into()
+        self.account_address
     }
 
     pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
@@ -384,10 +389,6 @@ impl ValidatorInfo {
 
     pub fn network_key(&self) -> &NetworkPublicKey {
         &self.network_key
-    }
-
-    pub fn account_key(&self) -> &AccountsPublicKey {
-        &self.account_key
     }
 
     pub fn gas_price(&self) -> u64 {

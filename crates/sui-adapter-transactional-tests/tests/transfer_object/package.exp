@@ -1,7 +1,7 @@
 processed 5 tasks
 
 init:
-A: object(100), B: object(101)
+A: object(103), B: object(104)
 
 task 1 'publish'. lines 8-10:
 created: object(106)
@@ -11,7 +11,7 @@ task 2 'view-object'. lines 13-13:
 106::m
 
 task 3 'transfer-object'. lines 15-15:
-Error: A move object is expected, instead a move package is passed: 0x563a472643fb0c8ef390968f3a631521623b19bf7a229111e97731f9dd7b596b
+Error: A move object is expected, instead a move package is passed: 0xb727750db26014e56ecf92cd32e4d068238821623c04698d962908d120a516d0
 
 task 4 'view-object'. lines 17-17:
 106::m

@@ -5,6 +5,7 @@ use camino::Utf8PathBuf;
 use sui_config::genesis::Builder;
 use sui_config::utils;
 use sui_config::ValidatorInfo;
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     KeypairTraits, NetworkKeyPair,
@@ -26,7 +27,7 @@ async fn main() {
             name: format!("Validator {}", i),
             protocol_key: key.public().into(),
             worker_key: worker_key.public().clone(),
-            account_key: account_key.public().clone().into(),
+            account_address: SuiAddress::from(account_key.public()),
             network_key: network_key.public().clone(),
             gas_price: 1,
             commission_rate: 0,

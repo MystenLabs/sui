@@ -7,12 +7,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useSigner } from '_hooks';
 
 export function useTransactionDryRun(
-    sender: SuiAddress,
+    sender: SuiAddress | undefined,
     transaction: Transaction
 ) {
     const signer = useSigner(sender);
     const response = useQuery({
-        queryKey: ['dryRunTransaction', transaction, sender],
+        queryKey: ['dryRunTransaction', transaction.serialize()],
         queryFn: async () => {
             const initializedSigner = await signer();
             return initializedSigner.dryRunTransaction({ transaction });

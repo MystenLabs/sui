@@ -54,8 +54,7 @@ pub struct GasLessTransactionData {
 ## Create a sponsor-initiated sponsored transaction  
 
 A sponsor-initiated sponsored transaction involves the following steps:
- 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. 
- You can send the unsigned `TransactionData` via email, SMS, or an application interface.
+ 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. You can send the unsigned `TransactionData` via email, SMS, or an application interface.
  1. The user checks the transaction and signs it to generate the second `Signature` for the transaction.
  1. The user submits the dual-signed transaction to a Sui Full node or sponsor to execute it.
 

@@ -7,9 +7,7 @@ use move_binary_format::{
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
-use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
-};
+use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
 use sui_types::{
     base_types::{
         STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
@@ -20,7 +18,6 @@ use sui_types::{
     error::ExecutionError,
     id::{ID_STRUCT_NAME, OBJECT_MODULE_NAME},
     move_package::FnInfoMap,
-    sui_system_state::SUI_SYSTEM_MODULE_NAME,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -176,7 +173,6 @@ fn verify_entry_function_impl(
     let view = &BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
-    let module_id = module.self_id();
 
     let all_non_ctx_params = match params.0.last() {
         Some(last_param) if is_tx_context(view, last_param) != TxContextKind::None => {
@@ -185,31 +181,49 @@ fn verify_entry_function_impl(
         _ => &params.0,
     };
     for param in all_non_ctx_params {
-        verify_param_type(view, &module_id, &handle.type_parameters, param)?;
+        verify_param_type(view, &handle.type_parameters, param)?;
     }
 
-    let return_ = view.signature_at(handle.return_);
-    if !return_.is_empty() {
-        return Err(format!(
-            "Entry function {} cannot have return values",
-            view.identifier_at(handle.name)
-        ));
+    for return_ty in &view.signature_at(handle.return_).0 {
+        verify_return_type(view, &handle.type_parameters, return_ty)?;
     }
 
     Ok(())
 }
 
+fn verify_return_type(
+    view: &BinaryIndexedView,
+    type_parameters: &[AbilitySet],
+    return_ty: &SignatureToken,
+) -> Result<(), String> {
+    if matches!(
+        return_ty,
+        SignatureToken::Reference(_) | SignatureToken::MutableReference(_)
+    ) {
+        return Err("Invalid entry point return type. Expected a non reference type.".to_owned());
+    }
+    let abilities = view
+        .abilities(return_ty, type_parameters)
+        .map_err(|e| format!("Unexpected CompiledModule error: {}", e))?;
+    if abilities.has_drop() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Invalid entry point return type. \
+            The specified return type does not have the 'drop' ability: {}",
+            format_signature_token(view, return_ty),
+        ))
+    }
+}
+
 fn verify_param_type(
     view: &BinaryIndexedView,
-    module_id: &ModuleId,
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
 ) -> Result<(), String> {
     // Only `sui::sui_system` is allowed to expose entry functions that accept a mutable clock
     // parameter.
-    if module_id != &ModuleId::new(SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_MODULE_NAME.to_owned())
-        && is_mutable_clock(view, param)
-    {
+    if is_mutable_clock(view, param) {
         return Err(format!(
             "Invalid entry point parameter type. Clock must be passed by immutable reference. got: \
              {}",

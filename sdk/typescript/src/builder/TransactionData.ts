@@ -21,7 +21,7 @@ import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
 import { TransactionCommand, TransactionInput } from './Commands';
 import { BuilderCallArg, PureCallArg } from './Inputs';
-import { create, DeepReadonly } from './utils';
+import { create } from './utils';
 
 export const TransactionExpiration = optional(
   nullable(
@@ -251,7 +251,7 @@ export class TransactionDataBuilder {
     return TransactionDataBuilder.getDigestFromBytes(bytes);
   }
 
-  snapshot(): DeepReadonly<SerializedTransactionDataBuilder> {
+  snapshot(): SerializedTransactionDataBuilder {
     return create(this, SerializedTransactionDataBuilder);
   }
 }

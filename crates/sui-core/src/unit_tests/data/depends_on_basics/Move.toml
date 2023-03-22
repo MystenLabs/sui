@@ -4,7 +4,7 @@ version = "0.0.0"
 
 [dependencies]
 Examples = { local = "../object_basics" }
-Sui = { local = "../../../../../sui-framework" }
+Sui = { local = "../../../../../sui-framework/packages/sui-framework" }
 
 [addresses]
 depends = "0x0"

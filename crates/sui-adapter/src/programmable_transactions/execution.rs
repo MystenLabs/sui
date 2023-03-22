@@ -193,7 +193,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             }
             vec![]
         }
-        Command::SplitCoin(coin_arg, amount_arg) => {
+        Command::SplitCoins(coin_arg, amount_args) => {
             let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
             let ObjectContents::Coin(coin) = &mut obj.contents else {
                 let e = ExecutionErrorKind::command_argument_error(
@@ -203,12 +203,19 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 let msg = format!("Expected a coin but got an object of type {}", obj.type_);
                 return Err(ExecutionError::new_with_source(e, msg));
             };
-            let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
-            let new_coin_id = context.fresh_id()?;
-            let new_coin = coin.split(amount, UID::new(new_coin_id))?;
-            let coin_type = obj.type_.clone();
+            let split_coins = amount_args
+                .into_iter()
+                .map(|amount_arg| {
+                    let amount: u64 =
+                        context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
+                    let new_coin_id = context.fresh_id()?;
+                    let new_coin = coin.split(amount, UID::new(new_coin_id))?;
+                    let coin_type = obj.type_.clone();
+                    Ok(Value::Object(ObjectValue::coin(coin_type, new_coin)?))
+                })
+                .collect::<Result<_, ExecutionError>>()?;
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
-            vec![Value::Object(ObjectValue::coin(coin_type, new_coin)?)]
+            split_coins
         }
         Command::MergeCoins(target_arg, coin_args) => {
             let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
@@ -908,14 +915,14 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         .map_err(|e| context.convert_vm_error(e))?;
     let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
     let return_value_kinds = match function_kind {
-        FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::Init => {
+        FunctionKind::Init => {
             assert_invariant!(
                 signature.return_.is_empty(),
-                "entry functions must have no return values"
+                "init functions must have no return values"
             );
             vec![]
         }
-        FunctionKind::NonEntry => {
+        FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
             check_non_entry_signature::<_, _, Mode>(context, module_id, function, &signature)?
         }
     };

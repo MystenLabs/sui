@@ -1,23 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
+
+use sui_json_rpc_types::{
+    Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiObjectData,
+};
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
+use sui_types::error::SuiError;
+use sui_types::event::EventID;
+use sui_types::object::ObjectRead;
+use sui_types::storage::ObjectStore;
+
 use crate::errors::IndexerError;
 use crate::models::addresses::Address;
 use crate::models::checkpoints::Checkpoint;
+use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
-use crate::models::owners::ObjectOwner;
 use crate::models::packages::Package;
+use crate::models::system_state::{DBSystemStateSummary, DBValidatorSummary};
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
 use crate::types::SuiTransactionFullResponse;
-use async_trait::async_trait;
-use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, EventFilter, EventPage, SuiObjectData,
-};
-use sui_types::base_types::{ObjectID, SequenceNumber};
-use sui_types::event::EventID;
-use sui_types::object::ObjectRead;
 
 #[async_trait]
 pub trait IndexerStore {
@@ -135,6 +140,13 @@ pub trait IndexerStore {
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
+    fn get_epochs(
+        &self,
+        cursor: Option<EpochId>,
+        limit: usize,
+    ) -> Result<Vec<EpochInfo>, IndexerError>;
+    fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
+
     fn module_cache(&self) -> &Self::ModuleCache;
 }
 
@@ -143,6 +155,23 @@ pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
     pub transactions: Vec<SuiTransactionFullResponse>,
     pub changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
+}
+
+impl ObjectStore for CheckpointData {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<sui_types::object::Object>, SuiError> {
+        Ok(self
+            .changed_objects
+            .iter()
+            .find_map(|(status, o)| match status {
+                ObjectStatus::Created | ObjectStatus::Mutated if &o.object_id == object_id => {
+                    o.clone().try_into().ok()
+                }
+                _ => None,
+            }))
+    }
 }
 
 // Per checkpoint indexing
@@ -166,6 +195,8 @@ pub struct TransactionObjectChanges {
 
 // Per epoch indexing
 pub struct TemporaryEpochStore {
-    pub owner_index: Vec<ObjectOwner>,
-    pub epoch_id: u64,
+    pub last_epoch: Option<DBEpochInfo>,
+    pub new_epoch: DBEpochInfo,
+    pub system_state: DBSystemStateSummary,
+    pub validators: Vec<DBValidatorSummary>,
 }

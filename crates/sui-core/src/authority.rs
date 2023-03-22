@@ -19,12 +19,13 @@ use move_core_types::language_storage::ModuleId;
 use parking_lot::Mutex;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
+use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -86,7 +87,7 @@ use sui_types::{
     fp_ensure,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
-    SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
 use typed_store::Map;
 
@@ -190,6 +191,7 @@ pub struct AuthorityMetrics {
     pub(crate) transaction_manager_num_ready: IntGauge,
 
     pub(crate) execution_driver_executed_transactions: IntCounter,
+    pub(crate) execution_driver_dispatch_queue: IntGauge,
 
     pub(crate) skipped_consensus_txns: IntCounter,
     pub(crate) skipped_consensus_txns_cache_hit: IntCounter,
@@ -206,7 +208,9 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
-    pub consensus_handler_scores: Histogram,
+    pub consensus_handler_scores: IntGaugeVec,
+    pub consensus_committed_subdags: IntCounterVec,
+    pub consensus_committed_certificates: IntCounterVec,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -365,6 +369,12 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            execution_driver_dispatch_queue: register_int_gauge_with_registry!(
+                "execution_driver_dispatch_queue",
+                "Number of transaction pending in execution driver dispatch queue",
+                registry,
+            )
+            .unwrap(),
             skipped_consensus_txns: register_int_counter_with_registry!(
                 "skipped_consensus_txns",
                 "Total number of consensus transactions skipped",
@@ -418,10 +428,24 @@ impl AuthorityMetrics {
                 "Number of low scoring authorities based on reputation scores from consensus", 
                 registry
             ).unwrap(),
-            consensus_handler_scores: register_histogram_with_registry!(
+            consensus_handler_scores: register_int_gauge_vec_with_registry!(
                 "consensus_handler_scores",
-                "Distribution of scores from consensus",
-                POSITIVE_INT_BUCKETS.to_vec(),
+                "scores from consensus for each authority",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
+            consensus_committed_subdags: register_int_counter_vec_with_registry!(
+                "consensus_committed_subdags",
+                "Number of committed subdags, sliced by author",
+                &["authority"],
+                registry,
+            )
+                .unwrap(),
+            consensus_committed_certificates: register_int_counter_vec_with_registry!(
+                "consensus_committed_certificates",
+                "Number of committed certificates, sliced by author",
+                &["authority"],
                 registry,
             )
                 .unwrap(),
@@ -1957,9 +1981,9 @@ impl AuthorityState {
         self.database.get_object(object_id)
     }
 
-    pub async fn get_framework_object_ref(&self) -> SuiResult<ObjectRef> {
+    pub async fn get_sui_system_package_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
-            .get_object(&SUI_FRAMEWORK_ADDRESS.into())
+            .get_object(&SUI_SYSTEM_ADDRESS.into())
             .await?
             .expect("framework object should always exist")
             .compute_object_reference())
@@ -2951,13 +2975,21 @@ impl AuthorityState {
 
         let Some(sui_framework) = self.compare_system_package(
             SuiFramework::ID,
-            sui_framework_injection::get_modules(self.name),
+            SuiFramework::as_modules(),
             SuiFramework::transitive_dependencies(),
         ).await else {
             return vec![];
         };
 
-        vec![move_stdlib, sui_framework]
+        let Some(sui_system) = self.compare_system_package(
+            SuiSystem::ID,
+            sui_system_injection::get_modules(self.name),
+            SuiSystem::transitive_dependencies(),
+        ).await else {
+            return vec![];
+        };
+
+        vec![move_stdlib, sui_framework, sui_system]
     }
 
     /// Check whether the framework defined by `modules` is compatible with the framework that is
@@ -3080,8 +3112,12 @@ impl AuthorityState {
                     MoveStdlib::transitive_dependencies(),
                 ),
                 SuiFramework::ID => (
-                    sui_framework_injection::get_bytes(self.name),
+                    SuiFramework::as_bytes(),
                     SuiFramework::transitive_dependencies(),
+                ),
+                SuiSystem::ID => (
+                    sui_system_injection::get_bytes(self.name),
+                    SuiSystem::transitive_dependencies(),
                 ),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
@@ -3522,7 +3558,7 @@ mod tests {
 }
 
 #[cfg(msim)]
-pub mod sui_framework_injection {
+pub mod sui_system_injection {
     use std::cell::RefCell;
 
     use super::*;
@@ -3564,36 +3600,36 @@ pub mod sui_framework_injection {
 
     pub fn get_bytes(name: AuthorityName) -> Vec<Vec<u8>> {
         OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiFramework::as_bytes(),
+            FrameworkOverrideConfig::Default => SuiSystem::as_bytes(),
             FrameworkOverrideConfig::Global(framework) => compiled_modules_to_bytes(framework),
             FrameworkOverrideConfig::PerValidator(func) => func(name)
                 .map(|fw| compiled_modules_to_bytes(&fw))
-                .unwrap_or_else(SuiFramework::as_bytes),
+                .unwrap_or_else(SuiSystem::as_bytes),
         })
     }
 
     pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
         OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiFramework::as_modules(),
+            FrameworkOverrideConfig::Default => SuiSystem::as_modules(),
             FrameworkOverrideConfig::Global(framework) => framework.clone(),
             FrameworkOverrideConfig::PerValidator(func) => {
-                func(name).unwrap_or_else(SuiFramework::as_modules)
+                func(name).unwrap_or_else(SuiSystem::as_modules)
             }
         })
     }
 }
 
 #[cfg(not(msim))]
-pub mod sui_framework_injection {
+pub mod sui_system_injection {
     use move_binary_format::CompiledModule;
 
     use super::*;
 
     pub fn get_bytes(_name: AuthorityName) -> Vec<Vec<u8>> {
-        SuiFramework::as_bytes()
+        SuiSystem::as_bytes()
     }
 
     pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
-        SuiFramework::as_modules()
+        SuiSystem::as_modules()
     }
 }

@@ -16,7 +16,6 @@ consensus-config:
   address: /ip4/127.0.0.1/tcp/8083/http
   db-path: /opt/sui/db/consensus_db
   internal-worker-address: null
-  timeout-secs: 60
   narwhal-config:
     header_num_of_batches_threshold: 32
     max_header_num_of_batches: 1000

@@ -34,7 +34,7 @@ export function AccountActions({
                     />
                 </div>
             ) : (
-                <Text variant="bodySmall" weight="medium" color="steel-dark">
+                <Text variant="bodySmall" weight="medium" color="steel">
                     No actions available
                 </Text>
             )}

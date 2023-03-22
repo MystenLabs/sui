@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const path = require('path');
+const path = require("path");
 
 const COPYRIGHT = `
 // Copyright (c) Mysten Labs, Inc.
@@ -16,6 +16,7 @@ module.exports = {
   jsxRuntime: "automatic",
   replaceAttrValues: {
     "#383F47": "currentColor",
+    "#007195": "currentColor",
   },
   indexTemplate(filePaths) {
     const exportEntries = filePaths.map((filePath) => {

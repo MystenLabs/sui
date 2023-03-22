@@ -44,7 +44,7 @@ use sui_types::{
 };
 use sui_types::{
     is_system_package, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use sui_types::temporary_store::TemporaryStore;
@@ -83,6 +83,7 @@ pub fn execute_transaction_to_effects<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
+    let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
@@ -112,6 +113,14 @@ pub fn execute_transaction_to_effects<
     // Remove from dependencies the generic hash
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
+    #[cfg(debug_assertions)]
+    {
+        if !Mode::allow_arbitrary_function_calls() {
+            temporary_store
+                .check_ownership_invariants(&transaction_signer, gas, is_epoch_change)
+                .unwrap()
+        } // else, in dev inspect mode and anything goes--don't check
+    }
     let (inner, effects) = temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,
@@ -216,7 +225,7 @@ fn execute_transaction<
         #[cfg(debug_assertions)]
         {
             // ensure that this transaction did not create or destroy SUI
-            temporary_store.check_sui_conserved();
+            temporary_store.check_sui_conserved().unwrap();
         }
     }
     let cost_summary = gas_status.summary();
@@ -358,7 +367,7 @@ pub fn construct_advance_epoch_pt(
     );
 
     let storage_rebates = builder.programmable_move_call(
-        SUI_FRAMEWORK_OBJECT_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         SUI_SYSTEM_MODULE_NAME.to_owned(),
         ADVANCE_EPOCH_FUNCTION_NAME.to_owned(),
         vec![],
@@ -423,7 +432,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             });
             // TODO: Rewards should be kept in safe mode too.
             let res = builder.move_call(
-                SUI_FRAMEWORK_OBJECT_ID,
+                SUI_SYSTEM_PACKAGE_ID,
                 SUI_SYSTEM_MODULE_NAME.to_owned(),
                 function,
                 vec![],

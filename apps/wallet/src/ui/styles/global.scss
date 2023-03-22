@@ -29,15 +29,18 @@ body {
     min-height: 0;
     margin: 0;
     padding: 0;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 
     /* to allow gradient color to work and show at least solid color when over-scroll */
     background: v.use(v.$colors-background);
     background-color: v.use(v.$colors-background-color);
     color: black;
     scroll-behavior: smooth;
-    font-family: InterVariable, sans-serif;
+    @apply antialiased font-sans;
+}
+
+/* TODO: Remove after we enable CSS Reset */
+button {
+    @apply font-sans;
 }
 
 body {

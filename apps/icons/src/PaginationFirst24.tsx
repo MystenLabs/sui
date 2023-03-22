@@ -13,12 +13,12 @@ const SvgPaginationFirst24 = (props: SVGProps<SVGSVGElement>) => (
     <path
       d="m18.521 6.807-7.912 4.315a1 1 0 0 0 0 1.756l7.912 4.315A1 1 0 0 0 20 16.315v-8.63a1 1 0 0 0-1.479-.878Z"
       fill="#fff"
-      stroke="#007195"
+      stroke="currentColor"
     />
     <path
       d="M10.521 6.807 2.61 11.122a1 1 0 0 0 0 1.756l7.912 4.315A1 1 0 0 0 12 16.315v-8.63a1 1 0 0 0-1.479-.878Z"
       fill="#fff"
-      stroke="#007195"
+      stroke="currentColor"
     />
   </svg>
 );

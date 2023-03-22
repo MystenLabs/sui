@@ -64,7 +64,7 @@ fn populated_genesis_snapshot_matches() {
         name: "0".into(),
         protocol_key: key.public().into(),
         worker_key: worker_key.public().clone(),
-        account_key: account_key.public().clone().into(),
+        account_address: SuiAddress::from(account_key.public()),
         network_key: network_key.public().clone(),
         gas_price: 1,
         commission_rate: 0,

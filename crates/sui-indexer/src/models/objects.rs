@@ -23,6 +23,9 @@ use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner
 
 const OBJECT: &str = "object";
 
+// NOTE: please add updating statement like below in pg_indexer_store.rs,
+// if new columns are added here:
+// objects::epoch.eq(excluded(objects::epoch))
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct Object {
