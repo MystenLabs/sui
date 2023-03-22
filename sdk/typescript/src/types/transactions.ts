@@ -16,13 +16,7 @@ import {
   assign,
   nullable,
 } from 'superstruct';
-import { SuiEvent } from './events';
-import {
-  ObjectDigest,
-  SuiGasData,
-  SuiMovePackage,
-  SuiObjectRef,
-} from './objects';
+
 import {
   ObjectId,
   ObjectOwner,
@@ -32,6 +26,13 @@ import {
   TransactionDigest,
   TransactionEventDigest,
 } from './common';
+import { SuiEvent } from './events';
+import {
+  ObjectDigest,
+  SuiGasData,
+  SuiMovePackage,
+  SuiObjectRef,
+} from './objects';
 
 // TODO: support u64
 export const EpochId = number();
@@ -65,17 +66,19 @@ export const SuiArgument = union([
   object({ Result: number() }),
   object({ NestedResult: tuple([number(), number()]) }),
 ]);
+export type SuiArgument = Infer<typeof SuiArgument>;
+
+export const MoveCallSuiCommand = object({
+  arguments: optional(array(SuiArgument)),
+  type_arguments: optional(array(string())),
+  package: ObjectId,
+  module: string(),
+  function: string(),
+});
+export type MoveCallSuiCommand = Infer<typeof MoveCallSuiCommand>;
 
 export const SuiCommand = union([
-  object({
-    MoveCall: object({
-      arguments: array(SuiArgument),
-      type_arguments: array(string()),
-      package: ObjectId,
-      module: string(),
-      function: string(),
-    }),
-  }),
+  object({ MoveCall: MoveCallSuiCommand }),
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
   object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
@@ -107,10 +110,11 @@ export const SuiCallArg = union([
 export type SuiCallArg = Infer<typeof SuiCallArg>;
 
 export const ProgrammableTransaction = object({
-  commands: array(),
+  commands: array(SuiCommand),
   inputs: array(SuiCallArg),
 });
 export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
+export type ProgrammableTransactionCommand = Infer<typeof SuiCommand>;
 
 /**
  * 1. WaitForEffectsCert: waits for TransactionEffectsCert and then returns to the client.
