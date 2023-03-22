@@ -35,7 +35,11 @@ pub struct Authority {
 }
 
 impl Authority {
-    pub fn new(
+    /// The constructor is not public by design. Everyone who wants to create authorities should do
+    /// it via Committee (more specifically can use CommitteeBuilder). As some internal properties of
+    /// Authority are initialised via the Committee, to ensure that the user will not accidentally use
+    /// stale Authority data, should always derive them via the Commitee.
+    fn new(
         protocol_key: PublicKey,
         stake: Stake,
         primary_address: Multiaddr,
@@ -119,7 +123,9 @@ impl Display for AuthorityIdentifier {
 }
 
 impl Committee {
-    pub fn new(authorities: BTreeMap<PublicKey, Authority>, epoch: Epoch) -> Self {
+    /// Any committee should be created via the CommitteeBuilder - this is intentionally be marked as
+    /// private method.
+    fn new(authorities: BTreeMap<PublicKey, Authority>, epoch: Epoch) -> Self {
         let mut committee = Self {
             authorities,
             epoch,
@@ -388,6 +394,42 @@ impl Committee {
         };
 
         errors.map(Err).unwrap_or(Ok(()))
+    }
+
+    /// Used for testing - not recommended to use for any other case.
+    /// It creates a new instance with updated epoch
+    pub fn advance_epoch(&self, new_epoch: Epoch) -> Committee {
+        Committee::new(self.authorities.clone(), new_epoch)
+    }
+}
+
+pub struct CommitteeBuilder {
+    epoch: Epoch,
+    authorities: BTreeMap<PublicKey, Authority>,
+}
+
+impl CommitteeBuilder {
+    pub fn new(epoch: Epoch) -> Self {
+        Self {
+            epoch,
+            authorities: BTreeMap::new(),
+        }
+    }
+
+    pub fn add_authority(
+        mut self,
+        protocol_key: PublicKey,
+        stake: Stake,
+        primary_address: Multiaddr,
+        network_key: NetworkPublicKey,
+    ) -> Self {
+        let authority = Authority::new(protocol_key.clone(), stake, primary_address, network_key);
+        self.authorities.insert(protocol_key, authority);
+        self
+    }
+
+    pub fn build(self) -> Committee {
+        Committee::new(self.authorities, self.epoch)
     }
 }
 

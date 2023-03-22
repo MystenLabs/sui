@@ -8,13 +8,10 @@ use super::*;
 use crate::consensus::ConsensusRound;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
-use config::Authority;
-use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use std::collections::BTreeMap;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
 use test_utils::CommitteeFixture;
@@ -745,10 +742,6 @@ async fn reset_consensus_scores_on_every_schedule_change() {
 async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
     let mut committee: Committee = fixture.committee();
-    let authorities: BTreeMap<PublicKey, Authority> = committee
-        .authorities()
-        .map(|a| (a.protocol_key().clone(), a.clone()))
-        .collect();
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
@@ -834,7 +827,7 @@ async fn restart_with_new_committee() {
         assert_eq!(output.round(), 2);
 
         // Move to the next epoch.
-        committee = Committee::new(authorities.clone(), epoch + 1);
+        committee = committee.advance_epoch(epoch + 1);
         tx_shutdown.send().unwrap();
 
         // Ensure consensus stopped.

@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
+use config::{CommitteeBuilder, Epoch, WorkerIndex, WorkerInfo};
 use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
     hash::Hash,
@@ -45,22 +45,19 @@ fn get_registry() -> Result<Registry> {
     let signature = kp.sign(msg);
     tracer.trace_value(&mut samples, &signature)?;
 
-    let authorities = keys
-        .iter()
-        .zip(network_keys.iter())
-        .enumerate()
-        .map(|(i, (kp, network_key))| {
-            let id = kp.public();
-            let primary_address: Multiaddr =
-                format!("/ip4/127.0.0.1/udp/{}", 100 + i).parse().unwrap();
-            (
-                id.clone(),
-                Authority::new(id.clone(), 1, primary_address, network_key.public().clone()),
-            )
-        })
-        .collect();
+    let mut committee_builder = CommitteeBuilder::new(Epoch::default());
+    for (i, (kp, network_key)) in keys.iter().zip(network_keys.iter()).enumerate() {
+        let primary_address: Multiaddr = format!("/ip4/127.0.0.1/udp/{}", 100 + i).parse().unwrap();
 
-    let committee = Committee::new(authorities, Epoch::default());
+        committee_builder = committee_builder.add_authority(
+            kp.public().clone(),
+            1,
+            primary_address,
+            network_key.public().clone(),
+        );
+    }
+
+    let committee = committee_builder.build();
 
     let certificates: Vec<Certificate> = Certificate::genesis(&committee);
 

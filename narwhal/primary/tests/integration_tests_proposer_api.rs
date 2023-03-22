@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use config::{AuthorityIdentifier, Epoch, Parameters};
+use config::{AuthorityIdentifier, CommitteeBuilder, Epoch, Parameters};
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::KeyPair;
@@ -15,11 +15,7 @@ use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use rand::thread_rng;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::NodeStorage;
 use test_utils::{
     make_optimal_certificates, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
@@ -92,16 +88,20 @@ async fn test_rounds_errors() {
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
-    let no_name_committee = config::Committee::new(
-        committee
-            .authorities()
-            .filter_map(|authority| {
-                (*authority.id() != authority_id)
-                    .then_some((authority.protocol_key().clone(), authority.clone()))
-            })
-            .collect::<BTreeMap<_, _>>(),
-        Epoch::default(),
-    );
+    let mut builder = CommitteeBuilder::new(Epoch::default());
+
+    for authority in committee.authorities() {
+        if *authority.id() != authority_id {
+            builder = builder.add_authority(
+                authority.protocol_key().clone(),
+                authority.stake(),
+                authority.primary_address(),
+                authority.network_key(),
+            );
+        }
+    }
+
+    let no_name_committee = builder.build();
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 

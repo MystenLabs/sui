@@ -4,8 +4,8 @@
 
 use anemo::async_trait;
 use config::{
-    utils::get_available_port, Authority, AuthorityIdentifier, Committee, Epoch, Stake,
-    WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
+    utils::get_available_port, Authority, AuthorityIdentifier, Committee, CommitteeBuilder, Epoch,
+    Stake, WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
 };
 use crypto::{
     to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
@@ -723,22 +723,16 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
             .collect();
 
         // create the committee in order to assign the ids to the authorities
-        let committee = Committee::new(
-            authorities
-                .iter()
-                .map(|a| {
-                    let pubkey = a.public_key();
-                    let authority = Authority::new(
-                        pubkey.clone(),
-                        a.stake,
-                        a.address.clone(),
-                        a.network_public_key(),
-                    );
-                    (pubkey, authority)
-                })
-                .collect(),
-            self.epoch,
-        );
+        let mut committee_builder = CommitteeBuilder::new(self.epoch);
+        for a in authorities.iter() {
+            committee_builder = committee_builder.add_authority(
+                a.public_key().clone(),
+                a.stake,
+                a.address.clone(),
+                a.network_public_key(),
+            );
+        }
+        let committee = committee_builder.build();
 
         // Update the Fixtures with the id assigned from the committee
         for authority in authorities.iter_mut() {

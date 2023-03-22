@@ -146,8 +146,8 @@ mod tests {
     use arc_swap::ArcSwap;
     use fastcrypto::traits::{InsecureDefault, KeyPair as _};
     use mysten_network::Multiaddr;
-    use narwhal_config::Authority;
     use narwhal_config::Committee;
+    use narwhal_config::{Authority, CommitteeBuilder};
     use narwhal_crypto::KeyPair;
     use narwhal_types::ReputationScores;
     use prometheus::Registry;
@@ -394,24 +394,21 @@ mod tests {
     /// via the committee to ensure than an AuthorityIdentifier will be assigned, as this is dynamically
     /// calculated during committee creation.
     fn generate_committee(committee_size: usize) -> Arc<Committee> {
+        let mut committee_builder = CommitteeBuilder::new(0);
         let mut rng = StdRng::from_rng(&mut OsRng).unwrap();
 
-        let authorities = (0..committee_size)
-            .into_iter()
-            .map(|_| {
-                let pair = KeyPair::generate(&mut rng);
-                let public_key = pair.public().clone();
+        for _ in 0..committee_size {
+            let pair = KeyPair::generate(&mut rng);
+            let public_key = pair.public().clone();
 
-                let authority = Authority::new(
-                    public_key.clone(),
-                    1,
-                    Multiaddr::empty(),
-                    NetworkPublicKey::insecure_default(),
-                );
-                (public_key, authority)
-            })
-            .collect();
+            committee_builder = committee_builder.add_authority(
+                public_key.clone(),
+                1,
+                Multiaddr::empty(),
+                NetworkPublicKey::insecure_default(),
+            );
+        }
 
-        Arc::new(Committee::new(authorities, 0))
+        Arc::new(committee_builder.build())
     }
 }
