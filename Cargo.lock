@@ -9310,6 +9310,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-loadgen"
+version = "0.29.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "clap 3.2.23",
+ "dirs",
+ "eyre",
+ "futures",
+ "http",
+ "mysten-metrics",
+ "prometheus",
+ "rand 0.8.5",
+ "rocksdb",
+ "scopeguard",
+ "serde 1.0.152",
+ "shared-crypto",
+ "sui",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tower",
+ "tower-http 0.3.5",
+ "tracing",
+ "tracing-subscriber 0.3.16",
+ "typed-store",
+ "typed-store-derive",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-sdk"
 version = "0.29.0"
 dependencies = [

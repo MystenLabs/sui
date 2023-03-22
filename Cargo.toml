@@ -36,6 +36,7 @@ members = [
     "crates/sui-protocol-config",
     "crates/sui-proxy",
     "crates/sui-rosetta",
+    "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-simulator",
     "crates/sui-source-validation",
