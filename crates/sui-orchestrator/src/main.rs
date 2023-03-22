@@ -311,7 +311,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .with_scrape_interval(scrape_interval)
                 .skip_testbed_updates(skip_testbed_update)
                 .skip_testbed_configuration(skip_testbed_configuration)
-                .with_log_processing(logs_processing)
+                .with_log_processing(log_processing)
                 .run_benchmarks(generator)
                 .await
                 .wrap_err("Failed to run benchmarks")?;
