@@ -21,7 +21,7 @@ The basic set of properties suggested includes:
 **creator** - A string that indicates the object creator. 
 An example Sui Hero module
 The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`. 
-The template defined in the init function can be represented as:
+The following represents the template the `init` function defines:
 
 ```rust
 {
