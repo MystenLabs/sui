@@ -21,7 +21,7 @@ pub mod pg_integration_test {
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
-    use sui_indexer::test_utils::start_test_indexer;
+    use sui_indexer::test_utils::{start_test_indexer, SuiTransactionResponseBuilder};
     use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
@@ -771,6 +771,99 @@ pub mod pg_integration_test {
                 Ok(())
             });
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_with_options() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+        let (tx_response, _, _, _) =
+            execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let full_transaction_response = indexer_rpc_client
+            .get_transaction_with_options(
+                tx_response.digest,
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        let transaction_required_fields =
+            SuiTransactionResponse::new(full_transaction_response.clone().digest);
+        let sui_transaction_response_options = vec![
+            SuiTransactionResponseOptions::new().with_input(),
+            SuiTransactionResponseOptions::new().with_raw_input(),
+            SuiTransactionResponseOptions::new().with_effects(),
+            SuiTransactionResponseOptions::new().with_events(),
+            SuiTransactionResponseOptions::new().with_balance_changes(),
+            SuiTransactionResponseOptions::new().with_object_changes(),
+            SuiTransactionResponseOptions::new()
+                .with_input()
+                .with_balance_changes()
+                .with_object_changes(),
+        ];
+        let futures = sui_transaction_response_options
+            .into_iter()
+            .map(|option| {
+                indexer_rpc_client.get_transaction_with_options(tx_response.digest, Some(option))
+            })
+            .collect::<Vec<_>>();
+        let received_transaction_results: Vec<SuiTransactionResponse> = join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        let expected_transaction_results = vec![
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_transaction()
+            .build(),
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_raw_transaction()
+            .build(),
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_effects()
+            .build(),
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_events()
+            .build(),
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_balance_changes()
+            .build(),
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_object_changes()
+            .build(),
+            SuiTransactionResponseBuilder::new(
+                &full_transaction_response,
+                &transaction_required_fields,
+            )
+            .with_all()
+            .build(),
+        ];
+        for (received, expected) in received_transaction_results
+            .iter()
+            .zip(expected_transaction_results.iter())
+        {
+            assert_eq!(received, expected);
+        }
+        Ok(())
     }
 
     async fn start_test_cluster(
