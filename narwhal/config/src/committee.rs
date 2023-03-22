@@ -18,20 +18,20 @@ use std::fmt::{Display, Formatter};
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Authority {
     /// The id under which we identify this authority across Narwhal
-    #[serde(skip)]
-    id: OnceCell<AuthorityIdentifier>,
+    id: AuthorityIdentifier,
     /// The authority's main PublicKey which is used to verify the content they sign.
-    #[serde(skip)]
-    protocol_key: OnceCell<PublicKey>,
+    protocol_key: PublicKey,
     /// The authority's main PublicKey expressed as pure bytes
-    #[serde(skip)]
-    protocol_key_bytes: OnceCell<PublicKeyBytes>,
+    protocol_key_bytes: PublicKeyBytes,
     /// The voting power of this authority.
     stake: Stake,
     /// The network address of the primary.
     primary_address: Multiaddr,
     /// Network key of the primary.
     network_key: NetworkPublicKey,
+    /// There are secondary indexes that should be initialised before we are ready to use the
+    /// authority - this bool protect us for premature use.
+    initialised: bool,
 }
 
 impl Authority {
@@ -49,41 +49,47 @@ impl Authority {
 
         Self {
             id: Default::default(),
-            protocol_key: OnceCell::with_value(protocol_key),
-            protocol_key_bytes: OnceCell::with_value(protocol_key_bytes),
+            protocol_key,
+            protocol_key_bytes,
             stake,
             primary_address,
             network_key,
+            initialised: false,
         }
     }
 
+    fn initialise(&mut self, id: AuthorityIdentifier) {
+        self.id = id;
+        self.initialised = true;
+    }
+
     pub fn id(&self) -> &AuthorityIdentifier {
-        self.id
-            .get()
-            .expect("Identifier should have been initialised by now")
+        assert!(self.initialised);
+        &self.id
     }
 
     pub fn protocol_key(&self) -> &PublicKey {
-        self.protocol_key
-            .get()
-            .expect("PublicKey should have been initialised by now")
+        assert!(self.initialised);
+        &self.protocol_key
     }
 
     pub fn protocol_key_bytes(&self) -> &PublicKeyBytes {
-        self.protocol_key_bytes
-            .get()
-            .expect("ProtocolKeyBytes should have been initialised by now")
+        assert!(self.initialised);
+        &self.protocol_key_bytes
     }
 
     pub fn stake(&self) -> Stake {
+        assert!(self.initialised);
         self.stake
     }
 
     pub fn primary_address(&self) -> Multiaddr {
+        assert!(self.initialised);
         self.primary_address.clone()
     }
 
     pub fn network_key(&self) -> NetworkPublicKey {
+        assert!(self.initialised);
         self.network_key.clone()
     }
 }
@@ -132,6 +138,13 @@ impl Committee {
             authorities_by_id: Default::default(),
         };
         committee.load();
+
+        // ensure all the authorities are ordered in incremented manner with their ids - just some
+        // extra confirmation here.
+        for (index, (_, authority)) in committee.authorities.iter().enumerate() {
+            assert_eq!(index as u16, authority.id.0);
+        }
+
         committee
     }
 
@@ -142,7 +155,7 @@ impl Committee {
 
             for (identifier, (_key, authority)) in (0_u16..).zip(self.authorities.iter_mut()) {
                 let id = AuthorityIdentifier(identifier);
-                let _ = authority.id.get_or_init(|| id.clone());
+                authority.initialise(id.clone());
 
                 authorities.insert(id, authority.clone());
             }
