@@ -989,9 +989,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for TemporaryStore<S> {
 
 impl<S: ChildObjectResolver> Storage for TemporaryStore<S> {
     fn reset(&mut self) {
-        self.written.clear();
-        self.deleted.clear();
-        self.events.clear();
+        TemporaryStore::drop_writes(self)
     }
 
     fn log_event(&mut self, event: Event) {
@@ -1067,7 +1065,6 @@ impl<S> ResourceResolver for TemporaryStore<S> {
                 }
             },
         };
-
         match &object.data {
             Data::Move(m) => {
                 assert!(

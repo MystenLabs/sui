@@ -47,7 +47,7 @@ use sui_types::{
     SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
-use sui_types::temporary_store::TemporaryStore;
+use sui_types::{storage_context::StorageContext, temporary_store::TemporaryStore};
 
 pub struct AdvanceEpochParams {
     pub epoch: u64,
@@ -67,7 +67,7 @@ pub fn execute_transaction_to_effects<
     S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
     shared_object_refs: Vec<ObjectRef>,
-    mut temporary_store: TemporaryStore<S>,
+    temporary_store: TemporaryStore<S>,
     transaction_kind: TransactionKind,
     transaction_signer: SuiAddress,
     gas: &[ObjectRef],
@@ -85,8 +85,10 @@ pub fn execute_transaction_to_effects<
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
+    let mut storage_context = StorageContext::new(temporary_store);
+
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
-        &mut temporary_store,
+        &mut storage_context,
         transaction_kind,
         gas,
         &mut tx_ctx,
@@ -94,6 +96,8 @@ pub fn execute_transaction_to_effects<
         gas_status,
         protocol_config,
     );
+
+    let temp_store = storage_context.into_temp_store();
 
     let (status, execution_result) = match execution_result {
         Ok(results) => (ExecutionStatus::Success, Ok(results)),
@@ -116,12 +120,12 @@ pub fn execute_transaction_to_effects<
     #[cfg(debug_assertions)]
     {
         if !Mode::allow_arbitrary_function_calls() {
-            temporary_store
+            temp_store
                 .check_ownership_invariants(&transaction_signer, gas, is_epoch_change)
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
     }
-    let (inner, effects) = temporary_store.to_effects(
+    let (inner, effects) = temp_store.to_effects(
         shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
@@ -155,7 +159,7 @@ fn execute_transaction<
     Mode: ExecutionMode,
     S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
-    temporary_store: &mut TemporaryStore<S>,
+    storage_context: &mut StorageContext<S>,
     transaction_kind: TransactionKind,
     gas: &[ObjectRef],
     tx_ctx: &mut TxContext,
@@ -167,17 +171,17 @@ fn execute_transaction<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     // First smash gas into the first coin if more than 1 was provided
-    let gas_object_ref = match temporary_store.smash_gas(gas) {
+    let gas_object_ref = match storage_context.temp_store_mut().smash_gas(gas) {
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
     let is_system = transaction_kind.is_system_tx();
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
-    let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
+    let result = charge_gas_for_object_read(storage_context.temp_store(), &mut gas_status);
     let mut result = result.and_then(|()| {
         let mut execution_result = execution_loop::<Mode, _>(
-            temporary_store,
+            storage_context,
             transaction_kind,
             gas_object_ref.0,
             tx_ctx,
@@ -186,7 +190,9 @@ fn execute_transaction<
             protocol_config,
         );
 
-        let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
+        let effects_estimated_size = storage_context
+            .temp_store()
+            .estimate_effects_size_upperbound();
 
         // Check if a limit threshold was crossed.
         // For metered transactions, there is not soft limit.
@@ -219,13 +225,18 @@ fn execute_transaction<
         execution_result
     });
     if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
+        storage_context.temp_store_mut().charge_gas(
+            gas_object_ref.0,
+            &mut gas_status,
+            &mut result,
+            gas,
+        );
     }
     if !is_system {
         #[cfg(debug_assertions)]
         {
             // ensure that this transaction did not create or destroy SUI
-            temporary_store.check_sui_conserved().unwrap();
+            storage_context.temp_store().check_sui_conserved().unwrap();
         }
     }
     let cost_summary = gas_status.summary();
@@ -236,7 +247,7 @@ fn execution_loop<
     Mode: ExecutionMode,
     S: BackingPackageStore + ParentSync + ChildObjectResolver + ObjectStore + GetModule,
 >(
-    temporary_store: &mut TemporaryStore<S>,
+    storage_context: &mut StorageContext<S>,
     transaction_kind: TransactionKind,
     gas_object_id: ObjectID,
     tx_ctx: &mut TxContext,
@@ -248,7 +259,7 @@ fn execution_loop<
         TransactionKind::ChangeEpoch(change_epoch) => {
             advance_epoch(
                 change_epoch,
-                temporary_store,
+                storage_context,
                 tx_ctx,
                 move_vm,
                 gas_status,
@@ -270,7 +281,9 @@ fn execution_loop<
                             previous_transaction: tx_ctx.digest(),
                             storage_rebate: 0,
                         };
-                        temporary_store.write_object(object, WriteKind::Create);
+                        storage_context
+                            .temp_store_mut()
+                            .write_object(object, WriteKind::Create);
                     }
                 }
             }
@@ -279,7 +292,7 @@ fn execution_loop<
         TransactionKind::ConsensusCommitPrologue(prologue) => {
             setup_consensus_commit(
                 prologue,
-                temporary_store,
+                storage_context,
                 tx_ctx,
                 move_vm,
                 gas_status,
@@ -291,7 +304,7 @@ fn execution_loop<
             programmable_transactions::execution::execute::<_, _, Mode>(
                 protocol_config,
                 move_vm,
-                temporary_store,
+                storage_context,
                 tx_ctx,
                 gas_status,
                 Some(gas_object_id),
@@ -387,7 +400,7 @@ pub fn construct_advance_epoch_pt(
 
 fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     change_epoch: ChangeEpoch,
-    temporary_store: &mut TemporaryStore<S>,
+    storage_context: &mut StorageContext<S>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
@@ -407,7 +420,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     let result = programmable_transactions::execution::execute::<_, _, execution_mode::System>(
         protocol_config,
         move_vm,
-        temporary_store,
+        storage_context,
         tx_ctx,
         gas_status,
         None,
@@ -418,10 +431,10 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         tracing::error!(
             "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
             result.as_ref().err(),
-            temporary_store.objects(),
+            storage_context.temp_store().objects(),
             change_epoch,
         );
-        temporary_store.drop_writes();
+        storage_context.temp_store_mut().drop_writes();
         let function = ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME.to_owned();
         let safe_mode_pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -451,7 +464,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         programmable_transactions::execution::execute::<_, _, execution_mode::System>(
             protocol_config,
             move_vm,
-            temporary_store,
+            storage_context,
             tx_ctx,
             gas_status,
             None,
@@ -480,7 +493,9 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .try_as_package_mut()
             .unwrap()
             .decrement_version();
-        temporary_store.write_object(new_package, WriteKind::Mutate);
+        storage_context
+            .temp_store_mut()
+            .write_object(new_package, WriteKind::Mutate);
     }
 
     Ok(())
@@ -492,7 +507,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
 ///   consensus.
 fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     prologue: ConsensusCommitPrologue,
-    temporary_store: &mut TemporaryStore<S>,
+    storage_context: &mut StorageContext<S>,
     tx_ctx: &mut TxContext,
     move_vm: &Arc<MoveVM>,
     gas_status: &mut SuiGasStatus,
@@ -523,7 +538,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
     programmable_transactions::execution::execute::<_, _, execution_mode::System>(
         protocol_config,
         move_vm,
-        temporary_store,
+        storage_context,
         tx_ctx,
         gas_status,
         None,

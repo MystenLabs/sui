@@ -25,7 +25,7 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::{account_address::AccountAddress, language_storage::ModuleId};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, HashMap};
@@ -691,5 +691,52 @@ impl ObjectStore for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
 impl<T: ObjectStore> ObjectStore for Arc<T> {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.as_ref().get_object(object_id)
+    }
+}
+
+// TODO: this is going to be defined on the core Move side (much like other StorageView trates) and
+// is here only to facilitate easier development.
+pub trait LinkageResolver {
+    type Error: std::fmt::Debug;
+
+    /// The link context identifies the mapping from runtime `ModuleId`s to the `ModuleId`s in
+    /// storage that they are loaded from as returned by `relocate`.
+    fn link_context(&self) -> AccountAddress;
+
+    /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
+    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error>;
+}
+
+impl<S: LinkageResolver<Error = SuiError>> LinkageResolver for &S {
+    type Error = SuiError;
+
+    fn link_context(&self) -> AccountAddress {
+        LinkageResolver::link_context(*self)
+    }
+    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
+        LinkageResolver::relocate(*self, module_id)
+    }
+}
+
+impl<S: LinkageResolver<Error = SuiError>> LinkageResolver for &mut S {
+    type Error = SuiError;
+
+    fn link_context(&self) -> AccountAddress {
+        LinkageResolver::link_context(*self)
+    }
+    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
+        LinkageResolver::relocate(*self, module_id)
+    }
+}
+
+/// Initialize linkage information. The input is the ID of a package containing a function used as
+/// an entry point to programmable transaction's Move call command.
+pub trait LinkageInitializer {
+    fn init(&mut self, id: ObjectID);
+}
+
+impl<S: LinkageInitializer> LinkageInitializer for &mut S {
+    fn init(&mut self, id: ObjectID) {
+        LinkageInitializer::init(*self, id);
     }
 }
