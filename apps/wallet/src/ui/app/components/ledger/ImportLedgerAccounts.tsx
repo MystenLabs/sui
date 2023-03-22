@@ -52,9 +52,11 @@ export function ImportLedgerAccounts() {
         },
         onError: (error) => {
             if (error instanceof LockedDeviceError) {
-                toast.error('Your device is locked. Un-lock it and try again.');
+                toast.error('Your device is locked. Unlock it and try again.');
             } else {
-                toast.error('Make sure you have the Sui application open.');
+                toast.error(
+                    'Make sure you have the Sui application open on your Ledger device.'
+                );
             }
             navigate(accountsUrl, { replace: true });
         },
