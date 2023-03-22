@@ -69,6 +69,11 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "multi-get-transactions")]
+    MultiGetTransactions {
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
 }
 
 fn get_keypair() -> Result<(SuiAddress, String)> {
@@ -113,6 +118,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ClapCommand::PaySui { common } => (Command::new_pay_sui(), common),
         ClapCommand::GetCheckpoints { common, start, end } => {
             (Command::new_get_checkpoints(start, end), common)
+        }
+        ClapCommand::MultiGetTransactions { common } => {
+            (Command::new_multi_get_transactions(), common)
         }
     };
 

@@ -6,7 +6,7 @@
 - **Easily extendable** to support any read/write endpoint
 - **Concurrent load generation** with multiple threads,  making it suitable for load testing high-traffic RPC servers.
 - **Cross-verifying** results across multiple RPC Servers, ensuring data consistency and accuracy.
-- **Performance comparison** between vanilla Full node RPC and Enhanced Full node RPC  
+- **Performance comparison** between vanilla Full node RPC and Enhanced Full node RPC
 
 ## Getting Started
 
@@ -15,6 +15,8 @@ Run the following command to see available commands:
 ```bash
 cargo run --bin sui-rpc-loadgen -- -h
 ```
+
+To try this locally, refer to [sef](../sui-test-validator/README.md). Recommend setting `database-url` to an env variable.
 
 ### Example 1: Get All Checkpoints
 
@@ -36,3 +38,15 @@ Both commands achieve the same outcome: fetching all checkpoints using one threa
 cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" --num-threads 1 pay-sui --repeat 100
 ```
 **NOTE**: right now `pay-sui` only supports 1 thread but multi-threading support can be added pretty easily by assigning different gas coins to different threads
+
+
+### Example 3: Get All Transactions
+Finds all checkpoints, and then all transactions in those checkpoints
+
+
+## Adding other endpoints
+
+1. Add new field `Endpoint` to `ClapCommand` in [src/main.rs](src/main.rs)
+2. Add `ClapCommand::Endpoint` to `match opts.command` in [src/main.rs](src/main.rs)
+3. Add new struct `Endpoint`  and provide `new_endpoint` function that returns `Endpoint` in `Command` to [src/payload/mod.rs](src/payload/mod.rs)
+4. Implementation details go in [src/payload/rpc_command_processor.rs](src/payload/rpc_command_processor.rs) and add to `match command`
