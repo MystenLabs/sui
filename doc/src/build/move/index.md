@@ -88,7 +88,7 @@ Move's struct type is similar to struct types defined in other programming langu
 
 You can read more about Move [primitive types](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types) and [structs](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md) in the Move book.
 
-For a Move struct type to define a Sui object type, such as `Coin`, its first field must be `id: UID`, which is a
+For a Sui Move struct type to define a Sui object type, such as `Coin`, its first field must be `id: UID`, which is a
 struct type defined in the [object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move). The Move struct type must also have the `key` ability, which allows Sui's global storage to persist the object. Abilities of a Move struct are listed after the `has` keyword in the struct definition, and their existence (or lack thereof) helps the compiler enforce various properties on a definition or on instances of a given struct.
 
 You can read more about struct [abilities](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md) in the Move book.
