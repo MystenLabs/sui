@@ -7,20 +7,19 @@ import { findIPFSvalue } from './stringUtils';
 
 import type { SuiObjectResponse } from '@mysten/sui.js';
 
-export function parseImageURL(data: any): string {
-    const url = data?.url;
-
-    if (!url) return '';
-
-    if (findIPFSvalue(url)) return url;
-
-    // String representing true http/https URLs are valid:
-    try {
-        new URL(url);
-        return url;
-    } catch {
-        return '';
+export function parseImageURL(display?: Record<string, string>) {
+    const url = display?.img_url;
+    if (url) {
+        if (findIPFSvalue(url)) return url;
+        // String representing true http/https URLs are valid:
+        try {
+            new URL(url);
+            return url;
+        } catch {
+            //do nothing
+        }
     }
+    return '';
 }
 
 export function parseObjectType(data: SuiObjectResponse): string {
@@ -44,18 +43,26 @@ export function getOwnerStr(owner: ObjectOwner | string): string {
 export const checkIsPropertyType = (value: any) =>
     ['number', 'string'].includes(typeof value);
 
-export const extractName = (
-    contents: Record<string, any> | undefined
-): string | undefined => {
-    if (!contents || !('name' in contents)) return undefined;
-    const name = contents.name;
-
+export const extractName = (display?: Record<string, string>) => {
+    if (!display || !('name' in display)) return undefined;
+    const name = display.name;
     if (typeof name === 'string') {
         return name;
     }
-
-    // Dynamic fields
-    if (typeof name === 'object' && typeof name?.fields?.name === 'string') {
-        return name?.fields?.name;
-    }
+    return null;
 };
+
+export function getDisplayUrl(url?: string) {
+    if (url) {
+        try {
+            const parsedUrl = new URL(url);
+            return {
+                href: url,
+                display: parsedUrl.hostname,
+            };
+        } catch (e) {
+            // do nothing
+        }
+    }
+    return url || null;
+}
