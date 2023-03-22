@@ -8,10 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use sui::sui_json_rpc_types::BigInt;
 
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{BigInt, SuiCommittee};
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
