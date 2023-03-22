@@ -1668,7 +1668,7 @@ async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
 
     assert_eq!(1, stake.len());
     assert_eq!(
-        <BigInt>::from(coins.first().unwrap().balance),
+        coins.first().unwrap().balance,
         <BigInt>::from(stake.first().unwrap().stakes.first().unwrap().principal)
     );
     Ok(())

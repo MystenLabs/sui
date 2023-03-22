@@ -3044,9 +3044,7 @@
         ],
         "properties": {
           "balance": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "coinObjectId": {
             "$ref": "#/components/schemas/ObjectID"
