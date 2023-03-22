@@ -226,5 +226,3 @@ module sui::devnet_nft {
    }
 }
 ```
-
-
