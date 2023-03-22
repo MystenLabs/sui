@@ -12,6 +12,7 @@ export interface ButtonOrLinkProps
         'ref'
     > {
     loading?: boolean;
+    target?: string;
 }
 
 export const ButtonOrLink = forwardRef<
@@ -19,7 +20,15 @@ export const ButtonOrLink = forwardRef<
     ButtonOrLinkProps
 >(
     (
-        { href, to, disabled = false, loading = false, children, ...props },
+        {
+            href,
+            to,
+            disabled = false,
+            loading = false,
+            children,
+            target = '_blank',
+            ...props
+        },
         ref
     ) => {
         const isDisabled = disabled || loading;
@@ -43,7 +52,7 @@ export const ButtonOrLink = forwardRef<
             return (
                 <a
                     ref={ref as Ref<HTMLAnchorElement>}
-                    target="_blank"
+                    target={target}
                     rel="noreferrer noopener"
                     href={href}
                     {...props}
