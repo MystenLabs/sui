@@ -14,6 +14,7 @@
 -  [Function `request_add_validator_candidate`](#0x3_validator_set_request_add_validator_candidate)
 -  [Function `request_remove_validator_candidate`](#0x3_validator_set_request_remove_validator_candidate)
 -  [Function `request_add_validator`](#0x3_validator_set_request_add_validator)
+-  [Function `assert_no_pending_or_actice_duplicates`](#0x3_validator_set_assert_no_pending_or_actice_duplicates)
 -  [Function `request_remove_validator`](#0x3_validator_set_request_remove_validator)
 -  [Function `request_add_stake`](#0x3_validator_set_request_add_stake)
 -  [Function `request_withdraw_stake`](#0x3_validator_set_request_withdraw_stake)
@@ -31,7 +32,9 @@
 -  [Function `is_active_validator_by_sui_address`](#0x3_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#0x3_validator_set_is_duplicate_with_active_validator)
 -  [Function `is_duplicate_validator`](#0x3_validator_set_is_duplicate_validator)
+-  [Function `count_duplicates_vec`](#0x3_validator_set_count_duplicates_vec)
 -  [Function `is_duplicate_with_pending_validator`](#0x3_validator_set_is_duplicate_with_pending_validator)
+-  [Function `count_duplicates_tablevec`](#0x3_validator_set_count_duplicates_tablevec)
 -  [Function `get_candidate_or_active_validator_mut`](#0x3_validator_set_get_candidate_or_active_validator_mut)
 -  [Function `find_validator`](#0x3_validator_set_find_validator)
 -  [Function `find_validator_from_table_vec`](#0x3_validator_set_find_validator_from_table_vec)
@@ -149,7 +152,7 @@
 <code>validator_candidates: <a href="_Table">table::Table</a>&lt;<b>address</b>, <a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>&gt;</code>
 </dt>
 <dd>
- Table storing preactive validators, mapping their addresses to their <code>Validator </code> structs.
+ Table storing preactive/candidate validators, mapping their addresses to their <code>Validator </code> structs.
  When an address calls <code>request_add_validator_candidate</code>, they get added to this table and become a preactive
  validator.
  When the candidate has met the min stake requirement, they can call <code>request_add_validator</code> to
@@ -549,17 +552,19 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> to 
     <a href="validator.md#0x3_validator">validator</a>: Validator,
     ctx: &<b>mut</b> TxContext,
 ) {
+    // The next assertions are not critical for the protocol, but they are here <b>to</b> catch problematic configs earlier.
     <b>assert</b>!(
         !<a href="validator_set.md#0x3_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self, &<a href="validator.md#0x3_validator">validator</a>)
             && !<a href="validator_set.md#0x3_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self, &<a href="validator.md#0x3_validator">validator</a>),
         <a href="validator_set.md#0x3_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
-    <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x3_validator">validator</a>), <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     <b>let</b> validator_address = sui_address(&<a href="validator.md#0x3_validator">validator</a>);
     <b>assert</b>!(
         !<a href="_contains">table::contains</a>(&self.validator_candidates, validator_address),
         <a href="validator_set.md#0x3_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>
     );
+
+    <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">validator::is_preactive</a>(&<a href="validator.md#0x3_validator">validator</a>), <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     // Add <a href="validator.md#0x3_validator">validator</a> <b>to</b> the candidates mapping and the pool id mappings so that users can start
     // staking <b>with</b> this candidate.
     <a href="_add">table::add</a>(&<b>mut</b> self.staking_pool_mappings, staking_pool_id(&<a href="validator.md#0x3_validator">validator</a>), validator_address);
@@ -656,6 +661,35 @@ processed at the end of epoch.
     <b>assert</b>!(<a href="validator.md#0x3_validator_total_stake_amount">validator::total_stake_amount</a>(&<a href="validator.md#0x3_validator">validator</a>) &gt;= min_joining_stake_amount, <a href="validator_set.md#0x3_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
 
     <a href="_push_back">table_vec::push_back</a>(&<b>mut</b> self.pending_active_validators, <a href="validator.md#0x3_validator">validator</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_assert_no_pending_or_actice_duplicates"></a>
+
+## Function `assert_no_pending_or_actice_duplicates`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">assert_no_pending_or_actice_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">assert_no_pending_or_actice_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &Validator) {
+    // Validator here must be active or pending, and thus must be identified <b>as</b> duplicate exactly once.
+    <b>assert</b>!(
+        <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(&self.active_validators, <a href="validator.md#0x3_validator">validator</a>) +
+            <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(&self.pending_active_validators, <a href="validator.md#0x3_validator">validator</a>) == 1,
+        <a href="validator_set.md#0x3_validator_set_EDuplicateValidator">EDuplicateValidator</a>
+    );
 }
 </code></pre>
 
@@ -909,6 +943,7 @@ It does the following things:
     <a href="validator_set.md#0x3_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
         &adjusted_storage_fund_reward_amounts, validator_report_records, &slashed_validators);
 
+    // Note that all their staged next epoch metadata will be effectuated below.
     <a href="validator_set.md#0x3_validator_set_process_pending_validators">process_pending_validators</a>(self, new_epoch);
 
     <a href="validator_set.md#0x3_validator_set_process_pending_removals">process_pending_removals</a>(self, validator_report_records, ctx);
@@ -1304,16 +1339,41 @@ only the sui address but this function looks at more metadata.
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &<a href="">vector</a>&lt;Validator&gt;, new_validator: &Validator): bool {
+    <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators, new_validator) &gt; 0
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_count_duplicates_vec"></a>
+
+## Function `count_duplicates_vec`
+
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &<a href="">vector</a>&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): u64 {
     <b>let</b> len = <a href="_length">vector::length</a>(validators);
     <b>let</b> i = 0;
+    <b>let</b> result = 0;
     <b>while</b> (i &lt; len) {
         <b>let</b> v = <a href="_borrow">vector::borrow</a>(validators, i);
-        <b>if</b> (<a href="validator.md#0x3_validator_is_duplicate">validator::is_duplicate</a>(v, new_validator)) {
-            <b>return</b> <b>true</b>
+        <b>if</b> (<a href="validator.md#0x3_validator_is_duplicate">validator::is_duplicate</a>(v, <a href="validator.md#0x3_validator">validator</a>)) {
+            result = result + 1;
         };
         i = i + 1;
     };
-    <b>false</b>
+    result
 }
 </code></pre>
 
@@ -1338,16 +1398,41 @@ Checks whether <code>new_validator</code> is duplicate with any currently pendin
 
 
 <pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
-    <b>let</b> len = <a href="_length">table_vec::length</a>(&self.pending_active_validators);
+    <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(&self.pending_active_validators, new_validator) &gt; 0
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_validator_set_count_duplicates_tablevec"></a>
+
+## Function `count_duplicates_tablevec`
+
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &<a href="_TableVec">table_vec::TableVec</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="validator_set.md#0x3_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &TableVec&lt;Validator&gt;, <a href="validator.md#0x3_validator">validator</a>: &Validator): u64 {
+    <b>let</b> len = <a href="_length">table_vec::length</a>(validators);
     <b>let</b> i = 0;
+    <b>let</b> result = 0;
     <b>while</b> (i &lt; len) {
-        <b>let</b> v = <a href="_borrow">table_vec::borrow</a>(&self.pending_active_validators, i);
-        <b>if</b> (<a href="validator.md#0x3_validator_is_duplicate">validator::is_duplicate</a>(v, new_validator)) {
-            <b>return</b> <b>true</b>
+        <b>let</b> v = <a href="_borrow">table_vec::borrow</a>(validators, i);
+        <b>if</b> (<a href="validator.md#0x3_validator_is_duplicate">validator::is_duplicate</a>(v, <a href="validator.md#0x3_validator">validator</a>)) {
+            result = result + 1;
         };
         i = i + 1;
     };
-    <b>false</b>
+    result
 }
 </code></pre>
 

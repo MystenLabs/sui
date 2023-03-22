@@ -56,7 +56,7 @@ module sui_system::validator_set {
         /// is added to this table so that stakers can continue to withdraw their stake from it.
         inactive_validators: Table<ID, ValidatorWrapper>,
 
-        /// Table storing preactive validators, mapping their addresses to their `Validator ` structs.
+        /// Table storing preactive/candidate validators, mapping their addresses to their `Validator ` structs.
         /// When an address calls `request_add_validator_candidate`, they get added to this table and become a preactive
         /// validator.
         /// When the candidate has met the min stake requirement, they can call `request_add_validator` to
@@ -160,17 +160,19 @@ module sui_system::validator_set {
         validator: Validator,
         ctx: &mut TxContext,
     ) {
+        // The next assertions are not critical for the protocol, but they are here to catch problematic configs earlier.
         assert!(
             !is_duplicate_with_active_validator(self, &validator)
                 && !is_duplicate_with_pending_validator(self, &validator),
             EDuplicateValidator
         );
-        assert!(validator::is_preactive(&validator), EValidatorNotCandidate);
         let validator_address = sui_address(&validator);
         assert!(
             !table::contains(&self.validator_candidates, validator_address),
             EAlreadyValidatorCandidate
         );
+
+        assert!(validator::is_preactive(&validator), EValidatorNotCandidate);
         // Add validator to the candidates mapping and the pool id mappings so that users can start
         // staking with this candidate.
         table::add(&mut self.staking_pool_mappings, staking_pool_id(&validator), validator_address);
@@ -227,6 +229,15 @@ module sui_system::validator_set {
         assert!(validator::total_stake_amount(&validator) >= min_joining_stake_amount, EMinJoiningStakeNotReached);
 
         table_vec::push_back(&mut self.pending_active_validators, validator);
+    }
+
+    public(friend) fun assert_no_pending_or_actice_duplicates(self: &ValidatorSet, validator: &Validator) {
+        // Validator here must be active or pending, and thus must be identified as duplicate exactly once.
+        assert!(
+            count_duplicates_vec(&self.active_validators, validator) +
+                count_duplicates_tablevec(&self.pending_active_validators, validator) == 1,
+            EDuplicateValidator
+        );
     }
 
     /// Called by `sui_system`, to remove a validator.
@@ -388,6 +399,7 @@ module sui_system::validator_set {
         emit_validator_epoch_events(new_epoch, &self.active_validators, &adjusted_staking_reward_amounts,
             &adjusted_storage_fund_reward_amounts, validator_report_records, &slashed_validators);
 
+        // Note that all their staged next epoch metadata will be effectuated below.
         process_pending_validators(self, new_epoch);
 
         process_pending_removals(self, validator_report_records, ctx);
@@ -547,30 +559,40 @@ module sui_system::validator_set {
     }
 
     public(friend) fun is_duplicate_validator(validators: &vector<Validator>, new_validator: &Validator): bool {
+        count_duplicates_vec(validators, new_validator) > 0
+    }
+
+    fun count_duplicates_vec(validators: &vector<Validator>, validator: &Validator): u64 {
         let len = vector::length(validators);
         let i = 0;
+        let result = 0;
         while (i < len) {
             let v = vector::borrow(validators, i);
-            if (validator::is_duplicate(v, new_validator)) {
-                return true
+            if (validator::is_duplicate(v, validator)) {
+                result = result + 1;
             };
             i = i + 1;
         };
-        false
+        result
     }
 
     /// Checks whether `new_validator` is duplicate with any currently pending validators.
     fun is_duplicate_with_pending_validator(self: &ValidatorSet, new_validator: &Validator): bool {
-        let len = table_vec::length(&self.pending_active_validators);
+        count_duplicates_tablevec(&self.pending_active_validators, new_validator) > 0
+    }
+
+    fun count_duplicates_tablevec(validators: &TableVec<Validator>, validator: &Validator): u64 {
+        let len = table_vec::length(validators);
         let i = 0;
+        let result = 0;
         while (i < len) {
-            let v = table_vec::borrow(&self.pending_active_validators, i);
-            if (validator::is_duplicate(v, new_validator)) {
-                return true
+            let v = table_vec::borrow(validators, i);
+            if (validator::is_duplicate(v, validator)) {
+                result = result + 1;
             };
             i = i + 1;
         };
-        false
+        result
     }
 
     /// Get mutable reference to either a candidate or an active validator by address.

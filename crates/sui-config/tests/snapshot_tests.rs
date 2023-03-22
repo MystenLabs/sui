@@ -56,10 +56,11 @@ fn populated_genesis_snapshot_matches() {
     let (_account_keys, objects) = genesis_config
         .generate_accounts(&mut StdRng::from_seed([0; 32]))
         .unwrap();
-    let key: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let account_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let mut rng = StdRng::from_seed([0; 32]);
+    let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
+    let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rng).1;
+    let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut rng).1;
+    let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rng).1;
     let validator = ValidatorInfo {
         name: "0".into(),
         protocol_key: key.public().into(),
