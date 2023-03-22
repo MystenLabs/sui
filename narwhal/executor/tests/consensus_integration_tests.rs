@@ -42,10 +42,9 @@ async fn test_recovery() {
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 3, next_parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 3, next_parents.clone());
     certificates.push_back(certificate);
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[1].clone(), 3, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 3, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.

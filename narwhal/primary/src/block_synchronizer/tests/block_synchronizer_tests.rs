@@ -83,7 +83,7 @@ async fn test_successful_headers_synchronization() {
 
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        id.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -228,7 +228,7 @@ async fn test_successful_payload_synchronization() {
 
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        id.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -408,7 +408,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         ..Default::default()
     };
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        id.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -706,7 +706,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
-        authority_id: authority_id.clone(),
+        authority_id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),

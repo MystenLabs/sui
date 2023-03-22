@@ -65,7 +65,7 @@ impl Cluster {
 
             let authority = AuthorityDetails::new(
                 id,
-                authority_fixture.id().clone(),
+                authority_fixture.id(),
                 authority_fixture.keypair().copy(),
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
@@ -451,7 +451,7 @@ impl WorkerNodeDetails {
             );
         }
 
-        let registry = worker_metrics_registry(self.id, self.name.clone());
+        let registry = worker_metrics_registry(self.id, self.name);
 
         // Make the data store.
         let store_path = if preserve_store {
@@ -530,7 +530,7 @@ impl AuthorityDetails {
         let public_key = key_pair.public().clone();
         let primary = PrimaryNodeDetails::new(
             id,
-            name.clone(),
+            name,
             key_pair,
             network_key_pair,
             parameters.clone(),
@@ -546,7 +546,7 @@ impl AuthorityDetails {
         for (worker_id, addresses) in worker_cache.workers.get(&public_key).unwrap().0.clone() {
             let worker = WorkerNodeDetails::new(
                 worker_id,
-                name.clone(),
+                name,
                 public_key.clone(),
                 parameters.clone(),
                 addresses.transactions.clone(),

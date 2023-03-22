@@ -314,7 +314,7 @@ async fn test_request_vote_send_missing_parents() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        target_id.clone(),
+        target_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -329,7 +329,7 @@ async fn test_request_vote_send_missing_parents() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        authority_id: target_id.clone(),
+        authority_id: target_id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -461,7 +461,7 @@ async fn test_request_vote_accept_missing_parents() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        target_id.clone(),
+        target_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -476,7 +476,7 @@ async fn test_request_vote_accept_missing_parents() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        authority_id: target_id.clone(),
+        authority_id: target_id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -600,7 +600,7 @@ async fn test_request_vote_missing_batches() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        authority_id.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -615,7 +615,7 @@ async fn test_request_vote_missing_batches() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        authority_id: authority_id.clone(),
+        authority_id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -725,7 +725,7 @@ async fn test_request_vote_already_voted() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        id.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -740,7 +740,7 @@ async fn test_request_vote_already_voted() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        authority_id: id.clone(),
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -883,7 +883,7 @@ async fn test_fetch_certificates_handler() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        id.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -945,7 +945,7 @@ async fn test_fetch_certificates_handler() {
     // already in store. But this does not matter for testing here.
     let mut authorities = Vec::<AuthorityIdentifier>::new();
     for i in 0..total_authorities {
-        authorities.push(certificates[i].header.author.clone());
+        authorities.push(certificates[i].header.author);
         for j in 0..=i {
             let cert = certificates[i + j * total_authorities].clone();
             assert_eq!(&cert.header.author, authorities.last().unwrap());
@@ -1051,7 +1051,7 @@ async fn test_process_payload_availability_success() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        id.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -1202,7 +1202,7 @@ async fn test_process_payload_availability_when_failures() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        id.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -1301,7 +1301,7 @@ async fn test_request_vote_created_at_in_future() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        id.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -1316,7 +1316,7 @@ async fn test_request_vote_created_at_in_future() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        authority_id: id.clone(),
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),

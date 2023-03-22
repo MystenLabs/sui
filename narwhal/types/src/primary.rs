@@ -243,7 +243,7 @@ impl Header {
         );
 
         // Ensure the authority has voting rights.
-        let voting_rights = committee.stake_by_id(&self.author);
+        let voting_rights = committee.stake_by_id(self.author);
         ensure!(
             voting_rights > 0,
             DagError::UnknownAuthority(self.author.to_string())
@@ -365,8 +365,8 @@ impl Vote {
             header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
-            origin: header.author.clone(),
-            author: author.clone(),
+            origin: header.author,
+            author: *author,
             signature: Signature::default(),
         };
         let signature = signature_service
@@ -383,8 +383,8 @@ impl Vote {
             header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
-            origin: header.author.clone(),
-            author: author.clone(),
+            origin: header.author,
+            author: *author,
             signature: Signature::default(),
         };
 
@@ -406,7 +406,7 @@ impl Vote {
 
         // Ensure the authority has voting rights.
         ensure!(
-            committee.stake_by_id(&self.author) > 0,
+            committee.stake_by_id(self.author) > 0,
             DagError::UnknownAuthority(self.author.to_string())
         );
 
@@ -503,7 +503,7 @@ impl Certificate {
             .authorities()
             .map(|authority| Self {
                 header: Header {
-                    author: authority.id().clone(),
+                    author: authority.id(),
                     epoch: committee.epoch(),
                     ..Header::default()
                 },
@@ -546,7 +546,7 @@ impl Certificate {
         check_stake: bool,
     ) -> DagResult<Certificate> {
         let mut votes = votes;
-        votes.sort_by_key(|(pk, _)| pk.clone());
+        votes.sort_by_key(|(pk, _)| *pk);
         let mut votes: VecDeque<_> = votes.into_iter().collect();
 
         let mut weight = 0;
@@ -556,7 +556,7 @@ impl Certificate {
             .authorities()
             .enumerate()
             .filter(|(_, authority)| {
-                if !votes.is_empty() && authority.id() == &votes.front().unwrap().0 {
+                if !votes.is_empty() && authority.id() == votes.front().unwrap().0 {
                     sigs.push(votes.pop_front().unwrap());
                     weight += authority.stake();
                     // If there are repeats, also remove them
@@ -676,7 +676,7 @@ impl Certificate {
     }
 
     pub fn origin(&self) -> AuthorityIdentifier {
-        self.header.author.clone()
+        self.header.author
     }
 }
 
@@ -854,7 +854,7 @@ impl FetchCertificatesRequest {
                             .into_iter()
                             .map(|r| self.exclusive_lower_bound + r as Round)
                             .collect();
-                        Some((k.clone(), rounds))
+                        Some((*k, rounds))
                     }
                     Err(e) => {
                         warn!("Failed to deserialize RoaringBitmap {e}");

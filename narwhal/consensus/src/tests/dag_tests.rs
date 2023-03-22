@@ -295,7 +295,7 @@ async fn dag_mutation_failures() {
 
     // Check no authority has live vertexes beyond 1
     for authority in ids.clone() {
-        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 0..=0)
+        assert_eq!(dag.rounds(authority).await.unwrap(), 0..=0)
     }
 
     // Feed the certificates to the Dag in order
@@ -305,13 +305,13 @@ async fn dag_mutation_failures() {
 
     // Check all authorities have live vertexes 1..=4 (genesis is compressible)
     for authority in ids.clone() {
-        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 1..=4)
+        assert_eq!(dag.rounds(authority).await.unwrap(), 1..=4)
     }
 
     // We have only inserted from round 0 to 4 => round 5 queries should fail
     for authority in ids {
         assert!(matches!(
-            dag.node_read_causal(authority.clone(), 5).await,
+            dag.node_read_causal(authority, 5).await,
             Err(ValidatorDagError::NoCertificateForCoordinates(_, 5))
         ))
     }
@@ -345,7 +345,7 @@ async fn dag_insert_one_and_rounds_node_read() {
 
     // we fed 4 complete rounds, and genesis is compressible => rounds(pk) = 1..=4
     for authority in ids.clone() {
-        assert_eq!(1..=4, dag.rounds(authority.clone()).await.unwrap());
+        assert_eq!(1..=4, dag.rounds(authority).await.unwrap());
     }
 
     // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices:

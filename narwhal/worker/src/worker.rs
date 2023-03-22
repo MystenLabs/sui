@@ -142,7 +142,7 @@ impl Worker {
         }
 
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
-            authority_id: worker.authority.id().clone(),
+            authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
             worker_cache: worker.worker_cache.clone(),

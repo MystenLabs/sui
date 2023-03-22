@@ -84,13 +84,8 @@ async fn test_successfully_retrieve_block() {
         .return_const(vec![Ok(certificate)]);
 
     // WHEN we send a request to get a block
-    let block_waiter = BlockWaiter::new(
-        id.clone(),
-        committee,
-        worker_cache,
-        network,
-        Arc::new(mock_handler),
-    );
+    let block_waiter =
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let mut response = block_waiter.get_blocks(vec![digest]).await.unwrap();
 
     // THEN we should expect to get back the correct result
@@ -257,13 +252,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
         .return_const(expected_result);
 
     // WHEN we send a request to get a block
-    let block_waiter = BlockWaiter::new(
-        id.clone(),
-        committee,
-        worker_cache,
-        network,
-        Arc::new(mock_handler),
-    );
+    let block_waiter =
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let response = block_waiter.get_blocks(digests).await.unwrap();
 
     // THEN we should expect to get back the correct result
@@ -299,13 +289,8 @@ async fn test_return_error_when_certificate_is_missing() {
     let network = test_network(primary.network_keypair(), primary.address());
 
     // WHEN we send a request to get a block
-    let block_waiter = BlockWaiter::new(
-        id.clone(),
-        committee,
-        worker_cache,
-        network,
-        Arc::new(mock_handler),
-    );
+    let block_waiter =
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let mut response = block_waiter.get_blocks(vec![digest]).await.unwrap();
 
     // THEN we should expect to get back the error
@@ -349,13 +334,8 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     let network = test_network(primary.network_keypair(), primary.address());
 
     // WHEN we send a request to get a block
-    let block_waiter = BlockWaiter::new(
-        id.clone(),
-        committee,
-        worker_cache,
-        network,
-        Arc::new(mock_handler),
-    );
+    let block_waiter =
+        BlockWaiter::new(id, committee, worker_cache, network, Arc::new(mock_handler));
     let response = block_waiter.get_blocks(vec![digest]).await.unwrap();
     let r = response.blocks.get(0).unwrap().to_owned();
     let block_error = r.err().unwrap();

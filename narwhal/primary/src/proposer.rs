@@ -219,7 +219,7 @@ impl Proposer {
         }
 
         let header = Header::new(
-            self.authority_id.clone(),
+            self.authority_id,
             this_round,
             this_epoch,
             header_digests
@@ -232,14 +232,14 @@ impl Proposer {
 
         let leader_and_support = if this_round % 2 == 0 {
             let authority = self.committee.leader(this_round);
-            if self.authority_id == authority.id().clone() {
+            if self.authority_id == authority.id() {
                 "even_round_is_leader"
             } else {
                 "even_round_not_leader"
             }
         } else {
             let authority = self.committee.leader(this_round - 1);
-            if parents.iter().any(|c| c.origin() == authority.id().clone()) {
+            if parents.iter().any(|c| c.origin() == authority.id()) {
                 "odd_round_gives_support"
             } else {
                 "odd_round_no_support"
@@ -314,7 +314,7 @@ impl Proposer {
             // round, we set a lower max timeout value to increase its chance of committing
             // the leader.
             NetworkModel::PartiallySynchronous
-                if *self.committee.leader(self.round + 1).id() == self.authority_id =>
+                if self.committee.leader(self.round + 1).id() == self.authority_id =>
             {
                 self.max_header_delay / 2
             }
@@ -331,7 +331,7 @@ impl Proposer {
             // min delay value to increase the chance of committing the leader.
             NetworkModel::PartiallySynchronous
                 if self.committee.size() > 1
-                    && *self.committee.leader(self.round + 1).id() == self.authority_id =>
+                    && self.committee.leader(self.round + 1).id() == self.authority_id =>
             {
                 Duration::ZERO
             }
@@ -347,7 +347,7 @@ impl Proposer {
         self.last_leader = self
             .last_parents
             .iter()
-            .find(|x| x.origin() == *leader.id())
+            .find(|x| x.origin() == leader.id())
             .cloned();
 
         if let Some(leader) = self.last_leader.as_ref() {
@@ -361,7 +361,7 @@ impl Proposer {
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
-        if self.committee.leader(self.round + 1).id() == &self.authority_id {
+        if self.committee.leader(self.round + 1).id() == self.authority_id {
             return true;
         }
 
@@ -373,7 +373,7 @@ impl Proposer {
         let mut votes_for_leader = 0;
         let mut no_votes = 0;
         for certificate in &self.last_parents {
-            let stake = self.committee.stake_by_id(&certificate.origin());
+            let stake = self.committee.stake_by_id(certificate.origin());
             if certificate.header.parents.contains(&leader) {
                 votes_for_leader += stake;
             } else {

@@ -169,7 +169,7 @@ async fn fetch_certificates_basic() {
 
     // Make a synchronizer for certificates.
     let synchronizer = Arc::new(Synchronizer::new(
-        id.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         gc_depth,
@@ -203,7 +203,7 @@ async fn fetch_certificates_basic() {
 
     // Make a certificate fetcher
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
-        id.clone(),
+        id,
         fixture.committee(),
         client_network.clone(),
         certificate_store.clone(),

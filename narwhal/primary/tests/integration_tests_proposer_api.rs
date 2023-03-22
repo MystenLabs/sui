@@ -91,7 +91,7 @@ async fn test_rounds_errors() {
     let mut builder = CommitteeBuilder::new(Epoch::default());
 
     for authority in committee.authorities() {
-        if *authority.id() != authority_id {
+        if authority.id() != authority_id {
             builder = builder.add_authority(
                 authority.protocol_key().clone(),
                 authority.stake(),
@@ -246,7 +246,7 @@ async fn test_rounds_return_successful_response() {
         &genesis,
         &committee
             .authorities()
-            .map(|authority| authority.id().clone())
+            .map(|authority| authority.id())
             .collect::<Vec<AuthorityIdentifier>>(),
     );
 

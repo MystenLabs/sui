@@ -265,7 +265,7 @@ impl Certifier {
 
         // Trigger vote requests.
         let peers = committee
-            .others_primaries_by_id(&authority_id)
+            .others_primaries_by_id(authority_id)
             .into_iter()
             .map(|(name, _, network_key)| (name, network_key));
         let mut requests: FuturesUnordered<_> = peers
@@ -367,7 +367,7 @@ impl Certifier {
                     }
                     self.cancel_proposed_header = Some(tx_cancel);
 
-                    let name = self.authority_id.clone();
+                    let name = self.authority_id;
                     let committee = self.committee.clone();
                     let header_store = self.header_store.clone();
                     let certificate_store = self.certificate_store.clone();

@@ -40,10 +40,9 @@ async fn commit_one() {
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 3, next_parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 3, next_parents.clone());
     certificates.push_back(certificate);
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[1].clone(), 3, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 3, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -114,7 +113,7 @@ async fn dead_node() {
     let committee: Committee = fixture.committee();
     let mut ids: Vec<_> = committee
         .authorities()
-        .map(|authority| authority.id().clone())
+        .map(|authority| authority.id())
         .collect();
 
     // remove the last authority - 4
@@ -240,7 +239,7 @@ async fn not_enough_support() {
     // Round 2: Fully connect graph. But remember the digest of the leader. Note that this
     // round is the only one with 4 certificates.
     let (leader_2_digest, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 2, parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 2, parents.clone());
     certificates.push_back(certificate);
 
     let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
@@ -251,22 +250,19 @@ async fn not_enough_support() {
     // Round 3: Only node 0 links to the leader of round 2.
     let mut next_parents = BTreeSet::new();
 
-    let name = &ids[1];
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let name = ids[1];
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
-    let name = &ids[2];
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let name = ids[2];
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
-    let name = &ids[0];
+    let name = ids[0];
     parents.insert(leader_2_digest);
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
@@ -278,10 +274,9 @@ async fn not_enough_support() {
     certificates.extend(out);
 
     // Round 5: Send f+1 certificates to trigger the commit of leader 4.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 5, parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 5, parents.clone());
     certificates.push_back(certificate);
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1].clone(), 5, parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -357,7 +352,7 @@ async fn not_enough_support() {
     // with value 1, and everything else should be zero.
     assert_eq!(committed_sub_dag.reputation_score.total_authorities(), 4);
 
-    let node_0_name: AuthorityIdentifier = ids[0].clone();
+    let node_0_name: AuthorityIdentifier = ids[0];
     committed_sub_dag
         .reputation_score
         .scores_per_authority
@@ -398,10 +393,9 @@ async fn missing_leader() {
     certificates.extend(out);
 
     // Add f+1 certificates of round 5 to commit the leader of round 4.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 5, parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 5, parents.clone());
     certificates.push_back(certificate);
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1].clone(), 5, parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 5, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -792,19 +786,14 @@ async fn restart_with_new_committee() {
         // Make two certificate (f+1) with round 3 to trigger the commits.
         let (_, certificate) = test_utils::mock_certificate_with_epoch(
             &committee,
-            ids[0].clone(),
+            ids[0],
             3,
             epoch,
             next_parents.clone(),
         );
         certificates.push_back(certificate);
-        let (_, certificate) = test_utils::mock_certificate_with_epoch(
-            &committee,
-            ids[1].clone(),
-            3,
-            epoch,
-            next_parents,
-        );
+        let (_, certificate) =
+            test_utils::mock_certificate_with_epoch(&committee, ids[1], 3, epoch, next_parents);
         certificates.push_back(certificate);
 
         // Feed all certificates to the consensus. Only the last certificate should trigger
@@ -857,12 +846,12 @@ async fn garbage_collection_basic() {
     // committed for authority 4.
     let ids: Vec<AuthorityIdentifier> = committee
         .authorities()
-        .map(|authority| authority.id().clone())
+        .map(|authority| authority.id())
         .collect();
-    let slow_node = ids[3].clone();
+    let slow_node = ids[3];
     let genesis = Certificate::genesis(&committee);
 
-    let slow_nodes = vec![(slow_node.clone(), 0.0_f64)];
+    let slow_nodes = vec![(slow_node, 0.0_f64)];
     let (certificates, _round_5_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
         1..=7,
@@ -946,12 +935,12 @@ async fn slow_node() {
     // committed for authority 4.
     let ids: Vec<AuthorityIdentifier> = committee
         .authorities()
-        .map(|authority| authority.id().clone())
+        .map(|authority| authority.id())
         .collect();
-    let slow_node = ids[3].clone();
+    let slow_node = ids[3];
     let genesis = Certificate::genesis(&committee);
 
-    let slow_nodes = vec![(slow_node.clone(), 0.0_f64)];
+    let slow_nodes = vec![(slow_node, 0.0_f64)];
     let (certificates, round_8_certificates) = test_utils::make_certificates_with_slow_nodes(
         &committee,
         1..=8,
@@ -1075,12 +1064,12 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
 
     let ids: Vec<AuthorityIdentifier> = committee
         .authorities()
-        .map(|authority| authority.id().clone())
+        .map(|authority| authority.id())
         .collect();
 
     // take the first 3 nodes only - 4th one won't propose anything
     let keys_with_dead_node = ids[0..=2].to_vec();
-    let slow_node = ids[3].clone();
+    let slow_node = ids[3];
     let slow_nodes = vec![(slow_node, 0.0_f64)];
     let genesis = Certificate::genesis(&committee);
 
@@ -1102,7 +1091,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                 .iter()
                 .map(|cert| cert.digest())
                 .collect::<BTreeSet<_>>();
-            let (_, certificate) = test_utils::mock_certificate(&committee, id.clone(), 3, parents);
+            let (_, certificate) = test_utils::mock_certificate(&committee, *id, 3, parents);
             round_3_certificates.push(certificate);
         } else {
             // we filter out the round 2 leader
@@ -1111,7 +1100,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
                 .filter(|cert| cert.origin() != *first_node)
                 .map(|cert| cert.digest())
                 .collect::<BTreeSet<_>>();
-            let (_, certificate) = test_utils::mock_certificate(&committee, id.clone(), 3, parents);
+            let (_, certificate) = test_utils::mock_certificate(&committee, *id, 3, parents);
             round_3_certificates.push(certificate);
         }
     }
@@ -1124,13 +1113,13 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
             .iter()
             .map(|cert| cert.digest())
             .collect::<BTreeSet<_>>();
-        let (_, certificate) = test_utils::mock_certificate(&committee, id.clone(), 4, parents);
+        let (_, certificate) = test_utils::mock_certificate(&committee, *id, 4, parents);
         round_4_certificates.push(certificate);
     }
 
     // now from round 5 to 7 create all certificates. Node 1 is now a slow node and won't create
     // referrencies to the certificates of that one.
-    let slow_node = ids[0].clone();
+    let slow_node = ids[0];
     let slow_nodes = vec![(slow_node, 0.0_f64)];
 
     let (certificates_5_to_7, _round_7_certificates) =

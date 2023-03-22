@@ -157,7 +157,7 @@ impl CertificateFetcher {
                     // The header should have been verified as part of the certificate.
                     match self
                     .certificate_store
-                    .last_round_number(&header.author) {
+                    .last_round_number(header.author) {
                         Ok(r) => {
                             if header.round <= r.unwrap_or(0) {
                                 // Ignore fetch request. Possibly the certificate was processed
@@ -174,7 +174,7 @@ impl CertificateFetcher {
                     };
 
                     // Update the target rounds for the authority.
-                    self.targets.insert(header.author.clone(), header.round);
+                    self.targets.insert(header.author, header.round);
 
                     // Kick start a fetch task if there is no other task running.
                     if self.fetch_certificates_task.is_empty() {
@@ -212,7 +212,7 @@ impl CertificateFetcher {
         for authority in self.committee.authorities() {
             // Initialize written_rounds for all authorities, because the handler only sends back
             // certificates for the set of authorities here.
-            written_rounds.insert(authority.id().clone(), BTreeSet::new());
+            written_rounds.insert(authority.id(), BTreeSet::new());
         }
         // NOTE: origins_after_round() is inclusive.
         match self.certificate_store.origins_after_round(gc_round + 1) {
@@ -296,7 +296,7 @@ async fn run_fetch_task(
         .set_bounds(gc_round, written_rounds)
         .set_max_items(MAX_CERTIFICATES_TO_FETCH);
     let Some(response) =
-        fetch_certificates_helper(&state.authority_id, &state.network, &committee, request).await else {
+        fetch_certificates_helper(state.authority_id, &state.network, &committee, request).await else {
             return Err(DagError::NoCertificateFetched);
         };
 
@@ -316,7 +316,7 @@ async fn run_fetch_task(
 /// Terminates after the 1st successful response is received.
 #[instrument(level = "debug", skip_all)]
 async fn fetch_certificates_helper(
-    name: &AuthorityIdentifier,
+    name: AuthorityIdentifier,
     network: &anemo::Network,
     committee: &Committee,
     request: FetchCertificatesRequest,

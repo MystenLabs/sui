@@ -70,7 +70,7 @@ impl ConsensusProtocol for Tusk {
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake_by_id(&x.origin()))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
@@ -166,7 +166,7 @@ impl Tusk {
         }
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(leader.id()))
+        dag.get(&round).and_then(|x| x.get(&leader.id()))
     }
 }
 

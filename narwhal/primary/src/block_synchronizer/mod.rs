@@ -381,7 +381,7 @@ impl BlockSynchronizer {
         };
         let primaries: Vec<_> = self
             .committee
-            .others_primaries_by_id(&self.authority_id)
+            .others_primaries_by_id(self.authority_id)
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
@@ -441,7 +441,7 @@ impl BlockSynchronizer {
         // Create a future to broadcast certificate requests.
         let network_keys: Vec<_> = self
             .committee
-            .others_primaries_by_id(&self.authority_id)
+            .others_primaries_by_id(self.authority_id)
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
@@ -602,7 +602,7 @@ impl BlockSynchronizer {
                     continue;
                 }
             };
-            self.send_synchronize_payload_requests(target.clone(), peer.assigned_values())
+            self.send_synchronize_payload_requests(target, peer.assigned_values())
                 .await
         }
 
@@ -653,7 +653,7 @@ impl BlockSynchronizer {
 
             let message = WorkerSynchronizeMessage {
                 digests: batch_ids,
-                target: primary_peer_name.clone(),
+                target: primary_peer_name,
                 is_certified: true,
             };
             let _ = self.network.unreliable_send(worker_name, &message);

@@ -39,7 +39,7 @@ impl NarwhalProposer {
 
         // ensure provided key is part of the committee
         return if let Some(authority) = self.committee.authority_by_key(&key) {
-            Ok(authority.id().clone())
+            Ok(authority.id())
         } else {
             Err(Status::invalid_argument(
                 "Invalid public key: unknown authority",

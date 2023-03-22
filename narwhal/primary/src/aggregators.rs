@@ -43,12 +43,12 @@ impl VotesAggregator {
 
         // Ensure it is the first time this authority votes.
         ensure!(
-            self.used.insert(author.clone()),
+            self.used.insert(author),
             DagError::AuthorityReuse(author.to_string())
         );
 
-        self.votes.push((author.clone(), vote.signature));
-        self.weight += committee.stake_by_id(&author);
+        self.votes.push((author, vote.signature));
+        self.weight += committee.stake_by_id(author);
 
         self.metrics
             .votes_received_last_round
@@ -90,12 +90,12 @@ impl CertificatesAggregator {
         let origin = certificate.origin();
 
         // Ensure it is the first time this authority votes.
-        if !self.used.insert(origin.clone()) {
+        if !self.used.insert(origin) {
             return None;
         }
 
         self.certificates.push(certificate);
-        self.weight += committee.stake_by_id(&origin);
+        self.weight += committee.stake_by_id(origin);
         if self.weight >= committee.quorum_threshold() {
             // Note that we do not reset the weight here. If this function is called again and
             // the proposer didn't yet advance round, we can add extra certificates as parents.

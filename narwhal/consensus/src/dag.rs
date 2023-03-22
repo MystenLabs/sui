@@ -245,7 +245,7 @@ impl InnerDag {
         let (earliest, latest) = {
             // Perform the actual round probe
             let vertices = self.vertices.read().unwrap();
-            let range = vertices.range((origin.clone(), Round::MIN)..(origin.clone(), Round::MAX));
+            let range = vertices.range((origin, Round::MIN)..(origin, Round::MAX));
 
             // In non-pathological cases, the range is non-empty, and has a lot of dropped nodes towards the beginning
             // yet this can't be a take_while because the DAG removal may be non-contiguous.
@@ -284,7 +284,7 @@ impl InnerDag {
         round: Round,
     ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError> {
         let vertices = self.vertices.read().unwrap();
-        let start_digest = vertices.get(&(origin.clone(), round)).ok_or(
+        let start_digest = vertices.get(&(origin, round)).ok_or(
             ValidatorDagError::NoCertificateForCoordinates(origin, round),
         )?;
         self.read_causal(*start_digest)

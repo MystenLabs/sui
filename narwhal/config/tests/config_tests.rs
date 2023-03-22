@@ -51,9 +51,9 @@ fn leader_election_rotates_through_all() {
         let leader_stepping_by_2 = committee.leader(i * 2);
         let leader_steeping_by_2_id = leader_stepping_by_2.id();
 
-        *leader_counts.entry(leader_id.clone()).or_insert(0) += 1;
+        *leader_counts.entry(leader_id).or_insert(0) += 1;
         *leader_counts_stepping_by_2
-            .entry(leader_steeping_by_2_id.clone())
+            .entry(leader_steeping_by_2_id)
             .or_insert(0) += 1;
     }
     assert!(leader_counts.values().all(|v| *v >= 20));

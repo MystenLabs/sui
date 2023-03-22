@@ -240,7 +240,7 @@ impl PrimaryNodeInner {
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
             let consensus_handles = Self::spawn_consensus(
-                authority.id().clone(),
+                authority.id(),
                 rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),

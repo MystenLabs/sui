@@ -67,7 +67,7 @@ fn get_registry() -> Result<Registry> {
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
     let header_builder = HeaderBuilder::default();
     let header = header_builder
-        .author(authority.id().clone())
+        .author(authority.id())
         .epoch(0)
         .created_at(0)
         .round(1)
@@ -86,7 +86,7 @@ fn get_registry() -> Result<Registry> {
     let certificate = Certificate::new_unsigned(
         &committee,
         header.clone(),
-        vec![(authority.id().clone(), signature)],
+        vec![(authority.id(), signature)],
     )
     .unwrap();
 
@@ -120,7 +120,7 @@ fn get_registry() -> Result<Registry> {
     };
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
-        target: authority.id().clone(),
+        target: authority.id(),
         is_certified: true,
     };
 

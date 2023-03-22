@@ -63,9 +63,9 @@ impl Authority {
         self.initialised = true;
     }
 
-    pub fn id(&self) -> &AuthorityIdentifier {
+    pub fn id(&self) -> AuthorityIdentifier {
         assert!(self.initialised);
-        &self.id
+        self.id
     }
 
     pub fn protocol_key(&self) -> &PublicKey {
@@ -113,6 +113,7 @@ pub struct Committee {
     Ord,
     PartialOrd,
     Clone,
+    Copy,
     Debug,
     Default,
     Hash,
@@ -155,7 +156,7 @@ impl Committee {
 
             for (identifier, (_key, authority)) in (0_u16..).zip(self.authorities.iter_mut()) {
                 let id = AuthorityIdentifier(identifier);
-                authority.initialise(id.clone());
+                authority.initialise(id);
 
                 authorities.insert(id, authority.clone());
             }
@@ -223,11 +224,11 @@ impl Committee {
             .map_or_else(|| 0, |x| x.stake)
     }
 
-    pub fn stake_by_id(&self, id: &AuthorityIdentifier) -> Stake {
+    pub fn stake_by_id(&self, id: AuthorityIdentifier) -> Stake {
         self.authorities_by_id
             .get()
             .unwrap()
-            .get(id)
+            .get(&id)
             .map_or_else(|| 0, |authority| authority.stake)
     }
 
@@ -310,14 +311,14 @@ impl Committee {
     /// Return all the network addresses in the committee.
     pub fn others_primaries_by_id(
         &self,
-        myself: &AuthorityIdentifier,
+        myself: AuthorityIdentifier,
     ) -> Vec<(AuthorityIdentifier, Multiaddr, NetworkPublicKey)> {
         self.authorities
             .iter()
             .filter(|(_, authority)| authority.id() != myself)
             .map(|(_, authority)| {
                 (
-                    authority.id().clone(),
+                    authority.id(),
                     authority.primary_address(),
                     authority.network_key(),
                 )
@@ -486,7 +487,7 @@ mod tests {
         assert_eq!(authorities.len() as u64, num_of_authorities);
 
         for (identifier, authority) in committee.authorities_by_id.get().unwrap().iter() {
-            assert_eq!(identifier, authority.id());
+            assert_eq!(*identifier, authority.id());
         }
 
         // AND ensure authorities are returned in the same order
@@ -498,7 +499,7 @@ mod tests {
             .zip(committee.authorities)
         {
             assert_eq!(authority_1.clone(), authority_2);
-            assert_eq!(id, authority_2.id());
+            assert_eq!(*id, authority_2.id());
             assert_eq!(&public_key, authority_1.protocol_key());
         }
     }

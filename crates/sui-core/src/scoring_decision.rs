@@ -196,10 +196,10 @@ mod tests {
 
         // there is a clear low outlier in the scores, exclude it
         let mut scores = HashMap::new();
-        scores.insert(a1.id().clone(), 207_u64);
-        scores.insert(a2.id().clone(), 211_u64);
-        scores.insert(a3.id().clone(), 207_u64);
-        scores.insert(a4.id().clone(), 155_u64);
+        scores.insert(a1.id(), 207_u64);
+        scores.insert(a2.id(), 211_u64);
+        scores.insert(a3.id(), 207_u64);
+        scores.insert(a4.id(), 155_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -220,10 +220,10 @@ mod tests {
 
         // a4 has score which is a bit lower, but should not be excluded
         let mut scores = HashMap::new();
-        scores.insert(a1.id().clone(), 207_u64);
-        scores.insert(a2.id().clone(), 211_u64);
-        scores.insert(a3.id().clone(), 207_u64);
-        scores.insert(a4.id().clone(), 190_u64);
+        scores.insert(a1.id(), 207_u64);
+        scores.insert(a2.id(), 211_u64);
+        scores.insert(a3.id(), 207_u64);
+        scores.insert(a4.id(), 190_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -240,10 +240,10 @@ mod tests {
 
         // this set of scores has a high performing outlier, we don't exclude it
         let mut scores = HashMap::new();
-        scores.insert(a1.id().clone(), 300_u64);
-        scores.insert(a2.id().clone(), 257_u64);
-        scores.insert(a3.id().clone(), 140_u64);
-        scores.insert(a4.id().clone(), 200_u64);
+        scores.insert(a1.id(), 300_u64);
+        scores.insert(a2.id(), 257_u64);
+        scores.insert(a3.id(), 140_u64);
+        scores.insert(a4.id(), 200_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -260,10 +260,10 @@ mod tests {
 
         // if more than the quorum is a low outlier, we don't exclude any authority
         let mut scores = HashMap::new();
-        scores.insert(a1.id().clone(), 450_u64);
-        scores.insert(a2.id().clone(), 490_u64);
-        scores.insert(a3.id().clone(), 10_u64);
-        scores.insert(a4.id().clone(), 0_u64);
+        scores.insert(a1.id(), 450_u64);
+        scores.insert(a2.id(), 490_u64);
+        scores.insert(a3.id(), 10_u64);
+        scores.insert(a4.id(), 0_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -291,10 +291,10 @@ mod tests {
         for (i, authority) in authorities.iter().enumerate().take(num_nodes - 1) {
             let score_add = i / 5;
 
-            scores.insert(authority.id().clone(), 100_u64 + (score_add as u64));
+            scores.insert(authority.id(), 100_u64 + (score_add as u64));
         }
         // the non-outlier
-        let outlier_id = authorities[final_idx].id().clone();
+        let outlier_id = authorities[final_idx].id();
         scores.insert(outlier_id, 190_u64);
 
         let reputation_scores = ReputationScores {
@@ -312,7 +312,7 @@ mod tests {
         assert_eq!(low_scoring.load().len(), 0);
 
         // the outlier
-        scores.insert(authorities[final_idx].id().clone(), 40_u64);
+        scores.insert(authorities[final_idx].id(), 40_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -359,14 +359,14 @@ mod tests {
 
         // there is a low outlier in the non zero scores, exclude it as well as down nodes
         let mut scores = HashMap::new();
-        scores.insert(a1.id().clone(), 350_u64);
-        scores.insert(a2.id().clone(), 390_u64);
-        scores.insert(a3.id().clone(), 350_u64);
-        scores.insert(a4.id().clone(), 50_u64);
-        scores.insert(a5.id().clone(), 0_u64); // down node
-        scores.insert(a6.id().clone(), 300_u64);
-        scores.insert(a7.id().clone(), 340_u64);
-        scores.insert(a8.id().clone(), 310_u64);
+        scores.insert(a1.id(), 350_u64);
+        scores.insert(a2.id(), 390_u64);
+        scores.insert(a3.id(), 350_u64);
+        scores.insert(a4.id(), 50_u64);
+        scores.insert(a5.id(), 0_u64); // down node
+        scores.insert(a6.id(), 300_u64);
+        scores.insert(a7.id(), 340_u64);
+        scores.insert(a8.id(), 310_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,

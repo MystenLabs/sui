@@ -44,7 +44,7 @@ async fn accept_certificates() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        authority_id.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -143,7 +143,7 @@ async fn accept_suspended_certificates() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        authority_id.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -254,7 +254,7 @@ async fn synchronizer_recover_basic() {
 
     // Make Synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -306,7 +306,7 @@ async fn synchronizer_recover_basic() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -373,7 +373,7 @@ async fn synchronizer_recover_partial_certs() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -424,7 +424,7 @@ async fn synchronizer_recover_partial_certs() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -486,7 +486,7 @@ async fn synchronizer_recover_previous_round() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -551,7 +551,7 @@ async fn synchronizer_recover_previous_round() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,

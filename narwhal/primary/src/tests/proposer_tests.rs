@@ -74,7 +74,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     // Spawn the proposer.
     let _proposer_handle = Proposer::spawn(
-        name.clone(),
+        name,
         committee.clone(),
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 1,
@@ -196,7 +196,7 @@ async fn equivocation_protection() {
 
     // Spawn the proposer.
     let proposer_handle = Proposer::spawn(
-        authority_id.clone(),
+        authority_id,
         committee.clone(),
         proposer_store.clone(),
         /* header_num_of_batches_threshold */ 1,
@@ -268,7 +268,7 @@ async fn equivocation_protection() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let _proposer_handle = Proposer::spawn(
-        authority_id.clone(),
+        authority_id,
         committee.clone(),
         proposer_store,
         /* header_num_of_batches_threshold */ 1,

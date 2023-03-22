@@ -279,7 +279,7 @@ impl Synchronizer {
         let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
         let highest_processed_round = certificate_store.highest_round_number();
-        let highest_created_certificate = certificate_store.last_round(&authority_id).unwrap();
+        let highest_created_certificate = certificate_store.last_round(authority_id).unwrap();
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
             broadcast::channel(CHANNEL_CAPACITY);
@@ -400,7 +400,7 @@ impl Synchronizer {
             let mut senders = inner_senders.certificate_senders.lock();
             for (name, _, network_key) in inner_senders
                 .committee
-                .others_primaries_by_id(&inner_senders.authority_id)
+                .others_primaries_by_id(inner_senders.authority_id)
                 .into_iter()
             {
                 senders.spawn(Self::push_certificates(
@@ -913,7 +913,7 @@ impl Synchronizer {
                 let digests = digests.clone();
                 let message = WorkerSynchronizeMessage {
                     digests: digests.clone(),
-                    target: header.author.clone(),
+                    target: header.author,
                     is_certified,
                 };
                 let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));

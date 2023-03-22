@@ -436,7 +436,7 @@ fn rounds_of_certificates(
         for id in ids {
             let this_cert_parents = this_cert_parents(&parents, failure_probability);
 
-            let (digest, certificate) = make_one_certificate(id.clone(), round, this_cert_parents);
+            let (digest, certificate) = make_one_certificate(*id, round, this_cert_parents);
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }
@@ -490,8 +490,7 @@ pub fn make_certificates_with_slow_nodes(
         for name in names {
             let this_cert_parents =
                 this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes);
-            let (_, certificate) =
-                mock_certificate(committee, name.clone(), round, this_cert_parents);
+            let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
         }
@@ -552,7 +551,7 @@ pub fn make_certificates_with_epoch(
         next_parents.clear();
         for name in keys {
             let (digest, certificate) =
-                mock_certificate_with_epoch(committee, name.clone(), round, epoch, parents.clone());
+                mock_certificate_with_epoch(committee, *name, round, epoch, parents.clone());
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }
@@ -571,7 +570,7 @@ pub fn make_signed_certificates(
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
     let ids = keys
         .iter()
-        .map(|(authority, _)| authority.clone())
+        .map(|(authority, _)| *authority)
         .collect::<Vec<_>>();
     let generator =
         |pk, round, parents| mock_signed_certificate(keys, pk, round, parents, committee);
@@ -640,7 +639,7 @@ pub fn mock_signed_certificate(
     let mut votes = Vec::new();
     for (name, signer) in signers {
         let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
-        votes.push((name.clone(), sig))
+        votes.push((*name, sig))
     }
     let cert = Certificate::new(committee, header, votes).unwrap();
     (cert.digest(), cert)
@@ -864,7 +863,7 @@ pub struct AuthorityFixture {
 
 impl AuthorityFixture {
     pub fn id(&self) -> AuthorityIdentifier {
-        self.authority.get().unwrap().id().clone()
+        self.authority.get().unwrap().id()
     }
 
     pub fn authority(&self) -> &Authority {

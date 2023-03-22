@@ -35,8 +35,7 @@ async fn commit_one() {
         test_utils::make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
 
     // Make one certificate with round 5 to trigger the commits.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 5, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 5, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -184,7 +183,7 @@ async fn not_enough_support() {
     // Round 2: Fully connect graph. But remember the digest of the leader. Note that this
     // round is the only one with 4 certificates.
     let (leader_2_digest, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 2, parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 2, parents.clone());
     certificates.push_back(certificate);
 
     let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
@@ -195,22 +194,19 @@ async fn not_enough_support() {
     // Round 3: Only node 0 links to the leader of round 2.
     let mut next_parents = BTreeSet::new();
 
-    let name = &ids[1];
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let name = ids[1];
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
-    let name = &ids[2];
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let name = ids[2];
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
-    let name = &ids[0];
+    let name = ids[0];
     parents.insert(leader_2_digest);
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
@@ -222,7 +218,7 @@ async fn not_enough_support() {
     certificates.extend(out);
 
     // Round 7: Send a single certificate to trigger the commits.
-    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0].clone(), 7, parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 7, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -311,8 +307,7 @@ async fn missing_leader() {
     certificates.extend(out);
 
     // Add a certificate of round 7 to commit the leader of round 4.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, ids[0].clone(), 7, parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 7, parents.clone());
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -418,13 +413,8 @@ async fn restart_with_new_committee() {
             test_utils::make_certificates_with_epoch(&committee, 1..=4, epoch, &genesis, &ids);
 
         // Make one certificate with round 5 to trigger the commits.
-        let (_, certificate) = test_utils::mock_certificate_with_epoch(
-            &committee,
-            ids[0].clone(),
-            5,
-            epoch,
-            next_parents,
-        );
+        let (_, certificate) =
+            test_utils::mock_certificate_with_epoch(&committee, ids[0], 5, epoch, next_parents);
         certificates.push_back(certificate);
 
         // Feed all certificates to the consensus. Only the last certificate should trigger

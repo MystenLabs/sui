@@ -47,7 +47,7 @@ async fn test_successful_blocks_delete() {
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let block_remover = BlockRemover::new(
-        id.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),
@@ -214,7 +214,7 @@ async fn test_failed_blocks_delete() {
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let block_remover = BlockRemover::new(
-        id.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),

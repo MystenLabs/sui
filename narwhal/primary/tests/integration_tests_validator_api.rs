@@ -743,7 +743,7 @@ async fn test_read_causal_unsigned_certificates() {
         &genesis,
         &committee
             .authorities()
-            .map(|authority| authority.id().clone())
+            .map(|authority| authority.id())
             .collect::<Vec<AuthorityIdentifier>>(),
     );
 

@@ -366,15 +366,15 @@ impl CertificateStore {
 
     /// Retrieves the last certificate of the given origin.
     /// Returns None if there is no certificate for the origin.
-    pub fn last_round(&self, origin: &AuthorityIdentifier) -> StoreResult<Option<Certificate>> {
-        let key = (origin.clone(), Round::MAX);
+    pub fn last_round(&self, origin: AuthorityIdentifier) -> StoreResult<Option<Certificate>> {
+        let key = (origin, Round::MAX);
         if let Some(((name, _round), digest)) = self
             .certificate_id_by_origin
             .iter()
             .skip_prior_to(&key)?
             .next()
         {
-            if &name == origin {
+            if name == origin {
                 return self.certificates_by_id.get(&digest);
             }
         }
@@ -399,15 +399,15 @@ impl CertificateStore {
 
     /// Retrieves the last round number of the given origin.
     /// Returns None if there is no certificate for the origin.
-    pub fn last_round_number(&self, origin: &AuthorityIdentifier) -> StoreResult<Option<Round>> {
-        let key = (origin.clone(), Round::MAX);
+    pub fn last_round_number(&self, origin: AuthorityIdentifier) -> StoreResult<Option<Round>> {
+        let key = (origin, Round::MAX);
         if let Some(((name, round), _)) = self
             .certificate_id_by_origin
             .iter()
             .skip_prior_to(&key)?
             .next()
         {
-            if &name == origin {
+            if name == origin {
                 return Ok(Some(round));
             }
         }
@@ -418,13 +418,13 @@ impl CertificateStore {
     /// Returns None if there is no more local certificate from the origin with bigger round.
     pub fn next_round_number(
         &self,
-        origin: &AuthorityIdentifier,
+        origin: AuthorityIdentifier,
         round: Round,
     ) -> StoreResult<Option<Round>> {
-        let key = (origin.clone(), round + 1);
+        let key = (origin, round + 1);
         if let Some(((name, round), _)) = self.certificate_id_by_origin.iter().skip_to(&key)?.next()
         {
-            if &name == origin {
+            if name == origin {
                 return Ok(Some(round));
             }
         }
@@ -591,7 +591,7 @@ mod test {
         // THEN
         let mut i = 0;
         let mut current_round = 0;
-        while let Some(r) = store.next_round_number(&origin, current_round).unwrap() {
+        while let Some(r) = store.next_round_number(origin, current_round).unwrap() {
             assert_eq!(rounds[i], r);
             i += 1;
             current_round = r;
@@ -612,11 +612,10 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
-        let last_round_cert = store.last_round(&origin).unwrap().unwrap();
-        let last_round_number = store.last_round_number(&origin).unwrap().unwrap();
-        let last_round_number_not_exist = store
-            .last_round_number(&AuthorityIdentifier(10u16))
-            .unwrap();
+        let last_round_cert = store.last_round(origin).unwrap().unwrap();
+        let last_round_number = store.last_round_number(origin).unwrap().unwrap();
+        let last_round_number_not_exist =
+            store.last_round_number(AuthorityIdentifier(10u16)).unwrap();
         let highest_round_number = store.highest_round_number();
 
         // THEN
@@ -640,9 +639,9 @@ mod test {
 
         // WHEN
         let result = store.last_two_rounds_certs().unwrap();
-        let last_round_cert = store.last_round(&AuthorityIdentifier::default()).unwrap();
+        let last_round_cert = store.last_round(AuthorityIdentifier::default()).unwrap();
         let last_round_number = store
-            .last_round_number(&AuthorityIdentifier::default())
+            .last_round_number(AuthorityIdentifier::default())
             .unwrap();
         let highest_round_number = store.highest_round_number();
 

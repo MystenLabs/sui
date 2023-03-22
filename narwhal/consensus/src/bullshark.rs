@@ -122,7 +122,7 @@ impl ConsensusProtocol for Bullshark {
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake_by_id(&x.origin()))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         self.last_leader_election = LastRound {
@@ -273,10 +273,10 @@ impl Bullshark {
                 let next_leader = (round/2 - 1) as usize % committee.size();
                 let authorities = committee.authorities().collect::<Vec<_>>();
 
-                authorities.get(next_leader).unwrap().id().clone()
+                authorities.get(next_leader).unwrap().id()
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
-                committee.leader(round).id().clone()
+                committee.leader(round).id()
             }
         }
     }

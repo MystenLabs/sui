@@ -110,7 +110,7 @@ async fn test_get_primary_address() {
 
     let committee = cluster.committee.clone();
     let authority = cluster.authority(0);
-    let name = authority.name.clone();
+    let name = authority.name;
 
     // Test gRPC server with client call
     let mut client = authority.new_configuration_client().await;

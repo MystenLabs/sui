@@ -154,7 +154,7 @@ async fn main() -> Result<(), eyre::Report> {
                 .id();
 
             let registry = match sub_matches.subcommand() {
-                ("primary", _) => primary_metrics_registry(authority_id.clone()),
+                ("primary", _) => primary_metrics_registry(authority_id),
                 ("worker", Some(worker_matches)) => {
                     let id = worker_matches
                         .value_of("id")
@@ -162,7 +162,7 @@ async fn main() -> Result<(), eyre::Report> {
                         .parse::<WorkerId>()
                         .context("The worker id must be a positive integer")?;
 
-                    worker_metrics_registry(id, authority_id.clone())
+                    worker_metrics_registry(id, authority_id)
                 }
                 _ => unreachable!(),
             };
