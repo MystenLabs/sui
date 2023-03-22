@@ -18,7 +18,7 @@ The [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framewor
 
 The most common case is to transfer an object to an address. For example, when you create a new object is created, you typically transfer it to an address for ownership. In Sui Move, to transfer an object `obj` to an address `recipient`, you import the module then make the transfer:
 
-```move
+```rust
 use sui::transfer;
 
 transfer::transfer(obj, recipient);
@@ -30,7 +30,7 @@ This call fully consumes the object, making it no longer accessible in the curre
 
 An object can be owned by another object when you add the former as a [dynamic object field](../programming-with-objects/ch5-dynamic-fields.md) of the latter. While external tools can read the dynamic object field value at its original ID, from Move's perspective, you can only access it through the field on its owner using the `dynamic_object_field` APIs:
 
-```move
+```rust
 use sui::dynamic_object_field as ofield;
 
 let a: &mut A = /* ... */;
