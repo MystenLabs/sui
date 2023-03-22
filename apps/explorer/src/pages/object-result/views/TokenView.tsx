@@ -77,10 +77,10 @@ export function TokenView({ data }: { data: DataType }) {
                     <Tab>Details</Tab>
                 </TabList>
                 <TabPanels>
-                    <TabPanel>
+                    <TabPanel noGap>
                         <div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
                             <div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0">
-                                <div className="pb-7 pr-10">
+                                <div className="pb-7 pr-10 pt-4">
                                     <DescriptionList>
                                         <DescriptionItem
                                             title="Owner"
