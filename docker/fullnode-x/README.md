@@ -15,4 +15,4 @@
 3. `docker compose up fullnode -d`
    - verify it's working by watching the logs with `docker compose logs fullnode -f`
 
-4. Once the fullnode is working, then start indexer with:  `docker compose up indexer -d`
+4. Once the full node is working, then start indexer with:  `docker compose up indexer -d`
