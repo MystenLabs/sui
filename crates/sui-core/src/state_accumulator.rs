@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_metrics::monitored_scope;
+use serde::Serialize;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::storage::ObjectKey;
@@ -23,6 +25,25 @@ use crate::authority::AuthorityStore;
 
 pub struct StateAccumulator {
     authority_store: Arc<AuthorityStore>,
+}
+
+/// Serializable representation of the ObjectRef of an
+/// object that has been wrapped
+#[derive(Serialize)]
+struct WrappedObject {
+    id: ObjectID,
+    wrapped_at: SequenceNumber,
+    digest: ObjectDigest,
+}
+
+impl WrappedObject {
+    fn new(id: ObjectID, wrapped_at: SequenceNumber) -> Self {
+        Self {
+            id,
+            wrapped_at,
+            digest: ObjectDigest::OBJECT_DIGEST_WRAPPED,
+        }
+    }
 }
 
 impl StateAccumulator {
@@ -60,6 +81,24 @@ impl StateAccumulator {
                 .collect::<Vec<ObjectDigest>>(),
         );
 
+        // insert wrapped tombstones. We use a custom struct in order to contain the tombstone
+        // against the object id and sequence number, as the tombstone by itself is not unique.
+        acc.insert_all(
+            effects
+                .iter()
+                .flat_map(|fx| {
+                    fx.wrapped()
+                        .iter()
+                        .map(|oref| {
+                            bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
+                                .unwrap()
+                                .to_vec()
+                        })
+                        .collect::<Vec<Vec<u8>>>()
+                })
+                .collect::<Vec<Vec<u8>>>(),
+        );
+
         // get all modified_at_versions for the fx
         let modified_at_version_keys = effects
             .iter()
@@ -93,7 +132,6 @@ impl StateAccumulator {
                     fx.deleted()
                         .iter()
                         .map(|oref| oref.2)
-                        .chain(fx.wrapped().iter().map(|oref| oref.2))
                         .chain(modified_at_digests.clone().into_iter())
                         .collect::<Vec<ObjectDigest>>()
                 })
@@ -193,6 +231,26 @@ impl StateAccumulator {
             .notify(epoch, &(last_checkpoint_of_epoch, root_state_hash.clone()));
 
         Ok(root_state_hash)
+    }
+
+    pub fn accumulate_live_object_set(&self) -> Accumulator {
+        let mut acc = Accumulator::default();
+        for oref in self.authority_store.iter_live_object_set() {
+            if oref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED {
+                acc.insert(
+                    bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
+                        .expect("Failed to serialize WrappedObject"),
+                );
+            } else {
+                acc.insert(oref.2);
+            }
+        }
+        acc
+    }
+
+    pub fn digest_live_object_set(&self) -> ECMHLiveObjectSetDigest {
+        let acc = self.accumulate_live_object_set();
+        acc.digest().into()
     }
 
     pub async fn digest_epoch(
