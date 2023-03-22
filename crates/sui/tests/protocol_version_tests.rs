@@ -171,6 +171,7 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    #[ignore = "buffer stake was set to 0 in protocol config, so this test is not valid anymore"]
     async fn test_protocol_version_upgrade_no_override_cleared() {
         ProtocolConfig::poison_get_for_min_version();
 
