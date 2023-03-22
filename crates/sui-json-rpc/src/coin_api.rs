@@ -255,7 +255,7 @@ impl CoinReadApiServer for CoinReadApi {
                     <u64>::from(coin.balance) as u128
             } else {
                 let total_balance: u128 =
-                    <u128>::from(balance.total_balance) + coin.balance as u128;
+                    <u128>::from(balance.total_balance) + <u64>::from(coin.balance) as u128;
                 balance.total_balance = <BigBigInt>::from(total_balance);
             }
             balance.coin_object_count += 1;

@@ -127,7 +127,7 @@ async fn test_coins_stream() -> Result<(), anyhow::Error> {
         .get_coins_stream(address, Some(SUI_COIN_TYPE.to_string()))
         .take_while(|coin| {
             let ready = future::ready(total < DEFAULT_GAS_AMOUNT as u128 * 3);
-            total += coin.balance as u128;
+            total += <u64>::from(coin.balance) as u128;
             ready
         })
         .map(|coin| coin.object_ref())
