@@ -12,7 +12,7 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-const TXN_PER_PAGE = 25;
+const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
     return (
@@ -28,8 +28,8 @@ function Home() {
 
                 <ErrorBoundary>
                     <LatestTxCard
-                        txPerPage={TXN_PER_PAGE}
-                        paginationtype="more button"
+                        initialLimit={TRANSACTIONS_LIMIT}
+                        disablePagination
                     />
                 </ErrorBoundary>
             </div>

@@ -267,8 +267,6 @@ export const DevInspectResults = object({
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
 
-export type GatewayTxSeqNumber = number;
-
 export const GetTxnDigestsResponse = array(TransactionDigest);
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
 

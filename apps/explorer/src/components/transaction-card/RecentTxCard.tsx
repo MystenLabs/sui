@@ -3,177 +3,80 @@
 
 import { useRpcClient } from '@mysten/core';
 import { ArrowRight12 } from '@mysten/icons';
-import { type JsonRpcProvider } from '@mysten/sui.js';
-import { type QueryStatus, useQuery } from '@tanstack/react-query';
-import cl from 'clsx';
-import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
-import TabFooter from '../../components/tabs/TabFooter';
-import Pagination from '../pagination/Pagination';
-import {
-    genTableDataFromTxData,
-    getDataOnTxDigests,
-    type TxnData,
-} from './TxCardUtils';
-
-import styles from './RecentTxCard.module.css';
+import { genTableDataFromTxData } from './TxCardUtils';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { Banner } from '~/ui/Banner';
 import { Link } from '~/ui/Link';
+import { Pagination, usePaginationStack } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { PlayPause } from '~/ui/PlayPause';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
+import { Text } from '~/ui/Text';
+import { numberSuffix } from '~/utils/numberUtil';
 
-const NUMBER_OF_TX_PER_PAGE = 20;
-const DEFAULT_PAGINATION_TYPE = 'more button';
-
-// We refresh transactions at checkpoint boundaries (currently ~10s).
 const TRANSACTION_POLL_TIME_SECONDS = 10;
 const TRANSACTION_POLL_TIME = TRANSACTION_POLL_TIME_SECONDS * 1000;
 
 const AUTO_REFRESH_ID = 'auto-refresh';
 
-export type PaginationType = 'more button' | 'pagination' | 'none';
-
-function generateStartEndRange(
-    txCount: number,
-    txNum: number,
-    pageNum?: number
-): { startGatewayTxSeqNumber: number; endGatewayTxSeqNumber: number } {
-    // Pagination pageNum from query params - default to 0; No negative values
-    const txPaged = pageNum && pageNum > 0 ? pageNum - 1 : 0;
-    const endGatewayTxSeqNumber = txCount - txNum * txPaged;
-    const startGatewayTxSeqNumber = Math.max(endGatewayTxSeqNumber - txNum, 0);
-    return {
-        startGatewayTxSeqNumber,
-        endGatewayTxSeqNumber,
-    };
-}
-
-// TODO: Optimize this method to use fewer API calls. Move the total tx count to this component.
-async function getRecentTransactions(
-    rpc: JsonRpcProvider,
-    totalTx: number,
-    txNum: number,
-    pageNum?: number
-): Promise<TxnData[]> {
-    // Get the latest transactions
-    // Instead of getRecentTransactions, use getTransactionCount
-    // then use getTransactionDigestsInRangeDeprecated using the totalTx as the start totalTx sequence number - txNum as the end sequence number
-    // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRangeDeprecated
-    const { endGatewayTxSeqNumber, startGatewayTxSeqNumber } =
-        generateStartEndRange(totalTx, txNum, pageNum);
-
-    // TODO: Add error page
-    // If paged tx value is less than 0, out of range
-    if (endGatewayTxSeqNumber < 0) {
-        throw new Error('Invalid transaction number');
-    }
-    // TODO: migrate this to `getTransactions`
-    const transactionDigests = await rpc.getTransactionDigestsInRangeDeprecated(
-        startGatewayTxSeqNumber,
-        endGatewayTxSeqNumber
-    );
-
-    // result returned by getTransactionDigestsInRangeDeprecated is in ascending order
-    const transactionData = await getDataOnTxDigests(
-        rpc,
-        [...transactionDigests].reverse()
-    );
-
-    // TODO: Don't force the type here:
-    return transactionData as TxnData[];
-}
-
 type Props = {
-    paginationtype?: PaginationType;
-    txPerPage?: number;
+    initialLimit: number;
+    disablePagination?: boolean;
 };
 
-// TODO: Remove this when we refactor pagiantion:
-export const statusToLoadState: Record<QueryStatus, string> = {
-    error: 'fail',
-    loading: 'pending',
-    success: 'loaded',
-};
-
-export function LatestTxCard({
-    paginationtype = DEFAULT_PAGINATION_TYPE,
-    txPerPage: initialTxPerPage,
-}: Props) {
+export function LatestTxCard({ initialLimit, disablePagination }: Props) {
     const [paused, setPaused] = useState(false);
-    const [txPerPage, setTxPerPage] = useState(
-        initialTxPerPage || NUMBER_OF_TX_PER_PAGE
-    );
+    const [limit, setLimit] = useState(initialLimit);
 
     const rpc = useRpcClient();
-    const [searchParams, setSearchParams] = useSearchParamsMerged();
 
-    const [pageIndex, setPageIndex] = useState(
-        parseInt(searchParams.get('p') || '1', 10) || 1
+    const countQuery = useQuery(['transactions', 'count'], () =>
+        rpc.getTotalTransactionNumber()
     );
 
-    const handlePageChange = useCallback(
-        (newPage: number) => {
-            setPageIndex(newPage);
-            setSearchParams({
-                p: newPage.toString(),
-            });
-        },
-        [setSearchParams]
-    );
-
-    const countQuery = useQuery(
-        ['transactions', 'count'],
-        () => rpc.getTotalTransactionNumber(),
-        {
-            refetchInterval: paused ? false : TRANSACTION_POLL_TIME,
-        }
-    );
+    const pagination = usePaginationStack();
+    const refetching = !pagination.cursor && !paused;
 
     const transactionQuery = useQuery(
-        ['transactions', { total: countQuery.data, txPerPage, pageIndex }],
-        async () => {
-            const { data: count } = countQuery;
-
-            if (!count) {
-                throw new Error('No transactions found');
-            }
-
-            // If pageIndex is greater than maxTxPage, set to maxTxPage
-            const maxTxPage = Math.ceil(count / txPerPage);
-            const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
-
-            return getRecentTransactions(rpc, count, txPerPage, pg);
-        },
+        ['transactions', { limit, cursor: pagination.cursor }],
+        async () =>
+            rpc.queryTransactions({
+                order: 'descending',
+                cursor: pagination.cursor,
+                limit,
+                options: {
+                    showEffects: true,
+                    showBalanceChanges: true,
+                    showInput: true,
+                },
+            }),
         {
             enabled: countQuery.isFetched,
             keepPreviousData: true,
+            refetchInterval: refetching ? TRANSACTION_POLL_TIME : false,
         }
     );
 
     const recentTx = useMemo(
         () =>
             transactionQuery.data
-                ? genTableDataFromTxData(transactionQuery.data)
+                ? genTableDataFromTxData(transactionQuery.data.data)
                 : null,
         [transactionQuery.data]
     );
 
-    const stats = {
-        count: countQuery?.data || 0,
-        stats_text: 'Total Transactions',
-        loadState: statusToLoadState[countQuery.status],
-    };
-
     const handlePauseChange = () => {
-        // If we were paused, immedietly refetch:
         if (paused) {
-            countQuery.refetch();
+            // If we were paused, and on the first page, immediately refetch:
+            if (!pagination.cursor) {
+                countQuery.refetch();
+            }
             toast.success(
                 `Auto-refreshing on - every ${TRANSACTION_POLL_TIME_SECONDS} seconds`,
                 { id: AUTO_REFRESH_ID }
@@ -185,39 +88,6 @@ export function LatestTxCard({
         setPaused((paused) => !paused);
     };
 
-    const PaginationWithStatsOrStatsWithLink =
-        paginationtype === 'pagination' ? (
-            <Pagination
-                totalItems={countQuery?.data || 0}
-                itemsPerPage={txPerPage}
-                updateItemsPerPage={setTxPerPage}
-                onPagiChangeFn={handlePageChange}
-                currentPage={pageIndex}
-                stats={stats}
-            />
-        ) : (
-            <div className="mt-3">
-                <TabFooter stats={stats}>
-                    <div className="w-full">
-                        <Link to="/transactions">
-                            <div className="flex items-center gap-2">
-                                More Transactions{' '}
-                                <ArrowRight12 fill="currentColor" />
-                            </div>
-                        </Link>
-                    </div>
-                </TabFooter>
-            </div>
-        );
-
-    if (countQuery.isError) {
-        return (
-            <Banner variant="error" fullWidth>
-                No transactions found.
-            </Banner>
-        );
-    }
-
     if (transactionQuery.isError) {
         return (
             <Banner variant="error" fullWidth>
@@ -227,7 +97,7 @@ export function LatestTxCard({
     }
 
     return (
-        <div className={cl(styles.txlatestresults, styles[paginationtype])}>
+        <div>
             <TabGroup size="lg">
                 <div className="relative flex items-center">
                     <TabList>
@@ -252,7 +122,7 @@ export function LatestTxCard({
                             />
                         ) : (
                             <PlaceholderTable
-                                rowCount={txPerPage}
+                                rowCount={initialLimit}
                                 rowHeight="16px"
                                 colHeadings={[
                                     'Transaction ID',
@@ -270,15 +140,73 @@ export function LatestTxCard({
                                 ]}
                             />
                         )}
-                        {paginationtype !== 'none' &&
-                            PaginationWithStatsOrStatsWithLink}
+
+                        <div className="flex items-center justify-between py-3">
+                            {disablePagination ? (
+                                <>
+                                    <Link
+                                        to="/transactions"
+                                        after={<ArrowRight12 />}
+                                    >
+                                        More Transactions
+                                    </Link>
+                                    <Text
+                                        variant="body/medium"
+                                        color="steel-dark"
+                                    >
+                                        {countQuery.data
+                                            ? numberSuffix(countQuery.data)
+                                            : '-'}{' '}
+                                        Transactions
+                                    </Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Pagination
+                                        {...pagination.props(
+                                            transactionQuery.data
+                                        )}
+                                    />
+                                    <div className="flex items-center gap-4">
+                                        <Text
+                                            variant="body/medium"
+                                            color="steel-dark"
+                                        >
+                                            {countQuery.data
+                                                ? numberSuffix(countQuery.data)
+                                                : '-'}{' '}
+                                            Transactions
+                                        </Text>
+
+                                        <select
+                                            className="shadow-button form-select rounded-md border border-gray-45 px-3 py-2 pr-8 text-bodySmall font-medium leading-[1.2] text-steel-dark"
+                                            value={limit}
+                                            onChange={(e) =>
+                                                setLimit(+e.target.value)
+                                            }
+                                        >
+                                            <option value={20}>
+                                                20 Per Page
+                                            </option>
+                                            <option value={40}>
+                                                40 Per Page
+                                            </option>
+                                            <option value={60}>
+                                                60 Per Page
+                                            </option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </TabPanel>
+
                     <TabPanel>
                         <CheckpointsTable
-                            initialItemsPerPage={NUMBER_OF_TX_PER_PAGE}
+                            initialItemsPerPage={initialLimit}
                             refetchInterval={TRANSACTION_POLL_TIME}
                             shouldRefetch={!paused}
-                            paginationType={paginationtype}
+                            // paginationType={paginationtype}
                         />
                     </TabPanel>
                 </TabPanels>

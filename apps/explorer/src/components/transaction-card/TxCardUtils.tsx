@@ -4,17 +4,13 @@
 import { useFormatCoin } from '@mysten/core';
 import { X12 } from '@mysten/icons';
 import {
-    type ExecutionStatusType,
     getExecutionStatusType,
     getTotalGasUsed,
-    getTransactionDigest,
-    getTransactionKind,
-    getTransactionKindName,
     getTransactionSender,
     type GetTxnDigestsResponse,
     type JsonRpcProvider,
     SUI_TYPE_ARG,
-    type TransactionKindName,
+    type SuiTransactionResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
@@ -25,18 +21,6 @@ import { TxTimeType } from '../tx-time/TxTimeType';
 import styles from './RecentTxCard.module.css';
 
 import { AddressLink, TransactionLink } from '~/ui/InternalLink';
-
-export type TxnData = {
-    To?: string;
-    txId: string;
-    status: ExecutionStatusType;
-    txGas: number;
-    suiAmount: bigint | number;
-    coinType?: string | null;
-    kind: TransactionKindName | undefined;
-    From: string;
-    timestamp_ms?: number;
-};
 
 export function SuiAmount({
     amount,
@@ -88,43 +72,55 @@ export function TxTableCol({
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (results: TxnData[]) => ({
-    data: results.map((txn) => ({
-        date: (
-            <TxTableCol>
-                <TxTimeType timestamp={txn.timestamp_ms} />
-            </TxTableCol>
-        ),
-        transactionId: (
-            <TxTableCol isFirstCol isHighlightedOnHover>
-                <TransactionLink
-                    digest={txn.txId}
-                    before={
-                        txn.status === 'success' ? (
-                            <div className="h-2 w-2 rounded-full bg-success" />
-                        ) : (
-                            <X12 className="text-issue-dark" />
-                        )
-                    }
-                />
-            </TxTableCol>
-        ),
-        amounts: (
-            <TxTableCol>
-                <SuiAmount amount={txn.suiAmount} />
-            </TxTableCol>
-        ),
-        gas: (
-            <TxTableCol>
-                <SuiAmount amount={txn.txGas} />
-            </TxTableCol>
-        ),
-        sender: (
-            <TxTableCol isHighlightedOnHover>
-                <AddressLink address={txn.From} />
-            </TxTableCol>
-        ),
-    })),
+export const genTableDataFromTxData = (results: SuiTransactionResponse[]) => ({
+    data: results.map((transaction) => {
+        const status = getExecutionStatusType(transaction);
+        const transfer = getAmount({
+            txnData: transaction,
+            suiCoinOnly: true,
+        })[0];
+
+        // use only absolute value of sui amount
+        const suiAmount = transfer?.amount ? Math.abs(transfer.amount) : null;
+        const sender = getTransactionSender(transaction);
+
+        return {
+            date: (
+                <TxTableCol>
+                    <TxTimeType timestamp={transaction.timestampMs} />
+                </TxTableCol>
+            ),
+            transactionId: (
+                <TxTableCol isFirstCol isHighlightedOnHover>
+                    <TransactionLink
+                        digest={transaction.digest}
+                        before={
+                            status === 'success' ? (
+                                <div className="h-2 w-2 rounded-full bg-success" />
+                            ) : (
+                                <X12 className="text-issue-dark" />
+                            )
+                        }
+                    />
+                </TxTableCol>
+            ),
+            amounts: (
+                <TxTableCol>
+                    <SuiAmount amount={suiAmount} />
+                </TxTableCol>
+            ),
+            gas: (
+                <TxTableCol>
+                    <SuiAmount amount={getTotalGasUsed(transaction)} />
+                </TxTableCol>
+            ),
+            sender: (
+                <TxTableCol isHighlightedOnHover>
+                    {sender ? <AddressLink address={sender} /> : '-'}
+                </TxTableCol>
+            ),
+        };
+    }),
     columns: [
         {
             header: 'Transaction ID',
@@ -164,45 +160,7 @@ export const getDataOnTxDigests = (
                 showEvents: true,
             },
         })
-        .then((txEffs) =>
-            txEffs
-                .map((txEff) => {
-                    const digest = transactions.filter(
-                        (transactionId) =>
-                            transactionId === getTransactionDigest(txEff)
-                    )[0];
-                    const txn = getTransactionKind(txEff)!;
-                    const txKind = getTransactionKindName(txn);
-                    const recipient = null;
-                    //     getTransferObjectTransaction(txn)?.recipient ||
-                    //     getTransferSuiTransaction(txn)?.recipient;
-
-                    const transfer = getAmount({
-                        txnData: txEff,
-                        suiCoinOnly: true,
-                    })[0];
-
-                    // use only absolute value of sui amount
-                    const suiAmount = transfer?.amount
-                        ? Math.abs(transfer.amount)
-                        : null;
-
-                    return {
-                        txId: digest,
-                        status: getExecutionStatusType(txEff)!,
-                        txGas: getTotalGasUsed(txEff),
-                        suiAmount,
-                        coinType: transfer?.coinType || null,
-                        kind: txKind,
-                        From: getTransactionSender(txEff),
-                        timestamp_ms: txEff.timestampMs,
-                        ...(recipient
-                            ? {
-                                  To: recipient,
-                              }
-                            : {}),
-                    };
-                })
-                // Remove failed transactions
-                .filter((itm) => itm)
+        .then((transactions) =>
+            // Remove failed transactions
+            transactions.filter((item) => item)
         );

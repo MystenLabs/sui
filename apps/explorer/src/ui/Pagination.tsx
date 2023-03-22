@@ -6,6 +6,7 @@ import {
     PaginationNext24,
     PaginationPrev24,
 } from '@mysten/icons';
+import { useState } from 'react';
 
 export interface PaginationProps {
     hasPrev: boolean;
@@ -13,6 +14,39 @@ export interface PaginationProps {
     onFirst(): void;
     onPrev(): void;
     onNext(): void;
+}
+
+interface PaginationResponse {
+    nextCursor: string | null;
+    hasNextPage: boolean;
+}
+
+export function usePaginationStack() {
+    const [stack, setStack] = useState<string[]>([]);
+
+    return {
+        cursor: stack.at(-1),
+        props({
+            hasNextPage = false,
+            nextCursor = null,
+        }: Partial<PaginationResponse> = {}): PaginationProps {
+            return {
+                hasPrev: stack.length > 0,
+                hasNext: hasNextPage,
+                onFirst() {
+                    setStack([]);
+                },
+                onNext() {
+                    if (nextCursor && hasNextPage) {
+                        setStack((stack) => [...stack, nextCursor]);
+                    }
+                },
+                onPrev() {
+                    setStack((stack) => stack.slice(0, -1));
+                },
+            };
+        },
+    };
 }
 
 function PaginationButton({
