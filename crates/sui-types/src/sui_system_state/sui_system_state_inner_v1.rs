@@ -139,6 +139,10 @@ impl ValidatorMetadataV1 {
         let worker_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
+        if worker_pubkey == network_pubkey {
+            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        }
+
         let net_address = Multiaddr::try_from(self.net_address.clone())
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
 
@@ -209,6 +213,11 @@ impl ValidatorMetadataV1 {
                         .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?,
                 )),
             }?;
+        if next_epoch_network_pubkey.is_some()
+            && next_epoch_network_pubkey == next_epoch_worker_pubkey
+        {
+            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        }
 
         let next_epoch_net_address = match self.next_epoch_net_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
@@ -452,6 +461,9 @@ pub struct SuiSystemStateInnerV1 {
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
     pub stake_subsidy: StakeSubsidyV1,
     pub safe_mode: bool,
+    pub safe_mode_storage_rewards: Balance,
+    pub safe_mode_computation_rewards: Balance,
+    pub safe_mode_storage_rebates: u64,
     pub epoch_start_timestamp_ms: u64,
     pub extra_fields: Bag,
     // TODO: Use getters instead of all pub.
@@ -636,6 +648,9 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                     extra_fields: _,
                 },
             safe_mode,
+            safe_mode_storage_rewards,
+            safe_mode_computation_rewards,
+            safe_mode_storage_rebates,
             epoch_start_timestamp_ms,
             extra_fields: _,
         } = self;
@@ -646,6 +661,9 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             storage_fund: storage_fund.value(),
             reference_gas_price,
             safe_mode,
+            safe_mode_storage_rewards: safe_mode_storage_rewards.value(),
+            safe_mode_computation_rewards: safe_mode_computation_rewards.value(),
+            safe_mode_storage_rebates,
             epoch_start_timestamp_ms,
             stake_subsidy_start_epoch,
             epoch_duration_ms,
@@ -729,6 +747,9 @@ impl Default for SuiSystemStateInnerV1 {
                 extra_fields: Default::default(),
             },
             safe_mode: false,
+            safe_mode_storage_rewards: Balance::new(0),
+            safe_mode_computation_rewards: Balance::new(0),
+            safe_mode_storage_rebates: 0,
             epoch_start_timestamp_ms: 0,
             extra_fields: Default::default(),
         }

@@ -3205,7 +3205,7 @@ async fn test_sui_system_state_nop_upgrade() {
     let new_system_state_version = SUI_SYSTEM_STATE_TESTING_VERSION1;
 
     // Dummy change epoch with the new protocol version and system state version.
-    let pt = construct_advance_epoch_pt(AdvanceEpochParams {
+    let pt = construct_advance_epoch_pt(&AdvanceEpochParams {
         epoch: 1,
         next_protocol_version: ProtocolVersion::from(new_protocol_version),
         storage_charge: 0,

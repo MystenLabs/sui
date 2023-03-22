@@ -109,6 +109,11 @@ module sui_system::sui_system_state_inner {
         /// It can be reset once we are able to successfully execute advance_epoch.
         /// MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
         safe_mode: bool,
+        safe_mode_storage_rewards: Balance<SUI>,
+        safe_mode_computation_rewards: Balance<SUI>,
+        safe_mode_storage_rebates: u64,
+
+
         /// Unix timestamp of the current epoch start
         epoch_start_timestamp_ms: u64,
         /// Any extra fields that's not defined statically.
@@ -140,6 +145,7 @@ module sui_system::sui_system_state_inner {
     const EReportRecordNotFound: u64 = 4;
     const EBpsTooLarge: u64 = 5;
     const EStakedSuiFromWrongEpoch: u64 = 6;
+    const ESafeModeGasNotProcessed: u64 = 7;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -169,6 +175,9 @@ module sui_system::sui_system_state_inner {
             validator_report_records: vec_map::empty(),
             stake_subsidy,
             safe_mode: false,
+            safe_mode_storage_rewards: balance::zero(),
+            safe_mode_computation_rewards: balance::zero(),
+            safe_mode_storage_rebates: 0,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),
         };
@@ -504,6 +513,8 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         let network_address = string::from_ascii(ascii::string(network_address));
         validator::update_next_epoch_network_address(validator, network_address);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's network address.
@@ -527,6 +538,8 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         let p2p_address = string::from_ascii(ascii::string(p2p_address));
         validator::update_next_epoch_p2p_address(validator, p2p_address);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's p2p address.
@@ -596,6 +609,8 @@ module sui_system::sui_system_state_inner {
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of protocol key and proof of possession.
@@ -618,6 +633,8 @@ module sui_system::sui_system_state_inner {
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of worker key.
@@ -639,6 +656,8 @@ module sui_system::sui_system_state_inner {
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_pubkey(validator, network_pubkey);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of network key.
@@ -680,6 +699,14 @@ module sui_system::sui_system_state_inner {
             && reward_slashing_rate <= bps_denominator_u64,
             EBpsTooLarge,
         );
+
+        // Accumulate the gas summary during safe_mode before processing any rewards:
+        let safe_mode_storage_rewards = balance::withdraw_all(&mut self.safe_mode_storage_rewards);
+        balance::join(&mut storage_reward, safe_mode_storage_rewards);
+        let safe_mode_computation_rewards = balance::withdraw_all(&mut self.safe_mode_computation_rewards);
+        balance::join(&mut computation_reward, safe_mode_computation_rewards);
+        storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
+        self.safe_mode_storage_rebates = 0;
 
         let total_validators_stake = validator_set::total_stake(&self.validators);
         let storage_fund_balance = balance::value(&self.storage_fund);
@@ -772,6 +799,10 @@ module sui_system::sui_system_state_inner {
             }
         );
         self.safe_mode = false;
+        // Double check that the gas from safe mode has been processed.
+        assert!(self.safe_mode_storage_rebates == 0
+            && balance::value(&self.safe_mode_storage_rewards) == 0
+            && balance::value(&self.safe_mode_computation_rewards) == 0, ESafeModeGasNotProcessed);
         storage_rebate
     }
 
@@ -785,6 +816,9 @@ module sui_system::sui_system_state_inner {
         self: &mut SuiSystemStateInner,
         new_epoch: u64,
         next_protocol_version: u64,
+        storage_reward: Balance<SUI>,
+        computation_reward: Balance<SUI>,
+        storage_rebate: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -792,7 +826,11 @@ module sui_system::sui_system_state_inner {
 
         self.epoch = new_epoch;
         self.protocol_version = next_protocol_version;
+
         self.safe_mode = true;
+        balance::join(&mut self.safe_mode_storage_rewards, storage_reward);
+        balance::join(&mut self.safe_mode_computation_rewards, computation_reward);
+        self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -841,6 +879,10 @@ module sui_system::sui_system_state_inner {
         } else {
             vec_set::empty()
         }
+    }
+
+    public(friend) fun get_storage_fund_balance(self: &SuiSystemStateInner): u64 {
+        balance::value(&self.storage_fund)
     }
 
     public(friend) fun upgrade_system_state(

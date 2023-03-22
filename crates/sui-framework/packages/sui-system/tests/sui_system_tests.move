@@ -393,6 +393,8 @@ module sui_system::sui_system_tests {
         pop: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
+        network_pubkey: vector<u8>,
+        worker_pubkey: vector<u8>,
     ) {
         let ctx = test_scenario::ctx(scenario);
         sui_system::update_validator_name(system_state, name, ctx);
@@ -409,8 +411,8 @@ module sui_system::sui_system_tests {
             pop,
             ctx
         );
-        sui_system::update_validator_next_epoch_worker_pubkey(system_state, vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43], ctx);
-        sui_system::update_validator_next_epoch_network_pubkey(system_state, vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199], ctx);
+        sui_system::update_validator_next_epoch_network_pubkey(system_state, network_pubkey, ctx);
+        sui_system::update_validator_next_epoch_worker_pubkey(system_state, worker_pubkey, ctx);
     }
 
     fun verify_metadata(
@@ -420,10 +422,14 @@ module sui_system::sui_system_tests {
         pop: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
+        network_pubkey: vector<u8>,
+        worker_pubkey: vector<u8>,
         new_protocol_pub_key: vector<u8>,
         new_pop: vector<u8>,
         new_network_address: vector<u8>,
         new_p2p_address: vector<u8>,
+        new_network_pubkey: vector<u8>,
+        new_worker_pubkey: vector<u8>,
     ) {
         // Current epoch
         verify_current_epoch_metadata(
@@ -435,8 +441,8 @@ module sui_system::sui_system_tests {
             b"/ip4/127.0.0.1/udp/80",
             network_address,
             p2p_address,
-            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            network_pubkey,
+            worker_pubkey,
         );
 
         // Next epoch
@@ -453,11 +459,11 @@ module sui_system::sui_system_tests {
             0
         );
         assert!(
-            validator::next_epoch_worker_pubkey_bytes(validator) == &option::some(vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43]),
+            validator::next_epoch_worker_pubkey_bytes(validator) == &option::some(new_worker_pubkey),
             0
         );
         assert!(
-            validator::next_epoch_network_pubkey_bytes(validator) == &option::some(vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199]),
+            validator::next_epoch_network_pubkey_bytes(validator) == &option::some(new_network_pubkey),
             0
         );
     }
@@ -497,6 +503,8 @@ module sui_system::sui_system_tests {
         pop: vector<u8>,
         network_address: vector<u8>,
         p2p_address: vector<u8>,
+        network_pubkey: vector<u8>,
+        worker_pubkey: vector<u8>,
     ) {
         // Current epoch
         verify_current_epoch_metadata(
@@ -508,8 +516,8 @@ module sui_system::sui_system_tests {
             b"/ip4/168.168.168.168/udp/80",
             network_address,
             p2p_address,
-            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+            network_pubkey,
+            worker_pubkey,
         );
 
         // Next epoch
@@ -588,6 +596,8 @@ module sui_system::sui_system_tests {
                 pop1,
                 b"/ip4/42.42.42.42/tcp/80",
                 b"/ip4/43.43.43.43/udp/80",
+                vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+                vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
             );
         };
 
@@ -600,10 +610,14 @@ module sui_system::sui_system_tests {
             pop,
             b"/ip4/127.0.0.1/tcp/80",
             b"/ip4/127.0.0.1/udp/80",
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
             pubkey1,
             pop1,
             b"/ip4/42.42.42.42/tcp/80",
             b"/ip4/43.43.43.43/udp/80",
+            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
         );
 
         test_scenario::return_shared(system_state);
@@ -619,8 +633,8 @@ module sui_system::sui_system_tests {
             sui_system::request_add_validator_candidate(
                 &mut system_state,
                 new_pubkey,
-                vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-                vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+                vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+                vector[69, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
                 new_pop,
                 b"ValidatorName2",
                 b"description2",
@@ -647,6 +661,8 @@ module sui_system::sui_system_tests {
                 new_pop1,
                 b"/ip4/66.66.66.66/tcp/80",
                 b"/ip4/77.77.77.77/udp/80",
+                vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+                vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
             );
         };
 
@@ -659,10 +675,14 @@ module sui_system::sui_system_tests {
             new_pop,
             b"/ip4/127.0.0.2/tcp/80",
             b"/ip4/127.0.0.2/udp/80",
+            vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[69, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
             new_pubkey1,
             new_pop1,
             b"/ip4/66.66.66.66/tcp/80",
             b"/ip4/77.77.77.77/udp/80",
+            vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+            vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
         );
 
         test_scenario::return_shared(system_state);
@@ -682,6 +702,8 @@ module sui_system::sui_system_tests {
             pop1,
             b"/ip4/42.42.42.42/tcp/80",
             b"/ip4/43.43.43.43/udp/80",
+            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
         );
 
         let validator = sui_system::active_validator_by_address(&system_state, new_validator_addr);
@@ -692,6 +714,8 @@ module sui_system::sui_system_tests {
             new_pop1,
             b"/ip4/66.66.66.66/tcp/80",
             b"/ip4/77.77.77.77/udp/80",
+            vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+            vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
         );
 
         test_scenario::return_shared(system_state);
