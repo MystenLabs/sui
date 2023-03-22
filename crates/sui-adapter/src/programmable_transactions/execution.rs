@@ -142,8 +142,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             let mut res = vec![];
             leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
             let mut arg_iter = args.into_iter().enumerate();
-            let (mut used_in_non_entry_move_call, tag) = match tag_opt {
-                Some(tag) => (false, tag),
+            let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
+                Some(tag) => {
+                    let elem_ty = context
+                        .session
+                        .load_type(&tag)
+                        .map_err(|e| context.convert_vm_error(e))?;
+                    (false, elem_ty)
+                }
                 // If no tag specified, it _must_ be an object
                 None => {
                     // empty args covered above
@@ -151,13 +157,9 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     let obj: ObjectValue =
                         context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                     obj.write_bcs_bytes(&mut res);
-                    (obj.used_in_non_entry_move_call, obj.into_type().into())
+                    (obj.used_in_non_entry_move_call, obj.type_)
                 }
             };
-            let elem_ty = context
-                .session
-                .load_type(&tag)
-                .map_err(|e| context.convert_vm_error(e))?;
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                 check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty)?;
@@ -200,7 +202,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     CommandArgumentError::TypeMismatch,
                     0,
                 );
-                let msg = format!("Expected a coin but got an object of type {}", obj.type_);
+                let msg = "Expected a coin but got an non coin object".to_owned();
                 return Err(ExecutionError::new_with_source(e, msg));
             };
             let split_coins = amount_args
@@ -211,7 +213,10 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     let new_coin_id = context.fresh_id()?;
                     let new_coin = coin.split(amount, UID::new(new_coin_id))?;
                     let coin_type = obj.type_.clone();
-                    Ok(Value::Object(ObjectValue::coin(coin_type, new_coin)?))
+                    // safe because we are propagating the coin type, and relying on the internal
+                    // invariant that coin values have a coin type
+                    let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin) };
+                    Ok(Value::Object(new_coin))
                 })
                 .collect::<Result<_, ExecutionError>>()?;
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
@@ -224,7 +229,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     CommandArgumentError::TypeMismatch,
                     0,
                 );
-                let msg = format!("Expected a coin but got an object of type {}", target.type_);
+                let msg = "Expected a coin but got an non coin object".to_owned();
                 return Err(ExecutionError::new_with_source(e, msg));
             };
             let coins: Vec<ObjectValue> = coin_args
@@ -238,10 +243,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                         CommandArgumentError::TypeMismatch,
                         (idx + 1) as u16,
                     );
-                    let msg = format!(
-                        "Expected a coin of type {} but got an object of type {}",
-                        target.type_, coin.type_
-                    );
+                    let msg = "Coins do not have the same type".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 }
                 let ObjectContents::Coin(Coin { id, balance }) = coin.contents else {
@@ -349,7 +351,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-        let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
+        let value = make_value(context, value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
     }
 
@@ -364,13 +366,14 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .map(|(value_info, (bytes, _layout))| {
             // only non entry functions have return values
             make_value(
-                value_info, bytes, /* used_in_non_entry_move_call */ true,
+                context, value_info, bytes, /* used_in_non_entry_move_call */ true,
             )
         })
         .collect()
 }
 
-fn make_value(
+fn make_value<E: fmt::Debug, S: StorageView<E>>(
+    context: &ExecutionContext<E, S>,
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
@@ -380,6 +383,9 @@ fn make_value(
             type_,
             has_public_transfer,
         } => Value::Object(ObjectValue::new(
+            context.vm,
+            context.state_view,
+            &context.session,
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
@@ -450,11 +456,15 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         // no upgrade cap for genesis modules
         vec![]
     } else {
+        let cap = &UpgradeCap::new(context.fresh_id()?, package_id);
         vec![Value::Object(ObjectValue::new(
+            context.vm,
+            context.state_view,
+            &context.session,
             UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
             /* used_in_non_entry_move_call */ false,
-            &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
+            &bcs::to_bytes(cap).unwrap(),
         )?)]
     };
     Ok(values)
@@ -1132,8 +1142,15 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     ..
                 }) = &value
                 {
+                    let type_tag = context
+                        .session
+                        .get_type_tag(type_)
+                        .map_err(|e| context.convert_vm_error(e))?;
+                    let TypeTag::Struct(struct_tag) = type_tag else {
+                        invariant_violation!("Struct type make a non struct type tag")
+                    };
                     ValueKind::Object {
-                        type_: type_.clone(),
+                        type_: MoveObjectType::Other(*struct_tag),
                         has_public_transfer: *has_public_transfer,
                     }
                 } else {
@@ -1180,7 +1197,6 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     value: &Value,
     param_ty: &Type,
 ) -> Result<(), ExecutionError> {
-    let obj_ty;
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
         // be violated (like for string or Option)
@@ -1213,13 +1229,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             );
             ty
         }
-        Value::Object(obj) => {
-            obj_ty = context
-                .session
-                .load_type(&obj.type_.clone().into())
-                .map_err(|e| context.convert_vm_error(e))?;
-            &obj_ty
-        }
+        Value::Object(obj) => &obj.type_,
     };
     if ty != param_ty {
         Err(command_argument_error(
