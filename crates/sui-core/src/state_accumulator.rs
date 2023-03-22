@@ -70,35 +70,35 @@ impl StateAccumulator {
                     .collect::<Vec<ObjectKey>>()
             })
             .collect::<HashSet<ObjectKey>>();
-
-        let modified_at_digests = self
-            .authority_store
-            .perpetual_tables
-            .parent_sync
-            .iter()
-            .filter_map(|(tup, _tx_digest)| {
-                if modified_at_version_keys.contains(&ObjectKey(tup.0, tup.1)) {
-                    Some(tup.2)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<ObjectDigest>>();
-
-        // process removals from the set
-        acc.remove_all(
-            effects
-                .iter()
-                .flat_map(|fx| {
-                    fx.deleted()
-                        .iter()
-                        .map(|oref| oref.2)
-                        .chain(fx.wrapped().iter().map(|oref| oref.2))
-                        .chain(modified_at_digests.clone().into_iter())
-                        .collect::<Vec<ObjectDigest>>()
-                })
-                .collect::<HashSet<ObjectDigest>>(),
-        );
+        //
+        // let modified_at_digests = self
+        //     .authority_store
+        //     .perpetual_tables
+        //     .parent_sync
+        //     .iter()
+        //     .filter_map(|(tup, _tx_digest)| {
+        //         if modified_at_version_keys.contains(&ObjectKey(tup.0, tup.1)) {
+        //             Some(tup.2)
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .collect::<Vec<ObjectDigest>>();
+        //
+        // // process removals from the set
+        // acc.remove_all(
+        //     effects
+        //         .iter()
+        //         .flat_map(|fx| {
+        //             fx.deleted()
+        //                 .iter()
+        //                 .map(|oref| oref.2)
+        //                 .chain(fx.wrapped().iter().map(|oref| oref.2))
+        //                 .chain(modified_at_digests.clone().into_iter())
+        //                 .collect::<Vec<ObjectDigest>>()
+        //         })
+        //         .collect::<HashSet<ObjectDigest>>(),
+        // );
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
