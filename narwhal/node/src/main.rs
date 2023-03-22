@@ -22,7 +22,7 @@ use node::{
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
 };
 use prometheus::Registry;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use storage::NodeStorage;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
@@ -255,12 +255,16 @@ async fn run(
         WorkerCache::import(workers_file).context("Failed to load the worker information")?;
 
     // Load default parameters if none are specified.
-    let parameters = match parameters_file {
+    let mut parameters = match parameters_file {
         Some(filename) => {
             Parameters::import(filename).context("Failed to load the node's parameters")?
         }
         None => Parameters::default(),
     };
+    // TMP TMP TMP experimentation only
+    parameters.gc_depth = 15;
+    parameters.min_header_delay = Duration::from_millis(750);
+    parameters.max_batch_delay = Duration::from_millis(500);
 
     // Make the data store.
     let store = NodeStorage::reopen(store_path);
