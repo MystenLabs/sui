@@ -97,6 +97,6 @@ sui::tx_context::sender(ctx)
 
 ## Next steps
 
-Now that you are familiar with the Move language, as well as with how to develop and test Move code, you are ready to start learning from larger
+Now that you are familiar with the Move language and the Sui Move dialect, as well as with how to develop and test Sui Move code, you are ready to start learning from larger
 [examples](../../explore/examples.md) of Move programs. The examples include implementations of Tic Tac Toe and (Hero), a more
 developed variant of the fantasy game developed in this tutorial.
