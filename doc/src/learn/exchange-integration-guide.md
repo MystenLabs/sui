@@ -235,7 +235,7 @@ Please refer to [offline signing](https://github.com/MystenLabs/sui/blob/d0aceae
 
 A native weighted multi-sig multi-scheme signature is also supported. Please see [multisig](https://github.com/MystenLabs/sui/blob/d0aceaea613b33fc969f7ca2cdd84b8a35e87de3/crates/sui/multisig.md) for details. 
 
-## SUI Staking and Delegation
+## SUI Staking
 
 The Sui blockchain uses a Delegated Proof-of-Stake mechanism (DPoS). This allows SUI token holders to stake their SUI tokens to any validator of their choice. When someone stakes their SUI tokens, it means those tokens are locked for the entire epoch. Users can withdraw their stake at any time, but new staking requests become active only at the start of the next epoch.
 
@@ -248,7 +248,7 @@ The total voting power in the Sui Network is always 10,000. The voting power of 
 Sui supports the following API operations related to staking. You can find the source code in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module.
 
  * `request_add_stake`
- Add delegated stake to a validator's staking pool.
+ Add user stake to a validator's staking pool.
 
 ```rust
 public entry fun request_add_stake(
@@ -268,7 +268,7 @@ public entry fun request_add_stake(
 ```
 
  * `request_add_stake_mul_coin`
- Add delegated stake to a validator's staking pool using multiple coins.
+ Add user stake to a validator's staking pool using multiple coins.
 
 ```rust
 public entry fun request_add_stake_mul_coin(
@@ -284,7 +284,7 @@ public entry fun request_add_stake_mul_coin(
 ```
 
  * `request_add_stake_with_locked_coin`
- Add delegated stake to a validator's staking pool using a locked SUI coin.
+ Add user stake to a validator's staking pool using a locked SUI coin.
 
 ```rust
 public entry fun request_add_stake_with_locked_coin(
@@ -299,7 +299,7 @@ public entry fun request_add_stake_with_locked_coin(
 ```
 
  * `request_withdraw_stake`
- Withdraw some portion of a delegation from a validator's staking pool.
+ Withdraw some portion of a user stake from a validator's staking pool.
 
 ```rust
 public entry fun request_withdraw_stake(
@@ -327,20 +327,18 @@ Get answers to common questions about Sui.
 
 During the staking period, you can add to or withdraw your stake from a validator. To modify your stake amount you can use the following functions:
  * Use the `request_add_stake` and `request_add_stake_with_locked_coin` methods to add to the staked amount.
- * Use the `request_withdraw_stake` method to withdraw your delegation.
+ * Use the `request_withdraw_stake` method to withdraw staked SUI.
 
 ### How is a staking transaction different from a typical transaction regarding construction, signing, and broadcasting?
 
 Staking transactions are Move call transactions that call specific Move functions in the [sui_system](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/governance/sui_system.move) module of the Sui Framework. The staking transaction uses a shared object, and is no different from other shared object transactions.
 
-### Is there a minimum and maximum staking amount (for validation and delegation)?
+### Is there a minimum and maximum staking amount (for Validators and user staking)?
 
 There will be a minimum amount required, as well as limits on stake changes within an epoch.
 
- * **Validation:** Requires a high minimum amount of SUI delegated with each validator to stay in the validator set.
- * **Delegation:** There will be a relatively low minimum amount for each delegation.
-
-Specific amounts to be determined prior to Sui Mainnet.
+ * **Validators:** Requires a minimum of 30 Million SUI to join as a Sui Validator. Validators must maintain a minimum of 20 Million SUI to continue as a validator. Any validator that drops below 15 Million SUI is removed at the next epoch boundary.
+ * **User staking:** The minimum amount to stake with a validator is 1 SUI.
 
 ### How to stake and un-stake SUI?
 
@@ -421,7 +419,7 @@ Staking transactions are Move call transactions that call specific Move function
 
 ### Does Sui support staking a partial amount of the SUI owned by an address?
 
-Yes, an address can own multiple coins of different amounts. Sui supports staking coins owned by an address to different validators. The minimum staking amount that can be delegated is 1 MIST which is equal to .000000001 SUI.
+Yes, an address can own multiple coins of different amounts. Sui supports staking coins owned by an address to different validators. The minimum user staking amount is 1 SUI.
 
 ### Can I use one account address to stake with multiple validators?
 
@@ -433,7 +431,7 @@ Yes, you can add to or withdraw your stake from a validator. Use the following m
 
 Use the [`request_add_stake`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_stake) and [`request_add_stake_with_locked_coin`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_add_stake_with_locked_coin) methods to add to the staked amount.
 
-Use the [`request_withdraw_stake`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_stake) method to withdraw all or part of the delegation.
+Use the [`request_withdraw_stake`](https://github.com/MystenLabs/sui/blob/58229627970a6e9ff558b156c1cb193f246eaf88/crates/sui-framework/docs/sui_system.md#0x2_sui_system_request_withdraw_stake) method to withdraw all or part of the stake.
 
 ### Does Sui require a bonding / warm-up period?
 
