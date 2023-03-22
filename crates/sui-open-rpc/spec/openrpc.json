@@ -2399,7 +2399,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create an unsigned transaction to publish Move module.",
+      "description": "Create an unsigned transaction to publish a Move package.",
       "params": [
         {
           "name": "sender",
@@ -2411,7 +2411,7 @@
         },
         {
           "name": "compiled_modules",
-          "description": "the compiled bytes of a move module, the",
+          "description": "the compiled bytes of a Move package",
           "required": true,
           "schema": {
             "type": "array",

@@ -618,6 +618,18 @@ pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependenc
     }
 }
 
+pub fn root_published_at(resolution_graph: &ResolvedGraph) -> Option<ObjectID> {
+    let published_at = resolution_graph
+        .package_table
+        .get(&resolution_graph.graph.root_package)
+        .unwrap()
+        .source_package
+        .package
+        .custom_properties
+        .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD))?;
+    ObjectID::from_str(published_at.as_str()).ok()
+}
+
 pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<(), SuiError> {
     if unpublished.is_empty() {
         return Ok(());
