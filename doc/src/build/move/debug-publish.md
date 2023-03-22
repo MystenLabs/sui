@@ -3,15 +3,15 @@ title: Debug and Publish the Sui Move Package
 ---
 
 ## Debugging a package
-At the moment there isn't yet a debugger for Move. To help with debugging, however, you could use `std::debug` module to print out arbitrary value. To do so, first import the `debug` module:
+At the moment, there isn't a debugger for Move. To aid with debugging, however, you can use the `std::debug` module to print out arbitrary values. To do so, first import the `debug` module in your source file:
 ```
 use std::debug;
 ```
-Then in places where you want to print out a value `v`, regardless of its type, simply do:
+Then in places where you want to print out a value `v`, regardless of its type, add the following code:
 ```
 debug::print(&v);
 ```
-or the following if v is already a reference:
+or the following if `v` is already a reference:
 ```
 debug::print(v);
 ```
@@ -19,51 +19,30 @@ The `debug` module also provides a function to print out the current stacktrace:
 ```
 debug::print_stack_trace();
 ```
-Alternatively, any call to `abort` or assertion failure will also print the stacktrace at the point of failure.
+Alternatively, any call to `abort` or assertion failure also prints the stacktrace at the point of failure.
 
-> **Important:** All calls to functions in the `debug` module must be removed from no-test code
-> before the new module can be published (test code is marked with the `#[test]` annotation).
+**Important:** You must remove all calls to functions in the `debug` module from no-test code before you can publish the new module (test code is marked with the `#[test]` annotation).
 
 ## Publishing a package
 
-For functions in a Move package to actually be callable from Sui
-(rather than for Sui execution scenario to be emulated), the package
-has to be _published_ to Sui's [distributed ledger](../../learn/how-sui-works.md)
-where it is represented as a Sui object.
+For functions in a Sui Move package to actually be callable from Sui (rather than an emulated Sui execution scenario), you have to publish the package to the Sui [distributed ledger](../../learn/how-sui-works.md), where it is represented as an immutable Sui object.
 
-At this point, however, the
-`sui move` command does not support package publishing. In fact, it is
-not clear if it even makes sense to accommodate package publishing,
-which happens once per package creation, in the context of a unit
-testing framework. Instead, one can use a Sui CLI client to
-[publish](../cli-client.md#publish-packages) Move code and to
-[call](../cli-client.md#calling-move-code) it. See the
-[Sui CLI client documentation](../cli-client.md) for a description of how
-to publish the package we have [written](write-package.md) as as
-part of this tutorial.
+At this point, however, the `sui move` command does not support package publishing. In fact, it is not clear if it even makes sense to accommodate package publishing, which happens once per package creation, in the context of a unit testing framework. Instead, you can use the Sui CLI client to
+[publish](../cli-client.md#publish-packages) Move code and to [call](../cli-client.md#calling-move-code) that code. See the [Sui CLI client documentation](../cli-client.md) for information on how to publish the package created in this tutorial.
 
 ### Module initializers
 
-There is, however, an important aspect of publishing packages that
-affects Move code development in Sui - each module in a package can
-include a special _initializer function_ that will be run at the
-publication time. The goal of an initializer function is to
-pre-initialize module-specific data (e.g., to create singleton
-objects). The initializer function must have the following properties
-in order to be executed at publication:
+There is, however, an important aspect of publishing packages that affects Move code development in Sui - each module in a package can
+include a special _initializer function_ that runs at publication time. The goal of an initializer function is to pre-initialize module-specific data (to create singleton objects). The initializer function must have the following properties for it to execute at publication:
 
-- name `init`
-- single parameter of `&mut TxContext` type
-- no return values
-- private visibility
+- Function name must be `init`
+- A single parameter of `&mut TxContext` type
+- No return values
+- Private visibility
 
-While the `sui move` command does not support publishing explicitly,
-we can still test module initializers using our testing framework -
-one can simply dedicate the first transaction to executing the
-initializer function. Let us use a concrete example to illustrate
-this.
+While the `sui move` command does not support publishing explicitly, you can still test module initializers using the testing framework by dedicating the first transaction to executing the initializer function.
 
-Continuing our fantasy game example, notice that we have used the init function in our tests, but have not tested it itself (in particular, the fact that it properly creates a Forge object):
+Continuing the fantasy game example, the `init` function should create a Forge object. 
 
 ``` rust
     // module initializer to be executed when this module is published
@@ -78,8 +57,7 @@ Continuing our fantasy game example, notice that we have used the init function 
     }
 ```
 
-In order to do so, we need to modify the `sword_create`
-function to take the forge as a parameter and to update the number of
+The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a Forge object. To test this functionality, modify the `sword_create` function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 
 ``` rust
@@ -89,31 +67,31 @@ created swords at the end of the function:
     }
 ```
 
-We can now create a function to test the module initialization:
+Now, create a function to test the module initialization:
 
 ``` rust
     #[test]
     public fun test_module_init() {
         use sui::test_scenario;
 
-        // create test address representing game admin
+        // Create test address representing game admin
         let admin = @0xBABE;
 
-        // first transaction to emulate module initialization
+        // First transaction to emulate module initialization
         let scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
         {
             init(test_scenario::ctx(scenario));
         };
-        // second transaction to check if the forge has been created
+        // Second transaction to check if the forge has been created
         // and has initial value of zero swords created
         test_scenario::next_tx(scenario, admin);
         {
-            // extract the Forge object
+            // Extract the Forge object
             let forge = test_scenario::take_from_sender<Forge>(scenario);
-            // verify number of created swords
+            // Verify number of created swords
             assert!(swords_created(&forge) == 0, 1);
-            // return the Forge object to the object pool
+            // Return the Forge object to the object pool
             test_scenario::return_to_sender(scenario, forge);
         };
         test_scenario::end(scenario_val);
@@ -121,15 +99,7 @@ We can now create a function to test the module initialization:
 
 ```
 
-As we can see in the test function defined above, in the first
-transaction we (explicitly) call the initializer, and in the next
-transaction we check if the forge object has been created and properly
-initialized.
+As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `forge` object has been created and properly initialized.
 
-If we try to run tests on the whole package at this point, we will
-encounter compilation errors in the existing tests due to the
-`sword_create` function signature change. We will leave the changes
-required for the tests to run again as an exercise for the reader. The
-entire source code for the package we have developed (with all the
-tests properly adjusted) can be found in
-[my_module.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/my_module.move).
+If you try to run tests on the whole package at this point, you encounter compilation errors in the existing tests because of the
+`sword_create` function signature change. The changes required for the tests to run again is an exercise left for you. If you need help, you can refer to the source code for the package (with all the tests properly adjusted) in [my_module.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/move_tutorial/sources/my_module.move).
