@@ -9,8 +9,9 @@ use crate::{
 use bytes::Bytes;
 use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
-    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
-    NarwhalAuthoritySignature, PublicKey, PublicKeyBytes, Signature,
+    to_intent_message, AggregateSignature, AggregateSignatureBytes,
+    NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, PublicKey, PublicKeyBytes,
+    Signature,
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
@@ -499,7 +500,7 @@ impl PartialEq for Vote {
 #[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
 pub struct Certificate {
     pub header: Header,
-    aggregated_signature: AggregateSignature,
+    aggregated_signature: AggregateSignatureBytes,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
     pub metadata: Metadata,
@@ -605,7 +606,7 @@ impl Certificate {
 
         Ok(Certificate {
             header,
-            aggregated_signature,
+            aggregated_signature: AggregateSignatureBytes::from(&aggregated_signature),
             signed_authorities,
             metadata: Metadata::default(),
         })
@@ -669,7 +670,8 @@ impl Certificate {
 
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        self.aggregated_signature
+        AggregateSignature::try_from(&self.aggregated_signature)
+            .map_err(|_| DagError::InvalidSignature)?
             .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
 
