@@ -84,7 +84,7 @@ struct Coin<phantom T> has key, store {
 }
 ```
 
-Move's struct type is similar to struct types defined in other programming languages, such as C or C++, and contains a name and a set of typed fields. In particular, struct fields can be of a primitive type, such as an integer type, or of a struct type.
+Sui Move's struct type is similar to struct types defined in other programming languages, such as C or C++, and contains a name and a set of typed fields. In particular, struct fields can be of a primitive type, such as an integer type, or of a struct type.
 
 You can read more about Move [primitive types](https://github.com/move-language/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types) and [structs](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md) in the Move book.
 
