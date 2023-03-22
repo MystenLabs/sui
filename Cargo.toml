@@ -49,12 +49,14 @@ strip = 'none'
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
-metrics = "0.20"
 tokio = "1.25.0"
-snarkos-metrics = { git = "https://github.com/eqlabs/snarkos", branch = "bft_testnet3_rebased_metrics", package = "snarkos-node-metrics" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", package = "fastcrypto-zkp" }
 fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235211dc8195590f5353d38135f5ee51a267521e", package = "fastcrypto-tbls" }
+
+# metrics
+metrics = "0.20"
+snarkos-metrics = { git = "https://github.com/eqlabs/snarkos", branch = "bft_testnet3_rebased_metrics", package = "snarkos-node-metrics" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313" }

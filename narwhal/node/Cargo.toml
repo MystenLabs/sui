@@ -6,6 +6,9 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 publish = false
 
+[features]
+metrics = ["consensus/metrics", "executor/metrics", "network/metrics", "primary/metrics"]
+
 [dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }
 async-trait = "0.1.61"
@@ -33,6 +36,7 @@ primary = { path = "../primary", package = "narwhal-primary" }
 storage = { path = "../storage", package = "narwhal-storage" }
 types = { path = "../types", package = "narwhal-types" }
 worker = { path = "../worker", package = "narwhal-worker" }
+
 eyre = "0.6.8"
 serde = {version = "1.0.144", features = ["derive"]}
 roaring = "0.10.1"

@@ -8,7 +8,6 @@ use crate::{
 use config::{Committee, Stake};
 use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
-use snarkos_metrics::{gauge, histogram, increment_counter};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::time::Instant;
 use tracing::{debug, error_span};
@@ -16,6 +15,9 @@ use types::{
     Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI,
     ReputationScores, Round,
 };
+
+#[cfg(feature = "metrics")]
+use snarkos_metrics::{gauge, histogram, increment_counter};
 
 #[cfg(test)]
 #[path = "tests/bullshark_tests.rs"]
@@ -194,8 +196,10 @@ impl ConsensusProtocol for Bullshark {
         }
 
         // record the last time we got a successful leader election
+        #[cfg(feature = "metrics")]
         let elapsed = self.last_successful_leader_election_timestamp.elapsed();
 
+        #[cfg(feature = "metrics")]
         histogram!(
             snarkos_metrics::consensus::COMMIT_ROUNDS_LATENCY,
             elapsed.as_secs_f64()
@@ -203,6 +207,7 @@ impl ConsensusProtocol for Bullshark {
 
         self.last_successful_leader_election_timestamp = Instant::now();
 
+        #[cfg(feature = "metrics")]
         increment_counter!(snarkos_metrics::consensus::LEADERS_ELECTED);
 
         // The total leader_commits are expected to grow the same amount on validators,
@@ -228,6 +233,7 @@ impl ConsensusProtocol for Bullshark {
             total_committed_certificates
         );
 
+        #[cfg(feature = "metrics")]
         gauge!(
             snarkos_metrics::consensus::COMMITTED_CERTIFICATES,
             total_committed_certificates as f64

@@ -17,7 +17,6 @@ use tokio::sync::mpsc;
 use fastcrypto::hash::Hash;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
-use snarkos_metrics::histogram;
 use tokio::time::Instant;
 use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
@@ -26,6 +25,9 @@ use types::{
     Batch, BatchDigest, Certificate, CommittedSubDag, ConditionalBroadcastReceiver,
     ConsensusOutput, Timestamp,
 };
+
+#[cfg(feature = "metrics")]
+use snarkos_metrics::histogram;
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
 /// downloaded all the transactions references by the certificates; it then
@@ -252,6 +254,8 @@ impl Subscriber {
             let output_cert = cert.clone();
 
             // TODO(metrics): Set `subscriber_current_round` to `cert.round() as i64`.
+
+            #[cfg(feature = "metrics")]
             histogram!(
                 snarkos_metrics::subscribers::CERTIFICATE_LATENCY,
                 cert.metadata.created_at.elapsed().as_secs_f64(),
