@@ -36,7 +36,7 @@ jobs:
             
       - name: Environment clean
         run: | 
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore Cargo.lock"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
  
       - name: Tmpfs clean
         run: |  
