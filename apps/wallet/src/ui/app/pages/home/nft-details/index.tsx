@@ -48,9 +48,18 @@ function NFTDetailsPage() {
     const { data: nftDisplayData, isLoading: isLoadingDisplay } = useGetNFTMeta(
         nftId || ''
     );
-    const explorerLink = useExplorerLink({
+    const objectExplorerLink = useExplorerLink({
         type: ExplorerLinkType.object,
         objectID: nftId || '',
+    });
+    const ownerAddress =
+        (typeof objectData?.owner === 'object' &&
+            'AddressOwner' in objectData.owner &&
+            objectData.owner.AddressOwner) ||
+        '';
+    const ownerExplorerLink = useExplorerLink({
+        type: ExplorerLinkType.address,
+        address: ownerAddress,
     });
     return (
         <div
@@ -62,15 +71,19 @@ function NFTDetailsPage() {
                 {objectData ? (
                     <>
                         <PageTitle back="/nfts" />
-                        <div className="flex flex-1 flex-col flex-nowrap items-stretch gap-7">
+                        <div className="flex flex-1 flex-col flex-nowrap items-stretch gap-8">
                             <div className="flex flex-col flex-nowrap items-center gap-3 self-center">
-                                <NFTDisplayCard objectId={nftId!} size="lg" />
+                                <NFTDisplayCard
+                                    objectId={nftId!}
+                                    size="lg"
+                                    borderRadius="xl"
+                                />
                                 {nftId ? (
                                     <Link
                                         color="steelDark"
                                         weight="semibold"
                                         size="captionSmall"
-                                        href={explorerLink || ''}
+                                        href={objectExplorerLink || ''}
                                         text="VIEW ON EXPLORER"
                                         after={
                                             <ArrowRight16 className="-rotate-45" />
@@ -78,34 +91,54 @@ function NFTDetailsPage() {
                                     />
                                 ) : null}
                             </div>
+                            <LabelValuesContainer>
+                                {ownerExplorerLink ? (
+                                    <LabelValueItem
+                                        label="Owner"
+                                        value={
+                                            <Link
+                                                color="suiDark"
+                                                weight="medium"
+                                                size="body"
+                                                mono
+                                                href={ownerExplorerLink}
+                                                text={formatAddress(
+                                                    ownerAddress
+                                                )}
+                                                title="View on Sui Explorer"
+                                            />
+                                        }
+                                    />
+                                ) : null}
+                                <LabelValueItem
+                                    label="Object Id"
+                                    value={
+                                        nftId ? (
+                                            <Link
+                                                color="suiDark"
+                                                weight="medium"
+                                                size="body"
+                                                mono
+                                                href={objectExplorerLink || ''}
+                                                text={formatAddress(nftId)}
+                                                title="View on Sui Explorer"
+                                            />
+                                        ) : null
+                                    }
+                                />
+                                <LabelValueItem
+                                    label="Media Type"
+                                    value={
+                                        filePath &&
+                                        fileExtensionType.name &&
+                                        fileExtensionType.type
+                                            ? `${fileExtensionType.name} ${fileExtensionType.type}`
+                                            : '-'
+                                    }
+                                />
+                            </LabelValuesContainer>
                             <Collapse title="Details" initialIsOpen>
                                 <LabelValuesContainer>
-                                    <LabelValueItem
-                                        label="Object Id"
-                                        value={
-                                            nftId ? (
-                                                <Link
-                                                    color="suiDark"
-                                                    weight="medium"
-                                                    size="body"
-                                                    mono
-                                                    href={explorerLink || ''}
-                                                    text={formatAddress(nftId)}
-                                                    title="View on Sui Explorer"
-                                                />
-                                            ) : null
-                                        }
-                                    />
-                                    <LabelValueItem
-                                        label="Media Type"
-                                        value={
-                                            filePath &&
-                                            fileExtensionType.name &&
-                                            fileExtensionType.type
-                                                ? `${fileExtensionType.name} ${fileExtensionType.type}`
-                                                : '-'
-                                        }
-                                    />
                                     {nftDisplayData?.name ? (
                                         <LabelValueItem
                                             label="Name"
