@@ -71,6 +71,16 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     pt: ProgrammableTransaction,
 ) -> Result<Mode::ExecutionResults, ExecutionError> {
     let ProgrammableTransaction { inputs, commands } = pt;
+
+    let mut move_packages = BTreeMap::new();
+    for (idx, command) in commands.clone().into_iter().enumerate() {
+        if let Command::MoveCall(move_call) = &command {
+            // we have to do it here to avoid borrowing problems (state_view is both stored in
+            // context as immutable reference below and used mutably here)
+            let running_pkg = fetch_package(state_view, &move_call.package)?;
+            move_packages.insert(idx, running_pkg);
+        }
+    }
     let mut context = ExecutionContext::new(
         protocol_config,
         vm,
@@ -83,6 +93,9 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
+        if let Some(running_pkg) = move_packages.get(&idx) {
+            state_view.init(running_pkg.clone());
+        }
         execute_command::<_, _, Mode>(&mut context, &mut mode_results, command)
             .map_err(|e| e.with_command_index(idx))?
     }
@@ -426,7 +439,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let dependencies = fetch_packages(context, &dep_ids)?;
+    let dependencies = fetch_packages(context.state_view, &dep_ids)?;
 
     // new_package also initializes type origin table in the package object
     let package_id = context.new_package(modules, &dependencies, None)?;
@@ -523,7 +536,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
 
     // Check that this package ID points to a package and get the package we're upgrading.
-    let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
+    let current_package = fetch_package(context.state_view, &upgrade_ticket.package.bytes)?;
 
     // Run the move + sui verifier on the modules and publish them into the cache.
     // NB: this will substitute in the original package id for the `self` address in all of these modules.
@@ -541,7 +554,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     )?;
 
     // Read the package dependencies.
-    let dependency_packages = fetch_packages(context, &dep_ids)?;
+    let dependency_packages = fetch_packages(context.state_view, &dep_ids)?;
 
     let upgraded_object_id = context.upgrade_package(
         &current_package,
@@ -626,10 +639,10 @@ fn check_compatibility<'a>(
 }
 
 fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
-    context: &'a ExecutionContext<E, S>,
+    state_view: &S,
     package_id: &ObjectID,
 ) -> Result<MovePackage, ExecutionError> {
-    let mut fetched_packages = fetch_packages(context, vec![package_id])?;
+    let mut fetched_packages = fetch_packages(state_view, vec![package_id])?;
     assert_invariant!(
         fetched_packages.len() == 1,
         "Number of fetched packages must match the number of package object IDs if successful."
@@ -643,11 +656,11 @@ fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
 }
 
 fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
-    context: &'a ExecutionContext<E, S>,
+    state_view: &S,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
 ) -> Result<Vec<MovePackage>, ExecutionError> {
     let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-    match context.state_view.get_packages(package_ids) {
+    match state_view.get_packages(package_ids) {
         Err(e) => Err(ExecutionError::new_with_source(
             ExecutionErrorKind::PublishUpgradeMissingDependency,
             e,

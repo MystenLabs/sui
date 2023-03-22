@@ -732,11 +732,11 @@ impl<S: LinkageResolver<Error = SuiError>> LinkageResolver for &mut S {
 /// Initialize linkage information. The input is the ID of a package containing a function used as
 /// an entry point to programmable transaction's Move call command.
 pub trait LinkageInitializer {
-    fn init(&mut self, id: ObjectID);
+    fn init(&mut self, running_pkg: MovePackage);
 }
 
 impl<S: LinkageInitializer> LinkageInitializer for &mut S {
-    fn init(&mut self, id: ObjectID) {
-        LinkageInitializer::init(*self, id);
+    fn init(&mut self, running_pkg: MovePackage) {
+        LinkageInitializer::init(*self, running_pkg);
     }
 }

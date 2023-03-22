@@ -7,6 +7,7 @@ use crate::{
     base_types::{ObjectID, ObjectRef},
     error::{SuiError, SuiResult},
     event::Event,
+    move_package::MovePackage,
     object::Object,
     storage::{
         BackingPackageStore, ChildObjectResolver, LinkageInitializer, ObjectChange, ParentSync,
@@ -22,7 +23,7 @@ use move_core_types::{
 };
 
 pub struct LinkageInfo {
-    pub running_pkg_id: Option<ObjectID>,
+    pub running_pkg: Option<MovePackage>,
 }
 
 pub struct StorageContext<S> {
@@ -34,9 +35,7 @@ impl<S> StorageContext<S> {
     pub fn new(temp_store: TemporaryStore<S>) -> Self {
         Self {
             temp_store,
-            linkage_info: LinkageInfo {
-                running_pkg_id: None,
-            },
+            linkage_info: LinkageInfo { running_pkg: None },
         }
     }
 
@@ -109,8 +108,8 @@ impl<S> ResourceResolver for StorageContext<S> {
 }
 
 impl<S: BackingPackageStore> LinkageInitializer for StorageContext<S> {
-    fn init(&mut self, id: ObjectID) {
-        self.linkage_info.running_pkg_id = Some(id);
+    fn init(&mut self, running_pkg: MovePackage) {
+        self.linkage_info.running_pkg = Some(running_pkg);
     }
 }
 
@@ -118,10 +117,20 @@ impl<S: BackingPackageStore> LinkageResolver for StorageContext<S> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
-        self.linkage_info.running_pkg_id.unwrap().into()
+        self.linkage_info.running_pkg.as_ref().unwrap().id().into()
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        Ok(module_id.clone())
+        let old_id: ObjectID = (*module_id.address()).into();
+        let new_id = self
+            .linkage_info
+            .running_pkg
+            .as_ref()
+            .unwrap()
+            .linkage_table()
+            .get(&old_id)
+            .unwrap()
+            .upgraded_id;
+        Ok(ModuleId::new(new_id.into(), module_id.name().into()))
     }
 }
