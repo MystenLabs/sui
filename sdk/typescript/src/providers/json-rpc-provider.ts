@@ -62,6 +62,7 @@ import { Connection, devnetConnection } from '../rpc/connection';
 import { Transaction } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
+import { EpochInfo, EpochPage } from '../types/epochs';
 
 export const TARGETED_RPC_VERSION = '0.27.0';
 
@@ -860,6 +861,32 @@ export class JsonRpcProvider {
       'sui_getCommitteeInfo',
       [input?.epoch],
       CommitteeInfo,
+    );
+  }
+  /**
+   * Retrieves a historical list of epochs. Extended API (requires sui-indexer)
+   */
+  async getEpochs(input?: {
+    cursor?: number;
+    limit?: number;
+  }): Promise<EpochPage> {
+    return await this.client.requestWithType(
+      'suix_getEpochs',
+      [input?.cursor, input?.limit],
+      EpochPage,
+      this.options.skipDataValidation,
+    );
+  }
+  /**
+   * Retrieves info about the current epoch. Extended API (requires sui-indexer)
+   * @
+   */
+  async getCurrentEpoch(): Promise<EpochInfo> {
+    return await this.client.requestWithType(
+      'suix_getCurrentEpoch',
+      [],
+      EpochInfo,
+      this.options.skipDataValidation,
     );
   }
 }

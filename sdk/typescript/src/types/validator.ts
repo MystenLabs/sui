@@ -99,10 +99,12 @@ export const DelegationStakingPool = object({
   fields: DelegationStakingPoolFields,
 });
 
+export const Validators = array(tuple([AuthorityName, number()]));
+
 export const CommitteeInfo = object({
   epoch: number(),
   /** Array of (validator public key, stake unit) tuple */
-  validators: optional(array(tuple([AuthorityName, number()]))),
+  validators: Validators,
 });
 
 export const SuiValidatorSummary = object({
