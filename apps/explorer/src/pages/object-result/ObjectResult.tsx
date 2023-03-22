@@ -8,7 +8,7 @@ import { useGetObject } from '../../hooks/useGetObject';
 import { extractName } from '../../utils/objectUtils';
 import { translate, type DataType } from './ObjectResultType';
 import PkgView from './views/PkgView';
-import TokenView from './views/TokenView';
+import { TokenView } from './views/TokenView';
 
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';

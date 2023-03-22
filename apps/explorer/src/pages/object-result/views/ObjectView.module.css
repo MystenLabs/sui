@@ -83,11 +83,6 @@ table.description {
     @apply mb-[3.75rem] w-full sm:w-[866px] 2xl:mb-0;
 }
 
-table.properties,
-div.ownedobjects {
-    @apply mb-[3.75rem];
-}
-
 /* Description CSS */
 
 table.description,
