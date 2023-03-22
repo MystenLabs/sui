@@ -8,7 +8,6 @@ use narwhal_config::{Committee, Stake};
 use narwhal_types::ReputationScores;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_simulator::anemo::PeerId;
 use sui_types::base_types::AuthorityName;
 use tracing::{info, warn};
 
@@ -47,15 +46,14 @@ pub fn update_low_scoring_authorities(
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     committee: &Committee,
     reputation_scores: ReputationScores,
-    authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
+    authority_names_to_hostnames: HashMap<AuthorityName, String>,
     metrics: &Arc<AuthorityMetrics>,
 ) {
     if !reputation_scores.final_of_schedule {
         return;
     }
 
-    // Convert the narwhal authority ids to the corresponding AuthorityName in SUI so we avoid constantly.
-    // doing conversions down the line.
+    // Convert the narwhal authority ids to the corresponding AuthorityName in SUI
     // Also capture the stake so can calculate later is strong quorum is reached for the non-low scoring authorities.
     let scores_per_authority: HashMap<AuthorityName, (u64, Stake)> = reputation_scores
         .scores_per_authority
@@ -65,12 +63,12 @@ pub fn update_low_scoring_authorities(
             let name: AuthorityName = authority.protocol_key().into();
 
             // report the scores
-            if let Some(peer_id) = authority_names_to_peer_ids.get(&name) {
-                info!("authority {} has score {}", peer_id, score);
+            if let Some(hostname) = authority_names_to_hostnames.get(&name) {
+                info!("authority {} has score {}", hostname, score);
 
                 metrics
                     .consensus_handler_scores
-                    .with_label_values(&[&format!("{:?}", peer_id)])
+                    .with_label_values(&[&format!("{:?}", hostname)])
                     .set(score as i64);
             }
 
@@ -122,8 +120,8 @@ pub fn update_low_scoring_authorities(
 
     for (authority, score) in low_scoring {
         final_low_scoring_map.insert(*authority, score);
-        if let Some(peer_id) = authority_names_to_peer_ids.get(authority) {
-            info!("low scoring authority {} has score {}", peer_id, score);
+        if let Some(hostname) = authority_names_to_hostnames.get(authority) {
+            info!("low scoring authority {} has score {}", hostname, score);
         }
     }
 
@@ -171,7 +169,6 @@ mod tests {
         let a4 = authorities.next().unwrap();
 
         let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
-        let peer_id_map = Arc::new(HashMap::new());
 
         let mut inner = HashMap::new();
         inner.insert(a1.protocol_key().into(), 50);
@@ -180,6 +177,7 @@ mod tests {
             final_of_schedule: false,
         };
         low_scoring.swap(Arc::new(inner));
+        let peer_id_map = HashMap::new();
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
@@ -192,6 +190,7 @@ mod tests {
             peer_id_map.clone(),
             &metrics,
         );
+
         assert_eq!(
             *low_scoring.load().get(&a1.protocol_key().into()).unwrap(),
             50_u64
@@ -380,7 +379,7 @@ mod tests {
             low_scoring.clone(),
             &committee,
             reputation_scores,
-            Arc::new(HashMap::new()),
+            HashMap::new(),
             &metrics,
         );
         assert_eq!(
@@ -452,7 +451,7 @@ mod tests {
             final_of_schedule: true,
         };
 
-        let peer_id_map = Arc::new(HashMap::new());
+        let peer_id_map = HashMap::new();
         update_low_scoring_authorities(
             low_scoring.clone(),
             &committee,
