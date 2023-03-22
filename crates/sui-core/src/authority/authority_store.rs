@@ -379,6 +379,22 @@ impl AuthorityStore {
             .transpose()
     }
 
+    pub fn multi_get_object_by_key(
+        &self,
+        object_keys: &[ObjectKey],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        let wrappers = self.perpetual_tables.objects.multi_get(object_keys)?;
+        let mut ret = vec![];
+
+        for w in wrappers {
+            ret.push(
+                w.map(|object| self.perpetual_tables.object(object))
+                    .transpose()?,
+            );
+        }
+        Ok(ret)
+    }
+
     /// Get many objects
     pub fn get_objects(&self, objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         let mut result = Vec::new();
