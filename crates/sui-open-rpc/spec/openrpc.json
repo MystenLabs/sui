@@ -2861,9 +2861,7 @@
             }
           },
           "totalBalance": {
-            "type": "integer",
-            "format": "uint128",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigBigInt"
           }
         }
       },
@@ -2897,6 +2895,10 @@
       },
       "Base64": {
         "description": "Base64 encoding",
+        "type": "string"
+      },
+      "BigBigInt": {
+        "description": "Type for de/serializing u128 to string",
         "type": "string"
       },
       "BigInt": {
