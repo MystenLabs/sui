@@ -336,28 +336,28 @@ impl ValidatorService {
                 "Cannot execute system certificate via RPC interface! {certificate:?}"
             )));
         }
-        for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
-            certificate
-                .data()
-                .intent_message()
-                .value
-                .kind()
-                .input_objects()
-                .map_err(SuiError::from)?
-                .into_iter()
-                .map(|r| r.object_id())
-                .collect(),
-        ) {
-            // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
-                return Err(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len,
-                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
-                }
-                .into());
-            }
-        }
+        // for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
+        //     certificate
+        //         .data()
+        //         .intent_message()
+        //         .value
+        //         .kind()
+        //         .input_objects()
+        //         .map_err(SuiError::from)?
+        //         .into_iter()
+        //         .map(|r| r.object_id())
+        //         .collect(),
+        // ) {
+        //     // When this occurs, most likely transactions piled up on a shared object.
+        //     if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+        //         return Err(SuiError::TooManyTransactionsPendingOnObject {
+        //             object_id,
+        //             queue_len,
+        //             threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+        //         }
+        //         .into());
+        //     }
+        // }
         // code block within reconfiguration lock
         let certificate = {
             let certificate = {

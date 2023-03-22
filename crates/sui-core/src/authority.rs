@@ -525,13 +525,13 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        let execution_queue_len = self.transaction_manager.execution_queue_len();
-        if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
-            return Err(SuiError::TooManyTransactionsPendingExecution {
-                queue_len: execution_queue_len,
-                threshold: MAX_EXECUTION_QUEUE_LENGTH,
-            });
-        }
+        // let execution_queue_len = self.transaction_manager.execution_queue_len();
+        // if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
+        //     return Err(SuiError::TooManyTransactionsPendingExecution {
+        //         queue_len: execution_queue_len,
+        //         threshold: MAX_EXECUTION_QUEUE_LENGTH,
+        //     });
+        // }
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
