@@ -15,6 +15,7 @@ use crate::{
 };
 use clap::Parser;
 use color_eyre::eyre::{Context, Result};
+use protocol::sui::SuiProtocol;
 
 mod benchmark;
 mod client;
@@ -277,7 +278,14 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .setup_commands()
                 .await
                 .wrap_err("Failed to load testbed setup commands")?;
-            let orchestrator = Orchestrator::new(settings, instances, setup_commands, ssh_manager);
+            let protocol_commands = SuiProtocol::new(&settings);
+            let orchestrator = Orchestrator::new(
+                settings,
+                instances,
+                setup_commands,
+                protocol_commands,
+                ssh_manager,
+            );
 
             let shared_objects_ratio = shared_objects_ratio.min(100);
             let load = match load_type {

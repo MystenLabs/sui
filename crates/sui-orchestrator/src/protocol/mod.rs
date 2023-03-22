@@ -10,6 +10,9 @@ pub mod sui;
 /// The minimum interface that the protocol should implement to allow benchmarks from
 /// the orchestrator.
 pub trait ProtocolCommands {
+    /// The port where the client exposes prometheus metrics.
+    const CLIENT_METRICS_PORT: u16;
+
     /// The list of dependencies to install (e.g., through apt-get).
     fn protocol_dependencies() -> Vec<&'static str>;
 

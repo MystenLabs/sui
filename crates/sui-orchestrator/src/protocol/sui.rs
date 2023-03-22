@@ -26,24 +26,15 @@ use crate::{benchmark::BenchmarkParameters, client::Instance, settings::Settings
 
 use super::{ProtocolCommands, ProtocolMetrics};
 
-/// TODO: All these variables are already defined in other parts of the codebase.
-const AUTHORITIES_DB: &str = "authorities_db";
-const CONSENSUS_DB: &str = "consensus_db";
-const CONFIG_DIR: &str = "sui_config";
-const GENESIS_BLOB: &str = "genesis.blob";
-const GENESIS_CONFIG_FILE: &str = "benchmark-genesis.yml";
-pub const GAS_KEYSTORE_FILE: &str = "gas.keystore";
-
-pub fn validator_configs(i: usize) -> String {
-    format!("validator-config-{i}.yaml")
-}
-
 /// All configurations information to run a sui client or validator.
 pub struct SuiProtocol {
+    /// The working directory on the remote hosts (containing the databases and configuration files).
     working_dir: PathBuf,
 }
 
 impl ProtocolCommands for SuiProtocol {
+    const CLIENT_METRICS_PORT: u16 = 8081;
+
     fn protocol_dependencies() -> Vec<&'static str> {
         vec![
             // Install typical sui dependencies.
@@ -54,8 +45,12 @@ impl ProtocolCommands for SuiProtocol {
     }
 
     fn db_directories(&self) -> Vec<PathBuf> {
-        let authorities_db = [&self.working_dir, &AUTHORITIES_DB.into()].iter().collect();
-        let consensus_db = [&self.working_dir, &CONSENSUS_DB.into()].iter().collect();
+        let authorities_db = [&self.working_dir, &Self::AUTHORITIES_DB.into()]
+            .iter()
+            .collect();
+        let consensus_db = [&self.working_dir, &Self::CONSENSUS_DB.into()]
+            .iter()
+            .collect();
         vec![authorities_db, consensus_db]
     }
 
@@ -86,7 +81,7 @@ impl ProtocolCommands for SuiProtocol {
 
         let working_dir = self.working_dir.clone();
         Box::new(move |i| {
-            let validator_config = validator_configs(i);
+            let validator_config = SuiProtocol::validator_configs(i);
             let config_path: PathBuf = [&working_dir, &validator_config.into()].iter().collect();
             let path = config_path.display();
             let address = listen_addresses[i].clone();
@@ -108,8 +103,10 @@ impl ProtocolCommands for SuiProtocol {
     where
         I: Iterator<Item = &'a Instance>,
     {
-        let genesis_path: PathBuf = [&self.working_dir, &GENESIS_BLOB.into()].iter().collect();
-        let keystore_path: PathBuf = [&self.working_dir, &GAS_KEYSTORE_FILE.into()]
+        let genesis_path: PathBuf = [&self.working_dir, &Self::GENESIS_BLOB.into()]
+            .iter()
+            .collect();
+        let keystore_path: PathBuf = [&self.working_dir, &Self::GAS_KEYSTORE_FILE.into()]
             .iter()
             .collect();
         let committee_size = parameters.nodes;
@@ -148,13 +145,41 @@ impl ProtocolMetrics for SuiProtocol {
 }
 
 impl SuiProtocol {
-    /// The port where the client exposes metrics.
-    const CLIENT_METRICS_PORT: u16 = 8081;
-
+    /// Make a new instance of the Sui protocol commands generator.
     pub fn new(settings: &Settings) -> Self {
         Self {
-            working_dir: [&settings.working_dir, &CONFIG_DIR.into()].iter().collect(),
+            working_dir: [&settings.working_dir, &Self::CONFIG_DIR.into()]
+                .iter()
+                .collect(),
         }
+    }
+
+    /// Convert the ip of the validators' network addresses to 0.0.0.0.
+    pub fn make_listen_addresses(instances: &[Instance]) -> Vec<Multiaddr> {
+        let genesis_config = Self::make_genesis_config(instances);
+        let mut addresses = Vec::new();
+        if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
+            for validator_info in validator_configs {
+                let address = &validator_info.genesis_info.network_address;
+                addresses.push(address.zero_ip_multi_address());
+            }
+        }
+        addresses
+    }
+}
+
+/// TODO: All these functions and variables are already defined in other parts of the codebase
+/// or should not be needed after #9695 lands.
+impl SuiProtocol {
+    const AUTHORITIES_DB: &str = "authorities_db";
+    const CONSENSUS_DB: &str = "consensus_db";
+    const CONFIG_DIR: &str = "sui_config";
+    const GENESIS_BLOB: &str = "genesis.blob";
+    const GENESIS_CONFIG_FILE: &str = "benchmark-genesis.yml";
+    pub const GAS_KEYSTORE_FILE: &str = "gas.keystore";
+
+    pub fn validator_configs(i: usize) -> String {
+        format!("validator-config-{i}.yaml")
     }
 
     fn gas_key() -> SuiKeyPair {
@@ -169,25 +194,28 @@ impl SuiProtocol {
             .collect()
     }
 
-    pub fn print_files(&mut self, instances: &[Instance]) {
+    pub fn print_files(instances: &[Instance]) {
         let genesis_config = Self::make_genesis_config(instances);
         let yaml = serde_yaml::to_string(&genesis_config).unwrap();
-        let path = PathBuf::from(GENESIS_CONFIG_FILE);
+        let path = PathBuf::from(Self::GENESIS_CONFIG_FILE);
         fs::write(path, yaml).unwrap();
 
         let mut keystore = FileBasedKeystore::default();
         let gas_key = Self::gas_key();
         keystore.add_key(gas_key).unwrap();
-        keystore.set_path(&PathBuf::from(GAS_KEYSTORE_FILE));
+        keystore.set_path(&PathBuf::from(Self::GAS_KEYSTORE_FILE));
         keystore.save().unwrap();
     }
 
-    pub fn configuration_files(&self) -> Vec<PathBuf> {
-        vec![GENESIS_CONFIG_FILE.into(), GAS_KEYSTORE_FILE.into()]
+    pub fn configuration_files() -> Vec<PathBuf> {
+        vec![
+            Self::GENESIS_CONFIG_FILE.into(),
+            Self::GAS_KEYSTORE_FILE.into(),
+        ]
     }
 
     pub fn genesis_config_command(&self) -> String {
-        let genesis_file = format!("~/{GENESIS_CONFIG_FILE}");
+        let genesis_file = format!("~/{}", Self::GENESIS_CONFIG_FILE);
         let genesis = [
             "cargo run --release --bin sui --",
             &format!(
@@ -251,18 +279,5 @@ impl SuiProtocol {
             grpc_concurrency_limit: None,
             accounts: vec![account_config],
         }
-    }
-
-    /// Convert the ip of the validators' network addresses to 0.0.0.0.
-    pub fn make_listen_addresses(instances: &[Instance]) -> Vec<Multiaddr> {
-        let genesis_config = Self::make_genesis_config(instances);
-        let mut addresses = Vec::new();
-        if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
-            for validator_info in validator_configs {
-                let address = &validator_info.genesis_info.network_address;
-                addresses.push(address.zero_ip_multi_address());
-            }
-        }
-        addresses
     }
 }

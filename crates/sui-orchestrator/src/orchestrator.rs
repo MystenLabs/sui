@@ -18,7 +18,7 @@ use crate::{
     error::{TestbedError, TestbedResult},
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
-    protocol::{self, sui::SuiProtocol},
+    protocol::{sui::SuiProtocol, ProtocolCommands},
     settings::Settings,
     ssh::{CommandStatus, SshCommand, SshConnectionManager},
 };
@@ -31,6 +31,9 @@ pub struct Orchestrator {
     instances: Vec<Instance>,
     /// Provider-specific commands to install on the instance.
     instance_setup_commands: Vec<String>,
+    /// Protocol-specific commands generator to generate the protocol configuration files,
+    /// boot clients and nodes, etc.
+    protocol_commands: SuiProtocol,
     /// The interval between measurements collection.
     scrape_interval: Duration,
     /// Handle ssh connections to instances.
@@ -44,8 +47,6 @@ pub struct Orchestrator {
 }
 
 impl Orchestrator {
-    /// The port where the client exposes prometheus metrics.
-    const CLIENT_METRIC_PORT: u16 = 8081;
     /// The default interval between measurements collection.
     const SCRAPE_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -54,12 +55,14 @@ impl Orchestrator {
         settings: Settings,
         instances: Vec<Instance>,
         instance_setup_commands: Vec<String>,
+        protocol_commands: SuiProtocol,
         ssh_manager: SshConnectionManager,
     ) -> Self {
         Self {
             settings,
             instances,
             instance_setup_commands,
+            protocol_commands,
             ssh_manager,
             scrape_interval: Self::SCRAPE_INTERVAL,
             skip_testbed_update: false,
@@ -230,8 +233,7 @@ impl Orchestrator {
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         // TODO: There should be no need to generate these files locally; we can generate them
         // directly on the remote machines.
-        let mut config = SuiProtocol::new(&self.settings);
-        config.print_files(&instances);
+        SuiProtocol::print_files(&instances);
 
         // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
         for (i, instance) in instances.iter().enumerate() {
@@ -245,7 +247,7 @@ impl Orchestrator {
                 .with_timeout(&Some(Duration::from_secs(180)));
 
             // Upload all configuration files.
-            for source in config.configuration_files() {
+            for source in SuiProtocol::configuration_files() {
                 let destination = source.file_name().expect("Config file is directory");
                 let mut file = File::open(&source).expect("Cannot open config file");
                 let mut buf = Vec::new();
@@ -254,8 +256,11 @@ impl Orchestrator {
             }
 
             // Generate the genesis files.
-            let command =
-                ["source $HOME/.cargo/env", &config.genesis_config_command()].join(" && ");
+            let command = [
+                "source $HOME/.cargo/env",
+                &self.protocol_commands.genesis_config_command(),
+            ]
+            .join(" && ");
             let repo_name = self.settings.repository_name();
             connection.execute_from_path(command, repo_name)?;
         }
@@ -348,7 +353,7 @@ impl Orchestrator {
             genesis.push("sui_config");
             genesis.push("genesis.blob");
             let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
-            let keystore = format!("~/{}", protocol::sui::GAS_KEYSTORE_FILE);
+            let keystore = format!("~/{}", SuiProtocol::GAS_KEYSTORE_FILE);
 
             let run = [
                 "cargo run --release --bin stress --",
@@ -361,7 +366,7 @@ impl Orchestrator {
                 "bench",
                 &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
                 &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
-                &format!("--client-metric-port {}", Self::CLIENT_METRIC_PORT),
+                &format!("--client-metric-port {}", SuiProtocol::CLIENT_METRICS_PORT),
             ]
             .join(" ");
             ["source $HOME/.cargo/env", &run].join(" && ")
@@ -394,7 +399,10 @@ impl Orchestrator {
         let instances = self.select_instances(parameters)?;
 
         // Regularly scrape the client metrics.
-        let command = format!("curl 127.0.0.1:{}/metrics", Self::CLIENT_METRIC_PORT);
+        let command = format!(
+            "curl 127.0.0.1:{}/metrics",
+            SuiProtocol::CLIENT_METRICS_PORT
+        );
         let ssh_command = SshCommand::new(move |_| command.clone());
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
