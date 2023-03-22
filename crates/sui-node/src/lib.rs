@@ -17,7 +17,7 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
-use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_core::consensus_adapter::{LazyNarwhalClient, SubmitToConsensus};
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
@@ -34,7 +34,6 @@ use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use narwhal_network::metrics::MetricsMakeCallbackHandler;
 use narwhal_network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
-use narwhal_types::TransactionsClient;
 use sui_config::node::DBCheckpointConfig;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -77,7 +76,7 @@ use sui_macros::fail_point_async;
 use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
-use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
+use sui_network::state_sync;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -759,27 +758,13 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
     ) -> ConsensusAdapter {
-        const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
-
-        let consensus_address = consensus_config.address().to_owned();
-        let client_config = mysten_network::config::Config {
-            connect_timeout: Some(DEFAULT_CONNECT_TIMEOUT_SEC),
-            http2_keepalive_interval: Some(DEFAULT_HTTP2_KEEPALIVE_SEC),
-            request_timeout: Some(REQUEST_TIMEOUT),
-            ..Default::default()
-        };
-
-        let consensus_client = TransactionsClient::new(
-            client_config
-                .connect_lazy(&consensus_address)
-                .expect("Failed to connect to consensus"),
-        );
-
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
         ConsensusAdapter::new(
-            Box::new(consensus_client),
+            Box::new(LazyNarwhalClient::new(
+                consensus_config.address().to_owned(),
+            )),
             authority,
             Box::new(connection_monitor_status),
             consensus_config.max_pending_transactions(),

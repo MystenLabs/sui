@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use bytes::Bytes;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
+use mysten_network::Multiaddr;
 use narwhal_types::{TransactionProto, TransactionsClient};
+use narwhal_worker::LocalNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
@@ -36,7 +38,7 @@ use sui_types::{
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time;
+use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -176,6 +178,78 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
             .submit_transaction(TransactionProto { transaction: bytes })
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+            .tap_err(|r| {
+                // Will be logged by caller as well.
+                warn!("Submit transaction failed with: {:?}", r);
+            })?;
+        Ok(())
+    }
+}
+
+/// A Narwhal client that instantiates LocalNarwhalClient lazily.
+pub struct LazyNarwhalClient {
+    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
+    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
+    client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
+    addr: Multiaddr,
+}
+
+impl LazyNarwhalClient {
+    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
+    pub fn new(addr: Multiaddr) -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+            addr,
+        }
+    }
+
+    async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
+        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
+        // Retries should only happen on Sui process start.
+        if let Ok(client) = timeout(Duration::from_secs(30), async {
+            loop {
+                match LocalNarwhalClient::get_global(&self.addr) {
+                    Some(c) => return c,
+                    None => {
+                        sleep(Duration::from_millis(100)).await;
+                        continue;
+                    }
+                };
+            }
+        })
+        .await
+        {
+            return client;
+        }
+        panic!("Timed out waiting for Narwhal to start on {}!", self.addr);
+    }
+}
+
+#[async_trait::async_trait]
+impl SubmitToConsensus for LazyNarwhalClient {
+    async fn submit_to_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        let transaction =
+            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
+        // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
+        // Narwhal shuts down, so there should be no correctness issue.
+        let client = {
+            let c = self.client.load();
+            if c.is_some() {
+                c
+            } else {
+                self.client.store(Some(self.get().await));
+                self.client.load()
+            }
+        };
+        let client = client.as_ref().unwrap().load();
+        client
+            .submit_transaction(transaction)
+            .await
+            .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
             .tap_err(|r| {
                 // Will be logged by caller as well.
                 warn!("Submit transaction failed with: {:?}", r);
