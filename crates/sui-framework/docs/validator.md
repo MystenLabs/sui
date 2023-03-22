@@ -545,7 +545,7 @@ Invalid pubkey_bytes field in ValidatorMetadata
 
 <a name="0x2_validator_EMetadataInvalidWorkerAddr"></a>
 
-Invalidworker_address field in ValidatorMetadata
+Invalid worker_address field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x2_validator_EMetadataInvalidWorkerAddr">EMetadataInvalidWorkerAddr</a>: u64 = 7;
