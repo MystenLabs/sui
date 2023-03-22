@@ -8,7 +8,6 @@ import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/pre
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
-import TxForID from '../../../components/transaction-card/TxForID';
 import {
     parseImageURL,
     checkIsPropertyType,
@@ -19,24 +18,23 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
+import TxForID from '~/components/transaction-card/TxForID';
+import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
+import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
+import { Text } from '~/ui/Text';
 
-function TokenView({ data }: { data: DataType }) {
-    const viewedData = {
-        ...data,
-        objType: data.objType,
-        tx_digest: data.data.tx_digest,
-        url: parseImageURL(data.data.contents),
-    };
-
+export function TokenView({ data }: { data: DataType }) {
+    const imgUrl = parseImageURL(data.data.contents);
     const name = extractName(data?.data?.contents);
 
-    const properties = Object.entries(viewedData.data?.contents).filter(
+    const properties = Object.entries(data.data?.contents).filter(
         ([key, value]) => key !== 'name' && checkIsPropertyType(value)
     );
 
-    const structProperties = Object.entries(viewedData.data?.contents).filter(
+    const structProperties = Object.entries(data.data?.contents).filter(
         ([key, value]) => typeof value == 'object' && key !== 'id'
     );
 
@@ -51,14 +49,14 @@ function TokenView({ data }: { data: DataType }) {
 
     useEffect(() => {
         const controller = new AbortController();
-        genFileTypeMsg(viewedData.url, controller.signal)
+        genFileTypeMsg(imgUrl, controller.signal)
             .then((result) => setFileType(result))
             .catch((err) => console.log(err));
 
         return () => {
             controller.abort();
         };
-    }, [viewedData.url]);
+    }, [imgUrl]);
 
     const [isImageFullScreen, setImageFullScreen] = useState<boolean>(false);
 
@@ -73,124 +71,149 @@ function TokenView({ data }: { data: DataType }) {
     };
 
     return (
-        <div>
-            <div className={styles.descimagecontainer}>
-                <div>
-                    <h2 className={styles.header}>Description</h2>
-                    <table className={styles.description}>
-                        <tbody>
-                            <tr>
-                                <td>Type</td>
-                                <td>
-                                    {/* TODO: Support module links on `ObjectLink` */}
-                                    <Link
-                                        to={genhref(viewedData.objType)}
-                                        variant="mono"
-                                    >
-                                        {trimStdLibPrefix(viewedData.objType)}
-                                    </Link>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>Object ID</td>
-                                <td id="objectID" className={styles.objectid}>
-                                    <ObjectLink
-                                        objectId={viewedData.id}
-                                        noTruncate
-                                    />
-                                </td>
-                            </tr>
-
-                            {viewedData.tx_digest && (
-                                <tr>
-                                    <td>Last Transaction ID</td>
-                                    <td>
-                                        <TransactionLink
-                                            digest={viewedData.tx_digest}
-                                            noTruncate
-                                        />
-                                    </td>
-                                </tr>
-                            )}
-
-                            <tr>
-                                <td>Version</td>
-                                <td>{viewedData.version}</td>
-                            </tr>
-
-                            <tr>
-                                <td>Owner</td>
-                                <td data-testid="owner">
-                                    {data.owner === 'Immutable' ? (
-                                        'Immutable'
-                                    ) : 'Shared' in data.owner ? (
-                                        'Shared'
-                                    ) : 'ObjectOwner' in data.owner ? (
-                                        <ObjectLink
-                                            objectId={data.owner.ObjectOwner}
-                                        />
-                                    ) : (
-                                        <AddressLink
-                                            address={data.owner.AddressOwner}
-                                        />
-                                    )}
-                                </td>
-                            </tr>
-                            {viewedData.contract_id && (
-                                <tr>
-                                    <td>Contract ID</td>
-                                    <td>
-                                        <ObjectLink
-                                            objectId={
-                                                viewedData.contract_id.bytes
+        <div className="flex flex-col flex-nowrap gap-14">
+            <TabGroup size="lg">
+                <TabList>
+                    <Tab>Details</Tab>
+                </TabList>
+                <TabPanels>
+                    <TabPanel noGap>
+                        <div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
+                            <div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0">
+                                <div className="pb-7 pr-10 pt-4">
+                                    <DescriptionList>
+                                        <DescriptionItem
+                                            title="Owner"
+                                            data-testid="owner"
+                                        >
+                                            {data.owner === 'Immutable' ? (
+                                                'Immutable'
+                                            ) : 'Shared' in data.owner ? (
+                                                'Shared'
+                                            ) : 'ObjectOwner' in data.owner ? (
+                                                <ObjectLink
+                                                    objectId={
+                                                        data.owner.ObjectOwner
+                                                    }
+                                                />
+                                            ) : (
+                                                <AddressLink
+                                                    address={
+                                                        data.owner.AddressOwner
+                                                    }
+                                                />
+                                            )}
+                                        </DescriptionItem>
+                                        <DescriptionItem title="Object ID">
+                                            <ObjectLink
+                                                objectId={data.id}
+                                                noTruncate
+                                            />
+                                        </DescriptionItem>
+                                        <DescriptionItem title="Type">
+                                            {/* TODO: Support module links on `ObjectLink` */}
+                                            <Link
+                                                to={genhref(data.objType)}
+                                                variant="mono"
+                                            >
+                                                {trimStdLibPrefix(data.objType)}
+                                            </Link>
+                                        </DescriptionItem>
+                                        <DescriptionItem title="Version">
+                                            <Text
+                                                variant="body/medium"
+                                                color="steel-darker"
+                                            >
+                                                {data.version}
+                                            </Text>
+                                        </DescriptionItem>
+                                        <DescriptionItem title="Last Transaction ID">
+                                            <TransactionLink
+                                                digest={data.data.tx_digest!}
+                                                noTruncate
+                                            />
+                                        </DescriptionItem>
+                                    </DescriptionList>
+                                </div>
+                                {name || data.data.contents.description ? (
+                                    <div className="pt-2 pr-10 md:pt-2.5">
+                                        <DescriptionList>
+                                            {name && (
+                                                <DescriptionItem title="Name">
+                                                    <Text
+                                                        variant="body/medium"
+                                                        color="steel-darker"
+                                                    >
+                                                        {name}
+                                                    </Text>
+                                                </DescriptionItem>
+                                            )}
+                                            {data.data.contents.description ? (
+                                                <DescriptionItem title="Description">
+                                                    <Text
+                                                        variant="p1/medium"
+                                                        color="steel-darker"
+                                                    >
+                                                        {
+                                                            data.data.contents
+                                                                .description
+                                                        }
+                                                    </Text>
+                                                </DescriptionItem>
+                                            ) : null}
+                                        </DescriptionList>
+                                    </div>
+                                ) : null}
+                            </div>
+                            {imgUrl !== '' && (
+                                <div className="flex flex-col gap-5 border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
+                                    <div className="flex w-40 justify-center md:w-50">
+                                        <DisplayBox
+                                            display={imgUrl}
+                                            caption={
+                                                name ||
+                                                trimStdLibPrefix(data.objType)
                                             }
+                                            fileInfo={fileType}
+                                            modalImage={[
+                                                isImageFullScreen,
+                                                setImageFullScreen,
+                                            ]}
                                         />
-                                    </td>
-                                </tr>
+                                    </div>
+                                    <div className="flex flex-col gap-2.5">
+                                        {name && (
+                                            <Heading
+                                                variant="heading4/semibold"
+                                                color="gray-90"
+                                            >
+                                                {name}
+                                            </Heading>
+                                        )}
+                                        {fileType && (
+                                            <Text
+                                                variant="bodySmall/medium"
+                                                color="steel-darker"
+                                            >
+                                                {fileType}
+                                            </Text>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={handlePreviewClick}
+                                            className="flex gap-1 text-caption font-semibold uppercase text-steel-dark"
+                                        >
+                                            Preview <PreviewMediaIcon />
+                                        </button>
+                                    </div>
+                                </div>
                             )}
-                        </tbody>
-                    </table>
-                </div>
-                {viewedData.url !== '' && (
-                    <div className={styles.displaycontainer}>
-                        <div className={styles.display}>
-                            <DisplayBox
-                                display={viewedData.url}
-                                caption={
-                                    name || trimStdLibPrefix(viewedData.objType)
-                                }
-                                fileInfo={fileType}
-                                modalImage={[
-                                    isImageFullScreen,
-                                    setImageFullScreen,
-                                ]}
-                            />
-                            <button
-                                type="button"
-                                onClick={handlePreviewClick}
-                                className={styles.mobilepreviewmedia}
-                            >
-                                Preview Media <PreviewMediaIcon />
-                            </button>
                         </div>
-                        <div className={styles.metadata}>
-                            {name && <h2 className={styles.header}>{name}</h2>}
-                            {fileType && (
-                                <p className={styles.header}>{fileType}</p>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handlePreviewClick}
-                                className={styles.desktoppreviewmedia}
-                            >
-                                Preview Media <PreviewMediaIcon />
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
+                    </TabPanel>
+                </TabPanels>
+            </TabGroup>
             {properties.length > 0 && (
-                <>
+                <div>
                     <h2 className={styles.header}>Properties</h2>
                     <table className={styles.properties}>
                         <tbody>
@@ -217,7 +240,7 @@ function TokenView({ data }: { data: DataType }) {
                             ))}
                         </tbody>
                     </table>
-                </>
+                </div>
             )}
             {structProperties.length > 0 && (
                 <ModulesWrapper
@@ -227,14 +250,16 @@ function TokenView({ data }: { data: DataType }) {
                     }}
                 />
             )}
-            <h2 className={styles.header}>Dynamic Fields</h2>
-            <div className={styles.ownedobjects}>
-                <OwnedObjects id={viewedData.id} byAddress={false} />
+            <div>
+                <h2 className={styles.header}>Dynamic Fields</h2>
+                <div className={styles.ownedobjects}>
+                    <OwnedObjects id={data.id} byAddress={false} />
+                </div>
             </div>
-            <h2 className={styles.header}>Transactions </h2>
-            <TxForID id={viewedData.id} category="object" />
+            <div>
+                <h2 className={styles.header}>Transactions</h2>
+                <TxForID id={data.id} category="object" />
+            </div>
         </div>
     );
 }
-
-export default TokenView;
