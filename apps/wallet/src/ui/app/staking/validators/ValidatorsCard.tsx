@@ -21,6 +21,7 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { FEATURES } from '_src/shared/experimentation/features';
+import { Plus12 } from '@mysten/icons';
 
 export function ValidatorsCard() {
     const accountAddress = useActiveAddress();
@@ -144,12 +145,7 @@ export function ValidatorsCard() {
                         variant="secondary"
                         to="new"
                         disabled={!stakingEnabled}
-                        before={
-                            <Icon
-                                icon={SuiIcons.Plus}
-                                className="text-body text-gray-65 font-normal"
-                            />
-                        }
+                        before={<Plus12 />}
                         text="Stake SUI"
                     />
                 </Menu>
