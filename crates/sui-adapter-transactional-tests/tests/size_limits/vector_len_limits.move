@@ -34,7 +34,7 @@ module Test::M1 {
 //# run Test::M1::push_n_items --args 256 --gas-budget 1000000
 
 // run at vec len limit should succeed
-//# run Test::M1::push_n_items --args 262144 --gas-budget 2000000
+//# run Test::M1::push_n_items --args 262144 --gas-budget 2200000
 
 // run above vec len limit should fail
 //# run Test::M1::push_n_items --args 262145 --gas-budget 2000000

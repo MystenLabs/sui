@@ -79,6 +79,7 @@ const RNG_SEED: [u8; 32] = [
 ];
 
 const DEFAULT_GAS_BUDGET: u64 = 10_000;
+const GAS_FOR_TESTING: u64 = 3_000_000;
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
@@ -224,7 +225,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
         for (account, (addr, _)) in &accounts {
-            let obj = Object::with_id_owner_for_testing(ObjectID::new(rng.gen()), *addr);
+            let obj = Object::with_id_owner_gas_for_testing(
+                ObjectID::new(rng.gen()),
+                *addr,
+                GAS_FOR_TESTING,
+            );
             objects.push(obj.clone());
             account_objects.insert(account.clone(), obj);
         }
@@ -604,7 +609,8 @@ impl<'a> SuiTestAdapter<'a> {
                 (sender, &new_key_pair)
             }
         };
-        let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+        let gas_object =
+            Object::with_id_owner_gas_for_testing(gas_object_id, sender, GAS_FOR_TESTING);
         let gas_payment = gas_object.compute_object_reference();
         let storage_mut = Arc::get_mut(&mut self.storage).unwrap();
         storage_mut.insert_object(gas_object);

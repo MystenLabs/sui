@@ -72,4 +72,4 @@ module Test::M1 {
 //# run Test::M1::emit_object_with_approx_size --args 200000 --gas-budget 2000000
 
 // emit above event size limit should fail
-//# run Test::M1::emit_object_with_approx_size --args 259000 --gas-budget 1000000
+//# run Test::M1::emit_object_with_approx_size --args 259000 --gas-budget 2000000
