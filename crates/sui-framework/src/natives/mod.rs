@@ -29,23 +29,68 @@ use sui_protocol_config::ProtocolConfig;
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
+    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     crypto::{
-        bls12381, ecdsa_k1, ecdsa_r1, ecvrf,
-        ed25519::{self, Ed25519VerifyCostParams},
-        groth16,
-        hash::{self, HashBlake2b256CostParams, HashKeccak256CostParams},
-        hmac,
+        ed25519::Ed25519VerifyCostParams,
+        hash::{HashBlake2b256CostParams, HashKeccak256CostParams},
+    },
+    dynamic_field::{
+        DynamicFieldAddChildObjectCostParams, DynamicFieldBorrowChildObjectCostParams,
+        DynamicFieldHasChildObjectCostParams, DynamicFieldHasChildObjectWithTyCostParams,
+        DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
     event::EventEmitCostParams,
+    object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
+    transfer::{
+        TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
+    },
+    tx_context::TxContextDeriveIdCostParams,
+    types::TypesIsOneTimeWitnessCostParams,
+    validator::ValidatorValidateMetadataBcsCostParams,
 };
 
 #[derive(Tid)]
 pub struct NativesCostTable {
+    // Address natives
     pub address_from_bytes_cost_params: AddressFromBytesCostParams,
     pub address_to_u256_cost_params: AddressToU256CostParams,
     pub address_from_u256_cost_params: AddressFromU256CostParams,
+
+    // Dynamic field natives
+    pub dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams,
+    pub dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams,
+    pub dynamic_field_borrow_child_object_cost_params: DynamicFieldBorrowChildObjectCostParams,
+    pub dynamic_field_remove_child_object_cost_params: DynamicFieldRemoveChildObjectCostParams,
+    pub dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams,
+    pub dynamic_field_has_child_object_with_ty_cost_params:
+        DynamicFieldHasChildObjectWithTyCostParams,
+
+    // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
+
+    // Object
+    pub borrow_uid_cost_params: BorrowUidCostParams,
+    pub delete_impl_cost_params: DeleteImplCostParams,
+    pub record_new_id_cost_params: RecordNewIdCostParams,
+
+    // Transfer
+    pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
+    pub transfer_freeze_object_cost_params: TransferFreezeObjectCostParams,
+    pub transfer_share_object_cost_params: TransferShareObjectCostParams,
+
+    // TxContext
+    pub tx_context_derive_id_cost_params: TxContextDeriveIdCostParams,
+
+    // Type
+    pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
+
+    // Validator
+    pub validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams,
+
+    // Crypto natives
+    // ed25519
     pub ed25519_verify_cost_params: Ed25519VerifyCostParams,
+    // hash
     pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
     pub hash_keccak256_cost_params: HashKeccak256CostParams,
 }
@@ -54,38 +99,108 @@ impl NativesCostTable {
     pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
         Self {
             address_from_bytes_cost_params: AddressFromBytesCostParams {
-                copy_bytes_to_address_cost_per_byte: protocol_config
-                    .copy_bytes_to_address_cost_per_byte()
-                    .into(),
+                address_from_bytes_cost_base: protocol_config.address_from_bytes_cost_base().into(),
             },
             address_to_u256_cost_params: AddressToU256CostParams {
-                address_to_vec_cost_per_byte: protocol_config.address_to_vec_cost_per_byte().into(),
-                address_vec_reverse_cost_per_byte: protocol_config
-                    .address_vec_reverse_cost_per_byte()
-                    .into(),
-                copy_convert_to_u256_cost_per_byte: protocol_config
-                    .copy_convert_to_u256_cost_per_byte()
-                    .into(),
+                address_to_u256_cost_base: protocol_config.address_to_u256_cost_base().into(),
             },
             address_from_u256_cost_params: AddressFromU256CostParams {
-                u256_to_bytes_to_vec_cost_per_byte: protocol_config
-                    .u256_to_bytes_to_vec_cost_per_byte()
+                address_from_u256_cost_base: protocol_config.address_from_u256_cost_base().into(),
+            },
+
+            dynamic_field_hash_type_and_key_cost_params: DynamicFieldHashTypeAndKeyCostParams {
+                dynamic_field_hash_type_and_key_cost_base: protocol_config
+                    .dynamic_field_hash_type_and_key_cost_base()
                     .into(),
-                u256_bytes_vec_reverse_cost_per_byte: protocol_config
-                    .u256_bytes_vec_reverse_cost_per_byte()
+                dynamic_field_hash_type_and_key_type_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_type_cost_per_byte()
                     .into(),
-                copy_convert_to_address_cost_per_byte: protocol_config
-                    .u256_bytes_vec_reverse_cost_per_byte()
+                dynamic_field_hash_type_and_key_value_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_value_cost_per_byte()
+                    .into(),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: protocol_config
+                    .dynamic_field_hash_type_and_key_type_tag_cost_per_byte()
                     .into(),
             },
+            dynamic_field_add_child_object_cost_params: DynamicFieldAddChildObjectCostParams {
+                dynamic_field_add_child_object_cost_base: protocol_config
+                    .dynamic_field_add_child_object_cost_base()
+                    .into(),
+                dynamic_field_add_child_object_type_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_type_cost_per_byte()
+                    .into(),
+                dynamic_field_add_child_object_value_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_value_cost_per_byte()
+                    .into(),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: protocol_config
+                    .dynamic_field_add_child_object_struct_tag_cost_per_byte()
+                    .into(),
+            },
+            dynamic_field_borrow_child_object_cost_params:
+                DynamicFieldBorrowChildObjectCostParams {
+                    dynamic_field_borrow_child_object_cost_base: protocol_config
+                        .dynamic_field_borrow_child_object_cost_base()
+                        .into(),
+                    dynamic_field_borrow_child_object_child_ref_cost_per_byte: protocol_config
+                        .dynamic_field_borrow_child_object_child_ref_cost_per_byte()
+                        .into(),
+                    dynamic_field_borrow_child_object_type_cost_per_byte: protocol_config
+                        .dynamic_field_borrow_child_object_type_cost_per_byte()
+                        .into(),
+                },
+            dynamic_field_remove_child_object_cost_params:
+                DynamicFieldRemoveChildObjectCostParams {
+                    dynamic_field_remove_child_object_cost_base: protocol_config
+                        .dynamic_field_remove_child_object_cost_base()
+                        .into(),
+                    dynamic_field_remove_child_object_child_cost_per_byte: protocol_config
+                        .dynamic_field_remove_child_object_child_cost_per_byte()
+                        .into(),
+                    dynamic_field_remove_child_object_type_cost_per_byte: protocol_config
+                        .dynamic_field_remove_child_object_type_cost_per_byte()
+                        .into(),
+                },
+            dynamic_field_has_child_object_cost_params: DynamicFieldHasChildObjectCostParams {
+                dynamic_field_has_child_object_cost_base: protocol_config
+                    .dynamic_field_has_child_object_cost_base()
+                    .into(),
+            },
+            dynamic_field_has_child_object_with_ty_cost_params:
+                DynamicFieldHasChildObjectWithTyCostParams {
+                    dynamic_field_has_child_object_with_ty_cost_base: protocol_config
+                        .dynamic_field_has_child_object_with_ty_cost_base()
+                        .into(),
+                    dynamic_field_has_child_object_with_ty_type_cost_per_byte: protocol_config
+                        .dynamic_field_has_child_object_with_ty_type_cost_per_byte()
+                        .into(),
+                    dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: protocol_config
+                        .dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte()
+                        .into(),
+                },
+
             event_emit_cost_params: EventEmitCostParams {
-                event_value_size_derivation_cost_per_byte: protocol_config
-                    .event_value_size_derivation_cost_per_byte()
+                event_emit_value_size_derivation_cost_per_byte: protocol_config
+                    .event_emit_value_size_derivation_cost_per_byte()
                     .into(),
-                event_tag_size_derivation_cost_per_byte: protocol_config
-                    .event_tag_size_derivation_cost_per_byte()
+                event_emit_tag_size_derivation_cost_per_byte: protocol_config
+                    .event_emit_tag_size_derivation_cost_per_byte()
                     .into(),
-                event_emit_cost_per_byte: protocol_config.event_emit_cost_per_byte().into(),
+                event_emit_output_cost_per_byte: protocol_config
+                    .event_emit_output_cost_per_byte()
+                    .into(),
+                event_emit_cost_base: protocol_config.event_emit_cost_base().into(),
+            },
+
+            borrow_uid_cost_params: BorrowUidCostParams {
+                object_borrow_uid_cost_base: protocol_config.object_borrow_uid_cost_base().into(),
+            },
+            delete_impl_cost_params: DeleteImplCostParams {
+                object_delete_impl_cost_base: protocol_config.object_delete_impl_cost_base().into(),
+            },
+            record_new_id_cost_params: RecordNewIdCostParams {
+                object_record_new_uid_cost_base: protocol_config
+                    .object_record_new_uid_cost_base()
+                    .into(),
             },
 
             // Crypto
@@ -118,6 +233,45 @@ impl NativesCostTable {
                     .into(),
                 hash_keccak256_data_cost_per_block: protocol_config
                     .hash_keccak256_data_cost_per_block()
+                    .into(),
+            },
+            transfer_transfer_internal_cost_params: TransferInternalCostParams {
+                transfer_transfer_internal_cost_base: protocol_config
+                    .transfer_transfer_internal_cost_base()
+                    .into(),
+            },
+            transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
+                transfer_freeze_object_cost_base: protocol_config
+                    .transfer_freeze_object_cost_base()
+                    .into(),
+            },
+            transfer_share_object_cost_params: TransferShareObjectCostParams {
+                transfer_share_object_cost_base: protocol_config
+                    .transfer_share_object_cost_base()
+                    .into(),
+            },
+            tx_context_derive_id_cost_params: TxContextDeriveIdCostParams {
+                tx_context_derive_id_cost_base: protocol_config
+                    .tx_context_derive_id_cost_base()
+                    .into(),
+            },
+            type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
+                types_is_one_time_witness_cost_base: protocol_config
+                    .types_is_one_time_witness_cost_base()
+                    .into(),
+                types_is_one_time_witness_type_tag_cost_per_byte: protocol_config
+                    .types_is_one_time_witness_type_tag_cost_per_byte()
+                    .into(),
+                types_is_one_time_witness_type_cost_per_byte: protocol_config
+                    .types_is_one_time_witness_type_cost_per_byte()
+                    .into(),
+            },
+            validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams {
+                validator_validate_metadata_cost_base: protocol_config
+                    .validator_validate_metadata_cost_base()
+                    .into(),
+                validator_validate_metadata_data_cost_per_byte: protocol_config
+                    .validator_validate_metadata_data_cost_per_byte()
                     .into(),
             },
         }

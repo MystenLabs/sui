@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::legacy_empty_cost;
 use fastcrypto::{
     bls12381::{min_pk, min_sig},
     traits::{ToFromBytes, VerifyingKey},
@@ -15,6 +14,8 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
+
+use crate::legacy_empty_cost;
 
 pub fn bls12381_min_sig_verify(
     _context: &mut NativeContext,
