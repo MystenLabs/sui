@@ -21,8 +21,8 @@ pub mod pg_integration_test {
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
+    use sui_indexer::test_utils::{start_test_indexer, SuiTransactionResponseBuilder};
     use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
-    use sui_indexer::test_utils::{start_test_indexer, SuiTransactionResponseBuilder};    
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
@@ -773,6 +773,7 @@ pub mod pg_integration_test {
         assert!(result.is_ok());
     }
 
+    #[tokio::test]
     async fn test_get_transaction_with_options() -> Result<(), anyhow::Error> {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
