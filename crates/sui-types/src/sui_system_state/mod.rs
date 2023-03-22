@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::ObjectID;
-use crate::committee::{CommitteeWithNetworkMetadata, EpochId};
+use crate::committee::CommitteeWithNetworkMetadata;
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
@@ -28,8 +28,6 @@ const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemSta
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
-
-pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 /// This repreents the object with 0x5 ID.
@@ -95,18 +93,8 @@ impl SuiSystemState {
         }
     }
 
-    pub fn new_for_testing(epoch: EpochId) -> Self {
-        SuiSystemState::V1(SuiSystemStateInnerV1::new_for_testing(epoch))
-    }
-
     pub fn version(&self) -> u64 {
         self.system_state_version()
-    }
-}
-
-impl Default for SuiSystemState {
-    fn default() -> Self {
-        SuiSystemState::V1(SuiSystemStateInnerV1::default())
     }
 }
 
@@ -130,9 +118,6 @@ where
     Ok(result)
 }
 
-// This version is used to support authority_tests::test_sui_system_state_nop_upgrade.
-pub const SUI_SYSTEM_STATE_TESTING_VERSION1: u64 = u64::MAX;
-
 pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
 where
     S: ObjectStore,
@@ -150,13 +135,6 @@ where
                         ))
                     },
                 )?;
-            Ok(SuiSystemState::V1(result))
-        }
-        // The following case is for sim_test only to support authority_tests::test_sui_system_state_nop_upgrade.
-        #[cfg(msim)]
-        SUI_SYSTEM_STATE_TESTING_VERSION1 => {
-            let result: SuiSystemStateInnerV1 =
-                get_dynamic_field_from_store(object_store, wrapper.id.id.bytes, &wrapper.version)?;
             Ok(SuiSystemState::V1(result))
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
