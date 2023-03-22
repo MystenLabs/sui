@@ -4,7 +4,7 @@ title: Accessing Time in Sui Move
 
 You have options when needing to access network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Sui Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.
 
-## The `sui::clock::Clock` module
+## The sui::clock::Clock module
 
 To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address `0x6`, no new instances can be created.
 
@@ -35,10 +35,10 @@ module example::clock {
 }
 ```
 
-A call to the entry function above takes the following form, passing `0x6` as the address for the `Clock` parameter:
+A call to the previous entry function takes the following form, passing `0x6` as the address for the `Clock` parameter:
 
 ```
-$ sui client call --package $EXAMPLE --module 'clock' --function 'access' --args '0x6' --gas-budget 10000
+sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget 10000
 ```
 
 **Expect the `Clock` timestamp to change every 2 to 3 seconds**, at the rate the network commits checkpoints.
@@ -49,7 +49,7 @@ Any transaction that requires access to a `Clock` must go through [consensus](/l
 
 **Transactions that use the clock must accept it as an immutable reference** (not a mutable reference or value).  This prevents contention, as transactions that access the `Clock` can only read it, so do not need to be sequenced relative to each other.  Validators refuse to sign transactions that do not meet this requirement and packages that include entry functions that accept a `Clock` or `&mut Clock` fail to publish.
 
-The following functions are used to test 'Clock'-dependent code by manually creating (and sharing) one and incrementing its timestamp. This is possible only in test code: 
+The following functions test 'Clock'-dependent code by manually creating (and sharing) a `Clock` object and incrementing its timestamp. This is possible only in test code: 
 
 ```
 module sui::clock {
@@ -61,7 +61,7 @@ module sui::clock {
 }
 ```
 
-These following example presents a simple test that creates a `Clock`, increments it, and then checks its value:
+The next example presents a simple test that creates a `Clock`, increments it, and then checks its value:
 
 ```
 module example::clock_tests {
