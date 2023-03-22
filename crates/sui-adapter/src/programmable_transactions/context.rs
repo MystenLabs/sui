@@ -342,7 +342,6 @@ where
         value: Value,
     ) -> Result<(), ExecutionError> {
         Mode::add_argument_update(self, updates, arg, &value)?;
-        Mode::add_argument_update(self, updates, arg, &value)?;
         let was_mut_opt = self.borrowed.remove(&arg);
         assert_invariant!(
             was_mut_opt.is_some() && was_mut_opt.unwrap(),
