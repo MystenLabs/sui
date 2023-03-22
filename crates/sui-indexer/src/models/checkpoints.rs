@@ -11,7 +11,6 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::EndOfEpochData;
 
 use crate::schema::checkpoints;
-use crate::schema::checkpoints::end_of_epoch_data;
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
 #[diesel(table_name = checkpoints)]
@@ -80,7 +79,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
                 Some(serde_json::from_str(&end_of_epoch_data_str).map_err(|e| {
                     IndexerError::SerdeError(format!(
                         "Failed to decode end_of_epoch_data: {:?} with err: {:?}",
-                        end_of_epoch_data, e
+                        end_of_epoch_data_str, e
                     ))
                 })?)
             } else {

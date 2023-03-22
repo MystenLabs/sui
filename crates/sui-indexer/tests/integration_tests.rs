@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-#[cfg(feature = "pg_integration")]
+// TODOggao
+// #[cfg(feature = "pg_integration")]
 pub mod pg_integration_test {
     use std::env;
     use std::str::FromStr;
@@ -26,8 +27,8 @@ pub mod pg_integration_test {
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-        SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponse,
+        CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataOptions,
+        SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponse,
         SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -705,6 +706,35 @@ pub mod pg_integration_test {
 
         let last_epoch = &epoch_page[0];
         assert!(last_epoch.end_of_epoch_info.is_some());
+
+        drop(handle);
+        drop(test_cluster);
+    }
+
+    #[tokio::test]
+    async fn test_get_last_checkpoint_of_epoch() {
+        let (test_cluster, _, store, handle) = start_test_cluster(Some(20000)).await;
+        wait_until_next_checkpoint(&store).await;
+        wait_until_next_epoch(&store).await;
+        let current_epoch = store.get_current_epoch().unwrap();
+        let prev_epoch_last_checkpoint_id = current_epoch.first_checkpoint_id - 1;
+
+        let checkpoint = store
+            .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
+            .unwrap();
+        assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
+        assert_eq!(
+            checkpoint.sequence_number as u64,
+            prev_epoch_last_checkpoint_id
+        );
+        assert!(checkpoint.end_of_epoch_data.is_some());
+
+        let decoded_checkpoint: sui_json_rpc_types::Checkpoint = checkpoint.try_into().unwrap();
+        assert_eq!(decoded_checkpoint.epoch, current_epoch.epoch - 1);
+        assert_eq!(
+            decoded_checkpoint.sequence_number,
+            prev_epoch_last_checkpoint_id
+        );
 
         drop(handle);
         drop(test_cluster);
