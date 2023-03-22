@@ -18,7 +18,6 @@ use move_core_types::{
 pub use move_vm_runtime::move_vm::MoveVM;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
@@ -199,10 +198,16 @@ pub enum UserInputError {
     JsonSchema,
     Error,
 )]
+#[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
 pub enum SuiObjectResponseError {
-    NotExists {
-        object_id: ObjectID,
-    },
+    #[error("Object {:?} does not exist.", object_id)]
+    NotExists { object_id: ObjectID },
+    #[error(
+        "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
+        object_id,
+        version,
+        digest
+    )]
     Deleted {
         object_id: ObjectID,
         /// Object version.
@@ -210,29 +215,9 @@ pub enum SuiObjectResponseError {
         /// Base64 string representing the object digest
         digest: ObjectDigest,
     },
-    Unknown, // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
-}
-
-impl fmt::Display for SuiObjectResponseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SuiObjectResponseError::NotExists { object_id } => {
-                write!(f, "Object not exists: {}", object_id)
-            }
-            SuiObjectResponseError::Deleted {
-                object_id,
-                version,
-                digest,
-            } => {
-                write!(
-                    f,
-                    "Object deleted: {}, version: {}, digest: {}",
-                    object_id, version, digest
-                )
-            }
-            SuiObjectResponseError::Unknown => write!(f, "Unknown error"),
-        }
-    }
+    #[error("Unknown Error.")]
+    Unknown,
+    // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
 }
 
 /// Custom error type for Sui.

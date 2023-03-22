@@ -580,7 +580,7 @@ export class Transaction {
       );
 
       const invalidObjects = Array.from(objectsById)
-        .filter(([_, obj]) => obj.status !== 'Exists')
+        .filter(([_, obj]) => obj.error)
         .map(([id, _]) => id);
       if (invalidObjects.length) {
         throw new Error(

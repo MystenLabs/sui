@@ -13,14 +13,14 @@ export type NFTMetadata = {
 };
 
 export function useGetNFTMeta(objectID: string) {
-    const data = useGetObject(objectID);
+    const resp = useGetObject(objectID);
 
     const nftMeta = useMemo(() => {
-        if (!data.data) return null;
+        if (!resp.data) return null;
 
-        const { details } = data.data || {};
-        if (!is(details, SuiObjectData) || !data) return null;
-        const fields = getObjectFields(data.data);
+        const { data } = resp.data || {};
+        if (!is(data, SuiObjectData) || !resp) return null;
+        const fields = getObjectFields(resp.data);
         if (!fields?.url) return null;
         return {
             description:
@@ -30,10 +30,10 @@ export function useGetNFTMeta(objectID: string) {
             name: typeof fields.name === 'string' ? fields.name : null,
             url: fields.url,
         };
-    }, [data]);
+    }, [resp]);
 
     return {
-        ...data,
+        ...resp,
         data: nftMeta,
     };
 }

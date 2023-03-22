@@ -59,35 +59,41 @@ impl SuiObjectResponse {
 
 impl SuiObjectResponse {
     pub fn move_object_bcs(&self) -> Option<&Vec<u8>> {
-        match self {
-            SuiObjectResponse::Exists(data) => match &data.bcs {
+        if let Some(data) = &self.data {
+            match &data.bcs {
                 Some(SuiRawData::MoveObject(obj)) => Some(&obj.bcs_bytes),
                 _ => None,
-            },
-            _ => None,
+            };
         }
+        None
     }
     pub fn owner(&self) -> Option<Owner> {
-        match self {
-            SuiObjectResponse::Exists(e) => e.owner,
-            SuiObjectResponse::NotExists(_) => None,
-            SuiObjectResponse::Deleted(_) => None,
+        if let Some(data) = &self.data {
+            return data.owner;
         }
+        None
     }
 
-    pub fn object_id(&self) -> ObjectID {
-        match self {
-            SuiObjectResponse::Exists(e) => e.object_id,
-            SuiObjectResponse::NotExists(ne) => *ne,
-            SuiObjectResponse::Deleted(d) => d.object_id,
+    pub fn object_id(&self) -> Result<ObjectID, anyhow::Error> {
+        match (&self.data, &self.error) {
+            (Some(obj_data), None) => Ok(obj_data.object_id),
+            (None, Some(SuiObjectResponseError::NotExists { object_id })) => Ok(*object_id),
+            (
+                None,
+                Some(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version: _,
+                    digest: _,
+                }),
+            ) => Ok(*object_id),
+            _ => Err(anyhow!("Could not get object_id, something went wrong with SuiObjectResponse construction.")),
         }
     }
 
     pub fn object_ref_if_exists(&self) -> Option<ObjectRef> {
-        match self {
-            SuiObjectResponse::Exists(e) => Some(e.object_ref()),
-            SuiObjectResponse::NotExists(_) => None,
-            SuiObjectResponse::Deleted(_) => None,
+        match (&self.data, &self.error) {
+            (Some(obj_data), None) => Some(obj_data.object_ref()),
+            _ => None,
         }
     }
 }
@@ -522,7 +528,7 @@ impl SuiObjectResponse {
     /// the object does not exist or is deleted.
     pub fn into_object(self) -> Result<SuiObjectData, SuiObjectResponseError> {
         let data = self.data.clone();
-        let error = self.error.clone();
+        let error = self.error;
         if let Some(data) = data {
             Ok(data)
         } else if let Some(error) = error {

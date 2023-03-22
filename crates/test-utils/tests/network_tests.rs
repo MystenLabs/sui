@@ -33,7 +33,7 @@ async fn test_package_override() {
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await.unwrap();
         let client = default_cluster.rpc_client();
-        let SuiObjectResponse::Exists(obj) = client
+        let obj = client
             .get_object_with_options(SuiSystem::ID, None)
             .await
             .unwrap();
@@ -71,7 +71,7 @@ async fn test_package_override() {
             .unwrap();
 
         let client = modified_cluster.rpc_client();
-        let SuiObjectResponse::Exists(obj) = client
+        let obj = client
             .get_object_with_options(SuiSystem::ID, None)
             .await
             .unwrap();

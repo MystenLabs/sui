@@ -183,9 +183,17 @@ export type ObjectStatus = Infer<typeof ObjectStatus>;
 export const GetOwnedObjectsResponse = array(SuiObjectInfo);
 export type GetOwnedObjectsResponse = Infer<typeof GetOwnedObjectsResponse>;
 
+export const SuiObjectResponseError = object({
+  tag: string(),
+  object_id: optional(ObjectId),
+  version: optional(SequenceNumber),
+  digest: optional(ObjectDigest),
+});
+export type SuiObjectResponseError = Infer<typeof SuiObjectResponseError>;
+
 export const SuiObjectResponse = object({
-  status: ObjectStatus,
-  details: union([SuiObjectData, ObjectId, SuiObjectRef]),
+  data: optional(SuiObjectData),
+  error: optional(SuiObjectResponseError),
 });
 export type SuiObjectResponse = Infer<typeof SuiObjectResponse>;
 
@@ -200,19 +208,42 @@ export type Order = 'ascending' | 'descending';
 export function getSuiObjectData(
   resp: SuiObjectResponse,
 ): SuiObjectData | undefined {
-  return resp.status !== 'Exists' ? undefined : (resp.details as SuiObjectData);
+  return resp.data;
 }
 
 export function getObjectDeletedResponse(
   resp: SuiObjectResponse,
 ): SuiObjectRef | undefined {
-  return resp.status !== 'Deleted' ? undefined : (resp.details as SuiObjectRef);
+  if (
+    resp.error &&
+    'object_id' in resp.error &&
+    'version' in resp.error &&
+    'digest' in resp.error
+  ) {
+    const error = resp.error as SuiObjectResponseError;
+    return {
+      objectId: error.object_id,
+      version: error.version,
+      digest: error.digest,
+    } as SuiObjectRef;
+  }
+
+  return undefined;
 }
 
 export function getObjectNotExistsResponse(
   resp: SuiObjectResponse,
 ): ObjectId | undefined {
-  return resp.status !== 'NotExists' ? undefined : (resp.details as ObjectId);
+  if (
+    resp.error &&
+    'object_id' in resp.error &&
+    !('version' in resp.error) &&
+    !('digest' in resp.error)
+  ) {
+    return (resp.error as SuiObjectResponseError).object_id as ObjectId;
+  }
+
+  return undefined;
 }
 
 export function getObjectReference(
@@ -257,6 +288,12 @@ export function getObjectVersion(
 
 /* -------------------------------- SuiObject ------------------------------- */
 
+export function isSuiObjectResponse(
+  resp: SuiObjectResponse | SuiObjectData,
+): resp is SuiObjectResponse {
+  return (resp as SuiObjectResponse).data !== undefined;
+}
+
 /**
  * Deriving the object type from the object response
  * @returns 'package' if the object is a package, move object type(e.g., 0x2::coin::Coin<0x2::sui::SUI>)
@@ -265,9 +302,9 @@ export function getObjectVersion(
 export function getObjectType(
   resp: SuiObjectResponse | SuiObjectData,
 ): ObjectType | undefined {
-  const data = 'status' in resp ? getSuiObjectData(resp) : resp;
+  const data = isSuiObjectResponse(resp) ? resp.data : resp;
 
-  if (!data?.type && 'status' in resp) {
+  if (!data?.type && 'data' in resp) {
     if (data?.content?.dataType === 'package') {
       return 'package';
     }
@@ -333,13 +370,30 @@ export function getObjectFields(
   return getMoveObject(resp)?.fields;
 }
 
+export interface SuiObjectDataWithContent extends SuiObjectData {
+  content: SuiParsedData;
+}
+
+function isSuiObjectDataWithContent(
+  data: SuiObjectData,
+): data is SuiObjectDataWithContent {
+  return data.content !== undefined;
+}
+
 export function getMoveObject(
   data: SuiObjectResponse | SuiObjectData,
 ): SuiMoveObject | undefined {
-  const suiObject = 'status' in data ? getSuiObjectData(data) : data;
-  if (suiObject?.content?.dataType !== 'moveObject') {
+  const suiObject =
+    'data' in data ? getSuiObjectData(data) : (data as SuiObjectData);
+
+  if (
+    !suiObject ||
+    !isSuiObjectDataWithContent(suiObject) ||
+    suiObject.content.dataType !== 'moveObject'
+  ) {
     return undefined;
   }
+
   return suiObject.content as SuiMoveObject;
 }
 

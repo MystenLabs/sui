@@ -727,7 +727,8 @@ async fn get_pending_candidate_summary(
         )
         .await?;
     for resp in resps {
-        let object_id = resp.object_id();
+        // We always expect an objectId from the response as one of data/error should be included.
+        let object_id = resp.object_id()?;
         let bcs = resp.move_object_bcs().ok_or_else(|| {
             anyhow::anyhow!(
                 "Object {} does not exist or does not return bcs bytes",

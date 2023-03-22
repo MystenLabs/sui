@@ -54,7 +54,7 @@ describe('Transaction Serialization and deserialization', () => {
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
-    const coin = coins[2].details as SuiObjectData;
+    const coin = coins[2].data as SuiObjectData;
     tx.moveCall({
       target: '0x3::sui_system::request_add_stake',
       arguments: [

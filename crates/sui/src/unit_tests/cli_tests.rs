@@ -1437,11 +1437,7 @@ async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiObjectDa
         .get_object_with_options(id, SuiObjectDataOptions::full_content())
         .await
         .unwrap();
-    if let Some(o) = response.data {
-        Some(o)
-    } else {
-        None
-    }
+    response.data
 }
 
 async fn get_parsed_object_assert_existence(
