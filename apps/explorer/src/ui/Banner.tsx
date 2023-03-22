@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { X12 } from '@mysten/icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
@@ -68,7 +69,7 @@ export function Banner({
             {onDismiss ? (
                 <div className="absolute top-0 right-0">
                     <IconButton
-                        icon="x"
+                        icon={X12}
                         onClick={onDismiss}
                         aria-label="Close"
                     />
