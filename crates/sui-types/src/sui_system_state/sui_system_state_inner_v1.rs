@@ -40,7 +40,7 @@ pub struct SystemParametersV1 {
 
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
-    pub max_vaidator_count: u64,
+    pub max_validator_count: u64,
 
     /// Lower-bound on the amount of stake required to become a validator.
     pub min_validator_joining_stake: u64,
@@ -614,12 +614,11 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 SystemParametersV1 {
                     stake_subsidy_start_epoch,
                     epoch_duration_ms,
-                    //TODO should we include these in the summary?
-                    max_vaidator_count: _,
-                    min_validator_joining_stake: _,
-                    validator_low_stake_threshold: _,
-                    validator_very_low_stake_threshold: _,
-                    validator_low_stake_grace_period: _,
+                    max_validator_count,
+                    min_validator_joining_stake,
+                    validator_low_stake_threshold,
+                    validator_very_low_stake_threshold,
+                    validator_low_stake_grace_period,
                     extra_fields: _,
                 },
             reference_gas_price,
@@ -630,10 +629,10 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             stake_subsidy:
                 StakeSubsidyV1 {
                     balance: stake_subsidy_balance,
-                    distribution_counter: stake_subsidy_epoch_counter,
-                    current_distribution_amount: stake_subsidy_current_epoch_amount,
-                    stake_subsidy_period_length: _,
-                    stake_subsidy_decrease_rate: _,
+                    distribution_counter: stake_subsidy_distribution_counter,
+                    current_distribution_amount: stake_subsidy_current_distribution_amount,
+                    stake_subsidy_period_length,
+                    stake_subsidy_decrease_rate,
                     extra_fields: _,
                 },
             safe_mode,
@@ -650,9 +649,9 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             epoch_start_timestamp_ms,
             stake_subsidy_start_epoch,
             epoch_duration_ms,
-            stake_subsidy_epoch_counter,
+            stake_subsidy_distribution_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
-            stake_subsidy_current_epoch_amount,
+            stake_subsidy_current_distribution_amount,
             total_stake,
             active_validators: active_validators
                 .into_iter()
@@ -675,6 +674,13 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .into_iter()
                 .map(|e| (e.key, e.value.contents))
                 .collect(),
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
         }
     }
 }
@@ -702,7 +708,7 @@ impl Default for SuiSystemStateInnerV1 {
             parameters: SystemParametersV1 {
                 stake_subsidy_start_epoch: 0,
                 epoch_duration_ms: 10000,
-                max_vaidator_count: crate::governance::MAX_VALIDATOR_COUNT,
+                max_validator_count: crate::governance::MAX_VALIDATOR_COUNT,
                 min_validator_joining_stake: crate::governance::MIN_VALIDATOR_JOINING_STAKE_MIST,
                 validator_low_stake_threshold:
                     crate::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,

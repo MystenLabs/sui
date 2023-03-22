@@ -296,7 +296,7 @@ storage_fund:
 parameters:
   epoch_duration_ms: 86400000
   stake_subsidy_start_epoch: 0
-  max_vaidator_count: 150
+  max_validator_count: 150
   min_validator_joining_stake: 30000000000000000
   validator_low_stake_threshold: 20000000000000000
   validator_very_low_stake_threshold: 15000000000000000
