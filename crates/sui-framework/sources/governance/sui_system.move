@@ -13,7 +13,7 @@ module sui::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::Validator;
     use sui::validator_cap::UnverifiedValidatorOperationCap;
-    use sui::sui_system_state_inner::SuiSystemStateInner;
+    use sui::sui_system_state_inner::{SuiSystemStateInnerV2, SuiSystemStateInner};
     use sui::vec_set::VecSet;
     use std::option;
     use sui::table::Table;
@@ -28,6 +28,7 @@ module sui::sui_system {
 
     #[test_only]
     use sui::test_utils;
+    use sui::object;
     #[test_only]
     friend sui::governance_test_utils;
 
@@ -67,7 +68,7 @@ module sui::sui_system {
             stake_subsidy_decrease_rate,
             ctx,
         );
-        let version = sui_system_state_inner::system_state_version(&system_state);
+        let version = sui_system_state_inner::genesis_system_state_version();
         let self = SuiSystemState {
             id,
             version,
@@ -560,19 +561,26 @@ module sui::sui_system {
         sui_system_state_inner::get_reporters_of(self, addr)
     }
 
-    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInner {
+    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         let version = self.version;
         // TODO: This is where we check the version and perform upgrade if necessary.
+        if (version == 1) {
+            let v1: SuiSystemStateInner = dynamic_field::remove(&mut self.id, version);
+            let v2 = sui_system_state_inner::upgrade_v1_to_v2(v1);
+            version = sui_system_state_inner::system_state_version(&v2);
+            dynamic_field::add(&mut self.id, version, v2);
+            self.version = version;
+        };
 
-        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
+        let inner: &mut SuiSystemStateInnerV2 = dynamic_field::borrow_mut(&mut self.id, version);
         assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
         inner
     }
