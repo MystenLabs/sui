@@ -7,8 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { notEmpty } from '_helpers';
 
-// Get inActive validators by inactivePoolsIds
-export function useGetInactiveValidators(inactivePoolsId?: ObjectId) {
+// Get inActive stakingPoolIds by inactivePoolsIds
+export function useGetInactiveStakingPoolIds(inactivePoolsId?: ObjectId) {
     const rpc = useRpcClient();
     const data = useQuery(
         ['inactive-pool-id', inactivePoolsId],

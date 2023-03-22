@@ -20,7 +20,7 @@ import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetInactiveValidators } from '_hooks';
+import { useGetInactiveStakingPoolIds } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 type DelegationDetailCardProps = {
@@ -77,11 +77,10 @@ export function DelegationDetailCard({
         staked: stakedId,
     }).toString()}`;
 
-    const { data: inActiveValidatorsIds } = useGetInactiveValidators(
-        system?.inactivePoolsId
-    );
+    const { data: inActiveValidatorsStakingPoolIds } =
+        useGetInactiveStakingPoolIds(system?.inactivePoolsId);
 
-    const inActiveValidator = inActiveValidatorsIds?.includes(
+    const inActiveValidator = inActiveValidatorsStakingPoolIds?.includes(
         validatorData?.stakingPoolId || ''
     );
 

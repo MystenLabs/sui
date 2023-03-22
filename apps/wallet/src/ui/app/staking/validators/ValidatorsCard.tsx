@@ -20,7 +20,7 @@ import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetInactiveValidators } from '_hooks';
+import { useGetInactiveStakingPoolIds } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
@@ -41,7 +41,7 @@ export function ValidatorsCard() {
         return getAllStakeSui(delegatedStake);
     }, [delegatedStake]);
 
-    const { data: inActiveStakingPoolID } = useGetInactiveValidators(
+    const { data: inActiveStakingPoolID } = useGetInactiveStakingPoolIds(
         system?.inactivePoolsId
     );
 

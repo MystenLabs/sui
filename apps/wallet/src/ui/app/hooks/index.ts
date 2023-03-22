@@ -20,7 +20,7 @@ export { useGetAllBalances } from './useGetAllBalances';
 export { useObjectsOwnedByAddress } from './useObjectsOwnedByAddress';
 export { useOwnedNFT } from './useOwnedNFT';
 export { useGetCoins } from './useGetCoins';
-export { useGetInactiveValidators } from './useGetInactiveValidators';
+export { useGetInactiveStakingPoolIds } from './useGetInactiveStakingPoolIds';
 export * from './useSigner';
 export * from './useTransactionData';
 export * from './useActiveAddress';
