@@ -58,6 +58,11 @@ export function ValidatorsCard() {
         });
     }, [delegatedStake, inActiveStakingPoolID]);
 
+    // Check if there are any inactive validators
+    const inActiveStakes = delegations?.some(
+        ({ inactiveValidator }) => inactiveValidator
+    );
+
     // Get total rewards for all delegations
     const totalEarnTokenReward = useMemo(() => {
         if (!delegatedStake || !activeValidators) return 0n;
@@ -101,7 +106,7 @@ export function ValidatorsCard() {
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
-                        {inActiveStakingPoolID?.length ? (
+                        {inActiveStakes ? (
                             <Alert className="mb-3">
                                 Unstake SUI from the inactive validators and
                                 stake on an active validator to start earning

@@ -81,7 +81,10 @@ export function DelegationDetailCard({
         system?.inactivePoolsId
     );
 
-    const inActiveValidator = inActiveValidatorsIds.length;
+    const inActiveValidator = inActiveValidatorsIds?.includes(
+        validatorData?.stakingPoolId || ''
+    );
+
     const commission = validatorData ? Number(validatorData.commissionRate) / 100 : 0;
     const stakingEnabled = useFeature(FEATURES.STAKING_ENABLED).on;
 
