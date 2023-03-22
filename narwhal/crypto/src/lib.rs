@@ -37,6 +37,7 @@ pub type PublicKey = bls12381::min_sig::BLS12381PublicKey;
 pub type PublicKeyBytes = bls12381::min_sig::BLS12381PublicKeyAsBytes;
 pub type Signature = bls12381::min_sig::BLS12381Signature;
 pub type AggregateSignature = bls12381::min_sig::BLS12381AggregateSignature;
+pub type AggregateSignatureBytes = bls12381::min_sig::BLS12381AggregateSignatureAsBytes;
 pub type PrivateKey = bls12381::min_sig::BLS12381PrivateKey;
 pub type KeyPair = bls12381::min_sig::BLS12381KeyPair;
 
