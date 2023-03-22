@@ -17,6 +17,7 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
+use sui_core::consensus_adapter::SubmitToConsensus;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot::Sender;
@@ -884,9 +885,18 @@ impl SuiNode {
                         self.state.get_available_system_packages().await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
-                components
+                if let Err(e) = components
                     .consensus_adapter
-                    .submit(transaction, None, &cur_epoch_store)?;
+                    .submit_to_consensus(&transaction, &cur_epoch_store)
+                    .await
+                {
+                    warn!(
+                        ?transaction,
+                        "failed to submit capabilities to consensus {e}"
+                    );
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                };
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
