@@ -13,6 +13,7 @@ use tracing::debug;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, BigBigInt, Coin as SuiCoin};
+use sui_json_rpc_types::{Balance, BigBigInt, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
@@ -254,7 +255,7 @@ impl CoinReadApiServer for CoinReadApi {
                     <u64>::from(coin.balance) as u128
             } else {
                 let total_balance: u128 =
-                    <u128>::from(balance.total_balance) + <u64>::from(coin.balance) as u128;
+                    <u128>::from(balance.total_balance) + coin.balance as u128;
                 balance.total_balance = <BigBigInt>::from(total_balance);
             }
             balance.coin_object_count += 1;
