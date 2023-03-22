@@ -71,16 +71,16 @@ export function TokenView({ data }: { data: DataType }) {
     };
 
     return (
-        <div>
+        <div className="flex flex-col flex-nowrap gap-14">
             <TabGroup size="lg">
                 <TabList>
                     <Tab>Details</Tab>
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <div className="-mt-4 flex flex-col md:flex-row md:divide-x md:divide-gray-45">
-                            <div className="divide-y divide-gray-45 md:basis-2/3 md:pt-2.5">
-                                <div className="pb-7">
+                        <div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
+                            <div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0">
+                                <div className="pb-7 pr-10">
                                     <DescriptionList>
                                         <DescriptionItem
                                             title="Owner"
@@ -104,7 +104,6 @@ export function TokenView({ data }: { data: DataType }) {
                                                 />
                                             )}
                                         </DescriptionItem>
-
                                         <DescriptionItem title="Object ID">
                                             <ObjectLink
                                                 objectId={data.id}
@@ -128,7 +127,6 @@ export function TokenView({ data }: { data: DataType }) {
                                                 {data.version}
                                             </Text>
                                         </DescriptionItem>
-
                                         <DescriptionItem title="Last Transaction ID">
                                             <TransactionLink
                                                 digest={data.data.tx_digest!}
@@ -137,75 +135,76 @@ export function TokenView({ data }: { data: DataType }) {
                                         </DescriptionItem>
                                     </DescriptionList>
                                 </div>
-                                <div className="pt-2 md:pt-2.5">
-                                    <DescriptionList>
+                                {name || data.data.contents.description ? (
+                                    <div className="pt-2 pr-10 md:pt-2.5">
+                                        <DescriptionList>
+                                            {name && (
+                                                <DescriptionItem title="Name">
+                                                    <Text
+                                                        variant="body/medium"
+                                                        color="steel-darker"
+                                                    >
+                                                        {name}
+                                                    </Text>
+                                                </DescriptionItem>
+                                            )}
+                                            {data.data.contents.description ? (
+                                                <DescriptionItem title="Description">
+                                                    <Text
+                                                        variant="p1/medium"
+                                                        color="steel-darker"
+                                                    >
+                                                        {
+                                                            data.data.contents
+                                                                .description
+                                                        }
+                                                    </Text>
+                                                </DescriptionItem>
+                                            ) : null}
+                                        </DescriptionList>
+                                    </div>
+                                ) : null}
+                            </div>
+                            {imgUrl !== '' && (
+                                <div className="flex flex-col gap-5 border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
+                                    <div className="flex w-40 justify-center md:w-50">
+                                        <DisplayBox
+                                            display={imgUrl}
+                                            caption={
+                                                name ||
+                                                trimStdLibPrefix(data.objType)
+                                            }
+                                            fileInfo={fileType}
+                                            modalImage={[
+                                                isImageFullScreen,
+                                                setImageFullScreen,
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2.5">
                                         {name && (
-                                            <DescriptionItem title="Name">
-                                                <Text
-                                                    variant="body/medium"
-                                                    color="steel-darker"
-                                                >
-                                                    {name}
-                                                </Text>
-                                            </DescriptionItem>
+                                            <Heading
+                                                variant="heading4/semibold"
+                                                color="gray-90"
+                                            >
+                                                {name}
+                                            </Heading>
                                         )}
-
-                                        <DescriptionItem title="Description">
+                                        {fileType && (
                                             <Text
-                                                variant="p1/medium"
+                                                variant="bodySmall/medium"
                                                 color="steel-darker"
                                             >
-                                                {data.data.contents.description}
+                                                {fileType}
                                             </Text>
-                                        </DescriptionItem>
-                                    </DescriptionList>
-                                </div>
-                            </div>
-
-                            {imgUrl !== '' && (
-                                <div className="pl-0 pt-6 md:pt-10 md:pl-10">
-                                    <div className="flex items-center justify-start gap-5 md:justify-center">
-                                        <div className="flex w-40 justify-center md:w-50">
-                                            <DisplayBox
-                                                display={imgUrl}
-                                                caption={
-                                                    name ||
-                                                    trimStdLibPrefix(
-                                                        data.objType
-                                                    )
-                                                }
-                                                fileInfo={fileType}
-                                                modalImage={[
-                                                    isImageFullScreen,
-                                                    setImageFullScreen,
-                                                ]}
-                                            />
-                                        </div>
-                                        <div className="flex flex-col gap-2.5">
-                                            {name && (
-                                                <Heading
-                                                    variant="heading4/semibold"
-                                                    color="gray-90"
-                                                >
-                                                    {name}
-                                                </Heading>
-                                            )}
-                                            {fileType && (
-                                                <Text
-                                                    variant="bodySmall/medium"
-                                                    color="steel-darker"
-                                                >
-                                                    {fileType}
-                                                </Text>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={handlePreviewClick}
-                                                className="flex gap-1 text-caption font-semibold uppercase text-steel-dark"
-                                            >
-                                                Preview <PreviewMediaIcon />
-                                            </button>
-                                        </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={handlePreviewClick}
+                                            className="flex gap-1 text-caption font-semibold uppercase text-steel-dark"
+                                        >
+                                            Preview <PreviewMediaIcon />
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -213,9 +212,8 @@ export function TokenView({ data }: { data: DataType }) {
                     </TabPanel>
                 </TabPanels>
             </TabGroup>
-
             {properties.length > 0 && (
-                <>
+                <div>
                     <h2 className={styles.header}>Properties</h2>
                     <table className={styles.properties}>
                         <tbody>
@@ -242,7 +240,7 @@ export function TokenView({ data }: { data: DataType }) {
                             ))}
                         </tbody>
                     </table>
-                </>
+                </div>
             )}
             {structProperties.length > 0 && (
                 <ModulesWrapper
@@ -252,12 +250,16 @@ export function TokenView({ data }: { data: DataType }) {
                     }}
                 />
             )}
-            <h2 className={styles.header}>Dynamic Fields</h2>
-            <div className={styles.ownedobjects}>
-                <OwnedObjects id={data.id} byAddress={false} />
+            <div>
+                <h2 className={styles.header}>Dynamic Fields</h2>
+                <div className={styles.ownedobjects}>
+                    <OwnedObjects id={data.id} byAddress={false} />
+                </div>
             </div>
-            <h2 className={styles.header}>Transactions </h2>
-            <TxForID id={data.id} category="object" />
+            <div>
+                <h2 className={styles.header}>Transactions</h2>
+                <TxForID id={data.id} category="object" />
+            </div>
         </div>
     );
 }
