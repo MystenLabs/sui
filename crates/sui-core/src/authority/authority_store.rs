@@ -9,12 +9,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use either::Either;
-use fastcrypto::hash::{Digest, MultisetHash};
+use fastcrypto::hash::MultisetHash;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tracing::{debug, info, trace};
 
@@ -186,13 +187,13 @@ impl AuthorityStore {
         Ok(store)
     }
 
-    pub fn get_root_state_hash(&self, epoch: EpochId) -> SuiResult<Digest<32>> {
+    pub fn get_root_state_hash(&self, epoch: EpochId) -> SuiResult<ECMHLiveObjectSetDigest> {
         let acc = self
             .perpetual_tables
             .root_state_hash_by_epoch
             .get(&epoch)?
             .expect("Root state hash for this epoch does not exist");
-        Ok(acc.1.digest())
+        Ok(acc.1.digest().into())
     }
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
