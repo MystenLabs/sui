@@ -88,9 +88,9 @@ pub enum Operation {
         #[clap(long, action, default_value = "false", global = true)]
         skip_testbed_configuration: bool,
 
-        /// Whether to skip downloading and analyzing log files.
+        /// Whether to download and analyze the client and node log files.
         #[clap(long, action, default_value = "false", global = true)]
-        skip_logs_processing: bool,
+        log_processing: bool,
 
         /// The timeout duration for ssh commands (in seconds).
         #[clap(long, action, value_parser = parse_duration, default_value = "30", global = true)]
@@ -256,7 +256,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             scrape_interval,
             skip_testbed_update,
             skip_testbed_configuration,
-            skip_logs_processing,
+            log_processing,
             timeout,
             retries,
             load_type,
@@ -311,7 +311,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 .with_scrape_interval(scrape_interval)
                 .skip_testbed_updates(skip_testbed_update)
                 .skip_testbed_configuration(skip_testbed_configuration)
-                .skip_logs_processing(skip_logs_processing)
+                .with_log_processing(logs_processing)
                 .run_benchmarks(generator)
                 .await
                 .wrap_err("Failed to run benchmarks")?;

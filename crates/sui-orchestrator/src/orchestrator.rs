@@ -42,8 +42,8 @@ pub struct Orchestrator {
     skip_testbed_update: bool,
     /// Whether to skip testbed configuration before running benchmarks.
     skip_testbed_configuration: bool,
-    /// Whether to skip downloading and analyzing log files.
-    skip_logs_processing: bool,
+    /// Whether to downloading and analyze the client and node log files.
+    log_processing: bool,
 }
 
 impl Orchestrator {
@@ -67,7 +67,7 @@ impl Orchestrator {
             scrape_interval: Self::SCRAPE_INTERVAL,
             skip_testbed_update: false,
             skip_testbed_configuration: false,
-            skip_logs_processing: false,
+            log_processing: false,
         }
     }
 
@@ -89,9 +89,9 @@ impl Orchestrator {
         self
     }
 
-    /// Whether to skip downloading and analyzing log files.
-    pub fn skip_logs_processing(mut self, skip_logs_analysis: bool) -> Self {
-        self.skip_logs_processing = skip_logs_analysis;
+    /// Whether to download and analyze the client and node log files.
+    pub fn with_log_processing(mut self, log_processing: bool) -> Self {
+        self.log_processing = log_processing;
         self
     }
 
@@ -551,7 +551,7 @@ impl Orchestrator {
             self.cleanup(false).await?;
 
             // Download the log files.
-            if !self.skip_logs_processing {
+            if self.log_processing {
                 let error_counter = self.download_logs(&parameters).await?;
                 error_counter.print_summary();
             }
