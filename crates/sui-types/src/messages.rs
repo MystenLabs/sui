@@ -309,6 +309,12 @@ impl From<u128> for CallArg {
     }
 }
 
+impl From<ObjectRef> for CallArg {
+    fn from(obj: ObjectRef) -> Self {
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj))
+    }
+}
+
 impl ObjectArg {
     pub fn id(&self) -> ObjectID {
         match self {

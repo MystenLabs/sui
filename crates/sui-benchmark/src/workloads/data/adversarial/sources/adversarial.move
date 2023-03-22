@@ -8,7 +8,9 @@ module adversarial::adversarial {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
     use sui::event;
-    use sui::dynamic_field::add;
+    use sui::dynamic_field::{add, borrow};
+
+    const NUM_DYNAMIC_FIELDS: u64 = 33;
 
     struct S has key, store {
         id: UID,
@@ -65,9 +67,9 @@ module adversarial::adversarial {
     // TODO: factor out the common bits with `create_object_with_size`
     // emit an event of size n
     public fun emit_event_with_size(n: u64) {
-        // 46 seems to be the added size from event size derivation for `NewValueEvent`
-        assert!(n > 46, 0);
-        n = n - 46;
+        // 55 seems to be the added size from event size derivation for `NewValueEvent`
+        assert!(n > 55, 0);
+        n = n - 55;
         // minimum object size for NewValueEvent is 1 byte for vector length
         assert!(n > 1, 0);
         let contents = vector[];
@@ -89,24 +91,28 @@ module adversarial::adversarial {
         event::emit(s);
     }
 
-    struct Obj has key {
+    struct Obj has key, store {
         id: object::UID,
     }
 
-    public fun add_dynamic_fields(n: u64, ctx: &mut TxContext) {
+    public fun add_dynamic_fields(obj: &mut Obj, n: u64) {
         let i = 0;
         while (i < n) {
-            let id = object::new(ctx);
-            add<u64, u64>(&mut id, i, i);
-            sui::transfer::transfer(Obj { id }, tx_context::sender(ctx));
-
+            add<u64, u64>(&mut obj.id, (i as u64), (i as u64));
             i = i + 1;
         };
     }
 
+    public fun read_n_dynamic_fields(obj: &mut Obj, n: u64) {
+        let i = 0;
+        while (i < n) {
+            let _ = borrow<u64, u64>(&obj.id, (i as u64));
+            i = i + 1;
+        };
+    }
 
     /// Emit `n` events of size `size`
-    public fun emit_events(n: u64, size: u64, _ctx: &mut TxContext) {
+    public fun emit_events(n: u64, size: u64) {
         let i = 0;
         while (i < n) {
             emit_event_with_size(size);
@@ -121,5 +127,13 @@ module adversarial::adversarial {
             transfer::share_object(create_max_size_object(size, ctx));
             i = i + 1
         }
+    }
+
+    /// Initialize object to be used for dynamic field opers
+    fun init(ctx: &mut TxContext) {
+        let id = object::new(ctx);
+        let x = Obj { id };
+        add_dynamic_fields(&mut x, NUM_DYNAMIC_FIELDS);
+        transfer::share_object(x);
     }
 }

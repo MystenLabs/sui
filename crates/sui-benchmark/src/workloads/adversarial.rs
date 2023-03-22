@@ -9,7 +9,8 @@ use std::sync::Arc;
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::messages::CallArg;
+use sui_types::base_types::{random_object_ref, ObjectRef};
+use sui_types::messages::{CallArg, ObjectArg};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
 use test_utils::messages::create_publish_move_package_transaction;
@@ -28,11 +29,14 @@ use super::{
 /// Number of max size objects to create in the max object payload
 const NUM_OBJECTS: u64 = 2048;
 
-#[derive(Debug, EnumCountMacro, EnumIter)]
+/// Maxinum number of dynamic fields we were able to create
+/// TODO: try to increase this value. Gas limits it
+const NUM_DYNAMIC_FIELDS: u64 = 33;
+
+#[derive(Debug, EnumCountMacro, EnumIter, Clone)]
 enum AdversarialPayloadType {
     ObjectsSize = 1,
     EventSize,
-    EventCount,
     DynamicFieldsCount,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
@@ -52,6 +56,7 @@ impl Distribution<AdversarialPayloadType> for Standard {
 pub struct AdversarialTestPayload {
     /// ID of the Move package with adversarial utility functions
     package_id: ObjectID,
+    df_parent_obj_ref: ObjectRef,
     /// address to send adversarial transactions from
     sender: SuiAddress,
     state: InMemoryWallet,
@@ -66,13 +71,13 @@ impl std::fmt::Display for AdversarialTestPayload {
 
 impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
-        // Sometimes useful when figuring out why things failed
+        // // Sometimes useful when figuring out why things failed
         // let stat = match effects {
         //     ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
         //     ExecutionEffects::SuiTransactionEffects(_) => unimplemented!("Not impl"),
         // };
         // println!("ERRR: {:?}", stat);
-
+        // println!("ERRR: {:?}", self.state);
         // important to keep this as a sanity check that we don't hit protocol limits or run out of gas as things change elsewhere.
         // adversarial tests aren't much use if they don't have effects :)
         debug_assert!(
@@ -84,13 +89,23 @@ impl Payload for AdversarialTestPayload {
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        let num_payload_types: AdversarialPayloadType = rand::random();
+        let payload_type: AdversarialPayloadType = AdversarialPayloadType::EventSize; //rand::random();
 
         let gas_budget = self.system_state_observer.protocol_config.max_tx_gas();
-        let payload_args = get_payload_args(
-            num_payload_types,
-            &self.system_state_observer.protocol_config,
-        );
+        let mut payload_args =
+            get_payload_args(&payload_type, &self.system_state_observer.protocol_config);
+
+        if let AdversarialPayloadType::DynamicFieldsCount = payload_type {
+            // Add the dynamic field parent
+            payload_args.args.insert(
+                0,
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: self.df_parent_obj_ref.0,
+                    initial_shared_version: self.df_parent_obj_ref.1,
+                    mutable: true,
+                }),
+            );
+        }
 
         self.state.move_call(
             self.sender,
@@ -143,6 +158,11 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
     ) -> Box<dyn Workload<dyn Payload>> {
         Box::<dyn Workload<dyn Payload>>::from(Box::new(AdversarialWorkload {
             package_id: ObjectID::ZERO,
+            df_parent_obj_ref: {
+                let mut f = random_object_ref();
+                f.0 = ObjectID::ZERO;
+                f
+            },
             init_gas: init_gas.pop().unwrap(),
             payload_gas,
         }))
@@ -185,6 +205,8 @@ impl AdversarialWorkloadBuilder {
 pub struct AdversarialWorkload {
     /// ID of the Move package with adversarial utility functions
     package_id: ObjectID,
+    /// ID of the object used for dynamic field opers
+    df_parent_obj_ref: ObjectRef,
     pub init_gas: Gas,
     pub payload_gas: Vec<Gas>,
 }
@@ -203,13 +225,28 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let transaction =
             create_publish_move_package_transaction(gas.0, path, gas.1, &gas.2, Some(gas_price));
         let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
+
         let created = effects.created();
-        // should only create the package object + upgrade cap. otherwise, there are some object initializers running and we will need to disambiguate
-        assert_eq!(created.len(), 2);
+
+        // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
+        assert_eq!(created.len() as u64, 3 + NUM_DYNAMIC_FIELDS);
         let package_obj = created
             .iter()
             .find(|o| matches!(o.1, Owner::Immutable))
             .unwrap();
+
+        for o in &created {
+            let obj = proxy.get_object(o.0 .0).await.unwrap();
+            if let Some(tag) = obj.data.struct_tag() {
+                if tag.to_string().contains("::adversarial::Obj") {
+                    self.df_parent_obj_ref = o.0;
+                }
+            }
+        }
+        assert!(
+            self.df_parent_obj_ref.0 != ObjectID::ZERO,
+            "Dynamic field parent must be created"
+        );
         self.package_id = package_obj.0 .0;
     }
 
@@ -223,6 +260,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         for gas in &self.payload_gas {
             payloads.push(AdversarialTestPayload {
                 package_id: self.package_id,
+                df_parent_obj_ref: self.df_parent_obj_ref,
                 sender: gas.1,
                 state: InMemoryWallet::new(gas),
                 system_state_observer: system_state_observer.clone(),
@@ -241,7 +279,7 @@ struct AdversarialPayloadArgs {
 }
 
 fn get_payload_args(
-    payload_type: AdversarialPayloadType,
+    payload_type: &AdversarialPayloadType,
     protocol_config: &ProtocolConfig,
 ) -> AdversarialPayloadArgs {
     match payload_type {
@@ -258,29 +296,14 @@ fn get_payload_args(
         AdversarialPayloadType::EventSize => AdversarialPayloadArgs {
             fn_name: "emit_events".to_owned(),
             args: [
-                // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                (protocol_config.max_num_event_emit() / 10).into(),
-                // TODO: Raise this. Using a smaller value here as full value errs
-                (protocol_config.max_event_emit_size() / 3).into(),
+                protocol_config.max_num_event_emit().into(),
+                protocol_config.max_event_emit_size().into(),
             ]
             .to_vec(),
         },
         AdversarialPayloadType::DynamicFieldsCount => AdversarialPayloadArgs {
-            fn_name: "add_dynamic_fields".to_owned(),
-            args: [protocol_config
-                .object_runtime_max_num_cached_objects()
-                .into()]
-            .to_vec(),
-        },
-        AdversarialPayloadType::EventCount => AdversarialPayloadArgs {
-            fn_name: "emit_events".to_owned(),
-            args: [
-                // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                protocol_config.max_num_event_emit().into(),
-                // Intentionally emitting small objects as we're only checking the count
-                (10u64).into(),
-            ]
-            .to_vec(),
+            fn_name: "read_n_dynamic_fields".to_owned(),
+            args: [NUM_DYNAMIC_FIELDS.into()].to_vec(),
         },
     }
 }
