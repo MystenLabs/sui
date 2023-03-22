@@ -158,14 +158,14 @@ module sui::display {
 
 ## Sui utility objects
 
-In Sui, utility objects enable authorization for Capabilities. Almost all modules have features that can be accessed only with the required Capability. Generic modules allow one Capability per Application, such as a marketplace. Some Capabilities mark ownership of a shared object on-chain, or access the shared data from another account.
-With Capabilities, it is important to provide a meaningful description of objects to facilitate user interface implementation. This helps avoid accidentally transferring the wrong object when objects are similar. It also provides a user-friendly description of items that users see.
+In Sui, utility objects enable authorization for capabilities. Almost all modules have features that can be accessed only with the required capability. Generic modules allow one capability per application, such as a marketplace. Some capabilities mark ownership of a shared object on-chain, or access the shared data from another account.
+With capabilities, it is important to provide a meaningful description of objects to facilitate user interface implementation. This helps avoid accidentally transferring the wrong object when objects are similar. It also provides a user-friendly description of items that users see.
 
-The following example demonstrates how to create a capy Capability:
+The following example demonstrates how to create a capy capability:
 
 ```rust
 module capy::utility {
-   /// A Capability which grants Capy Manager permission to add
+   /// A capability which grants Capy Manager permission to add
    /// new genes and manage the Capy Market
    struct CapyManagerCap has key, store {
 id: UID }
