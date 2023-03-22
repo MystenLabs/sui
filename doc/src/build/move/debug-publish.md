@@ -33,7 +33,7 @@ At this point, however, the `sui move` command does not support package publishi
 ### Module initializers
 
 There is, however, an important aspect of publishing packages that affects Move code development in Sui - each module in a package can
-include a special _initializer function_ that runs at publication time. The goal of an initializer function is to pre-initialize module-specific data (to create singleton objects). The initializer function must have the following properties for it to be executed at publication:
+include a special _initializer function_ that runs at publication time. The goal of an initializer function is to pre-initialize module-specific data (to create singleton objects). The initializer function must have the following properties for it to execute at publication:
 
 - Function name must be `init`
 - A single parameter of `&mut TxContext` type
