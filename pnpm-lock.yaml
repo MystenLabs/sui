@@ -693,6 +693,7 @@ importers:
       next: ^13.2.4
       nextra: latest
       nextra-theme-docs: latest
+      prettier: ^2.8.6
       react: ^18.2.0
       react-dom: ^18.2.0
       typescript: ^4.9.4
@@ -706,6 +707,7 @@ importers:
     devDependencies:
       '@types/node': 18.15.3
       '@types/react': 18.0.28
+      prettier: 2.8.6
       typescript: 4.9.5
 
   sdk/wallet-adapter/wallet-kit:
@@ -16010,6 +16012,12 @@ packages:
 
   /prettier/2.8.4:
     resolution: {integrity: sha512-vIS4Rlc2FNh0BySk3Wkd6xmwxB0FpOndW5fisM5H8hsZSxU2VWVB5CWIkIjWvrHjIhxk2g3bfMKM87zNTrZddw==}
+    engines: {node: '>=10.13.0'}
+    hasBin: true
+    dev: true
+
+  /prettier/2.8.6:
+    resolution: {integrity: sha512-mtuzdiBbHwPEgl7NxWlqOkithPyp4VN93V7VeHVWBF+ad3I5avc0RVDT4oImXQy9H/AqxA2NSQH8pSxHW6FYbQ==}
     engines: {node: '>=10.13.0'}
     hasBin: true
     dev: true
