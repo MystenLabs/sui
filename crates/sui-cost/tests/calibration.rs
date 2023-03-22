@@ -8,7 +8,7 @@ use move_cli::base::reroot_path;
 use move_disassembler::disassembler::Disassembler;
 use move_package::BuildConfig;
 
-const TEST_MODULE_DATA_DIR: &str = "../sui-framework/tests";
+const TEST_MODULE_DATA_DIR: &str = "../sui-framework/packages/sui-framework/tests";
 
 // Execute every entry function in Move framework and examples and ensure costs don't change
 // To review snapshot changes, and fix snapshot differences,

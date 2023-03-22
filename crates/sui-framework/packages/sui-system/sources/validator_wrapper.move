@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::validator_wrapper {
+module sui_system::validator_wrapper {
     use sui::versioned::Versioned;
-    use sui::validator::Validator;
+    use sui_system::validator::Validator;
     use sui::versioned;
     use sui::tx_context::TxContext;
 
-    friend sui::validator_set;
+    friend sui_system::validator_set;
 
     const EInvalidVersion: u64 = 0;
 

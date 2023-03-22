@@ -117,7 +117,7 @@ pub enum MoveObjectType {
     Other(StructTag),
     /// A SUI coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
     GasCoin,
-    /// A record of a staked SUI coin (i.e., 0x2::staking_pool::StakedSui)
+    /// A record of a staked SUI coin (i.e., 0x3::staking_pool::StakedSui)
     StakedSui,
     /// A non-SUI coin type (i.e., 0x2::coin::Coin<T> where T != 0x2::sui::SUI)
     Coin(TypeTag),

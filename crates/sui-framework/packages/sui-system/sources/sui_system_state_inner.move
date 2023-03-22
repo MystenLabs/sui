@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::sui_system_state_inner {
+module sui_system::sui_system_state_inner {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::object::{ID};
-    use sui::staking_pool::{stake_activation_epoch, StakedSui};
+    use sui_system::staking_pool::{stake_activation_epoch, StakedSui};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::validator::{Self, Validator};
-    use sui::validator_set::{Self, ValidatorSet};
-    use sui::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
-    use sui::stake_subsidy::{Self, StakeSubsidy};
+    use sui_system::validator::{Self, Validator};
+    use sui_system::validator_set::{Self, ValidatorSet};
+    use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
+    use sui_system::stake_subsidy::{Self, StakeSubsidy};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
     use std::option;
@@ -26,10 +26,10 @@ module sui::sui_system_state_inner {
     use sui::bag::Bag;
     use sui::bag;
 
-    friend sui::sui_system;
+    friend sui_system::sui_system;
 
     #[test_only]
-    friend sui::governance_test_utils;
+    friend sui_system::governance_test_utils;
 
     // same as in validator_set
     const ACTIVE_VALIDATOR_ONLY: u8 = 1;

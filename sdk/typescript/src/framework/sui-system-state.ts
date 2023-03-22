@@ -8,7 +8,7 @@ import {
   normalizeSuiObjectId,
   ObjectId,
   SuiAddress,
-  SUI_FRAMEWORK_ADDRESS,
+  SUI_SYSTEM_ADDRESS,
 } from '../types';
 
 /**
@@ -45,7 +45,7 @@ export class SuiSystemStateUtil {
 
     const coin = tx.splitCoins(tx.gas, [tx.pure(amount)]);
     tx.moveCall({
-      target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${ADD_STAKE_FUN_NAME}`,
+      target: `${SUI_SYSTEM_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${ADD_STAKE_FUN_NAME}`,
       arguments: [
         tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
         coin,
@@ -76,7 +76,7 @@ export class SuiSystemStateUtil {
   ): Promise<Transaction> {
     const tx = new Transaction();
     tx.moveCall({
-      target: `${SUI_FRAMEWORK_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${WITHDRAW_STAKE_FUN_NAME}`,
+      target: `${SUI_SYSTEM_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${WITHDRAW_STAKE_FUN_NAME}`,
       arguments: [
         tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
         tx.object(stake),

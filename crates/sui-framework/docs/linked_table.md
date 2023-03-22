@@ -126,20 +126,20 @@ removal
 ## Constants
 
 
-<a name="0x2_linked_table_ETableNotEmpty"></a>
-
-
-
-<pre><code><b>const</b> <a href="linked_table.md#0x2_linked_table_ETableNotEmpty">ETableNotEmpty</a>: u64 = 0;
-</code></pre>
-
-
-
 <a name="0x2_linked_table_ETableIsEmpty"></a>
 
 
 
 <pre><code><b>const</b> <a href="linked_table.md#0x2_linked_table_ETableIsEmpty">ETableIsEmpty</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_linked_table_ETableNotEmpty"></a>
+
+
+
+<pre><code><b>const</b> <a href="linked_table.md#0x2_linked_table_ETableNotEmpty">ETableNotEmpty</a>: u64 = 0;
 </code></pre>
 
 

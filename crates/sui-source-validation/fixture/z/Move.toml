@@ -3,4 +3,4 @@ name = "z"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "$REPO_ROOT/crates/sui-framework" }
+Sui = { local = "$REPO_ROOT/crates/sui-framework/packages/sui-framework" }

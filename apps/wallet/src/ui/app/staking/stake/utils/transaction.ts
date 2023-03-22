@@ -7,7 +7,7 @@ export function createStakeTransaction(amount: bigint, validator: string) {
     const tx = new Transaction();
     const stakeCoin = tx.splitCoins(tx.gas, [tx.pure(amount)]);
     tx.moveCall({
-        target: '0x2::sui_system::request_add_stake',
+        target: '0x3::sui_system::request_add_stake',
         arguments: [
             tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
             stakeCoin,
@@ -20,7 +20,7 @@ export function createStakeTransaction(amount: bigint, validator: string) {
 export function createUnstakeTransaction(stakedSuiId: string) {
     const tx = new Transaction();
     tx.moveCall({
-        target: '0x2::sui_system::request_withdraw_stake',
+        target: '0x3::sui_system::request_withdraw_stake',
         arguments: [
             tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
             tx.object(stakedSuiId),

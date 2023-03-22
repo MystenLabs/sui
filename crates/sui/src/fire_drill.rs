@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use sui_config::node::KeyPairWithPath;
 use sui_config::utils;
 use sui_config::{node::AuthorityKeyPairWithPath, Config, NodeConfig, PersistedConfig};
-use sui_framework::{SuiFramework, SystemPackage};
+use sui_framework::{SuiSystem, SystemPackage};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponseOptions};
 use sui_sdk::{rpc_types::SuiTransactionEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
@@ -315,7 +315,7 @@ async fn update_metadata_on_chain(
     args.extend(call_args);
     let tx_data = TransactionData::new_move_call(
         config.sui_address(),
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!(function).to_owned(),
         vec![],

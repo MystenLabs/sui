@@ -309,7 +309,7 @@ Make an <code><a href="object.md#0x2_object_ID">ID</a></code> from an address.
 ## Function `sui_system_state`
 
 Create the <code><a href="object.md#0x2_object_UID">UID</a></code> for the singleton <code>SuiSystemState</code> object.
-This should only be called once from <code><a href="sui_system.md#0x2_sui_system">sui_system</a></code>.
+This should only be called once from <code>sui_system</code>.
 
 
 <pre><code><b>fun</b> <a href="object.md#0x2_object_sui_system_state">sui_system_state</a>(ctx: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="object.md#0x2_object_UID">object::UID</a>

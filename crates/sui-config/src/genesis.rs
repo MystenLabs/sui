@@ -17,7 +17,7 @@ use std::convert::TryInto;
 use std::{fs, path::Path};
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::{adapter, execution_mode, programmable_transactions};
-use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
+use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -48,14 +48,13 @@ use sui_types::sui_system_state::{
     SuiSystemStateInnerGenesis, SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
-use sui_types::MOVE_STDLIB_ADDRESS;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{
     base_types::TxContext,
     committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
 };
+use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 
 #[derive(Clone, Debug)]
@@ -878,6 +877,7 @@ fn create_genesis_context(
     token_distribution_schedule: &TokenDistributionSchedule,
     move_framework: Vec<Vec<u8>>,
     sui_framework: Vec<Vec<u8>>,
+    sui_system_package: Vec<Vec<u8>>,
 ) -> TxContext {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
@@ -886,6 +886,7 @@ fn create_genesis_context(
     hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
     hasher.update(&bcs::to_bytes(&move_framework).unwrap());
     hasher.update(&bcs::to_bytes(&sui_framework).unwrap());
+    hasher.update(&bcs::to_bytes(&sui_system_package).unwrap());
 
     let hash = hasher.finalize();
     let genesis_transaction_digest = TransactionDigest::new(hash.into());
@@ -928,6 +929,7 @@ fn build_unsigned_genesis_data(
         token_distribution_schedule,
         MoveStdlib::as_bytes(),
         SuiFramework::as_bytes(),
+        SuiSystem::as_bytes(),
     );
 
     // Get Move and Sui Framework
@@ -939,6 +941,10 @@ fn build_unsigned_genesis_data(
         (
             SuiFramework::as_modules(),
             SuiFramework::transitive_dependencies(),
+        ),
+        (
+            SuiSystem::as_modules(),
+            SuiSystem::transitive_dependencies(),
         ),
     ];
 
@@ -1040,10 +1046,7 @@ fn create_genesis_transaction(
             protocol_config,
         );
 
-        let native_functions = sui_framework::natives::all_natives(
-            sui_types::MOVE_STDLIB_ADDRESS,
-            sui_types::SUI_FRAMEWORK_ADDRESS,
-        );
+        let native_functions = sui_framework::natives::all_natives();
         let move_vm = std::sync::Arc::new(
             adapter::new_move_vm(native_functions, protocol_config)
                 .expect("We defined natives to not fail here"),
@@ -1098,8 +1101,7 @@ fn create_genesis_objects(
     let protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::new(parameters.protocol_version));
 
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let native_functions = sui_framework::natives::all_natives();
     let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
         .expect("We defined natives to not fail here");
 
@@ -1274,7 +1276,7 @@ pub fn generate_genesis_system_object(
         .collect::<Result<_, _>>()?;
         arguments.append(&mut call_arg_arguments);
         builder.programmable_move_call(
-            SUI_FRAMEWORK_ADDRESS.into(),
+            SUI_SYSTEM_ADDRESS.into(),
             ident_str!("genesis").to_owned(),
             ident_str!("create").to_owned(),
             vec![],
@@ -1547,10 +1549,7 @@ mod test {
             &protocol_config,
         );
 
-        let native_functions = sui_framework::natives::all_natives(
-            sui_types::MOVE_STDLIB_ADDRESS,
-            sui_types::SUI_FRAMEWORK_ADDRESS,
-        );
+        let native_functions = sui_framework::natives::all_natives();
         let move_vm = std::sync::Arc::new(
             adapter::new_move_vm(native_functions, &protocol_config)
                 .expect("We defined natives to not fail here"),

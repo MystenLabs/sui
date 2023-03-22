@@ -27,7 +27,7 @@ use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::messages::TransactionData;
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_OBJECT_ID};
+use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinID, CoinIdentifier, InternalOperation,
@@ -440,13 +440,13 @@ impl Operations {
     }
 
     fn is_stake_call(tx: &SuiProgrammableMoveCall) -> bool {
-        tx.package == SUI_FRAMEWORK_OBJECT_ID
+        tx.package == SUI_SYSTEM_PACKAGE_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
             && tx.function == ADD_STAKE_FUN_NAME.as_str()
     }
 
     fn is_unstake_call(tx: &SuiProgrammableMoveCall) -> bool {
-        tx.package == SUI_FRAMEWORK_OBJECT_ID
+        tx.package == SUI_SYSTEM_PACKAGE_ID
             && tx.module == SUI_SYSTEM_MODULE_NAME.as_str()
             && tx.function == WITHDRAW_STAKE_FUN_NAME.as_str()
     }
@@ -590,7 +590,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
 }
 
 fn is_unstake_event(tag: &StructTag) -> bool {
-    tag.address == SUI_FRAMEWORK_ADDRESS
+    tag.address == SUI_SYSTEM_ADDRESS
         && tag.module.as_ident_str() == ident_str!("validator")
         && tag.name.as_ident_str() == ident_str!("UnstakingRequestEvent")
 }
