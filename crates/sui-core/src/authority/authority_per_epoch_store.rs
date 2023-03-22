@@ -332,7 +332,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
-        batch_verifier_metrics: Arc<VerifiedDigestCacheMetrics>,
+        signature_verifier_metrics: Arc<VerifiedDigestCacheMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -371,7 +371,8 @@ impl AuthorityPerEpochStore {
             .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
-        let signature_verifier = SignatureVerifier::new(committee.clone(), batch_verifier_metrics);
+        let signature_verifier =
+            SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
         Arc::new(Self {
             committee,
             protocol_config,

@@ -1731,7 +1731,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
+        let signature_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1741,7 +1741,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            batch_verifier_metrics,
+            signature_verifier_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(

@@ -21,13 +21,14 @@ use sui_types::{
 };
 
 use mysten_metrics::monitored_scope;
+use sui_types::digests::SenderSignedDataDigest;
+use sui_types::messages::SenderSignedData;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::{
     sync::oneshot,
     time::{timeout, Duration},
 };
-use tracing::error;
 
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
@@ -82,18 +83,11 @@ impl CertBuffer {
 
 /// Verifies signatures in ways that faster than verifying each signature individually.
 /// - BLS signatures - caching and batch verification.
-/// - Ed25519 signatures - caching.
-///
-/// Caching of verified digests is optimized for the happy flow:
-/// - tx signatures - cached if verified directly, but not if verified as part of a tx cert (since
-///   the tx cert is cached already).
-/// - tx certs - cached when verified.
-/// If a tx cert is cached already we don't need to verify its tx sigs since we never insert a tx
-/// cert unless we verified its tx sigs.
-///
+/// - User signed data - caching.
 pub struct SignatureVerifier {
     committee: Arc<Committee>,
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
+    signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<VerifiedDigestCacheMetrics>,
@@ -110,6 +104,10 @@ impl SignatureVerifier {
             certificate_cache: VerifiedDigestCache::new(
                 metrics.certificate_signatures_cache_hits.clone(),
                 metrics.certificate_signatures_cache_evictions.clone(),
+            ),
+            signed_data_cache: VerifiedDigestCache::new(
+                metrics.signed_data_cache_hits.clone(),
+                metrics.signed_data_cache_evictions.clone(),
             ),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
@@ -131,13 +129,15 @@ impl SignatureVerifier {
             .filter(|cert| !self.certificate_cache.is_cached(&cert.certificate_digest()))
             .collect();
 
-        // Note: this verifies user sigs
-        batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints).tap_ok(
-            |_| {
-                self.certificate_cache
-                    .cache_digests(certs.into_iter().map(|c| c.certificate_digest()).collect())
-            },
-        )
+        // Verify only the user sigs of certificates that were not cached already, since whenever we
+        // insert a certificate into the cache, it is already verified.
+        for cert in &certs {
+            self.verify_tx(cert.data())?;
+        }
+        batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints)?;
+        self.certificate_cache
+            .cache_digests(certs.into_iter().map(|c| c.certificate_digest()).collect());
+        Ok(())
     }
 
     /// Verifies one cert asynchronously, in a batch.
@@ -146,6 +146,7 @@ impl SignatureVerifier {
         if self.certificate_cache.is_cached(&cert_digest) {
             return Ok(VerifiedCertificate::new_unchecked(cert));
         }
+        self.verify_tx(cert.data())?;
         self.verify_cert_skip_cache(cert)
             .await
             .tap_ok(|_| self.certificate_cache.cache_digest(cert_digest))
@@ -165,7 +166,6 @@ impl SignatureVerifier {
             });
         }
 
-        cert.verify_sender_signatures()?;
         self.verify_cert_inner(cert).await
     }
 
@@ -263,11 +263,18 @@ impl SignatureVerifier {
             .ok();
         });
     }
+
+    pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
+        self.signed_data_cache
+            .is_verified(signed_tx.full_message_digest(), || signed_tx.verify(None))
+    }
 }
 
 pub struct VerifiedDigestCacheMetrics {
     certificate_signatures_cache_hits: IntCounter,
     certificate_signatures_cache_evictions: IntCounter,
+    signed_data_cache_hits: IntCounter,
+    signed_data_cache_evictions: IntCounter,
     timeouts: IntCounter,
     full_batches: IntCounter,
     partial_batches: IntCounter,
@@ -290,6 +297,18 @@ impl VerifiedDigestCacheMetrics {
                 registry
             )
             .unwrap(),
+            signed_data_cache_hits: register_int_counter_with_registry!(
+                "signed_data_cache_hits",
+                "Number of signed data which were known to be verified because of signature cache.",
+                registry
+            )
+                .unwrap(),
+            signed_data_cache_evictions: register_int_counter_with_registry!(
+                "signed_data_cache_evictions",
+                "Number of times we evict a pre-existing signed data were known to be verified because of signature cache.",
+                registry
+            )
+                .unwrap(),
             timeouts: register_int_counter_with_registry!(
                 "async_batch_verifier_timeouts",
                 "Number of times batch verifier times out and verifies a partial batch",
@@ -330,14 +349,11 @@ pub fn batch_verify_all_certificates_and_checkpoints(
     certs: &[CertifiedTransaction],
     checkpoints: &[SignedCheckpointSummary],
 ) -> SuiResult {
-    for cert in certs {
-        cert.verify_sender_signatures()?;
-    }
     for ckpt in checkpoints {
         ckpt.data().verify(Some(committee.epoch()))?;
     }
 
-    batch_verify_certificates_impl(committee, certs, checkpoints)
+    batch_verify(committee, certs, checkpoints)
 }
 
 /// Verifies certificates in batch mode, but returns a separate result for each cert.
@@ -345,23 +361,14 @@ pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
-    match batch_verify_certificates_impl(committee, certs, &[]) {
-        Ok(_) => certs
-            .iter()
-            .map(|c| {
-                c.data().verify(None).tap_err(|e| {
-                    error!(
-                        "Cert was signed by quorum, but contained bad user signatures! {}",
-                        e
-                    )
-                })?;
-                Ok(())
-            })
-            .collect(),
+    match batch_verify(committee, certs, &[]) {
+        Ok(_) => vec![Ok(()); certs.len()],
 
         // Verify one by one to find which certs were invalid.
         Err(_) if certs.len() > 1 => certs
             .iter()
+            // TODO: verify_signature currently checks the tx sig as well, which might be cached
+            // already.
             .map(|c| c.verify_signature(committee))
             .collect(),
 
@@ -369,7 +376,7 @@ pub fn batch_verify_certificates(
     }
 }
 
-fn batch_verify_certificates_impl(
+fn batch_verify(
     committee: &Committee,
     certs: &[CertifiedTransaction],
     checkpoints: &[SignedCheckpointSummary],
@@ -449,5 +456,16 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
                 }
             }
         });
+    }
+
+    pub fn is_verified<F>(&self, digest: D, verify_callback: F) -> SuiResult
+    where
+        F: FnOnce() -> SuiResult,
+    {
+        if !self.is_cached(&digest) {
+            verify_callback()?;
+            self.cache_digest(digest);
+        }
+        Ok(())
     }
 }
