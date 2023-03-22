@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight12 } from '@mysten/icons';
 import { normalizeSuiAddress } from '@mysten/sui.js';
 import { useState, useEffect, useCallback } from 'react';
 
-import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
@@ -14,6 +14,7 @@ import {
     extractName,
 } from '../../../utils/objectUtils';
 import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
+import { LinkOrTextDescriptionItem } from '../LinkOrTextDescriptionItem';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
@@ -27,8 +28,8 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 
 export function TokenView({ data }: { data: DataType }) {
-    const imgUrl = parseImageURL(data.data.contents);
-    const name = extractName(data?.data?.contents);
+    const imgUrl = parseImageURL(data.display);
+    const name = extractName(data.display);
 
     const properties = Object.entries(data.data?.contents).filter(
         ([key, value]) => key !== 'name' && checkIsPropertyType(value)
@@ -135,76 +136,85 @@ export function TokenView({ data }: { data: DataType }) {
                                         </DescriptionItem>
                                     </DescriptionList>
                                 </div>
-                                {name || data.data.contents.description ? (
+                                {data.display ? (
                                     <div className="pt-2 pr-10 md:pt-2.5">
                                         <DescriptionList>
-                                            {name && (
-                                                <DescriptionItem title="Name">
-                                                    <Text
-                                                        variant="body/medium"
-                                                        color="steel-darker"
-                                                    >
-                                                        {name}
-                                                    </Text>
-                                                </DescriptionItem>
-                                            )}
-                                            {data.data.contents.description ? (
-                                                <DescriptionItem title="Description">
-                                                    <Text
-                                                        variant="p1/medium"
-                                                        color="steel-darker"
-                                                    >
-                                                        {
-                                                            data.data.contents
-                                                                .description
-                                                        }
-                                                    </Text>
-                                                </DescriptionItem>
-                                            ) : null}
+                                            <LinkOrTextDescriptionItem
+                                                title="Name"
+                                                value={name}
+                                            />
+                                            <LinkOrTextDescriptionItem
+                                                title="Description"
+                                                value={data.display.description}
+                                            />
+                                            <LinkOrTextDescriptionItem
+                                                title="Creator"
+                                                value={data.display.creator}
+                                                parseUrl
+                                            />
+                                            <LinkOrTextDescriptionItem
+                                                title="Link"
+                                                value={data.display.link}
+                                                parseUrl
+                                            />
+                                            <LinkOrTextDescriptionItem
+                                                title="Website"
+                                                value={data.display.project_url}
+                                                parseUrl
+                                            />
                                         </DescriptionList>
                                     </div>
                                 ) : null}
                             </div>
                             {imgUrl !== '' && (
-                                <div className="flex flex-col gap-5 border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
-                                    <div className="flex w-40 justify-center md:w-50">
-                                        <DisplayBox
-                                            display={imgUrl}
-                                            caption={
-                                                name ||
-                                                trimStdLibPrefix(data.objType)
-                                            }
-                                            fileInfo={fileType}
-                                            modalImage={[
-                                                isImageFullScreen,
-                                                setImageFullScreen,
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="flex flex-col gap-2.5">
-                                        {name && (
-                                            <Heading
-                                                variant="heading4/semibold"
-                                                color="gray-90"
-                                            >
-                                                {name}
-                                            </Heading>
-                                        )}
-                                        {fileType && (
-                                            <Text
-                                                variant="bodySmall/medium"
-                                                color="steel-darker"
-                                            >
-                                                {fileType}
-                                            </Text>
-                                        )}
-                                        <button
-                                            type="button"
-                                            onClick={handlePreviewClick}
-                                            className="flex gap-1 text-caption font-semibold uppercase text-steel-dark"
-                                        >
-                                            Preview <PreviewMediaIcon />
-                                        </button>
+                                <div className="border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
+                                    <div className="flex flex-row flex-nowrap gap-5">
+                                        <div className="flex w-40 justify-center md:w-50">
+                                            <DisplayBox
+                                                display={imgUrl}
+                                                caption={
+                                                    name ||
+                                                    trimStdLibPrefix(
+                                                        data.objType
+                                                    )
+                                                }
+                                                fileInfo={fileType}
+                                                modalImage={[
+                                                    isImageFullScreen,
+                                                    setImageFullScreen,
+                                                ]}
+                                            />
+                                        </div>
+                                        <div className="flex flex-col justify-center gap-2.5">
+                                            {name && (
+                                                <Heading
+                                                    variant="heading4/semibold"
+                                                    color="gray-90"
+                                                >
+                                                    {name}
+                                                </Heading>
+                                            )}
+                                            {fileType && (
+                                                <Text
+                                                    variant="bodySmall/medium"
+                                                    color="steel-darker"
+                                                >
+                                                    {fileType}
+                                                </Text>
+                                            )}
+                                            <div>
+                                                <Link
+                                                    size="captionSmall"
+                                                    uppercase
+                                                    onClick={handlePreviewClick}
+                                                    after={
+                                                        <ArrowRight12 className="-rotate-45" />
+                                                    }
+                                                >
+                                                    Preview
+                                                </Link>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}

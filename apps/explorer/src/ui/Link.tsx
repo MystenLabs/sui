@@ -10,7 +10,9 @@ const linkStyles = cva([], {
     variants: {
         variant: {
             text: 'text-body font-semibold text-steel-dark hover:text-steel-darker active:text-steel disabled:text-gray-60',
-            mono: 'font-mono text-bodySmall font-medium text-sui-dark break-all',
+            mono: 'font-mono text-bodySmall font-medium text-hero-dark hover:text-hero-darkest break-all',
+            textHeroDark:
+                'text-p1 font-medium text-hero-dark hover:text-hero-darkest',
         },
         uppercase: {
             true: 'uppercase',
@@ -18,6 +20,7 @@ const linkStyles = cva([], {
         size: {
             md: '!text-body',
             sm: '!text-bodySmall',
+            captionSmall: '!text-captionSmall',
         },
     },
     defaultVariants: {
@@ -34,6 +37,7 @@ export interface LinkProps
 
 export function Link({
     variant,
+    uppercase,
     size,
     before,
     after,
@@ -41,7 +45,10 @@ export function Link({
     ...props
 }: LinkProps) {
     return (
-        <ButtonOrLink className={linkStyles({ variant, size })} {...props}>
+        <ButtonOrLink
+            className={linkStyles({ variant, size, uppercase })}
+            {...props}
+        >
             <div className="inline-flex flex-nowrap items-center gap-2">
                 {before}
                 {children}
