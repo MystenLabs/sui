@@ -57,6 +57,7 @@ be used to implement application-specific transfer rules.
 -  [Function `purchase_with_cap`](#0x2_kiosk_purchase_with_cap)
 -  [Function `return_purchase_cap`](#0x2_kiosk_return_purchase_cap)
 -  [Function `withdraw`](#0x2_kiosk_withdraw)
+-  [Function `has_item`](#0x2_kiosk_has_item)
 -  [Function `has_access`](#0x2_kiosk_has_access)
 -  [Function `uid_mut_as_owner`](#0x2_kiosk_uid_mut_as_owner)
 -  [Function `uid_mut`](#0x2_kiosk_uid_mut)
@@ -949,6 +950,31 @@ Withdraw profits from the Kiosk.
     };
 
     <a href="coin.md#0x2_coin_take">coin::take</a>(&<b>mut</b> self.profits, amount, ctx)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_has_item"></a>
+
+## Function `has_item`
+
+Check whether the an <code>item</code> is present in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, item_id: <a href="object.md#0x2_object_ID">object::ID</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_has_item">has_item</a>(self: &<a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, item_id: ID): bool {
+    dof::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: item_id })
 }
 </code></pre>
 

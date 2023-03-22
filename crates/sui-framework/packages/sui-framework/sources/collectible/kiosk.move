@@ -336,6 +336,11 @@ module sui::kiosk {
 
     // === Kiosk fields access ===
 
+    /// Check whether the an `item` is present in the `Kiosk`.
+    public fun has_item(self: &Kiosk, item_id: ID): bool {
+        dof::exists_(&self.id, Item { id: item_id })
+    }
+
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
     public fun has_access(self: &mut Kiosk, cap: &KioskOwnerCap): bool {
         object::id(self) == cap.for
