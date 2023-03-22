@@ -214,9 +214,9 @@ impl AuthorityStorePruner {
             loop {
                 tokio::select! {
                     _ = prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                        if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config).await {
-                            error!("Failed to prune objects: {:?}", err);
-                        }
+                        // if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, &objects_lock_table, config).await {
+                        //     error!("Failed to prune objects: {:?}", err);
+                        // }
                     },
                     _ = &mut recv => break,
                 }
