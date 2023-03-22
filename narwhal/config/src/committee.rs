@@ -114,7 +114,7 @@ pub struct Committee {
     Deserialize,
     MallocSizeOf,
 )]
-pub struct AuthorityIdentifier(pub u8);
+pub struct AuthorityIdentifier(pub u16);
 
 impl Display for AuthorityIdentifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -140,7 +140,7 @@ impl Committee {
         self.authorities_by_id.get_or_init(|| {
             let mut authorities = BTreeMap::new();
 
-            for (identifier, (_key, authority)) in (0_u8..).zip(self.authorities.iter_mut()) {
+            for (identifier, (_key, authority)) in (0_u16..).zip(self.authorities.iter_mut()) {
                 let id = AuthorityIdentifier(identifier);
                 let _ = authority.id.get_or_init(|| id.clone());
 
