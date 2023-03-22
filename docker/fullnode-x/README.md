@@ -16,3 +16,6 @@
    - verify it's working by watching the logs with `docker compose logs fullnode -f`
 
 4. Once the full node is working, then start indexer with:  `docker compose up indexer -d`
+
+	- You will see the indexer catching up checkpoint by checkpoint until it's up to date and ready to serve requests.
+	  `docker compose logs indexer | tail -30`
