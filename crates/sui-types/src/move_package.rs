@@ -574,9 +574,9 @@ fn build_linkage_table<'p>(
     let mut dep_linkage_tables = vec![];
 
     for transitive_dep in transitive_dependencies.into_iter() {
-        // TODO: original_package_id will deserialized a module but only for the purpose of
-        // obtaining "original ID" of the package containing it; do we still have to make sure that
-        // deserialization obeys the rules set by the protocol config?
+        // original_package_id will deserialize a module but only for the purpose of obtaining
+        // "original ID" of the package containing it so using max Move binary version during
+        // deserialization is OK
         let original_id = transitive_dep.original_package_id();
 
         if immediate_dependencies.remove(&original_id) {

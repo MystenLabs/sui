@@ -248,10 +248,7 @@ impl<S> TemporaryStore<S> {
             written,
             deleted,
             events: TransactionEvents { data: self.events },
-            max_binary_format_version: ProtocolConfig::get_for_version(
-                self.protocol_config.version,
-            )
-            .move_binary_format_version(),
+            max_binary_format_version: self.protocol_config.move_binary_format_version(),
         }
     }
 
@@ -1112,8 +1109,7 @@ impl<S: GetModule<Error = SuiError, Item = CompiledModule>> GetModule for Tempor
                     .expect("Bad object type--expected package")
                     .deserialize_module(
                         &module_id.name().to_owned(),
-                        ProtocolConfig::get_for_version(self.protocol_config.version)
-                            .move_binary_format_version(),
+                        self.protocol_config.move_binary_format_version(),
                     )?,
             ))
         } else {

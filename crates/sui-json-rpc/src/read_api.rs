@@ -34,7 +34,6 @@ use sui_json_rpc_types::{
     SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
 };
@@ -1022,12 +1021,11 @@ pub async fn get_move_modules_by_package(
     Ok(match object_read {
         ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
             Data::Package(p) => {
-                // TODO: is it OK to use it here since it's not on the actual validator?
-                let max_binary_format_version =
-                    ProtocolConfig::get_for_max_version().move_binary_format_version();
+                // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                // binary format
                 normalize_modules(
                     p.serialized_module_map().values(),
-                    max_binary_format_version,
+                    /* max_binary_format_version */ VERSION_MAX,
                 )
                 .map_err(|e| anyhow!("{e}"))
             }
