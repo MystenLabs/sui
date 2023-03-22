@@ -117,6 +117,11 @@ module sui::kiosk {
     /// item is listed without a `PurchaseCap`, exclusive is set to `false`.
     struct Listing has store, copy, drop { id: ID, is_exclusive: bool }
 
+    /// Dynamic field key for a `Lock` - mechanic that does not allow items
+    /// of a type leave the `Kiosk` ever unless the lock is disabled by the
+    /// creator of the item.
+    struct KioskLock<phantom T: key + store> has store, copy, drop {}
+
     // === Events ===
 
     /// Emitted when an item was listed by the safe owner. Can be used
@@ -127,6 +132,19 @@ module sui::kiosk {
         id: ID,
         price: u64
     }
+
+    // === Confirmations ===
+
+    /// Created in the call to `place` function and can be used as the
+    /// confirmation that kiosk::place was called for a `T`.
+    struct PlacedWitness<phantom T: key + store> has drop {}
+
+    /// Created in the call to `list` function and serves as the proof
+    /// that an item `T` was listed in the `Kiosk`.
+    struct ListedWitness<phantom T: key + store> has drop {}
+
+    /// Created in the `return_purchase_cap` and proves the action.
+    struct CapReturnedWitness<phantom T: key + store> has drop {}
 
     // === Kiosk packing and unpacking ===
 
@@ -183,10 +201,11 @@ module sui::kiosk {
     /// Performs an authorization check to make sure only owner can do that.
     public fun place<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T
-    ) {
+    ): PlacedWitness<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.item_count = self.item_count + 1;
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item);
+        PlacedWitness {}
     }
 
     /// Take any object from the Kiosk.
@@ -195,7 +214,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID
     ): T {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: true }), EListedExclusively);
+        assert!(!df::exists_<Listing>(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
 
         self.item_count = self.item_count - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
@@ -208,20 +227,19 @@ module sui::kiosk {
     /// Performs an authorization check to make sure only owner can sell.
     public fun list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
-    ) {
+    ): ListedWitness<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: true }), EListedExclusively);
+        assert!(!df::exists_<Listing>(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
-        event::emit(ItemListed<T> {
-            kiosk: object::id(self), id, price
-        })
+        event::emit(ItemListed<T> { kiosk: object::id(self), id, price });
+        ListedWitness {}
     }
 
     /// Calls `place` and `list` together - simplifies the flow.
     public fun place_and_list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, item: T, price: u64
-    ) {
+    ): ListedWitness<T> {
         let id = object::id(&item);
         place(self, cap, item);
         list<T>(self, cap, id, price)
@@ -255,7 +273,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_<Listing>(&mut self.id, Listing { id, is_exclusive: false }), EAlreadyListed);
+        assert!(!df::exists_<Listing>(&self.id, Listing { id, is_exclusive: false }), EAlreadyListed);
 
         let uid = object::new(ctx);
         df::add(&mut self.id, Listing { id, is_exclusive: true }, min_price);
@@ -290,12 +308,13 @@ module sui::kiosk {
     /// allow the item for taking. Can only be returned to its `Kiosk`, aborts otherwise.
     public fun return_purchase_cap<T: key + store>(
         self: &mut Kiosk, purchase_cap: PurchaseCap<T>
-    ) {
+    ): CapReturnedWitness<T> {
         let PurchaseCap { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
 
         assert!(object::id(self) == kiosk_id, EWrongKiosk);
         df::remove<Listing, u64>(&mut self.id, Listing { id: item_id, is_exclusive: true });
-        object::delete(id)
+        object::delete(id);
+        CapReturnedWitness {}
     }
 
     /// Withdraw profits from the Kiosk.

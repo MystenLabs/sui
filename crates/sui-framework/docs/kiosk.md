@@ -39,7 +39,11 @@ be used to implement application-specific transfer rules.
 -  [Resource `PurchaseCap`](#0x2_kiosk_PurchaseCap)
 -  [Struct `Item`](#0x2_kiosk_Item)
 -  [Struct `Listing`](#0x2_kiosk_Listing)
+-  [Struct `KioskLock`](#0x2_kiosk_KioskLock)
 -  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
+-  [Struct `PlacedWitness`](#0x2_kiosk_PlacedWitness)
+-  [Struct `ListedWitness`](#0x2_kiosk_ListedWitness)
+-  [Struct `CapReturnedWitness`](#0x2_kiosk_CapReturnedWitness)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
@@ -289,6 +293,36 @@ item is listed without a <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">Purchase
 
 </details>
 
+<a name="0x2_kiosk_KioskLock"></a>
+
+## Struct `KioskLock`
+
+Dynamic field key for a <code>Lock</code> - mechanic that does not allow items
+of a type leave the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> ever unless the lock is disabled by the
+creator of the item.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_KioskLock">KioskLock</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="0x2_kiosk_ItemListed"></a>
 
 ## Struct `ItemListed`
@@ -322,6 +356,92 @@ type-indexed which allows for searching for offers of a specific <code>T</code>
 </dd>
 <dt>
 <code>price: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_PlacedWitness"></a>
+
+## Struct `PlacedWitness`
+
+Created in the call to <code>place</code> function and can be used as the
+confirmation that kiosk::place was called for a <code>T</code>.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_PlacedWitness">PlacedWitness</a>&lt;T: store, key&gt; <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_ListedWitness"></a>
+
+## Struct `ListedWitness`
+
+Created in the call to <code>list</code> function and serves as the proof
+that an item <code>T</code> was listed in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_ListedWitness">ListedWitness</a>&lt;T: store, key&gt; <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_CapReturnedWitness"></a>
+
+## Struct `CapReturnedWitness`
+
+Created in the <code>return_purchase_cap</code> and proves the action.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_CapReturnedWitness">CapReturnedWitness</a>&lt;T: store, key&gt; <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
 </dt>
 <dd>
 
@@ -531,7 +651,7 @@ Place any object into a Kiosk.
 Performs an authorization check to make sure only owner can do that.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T): <a href="kiosk.md#0x2_kiosk_PlacedWitness">kiosk::PlacedWitness</a>&lt;T&gt;
 </code></pre>
 
 
@@ -542,10 +662,11 @@ Performs an authorization check to make sure only owner can do that.
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T
-) {
+): <a href="kiosk.md#0x2_kiosk_PlacedWitness">PlacedWitness</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.item_count = self.item_count + 1;
-    dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, item)
+    dof::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Item">Item</a> { id: <a href="object.md#0x2_object_id">object::id</a>(&item) }, item);
+    <a href="kiosk.md#0x2_kiosk_PlacedWitness">PlacedWitness</a> {}
 }
 </code></pre>
 
@@ -574,7 +695,7 @@ Performs an authorization check to make sure only owner can do that.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
 ): T {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
     self.item_count = self.item_count - 1;
     df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
@@ -594,7 +715,7 @@ List the item by setting a price and making it available for purchase.
 Performs an authorization check to make sure only owner can sell.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>, price: u64): <a href="kiosk.md#0x2_kiosk_ListedWitness">kiosk::ListedWitness</a>&lt;T&gt;
 </code></pre>
 
 
@@ -605,14 +726,13 @@ Performs an authorization check to make sure only owner can sell.
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
-) {
+): <a href="kiosk.md#0x2_kiosk_ListedWitness">ListedWitness</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }, price);
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a>&lt;T&gt; {
-        <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id, price
-    })
+    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a>&lt;T&gt; { <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id, price });
+    <a href="kiosk.md#0x2_kiosk_ListedWitness">ListedWitness</a> {}
 }
 </code></pre>
 
@@ -627,7 +747,7 @@ Performs an authorization check to make sure only owner can sell.
 Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: u64)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: u64): <a href="kiosk.md#0x2_kiosk_ListedWitness">kiosk::ListedWitness</a>&lt;T&gt;
 </code></pre>
 
 
@@ -638,7 +758,7 @@ Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T, price: u64
-) {
+): <a href="kiosk.md#0x2_kiosk_ListedWitness">ListedWitness</a>&lt;T&gt; {
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&item);
     <a href="kiosk.md#0x2_kiosk_place">place</a>(self, cap, item);
     <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T&gt;(self, cap, id, price)
@@ -710,7 +830,7 @@ for any price equal or higher than the <code>min_price</code>.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: u64, ctx: &<b>mut</b> TxContext
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
+    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
 
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }, min_price);
@@ -774,7 +894,7 @@ Return the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code>
 allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>, aborts otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_purchase_cap">return_purchase_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_purchase_cap">return_purchase_cap</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">kiosk::PurchaseCap</a>&lt;T&gt;): <a href="kiosk.md#0x2_kiosk_CapReturnedWitness">kiosk::CapReturnedWitness</a>&lt;T&gt;
 </code></pre>
 
 
@@ -785,12 +905,13 @@ allow the item for taking. Can only be returned to its <code><a href="kiosk.md#0
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_return_purchase_cap">return_purchase_cap</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, purchase_cap: <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;
-) {
+): <a href="kiosk.md#0x2_kiosk_CapReturnedWitness">CapReturnedWitness</a>&lt;T&gt; {
     <b>let</b> <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a> { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == kiosk_id, <a href="kiosk.md#0x2_kiosk_EWrongKiosk">EWrongKiosk</a>);
     df::remove&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id: item_id, is_exclusive: <b>true</b> });
-    <a href="object.md#0x2_object_delete">object::delete</a>(id)
+    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    <a href="kiosk.md#0x2_kiosk_CapReturnedWitness">CapReturnedWitness</a> {}
 }
 </code></pre>
 
