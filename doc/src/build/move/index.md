@@ -25,7 +25,7 @@ Sui and the custom code developers write.
 
 The main unit of Move code organization (and distribution) is a _package_. A package consists of a set of _modules_ defined in separate
 files with the `.move` extension. These files include Move functions and type definitions. A package must include the `Move.toml` manifest file
-describing package configuration, such as package metadata and package dependencies. See [Move.toml](manifest.md) for more information about package manifest files. Packages also include an auto-generated `Move.lock` file. The `Move.lock` file is similar in format to the package manifest, but is not meant for users to edit directly. See [Move.lock](lock-file.md) for more information about the lock file. 
+describing package configuration, such as package metadata and package dependencies. See [Move.toml](manifest.md) for more information about package manifest files in Sui Move. Packages also include an auto-generated `Move.lock` file. The `Move.lock` file is similar in format to the package manifest, but is not meant for users to edit directly. See [Move.lock](lock-file.md) for more information about the lock file in Sui Move. 
 
 The minimal package source directory structure looks as follows and contains the manifest file, the lock file, and the `sources` subdirectory where one or more module files are located:
 
