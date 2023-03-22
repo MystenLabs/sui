@@ -182,7 +182,7 @@ The following example demonstrates how to create a Capy:
 ```rust
 module capy::capy_items {
    /// A wearable Capy item. For some items there can be an
-   /// unlimited supply. And items with the same name are identical
+   /// unlimited supply. And items with the same name are identical.
    struct CapyItem has key, store {
 id: UID,
        name: String
