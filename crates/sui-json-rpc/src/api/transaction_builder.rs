@@ -138,13 +138,13 @@ pub trait TransactionBuilder {
         execution_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
-    /// Create an unsigned transaction to publish Move module.
+    /// Create an unsigned transaction to publish a Move package.
     #[method(name = "publish")]
     async fn publish(
         &self,
         /// the transaction signer's Sui address
         sender: SuiAddress,
-        /// the compiled bytes of a move module, the
+        /// the compiled bytes of a Move package
         compiled_modules: Vec<Base64>,
         /// a list of transitive dependency addresses that this set of modules depends on.
         dependencies: Vec<ObjectID>,

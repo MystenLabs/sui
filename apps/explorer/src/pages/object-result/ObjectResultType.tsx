@@ -33,6 +33,7 @@ export type DataType = {
         tx_digest?: string;
     };
     loadState?: string;
+    display?: Record<string, string>;
 };
 
 export function instanceOfDataType(object: any): object is DataType {
@@ -56,6 +57,11 @@ export function translate(o: SuiObjectResponse): DataType {
                     contents: getObjectFields(o) ?? getMovePackageContent(o)!,
                     tx_digest: getObjectPreviousTransactionDigest(o),
                 },
+                display:
+                    (typeof o.details === 'object' &&
+                        'display' in o.details &&
+                        o.details.display) ||
+                    undefined,
             };
         }
         case 'NotExists': {

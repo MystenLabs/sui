@@ -65,7 +65,7 @@ function TxTableHeader({ label }: { label: string }) {
     return <div className="pl-3">{label}</div>;
 }
 
-function TxTableCol({
+export function TxTableCol({
     isHighlightedOnHover,
     isFirstCol,
     children,

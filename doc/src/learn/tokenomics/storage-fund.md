@@ -6,7 +6,7 @@ Sui includes an efficient and sustainable economic mechanism for financing data 
 
 Financially, on-chain data storage introduces a severe inter-temporal challenge: validators who process and write data into storage today may differ from the future validators needing to store that data. If users were to pay fees for computation power only at write, effectively, future users would need to subsidize past users for their storage and pay disproportionately high fees. This negative network externality can become highly taxing for Sui in the future if left unaddressed.
 
-Sui’s economic design includes a storage fund that redistributes storage fees from past transactions to future validators. When users transact on Sui, they pay fees upfront for both computation and storage. The storage fees are deposited into a storage fund used to adjust the share of future stake rewards distributed to validators relative to SUI delegators. This design is intended to provide future Sui validators with viable business models.
+Sui’s economic design includes a storage fund that redistributes storage fees from past transactions to future validators. When users transact on Sui, they pay fees upfront for both computation and storage. The storage fees are deposited into a storage fund used to adjust the share of future stake rewards distributed to validators relative to the users that stake SUI with them. This design is intended to provide future Sui validators with viable business models.
 
 ## Storage fund rewards
 

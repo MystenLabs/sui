@@ -5,7 +5,6 @@ import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
 const TXN_PER_PAGE = 20;
-const TRUNCATE_LENGTH = 45;
 
 function Transactions() {
     return (
@@ -18,7 +17,6 @@ function Transactions() {
                 <LatestTxCard
                     txPerPage={TXN_PER_PAGE}
                     paginationtype="pagination"
-                    truncateLength={TRUNCATE_LENGTH}
                 />
             </ErrorBoundary>
         </div>

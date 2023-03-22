@@ -98,6 +98,16 @@ module sui::balance {
         ensures result.value == value;
     }
 
+    /// Withdraw all balance. After this the remaining balance must be 0.
+    public fun withdraw_all<T>(self: &mut Balance<T>): Balance<T> {
+        let value = self.value;
+        split(self, value)
+    }
+
+    spec withdraw_all {
+        ensures self.value == 0;
+    }
+
     /// Destroy a zero `Balance`.
     public fun destroy_zero<T>(balance: Balance<T>) {
         assert!(balance.value == 0, ENonZero);

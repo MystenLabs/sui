@@ -2399,7 +2399,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create an unsigned transaction to publish Move module.",
+      "description": "Create an unsigned transaction to publish a Move package.",
       "params": [
         {
           "name": "sender",
@@ -2411,7 +2411,7 @@
         },
         {
           "name": "compiled_modules",
-          "description": "the compiled bytes of a move module, the",
+          "description": "the compiled bytes of a Move package",
           "required": true,
           "schema": {
             "type": "array",
@@ -6170,18 +6170,25 @@
           "epoch",
           "epochDurationMs",
           "epochStartTimestampMs",
-          "governanceStartEpoch",
           "inactivePoolsId",
           "inactivePoolsSize",
+          "maxValidatorCount",
+          "minValidatorJoiningStake",
           "pendingActiveValidatorsId",
           "pendingActiveValidatorsSize",
           "pendingRemovals",
           "protocolVersion",
           "referenceGasPrice",
           "safeMode",
+          "safeModeComputationRewards",
+          "safeModeStorageRebates",
+          "safeModeStorageRewards",
           "stakeSubsidyBalance",
-          "stakeSubsidyCurrentEpochAmount",
-          "stakeSubsidyEpochCounter",
+          "stakeSubsidyCurrentDistributionAmount",
+          "stakeSubsidyDecreaseRate",
+          "stakeSubsidyDistributionCounter",
+          "stakeSubsidyPeriodLength",
+          "stakeSubsidyStartEpoch",
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
           "storageFund",
@@ -6189,7 +6196,10 @@
           "totalStake",
           "validatorCandidatesId",
           "validatorCandidatesSize",
-          "validatorReportRecords"
+          "validatorLowStakeGracePeriod",
+          "validatorLowStakeThreshold",
+          "validatorReportRecords",
+          "validatorVeryLowStakeThreshold"
         ],
         "properties": {
           "activeValidators": {
@@ -6236,12 +6246,6 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "governanceStartEpoch": {
-            "description": "The starting epoch in which various on-chain governance features take effect.",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          },
           "inactivePoolsId": {
             "description": "ID of the object that maps from a staking pool ID to the inactive validator that has that pool as its staking pool.",
             "allOf": [
@@ -6252,6 +6256,18 @@
           },
           "inactivePoolsSize": {
             "description": "Number of inactive staking pools.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "maxValidatorCount": {
+            "description": "Maximum number of active validators at any moment. We do not allow the number of validators in any epoch to go above this.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "minValidatorJoiningStake": {
+            "description": "Lower-bound on the amount of stake required to become a validator.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6295,20 +6311,56 @@
             "description": "Whether the system is running in a downgraded safe mode due to a non-recoverable bug. This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode. It can be reset once we are able to successfully execute advance_epoch.",
             "type": "boolean"
           },
+          "safeModeComputationRewards": {
+            "description": "Amount of computation rewards accumulated (and not yet distributed) during safe mode.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "safeModeStorageRebates": {
+            "description": "Amount of storage rebates accumulated (and not yet burned) during safe mode.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "safeModeStorageRewards": {
+            "description": "Amount of storage rewards accumulated (and not yet distributed) during safe mode.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "stakeSubsidyBalance": {
             "description": "Balance of SUI set aside for stake subsidies that will be drawn down over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stakeSubsidyCurrentEpochAmount": {
+          "stakeSubsidyCurrentDistributionAmount": {
             "description": "The amount of stake subsidy to be drawn down per epoch. This amount decays and decreases over time.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "stakeSubsidyEpochCounter": {
+          "stakeSubsidyDecreaseRate": {
+            "description": "The rate at which the distribution amount decays at the end of each period. Expressed in basis points.",
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "stakeSubsidyDistributionCounter": {
             "description": "This counter may be different from the current epoch number if in some epochs we decide to skip the subsidy.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stakeSubsidyPeriodLength": {
+            "description": "Number of distributions to occur before the distribution amount decays.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "stakeSubsidyStartEpoch": {
+            "description": "The starting epoch in which stake subsidies start being paid out",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -6359,6 +6411,18 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "validatorLowStakeGracePeriod": {
+            "description": "A validator can have stake below `validator_low_stake_threshold` for this many epochs before being kicked out.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "validatorLowStakeThreshold": {
+            "description": "Validators with stake amount below `validator_low_stake_threshold` are considered to have low stake and will be escorted out of the validator set after being below this threshold for more than `validator_low_stake_grace_period` number of epochs.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "validatorReportRecords": {
             "description": "A map storing the records of validator reporting each other.",
             "type": "array",
@@ -6378,6 +6442,12 @@
               "maxItems": 2,
               "minItems": 2
             }
+          },
+          "validatorVeryLowStakeThreshold": {
+            "description": "Validators with stake below `validator_very_low_stake_threshold` will be removed immediately at epoch change, no grace period.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           }
         }
       },
