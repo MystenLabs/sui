@@ -1,26 +1,25 @@
+use crate::client::LocalNarwhalClient;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::WorkerEndpointMetrics;
 use crate::TransactionValidator;
 use async_trait::async_trait;
+use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::server::Server;
 use mysten_network::Multiaddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use tonic::{Request, Response, Status};
 use tracing::{error, info, warn};
-use types::error::DagError;
 use types::metered_channel::Sender;
 use types::{
     ConditionalBroadcastReceiver, Empty, Transaction, TransactionProto, Transactions,
     TransactionsServer, TxResponse,
 };
-
-/// The maximum allowed size of transactions into Narwhal.
-pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
 
 pub struct TxServer<V: TransactionValidator> {
     address: Multiaddr,
@@ -57,9 +56,13 @@ impl<V: TransactionValidator> TxServer<V> {
         const RETRY_BACKOFF: Duration = Duration::from_millis(1_000);
         const GRACEFUL_SHUTDOWN_DURATION: Duration = Duration::from_millis(2_000);
 
+        //create and initialize local client
+        let local_client = LocalNarwhalClient::new(self.tx_batch_maker.clone());
+        LocalNarwhalClient::set(local_client.clone());
+
         // create the handler
         let tx_handler = TxReceiverHandler {
-            tx_batch_maker: self.tx_batch_maker,
+            local_client,
             validator: self.validator,
         };
 
@@ -127,7 +130,7 @@ impl<V: TransactionValidator> TxServer<V> {
 /// Defines how the network receiver handles incoming transactions.
 #[derive(Clone)]
 pub(crate) struct TxReceiverHandler<V> {
-    pub(crate) tx_batch_maker: Sender<(Transaction, TxResponse)>,
+    pub(crate) local_client: Arc<LocalNarwhalClient>,
     pub(crate) validator: V,
 }
 
@@ -137,29 +140,15 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
         &self,
         request: Request<TransactionProto>,
     ) -> Result<Response<Empty>, Status> {
-        let message = request.into_inner().transaction;
-        if message.len() > MAX_ALLOWED_TRANSACTION_SIZE {
-            return Err(Status::resource_exhausted(format!(
-                "Transaction size is too large: {} > {}",
-                message.len(),
-                MAX_ALLOWED_TRANSACTION_SIZE
-            )));
-        }
-        if self.validator.validate(message.as_ref()).is_err() {
+        let transaction = request.into_inner().transaction;
+        if self.validator.validate(transaction.as_ref()).is_err() {
             return Err(Status::invalid_argument("Invalid transaction"));
         }
-        // Send the transaction to the batch maker.
-        let (notifier, when_done) = tokio::sync::oneshot::channel();
-        self.tx_batch_maker
-            .send((message.to_vec(), notifier))
+        // Send the transaction to Narwhal via the local client.
+        self.local_client
+            .submit_transaction(transaction.to_vec())
             .await
-            .map_err(|_| DagError::ShuttingDown)
-            .map_err(|e| Status::not_found(e.to_string()))?;
-
-        let _digest = when_done
-            .await
-            .map_err(|_| Status::internal("Failed to propagate transaction for proposal"))?;
-
+            .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(Empty {}))
     }
 
@@ -168,7 +157,7 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
         request: Request<tonic::Streaming<types::TransactionProto>>,
     ) -> Result<Response<types::Empty>, Status> {
         let mut transactions = request.into_inner();
-        let mut responses = Vec::new();
+        let mut reqeusts = FuturesUnordered::new();
 
         while let Some(Ok(txn)) = transactions.next().await {
             if let Err(err) = self.validator.validate(txn.transaction.as_ref()) {
@@ -177,25 +166,21 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
                     "Stream contains an invalid transaction {err}"
                 )));
             }
-            // Send the transaction to the batch maker.
-            let (notifier, when_done) = tokio::sync::oneshot::channel();
-            self.tx_batch_maker
-                .send((txn.transaction.to_vec(), notifier))
-                .await
-                .expect("Failed to send transaction");
-
+            // Send the transaction to Narwhal via the local client.
             // Note that here we do not wait for a response because this would
             // mean that we process only a single message from this stream at a
             // time. Instead we gather them and resolve them once the stream is over.
-            responses.push(when_done);
+            reqeusts.push(
+                self.local_client
+                    .submit_transaction(txn.transaction.to_vec()),
+            );
         }
 
-        // TODO: activate when we provide a meaningful guarantee, and
-        // distingush between a digest being returned vs the channel closing
-        // suggesting an error.
-        // for response in responses {
-        //     let _digest = response.await;
-        // }
+        while let Some(result) = reqeusts.next().await {
+            if let Err(e) = result {
+                return Err(Status::internal(e.to_string()));
+            }
+        }
 
         Ok(Response::new(Empty {}))
     }

@@ -369,6 +369,8 @@ pub enum SuiError {
     FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
+    #[error("Failed to submit transaction to consensus: {0}")]
+    FailedToSubmitToConsensus(String),
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
     #[error("Failed to hear back from consensus: {0}")]

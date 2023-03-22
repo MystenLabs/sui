@@ -5,7 +5,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
-use narwhal_types::TransactionsClient;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
@@ -26,7 +25,7 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
+use crate::consensus_adapter::{ConnectionMonitorStatusForTests, LazyNarwhalClient};
 use crate::{
     authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -77,15 +76,10 @@ impl AuthorityServer {
     pub fn new_for_test(
         address: Multiaddr,
         state: Arc<AuthorityState>,
-        consensus_address: Multiaddr,
+        _consensus_address: Multiaddr,
     ) -> Self {
-        let consensus_client = Box::new(TransactionsClient::new(
-            mysten_network::client::connect_lazy(&consensus_address)
-                .expect("Failed to connect to consensus"),
-        ));
-
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            consensus_client,
+            Box::new(LazyNarwhalClient {}),
             state.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             100_000,

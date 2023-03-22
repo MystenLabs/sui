@@ -9,6 +9,7 @@ use futures::future::{select, Either};
 use futures::FutureExt;
 use itertools::Itertools;
 use narwhal_types::{TransactionProto, TransactionsClient};
+use narwhal_worker::LocalNarwhalClient;
 use parking_lot::{Mutex, RwLockReadGuard};
 use prometheus::IntGauge;
 use prometheus::Registry;
@@ -36,7 +37,7 @@ use sui_types::{
 use tap::prelude::*;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
-use tokio::time;
+use tokio::time::{self, sleep};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
@@ -176,6 +177,47 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
             .submit_transaction(TransactionProto { transaction: bytes })
             .await
             .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+            .tap_err(|r| {
+                // Will be logged by caller as well.
+                warn!("Submit transaction failed with: {:?}", r);
+            })?;
+        Ok(())
+    }
+}
+
+/// A Narwhal client that instantiates lazily into LocalNarwhalClient.
+pub struct LazyNarwhalClient {}
+
+impl LazyNarwhalClient {
+    async fn get() -> Arc<LocalNarwhalClient> {
+        loop {
+            match LocalNarwhalClient::get() {
+                Some(c) => return c,
+                None => {
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+            };
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl SubmitToConsensus for LazyNarwhalClient {
+    async fn submit_to_consensus(
+        &self,
+        transaction: &ConsensusTransaction,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult {
+        let transaction =
+            bcs::to_bytes(transaction).expect("Serializing consensus transaction cannot fail");
+        // The retrieved LocalNarwhalClient can be from the past epoch. Submit would fail after
+        // Narwhal shuts down, so there should be no correctness issue.
+        let client = Self::get().await;
+        client
+            .submit_transaction(transaction)
+            .await
+            .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
             .tap_err(|r| {
                 // Will be logged by caller as well.
                 warn!("Submit transaction failed with: {:?}", r);
