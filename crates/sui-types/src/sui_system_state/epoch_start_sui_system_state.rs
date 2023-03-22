@@ -3,6 +3,7 @@
 
 use enum_dispatch::enum_dispatch;
 use std::collections::{BTreeMap, HashMap};
+use tracing::warn;
 
 use crate::base_types::{AuthorityName, EpochId, SuiAddress};
 use crate::committee::{Committee, StakeUnit};
@@ -160,11 +161,22 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         self.active_validators
             .iter()
             .filter(|validator| validator.authority_name() != excluding_self)
-            .map(|validator| PeerInfo {
-                peer_id: PeerId(validator.narwhal_network_pubkey.0.to_bytes()),
-                affinity: PeerAffinity::High,
-                address: vec![multiaddr_to_anemo_address(&validator.p2p_address)
-                    .expect("p2p address must be valid anemo address and verified on-chain")],
+            .map(|validator| {
+                let address = multiaddr_to_anemo_address(&validator.p2p_address)
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                let peer_id = PeerId(validator.narwhal_network_pubkey.0.to_bytes());
+                if address.is_empty() {
+                    warn!(
+                        ?peer_id,
+                        "Peer has invalid p2p address: {}", &validator.p2p_address
+                    );
+                }
+                PeerInfo {
+                    peer_id,
+                    affinity: PeerAffinity::High,
+                    address,
+                }
             })
             .collect()
     }
