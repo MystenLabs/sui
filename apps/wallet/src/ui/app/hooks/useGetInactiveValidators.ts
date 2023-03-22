@@ -7,8 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { notEmpty } from '_helpers';
 
-// Get invalid validators by inactivePoolsIds
-// get system state summary
+// Get inActive validators by inactivePoolsIds
 export function useGetInactiveValidators(inactivePoolsId?: ObjectId) {
     const rpc = useRpcClient();
     const data = useQuery(
