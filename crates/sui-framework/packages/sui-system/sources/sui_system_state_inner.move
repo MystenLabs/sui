@@ -26,6 +26,7 @@ module sui_system::sui_system_state_inner {
     use sui::bag::Bag;
     use sui::bag;
 
+    friend sui_system::genesis;
     friend sui_system::sui_system;
 
     #[test_only]
@@ -148,24 +149,11 @@ module sui_system::sui_system_state_inner {
     /// This function will be called only once in genesis.
     public(friend) fun create(
         validators: vector<Validator>,
-        stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
         epoch_start_timestamp_ms: u64,
-        epoch_duration_ms: u64,
-
-        // Stake Subsidy parameters
-        stake_subsidy_start_epoch: u64,
-        stake_subsidy_initial_distribution_amount: u64,
-        stake_subsidy_period_length: u64,
-        stake_subsidy_decrease_rate: u16,
-
-        // Validator committee parameters
-        max_validator_count: u64,
-        min_validator_joining_stake: u64,
-        validator_low_stake_threshold: u64,
-        validator_very_low_stake_threshold: u64,
-        validator_low_stake_grace_period: u64,
+        parameters: SystemParameters,
+        stake_subsidy: StakeSubsidy,
         ctx: &mut TxContext,
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
@@ -176,30 +164,39 @@ module sui_system::sui_system_state_inner {
             system_state_version: SYSTEM_STATE_VERSION_V1,
             validators,
             storage_fund,
-            parameters: SystemParameters {
-                epoch_duration_ms,
-                stake_subsidy_start_epoch,
-                max_validator_count,
-                min_validator_joining_stake,
-                validator_low_stake_threshold,
-                validator_very_low_stake_threshold,
-                validator_low_stake_grace_period,
-                extra_fields: bag::new(ctx),
-            },
+            parameters,
             reference_gas_price,
             validator_report_records: vec_map::empty(),
-            stake_subsidy: stake_subsidy::create(
-                stake_subsidy_fund,
-                stake_subsidy_initial_distribution_amount,
-                stake_subsidy_period_length,
-                stake_subsidy_decrease_rate,
-                ctx
-            ),
+            stake_subsidy,
             safe_mode: false,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),
         };
         system_state
+    }
+
+    public(friend) fun create_system_parameters(
+        epoch_duration_ms: u64,
+        stake_subsidy_start_epoch: u64,
+
+        // Validator committee parameters
+        max_validator_count: u64,
+        min_validator_joining_stake: u64,
+        validator_low_stake_threshold: u64,
+        validator_very_low_stake_threshold: u64,
+        validator_low_stake_grace_period: u64,
+        ctx: &mut TxContext,
+    ): SystemParameters {
+        SystemParameters {
+            epoch_duration_ms,
+            stake_subsidy_start_epoch,
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
+            extra_fields: bag::new(ctx),
+        }
     }
 
     // ==== public(friend) functions ====

@@ -13,6 +13,8 @@ module sui_system::governance_test_utils {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::{Self, Validator};
     use sui_system::sui_system::{Self, SuiSystemState};
+    use sui_system::sui_system_state_inner;
+    use sui_system::stake_subsidy;
     use sui::test_scenario::{Self, Scenario};
     use sui_system::validator_set;
     use std::option;
@@ -59,23 +61,34 @@ module sui_system::governance_test_utils {
     public fun create_sui_system_state_for_testing(
         validators: vector<Validator>, sui_supply_amount: u64, storage_fund_amount: u64, ctx: &mut TxContext
     ) {
-        sui_system::create(
-            object::new(ctx), // it doesn't matter what ID sui system state has in tests
-            validators,
-            balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
-            balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
-            1,   // protocol version
-            0,   // epoch_start_timestamp_ms
+        let system_parameters = sui_system_state_inner::create_system_parameters(
             42,  // epoch_duration_ms, doesn't matter what number we put here
             0,   // stake_subsidy_start_epoch
-            0,   // stake subsidy initial distribution amount
-            10,  // stake_subsidy_period_length
-            0,   // stake_subsidy_decrease_rate
+
             150, // max_validator_count
             1,   // min_validator_joining_stake
             1,   // validator_low_stake_threshold
             0,   // validator_very_low_stake_threshold
             7,   // validator_low_stake_grace_period
+            ctx,
+        );
+
+        let stake_subsidy = stake_subsidy::create(
+            balance::create_for_testing<SUI>(sui_supply_amount), // sui_supply
+            0,   // stake subsidy initial distribution amount
+            10,  // stake_subsidy_period_length
+            0,   // stake_subsidy_decrease_rate
+            ctx,
+        );
+
+        sui_system::create(
+            object::new(ctx), // it doesn't matter what ID sui system state has in tests
+            validators,
+            balance::create_for_testing<SUI>(storage_fund_amount), // storage_fund
+            1,   // protocol version
+            0,   // chain_start_timestamp_ms
+            system_parameters,
+            stake_subsidy,
             ctx,
         )
     }
