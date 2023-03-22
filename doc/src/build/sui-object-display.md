@@ -175,7 +175,7 @@ id: UID }
 ## Typical objects with data duplication 
 
 A common case with in-game items is to have a large number of similar objects grouped by some criteria. It is important to optimize their size and the cost to mint and update them. Typically, a game uses a single source image or URL per group or item criteria. Storing the source image inside of every object is not optimal. 
-In some cases, in-game items are minted by users when a game allows them or when they purchase an in-game item. To enable this, some IPFS/Arweave metadata must be created and stored in advance. This requires additional logic that is usually not related to the in-game properties of the item.
+In some cases, users mint in-game items when a game allows them or when they purchase an in-game item. To enable this, some IPFS/Arweave metadata must be created and stored in advance. This requires additional logic that is usually not related to the in-game properties of the item.
 
 The following example demonstrates how to create a Capy:
 
