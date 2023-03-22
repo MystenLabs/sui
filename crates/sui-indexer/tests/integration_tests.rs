@@ -207,7 +207,7 @@ pub mod pg_integration_test {
         wait_until_next_checkpoint(&store).await;
         let (tx_response, sender, recipient, gas_objects) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
-        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+            wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
         let (_, _, nft_digest) = create_devnet_nft(&mut test_cluster.wallet).await.unwrap();
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
 
@@ -783,9 +783,10 @@ pub mod pg_integration_test {
         let full_transaction_response = indexer_rpc_client
             .get_transaction_with_options(
                 tx_response.digest,
-                Some(SuiTransactionResponseOptions::full_content()),
+                Some(SuiTransactionResponseOptions::full_content())
             )
             .await?;
+        let transaction_required_fields = SuiTransactionResponse::new(full_transaction_response.clone().digest);
         let sui_transaction_response_options = vec![
             SuiTransactionResponseOptions::new().with_input(),
             SuiTransactionResponseOptions::new().with_raw_input(),
@@ -801,44 +802,24 @@ pub mod pg_integration_test {
         let futures = sui_transaction_response_options
             .into_iter()
             .map(|option| {
-                indexer_rpc_client.get_transaction_with_options(tx_response.digest, Some(option))
-            })
-            .collect::<Vec<_>>();
+            indexer_rpc_client.get_transaction_with_options(tx_response.digest, Some(option))
+        }).collect::<Vec<_>>();
         let received_transaction_results: Vec<SuiTransactionResponse> = join_all(futures)
-            .await
-            .into_iter()
-            .collect::<Result<_, _>>()
-            .unwrap();
+                .await
+                .into_iter()
+                .collect::<Result<_, _>>()
+                .unwrap();
 
         let expected_transaction_results = vec![
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_input()
-                .build(),
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_raw_input()
-                .build(),
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_effects()
-                .build(),
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_events()
-                .build(),
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_balance_changes()
-                .build(),
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_object_changes()
-                .build(),
-            SuiTransactionResponseBuilder::new(&full_transaction_response)
-                .with_input()
-                .with_balance_changes()
-                .with_object_changes()
-                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_transaction().build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_raw_transaction().build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_effects().build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_events().build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_balance_changes().build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_object_changes().build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response, &transaction_required_fields).with_all().build(),
         ];
-        for (received, expected) in received_transaction_results
-            .iter()
-            .zip(expected_transaction_results.iter())
-        {
+        for (received, expected) in received_transaction_results.iter().zip(expected_transaction_results.iter()) {
             assert_eq!(received, expected);
         }
         Ok(())
