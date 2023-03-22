@@ -271,10 +271,10 @@ impl SignatureVerifier {
 }
 
 pub struct VerifiedDigestCacheMetrics {
-    certificate_signatures_cache_hits: IntCounter,
-    certificate_signatures_cache_evictions: IntCounter,
-    signed_data_cache_hits: IntCounter,
-    signed_data_cache_evictions: IntCounter,
+    pub certificate_signatures_cache_hits: IntCounter,
+    pub certificate_signatures_cache_evictions: IntCounter,
+    pub signed_data_cache_hits: IntCounter,
+    pub signed_data_cache_evictions: IntCounter,
     timeouts: IntCounter,
     full_batches: IntCounter,
     partial_batches: IntCounter,
