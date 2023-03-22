@@ -98,7 +98,7 @@ mod test {
     use super::{action, config, done, error, header, newline, warn};
 
     #[tokio::test]
-    #[ignore = "This test is simply used to manually check if prints work correctly"]
+    #[ignore = "only used to manually check if prints work correctly"]
     async fn display() {
         header("This is a header");
         config("This is a config", 2);

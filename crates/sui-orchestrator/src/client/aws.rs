@@ -195,8 +195,7 @@ impl AwsClient {
             .settings
             .regions
             .first()
-            .map(|x| self.clients.get(x))
-            .flatten()
+            .and_then(|x| self.clients.get(x))
         {
             Some(client) => client,
             None => return Ok(false),
@@ -210,15 +209,15 @@ impl AwsClient {
         // Send the request.
         let response = request.send().await?;
 
-        // Return true of the response contains references to NVMe drives.
-        if let Some(info) = response.instance_types().map(|x| x.first()).flatten() {
+        // Return true if the response contains references to NVMe drives.
+        if let Some(info) = response.instance_types().and_then(|x| x.first()) {
             if let Some(info) = info.instance_storage_info() {
                 if info.nvme_support() == Some(&EphemeralNvmeSupport::Required) {
                     return Ok(true);
                 }
             }
         }
-        return Ok(false);
+        Ok(false)
     }
 }
 
