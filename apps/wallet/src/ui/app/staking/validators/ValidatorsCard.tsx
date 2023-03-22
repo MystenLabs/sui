@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { Plus12 } from '@mysten/icons';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -18,10 +19,8 @@ import BottomMenuLayout, {
 import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { FEATURES } from '_src/shared/experimentation/features';
-import { Plus12 } from '@mysten/icons';
 
 export function ValidatorsCard() {
     const accountAddress = useActiveAddress();

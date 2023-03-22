@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCoinDecimals } from '@mysten/core';
+import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
@@ -42,7 +43,6 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
 
 import type { FormikHelpers } from 'formik';
-import { ArrowLeft16 } from '@mysten/icons';
 
 const initialValues = {
     amount: '',

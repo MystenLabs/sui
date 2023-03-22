@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight16 } from '@mysten/icons';
 import { Formik, Form, Field } from 'formik';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,7 +15,6 @@ import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
 import { ToS_LINK } from '_shared/constants';
-import { ArrowRight16 } from '@mysten/icons';
 
 const CreatePage = () => {
     const dispatch = useAppDispatch();
