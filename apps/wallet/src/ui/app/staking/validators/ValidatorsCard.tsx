@@ -10,11 +10,11 @@ import { StakeAmount } from '../home/StakeAmount';
 import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Menu,
     Content,
 } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
@@ -140,18 +140,18 @@ export function ValidatorsCard() {
                 </Content>
                 <Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
                     <Button
-                        size="large"
-                        mode="neutral"
+                        size="tall"
+                        variant="secondary"
                         href="new"
                         disabled={!stakingEnabled}
-                        className="!text-steel-darker w-full"
-                    >
-                        <Icon
-                            icon={SuiIcons.Plus}
-                            className="text-body text-gray-65 font-normal"
-                        />
-                        Stake SUI
-                    </Button>
+                        before={
+                            <Icon
+                                icon={SuiIcons.Plus}
+                                className="text-body text-gray-65 font-normal"
+                            />
+                        }
+                        text="Stake SUI"
+                    />
                 </Menu>
             </BottomMenuLayout>
         </div>
