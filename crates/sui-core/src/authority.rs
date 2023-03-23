@@ -424,8 +424,8 @@ impl AuthorityMetrics {
             consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
                 .unwrap(),
             consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
-                "consensus_handler_num_low_scoring_authorities", 
-                "Number of low scoring authorities based on reputation scores from consensus", 
+                "consensus_handler_num_low_scoring_authorities",
+                "Number of low scoring authorities based on reputation scores from consensus",
                 registry
             ).unwrap(),
             consensus_handler_scores: register_int_gauge_vec_with_registry!(
@@ -2964,11 +2964,15 @@ impl AuthorityState {
 
     /// Get the set of system packages that are compiled in to this build, if those packages are
     /// compatible with the current versions of those packages on-chain.
-    pub async fn get_available_system_packages(&self) -> Vec<ObjectRef> {
+    pub async fn get_available_system_packages(
+        &self,
+        max_binary_format_version: u32,
+    ) -> Vec<ObjectRef> {
         let Some(move_stdlib) = self.compare_system_package(
             MoveStdlib::ID,
             MoveStdlib::as_modules(),
             MoveStdlib::transitive_dependencies(),
+            max_binary_format_version,
         ).await else {
             return vec![];
         };
@@ -2977,6 +2981,7 @@ impl AuthorityState {
             SuiFramework::ID,
             SuiFramework::as_modules(),
             SuiFramework::transitive_dependencies(),
+            max_binary_format_version,
         ).await else {
             return vec![];
         };
@@ -2985,6 +2990,7 @@ impl AuthorityState {
             SuiSystem::ID,
             sui_system_injection::get_modules(self.name),
             SuiSystem::transitive_dependencies(),
+            max_binary_format_version,
         ).await else {
             return vec![];
         };
@@ -3008,6 +3014,7 @@ impl AuthorityState {
         id: ObjectID,
         modules: Vec<CompiledModule>,
         dependencies: Vec<ObjectID>,
+        max_binary_format_version: u32,
     ) -> Option<ObjectRef> {
         let cur_object = match self.get_object(&id).await {
             Ok(Some(cur_object)) => cur_object,
@@ -3056,8 +3063,14 @@ impl AuthorityState {
             .try_as_package_mut()
             .expect("Created as package");
 
-        let cur_normalized = cur_pkg.normalize().expect("Normalize existing package");
-        let mut new_normalized = new_pkg.normalize().ok()?;
+        let cur_normalized = match cur_pkg.normalize(max_binary_format_version) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Could not normalize existing package: {e:?}");
+                return None;
+            }
+        };
+        let mut new_normalized = new_pkg.normalize(max_binary_format_version).ok()?;
 
         for (name, cur_module) in cur_normalized {
             let Some(new_module) = new_normalized.remove(&name) else {
@@ -3090,6 +3103,7 @@ impl AuthorityState {
     async fn get_system_package_bytes(
         &self,
         system_packages: Vec<ObjectRef>,
+        move_binary_format_version: u32,
     ) -> Option<Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>> {
         let ids: Vec<_> = system_packages.iter().map(|(id, _, _)| *id).collect();
         let objects = self.get_objects(&ids).await.expect("read cannot fail");
@@ -3125,7 +3139,10 @@ impl AuthorityState {
             let new_object = Object::new_system_package(
                 bytes
                     .iter()
-                    .map(|m| CompiledModule::deserialize(m).unwrap())
+                    .map(|m| {
+                        CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
+                            .unwrap()
+                    })
                     .collect(),
                 system_package.1,
                 dependencies.clone(),
@@ -3263,8 +3280,10 @@ impl AuthorityState {
                 buffer_stake_bps,
             );
 
+        // since system packages are created during the current epoch, they should abide by the
+        // rules of the current epoch, including the current epoch's max Move binary format version
         let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
-            next_epoch_system_packages.clone()
+            next_epoch_system_packages.clone(), epoch_store.protocol_config().move_binary_format_version()
         ).await else {
             error!(
                 "upgraded system packages {:?} are not locally available, cannot create \

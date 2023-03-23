@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::{anyhow, bail, ensure, Ok};
-use move_binary_format::file_format::SignatureToken;
+use move_binary_format::{file_format::SignatureToken, file_format_common::VERSION_MAX};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use std::result::Result;
@@ -436,7 +436,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        let compiled_module = package.deserialize_module(module)?;
+        let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
 
         // TODO set the Mode from outside?
         resolve_and_type_check::<Mode>(

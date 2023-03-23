@@ -8,69 +8,67 @@ on:
     - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
-  # Disable incremental compilation.
-  #
-  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
-  # as it lets the compiler avoid recompiling code that hasn't changed. However,
-  # on CI, we're not making small edits; we're almost always building the entire
-  # project from scratch. Thus, incremental compilation on CI actually
-  # introduces *additional* overhead to support making future builds
-  # faster...but no future builds will ever occur in any given CI environment.
-  #
-  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
-  # for details.
-  CARGO_INCREMENTAL: 0
-  # Allow more retries for network requests in cargo (downloading crates) and
-  # rustup (installing toolchains). This should help to reduce flaky CI failures
-  # from transient network timeouts or other issues.
-  CARGO_NET_RETRY: 10
-  RUSTUP_MAX_RETRIES: 10
-  # Don't emit giant backtraces in the CI logs.
-  RUST_BACKTRACE: short
-
 jobs:
   simtest:
     timeout-minutes: 120
-    runs-on: [ self-hosted, simtest-01 ]
-    env:
-      RUST_LOG: off
-      # Runs tests much faster - disables signing and verification
-      USE_MOCK_CRYPTO: 1
-      CARGO_TERM_COLOR: always
-      NUM_CPUS: 24
+    permissions:
+      # The "id-token: write" permission is required or Machine ID will not be
+      # able to authenticate with the cluster.
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Environment clean
-      run: |
-        cd ~/sui && cargo clean && git restore Cargo.lock
-        sudo rm -rf /tmp/*.*
+      - name: Install Teleport
+        uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
+        with:
+          version: 11.3.1
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@6e73aa03a98e781ca6692817fbb6e554640a56b3 # pin@v1
+        with:
+          # Specify the publically accessible address of your Teleport proxy.
+          proxy: proxy.mysten-int.com:443
+          # Specify the name of the join token for your bot.
+          token: sui-simtest-token
+          # Specify the length of time that the generated credentials should be
+          # valid for. This is optional and defaults to "1h"
+          certificate-ttl: 2h
 
-    - name: Tmpfs clean
-      run: |
-        sudo rm -rf /tmp/*.*
+      # Cargo clean and git restore on any left over files from git checkout      
+      - name: Environment clean
+        run: | 
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+ 
+      # Deleting files in tmpfs that usually fill up pretty quickly after each run
+      - name: Tmpfs clean
+        run: |  
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*.*"
 
-    - name: Checkout sui repo
-      run: |
-        cd ~/sui && git fetch origin main && git rebase origin/main
+      # Checkout out the latest sui repo
+      - name: Checkout sui repo
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
 
-    - name: Install simtest
-      run: |
-        cd ~/sui && ./scripts/simtest/install.sh
+      # Setting up cargo and simtest
+      - name: Install simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
 
-    - name: Build simtest
-      run: |
-        cd ~/sui && ./scripts/simtest/cargo-simtest simtest build
-    
-    - name: Run simtest
-      run: |
-        cd ~/sui && ./scripts/simtest/simtest-run.sh
+      # Build simtest
+      - name: Build simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
 
+      # Run simulator tests
+      - name: Run simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && MSIM_TEST_NUM=30 RUSTUP_MAX_RETRIES=10 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=24 cd ~/sui && ./scripts/simtest/simtest-run.sh"
+  
   notify:
     name: Notify
     needs: [simtest]
-    runs-on: [self-hosted, simtest-01]
+    runs-on: ubuntu-latest
     if: always() # always notify
 
     steps:
@@ -129,7 +127,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder"
+                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
                 }
               }
             ]

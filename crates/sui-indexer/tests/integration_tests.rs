@@ -21,13 +21,13 @@ pub mod pg_integration_test {
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
-    use sui_indexer::test_utils::start_test_indexer;
+    use sui_indexer::test_utils::{start_test_indexer, SuiTransactionResponseBuilder};
     use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
     use sui_json_rpc::api::EventReadApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-        SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponse,
+        CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataOptions,
+        SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject, SuiTransactionResponse,
         SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -41,6 +41,8 @@ pub mod pg_integration_test {
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, transfer_coin};
+
+    const WAIT_UNTIL_TIME_LIMIT: u64 = 60;
 
     async fn get_owned_objects_for_address(
         indexer_rpc_client: &HttpClient,
@@ -682,18 +684,16 @@ pub mod pg_integration_test {
 
     #[tokio::test]
     async fn test_get_epoch() {
-        let (test_cluster, _, store, handle) = start_test_cluster(Some(20000)).await;
+        let (test_cluster, _, store, handle) = start_test_cluster(Some(10000)).await;
 
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
 
         let current_epoch = store.get_current_epoch().unwrap();
         let epoch_page = store.get_epochs(None, 100).unwrap();
-
         assert_eq!(0, current_epoch.epoch);
         assert!(current_epoch.end_of_epoch_info.is_none());
         assert_eq!(1, epoch_page.len());
-
         wait_until_next_epoch(&store).await;
 
         let current_epoch = store.get_current_epoch().unwrap();
@@ -705,6 +705,36 @@ pub mod pg_integration_test {
 
         let last_epoch = &epoch_page[0];
         assert!(last_epoch.end_of_epoch_info.is_some());
+
+        drop(handle);
+        drop(test_cluster);
+    }
+
+    #[tokio::test]
+    async fn test_get_last_checkpoint_of_epoch() {
+        let (test_cluster, _, store, handle) = start_test_cluster(Some(20000)).await;
+        // Allow indexer to sync geneis epoch
+        wait_until_next_checkpoint(&store).await;
+        wait_until_next_epoch(&store).await;
+        let current_epoch = store.get_current_epoch().unwrap();
+        let prev_epoch_last_checkpoint_id = current_epoch.first_checkpoint_id - 1;
+
+        let checkpoint = store
+            .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
+            .unwrap();
+        assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
+        assert_eq!(
+            checkpoint.sequence_number as u64,
+            prev_epoch_last_checkpoint_id
+        );
+        assert!(checkpoint.end_of_epoch_data.is_some());
+
+        let decoded_checkpoint: sui_json_rpc_types::Checkpoint = checkpoint.try_into().unwrap();
+        assert_eq!(decoded_checkpoint.epoch, current_epoch.epoch - 1);
+        assert_eq!(
+            decoded_checkpoint.sequence_number,
+            prev_epoch_last_checkpoint_id
+        );
 
         drop(handle);
         drop(test_cluster);
@@ -773,6 +803,79 @@ pub mod pg_integration_test {
         assert!(result.is_ok());
     }
 
+    #[tokio::test]
+    async fn test_get_transaction_with_options() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+        let (tx_response, _, _, _) =
+            execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let full_transaction_response = indexer_rpc_client
+            .get_transaction_with_options(
+                tx_response.digest,
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        let sui_transaction_response_options = vec![
+            SuiTransactionResponseOptions::new().with_input(),
+            SuiTransactionResponseOptions::new().with_raw_input(),
+            SuiTransactionResponseOptions::new().with_effects(),
+            SuiTransactionResponseOptions::new().with_events(),
+            SuiTransactionResponseOptions::new().with_balance_changes(),
+            SuiTransactionResponseOptions::new().with_object_changes(),
+            SuiTransactionResponseOptions::new()
+                .with_input()
+                .with_balance_changes()
+                .with_object_changes(),
+        ];
+        let futures = sui_transaction_response_options
+            .into_iter()
+            .map(|option| {
+                indexer_rpc_client.get_transaction_with_options(tx_response.digest, Some(option))
+            })
+            .collect::<Vec<_>>();
+        let received_transaction_results: Vec<SuiTransactionResponse> = join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<_, _>>()
+            .unwrap();
+
+        let expected_transaction_results = vec![
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_input()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_raw_input()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_effects()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_events()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_balance_changes()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_object_changes()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_input()
+                .with_balance_changes()
+                .with_object_changes()
+                .build(),
+        ];
+        for (i, (received, expected)) in received_transaction_results
+            .iter()
+            .zip(expected_transaction_results.iter())
+            .enumerate()
+        {
+            assert_eq!(received, expected, "Mismatch found at index {}", i);
+        }
+        Ok(())
+    }
+
     async fn start_test_cluster(
         epoch_duration_ms: Option<u64>,
     ) -> (
@@ -816,26 +919,41 @@ pub mod pg_integration_test {
     }
 
     async fn wait_until_next_checkpoint(store: &PgIndexerStore) {
+        let since = std::time::Instant::now();
         let mut cp = store.get_latest_checkpoint_sequence_number().unwrap();
         let target = cp + 1;
         while cp < target {
+            let now = std::time::Instant::now();
+            if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
+                panic!("wait_until_next_epoch timed out!");
+            }
             tokio::task::yield_now().await;
             cp = store.get_latest_checkpoint_sequence_number().unwrap();
         }
     }
 
     async fn wait_until_next_epoch(store: &PgIndexerStore) {
+        let since = std::time::Instant::now();
         let mut cp = store.get_current_epoch().unwrap().epoch;
         let target = cp + 1;
         while cp < target {
+            let now = std::time::Instant::now();
+            if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
+                panic!("wait_until_next_epoch timed out!");
+            }
             tokio::task::yield_now().await;
             cp = store.get_current_epoch().unwrap().epoch;
         }
     }
 
     async fn wait_until_transaction_synced(store: &PgIndexerStore, tx_digest: &str) {
+        let since = std::time::Instant::now();
         let mut tx = store.get_transaction_by_digest(tx_digest);
         while tx.is_err() {
+            let now = std::time::Instant::now();
+            if now.duration_since(since).as_secs() > WAIT_UNTIL_TIME_LIMIT {
+                panic!("wait_until_transaction_synced timed out!");
+            }
             tokio::task::yield_now().await;
             tx = store.get_transaction_by_digest(tx_digest);
         }

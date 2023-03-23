@@ -3,7 +3,7 @@
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
-use crate::types::SuiTransactionFullResponse;
+use crate::types::{SuiTransactionFullResponse, SuiTransactionFullResponseWithOptions};
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
@@ -47,14 +47,18 @@ impl<S: IndexerStore> ReadApi<S> {
     fn get_transaction_with_options_internal(
         &self,
         digest: &TransactionDigest,
-        _options: Option<SuiTransactionResponseOptions>,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
-        // TODO(chris): support options in indexer
-        let txn_full_resp: SuiTransactionFullResponse = self
+        let response: SuiTransactionFullResponse = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?
             .try_into()?;
-        Ok(txn_full_resp.into())
+        let sui_transaction_response = SuiTransactionFullResponseWithOptions {
+            response,
+            options: options.unwrap_or_default(),
+        }
+        .into();
+        Ok(sui_transaction_response)
     }
 
     fn multi_get_transactions_with_options_internal(

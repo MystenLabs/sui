@@ -17,6 +17,7 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
+use sui_core::consensus_adapter::SubmitToConsensus;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot::Sender;
@@ -875,18 +876,33 @@ impl SuiNode {
             if let Some(components) = &*self.validator_components.lock().await {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
+
+                let max_binary_format_version = cur_epoch_store
+                    .protocol_config()
+                    .move_binary_format_version();
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,
                         self.config
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
-                        self.state.get_available_system_packages().await,
+                        self.state
+                            .get_available_system_packages(max_binary_format_version)
+                            .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
-                components
+                if let Err(e) = components
                     .consensus_adapter
-                    .submit(transaction, None, &cur_epoch_store)?;
+                    .submit_to_consensus(&transaction, &cur_epoch_store)
+                    .await
+                {
+                    warn!(
+                        ?transaction,
+                        "failed to submit capabilities to consensus {e}"
+                    );
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                };
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
