@@ -171,6 +171,7 @@ pub struct AuthorityMetrics {
     total_cert_attempts: IntCounter,
     total_effects: IntCounter,
     pub shared_obj_tx: IntCounter,
+    sponsored_tx: IntCounter,
     tx_already_processed: IntCounter,
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
@@ -257,6 +258,14 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+
+            sponsored_tx: register_int_counter_with_registry!(
+                "num_sponsored_tx",
+                "Number of sponsored transactions",
+                registry,
+            )
+            .unwrap(),
+
             tx_already_processed: register_int_counter_with_registry!(
                 "num_tx_already_processed",
                 "Number of transaction orders already processed previously",
@@ -953,6 +962,10 @@ impl AuthorityState {
 
         if shared_object_count > 0 {
             self.metrics.shared_obj_tx.inc();
+        }
+
+        if certificate.is_sponsored_tx() {
+            self.metrics.sponsored_tx.inc();
         }
 
         self.metrics
