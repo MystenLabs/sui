@@ -9,7 +9,7 @@ use crate::committee::{Committee, StakeUnit};
 use crate::multiaddr::Multiaddr;
 use anemo::types::{PeerAffinity, PeerInfo};
 use anemo::PeerId;
-use narwhal_config::{Committee as NarwhalCommittee, WorkerCache, WorkerIndex};
+use narwhal_config::{Committee as NarwhalCommittee, CommitteeBuilder, WorkerCache, WorkerIndex};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
 use tracing::warn;
@@ -137,23 +137,18 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
 
     #[allow(clippy::mutable_key_type)]
     fn get_narwhal_committee(&self) -> NarwhalCommittee {
-        let narwhal_committee = self
-            .active_validators
-            .iter()
-            .map(|validator| {
-                let authority = narwhal_config::Authority {
-                    stake: validator.voting_power as narwhal_config::Stake,
-                    primary_address: validator.narwhal_primary_address.clone(),
-                    network_key: validator.narwhal_network_pubkey.clone(),
-                };
-                (validator.protocol_pubkey.clone(), authority)
-            })
-            .collect();
+        let mut committee_builder = CommitteeBuilder::new(self.epoch as narwhal_config::Epoch);
 
-        narwhal_config::Committee {
-            authorities: narwhal_committee,
-            epoch: self.epoch as narwhal_config::Epoch,
+        for validator in self.active_validators.iter() {
+            committee_builder = committee_builder.add_authority(
+                validator.protocol_pubkey.clone(),
+                validator.voting_power as narwhal_config::Stake,
+                validator.narwhal_primary_address.clone(),
+                validator.narwhal_network_pubkey.clone(),
+            );
         }
+
+        committee_builder.build()
     }
 
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo> {

@@ -12,7 +12,10 @@ use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
-use move_binary_format::normalized::{Module as NormalizedModule, Type};
+use move_binary_format::{
+    file_format_common::VERSION_MAX,
+    normalized::{Module as NormalizedModule, Type},
+};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -739,8 +742,15 @@ impl ReadApiServer for ReadApi {
 
         let normalized = match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
-                Data::Package(p) => normalize_modules(p.serialized_module_map().values())
-                    .map_err(|e| anyhow!("{e}")),
+                Data::Package(p) => {
+                    // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                    // binary format
+                    normalize_modules(
+                        p.serialized_module_map().values(),
+                        /* max_binary_format_version */ VERSION_MAX,
+                    )
+                    .map_err(|e| anyhow!("{e}"))
+                }
                 _ => Err(anyhow!("Object is not a package with ID {}", package)),
             },
             _ => Err(anyhow!("Package object does not exist with ID {}", package)),
@@ -896,7 +906,9 @@ async fn get_display_fields(
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> RpcResult<Option<BTreeMap<String, String>>> {
-    let (object_type, layout) = get_object_type_and_struct(original_object, original_layout)?;
+    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else{
+        return Ok(None)
+    };
     if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
         return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
     }
@@ -965,14 +977,13 @@ async fn get_display_object_id(
 fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
-) -> RpcResult<(StructTag, MoveStruct)> {
-    let object_type = o
-        .type_()
-        .ok_or_else(|| anyhow!("Failed to extract object type"))?
-        .clone()
-        .into();
-    let move_struct = get_move_struct(o, layout)?;
-    Ok((object_type, move_struct))
+) -> RpcResult<Option<(StructTag, MoveStruct)>> {
+    if let Some(object_type) = o.type_() {
+        let move_struct = get_move_struct(o, layout)?;
+        Ok(Some((object_type.clone().into(), move_struct)))
+    } else {
+        Ok(None)
+    }
 }
 
 fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> RpcResult<MoveStruct> {
@@ -1011,7 +1022,13 @@ pub async fn get_move_modules_by_package(
     Ok(match object_read {
         ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
             Data::Package(p) => {
-                normalize_modules(p.serialized_module_map().values()).map_err(|e| anyhow!("{e}"))
+                // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                // binary format
+                normalize_modules(
+                    p.serialized_module_map().values(),
+                    /* max_binary_format_version */ VERSION_MAX,
+                )
+                .map_err(|e| anyhow!("{e}"))
             }
             _ => Err(anyhow!("Object is not a package with ID {}", package)),
         },

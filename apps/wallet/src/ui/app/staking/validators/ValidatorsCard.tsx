@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { Plus12 } from '@mysten/icons';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -10,15 +11,14 @@ import { StakeAmount } from '../home/StakeAmount';
 import { StakeCard } from '../home/StakedCard';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Menu,
     Content,
 } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { FEATURES } from '_src/shared/experimentation/features';
 
@@ -140,18 +140,13 @@ export function ValidatorsCard() {
                 </Content>
                 <Menu stuckClass="staked-cta" className="w-full px-0 pb-0 mx-0">
                     <Button
-                        size="large"
-                        mode="neutral"
-                        href="new"
+                        size="tall"
+                        variant="secondary"
+                        to="new"
                         disabled={!stakingEnabled}
-                        className="!text-steel-darker w-full"
-                    >
-                        <Icon
-                            icon={SuiIcons.Plus}
-                            className="text-body text-gray-65 font-normal"
-                        />
-                        Stake SUI
-                    </Button>
+                        before={<Plus12 />}
+                        text="Stake SUI"
+                    />
                 </Menu>
             </BottomMenuLayout>
         </div>

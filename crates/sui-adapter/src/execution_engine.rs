@@ -494,7 +494,13 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
         let modules: Vec<_> = modules
             .into_iter()
-            .map(|m| CompiledModule::deserialize(&m).unwrap())
+            .map(|m| {
+                CompiledModule::deserialize_with_max_version(
+                    &m,
+                    protocol_config.move_binary_format_version(),
+                )
+                .unwrap()
+            })
             .collect();
 
         let mut new_package =

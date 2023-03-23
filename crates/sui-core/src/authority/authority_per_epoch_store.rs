@@ -35,7 +35,6 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper};
-use crate::batch_bls_verifier::*;
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
     PendingCheckpointInfo,
@@ -47,6 +46,7 @@ use crate::consensus_handler::{
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::module_cache_metrics::ResolverMetrics;
+use crate::signature_verifier::*;
 use crate::stake_aggregator::StakeAggregator;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_vm_runtime::move_vm::MoveVM;
@@ -116,10 +116,10 @@ pub struct AuthorityPerEpochStore {
     reconfig_state_mem: RwLock<ReconfigState>,
     consensus_notify_read: NotifyRead<SequencedConsensusTransactionKey, ()>,
 
-    /// Batch verifier for certificates - also caches certificates that are known to have
+    /// Batch verifier for certificates - also caches certificates and tx sigs that are known to have
     /// valid signatures. Lives in per-epoch store because the caching/batching is only valid
     /// within for certs within the current epoch.
-    pub(crate) batch_verifier: BatchCertificateVerifier,
+    pub(crate) signature_verifier: SignatureVerifier,
 
     pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, Accumulator>,
 
@@ -332,7 +332,7 @@ impl AuthorityPerEpochStore {
         epoch_start_configuration: EpochStartConfiguration,
         store: Arc<AuthorityStore>,
         cache_metrics: Arc<ResolverMetrics>,
-        batch_verifier_metrics: Arc<BatchCertificateVerifierMetrics>,
+        signature_verifier_metrics: Arc<VerifiedDigestCacheMetrics>,
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -371,8 +371,8 @@ impl AuthorityPerEpochStore {
             .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
-        let batch_verifier =
-            BatchCertificateVerifier::new(committee.clone(), batch_verifier_metrics);
+        let signature_verifier =
+            SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
         Arc::new(Self {
             committee,
             protocol_config,
@@ -383,7 +383,7 @@ impl AuthorityPerEpochStore {
             epoch_alive_notify,
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
-            batch_verifier,
+            signature_verifier,
             checkpoint_state_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
@@ -429,7 +429,7 @@ impl AuthorityPerEpochStore {
             epoch_start_configuration,
             store,
             self.execution_component.metrics(),
-            self.batch_verifier.metrics.clone(),
+            self.signature_verifier.metrics.clone(),
         )
     }
 
@@ -1514,7 +1514,8 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
-            certificate: consensus_output,
+            certificate: _consensus_output,
+            certificate_author,
             consensus_index,
             transaction,
         }) = transaction;
@@ -1533,13 +1534,12 @@ impl AuthorityPerEpochStore {
                     );
                     return Ok(None);
                 }
-                let authority = (&consensus_output.header.author).into();
-                if self.has_sent_end_of_publish(&authority)? {
+                if self.has_sent_end_of_publish(&certificate_author)? {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
                     // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
-                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
+                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", certificate_author.concise(), certificate.digest());
                     return Ok(None);
                 }
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction

@@ -142,8 +142,19 @@ async fn main() -> Result<(), eyre::Report> {
             let worker_key_file = sub_matches.value_of("worker-keys").unwrap();
             let worker_keypair = read_network_keypair_from_file(worker_key_file)
                 .expect("Failed to load the node's worker keypair");
+
+            let committee_file = sub_matches.value_of("committee").unwrap();
+            let mut committee = Committee::import(committee_file)
+                .context("Failed to load the committee information")?;
+            committee.load();
+
+            let authority_id = committee
+                .authority_by_key(primary_keypair.public())
+                .unwrap()
+                .id();
+
             let registry = match sub_matches.subcommand() {
-                ("primary", _) => primary_metrics_registry(primary_keypair.public().clone()),
+                ("primary", _) => primary_metrics_registry(authority_id),
                 ("worker", Some(worker_matches)) => {
                     let id = worker_matches
                         .value_of("id")
@@ -151,7 +162,7 @@ async fn main() -> Result<(), eyre::Report> {
                         .parse::<WorkerId>()
                         .context("The worker id must be a positive integer")?;
 
-                    worker_metrics_registry(id, primary_keypair.public().clone())
+                    worker_metrics_registry(id, authority_id)
                 }
                 _ => unreachable!(),
             };
@@ -167,6 +178,7 @@ async fn main() -> Result<(), eyre::Report> {
             }
             run(
                 sub_matches,
+                committee,
                 primary_keypair,
                 primary_network_keypair,
                 worker_keypair,
@@ -229,6 +241,7 @@ fn setup_benchmark_telemetry(
 // Runs either a worker or a primary.
 async fn run(
     matches: &ArgMatches<'_>,
+    committee: Committee,
     primary_keypair: KeyPair,
     primary_network_keypair: NetworkKeyPair,
     worker_keypair: NetworkKeyPair,
@@ -243,14 +256,11 @@ async fn run(
         info!("Failpoints are not enabled");
     }
 
-    let committee_file = matches.value_of("committee").unwrap();
     let workers_file = matches.value_of("workers").unwrap();
     let parameters_file = matches.value_of("parameters");
     let store_path = matches.value_of("store").unwrap();
 
-    // Read the committee, workers and node's keypair from file.
-    let committee =
-        Committee::import(committee_file).context("Failed to load the committee information")?;
+    // Read the workers and node's keypair from file.
     let worker_cache =
         WorkerCache::import(workers_file).context("Failed to load the worker information")?;
 

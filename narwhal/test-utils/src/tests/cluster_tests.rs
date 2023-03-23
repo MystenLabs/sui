@@ -55,7 +55,7 @@ async fn cluster_setup_with_consensus_disabled() {
 
     // send a sample rounds request
     let request = tonic::Request::new(RoundsRequest {
-        public_key: Some(PublicKeyProto::from(authority.name.clone())),
+        public_key: Some(PublicKeyProto::from(authority.public_key.clone())),
     });
     let response = client.rounds(request).await;
 

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowLeft16 } from '@mysten/icons';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-import Button from '_app/shared/button';
+import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import { useLockedGuard } from '_app/wallet/hooks';
@@ -26,7 +26,6 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     const [mnemonic, setLocalMnemonic] = useState<string[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [passwordCopied, setPasswordCopied] = useState(false);
-    const navigate = useNavigate();
     const dispatch = useAppDispatch();
     useEffect(() => {
         (async () => {
@@ -64,7 +63,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
             >
                 <div className="flex flex-col flex-nowrap flex-grow h-full w-full">
                     {mode === 'created' ? (
-                        <div className="flex flex-col flex-nowrap flex-grow">
+                        <div className="flex flex-col flex-nowrap flex-grow mb-5">
                             <div className="mb-1 mt-7.5 text-center">
                                 <Text
                                     variant="caption"
@@ -146,18 +145,15 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                     {mode !== 'created' && <div className="flex-1 flex" />}
                     <Button
                         type="button"
-                        className="flex flex-nowrap self-stretch px-3.5 py-5 mt-5"
-                        size="large"
-                        mode="primary"
+                        size="tall"
+                        variant="primary"
                         disabled={mode === 'created' && !passwordCopied}
-                        onClick={() => navigate('/')}
-                    >
-                        Open Sui Wallet
-                        <Icon
-                            icon={SuiIcons.ArrowLeft}
-                            className="text-p2 font-normal rotate-135"
-                        />
-                    </Button>
+                        to="/"
+                        text="Open Sui Wallet"
+                        after={
+                            <ArrowLeft16 className="text-p2 font-normal rotate-135" />
+                        }
+                    />
                 </div>
             </CardLayout>
         </Loading>

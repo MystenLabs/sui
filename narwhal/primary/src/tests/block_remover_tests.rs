@@ -29,7 +29,7 @@ async fn test_successful_blocks_delete() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND a Dag with genesis populated
@@ -47,7 +47,8 @@ async fn test_successful_blocks_delete() {
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let block_remover = BlockRemover::new(
-        name.clone(),
+        id,
+        committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),
         header_store.clone(),
@@ -197,7 +198,7 @@ async fn test_failed_blocks_delete() {
     let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     // AND a Dag with genesis populated
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(
@@ -213,7 +214,8 @@ async fn test_failed_blocks_delete() {
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let block_remover = BlockRemover::new(
-        name.clone(),
+        id,
+        committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),
         header_store.clone(),

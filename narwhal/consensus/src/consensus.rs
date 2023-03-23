@@ -6,8 +6,7 @@
 
 use crate::utils::gc_round;
 use crate::{metrics::ConsensusMetrics, ConsensusError, Outcome, SequenceNumber};
-use config::Committee;
-use crypto::{PublicKey, PublicKeyBytes};
+use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{
@@ -28,7 +27,7 @@ use types::{
 pub mod consensus_tests;
 
 /// The representation of the DAG in memory.
-pub type Dag = BTreeMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate)>>;
+pub type Dag = BTreeMap<Round, HashMap<AuthorityIdentifier, (CertificateDigest, Certificate)>>;
 
 /// The state that needs to be persisted for crash-recovery.
 pub struct ConsensusState {
@@ -38,7 +37,7 @@ pub struct ConsensusState {
     pub gc_depth: Round,
     /// Keeps the last committed round for each authority. This map is used to clean up the dag and
     /// ensure we don't commit twice the same certificate.
-    pub last_committed: HashMap<PublicKeyBytes, Round>,
+    pub last_committed: HashMap<AuthorityIdentifier, Round>,
     /// Used to populate the index in the sub-dag construction.
     pub latest_sub_dag_index: SequenceNumber,
     /// The last calculated consensus reputation score
@@ -71,7 +70,7 @@ impl ConsensusState {
         metrics: Arc<ConsensusMetrics>,
         last_committed_round: Round,
         gc_depth: Round,
-        recovered_last_committed: HashMap<PublicKeyBytes, Round>,
+        recovered_last_committed: HashMap<AuthorityIdentifier, Round>,
         latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
         committee: &Committee,
@@ -106,7 +105,7 @@ impl ConsensusState {
     #[instrument(level = "info", skip_all)]
     pub fn construct_dag_from_cert_store(
         cert_store: CertificateStore,
-        last_committed: &HashMap<PublicKeyBytes, Round>,
+        last_committed: &HashMap<AuthorityIdentifier, Round>,
         gc_round: Round,
     ) -> Result<Dag, ConsensusError> {
         let mut dag: Dag = BTreeMap::new();
@@ -145,7 +144,7 @@ impl ConsensusState {
     /// Returns true if certificate is inserted in the dag.
     fn try_insert_in_dag(
         dag: &mut Dag,
-        last_committed: &HashMap<PublicKeyBytes, Round>,
+        last_committed: &HashMap<AuthorityIdentifier, Round>,
         gc_round: Round,
         certificate: &Certificate,
     ) -> Result<bool, ConsensusError> {
@@ -175,7 +174,7 @@ impl ConsensusState {
 
         Ok(certificate.round()
             > last_committed
-                .get(&PublicKeyBytes::from(&certificate.origin()))
+                .get(&certificate.origin())
                 .cloned()
                 .unwrap_or_default())
     }
@@ -183,7 +182,7 @@ impl ConsensusState {
     /// Update and clean up internal state after committing a certificate.
     pub fn update(&mut self, certificate: &Certificate) {
         self.last_committed
-            .entry(PublicKeyBytes::from(&certificate.origin()))
+            .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
         self.last_round = self.last_round.update(certificate.round(), self.gc_depth);
