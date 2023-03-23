@@ -146,14 +146,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
-    // one payload per thread
+    use crate::payload::CommandData;
+    let command_payloads = if let CommandData::MultiGetTransactions(multi_get_txns) = command.data {
+        let num_chunks = 64;
+        let chunk_size = 10000;
+        (0..num_chunks)
+            .map(|i| {
+                let start = i * chunk_size;
+                let end = (i+1) * chunk_size;
+                Command::new_multi_get_transactions(start, Some(end), None)
+            })
+            .collect()
+    } else {
+        // code block if command.data is not of type MultiGetTransactions
+        vec![command.clone()]
+    };
+
 
     let load_test = LoadTest {
         processor,
         payloads: vec![
             // TODO(chris): use different gas_payment for different threads
             Payload {
-                commands: vec![command],
+                commands: command_payloads,
                 encoded_keypair,
                 signer_address,
                 gas_payment: None
