@@ -213,13 +213,14 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
-        read_only!(&self.cp, |conn| {
-            transactions_dsl::transactions
-                .select(count(transactions_dsl::id))
-                .first::<i64>(conn)
+    fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
+        let checkpoint: Checkpoint = read_only!(&self.cp, |conn| {
+            checkpoints_dsl::checkpoints
+                .order(checkpoints_dsl::total_transactions_from_genesis.desc())
+                .first::<Checkpoint>(conn)
         })
-        .context("Failed reading total transaction number")
+        .context("Failed reading total transaction number")?;
+        Ok(checkpoint.total_transactions_from_genesis)
     }
 
     fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError> {
@@ -628,13 +629,31 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    fn get_total_address_number(&self) -> Result<u64, IndexerError> {
+    fn get_total_addresses(&self) -> Result<u64, IndexerError> {
         let total_addresses = read_only!(&self.cp, |conn| {
             addresses::table
                 .select(count(addresses::account_address))
                 .first::<i64>(conn)
         })?;
         Ok(total_addresses as u64)
+    }
+
+    fn get_total_objects(&self) -> Result<u64, IndexerError> {
+        let total_objects = read_only!(&self.cp, |conn| {
+            objects::table
+                .select(count(objects::object_id))
+                .first::<i64>(conn)
+        })?;
+        Ok(total_objects as u64)
+    }
+
+    fn get_total_packages(&self) -> Result<u64, IndexerError> {
+        let total_packages = read_only!(&self.cp, |conn| {
+            packages::table
+                .select(count(packages::package_id))
+                .first::<i64>(conn)
+        })?;
+        Ok(total_packages as u64)
     }
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
