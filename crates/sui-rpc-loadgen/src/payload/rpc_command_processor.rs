@@ -218,7 +218,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
         let clients = self.get_clients().await?;
 
         if let Some(digests) = &op.digests {
-            check_transactions(&self.clients, digests);
+            check_transactions(&self.clients, digests).await;
         } else {
             let checkpoints = &op.checkpoints;
 
@@ -268,6 +268,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
                                 if t.sequence_number != seq {
                                     error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                                 }
+                                check_transactions(&self.clients, &t.transactions).await;
                                 Some(t)
                             },
                             Err(err) => {
@@ -329,7 +330,7 @@ pub async fn check_transactions(
     let read = clients.read().await;
     let clients = read.clone();
 
-    let transactions = join_all(clients.iter().map(|client| {
+    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| {
         async move {
             let start_time = Instant::now();
             let transactions = client
@@ -341,7 +342,7 @@ pub async fn check_transactions(
                 .await;
             let elapsed_time = start_time.elapsed();
             println!(
-                "MultiGetTransactions Request latency {:.4}",
+                "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
                 elapsed_time.as_secs_f64()
             );
             transactions
