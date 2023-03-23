@@ -11,6 +11,7 @@ use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use prometheus::Registry;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use tokio::time::timeout;
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
 
@@ -35,6 +36,8 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages::TransactionData;
 use sui_types::object::Object;
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 
 const NUM_VALIDAOTR: usize = 4;
 
@@ -145,6 +148,33 @@ impl TestCluster {
 
     pub fn random_node_restarter(self: &Arc<Self>) -> RandomNodeRestarter {
         RandomNodeRestarter::new(self.clone())
+    }
+
+    /// Wait for thet network to transition to the next or a specific epoch.
+    /// To detect whether the network has reached such state, we use the fullnode as the
+    /// source of truth, since a fullnode only does epoch transition when the network has
+    /// done so.
+    /// If target_epoch is specified, wait until the cluster reaches that epoch.
+    /// If target_epoch is None, wait until the cluster reaches the next epoch.
+    pub async fn wait_for_epoch(&self, target_epoch: Option<EpochId>) -> SuiSystemState {
+        let mut epoch_rx = self.fullnode_handle.sui_node.subscribe_to_epoch_change();
+        timeout(Duration::from_secs(60), async move {
+            while let Ok(system_state) = epoch_rx.recv().await {
+                info!("received epoch {}", system_state.epoch());
+                match target_epoch {
+                    Some(target_epoch) if system_state.epoch() >= target_epoch => {
+                        return system_state;
+                    }
+                    None => {
+                        return system_state;
+                    }
+                    _ => (),
+                }
+            }
+            unreachable!("Broken reconfig channel");
+        })
+        .await
+        .expect("Timed out waiting for cluster to target epoch")
     }
 }
 
@@ -440,8 +470,8 @@ pub async fn wait_for_nodes_transition_to_epoch<'a>(
                 let mut rx = node.subscribe_to_epoch_change();
                 let epoch = node.current_epoch_for_testing();
                 if epoch != expected_epoch {
-                    let (committee, _) = rx.recv().await.unwrap();
-                    assert_eq!(committee.epoch(), expected_epoch);
+                    let system_state = rx.recv().await.unwrap();
+                    assert_eq!(system_state.epoch(), expected_epoch);
                 }
             })
         })

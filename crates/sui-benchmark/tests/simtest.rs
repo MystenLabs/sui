@@ -20,7 +20,6 @@ mod test {
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::checkpoints::CheckpointStore;
     use sui_macros::{register_fail_points, sim_test};
-    use sui_protocol_config::ProtocolConfig;
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
