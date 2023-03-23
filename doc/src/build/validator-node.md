@@ -105,7 +105,7 @@ Importantly, the gas object’s value persists across epochs so that a validator
 
 ## Validator slashing and tallying rule
 
-Sui is designed to encourage and enforce community monitoring of the validator set. This is done through the Tallying Rule by which each validator monitors and scores every other validator in order to ensure that everyone is operating efficiently and in the network’s best interest. Validators that do not can be penalized with slashed stake rewards.
+Sui is designed to encourage and enforce community monitoring of the validator set. This is done through the Tallying Rule by which each validator monitors and scores every other validator in order to ensure that everyone is operating efficiently and in the network’s best interest. Validators that receive a low score can be penalized with slashed stake rewards.
 
 The protocol only computes the global Tallying Rule score at the epoch boundary and so relies on validators monitoring actively and changing their individual scores whenever they detect changes in other validator behavior. In general, the Tallying Rule default option should always be a score of one for all validators and only be changed to zero upon determining bad operations. In practice, the Tallying Rule consists of a set of objects each validator owns that default to scores of one and thus a validator will generally be passive and only update the object corresponding to another validator’s score whenever needed.
 
