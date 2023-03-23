@@ -160,8 +160,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         (0..num_chunks)
             .map(|i| {
                 let start = i * chunk_size;
-                let end = (i+1) * chunk_size;
-                Command::new_multi_get_transactions(start.try_into().unwrap(), Some(end.try_into().unwrap()), None)
+                let end = (i + 1) * chunk_size;
+                Command::new_multi_get_transactions(
+                    start.try_into().unwrap(),
+                    Some(end.try_into().unwrap()),
+                    None,
+                )
             })
             .collect()
     } else {
@@ -174,14 +178,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             commands: vec![command], // note commands is also a vector
             encoded_keypair: encoded_keypair.clone(),
             signer_address,
-            gas_payment: None
+            gas_payment: None,
         })
         .collect();
 
-
     let load_test = LoadTest {
         processor,
-        payloads
+        payloads,
     };
     load_test.run().await?;
 

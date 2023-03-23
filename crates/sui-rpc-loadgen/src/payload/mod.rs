@@ -72,7 +72,8 @@ impl Command {
             data: CommandData::MultiGetTransactions(MultiGetTransactions {
                 checkpoints: GetCheckpoints {
                     start: start_checkpoint,
-                    end: end_checkpoint },
+                    end: end_checkpoint,
+                },
                 digests,
             }),
             ..Default::default()
