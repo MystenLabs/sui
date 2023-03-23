@@ -44,7 +44,7 @@ Stake withdrawals are processed immediately with the exchange rate prevailing at
 
 *SUI withdrawn at E’ = ( SUI deposited at E ) * ( Exchange Rate at E’-1 / Exchange Rate at E )*
 
-## Validator Pool exchange rate
+## Validator pool exchange rate
 
 The exchange rate for each validator pool is calculated at each epoch boundary as follows:
 
