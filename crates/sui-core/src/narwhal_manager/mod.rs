@@ -16,7 +16,7 @@ use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use tokio::sync::Mutex;
 
@@ -86,7 +86,10 @@ pub struct NarwhalManager {
 }
 
 impl NarwhalManager {
-    pub fn new(config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
+    pub fn new(mut config: NarwhalConfiguration, metrics: NarwhalManagerMetrics) -> Self {
+        // TMP TMP TMP experimentation only
+        config.parameters.gc_depth = 15;
+        config.parameters.max_batch_delay = Duration::from_millis(250);
         // Create the Narwhal Primary with configuration
         let primary_node = PrimaryNode::new(
             config.parameters.clone(),
