@@ -18,6 +18,7 @@ use sui_types::messages::{
 use sui_types::utils::to_sender_signed_transaction;
 use tracing::log::info;
 
+// use crate::workloads::workload::MAX_GAS_FOR_TESTING;
 use crate::workloads::{
     Gas, GasCoinConfig, WorkloadGasConfig, WorkloadInitGas, WorkloadPayloadGas,
 };
@@ -25,7 +26,9 @@ use sui_types::crypto::{AccountKeyPair, KeypairTraits};
 
 // This is the maximum gas we will transfer from primary coin into any gas coin
 // for running the benchmark
-pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
+// pub const MAX_GAS_FOR_TESTING: u64 = 1000_000_000_000;
+
+pub const MAX_GAS: u64 = 1_000_000_000; // 1 SUI
 
 pub type UpdatedAndNewlyMintedGasCoins = (Gas, Gas, Vec<Gas>);
 
@@ -60,7 +63,7 @@ pub fn make_split_coin_tx(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
             CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
         ],
-        1000000,
+        MAX_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     )?;
     let verified_tx = to_sender_signed_transaction(split_coin, keypair);
@@ -82,7 +85,7 @@ pub fn make_pay_tx(
         addresses,
         split_amounts,
         gas,
-        1000000,
+        MAX_GAS,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     )?;
     Ok(to_sender_signed_transaction(pay, keypair))
@@ -112,12 +115,16 @@ pub async fn split_coin_and_pay(
         Some(gas_price),
     )?;
     let effects = proxy.execute_transaction(verified_tx.into()).await?;
+    if !effects.status_ok() {
+        return Err(anyhow::anyhow!("Failed to split coin: {:?}", effects));
+    }
     let updated_gas = effects
         .mutated()
         .into_iter()
         .find(|(k, _)| k.0 == gas.0 .0)
         .ok_or("Input gas missing in the effects")
         .map_err(Error::msg)?;
+
     let created_coins: Vec<ObjectRef> = effects.created().into_iter().map(|c| c.0).collect();
     assert_eq!(created_coins.len(), split_amounts.len());
     let updated_coin = effects

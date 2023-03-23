@@ -71,7 +71,8 @@ impl Env {
                     barrier,
                     registry,
                     opts.primary_gas_id.as_str(),
-                    opts.primary_gas_objects,
+                    // opts.primary_gas_objects,
+                    opts.pay_coin_id.as_str(),
                     opts.keystore_path.as_str(),
                     opts.genesis_blob_path.as_str(),
                     opts.use_fullnode_for_reconfig,
@@ -185,7 +186,8 @@ impl Env {
         barrier: Arc<Barrier>,
         registry: &Registry,
         primary_gas_id: &str,
-        primary_gas_objects: u64,
+        pay_coin_id: &str,
+        // primary_gas_objects: u64,
         keystore_path: &str,
         genesis_blob_path: &str,
         use_fullnode_for_reconfig: bool,
@@ -245,31 +247,36 @@ impl Env {
         );
 
         let mut proxy_gas_and_coins = vec![];
-        let mut used_ids = vec![];
+        // let mut used_ids = vec![];
 
+        assert_eq!(proxies.len(), 1);
         for proxy in proxies.iter() {
-            let offset = ObjectID::from_hex_literal(primary_gas_id)?;
-            let ids = ObjectID::in_range(offset, primary_gas_objects)?;
-            let mut primary_gas_id = ids
-                .choose(&mut rand::thread_rng())
-                .context("Failed to choose a random primary gas id")?;
-            while used_ids.contains(primary_gas_id) {
-                primary_gas_id = ids
-                    .choose(&mut rand::thread_rng())
-                    .context("Failed to choose a random primary gas id")?;
-            }
-            used_ids.push(*primary_gas_id);
-            let primary_gas = proxy.get_object(*primary_gas_id).await?;
-            let mut pay_coin_id = ids
-                .choose(&mut rand::thread_rng())
-                .context("Failed to choose a random pay coin")?;
-            while used_ids.contains(pay_coin_id) {
-                pay_coin_id = ids
-                    .choose(&mut rand::thread_rng())
-                    .context("Failed to choose a random primary gas id")?;
-            }
-            used_ids.push(*pay_coin_id);
-            let pay_coin = proxy.get_object(*pay_coin_id).await?;
+            let primary_gas_id = ObjectID::from_hex_literal(primary_gas_id)?;
+            let pay_coin_id = ObjectID::from_hex_literal(pay_coin_id)?;
+            let primary_gas = proxy.get_object(primary_gas_id).await?;
+            let pay_coin = proxy.get_object(pay_coin_id).await?;
+            // let offset = ObjectID::from_hex_literal(primary_gas_id)?;
+            // let ids = ObjectID::in_range(offset, primary_gas_objects)?;
+            // let mut primary_gas_id = ids
+            //     .choose(&mut rand::thread_rng())
+            //     .context("Failed to choose a random primary gas id")?;
+            // while used_ids.contains(primary_gas_id) {
+            //     primary_gas_id = ids
+            //         .choose(&mut rand::thread_rng())
+            //         .context("Failed to choose a random primary gas id")?;
+            // }
+            // used_ids.push(*primary_gas_id);
+            // let primary_gas = proxy.get_object(*primary_gas_id).await?;
+            // let mut pay_coin_id = ids
+            //     .choose(&mut rand::thread_rng())
+            //     .context("Failed to choose a random pay coin")?;
+            // while used_ids.contains(pay_coin_id) {
+            //     pay_coin_id = ids
+            //         .choose(&mut rand::thread_rng())
+            //         .context("Failed to choose a random primary gas id")?;
+            // }
+            // used_ids.push(*pay_coin_id);
+            // let pay_coin = proxy.get_object(*pay_coin_id).await?;
             let primary_gas_account = primary_gas.owner.get_owner_address()?;
             let keystore_path = Some(&keystore_path)
                 .filter(|s| !s.is_empty())

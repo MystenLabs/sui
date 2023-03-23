@@ -40,6 +40,8 @@ pub struct Opts {
     /// with large enough gas i.e. u64::MAX
     #[clap(long, default_value = "", global = true)]
     pub primary_gas_id: String,
+    #[clap(long, default_value = "", global = true)]
+    pub pay_coin_id: String,
     #[clap(long, default_value = "5000", global = true)]
     pub primary_gas_objects: u64,
     #[clap(long, default_value = "500", global = true)]
