@@ -26,7 +26,7 @@ After you successfully join the validator set, you must maintain a staking pool 
 
 The total voting power on Sui is always 10,000, regardless of the amount staked. Therefore, the quorum threshold is 6,667. There is no limit to the amount of SUI users can stake with a validator. Each validator has consensus voting power proportional to SUI in its staking pool, with one exception: the voting power of an individual validator is capped at 1,000 (10% of the total). If a validator accumulates more than 10% of total stake, the validator’s voting power remains fixed at 10%, and the remaining voting power is spread across the rest of the validator set.
 
-## Validator Staking Pool
+## Validator staking pool
 
 Each Sui validator maintains its own staking pool to track the amount of stake and to compound staking rewards. Validator pools operate together with a time series of exchange rates that are computed at each epoch boundary. These exchange rates determine the amount of SUI tokens that each past SUI staker can withdraw in the future. Importantly, the exchange rates increase as more rewards are deposited into a staking pool and the longer an amount of SUI is deposited in a staking pool, the more rewards it will accrue.
 
