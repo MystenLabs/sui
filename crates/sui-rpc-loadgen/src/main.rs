@@ -57,7 +57,7 @@ pub enum ClapCommand {
         #[clap(short, long, default_value_t = 0)]
         start: u64,
 
-        /// inclusive, use `getLatestCheckpointSequenceNumber` if `None`
+        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
         #[clap(short, long)]
         end: Option<u64>,
 
@@ -74,12 +74,11 @@ pub enum ClapCommand {
     MultiGetTransactions {
         #[clap(flatten)]
         common: CommonOptions,
-        // this is where the vector goes
         /// Default to start from checkpoint 0
         #[clap(short, long, default_value_t = 0)]
         start: u64,
 
-        /// inclusive, use `getLatestCheckpointSequenceNumber` if `None`
+        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
         #[clap(short, long)]
         end: Option<u64>,
         #[clap(short, long, multiple = true)]
