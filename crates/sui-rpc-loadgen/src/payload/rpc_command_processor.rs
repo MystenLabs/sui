@@ -7,7 +7,9 @@ use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions, SuiObjectDataOptions};
+use sui_json_rpc_types::{
+    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionResponseOptions,
+};
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
@@ -15,7 +17,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{SuiAddress, ObjectID};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -158,10 +160,6 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                             if op.verify_transaction {
                                 check_transactions(&self.clients, &t.transactions, cross_validate).await;
                             }
-                            // if op.verify_object {
-                            //     check_objects(&self.clients, , object_ids, cross_validate)
-                            // }
-
                             Some(t)
                         },
                         Err(err) => {
@@ -255,28 +253,10 @@ pub async fn check_transactions(
                 }
             };
 
-            if first.len() != second.len() {
-                error!(
-                    "Transaction response lengths do not match: {} vs {}",
-                    first.len(),
-                    second.len()
-                );
-                return; // Return early if the lengths don't match
-            }
-
-            for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-                // Todo: allow more comparisons
-                if a != b {
-                    error!(
-                        "Transaction response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
-                        digests[i], a, b
-                    );
-                }
-            }
+            cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
         }
     }
 }
-
 
 // todo: this and check_transactions can be generic
 pub async fn check_objects(
@@ -311,36 +291,55 @@ pub async fn check_objects(
             let first = match t1 {
                 Ok(vec) => vec.as_slice(),
                 Err(err) => {
-                    error!("Error unwrapping first vec of objects: {:?} for objectIDs {:?}", err, object_ids);
+                    error!(
+                        "Error unwrapping first vec of objects: {:?} for objectIDs {:?}",
+                        err, object_ids
+                    );
                     return;
                 }
             };
             let second = match t2 {
                 Ok(vec) => vec.as_slice(),
                 Err(err) => {
-                    error!("Error unwrapping second vec of objects: {:?} for objectIDs {:?}", err, object_ids);
+                    error!(
+                        "Error unwrapping second vec of objects: {:?} for objectIDs {:?}",
+                        err, object_ids
+                    );
                     return;
                 }
             };
 
-            if first.len() != second.len() {
-                error!(
-                    "Object response lengths do not match: {} vs {}",
-                    first.len(),
-                    second.len()
-                );
-                return; // Return early if the lengths don't match
-            }
+            cross_validate_entities(object_ids, first, second, "ObjectID", "Object");
+        }
+    }
+}
 
-            for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-                // Todo: allow more comparisons
-                if a != b {
-                    error!(
-                        "Object response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
-                        object_ids[i], a, b
-                    );
-                }
-            }
+fn cross_validate_entities<T, U>(
+    keys: &[T],
+    first: &[U],
+    second: &[U],
+    key_name: &str,
+    entity_name: &str,
+) where
+    T: std::fmt::Debug,
+    U: PartialEq + std::fmt::Debug,
+{
+    if first.len() != second.len() {
+        error!(
+            "Entity: {} lengths do not match: {} vs {}",
+            entity_name,
+            first.len(),
+            second.len()
+        );
+        return;
+    }
+
+    for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
+        if a != b {
+            error!(
+                "Entity: {} mismatch with index {}: {}: {:?}, first: {:?}, second: {:?}",
+                entity_name, i, key_name, keys[i], a, b
+            );
         }
     }
 }
