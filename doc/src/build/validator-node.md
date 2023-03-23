@@ -109,7 +109,7 @@ Sui is designed to encourage and enforce community monitoring of the validator s
 
 The protocol only computes the global Tallying Rule score at the epoch boundary and so relies on validators monitoring actively and changing their individual scores whenever they detect changes in other validator behavior. In general, the Tallying Rule default option should always be a score of one for all validators and only be changed to zero upon determining bad operations. In practice, the Tallying Rule consists of a set of objects each validator owns that default to scores of one and thus a validator will generally be passive and only update the object corresponding to another validator’s score whenever needed.
 
-For example, to report a validator whose Sui address is 0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446 as bad or non-performant, run:
+For example, to report a validator whose Sui address is `0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446` as bad or non-performant, run:
 
 ```shell
 sui client call --package 0x2 --module sui_system --function report_validator --args 0x5 0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446 --gas-budget 1000
