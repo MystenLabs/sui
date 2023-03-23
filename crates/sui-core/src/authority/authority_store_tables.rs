@@ -17,8 +17,8 @@ use typed_store::rocks::{
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
 use crate::authority::authority_store_types::{
-    MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper,
-    StoreObjectWrapper,
+    MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper, StoreObject,
+    StoreObjectValue, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
@@ -59,14 +59,6 @@ pub struct AuthorityPerpetualTables {
     /// state-sync but hasn't been executed yet.
     #[default_options_override_fn = "transactions_table_default_config"]
     pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
-
-    /// The map between the object ref of objects processed at all versions and the transaction
-    /// digest of the certificate that lead to the creation of this version of the object.
-    ///
-    /// When an object is deleted we include an entry into this table for its next version and
-    /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
-    /// TODO: Replace this table with a tombstone eventually.
-    pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
@@ -138,11 +130,12 @@ impl AuthorityPerpetualTables {
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
-        iter.reverse().next().and_then(|(_, o)| self.object(o).ok())
+        iter.reverse()
+            .next()
+            .and_then(|(_, o)| self.object(o).ok().flatten())
     }
 
-    pub fn object(&self, store_object: StoreObjectWrapper) -> Result<Object, SuiError> {
-        let store_object = store_object.migrate().into_inner();
+    fn construct_object(&self, store_object: StoreObjectValue) -> Result<Object, SuiError> {
         let indirect_object = match store_object.data {
             StoreData::IndirectObject(ref metadata) => self
                 .indirect_move_objects
@@ -150,26 +143,53 @@ impl AuthorityPerpetualTables {
                 .map(|o| o.migrate().into_inner()),
             _ => None,
         };
-        MigratedStoreObjectPair(store_object, indirect_object).try_into()
+        let object = MigratedStoreObjectPair(store_object, indirect_object).try_into()?;
+        Ok(object)
     }
 
-    pub fn get_latest_parent_entry(
+    // Constructs `sui_types::object::Object` from `StoreObjectWrapper`.
+    // Returns `None` if object was deleted/wrapped
+    pub fn object(&self, store_object: StoreObjectWrapper) -> Result<Option<Object>, SuiError> {
+        let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {return Ok(None)};
+        Ok(Some(self.construct_object(store_object)?))
+    }
+
+    pub fn object_reference(
+        &self,
+        object_key: &ObjectKey,
+        store_object: StoreObjectWrapper,
+    ) -> Result<ObjectRef, SuiError> {
+        let obj_ref = match store_object.migrate().into_inner() {
+            StoreObject::Value(object) => self.construct_object(object)?.compute_object_reference(),
+            StoreObject::Deleted => (
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            ),
+            StoreObject::Wrapped => (
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            ),
+        };
+        Ok(obj_ref)
+    }
+
+    pub fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<Option<ObjectRef>, SuiError> {
         let mut iterator = self
-            .parent_sync
+            .objects
             .iter()
-            // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
+            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
 
-        Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
-            if obj_ref.0 == object_id {
-                Some((obj_ref, tx_digest))
-            } else {
-                None
+        if let Some((object_key, value)) = iterator.next() {
+            if object_key.0 == object_id {
+                return Ok(Some(self.object_reference(&object_key, value)?));
             }
-        }))
+        }
+        Ok(None)
     }
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
@@ -217,7 +237,8 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.parent_sync.keys(),
+            iter: self.objects.iter(),
+            tables: self,
             prev: None,
         }
     }
@@ -239,37 +260,18 @@ impl ObjectStore for AuthorityPerpetualTables {
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
             .next();
 
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.parent_sync gets the last word.
-        // Such race is ok because, even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(self.object(obj)?)),
+        match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => Ok(self.object(obj)?),
             _ => Ok(None),
         }
     }
 }
 
 pub struct LiveSetIter<'a> {
-    iter: <DBMap<ObjectRef, TransactionDigest> as Map<'a, ObjectRef, TransactionDigest>>::Keys,
-    prev: Option<ObjectRef>,
+    iter:
+        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
+    tables: &'a AuthorityPerpetualTables,
+    prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
 
 impl Iterator for LiveSetIter<'_> {
@@ -277,23 +279,32 @@ impl Iterator for LiveSetIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(next) = self.iter.next() {
-                let prev = self.prev;
-                self.prev = Some(next);
+            if let Some((next_key, next_value)) = self.iter.next() {
+                let prev = self.prev.take();
+                self.prev = Some((next_key, next_value));
 
-                match prev {
-                    Some(prev) if prev.0 != next.0 && !prev.2.is_deleted() => return Some(prev),
-                    _ => continue,
+                if let Some((prev_key, prev_value)) = prev {
+                    if prev_key.0 != next_key.0 {
+                        let obj_ref = self.tables.object_reference(&prev_key, prev_value).expect(
+                            "Couldn't construct an object reference in the live set iterator",
+                        );
+                        if !obj_ref.2.is_deleted() {
+                            return Some(obj_ref);
+                        }
+                    }
+                }
+                continue;
+            }
+            if let Some((key, value)) = self.prev.take() {
+                let obj_ref = self
+                    .tables
+                    .object_reference(&key, value)
+                    .expect("Couldn't construct an object reference in the live set iterator");
+                if !obj_ref.2.is_deleted() {
+                    return Some(obj_ref);
                 }
             }
-
-            return match self.prev {
-                Some(prev) if !prev.2.is_deleted() => {
-                    self.prev = None;
-                    Some(prev)
-                }
-                _ => None,
-            };
+            return None;
         }
     }
 }

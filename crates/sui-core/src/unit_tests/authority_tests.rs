@@ -119,16 +119,6 @@ impl TestCallArg {
 
 const MAX_GAS: u64 = 10000;
 
-// Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
-fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
-    assert_eq!(o1.digest(), o2.digest());
-    // in this ser/de context it's relevant to compare signatures
-    assert_eq!(
-        o1.auth_sig().signature.as_ref(),
-        o2.auth_sig().signature.as_ref()
-    );
-}
-
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
 async fn construct_shared_object_transaction_with_sequence_number(
@@ -2188,17 +2178,6 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .await
         .unwrap();
     signed_effects.into_message().status().unwrap();
-    let account = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-
-    assert!(authority_state
-        .db()
-        .parent(&(object_id, account.version(), account.digest()))
-        .unwrap()
-        .is_some());
 }
 
 #[tokio::test]
@@ -2255,22 +2234,6 @@ async fn test_handle_confirmation_transaction_ok() {
         .unwrap();
     assert_eq!(new_account.owner, recipient);
     assert_eq!(next_sequence_number, new_account.version());
-    let opt_cert = {
-        let refx = authority_state
-            .db()
-            .parent(&(object_id, new_account.version(), new_account.digest()))
-            .unwrap()
-            .unwrap();
-        authority_state
-            .get_certified_transaction(&refx, &authority_state.epoch_store_for_testing())
-            .unwrap()
-    };
-    if let Some(certified_transaction) = opt_cert {
-        // valid since our test authority should not update its certificate set
-        compare_certified_transactions(&certified_transaction, &certified_transfer_transaction);
-    } else {
-        panic!("parent certificate not avaailable from the authority!");
-    }
 
     // Check locks are set and archived correctly
     assert!(authority_state
@@ -2288,16 +2251,6 @@ async fn test_handle_confirmation_transaction_ok() {
         .await
         .expect("Exists")
         .is_none());
-
-    // Check that all the parents are returned.
-    assert_eq!(
-        authority_state
-            .get_parent_iterator(object_id, None)
-            .await
-            .unwrap()
-            .count(),
-        2
-    );
 }
 
 struct LimitedPoll<F: Future> {
@@ -2748,7 +2701,7 @@ async fn test_get_latest_parent_entry_genesis() {
     let authority_state = init_state().await;
     // There should not be any object with ID zero
     assert!(authority_state
-        .get_latest_parent_entry(ObjectID::ZERO)
+        .get_object_or_tombstone(ObjectID::ZERO)
         .await
         .unwrap()
         .is_none());
@@ -2803,18 +2756,17 @@ async fn test_get_latest_parent_entry() {
     .unwrap();
 
     // Check entry for object to be deleted is returned
-    let (obj_ref, tx) = authority_state
-        .get_latest_parent_entry(new_object_id1)
+    let obj_ref = authority_state
+        .get_object_or_tombstone(new_object_id1)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, update_version);
-    assert_eq!(*effects.transaction_digest(), tx);
 
     let delete_version = SequenceNumber::lamport_increment([obj_ref.1, effects.gas_object().0 .1]);
 
-    let effects = call_move(
+    let _effects = call_move(
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2837,31 +2789,29 @@ async fn test_get_latest_parent_entry() {
     x[last_index] = u8::MAX - x[last_index];
     let unknown_object_id: ObjectID = x.try_into().unwrap();
     assert!(authority_state
-        .get_latest_parent_entry(unknown_object_id)
+        .get_object_or_tombstone(unknown_object_id)
         .await
         .unwrap()
         .is_none());
 
     // Check gas object is returned.
-    let (obj_ref, tx) = authority_state
-        .get_latest_parent_entry(gas_object_id)
+    let obj_ref = authority_state
+        .get_object_or_tombstone(gas_object_id)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, gas_object_id);
     assert_eq!(obj_ref.1, delete_version);
-    assert_eq!(*effects.transaction_digest(), tx);
 
     // Check entry for deleted object is returned
-    let (obj_ref, tx) = authority_state
-        .get_latest_parent_entry(new_object_id1)
+    let obj_ref = authority_state
+        .get_object_or_tombstone(new_object_id1)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, delete_version);
     assert_eq!(obj_ref.2, ObjectDigest::OBJECT_DIGEST_DELETED);
-    assert_eq!(*effects.transaction_digest(), tx);
 }
 
 #[tokio::test]
@@ -3376,8 +3326,8 @@ async fn test_store_revert_transfer_sui() {
         Owner::AddressOwner(sender),
     );
     assert_eq!(
-        db.get_latest_parent_entry(gas_object_id).unwrap().unwrap(),
-        (gas_object_ref, TransactionDigest::genesis()),
+        db.get_object_or_tombstone(gas_object_id).unwrap().unwrap(),
+        gas_object_ref
     );
     // Transaction should not be deleted on revert in case it's needed
     // to execute a future state sync checkpoint.

@@ -1532,15 +1532,14 @@ impl AuthorityState {
         let requested_object_seq = match request.request_kind {
             ObjectInfoRequestKind::LatestObjectInfo => {
                 let (_, seq, _) = self
-                    .get_latest_parent_entry(request.object_id)
+                    .get_object_or_tombstone(request.object_id)
                     .await?
                     .ok_or_else(|| {
                         SuiError::from(UserInputError::ObjectNotFound {
                             object_id: request.object_id,
                             version: None,
                         })
-                    })?
-                    .0;
+                    })?;
                 seq
             }
             ObjectInfoRequestKind::PastObjectInfoDebug(seq) => seq,
@@ -2030,9 +2029,9 @@ impl AuthorityState {
     }
 
     pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
-        match self.database.get_latest_parent_entry(*object_id)? {
+        match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
-            Some((obj_ref, _)) => {
+            Some(obj_ref) => {
                 if obj_ref.2.is_alive() {
                     match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {
@@ -2109,9 +2108,9 @@ impl AuthorityState {
         version: SequenceNumber,
     ) -> Result<PastObjectRead, SuiError> {
         // Firstly we see if the object ever exists by getting its latest data
-        match self.database.get_latest_parent_entry(*object_id)? {
+        match self.database.get_object_or_tombstone(*object_id)? {
             None => Ok(PastObjectRead::ObjectNotExists(*object_id)),
-            Some((obj_ref, _)) => {
+            Some(obj_ref) => {
                 if version > obj_ref.1 {
                     return Ok(PastObjectRead::VersionTooHigh {
                         object_id: *object_id,
@@ -2902,23 +2901,11 @@ impl AuthorityState {
         self.database.get_objects(_objects)
     }
 
-    /// Returns all parents (object_ref and transaction digests) that match an object_id, at
-    /// any object version, or optionally at a specific version.
-    pub async fn get_parent_iterator(
+    pub async fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
-        seq: Option<SequenceNumber>,
-    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
-        {
-            self.database.get_parent_iterator(object_id, seq)
-        }
-    }
-
-    pub async fn get_latest_parent_entry(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
-        self.database.get_latest_parent_entry(object_id)
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        self.database.get_object_or_tombstone(object_id)
     }
 
     /// Ordinarily, protocol upgrades occur when 2f + 1 + (f *

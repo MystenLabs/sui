@@ -36,7 +36,7 @@ use typed_store::traits::Map;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_types::{
-    get_store_object_pair, ObjectContentDigest, StoreObjectPair,
+    get_store_object_pair, ObjectContentDigest, StoreObject, StoreObjectPair, StoreObjectWrapper,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 
@@ -372,11 +372,13 @@ impl AuthorityStore {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        self.perpetual_tables
+        Ok(self
+            .perpetual_tables
             .objects
             .get(&ObjectKey(*object_id, version))?
             .map(|object| self.perpetual_tables.object(object))
-            .transpose()
+            .transpose()?
+            .flatten())
     }
 
     pub fn multi_get_object_by_key(
@@ -389,7 +391,8 @@ impl AuthorityStore {
         for w in wrappers {
             ret.push(
                 w.map(|object| self.perpetual_tables.object(object))
-                    .transpose()?,
+                    .transpose()?
+                    .flatten(),
             );
         }
         Ok(ret)
@@ -484,9 +487,9 @@ impl AuthorityStore {
                 .perpetual_tables
                 .objects
                 .contains_key(&ObjectKey(key.0, version))?),
-            None => match self.get_latest_parent_entry(key.0)? {
+            None => match self.get_object_or_tombstone(key.0)? {
                 None => Ok(false),
-                Some(entry) => Ok(entry.0 .2.is_alive()),
+                Some(entry) => Ok(entry.2.is_alive()),
             },
         }
     }
@@ -562,51 +565,6 @@ impl AuthorityStore {
         Ok(result)
     }
 
-    /// Read the transactionDigest that is the parent of an object reference
-    /// (ie. the transaction that created an object at this version.)
-    pub fn parent(&self, object_ref: &ObjectRef) -> Result<Option<TransactionDigest>, SuiError> {
-        self.perpetual_tables
-            .parent_sync
-            .get(object_ref)
-            .map_err(|e| e.into())
-    }
-
-    /// Batch version of `parent` function.
-    pub fn multi_get_parents(
-        &self,
-        object_refs: &[ObjectRef],
-    ) -> Result<Vec<Option<TransactionDigest>>, SuiError> {
-        self.perpetual_tables
-            .parent_sync
-            .multi_get(object_refs)
-            .map_err(|e| e.into())
-    }
-
-    /// Returns all parents (object_ref and transaction digests) that match an object_id, at
-    /// any object version, or optionally at a specific version.
-    pub fn get_parent_iterator(
-        &self,
-        object_id: ObjectID,
-        seq: Option<SequenceNumber>,
-    ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
-        let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
-        let obj_dig_inner = ObjectDigest::new([0; 32]);
-
-        Ok(self
-            .perpetual_tables
-            .parent_sync
-            .iter()
-            // The object id [0; 16] is the smallest possible
-            .skip_to(&(object_id, seq_inner, obj_dig_inner))?
-            .take_while(move |((id, iseq, _digest), _txd)| {
-                let mut flag = id == &object_id;
-                if let Some(seq_num) = seq {
-                    flag &= seq_num == *iseq;
-                }
-                flag
-            }))
-    }
-
     // Methods to mutate the store
 
     /// Insert a genesis object.
@@ -646,12 +604,6 @@ impl AuthorityStore {
             }
         }
 
-        // Update the parent
-        write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.parent_sync,
-            std::iter::once((&object_ref, &object.previous_transaction)),
-        )?;
-
         write_batch.write()?;
 
         Ok(())
@@ -682,12 +634,6 @@ impl AuthorityStore {
                         get_store_object_pair((**o).clone(), self.indirect_objects_threshold);
                     indirect_object.map(|obj| (obj.inner().digest(), obj))
                 }),
-            )?
-            .insert_batch(
-                &self.perpetual_tables.parent_sync,
-                ref_and_objects
-                    .iter()
-                    .map(|(oref, o)| (oref, o.previous_transaction)),
             )?;
 
         let non_child_object_refs: Vec<_> = ref_and_objects
@@ -747,12 +693,7 @@ impl AuthorityStore {
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();
         write_batch = self
-            .update_objects_and_locks(
-                write_batch,
-                inner_temporary_store,
-                *transaction_digest,
-                UpdateType::Transaction(effects_digest),
-            )
+            .update_objects_and_locks(write_batch, inner_temporary_store)
             .await?;
 
         // Store the signed effects of the transaction
@@ -805,8 +746,6 @@ impl AuthorityStore {
         &self,
         mut write_batch: DBBatch,
         inner_temporary_store: InnerTemporaryStore,
-        transaction_digest: TransactionDigest,
-        update_type: UpdateType,
     ) -> SuiResult<DBBatch> {
         let InnerTemporaryStore {
             objects,
@@ -825,30 +764,15 @@ impl AuthorityStore {
             .cloned()
             .collect();
 
-        // Index the certificate by the objects mutated
         write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.parent_sync,
-            written
-                .iter()
-                .map(|(_, (object_ref, _object, _kind))| (object_ref, transaction_digest)),
-        )?;
-
-        // Index the certificate by the objects deleted
-        write_batch = write_batch.insert_batch(
-            &self.perpetual_tables.parent_sync,
+            &self.perpetual_tables.objects,
             deleted.iter().map(|(object_id, (version, kind))| {
-                (
-                    (
-                        *object_id,
-                        *version,
-                        if kind == &DeleteKind::Wrap {
-                            ObjectDigest::OBJECT_DIGEST_WRAPPED
-                        } else {
-                            ObjectDigest::OBJECT_DIGEST_DELETED
-                        },
-                    ),
-                    transaction_digest,
-                )
+                let tombstone: StoreObjectWrapper = if *kind == DeleteKind::Wrap {
+                    StoreObject::Wrapped.into()
+                } else {
+                    StoreObject::Deleted.into()
+                };
+                (ObjectKey(*object_id, *version), tombstone)
             }),
         )?;
 
@@ -915,18 +839,16 @@ impl AuthorityStore {
             })
             .collect();
 
-        if let UpdateType::Transaction(_) = update_type {
-            // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
-            // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
-            // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
-            //    (But the lock should exist which means previous transactions finished)
-            // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
-            //    fine
-            // 4. Locks may have existed when we started processing this tx, but could have since
-            //    been deleted by a concurrent tx that finished first. In that case, check if the
-            //    tx effects exist.
-            self.check_owned_object_locks_exist(&owned_inputs)?;
-        }
+        // NOTE: We just check here that locks exist, not that they are locked to a specific TX. Why?
+        // 1. Lock existence prevents re-execution of old certs when objects have been upgraded
+        // 2. Not all validators lock, just 2f+1, so transaction should proceed regardless
+        //    (But the lock should exist which means previous transactions finished)
+        // 3. Equivocation possible (different TX) but as long as 2f+1 approves current TX its
+        //    fine
+        // 4. Locks may have existed when we started processing this tx, but could have since
+        //    been deleted by a concurrent tx that finished first. In that case, check if the
+        //    tx effects exist.
+        self.check_owned_object_locks_exist(&owned_inputs)?;
 
         write_batch = self.initialize_locks_impl(write_batch, &new_locks_to_init, false)?;
         self.delete_locks(write_batch, &owned_inputs)
@@ -1197,9 +1119,8 @@ impl AuthorityStore {
     /// executed locally on the validator but didn't make to the last checkpoint.
     /// The effects of the execution is reverted here.
     /// The following things are reverted:
-    /// 1. Latest parent_sync entries for each mutated object are deleted.
-    /// 2. All new object states are deleted.
-    /// 3. owner_index table change is reverted.
+    /// 1. All new object states are deleted.
+    /// 2. owner_index table change is reverted.
     ///
     /// NOTE: transaction and effects are intentionally not deleted. It's
     /// possible that if this node is behind, the network will execute the
@@ -1229,16 +1150,12 @@ impl AuthorityStore {
             )?;
         }
 
-        let all_new_refs = effects
-            .mutated()
+        let tombstones = effects
+            .deleted()
             .iter()
-            .chain(effects.created().iter())
-            .chain(effects.unwrapped().iter())
-            .map(|(r, _)| r)
-            .chain(effects.deleted().iter())
-            .chain(effects.unwrapped_then_deleted().iter())
-            .chain(effects.wrapped().iter());
-        write_batch = write_batch.delete_batch(&self.perpetual_tables.parent_sync, all_new_refs)?;
+            .chain(effects.wrapped().iter())
+            .map(|obj_ref| ObjectKey(obj_ref.0, obj_ref.1));
+        write_batch = write_batch.delete_batch(&self.perpetual_tables.objects, tombstones)?;
 
         let all_new_object_keys = effects
             .mutated()
@@ -1268,7 +1185,7 @@ impl AuthorityStore {
                                 obj_opt
                                     .expect(&format!("Older object version not found: {:?}", key)),
                             )
-                            .expect("Matching indirect object not found");
+                            .expect("Matching indirect object not found")?;
 
                         if obj.is_immutable() {
                             return None;
@@ -1312,22 +1229,20 @@ impl AuthorityStore {
             .find_object_lt_or_eq_version(object_id, version)
     }
 
-    /// Returns the last entry we have for this object in the parents_sync index used
-    /// to facilitate client and authority sync. In turn the latest entry provides the
-    /// latest object_reference, and also the latest transaction that has interacted with
-    /// this object.
+    /// Returns the latest object reference we have for this object_id in the objects table.
     ///
-    /// This parent_sync index also contains entries for deleted objects (with a digest of
-    /// ObjectDigest::deleted()), and provides the transaction digest of the certificate
-    /// that deleted the object. Note that a deleted object may re-appear if the deletion
-    /// was the result of the object being wrapped in another object.
+    /// The method may also return the reference to a deleted object with a digest of
+    /// ObjectDigest::deleted() or ObjectDigest::wrapped() and lamport version
+    /// of a transaction that deleted the object.
+    /// Note that a deleted object may re-appear if the deletion was the result of the object
+    /// being wrapped in another object.
     ///
     /// If no entry for the object_id is found, return None.
-    pub fn get_latest_parent_entry(
+    pub fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
-        self.perpetual_tables.get_latest_parent_entry(object_id)
+    ) -> Result<Option<ObjectRef>, SuiError> {
+        self.perpetual_tables.get_object_or_tombstone(object_id)
     }
 
     pub fn insert_transaction_and_effects(
@@ -1463,9 +1378,7 @@ impl ChildObjectResolver for AuthorityStore {
 
 impl ParentSync for AuthorityStore {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        Ok(self
-            .get_latest_parent_entry(object_id)?
-            .map(|(obj_ref, _)| obj_ref))
+        self.get_object_or_tombstone(object_id)
     }
 }
 
