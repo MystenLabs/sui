@@ -641,7 +641,7 @@ pub fn mock_signed_certificate(
         let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
         votes.push((*name, sig))
     }
-    let cert = Certificate::new(committee, header, votes).unwrap();
+    let cert = Certificate::new_unverified(committee, header, votes).unwrap();
     (cert.digest(), cert)
 }
 
@@ -848,7 +848,7 @@ impl CommitteeFixture {
             .into_iter()
             .map(|x| (x.author, x.signature))
             .collect();
-        Certificate::new(&committee, header.clone(), votes).unwrap()
+        Certificate::new_unverified(&committee, header.clone(), votes).unwrap()
     }
 }
 

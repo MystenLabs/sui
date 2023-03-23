@@ -393,32 +393,6 @@ impl Vote {
 
         Self { signature, ..vote }
     }
-
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
-        // Ensure the header is from the correct epoch.
-        ensure!(
-            self.epoch == committee.epoch(),
-            DagError::InvalidEpoch {
-                expected: committee.epoch(),
-                received: self.epoch
-            }
-        );
-
-        // Ensure the authority has voting rights.
-        ensure!(
-            committee.stake_by_id(self.author) > 0,
-            DagError::UnknownAuthority(self.author.to_string())
-        );
-
-        // Check the signature.
-        let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
-        self.signature
-            .verify_secure(
-                &to_intent_message(vote_digest),
-                committee.authority(&self.author).unwrap().protocol_key(),
-            )
-            .map_err(|_| DagError::InvalidSignature)
-    }
 }
 #[derive(
     Clone, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, Arbitrary,
@@ -491,7 +465,7 @@ impl PartialEq for Vote {
 #[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
 pub struct Certificate {
     pub header: Header,
-    aggregated_signature: AggregateSignatureBytes,
+    pub aggregated_signature: AggregateSignatureBytes,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
     pub metadata: Metadata,
@@ -512,7 +486,7 @@ impl Certificate {
             .collect()
     }
 
-    pub fn new(
+    pub fn new_unverified(
         committee: &Committee,
         header: Header,
         votes: Vec<(AuthorityIdentifier, Signature)>,
@@ -608,7 +582,7 @@ impl Certificate {
         pks
     }
 
-    fn signed_by(&self, committee: &Committee) -> (Stake, Vec<PublicKey>) {
+    pub fn signed_by(&self, committee: &Committee) -> (Stake, Vec<PublicKey>) {
         // Ensure the certificate has a quorum.
         let mut weight = 0;
 
