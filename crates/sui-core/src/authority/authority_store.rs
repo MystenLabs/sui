@@ -381,6 +381,26 @@ impl AuthorityStore {
             .flatten())
     }
 
+    pub fn get_object_prior_to_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        let Some(prior_version) = version.one_before() else {
+            return Ok(None);
+        };
+        let key = ObjectKey(*object_id, prior_version);
+        let Some(metadata) = self.perpetual_tables
+            .objects
+            .iter()
+            .skip_prior_to(&key)?
+            .next() else {
+                return Ok(None);
+            };
+
+        Ok(Some(self.perpetual_tables.object(metadata.1)?))
+    }
+
     pub fn multi_get_object_by_key(
         &self,
         object_keys: &[ObjectKey],

@@ -174,37 +174,17 @@ impl StateAccumulator {
         let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
             .iter()
             .map(|(id, seq_num)| {
-                let (_key, wrapper) = self
+                dbg!(id, seq_num);
+                let wrapped_tombstone = self
                     .authority_store
-                    .perpetual_tables
-                    .objects
-                    .iter()
-                    .skip_prior_to(&ObjectKey(*id, *seq_num))
-                    .unwrap_or_else(|err| {
-                        panic!("Object with id {} expected to be tombstoned: {}", id, err)
-                    })
-                    .reverse()
-                    .find(|(_key, wrapper)| {
-                        let object = self
-                            .authority_store
-                            .perpetual_tables
-                            .object(wrapper.clone())
-                            .expect("Failed to convert StoreObjectWrapper to Object");
-                        object.id() == *id && object.digest() == ObjectDigest::OBJECT_DIGEST_WRAPPED
-                    })
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Did not find tombstoned object in objects table for id {}",
-                            id
-                        )
-                    });
-                let object = self
-                    .authority_store
-                    .perpetual_tables
-                    .object(wrapper)
-                    .expect("Failed to convert StoreObjectWrapper to Object");
+                    .get_object_prior_to_key(id, *seq_num)
+                    .expect("read cannot fail")
+                    .expect("wrapped tombstone must precede unwrapped object");
+                let objref = wrapped_tombstone.compute_object_reference();
 
-                WrappedObject::new(object.id(), object.version())
+                assert!(objref.2.is_wrapped(), "{:?}", objref);
+
+                WrappedObject::new(objref.0, objref.1)
             })
             .collect();
 
