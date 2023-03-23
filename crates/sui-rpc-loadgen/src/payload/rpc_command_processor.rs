@@ -7,7 +7,7 @@ use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
+use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions, SuiTransactionResponse};
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
@@ -348,10 +348,20 @@ pub async fn check_transactions(
     }))
     .await;
 
+    let empty_vec: Vec<SuiTransactionResponse> = vec![];
+
     if transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
-            let first = t1.as_ref().unwrap();
-            let second = t2.as_ref().unwrap();
+            let first = t1.as_ref().unwrap_or_else(|_| {
+                error!("Error unwrapping first transaction: {:?}", t1.as_ref().err().unwrap());
+                &empty_vec
+                // &vec![]
+            });
+            let second = t2.as_ref().unwrap_or_else(|_| {
+                error!("Error unwrapping second transaction: {:?}", t2.as_ref().err().unwrap());
+                &empty_vec
+                // &vec![]
+            });
 
             if first.len() != second.len() {
                 warn!(
