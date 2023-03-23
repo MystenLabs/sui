@@ -37,6 +37,7 @@ use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
 
 use super::write_ahead_log::WriteAheadLog;
 
+// 
 pub struct SimpleFaucet {
     wallet: WalletContext,
     active_address: SuiAddress,
