@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::HashSet;
-use sui_adapter::adapter::run_metered_bytecode_verifier;
+use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
@@ -71,7 +71,7 @@ pub async fn check_transaction_input_with_given_gas(
     gas_object: Object,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
-
+    check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
     let mut input_objects = transaction.input_objects()?;
     let mut objects = store.check_input_objects(&input_objects, epoch_store.protocol_config())?;
 
@@ -397,7 +397,7 @@ pub fn check_non_system_packages_to_be_published(
     if !transaction.is_system_tx() {
         if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
             pt.non_system_packages_to_be_published()
-                .try_for_each(|q| run_metered_bytecode_verifier(q, protocol_config))
+                .try_for_each(|q| run_metered_move_bytecode_verifier(q, protocol_config))
                 .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() })?;
         }
     }

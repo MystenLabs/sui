@@ -44,12 +44,9 @@ use sui_types::{
     object::{Data, Object, Owner},
     storage::ChildObjectResolver,
 };
-use sui_verifier::{
-    entry_points_verifier::{
-        self, is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-        RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
-    },
-    verifier,
+use sui_verifier::entry_points_verifier::{
+    self, is_tx_context, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID,
+    RESOLVED_UTF8_STR,
 };
 
 pub fn default_verifier_config(
@@ -762,7 +759,7 @@ pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
 /// Run the bytecode verifier with a meter limit
 /// This function only fails if the verification does not complete within the limit
 #[instrument(level = "trace", skip_all)]
-pub fn run_metered_bytecode_verifier(
+pub fn run_metered_move_bytecode_verifier(
     module_bytes: &[Vec<u8>],
     protocol_config: &ProtocolConfig,
 ) -> Result<(), SuiError> {
@@ -784,9 +781,16 @@ pub fn run_metered_bytecode_verifier(
     let metered_verifier_config =
         default_verifier_config(protocol_config, true /* enable metering */);
 
+    run_metered_move_bytecode_verifier_impl(&modules, &metered_verifier_config)
+}
+
+pub fn run_metered_move_bytecode_verifier_impl(
+    modules: &[CompiledModule],
+    verifier_config: &VerifierConfig,
+) -> Result<(), SuiError> {
     // run the Move verifier
     for module in modules.iter() {
-        if let Err(e) = verify_module_with_config(&metered_verifier_config, module) {
+        if let Err(e) = verify_module_with_config(verifier_config, module) {
             // Check that the status indicates mtering timeout
             // TODO: currently the Move verifier emits `CONSTRAINT_NOT_SATISFIED` for various failures including metering timeout
             // We need to change the VM error code to be more specific when timedout for metering
@@ -802,11 +806,5 @@ pub fn run_metered_bytecode_verifier(
             };
         }
     }
-    // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
-    for module in modules.iter() {
-        // This cannot timeout, but can fail verification (which we dont care about)
-        let _ = verifier::verify_module(module, &BTreeMap::new());
-    }
-
     Ok(())
 }
