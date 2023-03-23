@@ -26,8 +26,8 @@ use tracing::debug;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
-    ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, EventFilter,
+    MoveFunctionArgType, ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
     SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiTransaction, SuiTransactionEvents, SuiTransactionResponse,
@@ -40,10 +40,9 @@ use sui_types::base_types::{
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::display::{DisplayCreatedEvent, DisplayObject};
+use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::error::UserInputError;
-use sui_types::event::Event;
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::{
     TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
@@ -927,60 +926,28 @@ async fn get_display_fields(
 async fn get_display_object_by_type(
     fullnode_api: &ReadApi,
     object_type: &StructTag,
-) -> RpcResult<Option<DisplayObject>> {
-    let display_object_id = get_display_object_id(fullnode_api, object_type).await?;
-    if display_object_id.is_none() {
-        return Ok(None);
-    }
-    // safe to unwrap because `is_none` is checked above
-    let display_object_id = display_object_id.unwrap();
-    if let ObjectRead::Exists(_, display_object, _) = fullnode_api
+    // TODO: add query version support
+) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
+    let mut events = fullnode_api
         .state
-        .get_object_read(&display_object_id)
-        .await
-        .map_err(|e| anyhow!("Failed to fetch display object {display_object_id}: {e}"))?
-    {
-        let move_object = display_object
-            .data
-            .try_as_move()
-            .ok_or_else(|| anyhow!("Failed to extract Move object from {display_object_id}"))?;
-        Ok(Some(
-            bcs::from_bytes::<DisplayObject>(move_object.contents()).map_err(|e| {
-                anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}")
-            })?,
-        ))
-    } else {
-        Err(anyhow!("Display object {display_object_id} does not exist"))?
-    }
-}
+        .query_events(
+            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+            None,
+            1,
+            true,
+        )
+        .await?;
 
-async fn get_display_object_id(
-    fullnode_api: &ReadApi,
-    object_type: &StructTag,
-) -> Result<Option<ObjectID>, Error> {
-    let package_id = ObjectID::from(object_type.address);
-    let package_tx = fullnode_api
-        .state
-        .get_object_read(&package_id)
-        .await?
-        .into_object()?
-        .previous_transaction;
-    let effects = fullnode_api.state.get_executed_effects(package_tx).await?;
-    let Some(event_digest) = effects.events_digest() else {
-        return Ok(None);
-    };
-    let events = fullnode_api.state.get_transaction_events(event_digest)?;
-    let Some(display_created_event) = events.data.iter().find(|e|{
-        e.type_ == DisplayCreatedEvent::type_(object_type)
-    }) else{
-        return Ok(None);
-    };
-    let Event { contents, .. } = display_created_event;
-    let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(contents)
-        .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
-        .id
-        .bytes;
-    Ok(Some(display_object_id))
+    // If there's any recent version of Display, give it to the client.
+    // TODO: add support for version query.
+    if let Some(event) = events.pop() {
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])
+            .map_err(|e| anyhow!("Failed to deserialize 'VersionUpdatedEvent': {e}"))?;
+
+        Ok(Some(display))
+    } else {
+        Ok(None)
+    }
 }
 
 fn get_object_type_and_struct(
