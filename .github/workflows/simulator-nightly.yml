@@ -67,7 +67,7 @@ jobs:
   
   notify:
     name: Notify
-    needs: [simtest]
+    # needs: [simtest]
     runs-on: ubuntu-latest
     if: always() # always notify
 
