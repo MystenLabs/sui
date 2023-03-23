@@ -63,6 +63,7 @@ pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
+use futures::FutureExt;
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
@@ -322,8 +323,8 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         // Send the transaction to all validators.
         let mut futures = FuturesUnordered::new();
-        for client in self.clients.values() {
-            let fut = client.handle_transaction(tx.clone());
+        for (name, client) in self.clients.iter() {
+            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
             futures.push(fut);
         }
 
@@ -333,7 +334,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut total_stake = 0;
         let mut votes = Vec::new();
         let mut certificate = None;
-        while let Some(response) = futures.next().await {
+        while let Some((response, name)) = futures.next().await {
             match response {
                 Ok(response) => match response.status {
                     // If all goes well, the authority returns a vote.
@@ -355,7 +356,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 },
                 // This typically happens when the validators are overloaded and the transaction is
                 // immediately rejected.
-                Err(e) => tracing::warn!("Failed to submit transaction: {e}"),
+                Err(e) => {
+                    self.qd
+                        .authority_aggregator()
+                        .load()
+                        .metrics
+                        .process_tx_errors
+                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                        .inc();
+                    tracing::warn!("Failed to submit transaction: {e}")
+                }
             }
 
             if total_stake >= self.committee.quorum_threshold() {
@@ -411,14 +421,20 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         total_stake = 0;
         let mut transaction_effects = None;
         let mut transaction_events = None;
-        for client in self.clients.values() {
+        for (name, client) in self.clients.iter() {
             let client = client.clone();
             let certificate = certified_transaction.clone();
-            futures.push(async move { client.handle_certificate(certificate).await });
+            let name = *name;
+            futures.push(async move {
+                client
+                    .handle_certificate(certificate)
+                    .map(move |r| (r, name))
+                    .await
+            });
         }
 
         // Wait for the replies from a quorum of validators.
-        while let Some(response) = futures.next().await {
+        while let Some((response, name)) = futures.next().await {
             match response {
                 // If all goes well, the validators reply with signed effects.
                 Ok(HandleCertificateResponse {
@@ -433,7 +449,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
                 // This typically happens when the validators are overloaded and the certificate is
                 // immediately rejected.
-                Err(e) => tracing::warn!("Failed to submit certificate: {e}"),
+                Err(e) => {
+                    self.qd
+                        .authority_aggregator()
+                        .load()
+                        .metrics
+                        .process_cert_errors
+                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                        .inc();
+                    tracing::warn!("Failed to submit certificate: {e}")
+                }
             }
 
             if total_stake >= self.committee.quorum_threshold() {
