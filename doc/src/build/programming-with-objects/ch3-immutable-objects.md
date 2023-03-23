@@ -141,7 +141,7 @@ Set the newly created object ID to `$OBJECT`. To view the objects in the current
 $ sui client objects $ADDR
 ```
 
-you should see an object with the ID you used for `$OBJECT`. To turn it into an immutable object:
+You should see an object with the ID you used for `$OBJECT`. To turn it into an immutable object:
 
 ```shell
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
