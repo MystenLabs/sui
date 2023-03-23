@@ -352,16 +352,22 @@ pub async fn check_transactions(
 
     if transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
-            let first = t1.as_ref().unwrap_or_else(|_| {
-                error!("Error unwrapping first transaction: {:?}", t1.as_ref().err().unwrap());
-                &empty_vec
-                // &vec![]
-            });
-            let second = t2.as_ref().unwrap_or_else(|_| {
-                error!("Error unwrapping second transaction: {:?}", t2.as_ref().err().unwrap());
-                &empty_vec
-                // &vec![]
-            });
+            let first = match t1 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!("Error unwrapping first vec of transactions: {:?}", err);
+                    error!("Logging digests, {:?}", digests);
+                    return;
+                }
+            };
+            let second = match t2 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!("Error unwrapping second vec of transactions: {:?}", err);
+                    error!("Logging digests, {:?}", digests);
+                    return;
+                }
+            };
 
             if first.len() != second.len() {
                 warn!(
