@@ -59,8 +59,7 @@ use crate::api::{
 };
 use crate::error::Error;
 use crate::{
-    get_balance_change_from_effect, get_object_change_from_effect, ObjectProviderCache,
-    SuiRpcModule,
+    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
 };
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
@@ -429,7 +428,7 @@ impl ReadApiServer for ReadApi {
         let object_cache = ObjectProviderCache::new(self.state.clone());
         if opts.show_balance_changes {
             if let Some(effects) = &temp_response.effects {
-                let balance_changes = get_balance_change_from_effect(&object_cache, effects)
+                let balance_changes = get_balance_changes_from_effect(&object_cache, effects)
                     .await
                     .map_err(Error::SuiError)?;
                 temp_response.balance_changes = Some(balance_changes);
@@ -441,9 +440,15 @@ impl ReadApiServer for ReadApi {
                 (&temp_response.effects, &temp_response.transaction)
             {
                 let sender = input.data().intent_message().value.sender();
-                let object_changes = get_object_change_from_effect(&object_cache, sender, effects)
-                    .await
-                    .map_err(Error::SuiError)?;
+                let object_changes = get_object_changes(
+                    &object_cache,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_deleted(),
+                )
+                .await
+                .map_err(Error::SuiError)?;
                 temp_response.object_changes = Some(object_changes);
             }
         }
@@ -615,7 +620,7 @@ impl ReadApiServer for ReadApi {
         if opts.show_balance_changes {
             let mut futures = vec![];
             for resp in temp_response.values() {
-                futures.push(get_balance_change_from_effect(
+                futures.push(get_balance_changes_from_effect(
                     &object_cache,
                     resp.effects.as_ref().ok_or_else(|| {
                         anyhow!("unable to derive balance changes because effect is empty")
@@ -637,7 +642,11 @@ impl ReadApiServer for ReadApi {
         if opts.show_object_changes {
             let mut futures = vec![];
             for resp in temp_response.values() {
-                futures.push(get_object_change_from_effect(
+                let effects = resp.effects.as_ref().ok_or_else(|| {
+                    anyhow!("unable to derive object changes because effect is empty")
+                })?;
+
+                futures.push(get_object_changes(
                     &object_cache,
                     resp.transaction
                         .as_ref()
@@ -648,9 +657,9 @@ impl ReadApiServer for ReadApi {
                         .intent_message()
                         .value
                         .sender(),
-                    resp.effects.as_ref().ok_or_else(|| {
-                        anyhow!("unable to derive object changes because effect is empty")
-                    })?,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_deleted(),
                 ));
             }
             let results = join_all(futures).await;

@@ -5,6 +5,7 @@ use crate::errors::IndexerError;
 use crate::store::IndexerStore;
 use crate::types::{SuiTransactionFullResponse, SuiTransactionFullResponseWithOptions};
 use async_trait::async_trait;
+use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
@@ -46,37 +47,47 @@ impl<S: IndexerStore> ReadApi<S> {
             .map(|n| n as u64)
     }
 
-    fn get_transaction_with_options_internal(
+    async fn get_transaction_with_options_internal(
         &self,
         digest: &TransactionDigest,
         options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
-        let response: SuiTransactionFullResponse = self
+        let tx = self
             .state
-            .get_transaction_by_digest(&digest.base58_encode())?
-            .try_into()?;
+            .get_transaction_by_digest(&digest.base58_encode())?;
+        let tx_full_resp: SuiTransactionFullResponse = self
+            .state
+            .compose_full_transaction_response(tx, options.clone())
+            .await?;
+
         let sui_transaction_response = SuiTransactionFullResponseWithOptions {
-            response,
+            response: tx_full_resp,
             options: options.unwrap_or_default(),
         }
         .into();
         Ok(sui_transaction_response)
     }
 
-    fn multi_get_transactions_with_options_internal(
+    async fn multi_get_transactions_with_options_internal(
         &self,
         digests: &[TransactionDigest],
-        _options: Option<SuiTransactionResponseOptions>,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> Result<Vec<SuiTransactionResponse>, IndexerError> {
         let digest_strs = digests
             .iter()
             .map(|digest| digest.base58_encode())
             .collect::<Vec<_>>();
         let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
-        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = tx_vec
+
+        let tx_full_resp_futures = tx_vec.into_iter().map(|tx| {
+            self.state
+                .compose_full_transaction_response(tx, options.clone())
+        });
+        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = join_all(tx_full_resp_futures)
+            .await
             .into_iter()
-            .map(|txn| txn.try_into())
             .collect::<Result<Vec<_>, _>>()?;
+
         let tx_resp_vec: Vec<SuiTransactionResponse> =
             tx_full_resp_vec.into_iter().map(|txn| txn.into()).collect();
         Ok(tx_resp_vec)
@@ -346,7 +357,9 @@ where
                 .get_transaction_with_options(digest, options)
                 .await;
         }
-        Ok(self.get_transaction_with_options_internal(&digest, options)?)
+        Ok(self
+            .get_transaction_with_options_internal(&digest, options)
+            .await?)
     }
 
     async fn multi_get_transactions_with_options(
@@ -363,7 +376,9 @@ where
                 .multi_get_transactions_with_options(digests, options)
                 .await;
         }
-        Ok(self.multi_get_transactions_with_options_internal(&digests, options)?)
+        Ok(self
+            .multi_get_transactions_with_options_internal(&digests, options)
+            .await?)
     }
 
     async fn get_normalized_move_modules_by_package(

@@ -510,7 +510,7 @@ impl TryFrom<SuiTransactionResponse> for Operations {
             .effects
             .ok_or_else(|| anyhow!("Response effects should not be empty"))?;
         let gas_owner = effect.gas_object().owner.get_owner_address()?;
-        let gas_summary = effect.gas_used();
+        let gas_summary = effect.gas_cost_summary();
         let gas_used = gas_summary.storage_rebate as i128
             - gas_summary.storage_cost as i128
             - gas_summary.computation_cost as i128;

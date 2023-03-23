@@ -154,7 +154,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
         // canonical object digest is Base58 encoded
         let gas_object_digest = gas_object_ref.digest.base58_encode();
 
-        let gas_summary = effects.gas_used();
+        let gas_summary = effects.gas_cost_summary();
         let computation_cost = gas_summary.computation_cost;
         let storage_cost = gas_summary.storage_cost;
         let storage_rebate = gas_summary.storage_rebate;
