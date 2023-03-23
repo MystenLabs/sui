@@ -138,6 +138,7 @@ pub struct AuthorityPerEpochStore {
     /// Lock ordering: this is a 'leaf' lock, no other locks should be acquired in the scope of this lock
     /// In particular, this lock is always acquired after taking read or write lock on reconfig state
     pending_consensus_certificates: Mutex<HashSet<TransactionDigest>>,
+
     /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
     /// crashes.
     wal: Arc<

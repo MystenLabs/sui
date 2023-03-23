@@ -19,7 +19,7 @@ mod test {
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::checkpoints::CheckpointStore;
-    use sui_macros::{register_fail_points, sim_test};
+    use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
@@ -139,7 +139,9 @@ mod test {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
 
-        let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
+        let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
+
+        let dead_validator = dead_validator_orig.clone();
         let client_node = sui_simulator::current_simnode_id();
         register_fail_points(
             &["batch-write", "transaction-commit", "put-cf"],
@@ -147,6 +149,14 @@ mod test {
                 handle_failpoint(dead_validator.clone(), client_node, 0.01);
             },
         );
+
+        let dead_validator = dead_validator_orig.clone();
+        register_fail_point_async("crash", move || {
+            let dead_validator = dead_validator.clone();
+            async move {
+                handle_failpoint(dead_validator.clone(), client_node, 0.01);
+            }
+        });
         test_simulated_load(test_cluster, 120).await;
     }
 

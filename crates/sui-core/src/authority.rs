@@ -754,12 +754,6 @@ impl AuthorityState {
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
         // very common to receive the same tx multiple times simultaneously due to gossip, so we
         // may as well hold the lock and save the cpu time for other requests.
-        //
-        // Note that this lock has some false contention (since it uses a MutexTable), so you can't
-        // assume that different txes can execute concurrently. This is probably the fastest way
-        // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
-        // epsilon of txes) while solutions without false contention have slightly higher cost
-        // for every tx.
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         self.process_certificate(tx_guard, certificate, epoch_store)
@@ -2815,6 +2809,7 @@ impl AuthorityState {
         } else {
             None
         };
+
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
         epoch_store.insert_tx_cert_and_effects_signature(
@@ -2822,6 +2817,9 @@ impl AuthorityState {
             certificate.certificate_sig(),
             effects_sig.as_ref(),
         )?;
+
+        // Allow testing what happens if we crash here.
+        fail_point_async!("crash");
 
         self.database
             .update_state(
