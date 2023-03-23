@@ -974,6 +974,15 @@ impl SuiNode {
                     )
                     .await;
 
+                #[cfg(msim)]
+                {
+                    self.check_is_consistent_state(
+                        self.accumulator.clone(),
+                        cur_epoch_store.epoch(),
+                        true,
+                    );
+                }
+
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
                     .await;
