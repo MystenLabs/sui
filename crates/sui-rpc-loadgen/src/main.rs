@@ -147,7 +147,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
     use crate::payload::CommandData;
-    let command_payloads = if let CommandData::MultiGetTransactions(multi_get_txns) = command.data {
+    let command_payloads = if let CommandData::MultiGetTransactions(_) = command.data {
         let num_chunks = 64;
         let chunk_size = 10000;
         (0..num_chunks)
@@ -161,7 +161,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // code block if command.data is not of type MultiGetTransactions
         vec![command.clone()]
     };
-
 
     let load_test = LoadTest {
         processor,
