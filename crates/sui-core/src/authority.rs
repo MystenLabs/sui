@@ -424,8 +424,8 @@ impl AuthorityMetrics {
             consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
                 .unwrap(),
             consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
-                "consensus_handler_num_low_scoring_authorities", 
-                "Number of low scoring authorities based on reputation scores from consensus", 
+                "consensus_handler_num_low_scoring_authorities",
+                "Number of low scoring authorities based on reputation scores from consensus",
                 registry
             ).unwrap(),
             consensus_handler_scores: register_int_gauge_vec_with_registry!(
@@ -2990,6 +2990,7 @@ impl AuthorityState {
             SuiSystem::ID,
             sui_system_injection::get_modules(self.name),
             SuiSystem::transitive_dependencies(),
+            max_binary_format_version,
         ).await else {
             return vec![];
         };
