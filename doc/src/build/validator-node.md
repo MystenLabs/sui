@@ -93,7 +93,7 @@ Operationally this is achieved through a Gas Price Survey that occurs as follows
 
 For example, assume that there are seven validators with equal stake, and the price quotes they submit are {15, 1, 4, 2, 8, 3, 23}. The protocol sets the reference gas price at 8.
 
-In practice, the process for submitting a gas price quote for the Gas Price Survey is very simple.  Each validator owns an object that contains their quote for the reference gas price. To change their response, they must update the value in that object.
+In practice, the process for submitting a gas price quote for the Gas Price Survey is a straightforward one.  Each validator owns an object that contains their quote for the reference gas price. To change their response, they must update the value in that object.
 
 For example, to set the price quote for the next epoch to 42, run:
 
