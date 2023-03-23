@@ -263,7 +263,7 @@ async fn handle_local_clients_transactions() {
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
     let myself = my_primary.worker(worker_id);
-    let name = my_primary.public_key();
+    let authority_public_key = my_primary.public_key();
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -287,7 +287,7 @@ async fn handle_local_clients_transactions() {
 
     // Spawn a `Worker` instance.
     Worker::spawn(
-        name.clone(),
+        my_primary.authority().clone(),
         myself.keypair(),
         worker_id,
         committee.clone(),
@@ -336,7 +336,10 @@ async fn handle_local_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
+    let address = worker_cache
+        .worker(&authority_public_key, &worker_id)
+        .unwrap()
+        .transactions;
     let client = LocalNarwhalClient::get_global(&address).unwrap().load();
 
     let join_handle = tokio::task::spawn(async move {
