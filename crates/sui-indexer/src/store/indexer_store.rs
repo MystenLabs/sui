@@ -3,14 +3,15 @@
 
 use async_trait::async_trait;
 
-use move_core_types::language_storage::StructTag;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiObjectData,
-    SuiTransactionResponseOptions,
+    SuiObjectDataFilter, SuiTransactionResponseOptions,
 };
-use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
+use sui_types::digests::CheckpointDigest;
 use sui_types::error::SuiError;
 use sui_types::event::EventID;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::ObjectRead;
 use sui_types::storage::ObjectStore;
 
@@ -32,6 +33,10 @@ pub trait IndexerStore {
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
     fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError>;
+    fn get_checkpoint_sequence_number(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<CheckpointSequenceNumber, IndexerError>;
 
     fn get_event(&self, id: EventID) -> Result<Event, IndexerError>;
     fn get_events(
@@ -48,30 +53,12 @@ pub trait IndexerStore {
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
 
-    fn get_all_objects_page(
+    fn query_objects(
         &self,
+        filter: SuiObjectDataFilter,
+        at_checkpoint: CheckpointSequenceNumber,
         cursor: Option<ObjectID>,
         limit: usize,
-        is_descending: bool,
-        at_checkpoint: Option<CheckpointId>,
-    ) -> Result<Vec<ObjectRead>, IndexerError>;
-
-    fn get_all_objects_page_by_owner(
-        &self,
-        cursor: Option<ObjectID>,
-        owner: SuiAddress,
-        limit: usize,
-        is_descending: bool,
-        at_checkpoint: Option<CheckpointId>,
-    ) -> Result<Vec<ObjectRead>, IndexerError>;
-
-    fn get_all_objects_page_by_type(
-        &self,
-        cursor: Option<ObjectID>,
-        type_: StructTag,
-        limit: usize,
-        is_descending: bool,
-        at_checkpoint: Option<CheckpointId>,
     ) -> Result<Vec<ObjectRead>, IndexerError>;
 
     fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;

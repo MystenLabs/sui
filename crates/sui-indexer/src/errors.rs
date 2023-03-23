@@ -70,6 +70,9 @@ pub enum IndexerError {
     #[error("Invalid argument with error: `{0}`")]
     InvalidArgumentError(String),
 
+    #[error(transparent)]
+    UserInputError(#[from] UserInputError),
+
     #[error("`{0}`: `{1}`")]
     ErrorWithContext(String, Box<IndexerError>),
 }

@@ -35,8 +35,6 @@ pub trait ExtendedApi {
         cursor: Option<ObjectID>,
         /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
         limit: Option<usize>,
-        /// query result ordering, default to false (ascending order), oldest record first.
-        descending_order: Option<bool>,
         /// If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.
         at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage>;

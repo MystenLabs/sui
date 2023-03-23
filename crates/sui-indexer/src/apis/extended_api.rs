@@ -5,8 +5,6 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
-use crate::errors::IndexerError;
-use crate::store::IndexerStore;
 use sui_json_rpc::api::{
     validate_limit, ExtendedApiServer, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
     QUERY_MAX_RESULT_LIMIT_OBJECTS,
@@ -18,6 +16,9 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, ObjectID};
+
+use crate::errors::IndexerError;
+use crate::store::IndexerStore;
 
 pub(crate) struct ExtendedApi<S> {
     state: S,
@@ -33,41 +34,26 @@ impl<S: IndexerStore> ExtendedApi<S> {
         query: SuiObjectResponseQuery,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
-        descending_order: Option<bool>,
         at_checkpoint: Option<CheckpointId>,
     ) -> Result<ObjectsPage, IndexerError> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
-        let is_descending = descending_order.unwrap_or_default();
-        let SuiObjectResponseQuery { filter, options } = query;
 
-        let objects_from_db = match filter {
-            None => self
-                .state
-                .get_all_objects_page(cursor, limit, is_descending, at_checkpoint),
-            Some(SuiObjectDataFilter::AddressOwner(address)) => {
-                self.state.get_all_objects_page_by_owner(
-                    cursor,
-                    address,
-                    limit,
-                    is_descending,
-                    at_checkpoint,
-                )
+        let at_checkpoint = match at_checkpoint {
+            Some(CheckpointId::SequenceNumber(seq)) => seq,
+            Some(CheckpointId::Digest(digest)) => {
+                self.state.get_checkpoint_sequence_number(digest)?
             }
-            Some(SuiObjectDataFilter::StructType(struct_tag)) => {
-                self.state.get_all_objects_page_by_type(
-                    cursor,
-                    struct_tag,
-                    limit,
-                    is_descending,
-                    at_checkpoint,
-                )
-            }
-            _ => Err(IndexerError::NotImplementedError(format!(
-                "Filter type [{filter:?}] not supported by the Indexer."
-            )))?,
+            None => self.state.get_latest_checkpoint_sequence_number()? as u64,
         };
 
-        let mut data = objects_from_db?
+        let SuiObjectResponseQuery { filter, options } = query;
+        let filter = filter.unwrap_or_else(|| SuiObjectDataFilter::MatchAll(vec![]));
+
+        let objects_from_db = self
+            .state
+            .query_objects(filter, at_checkpoint, cursor, limit + 1)?;
+
+        let mut data = objects_from_db
             .into_iter()
             .map(|obj_read| {
                 SuiObjectResponse::try_from((obj_read, options.clone().unwrap_or_default()))
@@ -125,10 +111,9 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         query: SuiObjectResponseQuery,
         cursor: Option<ObjectID>,
         limit: Option<usize>,
-        descending_order: Option<bool>,
         at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
-        Ok(self.query_objects_internal(query, cursor, limit, descending_order, at_checkpoint)?)
+        Ok(self.query_objects_internal(query, cursor, limit, at_checkpoint)?)
     }
 
     async fn get_total_packages(&self) -> RpcResult<u64> {

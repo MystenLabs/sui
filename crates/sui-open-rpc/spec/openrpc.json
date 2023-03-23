@@ -1979,62 +1979,6 @@
       }
     },
     {
-      "name": "suix_queryObjects",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return the list of queried objects. Note that this is an enhanced full node only api.",
-      "params": [
-        {
-          "name": "query",
-          "description": "the objects query criteria.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectResponseQuery"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.",
-          "schema": {
-            "type": "boolean"
-          }
-        },
-        {
-          "name": "at_checkpoint",
-          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointId"
-          }
-        }
-      ],
-      "result": {
-        "name": "ObjectsPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_ObjectRead_and_ObjectID"
-        }
-      }
-    },
-    {
       "name": "suix_getTotalAddresses",
       "tags": [
         {
@@ -2088,6 +2032,55 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "suix_queryObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of queried objects. Note that this is an enhanced full node only api.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the objects query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "at_checkpoint",
+          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointId"
+          }
+        }
+      ],
+      "result": {
+        "name": "ObjectsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_ObjectRead_and_ObjectID"
         }
       }
     },

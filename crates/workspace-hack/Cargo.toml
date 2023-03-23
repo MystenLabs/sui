@@ -355,6 +355,7 @@ nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
+ntest = { version = "0.9", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
 num-bigint = { version = "0.4" }
@@ -1013,6 +1014,9 @@ nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
+ntest = { version = "0.9", default-features = false }
+ntest_test_cases = { version = "0.9", default-features = false }
+ntest_timeout = { version = "0.9", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
 num-bigint = { version = "0.4" }
