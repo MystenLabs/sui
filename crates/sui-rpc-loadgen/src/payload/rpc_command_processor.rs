@@ -330,32 +330,42 @@ pub async fn check_transactions(
     let read = clients.read().await;
     let clients = read.clone();
 
-    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| {
-        async move {
-            let start_time = Instant::now();
-            let transactions = client
-                .read_api()
-                .multi_get_transactions_with_options(
-                    digests.to_vec(),
-                    SuiTransactionResponseOptions::full_content(),
-                )
-                .await;
-            let elapsed_time = start_time.elapsed();
-            println!(
-                "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-                elapsed_time.as_secs_f64()
-            );
-            transactions
-        }
+    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| async move {
+        let start_time = Instant::now();
+        let transactions = client
+            .read_api()
+            .multi_get_transactions_with_options(
+                digests.to_vec(),
+                SuiTransactionResponseOptions::new(),
+            )
+            .await;
+        let elapsed_time = start_time.elapsed();
+        println!(
+            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+            elapsed_time.as_secs_f64()
+        );
+        transactions
     }))
     .await;
 
     if transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
-            for (i, (a, b)) in t1.iter().zip(t2.iter()).enumerate() {
-                if a != b {
+            let first = t1.as_ref().unwrap();
+            let second = t2.as_ref().unwrap();
+
+            if first.len() != second.len() {
+                warn!(
+                    "Transaction response lengths do not match: {} vs {}",
+                    first.len(),
+                    second.len()
+                );
+                return; // Return early if the lengths don't match
+            }
+
+            for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
+                if a.digest != b.digest {
                     warn!(
-                        "Transaction response mismatch with digest {:?}:\nFN:\n{:?}\nIndexer:\n{:?} ",
+                        "Transaction response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
                         digests[i], a, b
                     );
                 }
