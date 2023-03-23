@@ -4,7 +4,7 @@
 import { ArrowLeft16 } from '@mysten/icons';
 import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import { Button } from '_app/shared/ButtonUI';
@@ -57,7 +57,6 @@ const FILTER_PROPERTIES = ['id', 'url', 'name'];
 
 function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const nftId = searchParams.get('objectId');
     const accountAddress = useActiveAddress();
 
@@ -177,14 +176,13 @@ function NFTDetailsPage() {
                                 <Button
                                     variant="primary"
                                     disabled={!isTransferable}
-                                    onClick={() => {
-                                        navigate(`/nft-transfer/${nftId}`);
-                                    }}
-                                    text={
+                                    to={`/nft-transfer/${nftId}`}
+                                    title={
                                         isTransferable
-                                            ? 'Send NFT'
+                                            ? undefined
                                             : "Unable to send. NFT doesn't have public transfer method"
                                     }
+                                    text="Send NFT"
                                     after={
                                         <ArrowLeft16 className="rotate-180 text-xs" />
                                     }
