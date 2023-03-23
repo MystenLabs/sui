@@ -342,7 +342,10 @@ pub async fn check_transactions(
             let first = match t1 {
                 Ok(vec) => vec.as_slice(),
                 Err(err) => {
-                    error!("Error unwrapping first vec of transactions: {:?}, logging digests: {:?}", err, digests);
+                    error!(
+                        "Error unwrapping first vec of transactions: {:?}, logging digests: {:?}",
+                        err, digests
+                    );
                     error!("Logging digests, {:?}", digests);
                     return;
                 }
@@ -350,7 +353,10 @@ pub async fn check_transactions(
             let second = match t2 {
                 Ok(vec) => vec.as_slice(),
                 Err(err) => {
-                    error!("Error unwrapping second vec of transactions: {:?}, logging digests: {:?}", err, digests);
+                    error!(
+                        "Error unwrapping second vec of transactions: {:?}, logging digests: {:?}",
+                        err, digests
+                    );
                     return;
                 }
             };
