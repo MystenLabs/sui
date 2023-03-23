@@ -58,7 +58,7 @@ Each epoch change emits a `0x2::validator_set::ValidatorEpochInfo` event per val
 
 ## Staking rewards
 
-Within a given validator staking pool, all stakers receive the same proportion of rewards through the pool’s exchange rate appreciation. In addition, since validators earn commissions over the stake they manage, validators receive additional `StakedSUI` objects at the end of each epoch in proportion to the amount of commissions earned by their staking pool.
+Within a given validator staking pool, all stakers receive the same proportion of rewards through the pool’s exchange rate appreciation. In addition, since validators earn commissions over the stake they manage, validators receive additional `StakedSUI` objects at the end of each epoch in proportion to the amount of commissions their staking pool earns.
 
 Staking rewards are funded by transaction gas fees collected during the current epoch and by stake subsidies released at the end of the epoch. 
 
