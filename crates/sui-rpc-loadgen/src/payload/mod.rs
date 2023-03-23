@@ -7,6 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
 use std::time::Duration;
+use sui_types::digests::TransactionDigest;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -62,6 +63,23 @@ impl Command {
         }
     }
 
+    pub fn new_multi_get_transactions(
+        start_checkpoint: CheckpointSequenceNumber,
+        end_checkpoint: Option<CheckpointSequenceNumber>,
+        digests: Option<Vec<TransactionDigest>>,
+    ) -> Self {
+        Self {
+            data: CommandData::MultiGetTransactions(MultiGetTransactions {
+                checkpoints: GetCheckpoints {
+                    start: start_checkpoint,
+                    end: end_checkpoint,
+                },
+                digests,
+            }),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -100,7 +118,10 @@ pub struct GetCheckpoints {
 }
 
 #[derive(Clone)]
-pub struct MultiGetTransactions {}
+pub struct MultiGetTransactions {
+    checkpoints: GetCheckpoints,
+    digests: Option<Vec<TransactionDigest>>,
+}
 
 #[derive(Clone)]
 pub struct PaySui {}

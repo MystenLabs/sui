@@ -11,7 +11,9 @@ use std::time::Duration;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
+use sui_types::digests::TransactionDigest;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::load_test::LoadTest;
 use crate::payload::{Command, Payload, RpcCommandProcessor};
@@ -56,7 +58,7 @@ pub enum ClapCommand {
         #[clap(short, long, default_value_t = 0)]
         start: u64,
 
-        /// inclusive, use `getLatestCheckpointSequenceNumber` if `None`
+        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
         #[clap(short, long)]
         end: Option<u64>,
 
@@ -68,6 +70,20 @@ pub enum ClapCommand {
         // TODO(chris) customize recipients and amounts
         #[clap(flatten)]
         common: CommonOptions,
+    },
+    #[clap(name = "multi-get-transactions")]
+    MultiGetTransactions {
+        #[clap(flatten)]
+        common: CommonOptions,
+        /// Default to start from checkpoint 0
+        #[clap(short, long, default_value_t = 0)]
+        start_checkpoint: u64,
+
+        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
+        #[clap(short, long)]
+        end_checkpoint: Option<u64>,
+        #[clap(short, long, multiple = true)]
+        digests: Option<Vec<TransactionDigest>>,
     },
 }
 
@@ -90,12 +106,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let network_tracing_level = "info";
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
 
+    let uuid = Uuid::new_v4();
+    let log_filename = format!("sui-rpc-loadgen.{}.log", uuid);
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .with_log_level(&log_filter)
+        .with_log_file(&log_filename)
         .init();
+
     let opts = Opts::parse();
+    info!("Logging to {}", log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
     // TODO(chris): remove hardcoded value since we only need keystore for write commands
@@ -114,6 +135,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ClapCommand::GetCheckpoints { common, start, end } => {
             (Command::new_get_checkpoints(start, end), common)
         }
+        ClapCommand::MultiGetTransactions {
+            common,
+            start_checkpoint,
+            end_checkpoint,
+            digests,
+        } => (
+            Command::new_multi_get_transactions(start_checkpoint, end_checkpoint, digests),
+            common,
+        ),
     };
 
     let command = command
@@ -121,18 +151,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_repeat_n_times(common.repeat);
 
     let processor = RpcCommandProcessor::new(&opts.urls).await;
+
+    use crate::payload::CommandData;
+    // todo: make flexible
+    let command_payloads = if let CommandData::MultiGetTransactions(_) = command.data {
+        let num_chunks = opts.num_threads;
+        let chunk_size = 600000 / num_chunks; // todo: adjustable limit
+        (0..num_chunks)
+            .map(|i| {
+                let start = i * chunk_size;
+                let end = (i + 1) * chunk_size;
+                Command::new_multi_get_transactions(
+                    start.try_into().unwrap(),
+                    Some(end.try_into().unwrap()),
+                    None,
+                )
+            })
+            .collect()
+    } else {
+        vec![command.clone(); opts.num_threads]
+    };
+
+    let payloads: Vec<Payload> = command_payloads
+        .into_iter()
+        .map(|command| Payload {
+            commands: vec![command], // note commands is also a vector
+            encoded_keypair: encoded_keypair.clone(),
+            signer_address,
+            gas_payment: None,
+        })
+        .collect();
+
     let load_test = LoadTest {
         processor,
-        payloads: vec![
-            // TODO(chris): use different gas_payment for different threads
-            Payload {
-                commands: vec![command],
-                encoded_keypair,
-                signer_address,
-                gas_payment: None
-            };
-            opts.num_threads
-        ],
+        payloads,
     };
     load_test.run().await?;
 
