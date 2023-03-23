@@ -1370,7 +1370,7 @@ checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 [[package]]
 name = "bytecode-interpreter-crypto"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "curve25519-dalek-fiat",
@@ -4586,27 +4586,57 @@ checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 [[package]]
 name = "move-abigen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
  "heck 0.3.3",
  "log",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-core-types",
- "move-model",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-abigen"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "heck 0.3.3",
+ "log",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "serde 1.0.152",
 ]
 
 [[package]]
 name = "move-binary-format"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
- "move-core-types",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "once_cell",
+ "ref-cast",
+ "serde 1.0.152",
+ "variant_count",
+]
+
+[[package]]
+name = "move-binary-format"
+version = "0.0.3"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "once_cell",
  "ref-cast",
  "serde 1.0.152",
@@ -4616,31 +4646,63 @@ dependencies = [
 [[package]]
 name = "move-borrow-graph"
 version = "0.0.1"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
+
+[[package]]
+name = "move-borrow-graph"
+version = "0.0.1"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
 
 [[package]]
 name = "move-bytecode-source-map"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
- "move-binary-format",
- "move-command-line-common",
- "move-core-types",
- "move-ir-types",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-bytecode-source-map"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "serde 1.0.152",
 ]
 
 [[package]]
 name = "move-bytecode-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
- "move-binary-format",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "petgraph 0.5.1",
+ "serde-reflection",
+]
+
+[[package]]
+name = "move-bytecode-utils"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "petgraph 0.5.1",
  "serde-reflection",
 ]
@@ -4648,29 +4710,42 @@ dependencies = [
 [[package]]
 name = "move-bytecode-verifier"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "fail 0.4.0",
- "move-binary-format",
- "move-borrow-graph",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "petgraph 0.5.1",
+]
+
+[[package]]
+name = "move-bytecode-verifier"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "fail 0.4.0",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "petgraph 0.5.1",
 ]
 
 [[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
  "crossterm 0.21.0",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-command-line-common",
- "move-disassembler",
- "move-ir-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "regex",
  "tui",
 ]
@@ -4678,7 +4753,7 @@ dependencies = [
 [[package]]
 name = "move-cli"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4687,28 +4762,28 @@ dependencies = [
  "colored",
  "difference",
  "itertools",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-bytecode-verifier",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-bytecode-viewer",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-coverage",
- "move-disassembler",
- "move-docgen",
- "move-errmapgen",
- "move-ir-types",
- "move-package",
- "move-prover",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-coverage 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-errmapgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-prover 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-resource-viewer",
- "move-stdlib",
- "move-symbol-pool",
+ "move-stdlib 0.1.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-unit-test",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-test-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "read-write-set",
  "read-write-set-dynamic",
@@ -4724,13 +4799,30 @@ dependencies = [
 [[package]]
 name = "move-command-line-common"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "difference",
  "dirs-next",
  "hex",
- "move-core-types",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num-bigint",
+ "once_cell",
+ "serde 1.0.152",
+ "sha2 0.9.9",
+ "walkdir",
+]
+
+[[package]]
+name = "move-command-line-common"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "difference",
+ "dirs-next",
+ "hex",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num-bigint",
  "once_cell",
  "serde 1.0.152",
@@ -4741,7 +4833,7 @@ dependencies = [
 [[package]]
 name = "move-compiler"
 version = "0.0.1"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4749,15 +4841,44 @@ dependencies = [
  "codespan-reporting",
  "difference",
  "hex",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-source-map",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-core-types",
- "move-ir-to-bytecode",
- "move-ir-types",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-to-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num-bigint",
+ "once_cell",
+ "petgraph 0.5.1",
+ "regex",
+ "sha3 0.9.1",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "move-compiler"
+version = "0.0.1"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.2.23",
+ "codespan-reporting",
+ "difference",
+ "hex",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-to-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num-bigint",
  "once_cell",
  "petgraph 0.5.1",
@@ -4770,7 +4891,26 @@ dependencies = [
 [[package]]
 name = "move-core-types"
 version = "0.0.4"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "ethnum",
+ "hex",
+ "num",
+ "once_cell",
+ "primitive-types",
+ "rand 0.8.5",
+ "ref-cast",
+ "serde 1.0.152",
+ "serde_bytes",
+ "uint",
+]
+
+[[package]]
+name = "move-core-types"
+version = "0.0.4"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4789,18 +4929,38 @@ dependencies = [
 [[package]]
 name = "move-coverage"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
  "clap 3.2.23",
  "codespan",
  "colored",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-command-line-common",
- "move-core-types",
- "move-ir-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "once_cell",
+ "petgraph 0.5.1",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-coverage"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.2.23",
+ "codespan",
+ "colored",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "once_cell",
  "petgraph 0.5.1",
  "serde 1.0.152",
@@ -4809,33 +4969,69 @@ dependencies = [
 [[package]]
 name = "move-disassembler"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
  "colored",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-coverage",
- "move-ir-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-coverage 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+]
+
+[[package]]
+name = "move-disassembler"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "colored",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-coverage 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
 ]
 
 [[package]]
 name = "move-docgen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "codespan",
  "codespan-reporting",
  "itertools",
  "log",
- "move-compiler",
- "move-model",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num",
+ "once_cell",
+ "regex",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-docgen"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "codespan",
+ "codespan-reporting",
+ "itertools",
+ "log",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num",
  "once_cell",
  "regex",
@@ -4845,51 +5041,84 @@ dependencies = [
 [[package]]
 name = "move-errmapgen"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
  "log",
- "move-command-line-common",
- "move-core-types",
- "move-model",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-errmapgen"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "log",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "serde 1.0.152",
 ]
 
 [[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
  "clap 3.2.23",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-core-types",
- "move-ir-to-bytecode",
- "move-ir-types",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-to-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "serde_json",
 ]
 
 [[package]]
 name = "move-ir-to-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "codespan-reporting",
  "log",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-command-line-common",
- "move-core-types",
- "move-ir-to-bytecode-syntax",
- "move-ir-types",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-to-bytecode-syntax 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "ouroboros 0.9.5",
+ "thiserror",
+]
+
+[[package]]
+name = "move-ir-to-bytecode"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "codespan-reporting",
+ "log",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-to-bytecode-syntax 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "ouroboros 0.9.5",
  "thiserror",
 ]
@@ -4897,26 +5126,53 @@ dependencies = [
 [[package]]
 name = "move-ir-to-bytecode-syntax"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "hex",
- "move-command-line-common",
- "move-core-types",
- "move-ir-types",
- "move-symbol-pool",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+]
+
+[[package]]
+name = "move-ir-to-bytecode-syntax"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "hex",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
 ]
 
 [[package]]
 name = "move-ir-types"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "hex",
- "move-command-line-common",
- "move-core-types",
- "move-symbol-pool",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "once_cell",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-ir-types"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "hex",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "once_cell",
  "serde 1.0.152",
 ]
@@ -4924,7 +5180,7 @@ dependencies = [
 [[package]]
 name = "move-model"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "codespan",
@@ -4932,15 +5188,41 @@ dependencies = [
  "internment",
  "itertools",
  "log",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num",
+ "once_cell",
+ "regex",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-model"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "codespan",
+ "codespan-reporting",
+ "internment",
+ "itertools",
+ "log",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num",
  "once_cell",
  "regex",
@@ -4950,7 +5232,7 @@ dependencies = [
 [[package]]
 name = "move-package"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
@@ -4958,16 +5240,52 @@ dependencies = [
  "colored",
  "dirs-next",
  "itertools",
- "move-abigen",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-docgen",
- "move-model",
- "move-symbol-pool",
+ "move-abigen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "named-lock",
+ "once_cell",
+ "petgraph 0.5.1",
+ "ptree",
+ "regex",
+ "reqwest",
+ "serde 1.0.152",
+ "serde_yaml",
+ "sha2 0.9.9",
+ "tempfile",
+ "toml",
+ "walkdir",
+ "whoami",
+]
+
+[[package]]
+name = "move-package"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 3.2.23",
+ "colored",
+ "dirs-next",
+ "itertools",
+ "move-abigen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "named-lock",
  "once_cell",
  "petgraph 0.5.1",
@@ -4986,7 +5304,7 @@ dependencies = [
 [[package]]
 name = "move-prover"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4998,17 +5316,54 @@ dependencies = [
  "hex",
  "itertools",
  "log",
- "move-abigen",
- "move-binary-format",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-ir-types",
- "move-model",
- "move-prover-boogie-backend",
- "move-stackless-bytecode",
+ "move-abigen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-errmapgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-prover-boogie-backend 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num",
+ "once_cell",
+ "pretty",
+ "rand 0.8.5",
+ "serde 1.0.152",
+ "serde_json",
+ "simplelog",
+ "tokio",
+ "toml",
+]
+
+[[package]]
+name = "move-prover"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "atty",
+ "clap 3.2.23",
+ "codespan",
+ "codespan-reporting",
+ "futures",
+ "hex",
+ "itertools",
+ "log",
+ "move-abigen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-errmapgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-prover-boogie-backend 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num",
  "once_cell",
  "pretty",
@@ -5023,7 +5378,7 @@ dependencies = [
 [[package]]
 name = "move-prover-boogie-backend"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5032,11 +5387,39 @@ dependencies = [
  "futures",
  "itertools",
  "log",
- "move-binary-format",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "move-stackless-bytecode",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num",
+ "once_cell",
+ "pretty",
+ "rand 0.8.5",
+ "regex",
+ "serde 1.0.152",
+ "serde_json",
+ "tera",
+ "tokio",
+]
+
+[[package]]
+name = "move-prover-boogie-backend"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "codespan",
+ "codespan-reporting",
+ "futures",
+ "itertools",
+ "log",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num",
  "once_cell",
  "pretty",
@@ -5051,25 +5434,36 @@ dependencies = [
 [[package]]
 name = "move-read-write-set-types"
 version = "0.0.3"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
- "move-binary-format",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-read-write-set-types"
+version = "0.0.3"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "serde 1.0.152",
 ]
 
 [[package]]
 name = "move-resource-viewer"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
  "hex",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "serde 1.0.152",
 ]
@@ -5077,7 +5471,7 @@ dependencies = [
 [[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "codespan",
  "codespan-reporting",
@@ -5085,15 +5479,42 @@ dependencies = [
  "im",
  "itertools",
  "log",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-ir-to-bytecode",
- "move-model",
- "move-read-write-set-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-to-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-read-write-set-types 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "num",
+ "once_cell",
+ "paste",
+ "petgraph 0.5.1",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "codespan",
+ "codespan-reporting",
+ "ethnum",
+ "im",
+ "itertools",
+ "log",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-to-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-read-write-set-types 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "num",
  "once_cell",
  "paste",
@@ -5104,17 +5525,17 @@ dependencies = [
 [[package]]
 name = "move-stackless-bytecode-interpreter"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
  "clap 3.2.23",
  "codespan-reporting",
  "itertools",
- "move-binary-format",
- "move-core-types",
- "move-model",
- "move-stackless-bytecode",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "num",
  "serde 1.0.152",
 ]
@@ -5122,20 +5543,43 @@ dependencies = [
 [[package]]
 name = "move-stdlib"
 version = "0.1.1"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "hex",
  "log",
- "move-binary-format",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-prover",
- "move-vm-runtime",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-errmapgen 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-prover 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib"
+version = "0.1.1"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-errmapgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-prover 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -5145,7 +5589,16 @@ dependencies = [
 [[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
+dependencies = [
+ "once_cell",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-symbol-pool"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
 dependencies = [
  "once_cell",
  "serde 1.0.152",
@@ -5154,15 +5607,15 @@ dependencies = [
 [[package]]
 name = "move-table-extension"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "bcs",
  "better_any",
- "move-binary-format",
- "move-core-types",
- "move-vm-runtime",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "sha3 0.9.1",
  "smallvec",
@@ -5171,29 +5624,29 @@ dependencies = [
 [[package]]
 name = "move-transactional-test-runner"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
  "colored",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-bytecode-verifier",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-cli",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-ir-compiler",
- "move-ir-types",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-resource-viewer",
  "move-stackless-bytecode-interpreter",
- "move-stdlib",
- "move-symbol-pool",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
+ "move-stdlib 0.1.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-test-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "rayon",
  "regex",
@@ -5203,7 +5656,7 @@ dependencies = [
 [[package]]
 name = "move-unit-test"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
  "better_any",
@@ -5211,21 +5664,21 @@ dependencies = [
  "codespan-reporting",
  "colored",
  "itertools",
- "move-binary-format",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-ir-types",
- "move-model",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-resource-viewer",
  "move-stackless-bytecode-interpreter",
- "move-stdlib",
- "move-symbol-pool",
+ "move-stdlib 0.1.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-table-extension",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-test-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "rayon",
  "regex",
@@ -5234,14 +5687,32 @@ dependencies = [
 [[package]]
 name = "move-vm-runtime"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "better_any",
  "fail 0.4.0",
- "move-binary-format",
- "move-bytecode-verifier",
- "move-core-types",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "better_any",
+ "fail 0.4.0",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "once_cell",
  "parking_lot 0.11.2",
  "sha3 0.9.1",
@@ -5252,12 +5723,25 @@ dependencies = [
 [[package]]
 name = "move-vm-test-utils"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
- "move-binary-format",
- "move-core-types",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "once_cell",
+ "serde 1.0.152",
+]
+
+[[package]]
+name = "move-vm-test-utils"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "anyhow",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "once_cell",
  "serde 1.0.152",
 ]
@@ -5265,11 +5749,24 @@ dependencies = [
 [[package]]
 name = "move-vm-types"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "bcs",
- "move-binary-format",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "once_cell",
+ "serde 1.0.152",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types"
+version = "0.1.0"
+source = "git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76#b13cdd786ae1541e3eb20dad4f7f98da990ebd76"
+dependencies = [
+ "bcs",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "once_cell",
  "serde 1.0.152",
  "smallvec",
@@ -7266,28 +7763,28 @@ dependencies = [
 [[package]]
 name = "read-write-set"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-model",
- "move-read-write-set-types",
- "move-stackless-bytecode",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-read-write-set-types 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "read-write-set-dynamic",
 ]
 
 [[package]]
 name = "read-write-set-dynamic"
 version = "0.1.0"
-source = "git+https://github.com/move-language/move?rev=3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54#3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54"
+source = "git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72#4931e10da5573d13c48d56063faff37f50f5bf72"
 dependencies = [
  "anyhow",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-read-write-set-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-read-write-set-types 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
 ]
 
 [[package]]
@@ -8473,9 +8970,9 @@ dependencies = [
  "inquire",
  "jemalloc-ctl",
  "jsonrpsee",
- "move-binary-format",
- "move-core-types",
- "move-package",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "prettytable-rs",
  "prometheus",
@@ -8524,13 +9021,13 @@ dependencies = [
  "anyhow",
  "bcs",
  "leb128",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier",
- "move-core-types",
- "move-package",
- "move-vm-runtime",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "serde 1.0.152",
  "sui-framework",
  "sui-protocol-config",
@@ -8563,8 +9060,8 @@ dependencies = [
  "hdrhistogram",
  "indicatif",
  "itertools",
- "move-core-types",
- "move-package",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "narwhal-node",
  "prometheus",
  "rand 0.8.5",
@@ -8606,7 +9103,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "jsonrpsee",
- "move-core-types",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "prometheus",
  "reqwest",
  "serde 1.0.152",
@@ -8645,8 +9142,8 @@ dependencies = [
  "dirs",
  "fastcrypto",
  "insta",
- "move-binary-format",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "narwhal-config",
  "once_cell",
  "rand 0.8.5",
@@ -8689,11 +9186,11 @@ dependencies = [
  "itertools",
  "lru",
  "more-asserts",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-package",
- "move-vm-runtime",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
@@ -8755,8 +9252,8 @@ dependencies = [
  "bcs",
  "insta",
  "move-cli",
- "move-disassembler",
- "move-package",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "serde 1.0.152",
  "strum",
  "strum_macros",
@@ -8773,10 +9270,10 @@ name = "sui-cost-tables"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "move-binary-format",
- "move-core-types",
- "move-vm-test-utils",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-test-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "serde 1.0.152",
  "workspace-hack",
@@ -8830,12 +9327,12 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "linked-hash-map",
- "move-binary-format",
- "move-core-types",
- "move-package",
- "move-stdlib",
- "move-vm-runtime",
- "move-vm-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-stdlib 0.1.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "smallvec",
  "sui-framework-build",
@@ -8850,13 +9347,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier",
- "move-compiler",
- "move-core-types",
- "move-package",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "serde-reflection",
  "sui-types",
  "sui-verifier",
@@ -8869,7 +9366,7 @@ name = "sui-framework-test"
 version = "0.1.0"
 dependencies = [
  "move-cli",
- "move-package",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "sui-framework",
  "sui-framework-build",
  "sui-move",
@@ -8892,8 +9389,8 @@ dependencies = [
  "fastcrypto",
  "futures",
  "jsonrpsee",
- "move-bytecode-utils",
- "move-core-types",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "prometheus",
  "serde 1.0.152",
@@ -8926,8 +9423,8 @@ dependencies = [
  "anyhow",
  "bcs",
  "fastcrypto",
- "move-binary-format",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "schemars",
  "serde 1.0.152",
@@ -8957,10 +9454,10 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-proc-macros",
  "linked-hash-map",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-package",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "prometheus",
  "rand 0.8.5",
@@ -9002,9 +9499,9 @@ dependencies = [
  "enum_dispatch",
  "fastcrypto",
  "itertools",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "schemars",
  "serde 1.0.152",
  "serde_json",
@@ -9060,16 +9557,16 @@ dependencies = [
  "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
- "move-binary-format",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-cli",
- "move-disassembler",
- "move-ir-types",
- "move-package",
- "move-prover",
- "move-prover-boogie-backend",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-prover 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-prover-boogie-backend 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-unit-test",
- "move-vm-runtime",
- "move-vm-test-utils",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-test-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "once_cell",
  "prometheus",
@@ -9170,7 +9667,7 @@ dependencies = [
  "bcs",
  "clap 3.2.23",
  "fastcrypto",
- "move-core-types",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "pretty_assertions",
  "rand 0.8.5",
  "schemars",
@@ -9277,8 +9774,8 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hyper",
- "move-bytecode-utils",
- "move-core-types",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "once_cell",
  "rand 0.8.5",
@@ -9349,7 +9846,7 @@ dependencies = [
  "anemo-tower",
  "fastcrypto",
  "lru",
- "move-package",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "msim",
  "narwhal-network",
  "sui-framework",
@@ -9369,11 +9866,11 @@ dependencies = [
  "anyhow",
  "expect-test",
  "futures",
- "move-binary-format",
- "move-compiler",
- "move-core-types",
- "move-package",
- "move-symbol-pool",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "rand 0.8.5",
  "sui",
  "sui-framework",
@@ -9399,7 +9896,7 @@ dependencies = [
  "criterion",
  "eyre",
  "futures",
- "move-core-types",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "num_cpus",
  "object_store",
@@ -9530,8 +10027,8 @@ dependencies = [
  "async-trait",
  "bcs",
  "futures",
- "move-binary-format",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "sui-adapter",
  "sui-json",
  "sui-json-rpc-types",
@@ -9548,14 +10045,14 @@ dependencies = [
  "bcs",
  "bimap",
  "clap 3.2.23",
- "move-binary-format",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-stdlib",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-stdlib 0.1.1 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "move-transactional-test-runner",
- "move-vm-runtime",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "once_cell",
  "rand 0.8.5",
  "sui-adapter",
@@ -9583,13 +10080,13 @@ dependencies = [
  "fastcrypto",
  "indexmap",
  "itertools",
- "move-binary-format",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "move-vm-runtime",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-network",
  "narwhal-config",
  "narwhal-crypto",
@@ -9622,9 +10119,9 @@ dependencies = [
 name = "sui-verifier"
 version = "0.1.0"
 dependencies = [
- "move-binary-format",
- "move-bytecode-verifier",
- "move-core-types",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "sui-types",
  "workspace-hack",
 ]
@@ -9891,9 +10388,9 @@ dependencies = [
  "bcs",
  "futures",
  "jsonrpsee",
- "move-binary-format",
- "move-core-types",
- "move-package",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=4931e10da5573d13c48d56063faff37f50f5bf72)",
  "mysten-metrics",
  "mysten-network",
  "prometheus",
@@ -11498,33 +11995,33 @@ dependencies = [
  "mockall",
  "mockall_derive",
  "more-asserts",
- "move-abigen",
- "move-binary-format",
- "move-borrow-graph",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-bytecode-verifier",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-coverage",
- "move-disassembler",
- "move-docgen",
- "move-errmapgen",
- "move-ir-to-bytecode",
- "move-ir-to-bytecode-syntax",
- "move-ir-types",
- "move-model",
- "move-package",
- "move-prover",
- "move-prover-boogie-backend",
- "move-read-write-set-types",
- "move-stackless-bytecode",
- "move-stdlib",
- "move-symbol-pool",
- "move-vm-runtime",
- "move-vm-test-utils",
- "move-vm-types",
+ "move-abigen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-binary-format 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-borrow-graph 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-source-map 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-utils 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-bytecode-verifier 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-command-line-common 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-compiler 0.0.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-core-types 0.0.4 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-coverage 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-disassembler 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-docgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-errmapgen 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-to-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-to-bytecode-syntax 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-ir-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-model 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-package 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-prover 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-prover-boogie-backend 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-read-write-set-types 0.0.3 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-stackless-bytecode 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-stdlib 0.1.1 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-symbol-pool 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-runtime 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-test-utils 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
+ "move-vm-types 0.1.0 (git+https://github.com/move-language/move?rev=b13cdd786ae1541e3eb20dad4f7f98da990ebd76)",
  "multiaddr",
  "multibase",
  "multihash",

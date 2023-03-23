@@ -253,7 +253,7 @@ fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
             let tag = context
-                .session
+                .vm
                 .get_type_tag(ty)
                 .map_err(|e| context.convert_vm_error(e))?;
             (tag, bytes.clone())

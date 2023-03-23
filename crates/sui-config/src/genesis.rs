@@ -15,7 +15,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, path::Path};
-use sui_adapter::adapter::MoveVM;
+use sui_adapter::move_vm::MoveVM;
 use sui_adapter::{adapter, execution_mode, programmable_transactions};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_protocol_config::ProtocolConfig;

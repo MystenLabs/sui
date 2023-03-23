@@ -12,7 +12,7 @@ use move_binary_format::{
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use move_vm_runtime::{move_vm::MoveVM, session::Session};
+use move_vm_runtime::native_extensions::NativeContextExtensions;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -28,8 +28,9 @@ use sui_types::{
 };
 
 use crate::{
-    adapter::{missing_unwrapped_msg, new_session},
+    adapter::{get_object_runtime_extension, missing_unwrapped_msg},
     execution_mode::ExecutionMode,
+    move_vm::MoveVM,
 };
 
 use super::types::*;
@@ -47,8 +48,10 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     pub tx_context: &'a mut TxContext,
     /// The gas status used for metering
     pub gas_status: &'a mut SuiGasStatus<'b>,
-    /// The session used for interacting with Move types and calls
-    pub session: Session<'state, 'vm, S>,
+    /// The native extension to be passed to the VM at execution time.
+    /// It wraps the state view and most importantly the `ObjectRuntime` that
+    /// the execution is going to use.
+    pub object_runtime_extension: NativeContextExtensions<'state>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
     /// Newly published packages
@@ -134,8 +137,7 @@ where
                 },
             }
         };
-        let session = new_session(
-            vm,
+        let object_runtime_extension = get_object_runtime_extension(
             state_view,
             object_owner_map,
             !gas_status.is_unmetered(),
@@ -147,7 +149,7 @@ where
             state_view,
             tx_context,
             gas_status,
-            session,
+            object_runtime_extension,
             gas,
             inputs,
             results: vec![],
@@ -162,7 +164,7 @@ where
     /// Create a new ID and update the state
     pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
         let object_id = self.tx_context.fresh_id();
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = self.object_runtime_extension.get_mut();
         object_runtime
             .new_id(object_id)
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
@@ -171,7 +173,7 @@ where
 
     /// Delete an ID and update the state
     pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = self.object_runtime_extension.get_mut();
         object_runtime
             .delete_id(object_id)
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
@@ -185,7 +187,7 @@ where
         function: FunctionDefinitionIndex,
         last_offset: CodeOffset,
     ) -> Result<(), ExecutionError> {
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = self.object_runtime_extension.get_mut();
         let events = object_runtime.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.protocol_config.max_num_event_emit();
@@ -199,8 +201,8 @@ where
             .into_iter()
             .map(|(tag, value)| {
                 let layout = self
-                    .session
-                    .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
+                    .vm
+                    .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())), self.state_view)?;
                 let bytes = value.simple_serialize(&layout).unwrap();
                 Ok((module_id.clone(), tag, bytes))
             })
@@ -405,14 +407,13 @@ where
 
     /// Determine the object changes and collect all user events
     pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
-        use sui_types::error::convert_vm_error;
+        use crate::programmable_transactions::error::convert_vm_error;
         let Self {
             protocol_config,
-            vm,
             state_view,
             tx_context,
             gas_status,
-            session,
+            mut object_runtime_extension,
             additional_transfers,
             new_packages,
             gas,
@@ -505,17 +506,7 @@ where
             refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
         }
 
-        let (change_set, events, mut native_context_extensions) = session
-            .finish_with_extensions()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
-        // Sui Move programs should never touch global state, so resources should be empty
-        assert_invariant!(
-            change_set.resources().next().is_none(),
-            "Change set must be empty"
-        );
-        // Sui Move no longer uses Move's internal event system
-        assert_invariant!(events.is_empty(), "Events must be empty");
-        let object_runtime: ObjectRuntime = native_context_extensions.remove();
+        let object_runtime: ObjectRuntime = object_runtime_extension.remove();
         let new_ids = object_runtime.new_ids().clone();
         // tell the object runtime what input objects were taken and which were transferred
         let external_transfers = additional_writes.keys().copied().collect();
@@ -574,22 +565,16 @@ where
             object_changes.insert(id, change);
         }
 
-        // we need a new session just for deserializing and fetching abilities. Which is sad
-        let tmp_session = new_session(
-            vm,
-            state_view,
-            BTreeMap::new(),
-            !gas_status.is_unmetered(),
-            protocol_config,
-        );
         for (id, (write_kind, recipient, ty, move_type, value)) in writes {
-            let abilities = tmp_session
+            let abilities = self
+                .vm
                 .get_type_abilities(&ty)
-                .map_err(|e| convert_vm_error(e, vm, state_view))?;
+                .map_err(|e| convert_vm_error(e, self.vm, state_view))?;
             let has_public_transfer = abilities.has_store();
-            let layout = tmp_session
-                .get_type_layout(&move_type.clone().into())
-                .map_err(|e| convert_vm_error(e, vm, state_view))?;
+            let layout = self
+                .vm
+                .get_type_layout(&move_type.clone().into(), self.state_view)
+                .map_err(|e| convert_vm_error(e, self.vm, state_view))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
@@ -621,13 +606,6 @@ where
             };
             object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
         }
-        let (change_set, move_events) = tmp_session
-            .finish()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
-        // the session was just used for ability and layout metadata fetching, no changes should
-        // exist. Plus, Sui Move does not use these changes or events
-        assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
-        assert_invariant!(move_events.is_empty(), "Events must be empty");
 
         Ok(ExecutionResults {
             object_changes,
@@ -637,7 +615,7 @@ where
 
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-        sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+        crate::programmable_transactions::error::convert_vm_error(error, self.vm, self.state_view)
     }
 
     /// Special case errors for type arguments to Move functions

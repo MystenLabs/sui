@@ -13,23 +13,19 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{AbilitySet, CompiledModule, LocalIndex, SignatureToken, StructHandleIndex},
 };
-use move_bytecode_verifier::VerifierConfig;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
-pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{
-    config::{VMConfig, VMRuntimeLimitsConfig},
-    native_extensions::NativeContextExtensions,
-    native_functions::NativeFunctionTable,
-    session::Session,
+    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
 };
 
 use crate::{
     execution_mode::ExecutionMode,
+    move_vm::MoveVM,
     programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout},
 };
 use sui_framework::natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -51,42 +47,10 @@ pub fn new_move_vm(
     natives: NativeFunctionTable,
     protocol_config: &ProtocolConfig,
 ) -> Result<MoveVM, SuiError> {
-    MoveVM::new_with_config(
-        natives,
-        VMConfig {
-            verifier: VerifierConfig {
-                max_loop_depth: Some(protocol_config.max_loop_depth() as usize),
-                max_generic_instantiation_length: Some(
-                    protocol_config.max_generic_instantiation_length() as usize,
-                ),
-                max_function_parameters: Some(protocol_config.max_function_parameters() as usize),
-                max_basic_blocks: Some(protocol_config.max_basic_blocks() as usize),
-                max_value_stack_size: protocol_config.max_value_stack_size() as usize,
-                max_type_nodes: Some(protocol_config.max_type_nodes() as usize),
-                max_push_size: Some(protocol_config.max_push_size() as usize),
-                max_dependency_depth: Some(protocol_config.max_dependency_depth() as usize),
-                max_fields_in_struct: Some(protocol_config.max_fields_in_struct() as usize),
-                max_function_definitions: Some(protocol_config.max_function_definitions() as usize),
-                max_struct_definitions: Some(protocol_config.max_struct_definitions() as usize),
-                max_constant_vector_len: Some(protocol_config.max_move_vector_len()),
-                max_back_edges_per_function: None,
-                max_back_edges_per_module: None,
-                max_basic_blocks_in_script: None,
-                max_per_fun_meter_units: None,
-                max_per_mod_meter_units: None,
-            },
-            max_binary_format_version: protocol_config.move_binary_format_version(),
-            paranoid_type_checks: false,
-            runtime_limits_config: VMRuntimeLimitsConfig {
-                vector_len_max: protocol_config.max_move_vector_len(),
-            },
-        },
-    )
-    .map_err(|_| SuiError::ExecutionInvariantViolation)
+    MoveVM::new(natives, protocol_config)
 }
 
-pub fn new_session<
-    'v,
+pub fn get_object_runtime_extension<
     'r,
     E: Debug,
     S: ResourceResolver<Error = E>
@@ -94,12 +58,11 @@ pub fn new_session<
         + LinkageResolver<Error = E>
         + ChildObjectResolver,
 >(
-    vm: &'v MoveVM,
     state_view: &'r S,
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
-) -> Session<'r, 'v, S> {
+) -> NativeContextExtensions<'r> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
         Box::new(state_view),
@@ -108,7 +71,7 @@ pub fn new_session<
         protocol_config,
     ));
     extensions.add(NativesCostTable::from_protocol_config(protocol_config));
-    vm.new_session_with_extensions(state_view, extensions)
+    extensions
 }
 
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
