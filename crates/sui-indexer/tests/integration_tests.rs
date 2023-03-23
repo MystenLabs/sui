@@ -361,6 +361,41 @@ pub mod pg_integration_test {
     }
 
     #[tokio::test]
+    async fn test_multi_get_transactions_order() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+
+        let (tx_response, _, _, _) =
+            execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let (_, _, nft_digest) = create_devnet_nft(&mut test_cluster.wallet).await.unwrap();
+        wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
+
+        let tx_multi_read_tx_response_1 = indexer_rpc_client
+            .multi_get_transactions_with_options(
+                vec![tx_response.digest, nft_digest],
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        assert_eq!(tx_multi_read_tx_response_1.len(), 2);
+        assert_eq!(tx_multi_read_tx_response_1[0].digest, tx_response.digest);
+        assert_eq!(tx_multi_read_tx_response_1[1].digest, nft_digest);
+
+        let tx_multi_read_tx_response_2 = indexer_rpc_client
+            .multi_get_transactions_with_options(
+                vec![nft_digest, tx_response.digest],
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        assert_eq!(tx_multi_read_tx_response_2.len(), 2);
+        assert_eq!(tx_multi_read_tx_response_2[0].digest, nft_digest);
+        assert_eq!(tx_multi_read_tx_response_2[1].digest, tx_response.digest);
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_event_query_e2e() -> Result<(), anyhow::Error> {
         let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
         wait_until_next_checkpoint(&store).await;
