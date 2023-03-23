@@ -3377,10 +3377,18 @@
       "DryRunTransactionResponse": {
         "type": "object",
         "required": [
+          "balanceChanges",
           "effects",
-          "events"
+          "events",
+          "objectChanges"
         ],
         "properties": {
+          "balanceChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
           },
@@ -3388,6 +3396,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "objectChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectChange"
             }
           }
         }
