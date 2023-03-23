@@ -13,6 +13,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
 use sui_types::digests::TransactionDigest;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::load_test::LoadTest;
 use crate::payload::{Command, Payload, RpcCommandProcessor};
@@ -105,14 +106,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let network_tracing_level = "info";
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
 
+    let uuid = Uuid::new_v4();
+    let log_filename = format!("sui-rpc-loadgen.{}.log", uuid);
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .with_log_level(&log_filter)
-        .with_log_file("sui-rpc-loadgen.log")
+        .with_log_file(&log_filename)
         .init();
 
     let opts = Opts::parse();
+    info!("Logging to {}", log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
     // TODO(chris): remove hardcoded value since we only need keystore for write commands
