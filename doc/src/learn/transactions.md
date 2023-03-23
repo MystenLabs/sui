@@ -99,6 +99,10 @@ flowchart LR
     classDef object-b fill:#ff43
 ```
 
+## Limits on transactions, objects, and data
+
+Sui has some limits on transactions and data used in transactions, such as a maximum size and number of objects used. To view the full list of limits in source code, see [Transaction input limits](https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs#L143).
+
 ## Further reading
 
  * See the [Move tutorial](move/index.md) to develop Sui smart contracts.

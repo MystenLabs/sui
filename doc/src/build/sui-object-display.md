@@ -2,13 +2,13 @@
 title: Sui Object Display Standard
 ---
 
-The Sui Object Display standard is a template engine that allows for off-chain management of display configurations for a type. With it, you can substitute data for an object into a template string. The standard doesn’t limit the fields you can set. You can use the  `{property}` syntax to access all object properties, and then insert them as a part of the template string.
+The Sui Object Display standard is a template engine that allows for on-chain management of off-chain representation (display) for a type. With it, you can substitute data for an object into a template string. The standard doesn’t limit the fields you can set. You can use the  `{property}` syntax to access all object properties, and then insert them as a part of the template string.
 
-You can use the `sui::display` module to define the display properties for a `Publisher` object you own. For more information about `Publisher` objects, see [Publisher](https://examples.sui.io/basics/publisher.html) topic in *Sui Move by Example*.
+Use a `Publisher` object that you own to set `sui::display` for a type. For more information about `Publisher` objects, see [Publisher](https://examples.sui.io/basics/publisher.html) topic in *Sui Move by Example*.
 
 In Sui Move, `Display<T>` represents an object that specifies a set of named templates for the type `T`. For example, for a type `0x2::capy::Capy` the display syntax is:  `Display<0x2::capy::Capy>`. 
 
-Sui Full nodes process all objects of the type `T` by matching the `Display` definition, and return the processed result when you query an object.
+Sui Full nodes process all objects of the type `T` by matching the `Display` definition, and return the processed result when you query an object with the `{ showDisplay: true }` setting in the query.
 
 ## Display properties
 
@@ -134,7 +134,7 @@ module sui::display {
     public fun add_multiple(
         self: &mut Display,
         keys: vector<String>,
-        values: vector<String
+        values: vector<String>
     ) { /* ... */ }
 
     /// Edit a single field
@@ -168,7 +168,7 @@ module capy::utility {
    /// A capability which grants Capy Manager permission to add
    /// new genes and manage the Capy Market
    struct CapyManagerCap has key, store {
-id: UID }
+    id: UID }
 }
 ```
 
@@ -184,8 +184,8 @@ module capy::capy_items {
    /// A wearable Capy item. For some items there can be an
    /// unlimited supply. And items with the same name are identical.
    struct CapyItem has key, store {
-id: UID,
-       name: String
+        id: UID,
+        name: String
    }
 }
 ```
@@ -204,8 +204,8 @@ module capy::capy {
    /// of genes. Created dynamically + for images a dynamic SVG
    /// generation is used.
    struct Capy has key, store {
-id: UID,
-       genes: vector<u8>
+    id: UID,
+    genes: vector<u8>
    }
 }
 ```
