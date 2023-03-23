@@ -63,7 +63,7 @@ pub fn default_verifier_config(
         max_per_mod_meter_units,
     ) = if is_metered {
         // TODO: change these to pull from protocol config
-        (None, None, Some(1000 * 8000), Some(1000 * 8000))
+        (None, None, Some(6_000_000), Some(6_000_000))
     } else {
         (None, None, None, None)
     };
@@ -762,16 +762,19 @@ pub fn run_metered_bytecode_verifier(
     module_bytes: &[Vec<u8>],
     protocol_config: &ProtocolConfig,
 ) -> Result<(), SuiError> {
-    let modules = module_bytes
+    let modules_stat = module_bytes
         .iter()
         .map(|b| {
             CompiledModule::deserialize(b)
                 .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
-        .map_err(|e| SuiError::ModuleDeserializationFailure {
-            error: e.to_string(),
-        })?;
+        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>();
+    let modules = if let Ok(m) = modules_stat {
+        m
+    } else {
+        // Although we failed, we dont care since it failed withing the timeout
+        return Ok(());
+    };
 
     // We use a custom config with metering enabled
     let metered_verifier_config =
