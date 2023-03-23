@@ -8,7 +8,8 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionResponseOptions, ObjectChange,
+    CheckpointId, ObjectChange, SuiObjectDataOptions, SuiObjectResponse,
+    SuiTransactionResponseOptions,
 };
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
@@ -17,7 +18,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{ObjectID, SuiAddress, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -216,22 +217,27 @@ pub async fn check_transactions(
     let read = clients.read().await;
     let cloned_clients = read.clone();
 
-    let transactions = join_all(cloned_clients.iter().enumerate().map(|(i, client)| async move {
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_transactions_with_options(
-                digests.to_vec(),
-                SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
+    let transactions = join_all(
+        cloned_clients
+            .iter()
+            .enumerate()
+            .map(|(i, client)| async move {
+                let start_time = Instant::now();
+                let transactions = client
+                    .read_api()
+                    .multi_get_transactions_with_options(
+                        digests.to_vec(),
+                        SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
+                    )
+                    .await;
+                let elapsed_time = start_time.elapsed();
+                debug!(
+                    "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+                    elapsed_time.as_secs_f64()
+                );
+                transactions
+            }),
+    )
     .await;
 
     // TODO: support more than 2 transactions
@@ -258,12 +264,14 @@ pub async fn check_transactions(
 
             if verify_objects {
                 for response in first {
-                    let object_changes: Vec<ObjectID> = response.object_changes.clone().unwrap().iter().filter_map(get_object_id).collect();
-                    check_objects(
-                        clients,
-                        object_changes.as_slice(),
-                        cross_validate
-                    ).await;
+                    let object_changes: Vec<ObjectID> = response
+                        .object_changes
+                        .clone()
+                        .unwrap()
+                        .iter()
+                        .filter_map(get_object_id)
+                        .collect();
+                    check_objects(clients, object_changes.as_slice(), cross_validate).await;
                 }
             }
         }

@@ -63,7 +63,7 @@ impl Command {
                 start,
                 end,
                 verify_transaction,
-                verify_objects
+                verify_objects,
             }),
             ..Default::default()
         }

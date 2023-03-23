@@ -128,7 +128,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             start,
             end,
             verify_transaction,
-            verify_objects
+            verify_objects,
         } => (
             Command::new_get_checkpoints(start, end, verify_transaction, verify_objects),
             common,
