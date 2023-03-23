@@ -751,6 +751,8 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await;
 
+    println!("TESTING -- create_parent");
+
     // Create a parent.
     let effects = call_move(
         &authority,
@@ -766,8 +768,12 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
 
+    println!("TESTING -- finished create_parent");
+
     assert!(effects.status().is_ok());
     let parent = effects.created()[0].0;
+
+    println!("TESTING -- create_child");
 
     // Create a child.
     let effects = call_move(
@@ -783,11 +789,15 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
+
+    println!("TESTING -- finished create_child");
+
     assert!(effects.status().is_ok());
     let child = effects.created()[0].0;
 
+    println!("TESTING -- add_child_wrapped");
+
     // Add the child to the parent.
-    println!("add_child_wrapped");
     let effects = call_move(
         &authority,
         &gas,
@@ -802,9 +812,13 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     .await
     .unwrap();
 
+    println!("TESTING -- finished add_child_wrapped");
+
     assert!(effects.status().is_ok());
     assert_eq!(effects.created().len(), 1);
     assert_eq!(effects.wrapped().len(), 1);
+
+    println!("TESTING -- delete_parent_and_child_wrapped");
 
     // Delete the parent and child altogether.
     let effects = call_move(
@@ -820,6 +834,8 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
+
+    println!("TESTING -- finished delete_parent_and_child_wrapped");
 
     assert!(effects.status().is_ok());
     // Check that parent object was deleted.
