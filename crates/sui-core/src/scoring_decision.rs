@@ -199,10 +199,10 @@ mod tests {
 
         // there is a clear low outlier in the scores, exclude it
         let mut scores = HashMap::new();
-        scores.insert(a1.id(), 207_u64);
-        scores.insert(a2.id(), 211_u64);
-        scores.insert(a3.id(), 207_u64);
-        scores.insert(a4.id(), 155_u64);
+        scores.insert(a1.id(), 607_u64);
+        scores.insert(a2.id(), 611_u64);
+        scores.insert(a3.id(), 607_u64);
+        scores.insert(a4.id(), 455_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -217,16 +217,16 @@ mod tests {
         );
         assert_eq!(
             *low_scoring.load().get(&a4.protocol_key().into()).unwrap(),
-            155_u64
+            455_u64
         );
         assert_eq!(low_scoring.load().len(), 1);
 
-        // a4 has score which is a bit lower, but should not be excluded
+        // one authority has score which is a bit lower, but should not be excluded
         let mut scores = HashMap::new();
-        scores.insert(a1.id(), 207_u64);
-        scores.insert(a2.id(), 211_u64);
-        scores.insert(a3.id(), 207_u64);
-        scores.insert(a4.id(), 190_u64);
+        scores.insert(a1.id(), 607_u64);
+        scores.insert(a2.id(), 751_u64);
+        scores.insert(a3.id(), 707_u64);
+        scores.insert(a4.id(), 650_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
             final_of_schedule: true,
@@ -243,9 +243,9 @@ mod tests {
 
         // this set of scores has a high performing outlier, we don't exclude it
         let mut scores = HashMap::new();
-        scores.insert(a1.id(), 300_u64);
+        scores.insert(a1.id(), 900_u64);
         scores.insert(a2.id(), 257_u64);
-        scores.insert(a3.id(), 140_u64);
+        scores.insert(a3.id(), 240_u64);
         scores.insert(a4.id(), 200_u64);
         let reputation_scores = ReputationScores {
             scores_per_authority: scores,
@@ -324,7 +324,7 @@ mod tests {
             low_scoring.clone(),
             &committee,
             reputation_scores,
-            peer_id_map.clone(),
+            peer_id_map,
             &metrics,
         );
 
@@ -429,20 +429,20 @@ mod tests {
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
-        // scores clustered between 100 - 300
+        // scores clustered between 600 - 800
         for (i, authority) in authorities.iter().enumerate().take(num_nodes - 1) {
             let score_add = i * 5;
 
             scores.insert(
                 authority.id(),
-                100_u64 + (std::cmp::min(score_add as u64, 200)),
+                600_u64 + (std::cmp::min(score_add as u64, 200)),
             );
         }
         // the outliers
         let outlier_id = authorities[final_idx].id();
-        scores.insert(outlier_id, 50_u64);
+        scores.insert(outlier_id, 550_u64);
         let outlier_id = authorities[final_idx - 1].id();
-        scores.insert(outlier_id, 40_u64);
+        scores.insert(outlier_id, 540_u64);
         let outlier_id = authorities[final_idx - 2].id();
         scores.insert(outlier_id, 0_u64);
 
