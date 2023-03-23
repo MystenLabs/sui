@@ -62,13 +62,13 @@ created: object(128)
 written: object(127)
 
 task 16 'run'. lines 163-166:
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of already taken value. There is now no value available at this location
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfTakenValue }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
 
 task 17 'run'. lines 168-168:
 created: object(131)
 written: object(130)
 
 task 18 'run'. lines 170-170:
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of already taken value. There is now no value available at this location
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfTakenValue }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }

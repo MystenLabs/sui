@@ -1304,7 +1304,7 @@ async fn test_entry_point_vector_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -1353,7 +1353,7 @@ async fn test_entry_point_vector_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -1691,7 +1691,7 @@ async fn test_entry_point_vector_any_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }
@@ -1739,7 +1739,7 @@ async fn test_entry_point_vector_any_error() {
         &ExecutionStatus::Failure {
             error: ExecutionErrorKind::CommandArgumentError {
                 arg_idx: 0,
-                kind: CommandArgumentError::InvalidUsageOfTakenValue,
+                kind: CommandArgumentError::InvalidValueUsage,
             },
             command: Some(1)
         }

@@ -72,7 +72,7 @@ pub struct ResultValue {
     pub value: Option<Value>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageKind {
     BorrowImm,
     BorrowMut,

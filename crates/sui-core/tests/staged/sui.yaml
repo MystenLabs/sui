@@ -129,12 +129,10 @@ CommandArgumentError:
     7:
       InvalidGasCoinUsage: UNIT
     8:
-      InvalidUsageOfBorrowedValue: UNIT
+      InvalidValueUsage: UNIT
     9:
-      InvalidUsageOfTakenValue: UNIT
-    10:
       InvalidObjectByValue: UNIT
-    11:
+    10:
       InvalidObjectByMutRef: UNIT
 ConsensusCommitPrologue:
   STRUCT:
