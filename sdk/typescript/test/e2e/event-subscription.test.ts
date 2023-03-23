@@ -12,34 +12,35 @@ describe('Event Subscription API', () => {
     toolbox = await setup();
   });
 
-  const mockCallback = vi.fn((_: SuiEvent) => expect(true).toBeTruthy());
+  // TODO: rewrite this test after the removal of devnet_nft
+  // const mockCallback = vi.fn((_: SuiEvent) => expect(true).toBeTruthy());
 
-  it('Subscribe to events', async () => {
-    const subscriptionId = await toolbox.provider.subscribeEvent({
-      filter: { Sender: toolbox.address() },
-      onMessage: mockCallback,
-    });
+  // it('Subscribe to events', async () => {
+  //   const subscriptionId = await toolbox.provider.subscribeEvent({
+  //     filter: { Sender: toolbox.address() },
+  //     onMessage: mockCallback,
+  //   });
 
-    const tx = new Transaction();
-    tx.moveCall({
-      target: '0x2::devnet_nft::mint',
-      arguments: [
-        tx.pure('Example NFT'),
-        tx.pure('An NFT created by the wallet Command Line Tool'),
-        tx.pure(
-          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-        ),
-      ],
-    });
-    await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
-      requestType: 'WaitForLocalExecution',
-    });
+  //   const tx = new Transaction();
+  //   tx.moveCall({
+  //     target: '0x2::devnet_nft::mint',
+  //     arguments: [
+  //       tx.pure('Example NFT'),
+  //       tx.pure('An NFT created by the wallet Command Line Tool'),
+  //       tx.pure(
+  //         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+  //       ),
+  //     ],
+  //   });
+  //   await toolbox.signer.signAndExecuteTransaction({
+  //     transaction: tx,
+  //     requestType: 'WaitForLocalExecution',
+  //   });
 
-    const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent({
-      id: subscriptionId,
-    });
-    expect(subFoundAndRemoved).toBeTruthy();
-    expect(mockCallback).toHaveBeenCalled();
-  });
+  //   const subFoundAndRemoved = await toolbox.provider.unsubscribeEvent({
+  //     id: subscriptionId,
+  //   });
+  //   expect(subFoundAndRemoved).toBeTruthy();
+  //   expect(mockCallback).toHaveBeenCalled();
+  // });
 });

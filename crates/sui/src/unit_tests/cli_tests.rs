@@ -201,43 +201,6 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_create_example_nft_command() {
-    use std::str::FromStr;
-    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let result = SuiClientCommands::CreateExampleNFT {
-        name: None,
-        description: None,
-        url: None,
-        gas: None,
-        gas_budget: None,
-    }
-    .execute(context)
-    .await
-    .unwrap();
-
-    match result {
-        SuiClientCommandResult::CreateExampleNFT(SuiObjectResponse::Exists(obj)) => {
-            assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
-            assert_eq!(
-                obj.type_.clone().unwrap(),
-                ObjectType::from_str(&sui_framework_address_concat_string(
-                    "::devnet_nft::DevNetNFT"
-                ))
-                .unwrap()
-            );
-            Ok(obj)
-        }
-        _ => Err(anyhow!(
-            "WalletCommands::CreateExampleNFT returns wrong type"
-        )),
-    }
-    .unwrap();
-}
-
-#[sim_test]
 async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id

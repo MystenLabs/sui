@@ -43,8 +43,7 @@ use test_utils::messages::{
 };
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
-    create_devnet_nft, delete_devnet_nft, increment_counter,
-    publish_basics_package_and_make_counter, transfer_coin,
+    increment_counter, publish_basics_package_and_make_counter, transfer_coin,
 };
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
@@ -541,169 +540,171 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sim_test]
-async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new()
-        .enable_fullnode_events()
-        .build()
-        .await?;
+// TODO: rewrite this test with the removal of devnet_nft
+// #[sim_test]
+// async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
+//     let mut test_cluster = TestClusterBuilder::new()
+//         .enable_fullnode_events()
+//         .build()
+//         .await?;
 
-    // Start a new fullnode that is not on the write path
-    let fullnode = start_fullnode_from_config(
-        test_cluster
-            .fullnode_config_builder()
-            .with_event_store()
-            .build()
-            .unwrap(),
-    )
-    .await
-    .unwrap();
+//     // Start a new fullnode that is not on the write path
+//     let fullnode = start_fullnode_from_config(
+//         test_cluster
+//             .fullnode_config_builder()
+//             .with_event_store()
+//             .build()
+//             .unwrap(),
+//     )
+//     .await
+//     .unwrap();
 
-    let node = fullnode.sui_node;
-    let ws_client = fullnode.ws_client;
+//     let node = fullnode.sui_node;
+//     let ws_client = fullnode.ws_client;
 
-    let context = &mut test_cluster.wallet;
+//     let context = &mut test_cluster.wallet;
 
-    let mut sub: Subscription<SuiEvent> = ws_client
-        .subscribe(
-            "sui_subscribeEvent",
-            rpc_params![EventFilter::MoveEventType(
-                parse_struct_tag(&sui_framework_address_concat_string(
-                    "::devnet_nft::MintNFTEvent"
-                ))
-                .unwrap()
-            )],
-            "sui_unsubscribeEvents",
-        )
-        .await
-        .unwrap();
+//     let mut sub: Subscription<SuiEvent> = ws_client
+//         .subscribe(
+//             "sui_subscribeEvent",
+//             rpc_params![EventFilter::MoveEventType(
+//                 parse_struct_tag(&sui_framework_address_concat_string(
+//                     "::devnet_nft::MintNFTEvent"
+//                 ))
+//                 .unwrap()
+//             )],
+//             "sui_unsubscribeEvents",
+//         )
+//         .await
+//         .unwrap();
 
-    let (sender, object_id, digest) = create_devnet_nft(context).await?;
-    wait_for_tx(digest, node.state().clone()).await;
+//     let (sender, object_id, digest) = create_devnet_nft(context).await?;
+//     wait_for_tx(digest, node.state().clone()).await;
 
-    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
+//     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
 
-    // Wait for streaming
-    let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
-        Ok(Some(Ok(SuiEvent {
-            type_,
-            parsed_json,
-            bcs,
-            ..
-        }))) => {
-            assert_eq!(type_.to_string(), struct_tag_str,);
-            assert_eq!(
-                parsed_json,
-                json!({
-                    "creator" : sender,
-                    "name": "example_nft_name",
-                    "object_id" : object_id,
-                })
-            );
-            bcs
-        }
-        other => panic!("Failed to get SuiEvent, but {:?}", other),
-    };
+//     // Wait for streaming
+//     let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
+//         Ok(Some(Ok(SuiEvent {
+//             type_,
+//             parsed_json,
+//             bcs,
+//             ..
+//         }))) => {
+//             assert_eq!(type_.to_string(), struct_tag_str,);
+//             assert_eq!(
+//                 parsed_json,
+//                 json!({
+//                     "creator" : sender,
+//                     "name": "example_nft_name",
+//                     "object_id" : object_id,
+//                 })
+//             );
+//             bcs
+//         }
+//         other => panic!("Failed to get SuiEvent, but {:?}", other),
+//     };
 
-    let type_ = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
-    let type_tag = parse_struct_tag(&type_).unwrap();
-    let expected_parsed_event = Event::move_event_to_move_struct(
-        &type_tag,
-        &bcs,
-        &**node.state().epoch_store_for_testing().module_cache(),
-    )
-    .unwrap();
-    let (_, expected_parsed_event) =
-        type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
-    let expected_event = SuiEvent {
-        id: EventID {
-            tx_digest: digest,
-            event_seq: 0,
-        },
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
-        transaction_module: ident_str!("devnet_nft").into(),
-        sender,
-        type_: type_tag,
-        parsed_json: expected_parsed_event.to_json_value(),
-        bcs,
-        timestamp_ms: None,
-    };
+//     let type_ = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
+//     let type_tag = parse_struct_tag(&type_).unwrap();
+//     let expected_parsed_event = Event::move_event_to_move_struct(
+//         &type_tag,
+//         &bcs,
+//         &**node.state().epoch_store_for_testing().module_cache(),
+//     )
+//     .unwrap();
+//     let (_, expected_parsed_event) =
+//         type_and_fields_from_move_struct(&type_tag, expected_parsed_event);
+//     let expected_event = SuiEvent {
+//         id: EventID {
+//             tx_digest: digest,
+//             event_seq: 0,
+//         },
+//         package_id: ObjectID::from_hex_literal("0x2").unwrap(),
+//         transaction_module: ident_str!("devnet_nft").into(),
+//         sender,
+//         type_: type_tag,
+//         parsed_json: expected_parsed_event.to_json_value(),
+//         bcs,
+//         timestamp_ms: None,
+//     };
 
-    // get tx events
-    let events = test_cluster
-        .sui_client()
-        .event_api()
-        .get_events(digest)
-        .await?;
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0], expected_event);
-    assert_eq!(events[0].id.tx_digest, digest);
+//     // get tx events
+//     let events = test_cluster
+//         .sui_client()
+//         .event_api()
+//         .get_events(digest)
+//         .await?;
+//     assert_eq!(events.len(), 1);
+//     assert_eq!(events[0], expected_event);
+//     assert_eq!(events[0].id.tx_digest, digest);
 
-    // No more
-    match timeout(Duration::from_secs(5), sub.next()).await {
-        Err(_) => (),
-        other => panic!(
-            "Expect to time out because no new events are coming in. Got {:?}",
-            other
-        ),
-    }
+//     // No more
+//     match timeout(Duration::from_secs(5), sub.next()).await {
+//         Err(_) => (),
+//         other => panic!(
+//             "Expect to time out because no new events are coming in. Got {:?}",
+//             other
+//         ),
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 // Test fullnode has event read jsonrpc endpoints working
-#[sim_test]
-async fn test_full_node_event_read_api_ok() {
-    let mut test_cluster = TestClusterBuilder::new()
-        .set_fullnode_rpc_port(50000)
-        .enable_fullnode_events()
-        .build()
-        .await
-        .unwrap();
+// TODO: rewrite this test with the removal of devnet_nft
+// #[sim_test]
+// async fn test_full_node_event_read_api_ok() {
+//     let mut test_cluster = TestClusterBuilder::new()
+//         .set_fullnode_rpc_port(50000)
+//         .enable_fullnode_events()
+//         .build()
+//         .await
+//         .unwrap();
 
-    let context = &mut test_cluster.wallet;
-    let node = &test_cluster.fullnode_handle.sui_node;
-    let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
+//     let context = &mut test_cluster.wallet;
+//     let node = &test_cluster.fullnode_handle.sui_node;
+//     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
-    let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
+//     let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
-    wait_for_tx(digest, node.state().clone()).await;
+//     wait_for_tx(digest, node.state().clone()).await;
 
-    let txes = node
-        .state()
-        .get_transactions(
-            Some(TransactionFilter::InputObject(transferred_object)),
-            None,
-            None,
-            false,
-        )
-        .unwrap();
+//     let txes = node
+//         .state()
+//         .get_transactions(
+//             Some(TransactionFilter::InputObject(transferred_object)),
+//             None,
+//             None,
+//             false,
+//         )
+//         .unwrap();
 
-    assert_eq!(txes.len(), 1);
-    assert_eq!(txes[0], digest);
+//     assert_eq!(txes.len(), 1);
+//     assert_eq!(txes[0], digest);
 
-    // timestamp is recorded
-    let ts = node.state().get_timestamp_ms(&digest).await.unwrap();
-    assert!(ts.is_some());
+//     // timestamp is recorded
+//     let ts = node.state().get_timestamp_ms(&digest).await.unwrap();
+//     assert!(ts.is_some());
 
-    // This is a poor substitute for the post processing taking some time
-    sleep(Duration::from_millis(1000)).await;
+//     // This is a poor substitute for the post processing taking some time
+//     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context).await.unwrap();
-    wait_for_tx(digest2, node.state().clone()).await;
+//     let (_sender, _object_id, digest2) = create_devnet_nft(context).await.unwrap();
+//     wait_for_tx(digest2, node.state().clone()).await;
 
-    // Add a delay to ensure event processing is done after transaction commits.
-    sleep(Duration::from_secs(5)).await;
+//     // Add a delay to ensure event processing is done after transaction commits.
+//     sleep(Duration::from_secs(5)).await;
 
-    // query by move event struct name
-    let params = rpc_params![digest2];
-    let events: Vec<SuiEvent> = jsonrpc_client
-        .request("sui_getEvents", params)
-        .await
-        .unwrap();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].id.tx_digest, digest2);
-}
+//     // query by move event struct name
+//     let params = rpc_params![digest2];
+//     let events: Vec<SuiEvent> = jsonrpc_client
+//         .request("sui_getEvents", params)
+//         .await
+//         .unwrap();
+//     assert_eq!(events.len(), 1);
+//     assert_eq!(events[0].id.tx_digest, digest2);
+// }
 
 #[sim_test]
 async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::Error> {
@@ -938,104 +939,105 @@ async fn get_past_obj_read_from_node(
     }
 }
 
-#[sim_test]
-#[ignore]
-async fn test_get_objects_read() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
-    let mut test_cluster = TestClusterBuilder::new().build().await?;
-    let node = test_cluster.fullnode_handle.sui_node.clone();
-    let context = &mut test_cluster.wallet;
+// TODO: rewrite this test with the removal of devnet
+// #[sim_test]
+// #[ignore]
+// async fn test_get_objects_read() -> Result<(), anyhow::Error> {
+//     telemetry_subscribers::init_for_testing();
+//     let mut test_cluster = TestClusterBuilder::new().build().await?;
+//     let node = test_cluster.fullnode_handle.sui_node.clone();
+//     let context = &mut test_cluster.wallet;
 
-    // Create the object
-    let (sender, object_id, _) = create_devnet_nft(context).await?;
-    sleep(Duration::from_secs(3)).await;
+//     // Create the object
+//     let (sender, object_id, _) = create_devnet_nft(context).await?;
+//     sleep(Duration::from_secs(3)).await;
 
-    let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
-    assert_ne!(sender, recipient);
+//     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
+//     assert_ne!(sender, recipient);
 
-    let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
+//     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id).await?;
 
-    // Transfer the object from sender to recipient
-    let gas_ref = get_gas_object_with_wallet_context(context, &sender)
-        .await
-        .expect("Expect at least one available gas object");
-    let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
-        object_ref_v1,
-        gas_ref,
-        context,
-        sender,
-        recipient,
-    );
-    context.execute_transaction(nft_transfer_tx).await.unwrap();
-    sleep(Duration::from_secs(1)).await;
+//     // Transfer the object from sender to recipient
+//     let gas_ref = get_gas_object_with_wallet_context(context, &sender)
+//         .await
+//         .expect("Expect at least one available gas object");
+//     let nft_transfer_tx = make_transfer_object_transaction_with_wallet_context(
+//         object_ref_v1,
+//         gas_ref,
+//         context,
+//         sender,
+//         recipient,
+//     );
+//     context.execute_transaction(nft_transfer_tx).await.unwrap();
+//     sleep(Duration::from_secs(1)).await;
 
-    let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;
-    assert_ne!(object_ref_v2, object_ref_v1);
+//     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;
+//     assert_ne!(object_ref_v2, object_ref_v1);
 
-    // Transfer some SUI to recipient
-    transfer_coin(context)
-        .await
-        .expect("Failed to transfer coins to recipient");
+//     // Transfer some SUI to recipient
+//     transfer_coin(context)
+//         .await
+//         .expect("Failed to transfer coins to recipient");
 
-    // Delete the object
-    let response = delete_devnet_nft(context, &recipient, object_ref_v2).await;
-    assert_eq!(
-        *response.effects.unwrap().status(),
-        SuiExecutionStatus::Success
-    );
-    sleep(Duration::from_secs(1)).await;
+//     // Delete the object
+//     let response = delete_devnet_nft(context, &recipient, object_ref_v2).await;
+//     assert_eq!(
+//         *response.effects.unwrap().status(),
+//         SuiExecutionStatus::Success
+//     );
+//     sleep(Duration::from_secs(1)).await;
 
-    // Now test get_object_read
-    let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
-        ObjectRead::Deleted(obj_ref) => obj_ref,
-        other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
-    };
+//     // Now test get_object_read
+//     let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
+//         ObjectRead::Deleted(obj_ref) => obj_ref,
+//         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
+//     };
 
-    let read_ref_v3 = match node
-        .state()
-        .get_past_object_read(&object_id, object_ref_v3.1)
-        .await?
-    {
-        PastObjectRead::ObjectDeleted(obj_ref) => obj_ref,
-        other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
-    };
-    assert_eq!(object_ref_v3, read_ref_v3);
+//     let read_ref_v3 = match node
+//         .state()
+//         .get_past_object_read(&object_id, object_ref_v3.1)
+//         .await?
+//     {
+//         PastObjectRead::ObjectDeleted(obj_ref) => obj_ref,
+//         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
+//     };
+//     assert_eq!(object_ref_v3, read_ref_v3);
 
-    let (read_ref_v2, read_obj_v2, _) =
-        get_past_obj_read_from_node(&node, object_id, object_ref_v2.1).await?;
-    assert_eq!(read_ref_v2, object_ref_v2);
-    assert_eq!(read_obj_v2, object_v2);
-    assert_eq!(read_obj_v2.owner, Owner::AddressOwner(recipient));
+//     let (read_ref_v2, read_obj_v2, _) =
+//         get_past_obj_read_from_node(&node, object_id, object_ref_v2.1).await?;
+//     assert_eq!(read_ref_v2, object_ref_v2);
+//     assert_eq!(read_obj_v2, object_v2);
+//     assert_eq!(read_obj_v2.owner, Owner::AddressOwner(recipient));
 
-    let (read_ref_v1, read_obj_v1, _) =
-        get_past_obj_read_from_node(&node, object_id, object_ref_v1.1).await?;
-    assert_eq!(read_ref_v1, object_ref_v1);
-    assert_eq!(read_obj_v1, object_v1);
-    assert_eq!(read_obj_v1.owner, Owner::AddressOwner(sender));
+//     let (read_ref_v1, read_obj_v1, _) =
+//         get_past_obj_read_from_node(&node, object_id, object_ref_v1.1).await?;
+//     assert_eq!(read_ref_v1, object_ref_v1);
+//     assert_eq!(read_obj_v1, object_v1);
+//     assert_eq!(read_obj_v1.owner, Owner::AddressOwner(sender));
 
-    let too_high_version = SequenceNumber::lamport_increment([object_ref_v3.1]);
+//     let too_high_version = SequenceNumber::lamport_increment([object_ref_v3.1]);
 
-    match node
-        .state()
-        .get_past_object_read(&object_id, too_high_version)
-        .await?
-    {
-        PastObjectRead::VersionTooHigh {
-            object_id: obj_id,
-            asked_version,
-            latest_version,
-        } => {
-            assert_eq!(obj_id, object_id);
-            assert_eq!(asked_version, too_high_version);
-            assert_eq!(latest_version, object_ref_v3.1);
-        }
-        other => anyhow::bail!(
-            "Expect SequenceNumberTooHigh for object {object_id:?} but got {other:?}."
-        ),
-    };
+//     match node
+//         .state()
+//         .get_past_object_read(&object_id, too_high_version)
+//         .await?
+//     {
+//         PastObjectRead::VersionTooHigh {
+//             object_id: obj_id,
+//             asked_version,
+//             latest_version,
+//         } => {
+//             assert_eq!(obj_id, object_id);
+//             assert_eq!(asked_version, too_high_version);
+//             assert_eq!(latest_version, object_ref_v3.1);
+//         }
+//         other => anyhow::bail!(
+//             "Expect SequenceNumberTooHigh for object {object_id:?} but got {other:?}."
+//         ),
+//     };
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 // Test for restoring a full node from a db snapshot
 #[sim_test]

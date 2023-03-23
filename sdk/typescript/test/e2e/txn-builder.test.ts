@@ -64,20 +64,21 @@ describe('Transaction Builders', () => {
     await validateTransaction(toolbox.signer, tx);
   });
 
-  it('MoveCall', async () => {
-    const tx = new Transaction();
-    tx.moveCall({
-      target: '0x2::devnet_nft::mint',
-      arguments: [
-        tx.pure('Example NFT'),
-        tx.pure('An NFT created by the wallet Command Line Tool'),
-        tx.pure(
-          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-        ),
-      ],
-    });
-    await validateTransaction(toolbox.signer, tx);
-  });
+  // TODO: rewrite this test after the removal of devnet_nft
+  // it('MoveCall', async () => {
+  //   const tx = new Transaction();
+  //   tx.moveCall({
+  //     target: '0x2::devnet_nft::mint',
+  //     arguments: [
+  //       tx.pure('Example NFT'),
+  //       tx.pure('An NFT created by the wallet Command Line Tool'),
+  //       tx.pure(
+  //         'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
+  //       ),
+  //     ],
+  //   });
+  //   await validateTransaction(toolbox.signer, tx);
+  // });
 
   it('MoveCall Shared Object', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();

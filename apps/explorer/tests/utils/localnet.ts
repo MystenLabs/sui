@@ -15,40 +15,6 @@ import {
 
 const addressToKeypair = new Map<string, Keypair>();
 
-export async function mint(address: string) {
-    const keypair = addressToKeypair.get(address);
-    if (!keypair) {
-        throw new Error('missing keypair');
-    }
-    const provider = new JsonRpcProvider(localnetConnection, {
-        skipDataValidation: false,
-    });
-    const signer = new RawSigner(keypair, provider);
-
-    const tx = new Transaction();
-    tx.moveCall({
-        target: '0x2::devnet_nft::mint',
-        arguments: [
-            tx.pure('Example NFT'),
-            tx.pure('An example NFT.'),
-            tx.pure(
-                'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty'
-            ),
-        ],
-    });
-
-    const result = await signer.signAndExecuteTransaction({
-        transaction: tx,
-        options: {
-            showInput: true,
-            showEffects: true,
-            showEvents: true,
-        },
-    });
-
-    return result;
-}
-
 export async function faucet() {
     const keypair = Ed25519Keypair.generate();
     const address = keypair.getPublicKey().toSuiAddress();

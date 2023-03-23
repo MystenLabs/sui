@@ -74,50 +74,51 @@ describe('offline build', () => {
     await tx.build();
   });
 
-  it('builds a more complex interaction', async () => {
-    const tx = setup();
-    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
-    tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: '0x2::devnet_nft::mint',
-        typeArguments: [],
-        arguments: [
-          tx.pure(Inputs.Pure('foo', 'string')),
-          tx.pure(Inputs.Pure('bar', 'string')),
-          tx.pure(Inputs.Pure('baz', 'string')),
-        ],
-      }),
-    );
-    await tx.build();
-  });
+  // TODO: rewrite this test after the removal of devnet_nft
+  // it('builds a more complex interaction', async () => {
+  //   const tx = setup();
+  //   const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+  //   tx.add(
+  //     Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
+  //   );
+  //   tx.add(
+  //     Commands.MoveCall({
+  //       target: '0x2::devnet_nft::mint',
+  //       typeArguments: [],
+  //       arguments: [
+  //         tx.pure(Inputs.Pure('foo', 'string')),
+  //         tx.pure(Inputs.Pure('bar', 'string')),
+  //         tx.pure(Inputs.Pure('baz', 'string')),
+  //       ],
+  //     }),
+  //   );
+  //   await tx.build();
+  // });
 
-  it('builds a more complex interaction', async () => {
-    const tx = setup();
-    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
-    tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
-    );
-    tx.add(
-      Commands.MoveCall({
-        target: '0x2::devnet_nft::mint',
-        typeArguments: [],
-        arguments: [
-          tx.pure(Inputs.Pure('foo', 'string')),
-          tx.pure(Inputs.Pure('bar', 'string')),
-          tx.pure(Inputs.Pure('baz', 'string')),
-        ],
-      }),
-    );
+  //   it('builds a more complex interaction', async () => {
+  //     const tx = setup();
+  //     const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+  //     tx.add(
+  //       Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
+  //     );
+  //     tx.add(
+  //       Commands.MoveCall({
+  //         target: '0x2::devnet_nft::mint',
+  //         typeArguments: [],
+  //         arguments: [
+  //           tx.pure(Inputs.Pure('foo', 'string')),
+  //           tx.pure(Inputs.Pure('bar', 'string')),
+  //           tx.pure(Inputs.Pure('baz', 'string')),
+  //         ],
+  //       }),
+  //     );
 
-    const bytes = await tx.build();
-    const tx2 = Transaction.from(bytes);
-    const bytes2 = await tx2.build();
+  //     const bytes = await tx.build();
+  //     const tx2 = Transaction.from(bytes);
+  //     const bytes2 = await tx2.build();
 
-    expect(bytes).toEqual(bytes2);
-  });
+  //     expect(bytes).toEqual(bytes2);
+  //   });
 });
 
 function ref(): { objectId: string; version: string; digest: string } {

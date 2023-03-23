@@ -339,28 +339,6 @@ const subFoundAndRemoved = await provider.unsubscribeEvent({
 });
 ```
 
-Subscribe to all events created by a package's `nft` module
-
-```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider();
-
-const packageObjectId = '0x...';
-const devnetNftFilter = {
-  All: [
-    { EventType: 'MoveEvent' },
-    { Package: packageObjectId },
-    { Module: 'nft' },
-  ],
-};
-const devNftSub = await provider.subscribeEvent({
-  filter: devnetNftFilter,
-  onMessage(event: SuiEventEnvelope) {
-    // handle subscription notification message here
-  },
-});
-```
-
 To publish a package:
 
 ```typescript

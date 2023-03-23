@@ -238,38 +238,6 @@ pub async fn increment_counter(
     .await
 }
 
-pub async fn create_devnet_nft(
-    context: &mut WalletContext,
-) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
-    let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
-    let gas_object = gas_objects.get(0).unwrap().id();
-
-    let res = SuiClientCommands::CreateExampleNFT {
-        name: Some("example_nft_name".into()),
-        description: Some("example_nft_desc".into()),
-        url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
-        gas: Some(*gas_object),
-        gas_budget: Some(GAS_BUDGET),
-    }
-    .execute(context)
-    .await?;
-
-    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
-        SuiObjectResponse::Exists(obj),
-    ) = res
-    {
-        (
-            obj.object_id,
-            obj.previous_transaction
-                .expect("previous_transaction should not be None"),
-        )
-    } else {
-        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectResponse::Exists, got {:?}", res);
-    };
-
-    Ok((sender, object_id, digest))
-}
-
 pub async fn transfer_sui(
     context: &mut WalletContext,
     sender: Option<SuiAddress>,
@@ -394,50 +362,6 @@ pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id
     .execute(context)
     .await
     .unwrap();
-}
-
-pub async fn delete_devnet_nft(
-    context: &mut WalletContext,
-    sender: &SuiAddress,
-    nft_to_delete: ObjectRef,
-) -> SuiTransactionResponse {
-    let gas = get_gas_object_with_wallet_context(context, sender)
-        .await
-        .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
-        *sender,
-        SUI_FRAMEWORK_OBJECT_ID,
-        "devnet_nft".parse().unwrap(),
-        "burn".parse().unwrap(),
-        Vec::new(),
-        gas,
-        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
-        MAX_GAS,
-    )
-    .unwrap();
-
-    let signature = context
-        .config
-        .keystore
-        .sign_secure(sender, &data, Intent::default())
-        .unwrap();
-
-    let tx = Transaction::from_data(data, Intent::default(), vec![signature])
-        .verify()
-        .unwrap();
-    let client = context.get_client().await.unwrap();
-    let resp = client
-        .quorum_driver()
-        .execute_transaction(
-            tx,
-            SuiTransactionResponseOptions::full_content(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await
-        .unwrap();
-
-    assert!(resp.confirmed_local_execution.unwrap());
-    resp
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.

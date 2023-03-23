@@ -13,8 +13,9 @@ Get answers to common questions about Sui.
 ### How to change the amount of an existing stake?
 
 During the staking period, you can add to or withdraw your stake from a validator. To modify your stake amount you can use the following functions:
- * Use the `request_add_stake` and `request_add_stake_with_locked_coin` methods to add to the staked amount.
- * Use the `request_withdraw_stake` method to withdraw staked SUI.
+
+- Use the `request_add_stake` and `request_add_stake_with_locked_coin` methods to add to the staked amount.
+- Use the `request_withdraw_stake` method to withdraw staked SUI.
 
 ### How is a staking transaction different from a typical transaction regarding construction, signing, and broadcasting?
 
@@ -24,8 +25,8 @@ Staking transactions are Move call transactions that call specific Move function
 
 There will be a minimum amount required, as well as limits on stake changes within an epoch.
 
- * **Validators:** Requires a minimum of 30 Million SUI to join as a Sui Validator. Validators must maintain a minimum of 20 Million SUI to continue as a validator. Any validator that drops below 15 Million SUI is removed at the next epoch boundary.
- * **User staking:** The minimum amount to stake with a validator is 1 SUI.
+- **Validators:** Requires a minimum of 30 Million SUI to join as a Sui Validator. Validators must maintain a minimum of 20 Million SUI to continue as a validator. Any validator that drops below 15 Million SUI is removed at the next epoch boundary.
+- **User staking:** The minimum amount to stake with a validator is 1 SUI.
 
 ### How to stake and un-stake SUI?
 
@@ -33,8 +34,8 @@ Sui Wallet supports both stake and un-staking. Staking via Move code or the Sui 
 
 ### Where are the Sui Developer Docs?
 
-* Sui Documentation Portal: [https://docs.sui.io/](https://docs.sui.io/)
-* Sui REST API's: [https://docs.sui.io/sui-jsonrpc](https://docs.sui.io/sui-jsonrpc)
+- Sui Documentation Portal: [https://docs.sui.io/](https://docs.sui.io/)
+- Sui REST API's: [https://docs.sui.io/sui-jsonrpc](https://docs.sui.io/sui-jsonrpc)
 
 ### What is the difference between the devnet branch and the main branch of the Sui repo?
 
@@ -57,12 +58,6 @@ Yes, the gas price is dynamic and exposed via the [sui_getReferenceGasPrice](htt
 ### How can I delete an object within Sui?
 
 You can delete objects (in most cases) only if the Move module that defines the object type includes a Move function that can delete the object, such as when a Move contract writer explicitly wants the object to be deletable.[https://docs.sui.io/devnet/build/programming-with-objects/ch2-using-objects#option-1-delete-the-object](https://docs.sui.io/devnet/build/programming-with-objects/ch2-using-objects#option-1-delete-the-object)
-
-If the delete function is defined in the Move module, you can delete the object by invoking the Move call using CLI or wallet. Here’s an example:
-
- 1. Create an example NFT using the Sui Client CLI: [https://docs.sui.io/devnet/build/cli-client#create-an-example-nft](https://docs.sui.io/devnet/build/cli-client#create-an-example-nft).
-
- 2. Call this Move [function](https://github.com/MystenLabs/sui/blob/21c26ce6a5d4e3448abd74323e3164286d3deba6/crates/sui-framework/sources/devnet_nft.move#L69-L72) with the CLI by following [https://docs.sui.io/devnet/build/cli-client#calling-move-code](https://docs.sui.io/devnet/build/cli-client#calling-move-code).
 
 ### What is the denomination of Sui？
 
@@ -177,4 +172,3 @@ Validators form a certificate (a quorum of signatures) for each transaction, and
 ### How can I get in touch and request more information?
 
 - Please visit our [Discord server](https://discord.gg/sui).
-

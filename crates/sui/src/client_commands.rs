@@ -435,31 +435,6 @@ pub enum SuiClientCommands {
         gas_budget: u64,
     },
 
-    /// Create an example NFT
-    #[clap(name = "create-example-nft")]
-    CreateExampleNFT {
-        /// Name of the NFT
-        #[clap(long)]
-        name: Option<String>,
-
-        /// Description of the NFT
-        #[clap(long)]
-        description: Option<String>,
-
-        /// Display url(e.g., an image url) of the NFT
-        #[clap(long)]
-        url: Option<String>,
-
-        /// ID of the gas object for gas payment, in 20 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-
-        /// Gas budget for this transfer
-        #[clap(long)]
-        gas_budget: Option<u64>,
-    },
-
     /// Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere.
     #[clap(name = "serialize-transfer-sui")]
     SerializeTransferSui {
@@ -1006,48 +981,6 @@ impl SuiClientCommands {
             SuiClientCommands::ActiveAddress => {
                 SuiClientCommandResult::ActiveAddress(context.active_address().ok())
             }
-            SuiClientCommands::CreateExampleNFT {
-                name,
-                description,
-                url,
-                gas,
-                gas_budget,
-            } => {
-                let args_json = json!([
-                    unwrap_or(&name, EXAMPLE_NFT_NAME),
-                    unwrap_or(&description, EXAMPLE_NFT_DESCRIPTION),
-                    unwrap_or(&url, EXAMPLE_NFT_URL)
-                ]);
-                let mut args = vec![];
-                for a in args_json.as_array().unwrap() {
-                    args.push(SuiJsonValue::new(a.clone()).unwrap());
-                }
-                let response = call_move(
-                    ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    "devnet_nft",
-                    "mint",
-                    vec![],
-                    gas,
-                    gas_budget.unwrap_or(100_000),
-                    args,
-                    context,
-                )
-                .await?;
-                let nft_id = response
-                    .effects
-                    .ok_or_else(|| anyhow!("Failed to fetch transaction effects"))?
-                    .created()
-                    .first()
-                    .ok_or_else(|| anyhow!("Failed to create NFT"))?
-                    .reference
-                    .object_id;
-                let client = context.get_client().await?;
-                let object_read = client
-                    .read_api()
-                    .get_object_with_options(nft_id, SuiObjectDataOptions::full_content())
-                    .await?;
-                SuiClientCommandResult::CreateExampleNFT(object_read)
-            }
 
             SuiClientCommands::SerializeTransferSui {
                 to,
@@ -1580,12 +1513,6 @@ impl Display for SuiClientCommandResult {
                     None => write!(writer, "None")?,
                 };
             }
-            SuiClientCommandResult::CreateExampleNFT(object_read) => {
-                // TODO: display the content of the object
-                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
-                writeln!(writer, "{}\n", "Successfully created an ExampleNFT:".bold())?;
-                writeln!(writer, "{}", object)?;
-            }
             SuiClientCommandResult::ExecuteSignedTx(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
@@ -1790,7 +1717,6 @@ pub enum SuiClientCommandResult {
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
-    CreateExampleNFT(SuiObjectResponse),
     SerializeTransferSui(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),

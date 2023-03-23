@@ -76,7 +76,6 @@ impl RpcExampleProvider {
 
     pub fn examples(&mut self) -> BTreeMap<String, Vec<ExamplePairing>> {
         [
-            self.batch_transaction_examples(),
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_owned_objects(),
@@ -92,85 +91,86 @@ impl RpcExampleProvider {
         .collect()
     }
 
-    fn batch_transaction_examples(&mut self) -> Examples {
-        let signer = SuiAddress::from(ObjectID::new(self.rng.gen()));
-        let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
-        let gas_id = ObjectID::new(self.rng.gen());
-        let object_id = ObjectID::new(self.rng.gen());
+    // TODO: rewrite this example with the removal of devnet_nft
+    // fn batch_transaction_examples(&mut self) -> Examples {
+    //     let signer = SuiAddress::from(ObjectID::new(self.rng.gen()));
+    //     let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
+    //     let gas_id = ObjectID::new(self.rng.gen());
+    //     let object_id = ObjectID::new(self.rng.gen());
 
-        let tx_params = vec![
-            RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
-                package_object_id: SUI_FRAMEWORK_OBJECT_ID,
-                module: "devnet_nft".to_string(),
-                function: "mint".to_string(),
-                type_arguments: vec![],
-                arguments: vec![
-                    SuiJsonValue::new(json!(EXAMPLE_NFT_NAME)).unwrap(),
-                    SuiJsonValue::new(json!(EXAMPLE_NFT_DESCRIPTION)).unwrap(),
-                    SuiJsonValue::new(json!(EXAMPLE_NFT_URL)).unwrap(),
-                ],
-            }),
-            RPCTransactionRequestParams::TransferObjectRequestParams(TransferObjectParams {
-                recipient,
-                object_id,
-            }),
-        ];
+    //     let tx_params = vec![
+    //         RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
+    //             package_object_id: SUI_FRAMEWORK_OBJECT_ID,
+    //             module: "devnet_nft".to_string(),
+    //             function: "mint".to_string(),
+    //             type_arguments: vec![],
+    //             arguments: vec![
+    //                 SuiJsonValue::new(json!(EXAMPLE_NFT_NAME)).unwrap(),
+    //                 SuiJsonValue::new(json!(EXAMPLE_NFT_DESCRIPTION)).unwrap(),
+    //                 SuiJsonValue::new(json!(EXAMPLE_NFT_URL)).unwrap(),
+    //             ],
+    //         }),
+    //         RPCTransactionRequestParams::TransferObjectRequestParams(TransferObjectParams {
+    //             recipient,
+    //             object_id,
+    //         }),
+    //     ];
 
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder
-                .move_call(
-                    SUI_FRAMEWORK_OBJECT_ID,
-                    Identifier::from_str("devnet_nft").unwrap(),
-                    Identifier::from_str("mint").unwrap(),
-                    vec![],
-                    vec![
-                        CallArg::Pure(EXAMPLE_NFT_NAME.as_bytes().to_vec()),
-                        CallArg::Pure(EXAMPLE_NFT_DESCRIPTION.as_bytes().to_vec()),
-                        CallArg::Pure(EXAMPLE_NFT_URL.as_bytes().to_vec()),
-                    ],
-                )
-                .unwrap();
-            builder
-                .transfer_object(
-                    recipient,
-                    (
-                        object_id,
-                        SequenceNumber::from_u64(1),
-                        ObjectDigest::new(self.rng.gen()),
-                    ),
-                )
-                .unwrap();
-            builder.finish()
-        };
-        let data = TransactionData::new_with_dummy_gas_price(
-            TransactionKind::programmable(pt),
-            signer,
-            (
-                gas_id,
-                SequenceNumber::from_u64(1),
-                ObjectDigest::new(self.rng.gen()),
-            ),
-            1000,
-        );
+    //     let pt = {
+    //         let mut builder = ProgrammableTransactionBuilder::new();
+    //         builder
+    //             .move_call(
+    //                 SUI_FRAMEWORK_OBJECT_ID,
+    //                 Identifier::from_str("devnet_nft").unwrap(),
+    //                 Identifier::from_str("mint").unwrap(),
+    //                 vec![],
+    //                 vec![
+    //                     CallArg::Pure(EXAMPLE_NFT_NAME.as_bytes().to_vec()),
+    //                     CallArg::Pure(EXAMPLE_NFT_DESCRIPTION.as_bytes().to_vec()),
+    //                     CallArg::Pure(EXAMPLE_NFT_URL.as_bytes().to_vec()),
+    //                 ],
+    //             )
+    //             .unwrap();
+    //         builder
+    //             .transfer_object(
+    //                 recipient,
+    //                 (
+    //                     object_id,
+    //                     SequenceNumber::from_u64(1),
+    //                     ObjectDigest::new(self.rng.gen()),
+    //                 ),
+    //             )
+    //             .unwrap();
+    //         builder.finish()
+    //     };
+    //     let data = TransactionData::new_with_dummy_gas_price(
+    //         TransactionKind::programmable(pt),
+    //         signer,
+    //         (
+    //             gas_id,
+    //             SequenceNumber::from_u64(1),
+    //             ObjectDigest::new(self.rng.gen()),
+    //         ),
+    //         1000,
+    //     );
 
-        let result = TransactionBytes::from_data(data).unwrap();
+    //     let result = TransactionBytes::from_data(data).unwrap();
 
-        Examples::new(
-            "sui_batchTransaction",
-            vec![ExamplePairing::new(
-                "Create unsigned batch transaction data.",
-                vec![
-                    ("signer", json!(signer)),
-                    ("single_transaction_params", json!(tx_params)),
-                    ("gas", json!(gas_id)),
-                    ("gas_budget", json!(1000)),
-                    ("txn_builder_mode", json!("Commit")),
-                ],
-                json!(result),
-            )],
-        )
-    }
+    //     Examples::new(
+    //         "sui_batchTransaction",
+    //         vec![ExamplePairing::new(
+    //             "Create unsigned batch transaction data.",
+    //             vec![
+    //                 ("signer", json!(signer)),
+    //                 ("single_transaction_params", json!(tx_params)),
+    //                 ("gas", json!(gas_id)),
+    //                 ("gas_budget", json!(1000)),
+    //                 ("txn_builder_mode", json!("Commit")),
+    //             ],
+    //             json!(result),
+    //         )],
+    //     )
+    // }
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signatures, _, _, result) = self.get_transfer_data_response();
