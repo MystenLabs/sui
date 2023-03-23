@@ -41,9 +41,10 @@ cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" --num-threads 
 ```
 **NOTE**: right now `pay-sui` only supports 1 thread but multi-threading support can be added pretty easily by assigning different gas coins to different threads
 
-## Adding other endpoints
+# Useful commands
+```bash
+cat sui-rpc-loadgen.b844f547-d354-4871-b958-1ea3fe23a0a8.log.2023-03-23 | awk '/Finished processing/{print $7}' | sort -n | uniq | awk 'BEGIN{last=0}{for(i=last+1;i<$1;i++) print i; last=$1} END{print last}' | tee missing_numbers.txt && wc -l missing_numbers.txt
+```
+Checks which checkpoints among threads have not been processed yet. The last one should be the largest checkpoint being processed.
 
-1. Add new field `Endpoint` to `ClapCommand` in [src/main.rs](src/main.rs)
-2. Add `ClapCommand::Endpoint` to `match opts.command` in [src/main.rs](src/main.rs)
-3. Add new struct `Endpoint`  and provide `new_endpoint` function that returns `Endpoint` in `Command` to [src/payload/mod.rs](src/payload/mod.rs)
-4. Implementation details go in [src/payload/rpc_command_processor.rs](src/payload/rpc_command_processor.rs) and add to `match command`
+`wc -l missing_numbers.txt` - counts how many checkpoints to go

@@ -96,6 +96,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let uuid = Uuid::new_v4();
     let log_filename = format!("sui-rpc-loadgen.{}.log", uuid);
+    println!("Logging to {}", log_filename);
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
@@ -104,7 +105,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let opts = Opts::parse();
-    println!("Logging to {}", log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
     // TODO(chris): remove hardcoded value since we only need keystore for write commands
@@ -139,15 +139,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // todo: make flexible
     let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {
+        let start = data.start;
+        let end = data.end.unwrap_or(455246); // todo: adjustable upper limit
         let num_chunks = opts.num_threads;
-        let chunk_size = 455246 / num_chunks; // todo: adjustable limit
+        let chunk_size = (end - start) / num_chunks as u64;
         (0..num_chunks)
             .map(|i| {
-                let start = i * chunk_size;
-                let end = (i + 1) * chunk_size;
+                let start_checkpoint = start + (i as u64) * chunk_size;
+                let end_checkpoint = start + ((i + 1) as u64) * chunk_size;
                 Command::new_get_checkpoints(
-                    start.try_into().unwrap(),
-                    Some(end.try_into().unwrap()),
+                    start_checkpoint,
+                    Some(end_checkpoint),
                     data.verify_transaction,
                 )
             })
