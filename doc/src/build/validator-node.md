@@ -77,7 +77,7 @@ The total amount of gas fees collected corresponds to the sum of gas fees across
 
 ### User staking and rewards
 
-A stake deposit request goes into a pending state immediately in the staking pool as soon as it is made. Sui Wallet reflects any pending stake deposits requests for the user’s account. However, pending stake deposit requests do not take effect until the end of the epoch during which the request is made.
+A stake deposit request goes into a pending state immediately in the staking pool as soon as it is made. Sui Wallet reflects any pending stake deposit requests for the user’s account. However, pending stake deposit requests do not take effect until the end of the epoch during which the request is made.
 
 A withdrawal (un-stake) request is processed immediately as soon as it is received. The staker obtains the originally deposited SUI together with all accrued stake rewards up to the previous epoch boundary – in other words, they do not include stake rewards for the current epoch.
 
