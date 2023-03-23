@@ -13,7 +13,20 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "rootDir": ".",
+    "paths": {
+      "@mysten/wallet-standard": ["../wallet-standard/src"],
+      "@mysten/wallet-adapter-base": ["../adapters/base-adapter/src"],
+      "@mysten/wallet-adapter-unsafe-burner": ["../adapters/unsafe-burner/src"],
+      "@mysten/wallet-adapter-wallet-standard": [
+        "../adapters/wallet-standard-adapter/src"
+      ],
+      "@mysten/wallet-kit": ["../wallet-kit/src"],
+      "@mysten/wallet-kit-core": ["../wallet-kit-core/src"],
+      "@mysten/sui.js": ["../../typescript/src"],
+      "@mysten/bcs": ["../../bcs/src"]
+    }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
