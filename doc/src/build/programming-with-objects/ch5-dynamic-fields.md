@@ -183,10 +183,10 @@ public entry fun reclaim_child(parent: &mut Parent, ctx: &mut TxContext) {
 }
 ```
 
-Similar to borrowing a field, a transaction that attempts to remove a non-existent field, or a field with a different `Value` type will fail.
+Similar to borrowing a field, a transaction that attempts to remove a non-existent field, or a field with a different `Value` type, fails.
 
 ### Deleting an Object with Dynamic Fields
 
-It is possible to delete an object that has dynamic fields still defined on it. Because field values can only be accessed via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability.
+It is possible to delete an object that has dynamic fields still defined on it. Because field values can be accessed only via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability.
 
 Deleting an object that has dynamic fields still defined on it is permitted, but it will render all its fields inaccessible.
