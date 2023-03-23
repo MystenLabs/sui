@@ -946,7 +946,7 @@ async fn get_display_object_by_type(
 
         Ok(Some(display))
     } else {
-        Err(anyhow!("Display object for {object_type} does not exist"))?
+        Ok(None)
     }
 }
 
