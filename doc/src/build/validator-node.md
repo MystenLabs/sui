@@ -54,7 +54,7 @@ The distinction between third-party owned vs validator-owned rewards and stake i
 
 ### Find the exchange rate
 
-Each epoch change emits a 0x2::validator_set::ValidatorEpochInfo event per validator with the exchange rate information. You can use the Events API to query events.
+Each epoch change emits a `0x2::validator_set::ValidatorEpochInfo` event per validator with the exchange rate information. You can use the Events API to query events.
 
 ## Staking rewards
 
