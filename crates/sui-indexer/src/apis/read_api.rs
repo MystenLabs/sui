@@ -83,7 +83,7 @@ impl<S: IndexerStore> ReadApi<S> {
             .filter_map(|digest| {
                 tx_vec
                     .iter()
-                    .find(|txn| txn.transaction_digest == *digest)
+                    .find(|tx| tx.transaction_digest == *digest)
                     .cloned()
             })
             .collect::<Vec<_>>();
@@ -102,7 +102,7 @@ impl<S: IndexerStore> ReadApi<S> {
             .collect::<Result<Vec<_>, _>>()?;
 
         let tx_resp_vec: Vec<SuiTransactionResponse> =
-            tx_full_resp_vec.into_iter().map(|txn| txn.into()).collect();
+            tx_full_resp_vec.into_iter().map(|tx| tx.into()).collect();
         Ok(tx_resp_vec)
     }
 
@@ -201,11 +201,11 @@ impl<S: IndexerStore> ReadApi<S> {
         }?;
 
         // digests here are of size (limit + 1), where the last one is the cursor for the next page
-        let mut txn_digests = digests_from_db
+        let mut tx_digests = digests_from_db
             .iter()
             .map(|digest| {
-                let txn_digest: Result<TransactionDigest, _> = digest.clone().parse();
-                txn_digest.map_err(|e| {
+                let tx_digest: Result<TransactionDigest, _> = digest.clone().parse();
+                tx_digest.map_err(|e| {
                     IndexerError::SerdeError(format!(
                         "Failed to deserialize transaction digest: {:?} with error {:?}",
                         digest, e
@@ -214,12 +214,12 @@ impl<S: IndexerStore> ReadApi<S> {
             })
             .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
 
-        let has_next_page = txn_digests.len() > limit;
-        txn_digests.truncate(limit);
-        let next_cursor = txn_digests.last().cloned().map_or(cursor, Some);
+        let has_next_page = tx_digests.len() > limit;
+        tx_digests.truncate(limit);
+        let next_cursor = tx_digests.last().cloned().map_or(cursor, Some);
 
         Ok(Page {
-            data: txn_digests
+            data: tx_digests
                 .into_iter()
                 .map(SuiTransactionResponse::new)
                 .collect(),

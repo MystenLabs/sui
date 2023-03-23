@@ -88,19 +88,19 @@ pub async fn check_transactions(
 ) -> Result<(), anyhow::Error> {
     for digest in tx_vec {
         let fetch_options = SuiTransactionResponseOptions::full_content();
-        let fn_sui_txn_response = fn_client
+        let fn_sui_tx_response = fn_client
             .read_api()
             .get_transaction_with_options(digest, fetch_options.clone())
             .await?;
-        let indexer_sui_txn_response = indexer_client
+        let indexer_sui_tx_response = indexer_client
             .read_api()
             .get_transaction_with_options(digest, fetch_options)
             .await?;
-        if fn_sui_txn_response != indexer_sui_txn_response {
+        if fn_sui_tx_response != indexer_sui_tx_response {
             error!("Checkpoint transactions mismatch found in {}", digest);
             warn!(
                 "Transaction response mismatch with digest {:?}:\nFN:\n{:?}\nIndexer:\n{:?} ",
-                digest, fn_sui_txn_response, indexer_sui_txn_response
+                digest, fn_sui_tx_response, indexer_sui_tx_response
             );
             continue;
         }
@@ -108,7 +108,7 @@ pub async fn check_transactions(
             check_events(fn_client, indexer_client, digest).await?;
         }
         if config.check_objects {
-            let objects = fn_sui_txn_response.object_changes.unwrap();
+            let objects = fn_sui_tx_response.object_changes.unwrap();
             check_objects(fn_client, indexer_client, objects).await?;
         }
     }

@@ -50,10 +50,10 @@ pub trait IndexerStore {
     fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;
 
     // TODO: combine all get_transaction* methods
-    fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError>;
+    fn get_transaction_by_digest(&self, tx_digest: &str) -> Result<Transaction, IndexerError>;
     fn multi_get_transactions_by_digests(
         &self,
-        txn_digests: &[String],
+        tx_digests: &[String],
     ) -> Result<Vec<Transaction>, IndexerError>;
 
     async fn compose_full_transaction_response(
@@ -114,25 +114,25 @@ pub trait IndexerStore {
 
     fn get_transaction_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
     fn get_move_call_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
     fn get_input_object_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
     fn get_recipient_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 

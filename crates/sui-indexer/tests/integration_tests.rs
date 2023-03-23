@@ -317,7 +317,7 @@ pub mod pg_integration_test {
         let tx_mutation_query_response = indexer_rpc_client
             .query_transactions(mutation_query, None, None, None)
             .await?;
-        // the coin is first created by genesis txn, then transferred by the above txn
+        // the coin is first created by genesis tx, then transferred by the above tx
         assert!(!tx_mutation_query_response.has_next_page);
         assert_eq!(tx_mutation_query_response.data.len(), 2);
         assert_eq!(
