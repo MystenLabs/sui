@@ -91,7 +91,7 @@ Operationally this is achieved through a Gas Price Survey that occurs as follows
  1. During each epoch E, each validator submits what they think the optimal reference gas price should be for the next epoch E+1.
  2. At the epoch boundary, when Sui transitions from epoch E to epoch E+1, the network observes the gas price quotes across the validator set and sets the 2/3 percentile weighted by stake as the epoch’s reference gas price. Hence the reference gas price is constant throughout each epoch and is only updated when the epoch changes.
 
-For example, assume that there are seven validators with equal stake, and the price quotes are they submit are {15,1,4,2,8,3,23}. The protocol sets the reference gas price at 8.
+For example, assume that there are seven validators with equal stake, and the price quotes they submit are {15, 1, 4, 2, 8, 3, 23}. The protocol sets the reference gas price at 8.
 
 In practice, the process for submitting a gas price quote for the Gas Price Survey is very simple.  Each validator owns an object that contains their quote for the reference gas price. To change their response, they must update the value in that object.
 
