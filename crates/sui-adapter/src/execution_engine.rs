@@ -83,6 +83,8 @@ pub fn execute_transaction_to_effects<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
+
+    #[cfg(debug_assertions)]
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
