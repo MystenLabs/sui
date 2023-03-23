@@ -1032,10 +1032,10 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
 }
 
 fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+    _context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &IdentStr,
-    type_arguments: &[Type],
+    _type_arguments: &[Type],
 ) -> Result<(), ExecutionError> {
     let module_ident = (module_id.address(), module_id.name());
     if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
@@ -1048,23 +1048,18 @@ fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
     if module_ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE)
         && PRIVATE_TRANSFER_FUNCTIONS.contains(&function)
     {
-        for ty in type_arguments {
-            let abilities = context
-                .session
-                .get_type_abilities(ty)
-                .map_err(|e| context.convert_vm_error(e))?;
-            if !abilities.has_store() {
-                let msg = format!(
-                    "Cannot directly call sui::{}::{} unless the object type has the store ability",
-                    TRANSFER_MODULE, function
-                );
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    msg,
-                ));
-            }
-        }
+        let msg = format!(
+            "Cannot directly call sui::{m}::{f}. \
+            Use the public variant instead, sui::{m}::public_{f}",
+            m = TRANSFER_MODULE,
+            f = function
+        );
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            msg,
+        ));
     }
+
     Ok(())
 }
 
