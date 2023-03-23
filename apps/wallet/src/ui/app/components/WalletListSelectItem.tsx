@@ -89,7 +89,6 @@ export function WalletListSelectItem({
             {mode === 'disconnect' && selected ? (
                 <XFill16 className="text-issue-dark text-base font-bold" />
             ) : null}
-            {/* Secondary/BodySmall-SB */}
             <Text
                 mono
                 variant="body"
