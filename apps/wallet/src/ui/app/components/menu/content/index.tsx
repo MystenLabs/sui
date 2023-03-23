@@ -40,7 +40,7 @@ import type { MouseEvent } from 'react';
 const CLOSE_KEY_CODES: string[] = ['Escape'];
 
 function MenuContent() {
-    const backUrl = useNextMenuUrl(true, '/');
+    const accountsUrl = useNextMenuUrl(true, '/accounts');
     const mainLocation = useLocation();
     const isOpen = useMenuIsOpen();
     const menuUrl = useMenuUrl();
@@ -84,10 +84,10 @@ function MenuContent() {
                                 element={
                                     <ConnectLedgerModal
                                         onClose={() => {
-                                            navigate(backUrl);
+                                            navigate(accountsUrl);
                                         }}
                                         onError={(error) => {
-                                            navigate(backUrl);
+                                            navigate(accountsUrl);
                                             toast.error(
                                                 getLedgerErrorMessage(error)
                                             );
