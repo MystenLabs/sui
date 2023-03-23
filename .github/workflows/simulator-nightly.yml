@@ -96,7 +96,6 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh_run_time=$(gh api -X GET "repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/timing" --jq '.run_duration_ms')
-        gh_run_time=$(printf "%.0f" ${gh_run_time})
         echo "gh_run_time=${gh_run_time}" >> $GITHUB_ENV
 
     - name: Post to slack
