@@ -194,6 +194,7 @@ async fn test_publish_duplicate_modules() {
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_object_wrapping_unwrapping() {
+    telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;

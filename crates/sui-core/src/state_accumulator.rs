@@ -175,12 +175,11 @@ impl StateAccumulator {
             .iter()
             .map(|(id, seq_num)| {
                 dbg!(id, seq_num);
-                let wrapped_tombstone = self
+                let objref = self
                     .authority_store
-                    .get_object_prior_to_key(id, *seq_num)
+                    .get_object_ref_prior_to_key(id, *seq_num)
                     .expect("read cannot fail")
                     .expect("wrapped tombstone must precede unwrapped object");
-                let objref = wrapped_tombstone.compute_object_reference();
 
                 assert!(objref.2.is_wrapped(), "{:?}", objref);
 
