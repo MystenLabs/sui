@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
+import { LockedDeviceError } from '@ledgerhq/errors';
 import { useCallback } from 'react';
+import toast from 'react-hot-toast';
 import {
     Navigate,
     Route,
@@ -11,7 +13,12 @@ import {
     useNavigate,
 } from 'react-router-dom';
 
+import { ConnectLedgerModal } from '../../ledger/ConnectLedgerModal';
 import { ImportLedgerAccounts } from '../../ledger/ImportLedgerAccounts';
+import {
+    LedgerConnectionFailedError,
+    LedgerNoTransportMechanismError,
+} from '../../ledger/LedgerExceptions';
 import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
 import { ExportAccount } from './ExportAccount';
@@ -33,6 +40,7 @@ import type { MouseEvent } from 'react';
 const CLOSE_KEY_CODES: string[] = ['Escape'];
 
 function MenuContent() {
+    const backUrl = useNextMenuUrl(true, '/');
     const mainLocation = useLocation();
     const isOpen = useMenuIsOpen();
     const menuUrl = useMenuUrl();
@@ -50,11 +58,13 @@ function MenuContent() {
     );
     useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
 
-    const isMultiAccountsEnabled = useFeature(
-        FEATURES.WALLET_MULTI_ACCOUNTS
-    ).on;
     const { on: isLedgerIntegrationEnabled } = useFeature(
         FEATURES.WALLET_LEDGER_INTEGRATION
+    );
+
+    const importLedgerAccountsUrl = useNextMenuUrl(
+        true,
+        '/import-ledger-accounts'
     );
 
     if (!isOpen) {
@@ -67,22 +77,37 @@ function MenuContent() {
                 <MainLocationContext.Provider value={mainLocation}>
                     <Routes location={menuUrl || ''}>
                         <Route path="/" element={<MenuList />} />
-                        {isMultiAccountsEnabled ? (
-                            <>
-                                <Route
-                                    path="/accounts"
-                                    element={<AccountsSettings />}
-                                />
-                                <Route
-                                    path="/export/:account"
-                                    element={<ExportAccount />}
-                                />
-                                <Route
-                                    path="/import-private-key"
-                                    element={<ImportPrivateKey />}
-                                />
-                            </>
-                        ) : null}
+
+                        <Route path="/accounts" element={<AccountsSettings />}>
+                            <Route
+                                path="connect-ledger-modal"
+                                element={
+                                    <ConnectLedgerModal
+                                        onClose={() => {
+                                            navigate(backUrl);
+                                        }}
+                                        onError={(error) => {
+                                            navigate(backUrl);
+                                            toast.error(
+                                                getLedgerErrorMessage(error)
+                                            );
+                                        }}
+                                        onConfirm={() => {
+                                            navigate(importLedgerAccountsUrl);
+                                        }}
+                                    />
+                                }
+                            />
+                        </Route>
+                        <Route
+                            path="/export/:account"
+                            element={<ExportAccount />}
+                        />
+                        <Route
+                            path="/import-private-key"
+                            element={<ImportPrivateKey />}
+                        />
+
                         <Route path="/network" element={<NetworkSettings />} />
                         <Route
                             path="/auto-lock"
@@ -108,3 +133,14 @@ function MenuContent() {
 }
 
 export default MenuContent;
+
+function getLedgerErrorMessage(error: unknown) {
+    if (error instanceof LockedDeviceError) {
+        return 'Your device is locked. Un-lock it and try again.';
+    } else if (error instanceof LedgerConnectionFailedError) {
+        return 'Ledger connection failed.';
+    } else if (error instanceof LedgerNoTransportMechanismError) {
+        return "Your machine doesn't support USB or HID.";
+    }
+    return 'Something went wrong. Try again.';
+}
