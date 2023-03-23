@@ -5479,7 +5479,6 @@ dependencies = [
 name = "narwhal-config"
 version = "0.1.0"
 dependencies = [
- "arc-swap",
  "fastcrypto",
  "insta",
  "match_opt",
@@ -5487,7 +5486,6 @@ dependencies = [
  "mysten-util-mem",
  "narwhal-crypto",
  "narwhal-test-utils",
- "once_cell",
  "rand 0.8.5",
  "serde 1.0.152",
  "serde_json",
