@@ -3,7 +3,6 @@
 
 import { ArrowLeft16 } from '@mysten/icons';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
@@ -27,7 +26,6 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
     const [mnemonic, setLocalMnemonic] = useState<string[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [passwordCopied, setPasswordCopied] = useState(false);
-    const navigate = useNavigate();
     const dispatch = useAppDispatch();
     useEffect(() => {
         (async () => {
@@ -150,7 +148,7 @@ const BackupPage = ({ mode = 'created' }: BackupPageProps) => {
                         size="tall"
                         variant="primary"
                         disabled={mode === 'created' && !passwordCopied}
-                        onClick={() => navigate('/')}
+                        to="/"
                         text="Open Sui Wallet"
                         after={
                             <ArrowLeft16 className="text-p2 font-normal rotate-135" />
