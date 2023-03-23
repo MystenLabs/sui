@@ -158,7 +158,7 @@ async fn fetch_certificates_basic() {
     let (tx_fetch_resp, rx_fetch_resp) = mpsc::channel(1000);
 
     // Create test stores.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
     let certificate_store = store.certificate_store.clone();
     let payload_store = store.payload_store.clone();
 

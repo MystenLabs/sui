@@ -5755,6 +5755,8 @@ dependencies = [
  "narwhal-test-utils",
  "narwhal-types",
  "parking_lot 0.12.1",
+ "prometheus",
+ "tap",
  "tempfile",
  "tokio",
  "tracing",

@@ -356,7 +356,7 @@ impl PrimaryNodeDetails {
         let (tx_transaction_confirmation, mut rx_transaction_confirmation) = channel(100);
 
         // Primary node
-        let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone());
+        let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone(), None);
 
         self.node
             .start(
@@ -460,7 +460,7 @@ impl WorkerNodeDetails {
             temp_dir()
         };
 
-        let worker_store = NodeStorage::reopen(store_path.clone());
+        let worker_store = NodeStorage::reopen(store_path.clone(), None);
         self.node
             .start(
                 self.primary_key.clone(),

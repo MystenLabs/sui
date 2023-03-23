@@ -1,9 +1,10 @@
+use std::num::NonZeroUsize;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{AuthorityIdentifier, WorkerId};
 use crypto::NetworkKeyPair;
 use std::time::Duration;
-use storage::{CertificateStore, HeaderStore, PayloadStore};
+use storage::{CertificateStore, CertificateStoreCache, HeaderStore, PayloadStore};
 use store::{reopen, rocks, rocks::DBMap, rocks::ReadWriteOptions};
 use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_DIGEST_BY_ORIGIN_CF,
@@ -53,6 +54,7 @@ pub fn create_db_stores() -> (HeaderStore, CertificateStore, PayloadStore) {
             certificate_map,
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
+            CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None),
         ),
         PayloadStore::new(payload_map),
     )

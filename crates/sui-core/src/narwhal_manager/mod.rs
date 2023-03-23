@@ -11,7 +11,7 @@ use narwhal_config::{Committee, Epoch, Parameters, WorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
-use narwhal_node::NodeStorage;
+use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
@@ -83,6 +83,7 @@ pub struct NarwhalManager {
     worker_nodes: WorkerNodes,
     running: Mutex<Running>,
     metrics: NarwhalManagerMetrics,
+    store_cache_metrics: CertificateStoreCacheMetrics,
 }
 
 impl NarwhalManager {
@@ -98,6 +99,9 @@ impl NarwhalManager {
         let worker_nodes =
             WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
 
+        let store_cache_metrics =
+            CertificateStoreCacheMetrics::new(&config.registry_service.default_registry());
+
         Self {
             primary_node,
             worker_nodes,
@@ -107,6 +111,7 @@ impl NarwhalManager {
             storage_base_path: config.storage_base_path,
             running: Mutex::new(Running::False),
             metrics,
+            store_cache_metrics,
         }
     }
 
@@ -134,7 +139,7 @@ impl NarwhalManager {
 
         // Create a new store
         let store_path = self.get_store_path(committee.epoch());
-        let store = NodeStorage::reopen(store_path);
+        let store = NodeStorage::reopen(store_path, Some(self.store_cache_metrics.clone()));
 
         let name = self.primary_keypair.public().clone();
 

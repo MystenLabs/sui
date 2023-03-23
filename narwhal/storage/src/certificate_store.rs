@@ -3,9 +3,12 @@
 use fastcrypto::hash::Hash;
 use lru::LruCache;
 use parking_lot::Mutex;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
+use tap::Tap;
 
 use crate::NotifySubscribers;
 use config::AuthorityIdentifier;
@@ -15,6 +18,165 @@ use store::{
 };
 use types::{Certificate, CertificateDigest, Round, StoreResult};
 
+#[derive(Clone)]
+pub struct CertificateStoreCacheMetrics {
+    hit: IntCounter,
+    miss: IntCounter,
+}
+
+impl CertificateStoreCacheMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            hit: register_int_counter_with_registry!(
+                "certificate_store_cache_hit",
+                "The number of hits in the cache",
+                registry
+            )
+            .unwrap(),
+            miss: register_int_counter_with_registry!(
+                "certificate_store_cache_miss",
+                "The number of miss in the cache",
+                registry
+            )
+            .unwrap(),
+        }
+    }
+}
+
+pub trait Cache {
+    fn write(&self, certificate: Certificate);
+    fn write_all(&self, certificate: Vec<Certificate>);
+    fn read(&self, digest: &CertificateDigest) -> Option<Certificate>;
+    fn read_all(
+        &self,
+        digests: Vec<CertificateDigest>,
+    ) -> Vec<(CertificateDigest, Option<Certificate>)>;
+    fn contains(&self, digest: &CertificateDigest) -> bool;
+    fn remove(&self, digest: &CertificateDigest);
+    fn remove_all(&self, digests: Vec<CertificateDigest>);
+}
+
+#[derive(Clone)]
+pub struct CertificateStoreCache {
+    cache: Arc<Mutex<LruCache<CertificateDigest, Certificate>>>,
+    metrics: Option<CertificateStoreCacheMetrics>,
+}
+
+impl CertificateStoreCache {
+    pub fn new(size: NonZeroUsize, metrics: Option<CertificateStoreCacheMetrics>) -> Self {
+        Self {
+            cache: Arc::new(Mutex::new(LruCache::new(size))),
+            metrics,
+        }
+    }
+
+    fn report_result(&self, is_hit: bool) {
+        if let Some(metrics) = self.metrics.as_ref() {
+            if is_hit {
+                metrics.hit.inc()
+            } else {
+                metrics.miss.inc()
+            }
+        }
+    }
+}
+
+impl Cache for CertificateStoreCache {
+    fn write(&self, certificate: Certificate) {
+        let mut guard = self.cache.lock();
+        guard.put(certificate.digest(), certificate);
+    }
+
+    fn write_all(&self, certificate: Vec<Certificate>) {
+        let mut guard = self.cache.lock();
+        for cert in certificate {
+            guard.put(cert.digest(), cert);
+        }
+    }
+
+    fn read(&self, digest: &CertificateDigest) -> Option<Certificate> {
+        let mut guard = self.cache.lock();
+        guard
+            .get(digest)
+            .cloned()
+            .tap(|v| self.report_result(v.is_some()))
+    }
+
+    fn read_all(
+        &self,
+        digests: Vec<CertificateDigest>,
+    ) -> Vec<(CertificateDigest, Option<Certificate>)> {
+        let mut guard = self.cache.lock();
+        digests
+            .into_iter()
+            .map(move |id| {
+                (
+                    id,
+                    guard
+                        .get(&id)
+                        .cloned()
+                        .tap(|v| self.report_result(v.is_some())),
+                )
+            })
+            .collect()
+    }
+
+    fn contains(&self, digest: &CertificateDigest) -> bool {
+        let guard = self.cache.lock();
+        guard
+            .contains(digest)
+            .tap(|result| self.report_result(*result))
+    }
+
+    fn remove(&self, digest: &CertificateDigest) {
+        let mut guard = self.cache.lock();
+        let _ = guard.pop(digest);
+    }
+
+    fn remove_all(&self, digests: Vec<CertificateDigest>) {
+        let mut guard = self.cache.lock();
+        for digest in digests {
+            let _ = guard.pop(&digest);
+        }
+    }
+}
+
+/// An implementation that basically disables the caching functionality
+struct NoCache {}
+
+impl Cache for NoCache {
+    fn write(&self, _certificate: Certificate) {
+        // no-op
+    }
+
+    fn write_all(&self, _certificate: Vec<Certificate>) {
+        // no-op
+    }
+
+    fn read(&self, _digest: &CertificateDigest) -> Option<Certificate> {
+        None
+    }
+
+    fn read_all(
+        &self,
+        digests: Vec<CertificateDigest>,
+    ) -> Vec<(CertificateDigest, Option<Certificate>)> {
+        digests.into_iter().map(|digest| (digest, None)).collect()
+    }
+
+    fn contains(&self, _digest: &CertificateDigest) -> bool {
+        false
+    }
+
+    fn remove(&self, _digest: &CertificateDigest) {
+        // no-op
+    }
+
+    fn remove_all(&self, _digests: Vec<CertificateDigest>) {
+        // no-op
+    }
+}
+
 /// The main storage when we have to deal with certificates. It maintains
 /// two storages, one main which saves the certificates by their ids, and a
 /// secondary one which acts as an index to allow us fast retrieval based
@@ -23,7 +185,7 @@ use types::{Certificate, CertificateDigest, Round, StoreResult};
 /// `notify_read` someone can wait to hear until a certificate by a specific
 /// id has been written in storage.
 #[derive(Clone)]
-pub struct CertificateStore {
+pub struct CertificateStore<T: Cache = CertificateStoreCache> {
     /// Holds the certificates by their digest id
     certificates_by_id: DBMap<CertificateDigest, Certificate>,
     /// A secondary index that keeps the certificate digest ids
@@ -39,23 +201,22 @@ pub struct CertificateStore {
     /// The pub/sub to notify for a write that happened for a certificate digest id
     notify_subscribers: NotifySubscribers<CertificateDigest, Certificate>,
     /// An LRU cache to keep recent certificates
-    cache: Arc<Mutex<LruCache<CertificateDigest, Certificate>>>,
+    cache: Arc<T>,
 }
 
-impl CertificateStore {
+impl<T: Cache> CertificateStore<T> {
     pub fn new(
         certificates_by_id: DBMap<CertificateDigest, Certificate>,
         certificate_id_by_round: DBMap<(Round, AuthorityIdentifier), CertificateDigest>,
         certificate_id_by_origin: DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
-    ) -> CertificateStore {
+        certificate_store_cache: T,
+    ) -> CertificateStore<T> {
         Self {
             certificates_by_id,
             certificate_id_by_round,
             certificate_id_by_origin,
             notify_subscribers: NotifySubscribers::new(),
-            cache: Arc::new(Mutex::new(LruCache::new(
-                NonZeroUsize::new(100 * 60).unwrap(),
-            ))), // 100 certificates for 60 rounds (roughly certificates for a minute)
+            cache: Arc::new(certificate_store_cache),
         }
     }
 
@@ -95,7 +256,7 @@ impl CertificateStore {
         }
 
         // insert in cache
-        self.cache.lock().put(id, certificate);
+        self.cache.write(certificate);
 
         result
     }
@@ -149,10 +310,12 @@ impl CertificateStore {
             }
         }
 
-        let mut guard = self.cache.lock();
-        for (id, certificate) in certificates {
-            guard.put(id, certificate);
-        }
+        self.cache.write_all(
+            certificates
+                .into_iter()
+                .map(|(_, certificate)| certificate)
+                .collect(),
+        );
 
         result
     }
@@ -166,8 +329,8 @@ impl CertificateStore {
             )))
         });
 
-        if let Some(certificate) = self.cache.lock().get(&id) {
-            return Ok(Some(certificate.clone()));
+        if let Some(certificate) = self.cache.read(&id) {
+            return Ok(Some(certificate));
         }
 
         self.certificates_by_id.get(&id)
@@ -201,7 +364,7 @@ impl CertificateStore {
             )))
         });
 
-        if self.cache.lock().contains(id) {
+        if self.cache.contains(id) {
             return Ok(true);
         }
 
@@ -220,7 +383,29 @@ impl CertificateStore {
             )))
         });
 
-        self.certificates_by_id.multi_get(ids)
+        let mut found = HashMap::new();
+        let mut missing = Vec::new();
+
+        let ids: Vec<CertificateDigest> = ids.into_iter().collect();
+        for (id, certificate) in self.cache.read_all(ids.clone()) {
+            if let Some(certificate) = certificate {
+                found.insert(id, certificate.clone());
+            } else {
+                missing.push(id);
+            }
+        }
+
+        let from_store = self.certificates_by_id.multi_get(&missing)?;
+        from_store
+            .iter()
+            .zip(missing)
+            .for_each(|(certificate, id)| {
+                if let Some(certificate) = certificate {
+                    found.insert(id, certificate.clone());
+                }
+            });
+
+        Ok(ids.into_iter().map(|id| found.get(&id).cloned()).collect())
     }
 
     /// Waits to get notified until the requested certificate becomes available
@@ -269,7 +454,7 @@ impl CertificateStore {
         let result = batch.write();
 
         if result.is_ok() {
-            let _ = self.cache.lock().pop(&id);
+            self.cache.remove(&id);
         }
 
         result
@@ -301,10 +486,7 @@ impl CertificateStore {
         let result = batch.write();
 
         if result.is_ok() {
-            let mut guard = self.cache.lock();
-            for id in ids {
-                guard.pop(&id);
-            }
+            self.cache.remove_all(ids);
         }
 
         result
@@ -488,9 +670,11 @@ impl CertificateStore {
 #[cfg(test)]
 mod test {
     use crate::certificate_store::CertificateStore;
+    use crate::CertificateStoreCache;
     use config::AuthorityIdentifier;
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
+    use std::num::NonZeroUsize;
     use std::{
         collections::{BTreeSet, HashSet},
         time::Instant,
@@ -526,10 +710,13 @@ mod test {
             CERTIFICATE_ID_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>
         );
 
+        let store_cache = CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None);
+
         CertificateStore::new(
             certificate_map,
             certificate_id_by_round_map,
             certificate_id_by_origin_map,
+            store_cache,
         )
     }
 
