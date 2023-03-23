@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{fmt, marker::PhantomData};
 
 use crate::programmable_transactions::types::StorageView;
 
 use sui_types::{
-    base_types::ObjectID, error::SuiResult, move_package::MovePackage, object::Object,
+    base_types::ObjectID,
+    error::SuiResult,
+    error::{ExecutionError, ExecutionErrorKind},
+    move_package::MovePackage,
+    object::Object,
     storage::ChildObjectResolver,
 };
 
@@ -20,27 +24,36 @@ pub struct LinkageInfo {
     pub running_pkg: MovePackage,
 }
 
-pub struct StorageContext<'a, E> {
-    storage_view: &'a (dyn StorageView<E> + 'a),
-    linkage_info: LinkageInfo,
+pub struct StorageContext<'a, E, S> {
+    pub storage_view: &'a S,
+    linkage_info: Option<LinkageInfo>,
+    _p: PhantomData<E>,
 }
 
-impl<'a, E> StorageContext<'a, E> {
-    pub fn new(storage_view: &'a (dyn StorageView<E> + 'a), running_pkg: MovePackage) -> Self {
+impl<'a, E, S> StorageContext<'a, E, S> {
+    pub fn new(storage_view: &'a S) -> Self {
         Self {
             storage_view,
-            linkage_info: LinkageInfo { running_pkg },
+            linkage_info: None,
+            _p: PhantomData,
         }
+    }
+
+    pub fn set_context(&mut self, running_pkg: MovePackage) -> Result<(), ExecutionError> {
+        if self.linkage_info.is_some() {
+            return Err(ExecutionErrorKind::VMInvariantViolation.into());
+        }
+        Ok(self.linkage_info = Some(LinkageInfo { running_pkg }))
     }
 }
 
-impl<'a, E: fmt::Debug> ChildObjectResolver for StorageContext<'a, E> {
+impl<'a, E: fmt::Debug, S: StorageView<E>> ChildObjectResolver for StorageContext<'a, E, S> {
     fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
         self.storage_view.read_child_object(parent, child)
     }
 }
 
-impl<'a, E: fmt::Debug> ModuleResolver for StorageContext<'a, E> {
+impl<'a, E: fmt::Debug, S: StorageView<E>> ModuleResolver for StorageContext<'a, E, S> {
     type Error = E;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -48,7 +61,7 @@ impl<'a, E: fmt::Debug> ModuleResolver for StorageContext<'a, E> {
     }
 }
 
-impl<'a, E: fmt::Debug> ResourceResolver for StorageContext<'a, E> {
+impl<'a, E: fmt::Debug, S: StorageView<E>> ResourceResolver for StorageContext<'a, E, S> {
     type Error = E;
 
     fn get_resource(
@@ -60,11 +73,11 @@ impl<'a, E: fmt::Debug> ResourceResolver for StorageContext<'a, E> {
     }
 }
 
-impl<'a, E: fmt::Debug> LinkageResolver for StorageContext<'a, E> {
+impl<'a, E: fmt::Debug, S: StorageView<E>> LinkageResolver for StorageContext<'a, E, S> {
     type Error = E;
 
     fn link_context(&self) -> AccountAddress {
-        self.linkage_info.running_pkg.id().into()
+        self.linkage_info.as_ref().unwrap().running_pkg.id().into()
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
