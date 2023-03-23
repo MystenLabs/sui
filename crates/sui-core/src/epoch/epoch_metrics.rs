@@ -76,6 +76,9 @@ pub struct EpochMetrics {
     /// without committing results to the store. It's useful to know whether this execution leads
     /// to safe_mode, since in theory the result could be different from checkpoint executor.
     pub checkpoint_builder_advance_epoch_is_safe_mode: IntGauge,
+
+    /// Buffer stake current in effect for this epoch
+    pub effective_buffer_stake: IntGauge,
 }
 
 impl EpochMetrics {
@@ -156,6 +159,11 @@ impl EpochMetrics {
             checkpoint_builder_advance_epoch_is_safe_mode: register_int_gauge_with_registry!(
                 "checkpoint_builder_advance_epoch_is_safe_mode",
                 "Whether the advance epoch execution leads to safe mode while building the last checkpoint",
+                registry,
+            ).unwrap(),
+            effective_buffer_stake: register_int_gauge_with_registry!(
+                "effective_buffer_stake",
+                "Buffer stake current in effect for this epoch",
                 registry,
             ).unwrap(),
         };

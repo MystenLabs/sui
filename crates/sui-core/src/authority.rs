@@ -26,7 +26,7 @@ use prometheus::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
-use tap::{TapFallible, TapOptional};
+use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -3175,14 +3175,7 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        let buffer_stake_bps = epoch_store
-            .get_override_protocol_upgrade_buffer_stake()
-            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
-            .unwrap_or_else(|| {
-                epoch_store
-                    .protocol_config()
-                    .buffer_stake_for_protocol_upgrade_bps()
-            });
+        let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
