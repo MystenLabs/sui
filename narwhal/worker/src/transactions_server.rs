@@ -1,6 +1,7 @@
-use crate::client::LocalNarwhalClient;
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use crate::client::LocalNarwhalClient;
 use crate::metrics::WorkerEndpointMetrics;
 use crate::TransactionValidator;
 use async_trait::async_trait;
@@ -56,7 +57,7 @@ impl<V: TransactionValidator> TxServer<V> {
         const RETRY_BACKOFF: Duration = Duration::from_millis(1_000);
         const GRACEFUL_SHUTDOWN_DURATION: Duration = Duration::from_millis(2_000);
 
-        //create and initialize local client
+        // create and initialize local Narwhal client
         let local_client = LocalNarwhalClient::new(self.tx_batch_maker.clone());
         LocalNarwhalClient::set_global(self.address.clone(), local_client.clone());
 
@@ -66,7 +67,7 @@ impl<V: TransactionValidator> TxServer<V> {
             validator: self.validator,
         };
 
-        //now create the server
+        // now create the server
         let mut retries = MAX_RETRIES;
         let mut server: Server;
 

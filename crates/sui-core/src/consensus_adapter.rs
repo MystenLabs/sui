@@ -186,15 +186,16 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
     }
 }
 
-/// A Narwhal client that instantiates lazily into LocalNarwhalClient.
+/// A Narwhal client that instantiates LocalNarwhalClient lazily.
 pub struct LazyNarwhalClient {
-    /// First ArcSwapOption handles initializing the connection to Narwhal the first time.
-    /// Second ArcSwap handles epoch changes of Narwhal.
+    /// Outer ArcSwapOption allows initialization after the first the connection to Narwhal.
+    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
     client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
     addr: Multiaddr,
 }
 
 impl LazyNarwhalClient {
+    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
     pub fn new(addr: Multiaddr) -> Self {
         Self {
             client: ArcSwapOption::empty(),
@@ -204,7 +205,7 @@ impl LazyNarwhalClient {
 
     async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
         // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
-        // Retries should only happen on process start.
+        // Retries should only happen on Sui process start.
         if let Ok(client) = timeout(Duration::from_secs(30), async {
             loop {
                 match LocalNarwhalClient::get_global(&self.addr) {

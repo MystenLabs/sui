@@ -18,6 +18,7 @@ static LOCAL_NARWHAL_CLIENTS: Mutex<Option<BTreeMap<Multiaddr, Arc<ArcSwap<Local
     Mutex::new(None);
 
 /// The maximum allowed size of transactions into Narwhal.
+/// TODO: maybe move to TxValidator?
 pub const MAX_ALLOWED_TRANSACTION_SIZE: usize = 6 * 1024 * 1024;
 
 /// Errors returned to clients submitting transactions to Narwhal.
@@ -92,7 +93,7 @@ impl LocalNarwhalClient {
         Ok(())
     }
 
-    /// Ensure getter and setter use the same key for the same network address.
+    /// Ensures getter and setter use the same key for the same network address.
     /// This is needed because TxServer serves from 0.0.0.0.
     fn canonicalize_address_key(address: Multiaddr) -> Multiaddr {
         address
