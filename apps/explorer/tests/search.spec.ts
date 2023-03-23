@@ -17,7 +17,7 @@ test('can search for an address', async ({ page }) => {
     const address = await faucet();
     await page.goto('/');
     await search(page, address);
-    await expect(page).toHaveURL(`/address/0x${address}`);
+    await expect(page).toHaveURL(`/address/${address}`);
 });
 
 test('can search for objects', async ({ page }) => {
