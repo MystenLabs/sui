@@ -226,8 +226,12 @@ fn execute_transaction<
     if !is_system {
         #[cfg(debug_assertions)]
         {
-            // ensure that this transaction did not create or destroy SUI
-            temporary_store.check_sui_conserved().unwrap();
+            if !Mode::allow_arbitrary_values() {
+                // ensure that this transaction did not create or destroy SUI
+                temporary_store.check_sui_conserved().unwrap();
+            }
+            // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
+            // objects (including coins). this can violate conservation, but it's expected
         }
     }
     let cost_summary = gas_status.summary();
