@@ -323,7 +323,7 @@ Aborts if <code>key</code> is not bound in <code>self</code>.
 ## Function `try_get`
 
 Safely try borrow a value bound to <code>key</code> in <code>self</code>.
-Return Some(&V) if the value exists, None otherwise.
+Return Some(V) if the value exists, None otherwise.
 Only works for a "copyable" value as references cannot be stored in <code><a href="">vector</a></code>.
 
 
