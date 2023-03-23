@@ -11,7 +11,6 @@ use std::time::Duration;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
-use sui_types::digests::TransactionDigest;
 use tracing::info;
 use uuid::Uuid;
 
