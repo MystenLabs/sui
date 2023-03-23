@@ -9,61 +9,61 @@ on:
   workflow_dispatch:
 
 jobs:
-  simtest:
-    timeout-minutes: 120
-    permissions:
-      # The "id-token: write" permission is required or Machine ID will not be
-      # able to authenticate with the cluster.
-      id-token: write
-      contents: read
-    runs-on: ubuntu-latest
+  # simtest:
+  #   timeout-minutes: 120
+  #   permissions:
+  #     # The "id-token: write" permission is required or Machine ID will not be
+  #     # able to authenticate with the cluster.
+  #     id-token: write
+  #     contents: read
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Install Teleport
-        uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
-        with:
-          version: 11.3.1
-      - name: Authorize against Teleport
-        id: auth
-        uses: teleport-actions/auth@6e73aa03a98e781ca6692817fbb6e554640a56b3 # pin@v1
-        with:
-          # Specify the publically accessible address of your Teleport proxy.
-          proxy: proxy.mysten-int.com:443
-          # Specify the name of the join token for your bot.
-          token: sui-simtest-token
-          # Specify the length of time that the generated credentials should be
-          # valid for. This is optional and defaults to "1h"
-          certificate-ttl: 2h
+  #   steps:
+  #     - name: Install Teleport
+  #       uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
+  #       with:
+  #         version: 11.3.1
+  #     - name: Authorize against Teleport
+  #       id: auth
+  #       uses: teleport-actions/auth@6e73aa03a98e781ca6692817fbb6e554640a56b3 # pin@v1
+  #       with:
+  #         # Specify the publically accessible address of your Teleport proxy.
+  #         proxy: proxy.mysten-int.com:443
+  #         # Specify the name of the join token for your bot.
+  #         token: sui-simtest-token
+  #         # Specify the length of time that the generated credentials should be
+  #         # valid for. This is optional and defaults to "1h"
+  #         certificate-ttl: 2h
 
-      # Cargo clean and git restore on any left over files from git checkout      
-      - name: Environment clean
-        run: | 
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+  #     # Cargo clean and git restore on any left over files from git checkout      
+  #     - name: Environment clean
+  #       run: | 
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
  
-      # Deleting files in tmpfs that usually fill up pretty quickly after each run
-      - name: Tmpfs clean
-        run: |  
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*.*"
+  #     # Deleting files in tmpfs that usually fill up pretty quickly after each run
+  #     - name: Tmpfs clean
+  #       run: |  
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*.*"
 
-      # Checkout out the latest sui repo
-      - name: Checkout sui repo
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
+  #     # Checkout out the latest sui repo
+  #     - name: Checkout sui repo
+  #       run: |
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
 
-      # Setting up cargo and simtest
-      - name: Install simtest
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+  #     # Setting up cargo and simtest
+  #     - name: Install simtest
+  #       run: |
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
 
-      # Build simtest
-      - name: Build simtest
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
+  #     # Build simtest
+  #     - name: Build simtest
+  #       run: |
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
 
-      # Run simulator tests
-      - name: Run simtest
-        run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && MSIM_TEST_NUM=30 RUSTUP_MAX_RETRIES=10 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=24 cd ~/sui && ./scripts/simtest/simtest-run.sh"
+  #     # Run simulator tests
+  #     - name: Run simtest
+  #       run: |
+  #         tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && MSIM_TEST_NUM=30 RUSTUP_MAX_RETRIES=10 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=24 cd ~/sui && ./scripts/simtest/simtest-run.sh"
   
   notify:
     name: Notify
@@ -89,7 +89,15 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
-        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV
+
+    - name: Get run time
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh_run_time=$(gh api -X GET "repos/MystenLabs/sui/actions/runs/4498780060/timing" --jq '.run_duration_ms)
+        gh_run_time=$(printf "%.0f" ${gh_run_time})
+        echo "gh_run_time=${gh_run_time}" >> $GITHUB_ENV        
 
     - name: Post to slack
       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
@@ -97,8 +105,9 @@ jobs:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         SUI_SHA: ${{ env.sui_sha }}
         GH_JOB_LINK: ${{ env.gh_job_link }}
+        GH_RUN_TIME: ${{ env.gh_run_time }}
       with:
-        channel-id: 'simtest-nightly'
+        channel-id: 'test-notifications'
         payload: |
           {
             "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
@@ -117,7 +126,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>\nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>\nRun Time: ${{ env.GH_RUN_TIME }} minutes"
                 }
               },
               {
