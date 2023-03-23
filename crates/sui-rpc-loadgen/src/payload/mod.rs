@@ -7,7 +7,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
 use std::time::Duration;
-use sui_types::digests::TransactionDigest;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -56,25 +55,13 @@ impl Command {
     pub fn new_get_checkpoints(
         start: CheckpointSequenceNumber,
         end: Option<CheckpointSequenceNumber>,
+        verify_transaction: bool,
     ) -> Self {
         Self {
-            data: CommandData::GetCheckpoints(GetCheckpoints { start, end }),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_multi_get_transactions(
-        start_checkpoint: CheckpointSequenceNumber,
-        end_checkpoint: Option<CheckpointSequenceNumber>,
-        digests: Option<Vec<TransactionDigest>>,
-    ) -> Self {
-        Self {
-            data: CommandData::MultiGetTransactions(MultiGetTransactions {
-                checkpoints: GetCheckpoints {
-                    start: start_checkpoint,
-                    end: end_checkpoint,
-                },
-                digests,
+            data: CommandData::GetCheckpoints(GetCheckpoints {
+                start,
+                end,
+                verify_transaction,
             }),
             ..Default::default()
         }
@@ -96,7 +83,6 @@ impl Command {
 pub enum CommandData {
     DryRun(DryRun),
     GetCheckpoints(GetCheckpoints),
-    MultiGetTransactions(MultiGetTransactions),
     PaySui(PaySui),
 }
 
@@ -112,15 +98,10 @@ pub struct DryRun {}
 #[derive(Clone, Default)]
 pub struct GetCheckpoints {
     /// Default to start from 0
-    start: CheckpointSequenceNumber,
+    pub start: CheckpointSequenceNumber,
     /// If None, use `getLatestCheckpointSequenceNumber`
-    end: Option<CheckpointSequenceNumber>,
-}
-
-#[derive(Clone)]
-pub struct MultiGetTransactions {
-    checkpoints: GetCheckpoints,
-    digests: Option<Vec<TransactionDigest>>,
+    pub end: Option<CheckpointSequenceNumber>,
+    pub verify_transaction: bool,
 }
 
 #[derive(Clone)]

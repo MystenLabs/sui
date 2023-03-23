@@ -11,12 +11,11 @@ use std::time::Duration;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
-use sui_types::digests::TransactionDigest;
 use tracing::info;
 use uuid::Uuid;
 
 use crate::load_test::LoadTest;
-use crate::payload::{Command, Payload, RpcCommandProcessor};
+use crate::payload::{Command, CommandData, Payload, RpcCommandProcessor};
 
 #[derive(Parser)]
 #[clap(
@@ -62,6 +61,9 @@ pub enum ClapCommand {
         #[clap(short, long)]
         end: Option<u64>,
 
+        #[clap(short, long, default_value_t = true)]
+        verify_transaction: bool,
+
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -70,20 +72,6 @@ pub enum ClapCommand {
         // TODO(chris) customize recipients and amounts
         #[clap(flatten)]
         common: CommonOptions,
-    },
-    #[clap(name = "multi-get-transactions")]
-    MultiGetTransactions {
-        #[clap(flatten)]
-        common: CommonOptions,
-        /// Default to start from checkpoint 0
-        #[clap(short, long, default_value_t = 0)]
-        start_checkpoint: u64,
-
-        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
-        #[clap(short, long)]
-        end_checkpoint: Option<u64>,
-        #[clap(short, long, multiple = true)]
-        digests: Option<Vec<TransactionDigest>>,
     },
 }
 
@@ -116,7 +104,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let opts = Opts::parse();
-    info!("Logging to {}", log_filename);
+    println!("Logging to {}", log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
     // TODO(chris): remove hardcoded value since we only need keystore for write commands
@@ -132,16 +120,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (command, common) = match opts.command {
         ClapCommand::DryRun { common } => (Command::new_dry_run(), common),
         ClapCommand::PaySui { common } => (Command::new_pay_sui(), common),
-        ClapCommand::GetCheckpoints { common, start, end } => {
-            (Command::new_get_checkpoints(start, end), common)
-        }
-        ClapCommand::MultiGetTransactions {
+        ClapCommand::GetCheckpoints {
             common,
-            start_checkpoint,
-            end_checkpoint,
-            digests,
+            start,
+            end,
+            verify_transaction,
         } => (
-            Command::new_multi_get_transactions(start_checkpoint, end_checkpoint, digests),
+            Command::new_get_checkpoints(start, end, verify_transaction),
             common,
         ),
     };
@@ -152,19 +137,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
-    use crate::payload::CommandData;
     // todo: make flexible
-    let command_payloads = if let CommandData::MultiGetTransactions(_) = command.data {
+    let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {
         let num_chunks = opts.num_threads;
-        let chunk_size = 600000 / num_chunks; // todo: adjustable limit
+        let chunk_size = 455246 / num_chunks; // todo: adjustable limit
         (0..num_chunks)
             .map(|i| {
                 let start = i * chunk_size;
                 let end = (i + 1) * chunk_size;
-                Command::new_multi_get_transactions(
+                Command::new_get_checkpoints(
                     start.try_into().unwrap(),
                     Some(end.try_into().unwrap()),
-                    None,
+                    data.verify_transaction,
                 )
             })
             .collect()

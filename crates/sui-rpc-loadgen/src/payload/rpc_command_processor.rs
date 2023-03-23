@@ -12,7 +12,7 @@ use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tracing::log::warn;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
@@ -21,8 +21,7 @@ use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::payload::{
-    CommandData, DryRun, GetCheckpoints, MultiGetTransactions, PaySui, Payload, ProcessPayload,
-    Processor,
+    CommandData, DryRun, GetCheckpoints, PaySui, Payload, ProcessPayload, Processor,
 };
 
 #[derive(Clone)]
@@ -55,7 +54,6 @@ impl RpcCommandProcessor {
         match command {
             CommandData::DryRun(ref v) => self.process(v, keypair).await,
             CommandData::GetCheckpoints(ref v) => self.process(v, keypair).await,
-            CommandData::MultiGetTransactions(ref v) => self.process(v, keypair).await,
             CommandData::PaySui(ref v) => self.process(v, keypair).await,
         }
     }
@@ -131,62 +129,62 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
             .expect("get_latest_checkpoint_sequence_number should not return empty");
 
         debug!("GetCheckpoints({}, {:?})", op.start, max_checkpoint);
+
+        // TODO(chris): read `cross_validate` from config
+        let cross_validate = true;
+
         for seq in op.start..=*max_checkpoint {
             let checkpoints = join_all(clients.iter().enumerate().map(|(i, client)| {
-                let end_checkpoints = end_checkpoints.clone();
+                let end_checkpoint_for_clients = end_checkpoints.clone();
                 async move {
-
-                    if end_checkpoints[i] < seq {
+                    if end_checkpoint_for_clients[i] < seq {
                         // TODO(chris) log actual url
                         warn!(
-                        "The RPC server corresponding to the {i}th url has a outdated checkpoint number {}.\
-                         The latest checkpoint number is {seq}",
-                        end_checkpoints[i]
-                    );
-                        None
-                    } else {
-                        let start_time = Instant::now();
-                        let checkpoint = match client
-                            .read_api()
-                            .get_checkpoint(CheckpointId::SequenceNumber(seq))
-                            .await {
-                            Ok(t) => {
-                                if t.sequence_number != seq {
-                                    error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
-                                }
-                                Some(t)
-                            },
-                            Err(err) => {
-                                error!("Failed to fetch checkpoint {seq} on the {i}th url: {err}");
-                                None
-                            }
-                        };
-                        let elapsed_time = start_time.elapsed();
-
-                        debug!(
-                            "GetCheckpoint Request latency {:.4}",
-                            elapsed_time.as_secs_f64(),
+                            "The RPC server corresponding to the {i}th url has a outdated checkpoint number {}.\
+                            The latest checkpoint number is {seq}",
+                            end_checkpoint_for_clients[i]
                         );
-                        checkpoint
+                        return None;
+                    }
+
+                    match client
+                        .read_api()
+                        .get_checkpoint(CheckpointId::SequenceNumber(seq))
+                        .await {
+                        Ok(t) => {
+                            if t.sequence_number != seq {
+                                error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
+                            }
+                            if op.verify_transaction {
+                                check_transactions(&self.clients, &t.transactions, cross_validate).await;
+                            }
+
+                            Some(t)
+                        },
+                        Err(err) => {
+                            error!("Failed to fetch checkpoint {seq} on the {i}th url: {err}");
+                            None
+                        }
                     }
                 }
             }))
-            .await;
+                .await;
 
-            // TODO(chris): read `cross_validate` from config
-            let cross_validate = true;
             if cross_validate {
-                let (valid_checkpoint_idx, valid_checkpoint) = checkpoints
-                    .iter()
-                    .enumerate()
-                    .find_map(|(i, x)| {
-                        if x.is_some() {
-                            Some((i, x.clone().unwrap()))
-                        } else {
-                            None
-                        }
-                    })
-                    .expect("There should be at least one RPC server returning a checkpoint");
+                let valid_checkpoint = checkpoints.iter().enumerate().find_map(|(i, x)| {
+                    if x.is_some() {
+                        Some((i, x.clone().unwrap()))
+                    } else {
+                        None
+                    }
+                });
+
+                if valid_checkpoint.is_none() {
+                    error!("none of the urls are returning valid checkpoint for seq {seq}");
+                    continue;
+                }
+                // safe to unwrap because we check some above
+                let (valid_checkpoint_idx, valid_checkpoint) = valid_checkpoint.unwrap();
                 for (i, x) in checkpoints.iter().enumerate() {
                     if i == valid_checkpoint_idx {
                         continue;
@@ -199,115 +197,11 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                 }
             }
 
-            if seq % 100 == 0 {
-                debug!("Finished processing checkpoint {seq}")
+            if seq % 10000 == 0 {
+                info!("Finished processing checkpoint {seq}");
             }
         }
 
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
-    async fn process(
-        &'a self,
-        op: &'a MultiGetTransactions,
-        _keypair: &Option<SuiKeyPair>,
-    ) -> Result<()> {
-        let clients = self.get_clients().await?;
-
-        if let Some(digests) = &op.digests {
-            check_transactions(&self.clients, digests).await;
-        } else {
-            let checkpoints = &op.checkpoints;
-            let end_checkpoints: Vec<CheckpointSequenceNumber> =
-                join_all(clients.iter().map(|client| async {
-                    match checkpoints.end {
-                        Some(e) => e,
-                        None => client
-                            .read_api()
-                            .get_latest_checkpoint_sequence_number()
-                            .await
-                            .expect("get_latest_checkpoint_sequence_number should not fail"),
-                    }
-                }))
-                .await;
-
-            // The latest `latest_checkpoint` among all rpc servers
-            let max_checkpoint = end_checkpoints
-                .iter()
-                .max()
-                .expect("get_latest_checkpoint_sequence_number should not return empty");
-
-            debug!(
-                "GetCheckpoints({}, {:?})",
-                checkpoints.start, max_checkpoint
-            );
-            for seq in checkpoints.start..=*max_checkpoint {
-                let checkpoints = join_all(clients.iter().enumerate().map(|(i, client)| {
-                let end_checkpoints = end_checkpoints.clone();
-                async move {
-
-                    if end_checkpoints[i] < seq {
-                        // TODO(chris) log actual url
-                        warn!(
-                        "The RPC server corresponding to the {i}th url has a outdated checkpoint number {}.\
-                        The latest checkpoint number is {seq}",
-                        end_checkpoints[i]
-                    );
-                        None
-                    } else {
-                        match client
-                            .read_api()
-                            .get_checkpoint(CheckpointId::SequenceNumber(seq))
-                            .await {
-                            Ok(t) => {
-                                if t.sequence_number != seq {
-                                    error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
-                                }
-                                check_transactions(&self.clients, &t.transactions).await;
-                                Some(t)
-                            },
-                            Err(err) => {
-                                error!("Failed to fetch checkpoint {seq} on the {i}th url: {err}");
-                                None
-                            }
-                        }
-                    }
-                }
-            }))
-            .await;
-
-                // TODO(chris): read `cross_validate` from config
-                let cross_validate = true;
-                if cross_validate {
-                    let (valid_checkpoint_idx, valid_checkpoint) = checkpoints
-                        .iter()
-                        .enumerate()
-                        .find_map(|(i, x)| {
-                            if x.is_some() {
-                                Some((i, x.clone().unwrap()))
-                            } else {
-                                None
-                            }
-                        })
-                        .expect("There should be at least one RPC server returning a checkpoint");
-                    for (i, x) in checkpoints.iter().enumerate() {
-                        if i == valid_checkpoint_idx {
-                            continue;
-                        }
-                        // ignore the None value because it's warned above
-                        let eq = x.is_none() || x.as_ref().unwrap() == &valid_checkpoint;
-                        if !eq {
-                            error!("getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}", x, checkpoints[valid_checkpoint_idx])
-                        }
-                    }
-                }
-
-                debug!("Finished processing checkpoint {seq}");
-            }
-        }
         Ok(())
     }
 }
@@ -315,6 +209,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
 pub async fn check_transactions(
     clients: &Arc<RwLock<Vec<SuiClient>>>,
     digests: &[TransactionDigest],
+    cross_validate: bool,
 ) {
     let read = clients.read().await;
     let clients = read.clone();
@@ -337,7 +232,8 @@ pub async fn check_transactions(
     }))
     .await;
 
-    if transactions.len() == 2 {
+    // TODO: support more than 2 transactions
+    if cross_validate && transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
             let first = match t1 {
                 Ok(vec) => vec.as_slice(),
