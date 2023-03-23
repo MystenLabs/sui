@@ -12,7 +12,6 @@ members = [
     "narwhal/consensus",
     "narwhal/crypto",
     "narwhal/dag",
-    "narwhal/examples",
     "narwhal/executor",
     "narwhal/network",
     "narwhal/node",
