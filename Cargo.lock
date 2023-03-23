@@ -9345,6 +9345,7 @@ dependencies = [
  "tower",
  "tower-http 0.3.5",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber 0.3.16",
  "typed-store",
  "typed-store-derive",

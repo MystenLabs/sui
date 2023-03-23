@@ -221,8 +221,6 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
             check_transactions(&self.clients, digests).await;
         } else {
             let checkpoints = &op.checkpoints;
-            println!("start and end {} {} for checkpoint", checkpoints.start, checkpoints.end.unwrap_or(0));
-
             let end_checkpoints: Vec<CheckpointSequenceNumber> =
                 join_all(clients.iter().map(|client| async {
                     match checkpoints.end {
@@ -260,8 +258,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
                     );
                         None
                     } else {
-                        let start_time = Instant::now();
-                        let checkpoint = match client
+                        match client
                             .read_api()
                             .get_checkpoint(CheckpointId::SequenceNumber(seq))
                             .await {
@@ -276,9 +273,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
                                 error!("Failed to fetch checkpoint {seq} on the {i}th url: {err}");
                                 None
                             }
-                        };
-                        let elapsed_time = start_time.elapsed();
-                        checkpoint
+                        }
                     }
                 }
             }))

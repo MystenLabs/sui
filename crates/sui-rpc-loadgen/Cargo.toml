@@ -26,6 +26,7 @@ prometheus = "0.13.3"
 scopeguard = "1.1"
 tap = "1.0"
 tracing-subscriber = { version = "0.3.15" }
+tracing-appender="0.2"
 dirs = "4.0.0"
 
 eyre = "0.6.8"
