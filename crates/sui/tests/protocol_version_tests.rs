@@ -65,7 +65,8 @@ mod sim_only_tests {
     use sui_framework_build::compiled_package::BuildConfig;
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
-    use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+    use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::sui_system_state::SuiSystemStateTrait;
     use sui_types::{
         base_types::SequenceNumber,
         digests::TransactionDigest,
@@ -75,7 +76,7 @@ mod sim_only_tests {
         storage::ObjectStore,
     };
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use tokio::time::{sleep, timeout, Duration};
+    use tokio::time::{sleep, Duration};
     use tracing::info;
 
     const START: u64 = ProtocolVersion::MAX.as_u64();
@@ -118,50 +119,33 @@ mod sim_only_tests {
         let validator = test_cluster.get_validator_addresses()[0].clone();
         test_cluster.stop_validator(validator);
 
-        let mut epoch_rx = test_cluster
-            .fullnode_handle
-            .sui_node
-            .subscribe_to_epoch_change();
+        assert_eq!(
+            test_cluster
+                .wait_for_epoch(Some(1))
+                .await
+                .protocol_version(),
+            FINISH
+        );
+        test_cluster.start_validator(validator).await;
 
-        timeout(Duration::from_secs(90), async move {
-            while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
-                info!(
-                    "received epoch {} {:?}",
-                    committee.epoch(),
-                    protocol_version
-                );
-                match committee.epoch() {
-                    0 => assert_eq!(protocol_version, ProtocolVersion::new(START)),
-                    1 => {
-                        assert_eq!(protocol_version, ProtocolVersion::new(FINISH));
-                        test_cluster.start_validator(validator).await;
-                    }
-                    2 => {
-                        let validator_handle = test_cluster
-                            .swarm
-                            .validator(validator.clone())
-                            .unwrap()
-                            .get_node_handle()
-                            .unwrap();
-                        validator_handle
-                            .with_async(|node| async {
-                                // give time for restarted node to catch up, reconfig
-                                // to new protocol, and reconfig again
-                                sleep(Duration::from_secs(5)).await;
+        test_cluster.wait_for_epoch(Some(2)).await;
+        let validator_handle = test_cluster
+            .swarm
+            .validator(validator.clone())
+            .unwrap()
+            .get_node_handle()
+            .unwrap();
+        validator_handle
+            .with_async(|node| async {
+                // give time for restarted node to catch up, reconfig
+                // to new protocol, and reconfig again
+                sleep(Duration::from_secs(5)).await;
 
-                                let epoch_store = node.state().epoch_store_for_testing();
-                                assert_eq!(epoch_store.epoch(), 2);
-                                assert!(node.state().is_validator(&epoch_store));
-                            })
-                            .await;
-                        break;
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        })
-        .await
-        .expect("Timed out waiting for cluster to target epoch");
+                let epoch_store = node.state().epoch_store_for_testing();
+                assert_eq!(epoch_store.epoch(), 2);
+                assert!(node.state().is_validator(&epoch_store));
+            })
+            .await;
     }
 
     #[sim_test]
@@ -560,28 +544,10 @@ mod sim_only_tests {
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
-        let mut epoch_rx = test_cluster
-            .fullnode_handle
-            .sui_node
-            .subscribe_to_epoch_change();
-
-        timeout(Duration::from_secs(60), async move {
-            while let Ok((committee, protocol_version)) = epoch_rx.recv().await {
-                info!(
-                    "received epoch {} {:?}",
-                    committee.epoch(),
-                    protocol_version
-                );
-                match committee.epoch() {
-                    0 => assert_eq!(protocol_version, ProtocolVersion::new(START)),
-                    1 => assert_eq!(protocol_version, ProtocolVersion::new(final_version)),
-                    2 => break,
-                    _ => unreachable!(),
-                }
-            }
-        })
-        .await
-        .expect("Timed out waiting for cluster to target epoch");
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.protocol_version(), final_version);
+        // End this at the end of epoch 2 since tests expect so.
+        test_cluster.wait_for_epoch(Some(2)).await;
     }
 
     /// Get compiled modules for Sui Framework, built from fixture `fixture` in the

@@ -256,26 +256,12 @@ async fn test_passive_reconfig() {
         .await
         .unwrap();
 
-    let mut epoch_rx = test_cluster
-        .fullnode_handle
-        .sui_node
-        .subscribe_to_epoch_change();
-
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
         .map(|v| v.parse().unwrap())
         .unwrap_or(4);
 
-    timeout(Duration::from_secs(60), async move {
-        while let Ok((committee, _)) = epoch_rx.recv().await {
-            info!("received epoch {}", committee.epoch());
-            if committee.epoch() >= target_epoch {
-                break;
-            }
-        }
-    })
-    .await
-    .expect("Timed out waiting for cluster to target epoch");
+    test_cluster.wait_for_epoch(Some(target_epoch)).await;
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -338,16 +324,7 @@ async fn test_create_advance_epoch_tx_race() {
         .await
         .unwrap();
 
-    let mut epoch_rx = test_cluster
-        .fullnode_handle
-        .sui_node
-        .subscribe_to_epoch_change();
-
-    // wait for cluster to reconfigure.
-    timeout(Duration::from_secs(30), epoch_rx.recv())
-        .await
-        .expect("Timed out waiting for cluster to reconfigure")
-        .unwrap();
+    test_cluster.wait_for_epoch(None).await;
 
     // Allow time for paused node to execute change epoch tx via state sync.
     sleep(Duration::from_secs(5)).await;
@@ -381,26 +358,12 @@ async fn test_reconfig_with_failing_validator() {
         .with_restart_delay_secs(2, 4)
         .run();
 
-    let mut epoch_rx = test_cluster
-        .fullnode_handle
-        .sui_node
-        .subscribe_to_epoch_change();
-
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
         .map(|v| v.parse().unwrap())
         .unwrap_or(4);
 
-    timeout(Duration::from_secs(60), async move {
-        while let Ok((committee, _)) = epoch_rx.recv().await {
-            info!("received epoch {}", committee.epoch());
-            if committee.epoch() >= target_epoch {
-                break;
-            }
-        }
-    })
-    .await
-    .expect("Timed out waiting for cluster to target epoch");
+    test_cluster.wait_for_epoch(Some(target_epoch)).await;
 }
 
 #[sim_test]
