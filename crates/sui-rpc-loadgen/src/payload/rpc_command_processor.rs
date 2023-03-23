@@ -348,8 +348,6 @@ pub async fn check_transactions(
     }))
     .await;
 
-    let empty_vec: Vec<SuiTransactionResponse> = vec![];
-
     if transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
             let first = match t1 {
