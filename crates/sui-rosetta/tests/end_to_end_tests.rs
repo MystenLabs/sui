@@ -9,6 +9,7 @@ use rosetta_client::start_rosetta_test_server;
 use sui_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
 use sui_json_rpc_types::SuiTransactionResponseOptions;
 use sui_keys::keystore::AccountKeystore;
+use sui_macros::sim_test;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, NetworkIdentifier,
@@ -246,7 +247,7 @@ async fn test_stake_all() {
     println!("{}", serde_json::to_string_pretty(&ops2).unwrap())
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_withdraw_stake() {
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
