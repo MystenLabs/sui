@@ -790,12 +790,16 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
     assert_eq!(1, staked_sui.len());
     assert_eq!(1000000, staked_sui[0].stakes[0].principal);
 
-    sleep(Duration::from_millis(1000)).await;
+    // If the Pending Stake gets activated, then it throws error, if not then the Pending gets Unstaked and works fine
+    // sleep(Duration::from_millis(10000)).await;
 
     let staked_sui_copy = http_client
         .get_stakes_by_ids(vec![staked_sui[0].stakes[0].staked_sui_id])
         .await?;
     println!("{:?}", staked_sui_copy[0].stakes[0].status);
+    println!("{:?}", staked_sui_copy[0].stakes[0].principal);
+    println!("{:?}", staked_sui_copy[0].stakes[0].stake_active_epoch);
+    println!("{:?}", staked_sui_copy[0].stakes[0].stake_request_epoch);
 
     let transaction_bytes: TransactionBytes = http_client
         .request_withdraw_stake(
@@ -826,6 +830,9 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
         .get_stakes_by_ids(vec![staked_sui[0].stakes[0].staked_sui_id])
         .await?;
     println!("{:?}", staked_sui_copy[0].stakes[0].status);
+    println!("{:?}", staked_sui_copy[0].stakes[0].principal);
+    println!("{:?}", staked_sui_copy[0].stakes[0].stake_active_epoch);
+    println!("{:?}", staked_sui_copy[0].stakes[0].stake_request_epoch);
     Ok(())
 }
 
