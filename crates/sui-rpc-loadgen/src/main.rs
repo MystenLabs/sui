@@ -145,6 +145,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_repeat_n_times(common.repeat);
 
     let processor = RpcCommandProcessor::new(&opts.urls).await;
+
+    // one payload per thread
+
     let load_test = LoadTest {
         processor,
         payloads: vec![

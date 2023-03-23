@@ -163,7 +163,7 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                         };
                         let elapsed_time = start_time.elapsed();
 
-                        println!(
+                        debug!(
                             "GetCheckpoint Request latency {:.4}",
                             elapsed_time.as_secs_f64(),
                         );
@@ -278,7 +278,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
                         };
                         let elapsed_time = start_time.elapsed();
 
-                        println!(
+                        debug!(
                             "GetCheckpoint Request latency {:.4}",
                             elapsed_time.as_secs_f64(),
                         );
@@ -340,7 +340,7 @@ pub async fn check_transactions(
             )
             .await;
         let elapsed_time = start_time.elapsed();
-        println!(
+        debug!(
             "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
             elapsed_time.as_secs_f64()
         );
