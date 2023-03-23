@@ -263,7 +263,18 @@ pub async fn check_transactions(
             cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
 
             if verify_objects {
+                // todo: this can be written better
                 for response in first {
+                    let object_changes: Vec<ObjectID> = response
+                        .object_changes
+                        .clone()
+                        .unwrap()
+                        .iter()
+                        .filter_map(get_object_id)
+                        .collect();
+                    check_objects(clients, object_changes.as_slice(), cross_validate).await;
+                }
+                for response in second {
                     let object_changes: Vec<ObjectID> = response
                         .object_changes
                         .clone()
@@ -281,13 +292,13 @@ pub async fn check_transactions(
 fn get_object_id(object_change: &ObjectChange) -> Option<ObjectID> {
     match object_change {
         ObjectChange::Transferred {
-            object_id, version, ..
+            object_id, ..
         } => Some(*object_id),
         ObjectChange::Mutated {
-            object_id, version, ..
+            object_id, ..
         } => Some(*object_id),
         ObjectChange::Created {
-            object_id, version, ..
+            object_id, ..
         } => Some(*object_id),
         // TODO(gegaowp): needs separate checks for packages and modules publishing
         // TODO(gegaowp): ?? needs separate checks for deleted and wrapped objects
