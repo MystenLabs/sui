@@ -23,6 +23,7 @@ importers:
       '@sentry/tracing': ^7.43.0
       '@tailwindcss/aspect-ratio': ^0.4.2
       '@tailwindcss/forms': ^0.5.3
+      '@tailwindcss/line-clamp': ^0.4.2
       '@tanstack/react-query': ^4.26.1
       '@types/react': ^18.0.28
       bignumber.js: ^9.1.1
@@ -48,6 +49,7 @@ importers:
       '@headlessui/tailwindcss': 0.1.2_tailwindcss@3.2.7
       '@tailwindcss/aspect-ratio': 0.4.2_tailwindcss@3.2.7
       '@tailwindcss/forms': 0.5.3_tailwindcss@3.2.7
+      '@tailwindcss/line-clamp': 0.4.2_tailwindcss@3.2.7
       '@types/react': 18.0.28
       eslint: 8.36.0
       eslint-config-prettier: 8.7.0_eslint@8.36.0
@@ -263,7 +265,6 @@ importers:
       '@storybook/react': 7.0.0-rc.3
       '@storybook/react-webpack5': 7.0.0-rc.3
       '@storybook/theming': 7.0.0-rc.3
-      '@tailwindcss/line-clamp': ^0.4.2
       '@tanstack/react-query': ^4.26.1
       '@types/dotenv-webpack': ^7.0.3
       '@types/git-rev-sync': ^2.0.0
@@ -410,7 +411,6 @@ importers:
       '@storybook/react': 7.0.0-rc.3_ygqkwb4gg3aean7xjfdauovyqq
       '@storybook/react-webpack5': 7.0.0-rc.3_buqqgnm3b3ulqaa7rrgu76qvnq
       '@storybook/theming': 7.0.0-rc.3_biqbaboplfbrettd7655fr4n2y
-      '@tailwindcss/line-clamp': 0.4.2_tailwindcss@3.2.7
       '@types/dotenv-webpack': 7.0.3_webpack-cli@5.0.1
       '@types/git-rev-sync': 2.0.0
       '@types/node': 18.15.3
@@ -5622,7 +5622,7 @@ packages:
     peerDependencies:
       tailwindcss: '>=2.0.0 || >=3.0.0 || >=3.0.0-alpha.1'
     dependencies:
-      tailwindcss: 3.2.7_aesdjsunmf4wiehhujt67my7tu
+      tailwindcss: 3.2.7_postcss@8.4.21
     dev: true
 
   /@tanstack/match-sorter-utils/8.7.6:
@@ -15634,6 +15634,7 @@ packages:
       postcss: 8.4.21
       ts-node: 10.9.1_cbfmry4sbbh4vatmdrsmatfg5a
       yaml: 1.10.2
+    dev: false
 
   /postcss-load-config/3.1.4_postcss@8.4.21:
     resolution: {integrity: sha512-6DiM4E7v4coTE4uzA8U//WhtPwyhiim3eyjEMFCnUpzbrkK9wJHgKDT2mR+HbtSrd/NubVaYTOpSpjUl8NQeRg==}
@@ -18509,6 +18510,7 @@ packages:
       resolve: 1.22.1
     transitivePeerDependencies:
       - ts-node
+    dev: false
 
   /tailwindcss/3.2.7_postcss@8.4.21:
     resolution: {integrity: sha512-B6DLqJzc21x7wntlH/GsZwEXTBttVSl1FtCzC8WP4oBc/NKef7kaax5jeihkkCEWc831/5NDJ9gRNDK6NEioQQ==}

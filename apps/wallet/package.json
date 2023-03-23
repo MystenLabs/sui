@@ -57,7 +57,6 @@
         "@storybook/react": "7.0.0-rc.3",
         "@storybook/react-webpack5": "7.0.0-rc.3",
         "@storybook/theming": "7.0.0-rc.3",
-        "@tailwindcss/line-clamp": "^0.4.2",
         "@types/dotenv-webpack": "^7.0.3",
         "@types/git-rev-sync": "^2.0.0",
         "@types/node": "^18.15.3",

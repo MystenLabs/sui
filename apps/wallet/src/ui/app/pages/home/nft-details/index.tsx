@@ -139,37 +139,30 @@ function NFTDetailsPage() {
                             </LabelValuesContainer>
                             <Collapse title="Details" initialIsOpen>
                                 <LabelValuesContainer>
-                                    {nftDisplayData?.name ? (
-                                        <LabelValueItem
-                                            label="Name"
-                                            value={nftDisplayData.name}
-                                        />
-                                    ) : null}
-                                    {nftDisplayData?.description ? (
-                                        <LabelValueItem
-                                            label="Description"
-                                            value={nftDisplayData.description}
-                                            multiline
-                                        />
-                                    ) : null}
-                                    {nftDisplayData?.creator ? (
-                                        <LabelValueItem
-                                            label="Creator"
-                                            value={nftDisplayData.creator}
-                                        />
-                                    ) : null}
-                                    {nftDisplayData?.link ? (
-                                        <LabelValueItem
-                                            label="Link"
-                                            value={nftDisplayData.link}
-                                        />
-                                    ) : null}
-                                    {nftDisplayData?.projectUrl ? (
-                                        <LabelValueItem
-                                            label="Website"
-                                            value={nftDisplayData.projectUrl}
-                                        />
-                                    ) : null}
+                                    <LabelValueItem
+                                        label="Name"
+                                        value={nftDisplayData?.name}
+                                    />
+                                    <LabelValueItem
+                                        label="Description"
+                                        value={nftDisplayData?.description}
+                                        multiline
+                                    />
+                                    <LabelValueItem
+                                        label="Creator"
+                                        value={nftDisplayData?.creator}
+                                        parseUrl
+                                    />
+                                    <LabelValueItem
+                                        label="Link"
+                                        value={nftDisplayData?.link}
+                                        parseUrl
+                                    />
+                                    <LabelValueItem
+                                        label="Website"
+                                        value={nftDisplayData?.projectUrl}
+                                        parseUrl
+                                    />
                                 </LabelValuesContainer>
                             </Collapse>
                             {metaKeys.length ? (

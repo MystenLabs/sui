@@ -6,20 +6,6 @@ import { useMemo } from 'react';
 
 import { useGetObject } from './useGetObject';
 
-export type LinkData = {
-    href: string;
-    display: string;
-};
-
-function toLinkData(link: string): LinkData | string | null {
-    try {
-        const url = new URL(link);
-        return { href: link, display: url.hostname };
-    } catch (e) {
-        return link || null;
-    }
-}
-
 export type NFTMetadata = {
     name: string | null;
     description: string | null;
@@ -38,9 +24,9 @@ export function useGetNFTMeta(objectID: string) {
             name: name || null,
             description: description || null,
             imageUrl: img_url || null,
-            link: link ? toLinkData(link) : null,
-            projectUrl: project_url ? toLinkData(project_url) : null,
-            creator: creator ? toLinkData(creator) : null,
+            link: link || null,
+            projectUrl: project_url || null,
+            creator: creator || null,
         };
     }, [resp]);
     return {

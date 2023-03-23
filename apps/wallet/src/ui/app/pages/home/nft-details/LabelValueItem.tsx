@@ -4,26 +4,41 @@
 import cl from 'classnames';
 import { type ReactNode } from 'react';
 
-import { type LinkData } from '_src/ui/app/hooks/useGetNFTMeta';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
 
+function getDisplayUrl(link: string) {
+    try {
+        const url = new URL(link);
+        return { href: link, display: url.hostname };
+    } catch (e) {
+        return link || null;
+    }
+}
+
 export type LabelValueItemProps = {
     label: string;
-    value: ReactNode | LinkData;
+    value: ReactNode;
     multiline?: boolean;
+    parseUrl?: boolean;
 };
 
 export function LabelValueItem({
     label,
     value,
     multiline = false,
+    parseUrl = false,
 }: LabelValueItemProps) {
     let href: string | null = null;
     let display: ReactNode | null = null;
-    if (typeof value === 'object' && value && 'href' in value) {
-        href = value.href;
-        display = value.display;
+    if (parseUrl && typeof value === 'string') {
+        const displayUrl = getDisplayUrl(value);
+        if (typeof displayUrl === 'string') {
+            display = displayUrl;
+        } else if (displayUrl) {
+            href = displayUrl.href;
+            display = displayUrl.display;
+        }
     } else if (
         typeof value === 'string' &&
         (value.startsWith('http://') || value.startsWith('https://'))
@@ -32,7 +47,7 @@ export function LabelValueItem({
     } else {
         display = value;
     }
-    return (
+    return display ? (
         <div className="flex flex-row flex-nowrap gap-1">
             <div className="flex-1 overflow-hidden">
                 <Text
@@ -68,5 +83,5 @@ export function LabelValueItem({
                 )}
             </div>
         </div>
-    );
+    ) : null;
 }
