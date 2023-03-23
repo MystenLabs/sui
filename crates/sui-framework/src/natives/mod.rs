@@ -374,7 +374,7 @@ pub fn all_natives() -> NativeFunctionTable {
         ),
         (
             "hmac",
-            "native_hmac_sha3_256",
+            "hmac_sha3_256",
             make_native!(hmac::hmac_sha3_256),
         ),
         ("hash", "keccak256", make_native!(hash::keccak256)),
