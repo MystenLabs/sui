@@ -95,8 +95,9 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh_run_time=$(expr $(gh api -X GET "repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/timing" --jq '.run_duration_ms') / 60000)
-        echo "gh_run_time=${gh_run_time}" >> $GITHUB_ENV        
+        gh_run_time=$(gh api -X GET "repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/timing" --jq '.run_duration_ms')
+        echo "gh_run_time=$(expr ${gh_run_time} / 60000)
+        echo "gh_run_time=${gh_run_time}" >> $GITHUB_ENV
 
     - name: Post to slack
       uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
