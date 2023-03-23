@@ -232,6 +232,10 @@ impl SuiTransactionResponse {
             ..Default::default()
         }
     }
+
+    pub fn status_ok(&self) -> Option<bool> {
+        self.effects.as_ref().map(|e| e.status().is_ok())
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
