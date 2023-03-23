@@ -96,7 +96,6 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh_run_time=$(gh api -X GET "repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/timing" --jq '.run_duration_ms')
-        gh_run_time=$(expr ${gh_run_time} / 60000)
         echo "gh_run_time=${gh_run_time}" >> $GITHUB_ENV
 
     - name: Post to slack
@@ -126,7 +125,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>\nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>\nRun Time: ${{ env.GH_RUN_TIME }} minutes"
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>\nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>\nRun Time: ${{ env.GH_RUN_TIME }} milliseconds"
                 }
               },
               {
