@@ -71,7 +71,7 @@ Stake rewards are made up of gas fees and stake subsidies. The total amount dist
  * **Stake Subsidies:** The amount distributed in each epoch is determined prior to the beginning of the epoch according to a predefined schedule.
  * **Gas Fees:** Each epoch’s amount depends on the total gas fees collected throughout the epoch. Each Sui transaction pays gas fees depending on two variables, the amount of executed gas units and the gas price:
 
-*GasFee  = GasPrice * GasUnits*
+    *GasFee  = GasPrice * GasUnits*
 
 The total amount of gas fees collected corresponds to the sum of gas fees across all transactions processed in the epoch. During regular market conditions, the vast majority of transactions should have a `GasPrice` equal to the `ReferenceGasPrice`.
 
