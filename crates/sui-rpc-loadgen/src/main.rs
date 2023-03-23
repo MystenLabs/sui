@@ -109,7 +109,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .with_log_level(&log_filter)
+        .with_log_file("sui-rpc-loadgen.log")
         .init();
+
     let opts = Opts::parse();
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
