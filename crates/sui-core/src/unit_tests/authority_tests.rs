@@ -1063,7 +1063,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_unknown_sender() {
-    let sender = get_new_address::<AccountKeyPair>();
+    let sender = dbg_addr(1);
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();

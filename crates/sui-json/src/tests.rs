@@ -447,7 +447,7 @@ fn test_basic_args_linter_top_level() {
     let monster_description_raw = "MonsterDescription";
     let display_raw = "DisplayUrl";
 
-    let player_id = json!(format!("0x{:02x}", ObjectID::random()));
+    let player_id = json!(format!("0x{}", ObjectID::random()));
     // This is okay since not starting with 0x
     let monster_name = json!(monster_name_raw);
     // Well within U64 bounds
@@ -559,7 +559,7 @@ fn test_basic_args_linter_top_level() {
 
     let value = json!(value_raw);
     // Encode as hex string
-    let addr = json!(format!("0x{:02x}", address));
+    let addr = json!(format!("{address}"));
 
     // They have to be ordered
     let args = vec![value, addr]
@@ -601,9 +601,9 @@ fn test_basic_args_linter_top_level() {
     let object_id_raw = ObjectID::random();
     let address = SuiAddress::random_for_testing_only();
 
-    let object_id = json!(format!("0x{:02x}", object_id_raw));
+    let object_id = json!(format!("{object_id_raw}"));
     // Encode as hex string
-    let addr = json!(format!("0x{:02x}", address));
+    let addr = json!(format!("{address}"));
 
     // They have to be ordered
     let args = vec![object_id, addr]
@@ -624,7 +624,7 @@ fn test_basic_args_linter_top_level() {
     assert_eq!(
         args[0].0,
         ResolvedCallArg::Object(
-            ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
+            ObjectID::from_hex_literal(&format!("0x{}", object_id_raw)).unwrap()
         )
     );
 
@@ -659,8 +659,8 @@ fn test_basic_args_linter_top_level() {
      */
     let object_id_raw1 = ObjectID::random();
     let object_id_raw2 = ObjectID::random();
-    let object_id1 = json!(format!("0x{:02x}", object_id_raw1));
-    let object_id2 = json!(format!("0x{:02x}", object_id_raw2));
+    let object_id1 = json!(format!("0x{}", object_id_raw1));
+    let object_id2 = json!(format!("0x{}", object_id_raw2));
 
     let args = vec![SuiJsonValue::new(Value::Array(vec![object_id1, object_id2])).unwrap()];
 
@@ -680,11 +680,11 @@ fn test_basic_args_linter_top_level() {
         assert_eq!(vec.len(), 2);
         assert_eq!(
             vec[0],
-            ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw1)).unwrap()
+            ObjectID::from_hex_literal(&format!("0x{}", object_id_raw1)).unwrap()
         );
         assert_eq!(
             vec[1],
-            ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw2)).unwrap()
+            ObjectID::from_hex_literal(&format!("0x{}", object_id_raw2)).unwrap()
         );
     }
 }

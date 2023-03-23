@@ -86,6 +86,7 @@ serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
 narwhal-test-utils = { path = "../../narwhal/test-utils" }
 sui-verifier = { path = "../sui-verifier" }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dev-dependencies]
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
@@ -108,3 +109,6 @@ harness = false
 [[bench]]
 name = "batch_verification_bench"
 harness = false
+
+[features]
+test-utils = []

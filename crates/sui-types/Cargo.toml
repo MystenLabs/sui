@@ -64,3 +64,6 @@ proptest = "1.0.0"
 [[bench]]
 name = "accumulator_bench"
 harness = false
+
+[features]
+test-utils = []

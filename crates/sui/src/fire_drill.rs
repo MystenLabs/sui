@@ -15,6 +15,7 @@ use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use move_core_types::ident_str;
+use shared_crypto::intent::Intent;
 use std::path::{Path, PathBuf};
 use sui_config::node::KeyPairWithPath;
 use sui_config::utils;
@@ -24,9 +25,8 @@ use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponseOptions};
 use sui_sdk::{rpc_types::SuiTransactionEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
-use sui_types::messages::{CallArg, ObjectArg, TransactionData};
+use sui_types::messages::{CallArg, ObjectArg, Transaction, TransactionData};
 use sui_types::multiaddr::{Multiaddr, Protocol};
-use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{committee::EpochId, crypto::get_authority_key_pair};
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use tracing::info;
@@ -336,7 +336,12 @@ async fn execute_tx(
     tx_data: TransactionData,
     action: &str,
 ) -> anyhow::Result<()> {
-    let tx = to_sender_signed_transaction(tx_data, config.account_key_pair());
+    let tx = Transaction::from_data_and_signer(
+        tx_data,
+        Intent::default(),
+        vec![config.account_key_pair()],
+    )
+    .verify()?;
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client

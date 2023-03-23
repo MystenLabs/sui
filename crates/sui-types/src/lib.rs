@@ -55,6 +55,8 @@ pub mod temporary_store;
 pub mod versioned;
 
 pub mod epoch_data;
+
+#[cfg(feature = "test-utils")]
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;
 
