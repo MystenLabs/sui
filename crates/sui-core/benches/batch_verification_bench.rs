@@ -14,7 +14,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages::CertifiedTransaction;
 
-use sui_core::batch_bls_verifier::*;
+use sui_core::signature_verifier::*;
 
 fn gen_certs(
     committee: &Committee,
@@ -55,7 +55,7 @@ fn async_verifier_bench(c: &mut Criterion) {
     group.sample_size(10);
 
     let registry = Registry::new();
-    let metrics = BatchCertificateVerifierMetrics::new(&registry);
+    let metrics = VerifiedDigestCacheMetrics::new(&registry);
 
     let num_cpus = num_cpus::get() as u64;
     for num_threads in [1, num_cpus / 2, num_cpus] {
@@ -72,7 +72,7 @@ fn async_verifier_bench(c: &mut Criterion) {
                         .enable_time()
                         .build()
                         .unwrap();
-                    let batch_verifier = Arc::new(BatchCertificateVerifier::new_with_batch_size(
+                    let batch_verifier = Arc::new(SignatureVerifier::new_with_batch_size(
                         committee.clone(),
                         batch_size,
                         metrics.clone(),

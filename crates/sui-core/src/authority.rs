@@ -97,13 +97,13 @@ use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, Object
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
 use crate::execution_driver::{execution_process, EXECUTION_MAX_ATTEMPTS};
 use crate::module_cache_metrics::ResolverMetrics;
+use crate::signature_verifier::VerifiedDigestCacheMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::{transaction_input_checker, transaction_manager::TransactionManager};
 
@@ -1731,7 +1731,7 @@ impl AuthorityState {
         );
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+        let signature_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -1741,7 +1741,7 @@ impl AuthorityState {
             EpochStartConfiguration::new_for_testing(),
             store.clone(),
             cache_metrics,
-            batch_verifier_metrics,
+            signature_verifier_metrics,
         );
 
         let epochs = Arc::new(CommitteeStore::new(

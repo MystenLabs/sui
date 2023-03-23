@@ -2907,7 +2907,7 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+        let async_batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,
