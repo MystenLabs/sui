@@ -147,33 +147,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
     use crate::payload::CommandData;
-    let command_payloads = if let CommandData::MultiGetTransactions(_) = command.data {
-        let num_chunks = 64;
-        let chunk_size = 10000;
+    let command_payloads = if let CommandData::MultiGetTransactions(txns) = command.data {
+        let num_chunks = opts.num_threads;
+        let chunk_size = 600000 / num_chunks;
+        println!("Is multiget");
         (0..num_chunks)
             .map(|i| {
-                let start = i * chunk_size;
-                let end = (i+1) * chunk_size;
-                Command::new_multi_get_transactions(start, Some(end), None)
+                let start = i * chunk_size; // 0
+                let end = (i+1) * chunk_size; // 187500
+                println!("{}, {}, {}", i, start, end);
+                Command::new_multi_get_transactions(start.try_into().unwrap(), Some(end.try_into().unwrap()), None)
             })
             .collect()
     } else {
+        println!("is not multiget");
         // code block if command.data is not of type MultiGetTransactions
-        vec![command.clone()]
+        vec![command.clone(); opts.num_threads]
     };
+
+    let payloads: Vec<Payload> = command_payloads
+        .into_iter()
+        .map(|command| Payload {
+            commands: vec![command],
+            encoded_keypair: encoded_keypair.clone(),
+            signer_address,
+            gas_payment: None
+        })
+        .collect();
+
 
     let load_test = LoadTest {
         processor,
-        payloads: vec![
-            // TODO(chris): use different gas_payment for different threads
-            Payload {
-                commands: command_payloads,
-                encoded_keypair,
-                signer_address,
-                gas_payment: None
-            };
-            opts.num_threads
-        ],
+        payloads
     };
     load_test.run().await?;
 

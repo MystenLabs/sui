@@ -68,9 +68,10 @@ impl Command {
         end: Option<CheckpointSequenceNumber>,
         digests: Option<Vec<TransactionDigest>>,
     ) -> Self {
+        println!("in new_multi_get_transactions, {:?}, {}", start, end.unwrap_or(0));
         Self {
             data: CommandData::MultiGetTransactions(MultiGetTransactions {
-                checkpoints: GetCheckpoints { start, end },
+                checkpoints: GetCheckpoints {start, end },
                 digests,
             }),
             ..Default::default()

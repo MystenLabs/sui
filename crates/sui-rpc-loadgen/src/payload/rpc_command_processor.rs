@@ -221,6 +221,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
             check_transactions(&self.clients, digests).await;
         } else {
             let checkpoints = &op.checkpoints;
+            println!("start and end {} {} for checkpoint", checkpoints.start, checkpoints.end.unwrap_or(0));
 
             let end_checkpoints: Vec<CheckpointSequenceNumber> =
                 join_all(clients.iter().map(|client| async {
@@ -277,11 +278,6 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
                             }
                         };
                         let elapsed_time = start_time.elapsed();
-
-                        debug!(
-                            "GetCheckpoint Request latency {:.4}",
-                            elapsed_time.as_secs_f64(),
-                        );
                         checkpoint
                     }
                 }
@@ -314,9 +310,7 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
                     }
                 }
 
-                if seq % 100 == 0 {
-                    debug!("Finished processing checkpoint {seq}")
-                }
+                debug!("Finished processing checkpoint {seq}");
             }
         }
         Ok(())
@@ -368,7 +362,7 @@ pub async fn check_transactions(
             };
 
             if first.len() != second.len() {
-                warn!(
+                error!(
                     "Transaction response lengths do not match: {} vs {}",
                     first.len(),
                     second.len()
@@ -379,7 +373,7 @@ pub async fn check_transactions(
             for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
                 // Todo: allow more comparisons
                 if a != b {
-                    warn!(
+                    error!(
                         "Transaction response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
                         digests[i], a, b
                     );
