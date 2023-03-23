@@ -3,7 +3,7 @@
 
 /// The Safe standard is a minimalistic shared wrapper around a coin. It provides a way for users to provide third-party dApps with
 /// the capability to transfer coins away from their wallets, if they are provided with the correct permission.
-module sui::safe {
+module utils::safe {
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{TxContext, sender};
     use sui::transfer;

@@ -6,7 +6,7 @@
 /// The keywords "MUST", "MUST NOT", "SHOULD", "SHOULD NOT" and "MAY" below should be interpreted as described in
 /// RFC 2119.
 ///
-module sui::immutable_external_resource {
+module utils::immutable_external_resource {
     use sui::digest::Sha3256Digest;
     use sui::url::{Url, inner_url};
 

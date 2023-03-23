@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::locked_coin {
+module utils::locked_coin {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::epoch_time_lock::{Self, EpochTimeLock};
+    use utils::epoch_time_lock::{Self, EpochTimeLock};
 
     /// A coin of type `T` locked until `locked_until_epoch`.
     struct LockedCoin<phantom T> has key {

@@ -8869,7 +8869,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-framework-test"
+name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
  "move-cli",

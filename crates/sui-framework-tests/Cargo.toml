@@ -1,5 +1,5 @@
 [package]
-name = "sui-framework-test"
+name = "sui-framework-tests"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
