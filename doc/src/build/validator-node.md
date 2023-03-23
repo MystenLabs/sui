@@ -64,7 +64,7 @@ Staking rewards are funded by transaction gas fees collected during the current 
 
 *StakeRewards = StakeSubsidies + GasFees*
 
-Stake subsidies are intended to subsidize the network during its early phases and are funded by a 10% allocation of SUI tokens. Once this allocation gets depleted the entirety of stake rewards will be made up of gas fees collected through regular network operations.
+Stake subsidies are intended to subsidize the network during its early phases and are funded by a 10% allocation of SUI tokens. After this allocation depletes, the entirety of stake rewards will be made up of gas fees collected through regular network operations.
 
 Stake rewards are made up of gas fees and stake subsidies. The total amount distributed throughout each epoch is determined as follows:
 
