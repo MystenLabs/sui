@@ -237,6 +237,10 @@ mod sim_only_tests {
     #[sim_test]
     async fn test_protocol_version_upgrade_no_override_cleared() {
         ProtocolConfig::poison_get_for_min_version();
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
+            config
+        });
 
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
