@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { LockedDeviceError } from '@ledgerhq/errors';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
