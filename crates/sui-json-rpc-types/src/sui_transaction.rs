@@ -323,6 +323,13 @@ impl SuiTransactionKind {
             ),
         })
     }
+
+    pub fn command_count(&self) -> usize {
+        match self {
+            Self::ProgrammableTransaction(p) => p.commands.len(),
+            _ => 1,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]

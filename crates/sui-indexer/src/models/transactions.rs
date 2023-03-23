@@ -26,6 +26,7 @@ pub struct Transaction {
     pub checkpoint_sequence_number: i64,
     pub timestamp_ms: i64,
     pub transaction_kind: String,
+    pub command_count: i64,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -80,7 +81,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
     type Error = IndexerError;
 
     fn try_from(tx_resp: SuiTransactionFullResponse) -> Result<Self, Self::Error> {
-        let txn_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
+        let tx_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction {:?} to JSON with error: {:?}",
                 tx_resp.transaction, err
@@ -103,6 +104,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
         let sender = transaction_data.sender().to_string();
         let checkpoint_seq_number = tx_resp.checkpoint as i64;
         let tx_kind = transaction_data.transaction().to_string();
+        let command_count = transaction_data.transaction().command_count() as i64;
 
         let recipients: Vec<String> = effects
             .mutated()
@@ -166,6 +168,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
             transaction_kind: tx_kind,
+            command_count,
             timestamp_ms: tx_resp.timestamp_ms as i64,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),
@@ -185,7 +188,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             storage_cost: storage_cost as i64,
             storage_rebate: storage_rebate as i64,
             raw_transaction: tx_resp.raw_transaction,
-            transaction_content: txn_json,
+            transaction_content: tx_json,
             transaction_effects_content: txn_effect_json,
             confirmed_local_execution: tx_resp.confirmed_local_execution,
         })
