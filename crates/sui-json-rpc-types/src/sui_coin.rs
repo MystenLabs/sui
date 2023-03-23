@@ -45,33 +45,6 @@ impl Display for BigBigInt {
     }
 }
 
-#[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
-/// Type for de/serializing u128 to string
-pub struct BigBigInt(
-    #[serde_as(as = "DisplayFromStr")]
-    #[schemars(with = "String")]
-    u128,
-);
-
-impl From<BigBigInt> for u128 {
-    fn from(x: BigBigInt) -> u128 {
-        x.0
-    }
-}
-
-impl From<u128> for BigBigInt {
-    fn from(v: u128) -> BigBigInt {
-        BigBigInt(v)
-    }
-}
-
-impl Display for BigBigInt {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 pub type CoinPage = Page<Coin, ObjectID>;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]

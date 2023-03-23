@@ -13,7 +13,6 @@ use tracing::debug;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{Balance, BigBigInt, Coin as SuiCoin};
-use sui_json_rpc_types::{Balance, BigBigInt, Coin as SuiCoin};
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
