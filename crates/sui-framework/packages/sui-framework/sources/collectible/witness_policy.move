@@ -9,7 +9,7 @@
 /// in the `Kiosk`. When an item is placed into the Kiosk, a `PlacedWitness`
 /// struct is created which can be used to prove that the `T` was placed
 /// to the `Kiosk`.
-module sui::lock_policy {
+module sui::witness_policy {
     use sui::transfer_policy::{
         Self as policy,
         TransferPolicy,
@@ -45,11 +45,11 @@ module sui::lock_policy {
 }
 
 #[test_only]
-module sui::lock_policy_tests {
-    use sui::lock_policy;
+module sui::witness_policy_tests {
+    use sui::witness_policy;
     use sui::tx_context::dummy as ctx;
     use sui::transfer_policy as policy;
-    use sui::transfer_policy_test::{
+    use sui::transfer_policy_tests::{
         Self as test,
         Asset
     };
@@ -66,11 +66,11 @@ module sui::lock_policy_tests {
         let (policy, cap) = test::prepare(ctx);
 
         // set the lock policy and require `Proof` on every transfer.
-        lock_policy::set<Asset, Proof>(&mut policy, &cap);
+        witness_policy::set<Asset, Proof>(&mut policy, &cap);
 
         let request = policy::new_request(0, test::fresh_id(ctx), ctx);
 
-        lock_policy::prove(Proof {}, &policy, &mut request);
+        witness_policy::prove(Proof {}, &policy, &mut request);
         policy::confirm_request(&policy, request);
         test::wrapup(policy, cap, ctx);
     }
@@ -82,7 +82,7 @@ module sui::lock_policy_tests {
         let (policy, cap) = test::prepare(ctx);
 
         // set the lock policy and require `Proof` on every transfer.
-        lock_policy::set<Asset, Proof>(&mut policy, &cap);
+        witness_policy::set<Asset, Proof>(&mut policy, &cap);
         let request = policy::new_request(0, test::fresh_id(ctx), ctx);
 
         policy::confirm_request(&policy, request);
@@ -90,17 +90,17 @@ module sui::lock_policy_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = sui::lock_policy::ERuleNotFound)]
+    #[expected_failure(abort_code = sui::witness_policy::ERuleNotFound)]
     fun test_wrong_proof() {
         let ctx = &mut ctx();
         let (policy, cap) = test::prepare(ctx);
 
         // set the lock policy and require `Proof` on every transfer.
-        lock_policy::set<Asset, Proof>(&mut policy, &cap);
+        witness_policy::set<Asset, Proof>(&mut policy, &cap);
 
         let request = policy::new_request(0, test::fresh_id(ctx), ctx);
 
-        lock_policy::prove(Cheat {}, &policy, &mut request);
+        witness_policy::prove(Cheat {}, &policy, &mut request);
         policy::confirm_request(&policy, request);
         test::wrapup(policy, cap, ctx);
     }

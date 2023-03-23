@@ -31,7 +31,7 @@ to the <code>Kiosk</code>.
 Custom witness-key for the "proof policy".
 
 
-<pre><code><b>struct</b> <a href="lock_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof: drop&gt; <b>has</b> drop
+<pre><code><b>struct</b> <a href="witness_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof: drop&gt; <b>has</b> drop
 </code></pre>
 
 
@@ -62,7 +62,7 @@ Custom witness-key for the "proof policy".
 When a Proof does not find its Rule<Proof>.
 
 
-<pre><code><b>const</b> <a href="lock_policy.md#0x2_witness_policy_ERuleNotFound">ERuleNotFound</a>: u64 = 0;
+<pre><code><b>const</b> <a href="witness_policy.md#0x2_witness_policy_ERuleNotFound">ERuleNotFound</a>: u64 = 0;
 </code></pre>
 
 
@@ -75,7 +75,7 @@ Creator action: adds the Rule.
 Requires a "Proof" witness confirmation on every transfer.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="lock_policy.md#0x2_witness_policy_set">set</a>&lt;T: store, key, Proof: drop&gt;(policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="witness_policy.md#0x2_witness_policy_set">set</a>&lt;T: store, key, Proof: drop&gt;(policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -84,11 +84,11 @@ Requires a "Proof" witness confirmation on every transfer.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="lock_policy.md#0x2_witness_policy_set">set</a>&lt;T: key + store, Proof: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="witness_policy.md#0x2_witness_policy_set">set</a>&lt;T: key + store, Proof: drop&gt;(
     policy: &<b>mut</b> TransferPolicy&lt;T&gt;,
     cap: &TransferPolicyCap&lt;T&gt;
 ) {
-    policy::add_rule(<a href="lock_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof&gt; {}, policy, cap, <b>true</b>);
+    policy::add_rule(<a href="witness_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof&gt; {}, policy, cap, <b>true</b>);
 }
 </code></pre>
 
@@ -104,7 +104,7 @@ Buyer action: follow the policy.
 Present the required "Proof" instance to get a receipt.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="lock_policy.md#0x2_witness_policy_prove">prove</a>&lt;T: store, key, Proof: drop&gt;(_proof: Proof, policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="witness_policy.md#0x2_witness_policy_prove">prove</a>&lt;T: store, key, Proof: drop&gt;(_proof: Proof, policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -113,13 +113,13 @@ Present the required "Proof" instance to get a receipt.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="lock_policy.md#0x2_witness_policy_prove">prove</a>&lt;T: key + store, Proof: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="witness_policy.md#0x2_witness_policy_prove">prove</a>&lt;T: key + store, Proof: drop&gt;(
     _proof: Proof,
     policy: &TransferPolicy&lt;T&gt;,
     request: &<b>mut</b> TransferRequest&lt;T&gt;
 ) {
-    <b>assert</b>!(policy::has_rule&lt;T, <a href="lock_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof&gt;&gt;(policy), <a href="lock_policy.md#0x2_witness_policy_ERuleNotFound">ERuleNotFound</a>);
-    policy::add_receipt(<a href="lock_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof&gt; {}, request)
+    <b>assert</b>!(policy::has_rule&lt;T, <a href="witness_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof&gt;&gt;(policy), <a href="witness_policy.md#0x2_witness_policy_ERuleNotFound">ERuleNotFound</a>);
+    policy::add_receipt(<a href="witness_policy.md#0x2_witness_policy_Rule">Rule</a>&lt;Proof&gt; {}, request)
 }
 </code></pre>
 

@@ -348,7 +348,7 @@ module sui::malicious_policy {
 }
 
 #[test_only]
-module sui::transfer_policy_test {
+module sui::transfer_policy_tests {
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
     use sui::tx_context::{Self, TxContext, dummy as ctx};
     use sui::object::{Self, ID, UID};
