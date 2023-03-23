@@ -17,7 +17,7 @@ use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_types::balance::Supply;
 use sui_types::base_types::{MoveObjectType, ObjectID, ObjectRef, ObjectType, SuiAddress};
-use sui_types::coin::{Coin, CoinMetadata, LockedCoin, TreasuryCap};
+use sui_types::coin::{Coin, CoinMetadata, TreasuryCap};
 use sui_types::error::SuiError;
 use sui_types::gas_coin::GAS;
 use sui_types::messages::TransactionEffectsAPI;
@@ -52,12 +52,6 @@ impl CoinReadApi {
             let (balance, locked_until_epoch) = if move_object.type_().is_coin() {
                 let coin: Coin = bcs::from_bytes(move_object.contents())?;
                 (coin.balance.value(), None)
-            } else if move_object.type_().is_locked_coin() {
-                let locked_coin: LockedCoin = bcs::from_bytes(move_object.contents())?;
-                (
-                    locked_coin.balance.value(),
-                    Some(locked_coin.locked_until_epoch),
-                )
             } else {
                 return Err(Error::SuiError(SuiError::ObjectDeserializationError {
                     error: format!("{:?} is not a supported coin type", move_object.type_()),
@@ -312,7 +306,7 @@ impl CoinReadApiServer for CoinReadApi {
 }
 
 fn is_coin_type(type_: &MoveObjectType, coin_type: &Option<StructTag>) -> bool {
-    if type_.is_coin() || type_.is_locked_coin() {
+    if type_.is_coin() {
         return if let Some(coin_type) = coin_type {
             matches!(type_.type_params().first(), Some(TypeTag::Struct(type_)) if type_.to_canonical_string() == coin_type.to_canonical_string())
         } else {

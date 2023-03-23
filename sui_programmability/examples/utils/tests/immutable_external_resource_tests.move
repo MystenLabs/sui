@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::immutable_external_resource_tests {
-    use sui::immutable_external_resource;
+module utils::immutable_external_resource_tests {
+    use utils::immutable_external_resource;
     use sui::url;
     use std::ascii::Self;
     use sui::digest;

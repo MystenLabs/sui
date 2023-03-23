@@ -25,7 +25,7 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
-use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
+use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
@@ -600,83 +600,6 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
     assert_eq!(100000, result.value);
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_locked_sui() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
-
-    let http_client = cluster.rpc_client();
-    let address = cluster.accounts.first().unwrap();
-
-    let objects = http_client
-        .get_owned_objects(
-            *address,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
-            )),
-            None,
-            None,
-            None,
-        )
-        .await?
-        .data;
-    assert_eq!(5, objects.len());
-    // verify coins and balance before test
-    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
-    let balance: Vec<Balance> = http_client.get_all_balances(*address).await?;
-
-    assert_eq!(5, coins.data.len());
-    for coin in &coins.data {
-        assert!(coin.locked_until_epoch.is_none());
-    }
-
-    assert_eq!(1, balance.len());
-    assert!(balance[0].locked_balance.is_empty());
-
-    // lock one coin
-    let transaction_bytes: TransactionBytes = http_client
-        .move_call(
-            *address,
-            SUI_FRAMEWORK_ADDRESS.into(),
-            LOCKED_COIN_MODULE_NAME.to_string(),
-            "lock_coin".to_string(),
-            type_args!("0x2::sui::SUI")?,
-            call_args![coins.data[0].coin_object_id, address, 20]?,
-            None,
-            2000,
-            None,
-        )
-        .await?;
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    http_client
-        .execute_transaction(
-            tx_bytes,
-            signatures,
-            Some(SuiTransactionResponseOptions::new()),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await?;
-
-    let balances: Vec<Balance> = http_client.get_all_balances(*address).await?;
-
-    assert_eq!(1, balance.len());
-
-    let balance = balances.first().unwrap();
-
-    assert_eq!(5, balance.coin_object_count);
-    assert_eq!(1, balance.locked_balance.len());
-    assert!(balance.locked_balance.contains_key(&20));
 
     Ok(())
 }

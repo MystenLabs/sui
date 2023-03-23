@@ -2533,7 +2533,7 @@
         },
         {
           "name": "coins",
-          "description": "Coin<SUI> or LockedCoin<SUI> object to stake",
+          "description": "Coin<SUI> object to stake",
           "required": true,
           "schema": {
             "type": "array",

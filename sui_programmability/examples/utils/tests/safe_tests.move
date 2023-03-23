@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::safe_tests {
-    use sui::safe::{Self, Safe, TransferCapability, OwnerCapability};
+module utils::safe_tests {
+    use utils::safe::{Self, Safe, TransferCapability, OwnerCapability};
     use sui::test_scenario::{Self as ts, Scenario, ctx};
     use sui::coin::{Self, Coin};
     use sui::object::{Self, ID};
