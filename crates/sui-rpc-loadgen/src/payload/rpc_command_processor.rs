@@ -7,7 +7,7 @@ use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
+use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions, SuiObjectDataOptions};
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
@@ -15,7 +15,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{SuiAddress, ObjectID};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -273,6 +273,94 @@ pub async fn check_transactions(
         }
     }
 }
+
+
+pub async fn check_objects(
+    clients: &Arc<RwLock<Vec<SuiClient>>>,
+    object_ids: &[ObjectID],
+    cross_validate: bool
+) {
+    let api_call = async |api: &SuiClient, object_ids: &[ObjectID]| {
+        api.multi_get_object_with_options(
+            object_ids.to_vec(),
+            SuiObjectDataOptions::full_content()
+        )
+        .await
+    };
+    check_entity(
+        &clients,
+        &object_ids,
+        true,
+        api_call,
+        |a, b| a == b).await;
+}
+
+pub async fn check_entity<T, F>(
+    clients: &Arc<RwLock<Vec<SuiClient>>>,
+    keys: &[T],
+    cross_validate: bool,
+    api_call: F,
+    compare: fn(&T, &T) -> bool,
+) where
+    T: Clone + Send + Sync + std::fmt::Debug + 'static,
+    F: Fn(&SuiClient, &[T]) -> std::result::Result<U, U> + Send + Sync + 'static,
+{
+    let read = clients.read().await;
+    let clients = read.clone();
+
+    let entities = join_all(clients.iter().enumerate().map(|(i, client)| async move {
+        let start_time = Instant::now();
+        let entities = api_call(client.read_api(), keys);
+        let elapsed_time = start_time.elapsed();
+        debug!(
+            "MultiGetEntity Request latency {:.4} for rpc at url {i}",
+            elapsed_time.as_secs_f64()
+        );
+        entities
+    }))
+    .await;
+
+    if cross_validate && entities.len() == 2 {
+        if let (Some(t1), Some(t2)) = (entities.get(0), entities.get(1)) {
+            let first = match t1 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!("Error unwrapping first vec of entities: {:?}", err);
+                    error!("Logging keys, {:?}", keys);
+                    return;
+                }
+            };
+            let second = match t2 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!("Error unwrapping second vec of entities: {:?}", err);
+                    error!("Logging keys, {:?}", keys);
+                    return;
+                }
+            };
+
+            if first.len() != second.len() {
+                error!(
+                    "Entity response lengths do not match: {} vs {}",
+                    first.len(),
+                    second.len()
+                );
+                return; // Return early if the lengths don't match
+            }
+
+            for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
+                if !compare(a, b) {
+                    error!(
+                        "Entity response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
+                        keys[i], a, b
+                    );
+                }
+            }
+        }
+    }
+}
+
+
 
 #[async_trait]
 impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
