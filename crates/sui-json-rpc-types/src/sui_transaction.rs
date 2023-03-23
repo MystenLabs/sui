@@ -17,9 +17,7 @@ use enum_dispatch::enum_dispatch;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sui_json::{primitive_type, SuiJsonValue};
-use sui_types::base_types::{
-    EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::gas::GasCostSummary;
