@@ -259,6 +259,7 @@ diesel::table! {
         checkpoint_sequence_number -> Int8,
         timestamp_ms -> Int8,
         transaction_kind -> Text,
+        command_count -> Int8,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,
