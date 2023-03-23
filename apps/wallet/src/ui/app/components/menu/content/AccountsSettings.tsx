@@ -69,14 +69,9 @@ export function AccountsSettings() {
                         before={<LockedLockIcon />}
                         onClick={async () => {
                             if (appType === AppType.popup) {
-                                const absoluteConnectLedgerModalUrl = new URL(
-                                    `${window.location.origin}/${window.location.pathname}`
-                                );
-                                absoluteConnectLedgerModalUrl.hash =
-                                    connectLedgerModalUrl;
-
+                                const { origin, pathname } = window.location;
                                 await Browser.tabs.create({
-                                    url: absoluteConnectLedgerModalUrl.toString(),
+                                    url: `${origin}/${pathname}#${connectLedgerModalUrl}`,
                                 });
                                 window.close();
                             } else {

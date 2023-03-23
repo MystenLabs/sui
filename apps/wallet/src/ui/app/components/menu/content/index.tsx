@@ -93,7 +93,6 @@ function MenuContent() {
                                 />
                             </>
                         ) : null}
-
                         <Route path="/network" element={<NetworkSettings />} />
                         <Route
                             path="/auto-lock"
