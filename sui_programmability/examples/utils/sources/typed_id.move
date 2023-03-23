@@ -15,7 +15,7 @@
 /// ```
 /// We then know that `child1` is an ID for an object of type `A` and that `child2` is an `ID`
 /// of an object of type `B`
-module sui::typed_id {
+module utils::typed_id {
     use sui::object::{Self, ID};
 
     /// An ID of an of type `T`. See `ID` for more details
