@@ -527,6 +527,16 @@ Trying to close a Kiosk and it has items in it.
 
 
 
+<a name="0x2_kiosk_ETakingNotAllowed"></a>
+
+Trying to take an item from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> but policy does not allow it.
+
+
+<pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_ETakingNotAllowed">ETakingNotAllowed</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="0x2_kiosk_EWrongKiosk"></a>
 
 <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> does not match the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
@@ -650,9 +660,11 @@ in a third party module.
 
 Place any object into a Kiosk.
 Performs an authorization check to make sure only owner can do that.
+Makes sure a <code>TransferPolicy</code> exists for <code>T</code>, otherwise assets can be
+locked in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> forever.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T): <a href="kiosk.md#0x2_kiosk_PlacedWitness">kiosk::PlacedWitness</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, _policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, item: T): <a href="kiosk.md#0x2_kiosk_PlacedWitness">kiosk::PlacedWitness</a>&lt;T&gt;
 </code></pre>
 
 
@@ -662,7 +674,7 @@ Performs an authorization check to make sure only owner can do that.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place">place</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, _policy: &TransferPolicy&lt;T&gt;, item: T
 ): <a href="kiosk.md#0x2_kiosk_PlacedWitness">PlacedWitness</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.item_count = self.item_count + 1;
@@ -683,7 +695,7 @@ Take any object from the Kiosk.
 Performs an authorization check to make sure only owner can do that.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, id: <a href="object.md#0x2_object_ID">object::ID</a>): T
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, id: <a href="object.md#0x2_object_ID">object::ID</a>): T
 </code></pre>
 
 
@@ -693,8 +705,9 @@ Performs an authorization check to make sure only owner can do that.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, policy: &TransferPolicy&lt;T&gt;, id: ID
 ): T {
+    <b>assert</b>!(<a href="transfer_policy.md#0x2_transfer_policy_allow_taking">transfer_policy::allow_taking</a>(policy), <a href="kiosk.md#0x2_kiosk_ETakingNotAllowed">ETakingNotAllowed</a>);
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
@@ -748,7 +761,7 @@ Performs an authorization check to make sure only owner can sell.
 Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, item: T, price: u64): <a href="kiosk.md#0x2_kiosk_ListedWitness">kiosk::ListedWitness</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: store, key&gt;(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, item: T, price: u64): <a href="kiosk.md#0x2_kiosk_ListedWitness">kiosk::ListedWitness</a>&lt;T&gt;
 </code></pre>
 
 
@@ -758,10 +771,10 @@ Calls <code>place</code> and <code>list</code> together - simplifies the flow.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_place_and_list">place_and_list</a>&lt;T: key + store&gt;(
-    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, item: T, price: u64
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, policy: &TransferPolicy&lt;T&gt;, item: T, price: u64
 ): <a href="kiosk.md#0x2_kiosk_ListedWitness">ListedWitness</a>&lt;T&gt; {
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&item);
-    <a href="kiosk.md#0x2_kiosk_place">place</a>(self, cap, item);
+    <a href="kiosk.md#0x2_kiosk_place">place</a>(self, cap, policy, item);
     <a href="kiosk.md#0x2_kiosk_list">list</a>&lt;T&gt;(self, cap, id, price)
 }
 </code></pre>

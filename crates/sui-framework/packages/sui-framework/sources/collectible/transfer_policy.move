@@ -62,7 +62,15 @@ module sui::transfer_policy {
         /// to balance and how much.
         balance: Balance<SUI>,
         /// Set of types of attached rules.
-        rules: VecSet<TypeName>
+        rules: VecSet<TypeName>,
+        /// Whether to allow taking the `T` from the `Kiosk` or any other
+        /// storage. Only works if supported in the storage and opens the door
+        /// for locking mechanics. The best combination would be with the
+        /// `witness_policy` which makes sure that a certain action was
+        /// performed (eg item was put back to the `Kiosk` after a sell).
+        ///
+        /// Defaults to `true`.
+        allow_taking: bool
     }
 
     /// A Capability granting the owner permission to add/remove rules as well
@@ -103,7 +111,7 @@ module sui::transfer_policy {
         event::emit(TransferPolicyCreated<T> { id: policy_id });
 
         (
-            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero(), allow_taking: true },
             TransferPolicyCap { id: object::new(ctx), policy_id }
         )
     }
@@ -121,7 +129,7 @@ module sui::transfer_policy {
         event::emit(TransferPolicyCreated<T> { id: policy_id });
 
         (
-            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero(), allow_taking: true },
             TransferPolicyCap { id: object::new(ctx), policy_id }
         )
     }
@@ -152,7 +160,7 @@ module sui::transfer_policy {
         assert!(object::id(&self) == cap.policy_id, ENotOwner);
 
         let TransferPolicyCap { id: cap_id, policy_id: _ } = cap;
-        let TransferPolicy { id, rules: _, balance } = self;
+        let TransferPolicy { id, rules: _, balance, allow_taking: _ } = self;
 
         object::delete(id);
         object::delete(cap_id);
@@ -241,6 +249,19 @@ module sui::transfer_policy {
     }
 
     // === Fields access ===
+
+    /// Set the `allow_taking` field of the `TransferPolicy`.
+    public fun set_allow_taking<T>(
+        policy: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>,
+        allow_taking: bool
+    ) {
+        assert!(object::id(policy) == cap.policy_id, ENotOwner);
+        policy.allow_taking = allow_taking;
+    }
+
+    /// Get the `allow_taking` field of the `TransferPolicy`.
+    public fun allow_taking<T>(policy: &TransferPolicy<T>): bool { policy.allow_taking }
 
     /// Get the `paid` field of the `TransferRequest`.
     public fun paid<T>(self: &TransferRequest<T>): u64 { self.paid }
