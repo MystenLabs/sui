@@ -3250,6 +3250,8 @@ impl AuthorityState {
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
+            // TODO: use the actual non refundable storage rebate from gas_cost_summary
+            0,
             epoch_start_timestamp_ms,
             next_epoch_system_package_bytes,
         );

@@ -240,13 +240,13 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-            id: "0xfc5e9833f7ca2ad3ba65a81614b93e203f49949cc64ef53659703a599e7eec22"
+            id: "0x38e8a2706a4f946577144fb989e864f769ad09bcaeb4371dc91b79c32252e29c"
           size: 0
       voting_power: 10000
-      operation_cap_id: "0xcee1a0ba5fdb5b2345edf6f6a052b8164c3b11813090358bcbad51ae9a58274b"
+      operation_cap_id: "0xb6c6e071dcff755684443411790cf3aa439079c30842e7bfe00bfe5fa49f55ea"
       gas_price: 1
       staking_pool:
-        id: "0x15d528877dd802225cd8c8c27c5409088e03c4c2fe34ff74dbf5d74192e3a292"
+        id: "0xa3b72999e57fe9c9ebe884bde20ce8fb1fe7c31c8002277fa36829be0a9fa5bd"
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -254,14 +254,14 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
-          id: "0xf1fba49635b1c5cee7bce702a5b87ccbe714840524d4e2bbbf2bd5e60711518d"
+          id: "0x31ded9c0ca56f93200cdf19b4c5ef157e4670813de632c3e0d10a85f4cbe9229"
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-            id: "0xdc01ea56b73c748505f274b1a088dbb6dc8223ab25c20922bd91c999d2236050"
+            id: "0xea743b617733f5ec53781a0553195ccc5d23198cec5f06a3cd1f40884d7de104"
           size: 0
       commission_rate: 0
       next_epoch_stake: 20000000000000000
@@ -269,30 +269,33 @@ validators:
       next_epoch_commission_rate: 0
       extra_fields:
         id:
-          id: "0xbe3b8ed827b16f424d4c905e689333b80dc43a5383cc467994e2d807ca6ed80b"
+          id: "0x5f32c66262d3fd1455b02c9c75c1acec09c85f63dbc43aad8e4f285c4f1f8139"
         size: 0
   pending_active_validators:
     contents:
-      id: "0x7c1395e056653a46f154d526a20659f06fb350cb04d7af4c4bd6253a003206d0"
+      id: "0x93c25a1366157cfa1202974903734bc805711fd543f1f3241cea3743414f975f"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0x5b2ae83660fec9728fdda8e2af71d8d62f07225b86ddc9141fd9abc5fca91eb1"
+    id: "0x2d3419d28d1ee883a9e4c8984abcd282074887c5af7c615e2f6456567109f56f"
     size: 1
   inactive_validators:
-    id: "0xa33cce8e09cb86a4d23584fe02a8c1c0df365d6620c2ba53242887ea5fc702d9"
+    id: "0x1248b2240359a065a47282d9fdc2e3f040626ac181a79030bc32cfb0fac562f6"
     size: 0
   validator_candidates:
-    id: "0x13f2faafd243d0e19c5f1b2049dbac71ed6a1f14638d648830fafc70140f2eda"
+    id: "0x356675991303550958c5b1a68732fc3aed115e567a4b5d3f83e648021776b246"
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-      id: "0x94744ab741e181b9fdc961215ad0f09719f3803cf3ba24470183ed7995d616a1"
+      id: "0x3fd74a301a1a5fb0df32d5bac3718761423d77c1a71e7fff16b9dc02970e6e15"
     size: 0
 storage_fund:
-  value: 0
+  total_object_storage_rebates:
+    value: 0
+  non_refundable_balance:
+    value: 0
 parameters:
   epoch_duration_ms: 86400000
   stake_subsidy_start_epoch: 0
@@ -303,7 +306,7 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
-      id: "0x58b31e324aed170e2cbab2856108c6164c5ef3aad7f9c331eb920ba0ecc22851"
+      id: "0xfd94fa9051bbe0f1d25271cf6f1810bf03a86354ce538a8096c85f967a4a0103"
     size: 0
 reference_gas_price: 1
 validator_report_records:
@@ -317,7 +320,7 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 10000
   extra_fields:
     id:
-      id: "0x34ba4b4bca961c500709cf7c6b33d4d9511d4ba3da588be2b474db6bb4f5f93a"
+      id: "0x03d076747d899bc95cb835a22be9c3ce1a4a0076e0623736707945d4c5187668"
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -325,9 +328,10 @@ safe_mode_storage_rewards:
 safe_mode_computation_rewards:
   value: 0
 safe_mode_storage_rebates: 0
+safe_mode_non_refundable_storage_rebates: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-    id: "0x4706a2dded0f824c06807b53b80c9b273f78b79503b72406508cacc705196a4b"
+    id: "0x31d8828b01267f5beb5fd65fb2596b7c3f85ecdfcce298863a18cadab3fc2881"
   size: 0
 

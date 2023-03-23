@@ -467,6 +467,7 @@ module sui_system::sui_system {
         new_epoch: u64,
         next_protocol_version: u64,
         storage_rebate: u64,
+        non_refundable_storage_rebate: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
@@ -483,6 +484,7 @@ module sui_system::sui_system {
             storage_reward,
             computation_reward,
             storage_rebate,
+            non_refundable_storage_rebate,
             storage_fund_reinvest_rate,
             reward_slashing_rate,
             epoch_start_timestamp_ms,
@@ -505,6 +507,7 @@ module sui_system::sui_system {
         new_epoch: u64,
         next_protocol_version: u64,
         storage_rebate: u64,
+        non_refundable_storage_rebate: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
@@ -517,6 +520,7 @@ module sui_system::sui_system {
             storage_reward,
             computation_reward,
             storage_rebate,
+            non_refundable_storage_rebate,
             ctx
         )
     }
@@ -630,6 +634,12 @@ module sui_system::sui_system {
         sui_system_state_inner::get_storage_fund_balance(self)
     }
 
+    #[test_only]
+    public fun get_storage_fund_object_rebates(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_storage_fund_object_rebates(self)
+    }
+
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
     // candidate validator - bypassing the proof of possession check and other metadata validation
     // in the process.
@@ -682,6 +692,7 @@ module sui_system::sui_system {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        non_refundable_storage_rebate: u64,
         storage_fund_reinvest_rate: u64,
         reward_slashing_rate: u64,
         epoch_start_timestamp_ms: u64,
@@ -696,6 +707,7 @@ module sui_system::sui_system {
             new_epoch,
             next_protocol_version,
             storage_rebate,
+            non_refundable_storage_rebate,
             storage_fund_reinvest_rate,
             reward_slashing_rate,
             epoch_start_timestamp_ms,
@@ -713,6 +725,7 @@ module sui_system::sui_system {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        non_refundable_storage_rebate: u64,
         ctx: &mut TxContext,
     ) {
         let storage_reward = balance::create_for_testing(storage_charge);
@@ -724,6 +737,7 @@ module sui_system::sui_system {
             new_epoch,
             next_protocol_version,
             storage_rebate,
+            non_refundable_storage_rebate,
             ctx,
         );
     }
