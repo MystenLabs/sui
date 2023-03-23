@@ -34,6 +34,8 @@ pub enum NarwhalError {
     TransactionTooLarge(usize, usize),
 }
 
+/// TODO: add NarwhalClient trait and implement RemoteNarwhalClient with grpc.
+
 /// A client that connects to Narwhal locally.
 #[derive(Clone)]
 pub struct LocalNarwhalClient {
