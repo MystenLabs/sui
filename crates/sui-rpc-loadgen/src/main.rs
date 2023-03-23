@@ -108,6 +108,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let uuid = Uuid::new_v4();
     let log_filename = format!("sui-rpc-loadgen.{}.log", uuid);
+    println!("Logging to {}", log_filename);
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
@@ -116,7 +117,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let opts = Opts::parse();
-    info!("Logging to {}", log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
     // TODO(chris): remove hardcoded value since we only need keystore for write commands
@@ -154,16 +154,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     use crate::payload::CommandData;
     // todo: make flexible
-    let command_payloads = if let CommandData::MultiGetTransactions(_) = command.data {
+    let command_payloads = if let CommandData::MultiGetTransactions(op) = command.data {
+        let start = op.checkpoints.start;
+        let end = op.checkpoints.end.unwrap_or(600000); // adjustable end
+
         let num_chunks = opts.num_threads;
-        let chunk_size = 600000 / num_chunks; // todo: adjustable limit
+        let chunk_size = (end - start) / num_chunks as u64; // todo: adjustable limit
         (0..num_chunks)
             .map(|i| {
-                let start = i * chunk_size;
-                let end = (i + 1) * chunk_size;
+                let start_chunk = start + (i as u64) * chunk_size;
+                let end_chunk = start + ((i + 1) as u64) * chunk_size;
+                // let start = i * chunk_size;
+                // let end = (i + 1) * chunk_size;
                 Command::new_multi_get_transactions(
-                    start.try_into().unwrap(),
-                    Some(end.try_into().unwrap()),
+                    start_chunk,
+                    Some(end_chunk),
+                    // start.try_into().unwrap(),
+                    // Some(end.try_into().unwrap()),
                     None,
                 )
             })
@@ -171,6 +178,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     } else {
         vec![command.clone(); opts.num_threads]
     };
+
+    // let command_payloads = vec![command.clone(); opts.num_threads];
 
     let payloads: Vec<Payload> = command_payloads
         .into_iter()

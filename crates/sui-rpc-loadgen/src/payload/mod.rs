@@ -112,14 +112,14 @@ pub struct DryRun {}
 #[derive(Clone, Default)]
 pub struct GetCheckpoints {
     /// Default to start from 0
-    start: CheckpointSequenceNumber,
+    pub start: CheckpointSequenceNumber,
     /// If None, use `getLatestCheckpointSequenceNumber`
-    end: Option<CheckpointSequenceNumber>,
+    pub end: Option<CheckpointSequenceNumber>,
 }
 
 #[derive(Clone)]
 pub struct MultiGetTransactions {
-    checkpoints: GetCheckpoints,
+    pub checkpoints: GetCheckpoints,
     digests: Option<Vec<TransactionDigest>>,
 }
 

@@ -50,3 +50,25 @@ Finds all checkpoints, and then all transactions in those checkpoints
 2. Add `ClapCommand::Endpoint` to `match opts.command` in [src/main.rs](src/main.rs)
 3. Add new struct `Endpoint`  and provide `new_endpoint` function that returns `Endpoint` in `Command` to [src/payload/mod.rs](src/payload/mod.rs)
 4. Implementation details go in [src/payload/rpc_command_processor.rs](src/payload/rpc_command_processor.rs) and add to `match command`
+
+
+# Useful commands
+```bash
+cat sui-rpc-loadgen.b844f547-d354-4871-b958-1ea3fe23a0a8.log.2023-03-23 | awk '/Finished processing/{print $7}' | sort -n | uniq | awk 'BEGIN{last=0}{for(i=last+1;i<$1;i++) print i; last=$1} END{print last}' | tee missing_numbers.txt && wc -l missing_numbers.txt
+```
+Checks which checkpoints among threads have not been processed yet. The last one should be the largest checkpoint being processed.
+
+`wc -l missing_numbers.txt` - counts how many checkpoints to go
+
+`cat sui-rpc-loadgen.b844f547-d354-4871-b958-1ea3fe23a0a8.log.2023-03-23 | grep panic` check for any panic so far
+
+`cat sui-rpc-loadgen.b844f547-d354-4871-b958-1ea3fe23a0a8.log.2023-03-23 | grep SuiCallArg -m 1 -B 20 | grep -v SuiCallArg | grep "Finished processing checkpoint"`
+- Find instances of `SuiCallArg`
+- Grab previous 20 `(-B 20)`
+- Find "Finished processing checkpoint"
+
+
+```
+cat sui-rpc-loadgen.b844f547-d354-4871-b958-1ea3fe23a0a8.log.2023-03-23 | grep 'invalid type: string' | awk {'print $13'} | cut -d\" -f2 | sed 's/\\$//' > sui_call_arg_errors.txt
+```
+get all addresses with SuiCallArg errors
