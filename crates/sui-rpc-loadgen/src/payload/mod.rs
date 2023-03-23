@@ -7,6 +7,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
 use std::time::Duration;
+use sui_types::digests::TransactionDigest;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -67,9 +68,19 @@ impl Command {
         }
     }
 
-    pub fn new_multi_get_transactions() -> Self {
+    pub fn new_multi_get_transactions(
+        start_checkpoint: CheckpointSequenceNumber,
+        end_checkpoint: Option<CheckpointSequenceNumber>,
+        digests: Option<Vec<TransactionDigest>>,
+    ) -> Self {
         Self {
-            data: CommandData::MultiGetTransactions(MultiGetTransactions {}),
+            data: CommandData::MultiGetTransactions(MultiGetTransactions {
+                checkpoints: GetCheckpoints {
+                    start: start_checkpoint,
+                    end: end_checkpoint,
+                },
+                digests,
+            }),
             ..Default::default()
         }
     }

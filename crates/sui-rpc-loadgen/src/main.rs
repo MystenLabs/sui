@@ -11,6 +11,7 @@ use std::time::Duration;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
+use sui_types::digests::TransactionDigest;
 use tracing::info;
 use uuid::Uuid;
 
@@ -77,6 +78,15 @@ pub enum ClapCommand {
     MultiGetTransactions {
         #[clap(flatten)]
         common: CommonOptions,
+        /// Default to start from checkpoint 0
+        #[clap(short, long, default_value_t = 0)]
+        start_checkpoint: u64,
+
+        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
+        #[clap(short, long)]
+        end_checkpoint: Option<u64>,
+        #[clap(short, long, multiple = true)]
+        digests: Option<Vec<TransactionDigest>>,
     },
 }
 
@@ -101,6 +111,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let uuid = Uuid::new_v4();
     let log_filename = format!("sui-rpc-loadgen.{}.log", uuid);
+    println!("Logging to {}", log_filename);
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
@@ -109,7 +120,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let opts = Opts::parse();
-    println!("Logging to {}", log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
     // TODO(chris): remove hardcoded value since we only need keystore for write commands
@@ -143,17 +153,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
     // todo: make flexible
-    let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {
+    let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {        
+        let start = data.start;
+        let end = data.end.unwrap_or(455246);
         let num_chunks = opts.num_threads;
+        let chunk_size = (end - start) / num_chunks as u64;
         let chunk_size = 455246 / num_chunks; // todo: adjustable limit
         (0..num_chunks)
             .map(|i| {
-                let start = i * chunk_size;
+                let start_checkpoint = start + (i as u64) * chunk_size;
+                let end_checkpoint = start + ((i + 1) as u64) * chunk_size;
+
                 let end = (i + 1) * chunk_size;
                 Command::new_get_checkpoints(
-                    start.try_into().unwrap(),
-                    Some(end.try_into().unwrap()),
-                    data.verify_transaction,
+                    start_checkpoint,
+                    Some(end_checkpoint),                    
+                    data.verify_transaction,        
                 )
             })
             .collect()
