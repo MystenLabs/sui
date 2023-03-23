@@ -876,13 +876,19 @@ impl SuiNode {
             if let Some(components) = &*self.validator_components.lock().await {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
+
+                let max_binary_format_version = cur_epoch_store
+                    .protocol_config()
+                    .move_binary_format_version();
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,
                         self.config
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
-                        self.state.get_available_system_packages().await,
+                        self.state
+                            .get_available_system_packages(max_binary_format_version)
+                            .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
                 if let Err(e) = components

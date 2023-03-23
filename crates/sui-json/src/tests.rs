@@ -528,7 +528,7 @@ fn test_basic_args_linter_top_level() {
         function,
         &[],
         args,
-        /* allow_arbitrary_function_call */ false
+        /* allow_arbitrary_function_call */ false,
     )
     .is_err());
 

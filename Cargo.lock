@@ -8978,6 +8978,7 @@ dependencies = [
  "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-transaction-builder",

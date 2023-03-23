@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail};
 use fastcrypto::encoding::{Encoding, Hex};
 use move_binary_format::{
     access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
+    file_format_common::VERSION_MAX,
 };
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
@@ -795,7 +796,7 @@ pub fn resolve_move_function_args(
     allow_arbitrary_function_call: bool,
 ) -> Result<Vec<(ResolvedCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
-    let module = package.deserialize_module(&module_ident)?;
+    let module = package.deserialize_module(&module_ident, VERSION_MAX)?;
     let function_str = function.as_ident_str();
     let fdef = module
         .function_defs
