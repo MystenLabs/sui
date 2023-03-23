@@ -158,7 +158,7 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                             if t.sequence_number != seq {
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
-                            if op.verify_transaction {
+                            if op.verify_transactions {
                                 check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects).await;
                             }
                             Some(t)

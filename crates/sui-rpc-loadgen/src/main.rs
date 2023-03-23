@@ -62,7 +62,7 @@ pub enum ClapCommand {
         end: Option<u64>,
 
         #[clap(long, default_value_t = true)]
-        verify_transaction: bool,
+        verify_transactions: bool,
 
         #[clap(long, default_value_t = true)]
         verify_objects: bool,
@@ -127,10 +127,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             common,
             start,
             end,
-            verify_transaction,
+            verify_transactions,
             verify_objects,
         } => (
-            Command::new_get_checkpoints(start, end, verify_transaction, verify_objects),
+            Command::new_get_checkpoints(start, end, verify_transactions, verify_objects),
             common,
         ),
     };
@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Command::new_get_checkpoints(
                     start_checkpoint,
                     Some(end_checkpoint),
-                    data.verify_transaction,
+                    data.verify_transactions,
                     data.verify_objects,
                 )
             })
