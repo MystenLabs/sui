@@ -920,29 +920,32 @@ WHERE e1.epoch = e2.epoch
 
     fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-        let epoch_info :DBEpochInfo =   pg_pool_conn
+        let epoch_info: DBEpochInfo = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                epochs::dsl::epochs.order_by(epochs::epoch.desc())
+                epochs::dsl::epochs
+                    .order_by(epochs::epoch.desc())
                     .first::<DBEpochInfo>(conn)
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
-                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    "Failed reading latest epoch in PostgresDB with error {:?}",
                     e
                 ))
             })?;
 
-        let validators : Vec<DBValidatorSummary> =   pg_pool_conn
+        let validators: Vec<DBValidatorSummary> = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                validators::dsl::validators.filter(validators::epoch.eq(epoch_info.epoch)).load(conn)
+                validators::dsl::validators
+                    .filter(validators::epoch.eq(epoch_info.epoch))
+                    .load(conn)
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
-                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    "Failed reading latest validator summary in PostgresDB with error {:?}",
                     e
                 ))
             })?;
