@@ -357,6 +357,12 @@ module sui::kiosk {
         &mut self.id
     }
 
+    /// Allow or disallow `uid_mut` access via the `allow_extensions` setting.
+    public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        self.allow_extensions = allow_extensions;
+    }
+
     /// Get the mutable `UID` for dynamic field access and extensions.
     /// Aborts if `allow_extensions` set to `false`.
     public fun uid_mut(self: &mut Kiosk): &mut UID {
@@ -606,6 +612,28 @@ module sui::kiosk_tests {
         let (kiosk, owner_cap) = kiosk::new(ctx);
 
         let _profits = kiosk::withdraw(&mut kiosk, &owner_cap, std::option::some(100), ctx);
+
+        abort 1337
+    }
+
+    #[test]
+    fun test_disallow_extensions_access_as_owner() {
+        let ctx = &mut tx_context::dummy();
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
+        let _uid_mut = kiosk::uid_mut_as_owner(&mut kiosk, &owner_cap);
+        return_kiosk(kiosk, owner_cap, ctx);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
+    fun test_disallow_extensions() {
+        let ctx = &mut tx_context::dummy();
+        let (kiosk, owner_cap) = kiosk::new(ctx);
+
+        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
+        let _ = kiosk::uid_mut(&mut kiosk);
 
         abort 1337
     }

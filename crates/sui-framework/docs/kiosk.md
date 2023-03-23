@@ -60,6 +60,7 @@ be used to implement application-specific transfer rules.
 -  [Function `has_item`](#0x2_kiosk_has_item)
 -  [Function `has_access`](#0x2_kiosk_has_access)
 -  [Function `uid_mut_as_owner`](#0x2_kiosk_uid_mut_as_owner)
+-  [Function `set_allow_extensions`](#0x2_kiosk_set_allow_extensions)
 -  [Function `uid_mut`](#0x2_kiosk_uid_mut)
 -  [Function `owner`](#0x2_kiosk_owner)
 -  [Function `item_count`](#0x2_kiosk_item_count)
@@ -1039,6 +1040,32 @@ Access the <code>UID</code> using the <code><a href="kiosk.md#0x2_kiosk_KioskOwn
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">uid_mut_as_owner</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>): &<b>mut</b> UID {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     &<b>mut</b> self.id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_set_allow_extensions"></a>
+
+## Function `set_allow_extensions`
+
+Allow or disallow <code>uid_mut</code> access via the <code>allow_extensions</code> setting.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, allow_extensions: bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, allow_extensions: bool) {
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    self.allow_extensions = allow_extensions;
 }
 </code></pre>
 
