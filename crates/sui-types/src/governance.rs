@@ -6,7 +6,7 @@ use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::StructTag;
 
 use crate::balance::Balance;
-use crate::base_types::{ObjectID, SuiAddress};
+use crate::base_types::ObjectID;
 use crate::committee::EpochId;
 use crate::error::SuiError;
 use crate::gas_coin::MIST_PER_SUI;
@@ -53,7 +53,6 @@ pub const WITHDRAW_STAKE_FUN_NAME: &IdentStr = ident_str!("request_withdraw_stak
 pub struct StakedSui {
     id: UID,
     pool_id: ID,
-    validator_address: SuiAddress,
     stake_activation_epoch: u64,
     principal: Balance,
 }
@@ -89,10 +88,6 @@ impl StakedSui {
 
     pub fn principal(&self) -> u64 {
         self.principal.value()
-    }
-
-    pub fn validator_address(&self) -> SuiAddress {
-        self.validator_address
     }
 }
 

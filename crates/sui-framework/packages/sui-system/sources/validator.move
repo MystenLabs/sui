@@ -284,7 +284,7 @@ module sui_system::validator {
         assert!(stake_amount > 0, 0);
         let stake_epoch = tx_context::epoch(ctx) + 1;
         staking_pool::request_add_stake(
-            &mut self.staking_pool, stake, self.metadata.sui_address, staker_address, stake_epoch, ctx
+            &mut self.staking_pool, stake, staker_address, stake_epoch, ctx
         );
         // Process stake right away if staking pool is preactive.
         if (staking_pool::is_preactive(&self.staking_pool)) {
@@ -316,7 +316,6 @@ module sui_system::validator {
         staking_pool::request_add_stake(
             &mut self.staking_pool,
             stake,
-            self.metadata.sui_address,
             staker_address,
             0, // epoch 0 -- genesis
             ctx
@@ -570,8 +569,8 @@ module sui_system::validator {
             || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
             || self.metadata.network_pubkey_bytes == other.metadata.network_pubkey_bytes
             || self.metadata.network_pubkey_bytes == other.metadata.worker_pubkey_bytes
-            || self.metadata.worker_pubkey_bytes == other.metadata.worker_pubkey_bytes            
-            || self.metadata.worker_pubkey_bytes == other.metadata.network_pubkey_bytes            
+            || self.metadata.worker_pubkey_bytes == other.metadata.worker_pubkey_bytes
+            || self.metadata.worker_pubkey_bytes == other.metadata.network_pubkey_bytes
             // All next epoch parameters.
             || is_equal_some(&self.metadata.next_epoch_net_address, &other.metadata.next_epoch_net_address)
             || is_equal_some(&self.metadata.next_epoch_p2p_address, &other.metadata.next_epoch_p2p_address)
