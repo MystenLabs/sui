@@ -1,10 +1,10 @@
 ---
-title: Run a Sui Validator node
+title: Sui Validator nodes and staking
 ---
 
 ## Requirements to run a validator on Sui
 
-To run a Sui Validator, you must set up and configure a Sui Validator node. After you have a running node, you must have a minimum of 30 Million SUI in your staking pool to join the Validator committee on the Sui network.
+To run a Sui Validator, you must set up and configure a Sui Validator node. After you have a running node, you must have a minimum of 30 Million SUI in your staking pool to join the Validator set on the Sui network.
 
 To learn how to set up and configure a Sui Validator node, see [Sui for Node Operators](https://github.com/MystenLabs/sui/blob/main/nre/sui_for_node_operators.md). The guide includes all of the information you need to configure your Validator node. It also provides guidance on the tasks you must perform after you join the validator set.
 
