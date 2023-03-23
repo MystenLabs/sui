@@ -878,12 +878,12 @@ impl IndexStore {
         // We use +1 to grab the next cursor
         let count = min(count, MAX_GET_OWNED_OBJECT_SIZE + 1);
         debug!(?owner, ?count, ?starting_object_id, "get_owner_objects");
-        Ok(self
+        let iter = self
             .tables
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(owner, starting_object_id))?
+            .skip_to(&(owner.clone(), starting_object_id))?
             .filter(move |((object_owner, _), obj_info)| {
                 let to_include: bool = match &filter {
                     Some(SuiObjectDataFilter::StructType(struct_tag)) => {
@@ -921,10 +921,11 @@ impl IndexStore {
                     }
                     None => true,
                 };
-                object_owner == &owner && to_include
+                (object_owner == &owner) && to_include
             })
-            .take(count)
-            .map(|(_, object_info)| object_info))
+            .take_while(move |((address_owner, _), _)| address_owner == &owner)
+            .map(|(_, object_info)| object_info);
+        Ok(iter.take(count))
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
