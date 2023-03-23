@@ -817,8 +817,6 @@ pub mod pg_integration_test {
                 Some(SuiTransactionResponseOptions::full_content()),
             )
             .await?;
-        let transaction_required_fields =
-            SuiTransactionResponse::new(full_transaction_response.clone().digest);
         let sui_transaction_response_options = vec![
             SuiTransactionResponseOptions::new().with_input(),
             SuiTransactionResponseOptions::new().with_raw_input(),
@@ -844,54 +842,36 @@ pub mod pg_integration_test {
             .unwrap();
 
         let expected_transaction_results = vec![
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_transaction()
-            .build(),
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_raw_transaction()
-            .build(),
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_effects()
-            .build(),
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_events()
-            .build(),
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_balance_changes()
-            .build(),
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_object_changes()
-            .build(),
-            SuiTransactionResponseBuilder::new(
-                &full_transaction_response,
-                &transaction_required_fields,
-            )
-            .with_all()
-            .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_input()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_raw_input()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_effects()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_events()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_balance_changes()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_object_changes()
+                .build(),
+            SuiTransactionResponseBuilder::new(&full_transaction_response)
+                .with_input()
+                .with_balance_changes()
+                .with_object_changes()
+                .build(),
         ];
-        for (received, expected) in received_transaction_results
+        for (i, (received, expected)) in received_transaction_results
             .iter()
             .zip(expected_transaction_results.iter())
+            .enumerate()
         {
-            assert_eq!(received, expected);
+            assert_eq!(received, expected, "Mismatch found at index {}", i);
         }
         Ok(())
     }
