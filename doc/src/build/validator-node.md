@@ -83,7 +83,7 @@ A withdrawal (un-stake) request is processed immediately as soon as it is receiv
 
 Users can’t withdraw a portion of their active stake. They must withdraw all staked SUI at the same time. Users can, however, stake using multiple `StakedSui` objects by splitting their SUI into multiple coins. They can then perform a partial withdrawal from a validator by un-staking only some of the `StakedSUI` objects. 
 
-## Reference Gas Price
+## Reference gas price
 
 Sui is designed such that end-users can expect the gas price to be stable and predictable during regular network operations. This is achieved by having validators set the network’s reference gas price at the beginning of each epoch.
 
