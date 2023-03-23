@@ -2,13 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use sui_types::{base_types::ObjectID, object::Owner};
-use test_utils::messages::create_publish_move_package_transaction;
-
+use rand::distributions::{Distribution, Standard};
+use rand::Rng;
 use std::path::PathBuf;
 use std::sync::Arc;
-
+use strum::{EnumCount, IntoEnumIterator};
+use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
+use sui_protocol_config::ProtocolConfig;
+use sui_types::base_types::{random_object_ref, ObjectRef};
+use sui_types::messages::{CallArg, ObjectArg, TransactionEffectsAPI};
+use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
+use test_utils::messages::create_publish_move_package_transaction;
 
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::SystemStateObserver;
@@ -21,29 +26,37 @@ use super::{
     WorkloadBuilderInfo, WorkloadParams,
 };
 
-// TODO: copied from protocol_config, but maybe we can put this in SystemStateObserver
-const MAX_TX_GAS: u64 = 10_000_000_000;
-
-// TODO: copied from protocol_config, but maybe we can put this in SystemStateObserver
 /// Number of max size objects to create in the max object payload
-const NUM_OBJECTS: u64 = 32;
-// TODO: make this big once https://github.com/MystenLabs/sui/pull/9394 lands
-//const NUM_OBJECTS: u64 = 2048;
+const NUM_OBJECTS: u64 = 2048;
 
-/*enum PayloadType {
-    /// create NUM_OBJECTS objects with the max object size. This will write out a lot of object data
-    MaxObjects,
+/// Maxinum number of dynamic fields we were able to create
+/// TODO: try to increase this value. Gas limits it
+const NUM_DYNAMIC_FIELDS: u64 = 33;
+
+#[derive(Debug, EnumCountMacro, EnumIter, Clone)]
+enum AdversarialPayloadType {
+    ObjectsSize = 1,
+    EventSize,
+    DynamicFieldsCount,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
-    // - MaxDynamicFields (by reading a bunch of dynamic fields at runtime)
-    // - MaxEffects (by creating a bunch of small objects)
-    // - MaxEvents (max out VM's event size limit)
-}*/
+    // - MaxEffects (by creating a bunch of small objects) and mutating lots of objects
+    // - MaxCommands (by created the maximum number of PT commands)
+    // ...
+}
+
+impl Distribution<AdversarialPayloadType> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AdversarialPayloadType {
+        let n = rng.gen_range(0..AdversarialPayloadType::COUNT);
+        AdversarialPayloadType::iter().nth(n).unwrap()
+    }
+}
 
 #[derive(Debug)]
 pub struct AdversarialTestPayload {
     /// ID of the Move package with adversarial utility functions
     package_id: ObjectID,
+    df_parent_obj_ref: ObjectRef,
     /// address to send adversarial transactions from
     sender: SuiAddress,
     state: InMemoryWallet,
@@ -58,30 +71,95 @@ impl std::fmt::Display for AdversarialTestPayload {
 
 impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
-        // important to keep this as a sanity check that we don't hit protocol limits or run out of gas as things change elsewhere.
-        // adversarial tests aren't much use if they don't have effects :)
+        // Sometimes useful when figuring out why things failed
+        let stat = match effects {
+            ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
+            ExecutionEffects::SuiTransactionEffects(_) => unimplemented!("Not impl"),
+        };
+
         debug_assert!(
             effects.is_ok(),
-            "Adversarial transactions should never abort"
+            "Adversarial transactions should never abort: {:?}",
+            stat
         );
 
         self.state.update(effects);
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        // TODO: default benchmarking gas coins are too small to use MAX_TX_GAS. But we will want to be able to use that much to hit some limits
-        let gas_budget = MAX_TX_GAS / 100;
-        // TODO: generate random number, convert it to a PayloadType, call the appropriate function
+        let payload_type: AdversarialPayloadType = rand::random();
+        let gas_budget = self
+            .system_state_observer
+            .state
+            .borrow()
+            .protocol_config
+            .as_ref()
+            .expect("Protocol config not in system state")
+            .max_tx_gas();
+        let payload_args = self.get_payload_args(
+            &payload_type,
+            self.system_state_observer
+                .state
+                .borrow()
+                .protocol_config
+                .as_ref()
+                .expect("Protocol config not in system state"),
+        );
+
         self.state.move_call(
             self.sender,
             self.package_id,
             "adversarial",
-            "create_max_size_owned_objects",
+            &payload_args.fn_name,
             vec![],
-            vec![NUM_OBJECTS.into()],
+            payload_args.args,
             gas_budget,
-            *self.system_state_observer.reference_gas_price.borrow(),
+            self.system_state_observer
+                .state
+                .borrow()
+                .reference_gas_price,
         )
+    }
+}
+
+impl AdversarialTestPayload {
+    fn get_payload_args(
+        &self,
+        payload_type: &AdversarialPayloadType,
+        protocol_config: &ProtocolConfig,
+    ) -> AdversarialPayloadArgs {
+        match payload_type {
+            AdversarialPayloadType::ObjectsSize => AdversarialPayloadArgs {
+                fn_name: "create_shared_objects".to_owned(),
+                args: [
+                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                    (NUM_OBJECTS / 10).into(),
+                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                    (protocol_config.max_move_object_size() / 10).into(),
+                ]
+                .to_vec(),
+            },
+            AdversarialPayloadType::EventSize => AdversarialPayloadArgs {
+                fn_name: "emit_events".to_owned(),
+                args: [
+                    protocol_config.max_num_event_emit().into(),
+                    protocol_config.max_event_emit_size().into(),
+                ]
+                .to_vec(),
+            },
+            AdversarialPayloadType::DynamicFieldsCount => AdversarialPayloadArgs {
+                fn_name: "read_n_dynamic_fields".to_owned(),
+                args: [
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: self.df_parent_obj_ref.0,
+                        initial_shared_version: self.df_parent_obj_ref.1,
+                        mutable: true,
+                    }),
+                    NUM_DYNAMIC_FIELDS.into(),
+                ]
+                .to_vec(),
+            },
+        }
     }
 }
 
@@ -123,6 +201,11 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
     ) -> Box<dyn Workload<dyn Payload>> {
         Box::<dyn Workload<dyn Payload>>::from(Box::new(AdversarialWorkload {
             package_id: ObjectID::ZERO,
+            df_parent_obj_ref: {
+                let mut f = random_object_ref();
+                f.0 = ObjectID::ZERO;
+                f
+            },
             init_gas: init_gas.pop().unwrap(),
             payload_gas,
         }))
@@ -165,6 +248,8 @@ impl AdversarialWorkloadBuilder {
 pub struct AdversarialWorkload {
     /// ID of the Move package with adversarial utility functions
     package_id: ObjectID,
+    /// ID of the object used for dynamic field opers
+    df_parent_obj_ref: ObjectRef,
     pub init_gas: Gas,
     pub payload_gas: Vec<Gas>,
 }
@@ -179,17 +264,32 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let gas = &self.init_gas;
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("src/workloads/data/adversarial");
-        let gas_price = *system_state_observer.reference_gas_price.borrow();
+        let gas_price = system_state_observer.state.borrow().reference_gas_price;
         let transaction =
             create_publish_move_package_transaction(gas.0, path, gas.1, &gas.2, Some(gas_price));
         let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
+
         let created = effects.created();
-        // should only create the package object + upgrade cap. otherwise, there are some object initializers running and we will need to disambiguate
-        assert_eq!(created.len(), 2);
+
+        // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
+        assert_eq!(created.len() as u64, 3 + NUM_DYNAMIC_FIELDS);
         let package_obj = created
             .iter()
             .find(|o| matches!(o.1, Owner::Immutable))
             .unwrap();
+
+        for o in &created {
+            let obj = proxy.get_object(o.0 .0).await.unwrap();
+            if let Some(tag) = obj.data.struct_tag() {
+                if tag.to_string().contains("::adversarial::Obj") {
+                    self.df_parent_obj_ref = o.0;
+                }
+            }
+        }
+        assert!(
+            self.df_parent_obj_ref.0 != ObjectID::ZERO,
+            "Dynamic field parent must be created"
+        );
         self.package_id = package_obj.0 .0;
     }
 
@@ -203,6 +303,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         for gas in &self.payload_gas {
             payloads.push(AdversarialTestPayload {
                 package_id: self.package_id,
+                df_parent_obj_ref: self.df_parent_obj_ref,
                 sender: gas.1,
                 state: InMemoryWallet::new(gas),
                 system_state_observer: system_state_observer.clone(),
@@ -213,4 +314,9 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))
             .collect()
     }
+}
+
+struct AdversarialPayloadArgs {
+    pub fn_name: String,
+    pub args: Vec<CallArg>,
 }
