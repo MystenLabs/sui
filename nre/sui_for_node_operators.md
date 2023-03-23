@@ -67,7 +67,7 @@ Sui Node uses the following ports by default:
 | ------------- | ---------------- | --------------------------------- |
 | TCP/8080      | inbound          | protocol/transaction interface    |
 | UDP/8081      | inbound/outbound | narwhal primary interface         |
-| UDP/8082      | inbound/outbound | narwhal primary interface         |
+| UDP/8082      | inbound/outbound | narwhal worker interface         |
 | TCP/8083      | localhost        | sui -> narwhal interface          |
 | UDP/8084      | inbound/outbound | peer to peer state sync interface |
 | TCP/8443      | outbound         | metrics pushing                   |
