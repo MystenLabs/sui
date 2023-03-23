@@ -11,7 +11,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Resource `Coin`](#0x2_coin_Coin)
 -  [Resource `CoinMetadata`](#0x2_coin_CoinMetadata)
 -  [Resource `TreasuryCap`](#0x2_coin_TreasuryCap)
--  [Struct `CurrencyCreated`](#0x2_coin_CurrencyCreated)
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
 -  [Function `treasury_into_supply`](#0x2_coin_treasury_into_supply)
@@ -34,27 +33,20 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
--  [Function `update_name`](#0x2_coin_update_name)
--  [Function `update_symbol`](#0x2_coin_update_symbol)
--  [Function `update_description`](#0x2_coin_update_description)
--  [Function `update_icon_url`](#0x2_coin_update_icon_url)
--  [Function `get_decimals`](#0x2_coin_get_decimals)
--  [Function `get_name`](#0x2_coin_get_name)
--  [Function `get_symbol`](#0x2_coin_get_symbol)
--  [Function `get_description`](#0x2_coin_get_description)
--  [Function `get_icon_url`](#0x2_coin_get_icon_url)
+-  [Function `metadata_display`](#0x2_coin_metadata_display)
+-  [Function `metadata_display_mut`](#0x2_coin_metadata_display_mut)
+-  [Function `display_from_supply`](#0x2_coin_display_from_supply)
 
 
-<pre><code><b>use</b> <a href="">0x1::ascii</a>;
-<b>use</b> <a href="">0x1::option</a>;
+<pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
+<b>use</b> <a href="display.md#0x2_display">0x2::display</a>;
+<b>use</b> <a href="hex.md#0x2_hex">0x2::hex</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="types.md#0x2_types">0x2::types</a>;
-<b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
 </code></pre>
 
 
@@ -118,37 +110,10 @@ unique instance of CoinMetadata<T> that stores the metadata for this coin type.
 
 </dd>
 <dt>
-<code>decimals: u8</code>
+<code><a href="display.md#0x2_display">display</a>: <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;</code>
 </dt>
 <dd>
- Number of decimal places the coin uses.
- A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
- E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
- This is metadata for display usage only.
-</dd>
-<dt>
-<code>name: <a href="_String">string::String</a></code>
-</dt>
-<dd>
- Name for the token
-</dd>
-<dt>
-<code>symbol: <a href="_String">ascii::String</a></code>
-</dt>
-<dd>
- Symbol for the token
-</dd>
-<dt>
-<code>description: <a href="_String">string::String</a></code>
-</dt>
-<dd>
- Description of the token
-</dd>
-<dt>
-<code>icon_url: <a href="_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;</code>
-</dt>
-<dd>
- URL for the token logo
+
 </dd>
 </dl>
 
@@ -184,39 +149,6 @@ coins of type <code>T</code>. Transferable
 </dt>
 <dd>
 
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_coin_CurrencyCreated"></a>
-
-## Struct `CurrencyCreated`
-
-Emitted when new currency is created through the <code>create_currency</code> call.
-Contains currency metadata for off-chain discovery. Type parameter <code>T</code>
-matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code>
-
-
-<pre><code><b>struct</b> <a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; <b>has</b> <b>copy</b>, drop
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>decimals: u8</code>
-</dt>
-<dd>
- Number of decimal places the coin uses.
- A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
- E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
- This is metadata for display usage only.
 </dd>
 </dl>
 
@@ -788,8 +720,12 @@ Create a new currency type <code>T</code> as and return the <code><a href="coin.
 <code>T</code> to the caller. Can only be called with a <code>one-time-witness</code>
 type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a></code> per <code>T</code>.
 
+Additionally, create <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code> which wraps a <code>Display</code> for the
+<code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code>. <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code> is guaranteed to be unique due to the OTW
+requirement and inability to create it otherwise.
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="">vector</a>&lt;u8&gt;, name: <a href="">vector</a>&lt;u8&gt;, description: <a href="">vector</a>&lt;u8&gt;, icon_url: <a href="_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="_String">string::String</a>, name: <a href="_String">string::String</a>, description: <a href="_String">string::String</a>, icon_url: <a href="_Option">option::Option</a>&lt;<a href="_String">string::String</a>&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -801,33 +737,37 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
 <pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_create_currency">create_currency</a>&lt;T: drop&gt;(
     witness: T,
     decimals: u8,
-    symbol: <a href="">vector</a>&lt;u8&gt;,
-    name: <a href="">vector</a>&lt;u8&gt;,
-    description: <a href="">vector</a>&lt;u8&gt;,
-    icon_url: Option&lt;Url&gt;,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: Option&lt;String&gt;,
     ctx: &<b>mut</b> TxContext
 ): (<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
 
-    // Emit Currency metadata <b>as</b> an <a href="event.md#0x2_event">event</a>.
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; {
-        decimals
-    });
+    <b>let</b> total_supply = <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(witness);
+    <b>let</b> <a href="display.md#0x2_display">display</a> = <a href="coin.md#0x2_coin_display_from_supply">display_from_supply</a>(&total_supply, ctx);
+
+    <a href="display.md#0x2_display_add_multiple">display::add_multiple</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, <a href="">vector</a>[
+        utf8(b"decimals"),
+        utf8(b"symbol"),
+        utf8(b"name"),
+        utf8(b"description"),
+    ], <a href="">vector</a>[
+        utf8(sui::hex::encode(<a href="">vector</a>[decimals])),
+        symbol, name, description
+    ]);
+
+    <b>if</b> (<a href="_is_some">option::is_some</a>(&icon_url)) {
+        <a href="display.md#0x2_display_add">display::add</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>, utf8(b"icon_url"), <a href="_destroy_some">option::destroy_some</a>(icon_url));
+    };
+
+    <a href="display.md#0x2_display_update_version">display::update_version</a>(&<b>mut</b> <a href="display.md#0x2_display">display</a>);
 
     (
-        <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
-            id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-            total_supply: <a href="balance.md#0x2_balance_create_supply">balance::create_supply</a>(witness)
-        },
-        <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a> {
-            id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-            decimals,
-            name: <a href="_utf8">string::utf8</a>(name),
-            symbol: <a href="_string">ascii::string</a>(symbol),
-            description: <a href="_utf8">string::utf8</a>(description),
-            icon_url
-        }
+        <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), total_supply },
+        <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), <a href="display.md#0x2_display">display</a> }
     )
 }
 </code></pre>
@@ -988,14 +928,14 @@ Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code
 
 </details>
 
-<a name="0x2_coin_update_name"></a>
+<a name="0x2_coin_metadata_display"></a>
 
-## Function `update_name`
+## Function `metadata_display`
 
-Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+Allow reading the <code>Display</code> to access the fields in the CoinMetadata.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_metadata_display">metadata_display</a>&lt;T&gt;(meta: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): &<a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
 </code></pre>
 
 
@@ -1004,10 +944,8 @@ Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMet
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_name">update_name</a>&lt;T&gt;(
-    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, name: <a href="_String">string::String</a>
-) {
-    metadata.name = name;
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_metadata_display">metadata_display</a>&lt;T&gt;(meta: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;): &Display&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
+    &meta.<a href="display.md#0x2_display">display</a>
 }
 </code></pre>
 
@@ -1015,14 +953,14 @@ Update name of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMet
 
 </details>
 
-<a name="0x2_coin_update_symbol"></a>
+<a name="0x2_coin_metadata_display_mut"></a>
 
-## Function `update_symbol`
+## Function `metadata_display_mut`
 
-Update the symbol of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+Get mutable access to the inner <code>Display</code> in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, symbol: <a href="_String">ascii::String</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_metadata_display_mut">metadata_display_mut</a>&lt;T&gt;(_: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, meta: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
 </code></pre>
 
 
@@ -1031,10 +969,10 @@ Update the symbol of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">C
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_symbol">update_symbol</a>&lt;T&gt;(
-    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, symbol: <a href="_String">ascii::String</a>
-) {
-    metadata.symbol = symbol;
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_metadata_display_mut">metadata_display_mut</a>&lt;T&gt;(
+    _: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, meta: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
+): &<b>mut</b> Display&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
+    &<b>mut</b> meta.<a href="display.md#0x2_display">display</a>
 }
 </code></pre>
 
@@ -1042,14 +980,16 @@ Update the symbol of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">C
 
 </details>
 
-<a name="0x2_coin_update_description"></a>
+<a name="0x2_coin_display_from_supply"></a>
 
-## Function `update_description`
+## Function `display_from_supply`
 
-Update the description of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
+Create <code>Display&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;</code> by presenting a <code>Supply&lt;T&gt;</code>. There's no guarantee
+that the resulting <code>Display</code> will be unique and the function can be called
+multiple times.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, description: <a href="_String">string::String</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_display_from_supply">display_from_supply</a>&lt;T&gt;(_supply: &<a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="display.md#0x2_display_Display">display::Display</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;
 </code></pre>
 
 
@@ -1058,167 +998,10 @@ Update the description of the coin in <code><a href="coin.md#0x2_coin_CoinMetada
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_description">update_description</a>&lt;T&gt;(
-    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, description: <a href="_String">string::String</a>
-) {
-    metadata.description = description;
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_update_icon_url"></a>
-
-## Function `update_icon_url`
-
-Update the url of the coin in <code><a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a></code>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(_treasury: &<a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_update_icon_url">update_icon_url</a>&lt;T&gt;(
-    _treasury: &<a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, metadata: &<b>mut</b> <a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, <a href="url.md#0x2_url">url</a>: <a href="_String">ascii::String</a>
-) {
-    metadata.icon_url = <a href="_some">option::some</a>(<a href="url.md#0x2_url_new_unsafe">url::new_unsafe</a>(<a href="url.md#0x2_url">url</a>));
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_get_decimals"></a>
-
-## Function `get_decimals`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_decimals">get_decimals</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): u8
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_decimals">get_decimals</a>&lt;T&gt;(
-    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
-): u8 {
-    metadata.decimals
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_get_name"></a>
-
-## Function `get_name`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_name">get_name</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_String">string::String</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_name">get_name</a>&lt;T&gt;(
-    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
-): <a href="_String">string::String</a> {
-    metadata.name
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_get_symbol"></a>
-
-## Function `get_symbol`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_symbol">get_symbol</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_String">ascii::String</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_symbol">get_symbol</a>&lt;T&gt;(
-    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
-): <a href="_String">ascii::String</a> {
-    metadata.symbol
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_get_description"></a>
-
-## Function `get_description`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_description">get_description</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_String">string::String</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_description">get_description</a>&lt;T&gt;(
-    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
-): <a href="_String">string::String</a> {
-    metadata.description
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_get_icon_url"></a>
-
-## Function `get_icon_url`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(metadata: &<a href="coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;): <a href="_Option">option::Option</a>&lt;<a href="url.md#0x2_url_Url">url::Url</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_get_icon_url">get_icon_url</a>&lt;T&gt;(
-    metadata: &<a href="coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;
-): Option&lt;Url&gt; {
-    metadata.icon_url
+<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_display_from_supply">display_from_supply</a>&lt;T&gt;(
+    _supply: &Supply&lt;T&gt;, ctx: &<b>mut</b> TxContext
+): Display&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt; {
+    <a href="display.md#0x2_display_new_protected">display::new_protected</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;(ctx)
 }
 </code></pre>
 

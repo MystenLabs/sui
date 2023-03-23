@@ -14,11 +14,11 @@ It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
+<b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
-<b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
 </code></pre>
 
 
@@ -130,10 +130,10 @@ This should be called only once during genesis creation.
     <b>let</b> (treasury, metadata) = <a href="coin.md#0x2_coin_create_currency">coin::create_currency</a>(
         <a href="sui.md#0x2_sui_SUI">SUI</a> {},
         9,
-        b"<a href="sui.md#0x2_sui_SUI">SUI</a>",
-        b"Sui",
+        utf8(b"<a href="sui.md#0x2_sui_SUI">SUI</a>"),
+        utf8(b"Sui"),
         // TODO: add appropriate description and logo <a href="url.md#0x2_url">url</a>
-        b"",
+        utf8(b""),
         <a href="_none">option::none</a>(),
         ctx
     );

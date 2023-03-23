@@ -5,16 +5,14 @@
 /// tokens and coins. `Coin` can be described as a secure wrapper around
 /// `Balance` type.
 module sui::coin {
-    use std::string;
-    use std::ascii;
+    use std::string::{utf8, String};
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::url::{Self, Url};
+    use sui::display::{Self, Display};
     use std::vector;
-    use sui::event;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -33,19 +31,7 @@ module sui::coin {
     /// unique instance of CoinMetadata<T> that stores the metadata for this coin type.
     struct CoinMetadata<phantom T> has key, store {
         id: UID,
-        /// Number of decimal places the coin uses.
-        /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
-        /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
-        /// This is metadata for display usage only.
-        decimals: u8,
-        /// Name for the token
-        name: string::String,
-        /// Symbol for the token
-        symbol: ascii::String,
-        /// Description of the token
-        description: string::String,
-        /// URL for the token logo
-        icon_url: Option<Url>
+        display: Display<Coin<T>>
     }
 
     /// Capability allowing the bearer to mint and burn
@@ -53,19 +39,6 @@ module sui::coin {
     struct TreasuryCap<phantom T> has key, store {
         id: UID,
         total_supply: Supply<T>
-    }
-
-    // === Events ===
-
-    /// Emitted when new currency is created through the `create_currency` call.
-    /// Contains currency metadata for off-chain discovery. Type parameter `T`
-    /// matches the one in `Coin<T>`
-    struct CurrencyCreated<phantom T> has copy, drop {
-        /// Number of decimal places the coin uses.
-        /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
-        /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
-        /// This is metadata for display usage only.
-        decimals: u8
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -246,36 +219,44 @@ module sui::coin {
     /// Create a new currency type `T` as and return the `TreasuryCap` for
     /// `T` to the caller. Can only be called with a `one-time-witness`
     /// type, ensuring that there's only one `TreasuryCap` per `T`.
+    ///
+    /// Additionally, create `CoinMetadata` which wraps a `Display` for the
+    /// `Coin<T>`. `CoinMetadata` is guaranteed to be unique due to the OTW
+    /// requirement and inability to create it otherwise.
     public fun create_currency<T: drop>(
         witness: T,
         decimals: u8,
-        symbol: vector<u8>,
-        name: vector<u8>,
-        description: vector<u8>,
-        icon_url: Option<Url>,
+        symbol: String,
+        name: String,
+        description: String,
+        icon_url: Option<String>,
         ctx: &mut TxContext
     ): (TreasuryCap<T>, CoinMetadata<T>) {
         // Make sure there's only one instance of the type T
         assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
-        // Emit Currency metadata as an event.
-        event::emit(CurrencyCreated<T> {
-            decimals
-        });
+        let total_supply = balance::create_supply(witness);
+        let display = display_from_supply(&total_supply, ctx);
+
+        display::add_multiple(&mut display, vector[
+            utf8(b"decimals"),
+            utf8(b"symbol"),
+            utf8(b"name"),
+            utf8(b"description"),
+        ], vector[
+            utf8(sui::hex::encode(vector[decimals])),
+            symbol, name, description
+        ]);
+
+        if (option::is_some(&icon_url)) {
+            display::add(&mut display, utf8(b"icon_url"), option::destroy_some(icon_url));
+        };
+
+        display::update_version(&mut display);
 
         (
-            TreasuryCap {
-                id: object::new(ctx),
-                total_supply: balance::create_supply(witness)
-            },
-            CoinMetadata {
-                id: object::new(ctx),
-                decimals,
-                name: string::utf8(name),
-                symbol: ascii::string(symbol),
-                description: string::utf8(description),
-                icon_url
-            }
+            TreasuryCap { id: object::new(ctx), total_supply },
+            CoinMetadata { id: object::new(ctx), display }
         )
     }
 
@@ -351,66 +332,27 @@ module sui::coin {
         transfer::public_transfer(mint(c, amount, ctx), recipient)
     }
 
-    // === Update coin metadata ===
+    // === Metadata management ===
 
-    /// Update name of the coin in `CoinMetadata`
-    public entry fun update_name<T>(
-        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, name: string::String
-    ) {
-        metadata.name = name;
+    /// Allow reading the `Display` to access the fields in the CoinMetadata.
+    public fun metadata_display<T>(meta: &CoinMetadata<T>): &Display<Coin<T>> {
+        &meta.display
     }
 
-    /// Update the symbol of the coin in `CoinMetadata`
-    public entry fun update_symbol<T>(
-        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, symbol: ascii::String
-    ) {
-        metadata.symbol = symbol;
+    /// Get mutable access to the inner `Display` in `CoinMetadata`.
+    public fun metadata_display_mut<T>(
+        _: &TreasuryCap<T>, meta: &mut CoinMetadata<T>
+    ): &mut Display<Coin<T>> {
+        &mut meta.display
     }
 
-    /// Update the description of the coin in `CoinMetadata`
-    public entry fun update_description<T>(
-        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, description: string::String
-    ) {
-        metadata.description = description;
-    }
-
-    /// Update the url of the coin in `CoinMetadata`
-    public entry fun update_icon_url<T>(
-        _treasury: &TreasuryCap<T>, metadata: &mut CoinMetadata<T>, url: ascii::String
-    ) {
-        metadata.icon_url = option::some(url::new_unsafe(url));
-    }
-
-    // === Get coin metadata fields for on-chain consumption ===
-
-    public fun get_decimals<T>(
-        metadata: &CoinMetadata<T>
-    ): u8 {
-        metadata.decimals
-    }
-
-    public fun get_name<T>(
-        metadata: &CoinMetadata<T>
-    ): string::String {
-        metadata.name
-    }
-
-    public fun get_symbol<T>(
-        metadata: &CoinMetadata<T>
-    ): ascii::String {
-        metadata.symbol
-    }
-
-    public fun get_description<T>(
-        metadata: &CoinMetadata<T>
-    ): string::String {
-        metadata.description
-    }
-
-    public fun get_icon_url<T>(
-        metadata: &CoinMetadata<T>
-    ): Option<Url> {
-        metadata.icon_url
+    /// Create `Display<Coin<T>>` by presenting a `Supply<T>`. There's no guarantee
+    /// that the resulting `Display` will be unique and the function can be called
+    /// multiple times.
+    public fun display_from_supply<T>(
+        _supply: &Supply<T>, ctx: &mut TxContext
+    ): Display<Coin<T>> {
+        display::new_protected<Coin<T>>(ctx)
     }
 
     // === Test-only code ===

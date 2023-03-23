@@ -6,12 +6,12 @@ module sui::coin_tests {
     use std::option;
     use sui::coin::{Self, Coin};
     use sui::pay;
-    use sui::url;
     use sui::test_scenario;
     use sui::transfer;
     use sui::tx_context;
-    use std::string;
-    use std::ascii;
+    use sui::vec_map;
+    use sui::display;
+    use std::string::utf8;
 
     struct COIN_TESTS has drop {}
 
@@ -23,35 +23,32 @@ module sui::coin_tests {
         let test = &mut scenario;
         let ctx = test_scenario::ctx(test);
         let witness = COIN_TESTS{};
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
+        let (treasury, metadata) = coin::create_currency(
+            witness,
+            6,
+            utf8(b"COIN_TESTS"),
+            utf8(b"coin_name"),
+            utf8(b"description"),
+            option::some(utf8(b"icon_url")),
+            ctx
+        );
 
-        let decimals = coin::get_decimals(&metadata);
-        let symbol_bytes = ascii::as_bytes(&coin::get_symbol<COIN_TESTS>(&metadata));
-        let name_bytes = string::bytes(&coin::get_name<COIN_TESTS>(&metadata));
-        let description_bytes = string::bytes(&coin::get_description<COIN_TESTS>(&metadata));
-        let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&coin::get_icon_url<COIN_TESTS>(&metadata))));
+        // mutable borrow of inner `Display` object in the `CoinMetadata`
+        let display_mut = coin::metadata_display_mut(&treasury, &mut metadata);
+        let fields = display::fields_mut(display_mut);
 
-        assert!(decimals == 6, 0);
-        assert!(*symbol_bytes == b"COIN_TESTS", 0);
-        assert!(*name_bytes == b"coin_name", 0);
-        assert!(*description_bytes == b"description", 0);
-        assert!(*icon_url == b"icon_url", 0);
+        // decimals are encoded as `base16` string via `sui::hex::encode`
+        let decimals = vec_map::get(fields, &utf8(b"decimals"));
+        let symbol_bytes = vec_map::get(fields, &utf8(b"symbol"));
+        let name_bytes = vec_map::get(fields, &utf8(b"name"));
+        let description_bytes = vec_map::get(fields, &utf8(b"description"));
+        let icon_url = vec_map::get(fields, &utf8(b"icon_url"));
 
-        // Update
-        coin::update_symbol<COIN_TESTS>(&treasury, &mut metadata, ascii::string(b"NEW_COIN_TESTS"));
-        coin::update_name<COIN_TESTS>(&treasury, &mut metadata, string::utf8(b"new_coin_name"));
-        coin::update_description<COIN_TESTS>(&treasury, &mut metadata, string::utf8(b"new_description"));
-        coin::update_icon_url<COIN_TESTS>(&treasury, &mut metadata, ascii::string(b"new_icon_url"));
-
-        let symbol_bytes = ascii::as_bytes(&coin::get_symbol<COIN_TESTS>(&metadata));
-        let name_bytes = string::bytes(&coin::get_name<COIN_TESTS>(&metadata));
-        let description_bytes = string::bytes(&coin::get_description<COIN_TESTS>(&metadata));
-        let icon_url = ascii::as_bytes(&url::inner_url(option::borrow(&coin::get_icon_url<COIN_TESTS>(&metadata))));
-
-        assert!(*symbol_bytes == b"NEW_COIN_TESTS", 0);
-        assert!(*name_bytes == b"new_coin_name", 0);
-        assert!(*description_bytes == b"new_description", 0);
-        assert!(*icon_url == b"new_icon_url", 0);
+        assert!(*decimals == utf8(b"06"), 0);
+        assert!(*symbol_bytes == utf8(b"COIN_TESTS"), 0);
+        assert!(*name_bytes == utf8(b"coin_name"), 0);
+        assert!(*description_bytes == utf8(b"description"), 0);
+        assert!(*icon_url == utf8(b"icon_url"), 0);
 
         transfer::public_freeze_object(metadata);
         transfer::public_transfer(treasury, tx_context::sender(ctx));
@@ -63,7 +60,15 @@ module sui::coin_tests {
         let scenario = test_scenario::begin(TEST_ADDR);
         let test = &mut scenario;
         let witness = COIN_TESTS{};
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), test_scenario::ctx(test));
+        let (treasury, metadata) = coin::create_currency(
+            witness,
+            6,
+            utf8(b"COIN_TESTS"),
+            utf8(b"coin_name"),
+            utf8(b"description"),
+            option::some(utf8(b"icon_url")),
+            test_scenario::ctx(test)
+        );
 
         let balance = coin::mint_balance<COIN_TESTS>(&mut treasury, 1000);
         let coin = coin::from_balance(balance, test_scenario::ctx(test));

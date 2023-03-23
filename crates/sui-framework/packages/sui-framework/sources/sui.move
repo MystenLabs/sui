@@ -5,6 +5,7 @@
 /// It has 9 decimals, and the smallest unit (10^-9) is called "mist".
 module sui::sui {
     use std::option;
+    use std::string::utf8;
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::transfer;
@@ -36,10 +37,10 @@ module sui::sui {
         let (treasury, metadata) = coin::create_currency(
             SUI {},
             9,
-            b"SUI",
-            b"Sui",
+            utf8(b"SUI"),
+            utf8(b"Sui"),
             // TODO: add appropriate description and logo url
-            b"",
+            utf8(b""),
             option::none(),
             ctx
         );

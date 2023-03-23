@@ -20,8 +20,9 @@ module sui::display {
     use std::vector;
     use std::string::String;
 
-    // Collectible is a special case to avoid storing `Publisher`.
+    // Special cases to avoid storing `Publisher` for the Sui Framework.
     friend sui::collectible;
+    friend sui::coin;
 
     /// For when T does not belong to the package `Publisher`.
     const ENotOwner: u64 = 0;
@@ -179,6 +180,11 @@ module sui::display {
         &d.fields
     }
 
+    /// Read the `fields` field and return a mutable reference.
+    public fun fields_mut<T: key>(d: &mut Display<T>): &mut VecMap<String, String> {
+        &mut d.fields
+    }
+
     // === Private functions ===
 
     /// Internal function to create a new `Display<T>`.
@@ -199,6 +205,14 @@ module sui::display {
     /// Private method for inserting fields without security checks.
     fun add_internal<T: key>(display: &mut Display<T>, name: String, value: String) {
         vec_map::insert(&mut display.fields, name, value)
+    }
+
+    // === Test functions ===
+
+    #[test_only]
+    /// Create an instance of `Display` for `T`. For testing purposes only!
+    public fun create_for_testing<T: key>(ctx: &mut TxContext): Display<T> {
+        create_internal(ctx)
     }
 }
 

@@ -250,22 +250,22 @@ Trying to <code>withdraw</code> more than there is.
 
 
 
-<a name="0x2_transfer_policy_EIllegalRule"></a>
-
-A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
-
-
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0x2_transfer_policy_ENotOwner"></a>
 
 Trying to <code>withdraw</code> or <code>close_and_withdraw</code> with a wrong Cap.
 
 
 <pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x2_transfer_policy_EIllegalRule"></a>
+
+A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+
+
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: u64 = 1;
 </code></pre>
 
 

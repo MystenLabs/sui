@@ -30,6 +30,7 @@ More entry functions might be added in the future depending on the use cases.
 -  [Function `is_authorized`](#0x2_display_is_authorized)
 -  [Function `version`](#0x2_display_version)
 -  [Function `fields`](#0x2_display_fields)
+-  [Function `fields_mut`](#0x2_display_fields_mut)
 -  [Function `create_internal`](#0x2_display_create_internal)
 -  [Function `add_internal`](#0x2_display_add_internal)
 
@@ -532,6 +533,31 @@ Read the <code>fields</code> field.
 
 <pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields">fields</a>&lt;T: key&gt;(d: &<a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): &VecMap&lt;String, String&gt; {
     &d.fields
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_display_fields_mut"></a>
+
+## Function `fields_mut`
+
+Read the <code>fields</code> field and return a mutable reference.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields_mut">fields_mut</a>&lt;T: key&gt;(d: &<b>mut</b> <a href="display.md#0x2_display_Display">display::Display</a>&lt;T&gt;): &<b>mut</b> <a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;<a href="_String">string::String</a>, <a href="_String">string::String</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="display.md#0x2_display_fields_mut">fields_mut</a>&lt;T: key&gt;(d: &<b>mut</b> <a href="display.md#0x2_display_Display">Display</a>&lt;T&gt;): &<b>mut</b> VecMap&lt;String, String&gt; {
+    &<b>mut</b> d.fields
 }
 </code></pre>
 
