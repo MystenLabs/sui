@@ -61,8 +61,11 @@ pub enum ClapCommand {
         #[clap(short, long)]
         end: Option<u64>,
 
-        #[clap(short, long, default_value_t = true)]
+        #[clap(long, default_value_t = true)]
         verify_transaction: bool,
+
+        #[clap(long, default_value_t = true)]
+        verify_objects: bool,
 
         #[clap(flatten)]
         common: CommonOptions,
@@ -125,8 +128,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             start,
             end,
             verify_transaction,
+            verify_objects
         } => (
-            Command::new_get_checkpoints(start, end, verify_transaction),
+            Command::new_get_checkpoints(start, end, verify_transaction, verify_objects),
             common,
         ),
     };
@@ -151,6 +155,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     start_checkpoint,
                     Some(end_checkpoint),
                     data.verify_transaction,
+                    data.verify_objects,
                 )
             })
             .collect()

@@ -8,7 +8,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionResponseOptions,
+    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionResponseOptions, ObjectChange,
 };
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
@@ -17,7 +17,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress, SequenceNumber};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -158,7 +158,7 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
                             if op.verify_transaction {
-                                check_transactions(&self.clients, &t.transactions, cross_validate).await;
+                                check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects).await;
                             }
                             Some(t)
                         },
@@ -211,11 +211,12 @@ pub async fn check_transactions(
     clients: &Arc<RwLock<Vec<SuiClient>>>,
     digests: &[TransactionDigest],
     cross_validate: bool,
+    verify_objects: bool,
 ) {
     let read = clients.read().await;
-    let clients = read.clone();
+    let cloned_clients = read.clone();
 
-    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| async move {
+    let transactions = join_all(cloned_clients.iter().enumerate().map(|(i, client)| async move {
         let start_time = Instant::now();
         let transactions = client
             .read_api()
@@ -254,7 +255,35 @@ pub async fn check_transactions(
             };
 
             cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
+
+            if verify_objects {
+                for response in first {
+                    let object_changes: Vec<ObjectID> = response.object_changes.clone().unwrap().iter().filter_map(get_object_id).collect();
+                    check_objects(
+                        clients,
+                        object_changes.as_slice(),
+                        cross_validate
+                    ).await;
+                }
+            }
         }
+    }
+}
+
+fn get_object_id(object_change: &ObjectChange) -> Option<ObjectID> {
+    match object_change {
+        ObjectChange::Transferred {
+            object_id, version, ..
+        } => Some(*object_id),
+        ObjectChange::Mutated {
+            object_id, version, ..
+        } => Some(*object_id),
+        ObjectChange::Created {
+            object_id, version, ..
+        } => Some(*object_id),
+        // TODO(gegaowp): needs separate checks for packages and modules publishing
+        // TODO(gegaowp): ?? needs separate checks for deleted and wrapped objects
+        _ => None,
     }
 }
 
@@ -278,7 +307,7 @@ pub async fn check_objects(
             .await;
         let elapsed_time = start_time.elapsed();
         debug!(
-            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+            "MultiGetObject Request latency {:.4} for rpc at url {i}",
             elapsed_time.as_secs_f64()
         );
         transactions

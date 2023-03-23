@@ -56,12 +56,14 @@ impl Command {
         start: CheckpointSequenceNumber,
         end: Option<CheckpointSequenceNumber>,
         verify_transaction: bool,
+        verify_objects: bool,
     ) -> Self {
         Self {
             data: CommandData::GetCheckpoints(GetCheckpoints {
                 start,
                 end,
                 verify_transaction,
+                verify_objects
             }),
             ..Default::default()
         }
@@ -102,6 +104,7 @@ pub struct GetCheckpoints {
     /// If None, use `getLatestCheckpointSequenceNumber`
     pub end: Option<CheckpointSequenceNumber>,
     pub verify_transaction: bool,
+    pub verify_objects: bool,
 }
 
 #[derive(Clone)]
