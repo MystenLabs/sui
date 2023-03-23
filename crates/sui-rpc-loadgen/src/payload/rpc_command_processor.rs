@@ -5,6 +5,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
+use sui_types::digests::TransactionDigest;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
@@ -312,6 +313,32 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
             }
         }
         Ok(())
+    }
+}
+
+pub async fn check_transactions(
+    clients: &[SuiClient],
+    digests: &[TransactionDigest]
+) {
+    let transactions = join_all(clients.iter().map(|client| async {
+        client
+            .read_api()
+            .multi_get_transactions_with_options(digests.to_vec(), SuiTransactionResponseOptions::full_content())
+            .await
+    }))
+    .await;
+
+    if transactions.len() == 2 {
+        if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
+            for (i, (a, b)) in t1.iter().zip(t2.iter()).enumerate() {
+                if a != b {
+                    warn!(
+                        "Transaction response mismatch with digest {:?}:\nFN:\n{:?}\nIndexer:\n{:?} ",
+                        digests[i], a, b
+                    );
+                }
+            }
+        }
     }
 }
 
