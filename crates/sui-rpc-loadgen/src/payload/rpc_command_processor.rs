@@ -214,12 +214,45 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
         op: &'a MultiGetTransactions,
         _keypair: &Option<SuiKeyPair>,
     ) -> Result<()> {
+        let clients = self.get_clients().await?;
 
         // if digests provided
         if op.digests.is_some() {
+            let digests = op.digests.unwrap();
+            // grab from either client
+            let transactions = join_all(clients.iter().map(|client| async {
+                client
+                    .read_api()
+                    .multi_get_transactions_with_options(digests, SuiTransactionResponseOptions::full_content())
+                    .await
+            }))
+            .await;
+            // validate?
+            let cross_validate = true;
+            if cross_validate {
+                // let yeet = transactions.iter()
+                // .map(|transaction| transaction.as_ref().map(|responses| responses.iter()))
+                // .collect::<Result<Vec<_>, _>>();
 
+                let are_equal = transactions.iter()
+                .map(|transaction| transaction.as_ref().map(|responses| responses.iter()))
+                .collect::<Result<Vec<_>, _>>()
+                // combine the two response iterators into a single iterator of pairs
+                .map(|mut iter| iter.next().unwrap().zip(iter.next().unwrap()))
+                .map(|pairs| pairs.enumerate().all(|(index, (a, b))| {
+                    if a == b {
+                        true
+                    } else {
+                        warn!(
+                            "Transaction response mismatch with digest {:?}:\nFN:\n{:?}\nIndexer:\n{:?} ",
+                            digests[index], a, b
+                        );
+                        false
+                    }
+                }))
+                .unwrap_or(false); // return false if the Result is an error (i.e., one of the iterators was empty)
+            };
         } else {
-            let clients = self.get_clients().await?;
             let checkpoints = &op.checkpoints;
 
             let end_checkpoints: Vec<CheckpointSequenceNumber> =
