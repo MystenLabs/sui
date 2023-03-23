@@ -19,7 +19,6 @@ export const DisclosureBoxClosed: StoryObj<DisclosureBoxProps> = {
     args: {
         title: 'Expanded disclosure box',
         defaultOpen: true,
-        subTitle: 'Sub title',
-        footer: 'Footer',
+        preview: 'Preview content',
     },
 };

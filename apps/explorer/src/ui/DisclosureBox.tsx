@@ -25,18 +25,16 @@ export interface DisclosureBoxProps
     extends VariantProps<typeof disclosureBoxStyles> {
     defaultOpen?: boolean;
     title: ReactNode;
-    subTitle?: ReactNode;
+    preview?: ReactNode;
     children: ReactNode;
-    footer?: ReactNode;
 }
 
 export function DisclosureBox({
     defaultOpen,
     title,
     children,
-    subTitle,
+    preview,
     variant,
-    footer,
 }: DisclosureBoxProps) {
     return (
         <div className={disclosureBoxStyles({ variant })}>
@@ -49,7 +47,7 @@ export function DisclosureBox({
                         >
                             <div className="flex flex-1 text-body font-semibold text-gray-90">
                                 {title}
-                                {subTitle && !open ? subTitle : null}
+                                {preview && !open ? preview : null}
                             </div>
 
                             <ChevronRight12 className="text-caption text-steel ui-open:rotate-90" />
@@ -57,12 +55,6 @@ export function DisclosureBox({
                         <Disclosure.Panel className="px-5 pb-3.75">
                             {children}
                         </Disclosure.Panel>
-
-                        {footer && open ? (
-                            <Disclosure.Panel className="mx-5 border-t border-gray-45 py-3.75">
-                                {footer}
-                            </Disclosure.Panel>
-                        ) : null}
                     </>
                 )}
             </Disclosure>
