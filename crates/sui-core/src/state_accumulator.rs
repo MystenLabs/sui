@@ -10,7 +10,6 @@ use sui_types::storage::ObjectKey;
 use tracing::debug;
 use typed_store::Map;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
@@ -100,7 +99,7 @@ impl StateAccumulator {
         );
 
         // get all modified_at_versions for the fx
-        let modified_at_version_keys = effects
+        let modified_at_version_keys: Vec<_> = effects
             .iter()
             .flat_map(|fx| {
                 fx.modified_at_versions()
@@ -108,22 +107,21 @@ impl StateAccumulator {
                     .map(|(id, seq_num)| ObjectKey(*id, *seq_num))
                     .collect::<Vec<ObjectKey>>()
             })
-            .collect::<HashSet<ObjectKey>>();
+            .collect();
 
-        // process removals from the set
-        let modified_at_digests = self
+        let modified_at_digests: Vec<_> = self
             .authority_store
-            .perpetual_tables
-            .parent_sync
-            .iter()
-            .filter_map(|(tup, _tx_digest)| {
-                if modified_at_version_keys.contains(&ObjectKey(tup.0, tup.1)) {
-                    Some(tup.2)
-                } else {
-                    None
-                }
+            .multi_get_object_by_key(&modified_at_version_keys)
+            .expect("Failed to get modified_at_versions object from object table")
+            .into_iter()
+            .map(|obj| {
+                obj.expect(
+                    "Object from modified_at_versions effects does not exist in objects table",
+                )
+                .compute_object_reference()
+                .2
             })
-            .collect::<Vec<ObjectDigest>>();
+            .collect();
 
         acc.remove_all(modified_at_digests);
 
