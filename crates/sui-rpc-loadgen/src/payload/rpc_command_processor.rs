@@ -7,7 +7,7 @@ use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
+use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions, SuiObjectDataOptions};
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
@@ -15,7 +15,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{SuiAddress, ObjectID};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -158,6 +158,9 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                             if op.verify_transaction {
                                 check_transactions(&self.clients, &t.transactions, cross_validate).await;
                             }
+                            // if op.verify_object {
+                            //     check_objects(&self.clients, , object_ids, cross_validate)
+                            // }
 
                             Some(t)
                         },
@@ -267,6 +270,74 @@ pub async fn check_transactions(
                     error!(
                         "Transaction response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
                         digests[i], a, b
+                    );
+                }
+            }
+        }
+    }
+}
+
+
+// todo: this and check_transactions can be generic
+pub async fn check_objects(
+    clients: &Arc<RwLock<Vec<SuiClient>>>,
+    object_ids: &[ObjectID],
+    cross_validate: bool,
+) {
+    let read = clients.read().await;
+    let clients = read.clone();
+
+    let objects = join_all(clients.iter().enumerate().map(|(i, client)| async move {
+        let start_time = Instant::now();
+        let transactions = client
+            .read_api()
+            .multi_get_object_with_options(
+                object_ids.to_vec(),
+                SuiObjectDataOptions::full_content(), // todo(Will) support options for this
+            )
+            .await;
+        let elapsed_time = start_time.elapsed();
+        debug!(
+            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+            elapsed_time.as_secs_f64()
+        );
+        transactions
+    }))
+    .await;
+
+    // TODO: support more than 2 transactions
+    if cross_validate && objects.len() == 2 {
+        if let (Some(t1), Some(t2)) = (objects.get(0), objects.get(1)) {
+            let first = match t1 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!("Error unwrapping first vec of objects: {:?} for objectIDs {:?}", err, object_ids);
+                    return;
+                }
+            };
+            let second = match t2 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!("Error unwrapping second vec of objects: {:?} for objectIDs {:?}", err, object_ids);
+                    return;
+                }
+            };
+
+            if first.len() != second.len() {
+                error!(
+                    "Object response lengths do not match: {} vs {}",
+                    first.len(),
+                    second.len()
+                );
+                return; // Return early if the lengths don't match
+            }
+
+            for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
+                // Todo: allow more comparisons
+                if a != b {
+                    error!(
+                        "Object response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
+                        object_ids[i], a, b
                     );
                 }
             }
