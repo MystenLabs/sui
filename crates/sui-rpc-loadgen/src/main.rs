@@ -6,12 +6,12 @@ mod payload;
 
 use anyhow::Result;
 use clap::Parser;
-use sui_types::digests::TransactionDigest;
 use std::error::Error;
 use std::time::Duration;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
+use sui_types::digests::TransactionDigest;
 use tracing::info;
 
 use crate::load_test::LoadTest;
@@ -82,7 +82,7 @@ pub enum ClapCommand {
         #[clap(short, long)]
         end: Option<u64>,
         #[clap(short, long, multiple = true)]
-        digests: Option<Vec<TransactionDigest>>
+        digests: Option<Vec<TransactionDigest>>,
     },
 }
 
@@ -129,9 +129,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ClapCommand::GetCheckpoints { common, start, end } => {
             (Command::new_get_checkpoints(start, end), common)
         }
-        ClapCommand::MultiGetTransactions { common, start, end, digests } => {
-            (Command::new_multi_get_transactions(start, end, digests), common)
-        }
+        ClapCommand::MultiGetTransactions {
+            common,
+            start,
+            end,
+            digests,
+        } => (
+            Command::new_multi_get_transactions(start, end, digests),
+            common,
+        ),
     };
 
     let command = command

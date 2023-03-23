@@ -5,9 +5,9 @@ mod rpc_command_processor;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use sui_types::digests::TransactionDigest;
 use core::default::Default;
 use std::time::Duration;
+use sui_types::digests::TransactionDigest;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
@@ -66,14 +66,13 @@ impl Command {
     pub fn new_multi_get_transactions(
         start: CheckpointSequenceNumber,
         end: Option<CheckpointSequenceNumber>,
-        digests: Option<Vec<TransactionDigest>>) -> Self {
+        digests: Option<Vec<TransactionDigest>>,
+    ) -> Self {
         Self {
             data: CommandData::MultiGetTransactions(MultiGetTransactions {
-                checkpoints: GetCheckpoints {
-                    start,
-                    end
-                },
-                digests}),
+                checkpoints: GetCheckpoints { start, end },
+                digests,
+            }),
             ..Default::default()
         }
     }
@@ -118,7 +117,7 @@ pub struct GetCheckpoints {
 #[derive(Clone)]
 pub struct MultiGetTransactions {
     checkpoints: GetCheckpoints,
-    digests: Option<Vec<TransactionDigest>>
+    digests: Option<Vec<TransactionDigest>>,
 }
 
 #[derive(Clone)]

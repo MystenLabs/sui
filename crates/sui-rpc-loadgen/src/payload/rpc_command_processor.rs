@@ -5,10 +5,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_types::digests::TransactionDigest;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
+use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tracing::log::warn;
@@ -219,33 +219,34 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
 
         if let Some(digests) = &op.digests {
             check_transactions(&self.clients, digests);
-        }
+        } else {
+            let checkpoints = &op.checkpoints;
 
-        // TODO(will) handle digests as input
-        let checkpoints = &op.checkpoints;
+            let end_checkpoints: Vec<CheckpointSequenceNumber> =
+                join_all(clients.iter().map(|client| async {
+                    match checkpoints.end {
+                        Some(e) => e,
+                        None => client
+                            .read_api()
+                            .get_latest_checkpoint_sequence_number()
+                            .await
+                            .expect("get_latest_checkpoint_sequence_number should not fail"),
+                    }
+                }))
+                .await;
 
-        let end_checkpoints: Vec<CheckpointSequenceNumber> =
-            join_all(clients.iter().map(|client| async {
-                match checkpoints.end {
-                    Some(e) => e,
-                    None => client
-                        .read_api()
-                        .get_latest_checkpoint_sequence_number()
-                        .await
-                        .expect("get_latest_checkpoint_sequence_number should not fail"),
-                }
-            }))
-            .await;
+            // The latest `latest_checkpoint` among all rpc servers
+            let max_checkpoint = end_checkpoints
+                .iter()
+                .max()
+                .expect("get_latest_checkpoint_sequence_number should not return empty");
 
-        // The latest `latest_checkpoint` among all rpc servers
-        let max_checkpoint = end_checkpoints
-            .iter()
-            .max()
-            .expect("get_latest_checkpoint_sequence_number should not return empty");
-
-        debug!("GetCheckpoints({}, {:?})", checkpoints.start, max_checkpoint);
-        for seq in checkpoints.start..=*max_checkpoint {
-            let checkpoints = join_all(clients.iter().enumerate().map(|(i, client)| {
+            debug!(
+                "GetCheckpoints({}, {:?})",
+                checkpoints.start, max_checkpoint
+            );
+            for seq in checkpoints.start..=*max_checkpoint {
+                let checkpoints = join_all(clients.iter().enumerate().map(|(i, client)| {
                 let end_checkpoints = end_checkpoints.clone();
                 async move {
 
@@ -286,34 +287,35 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
             }))
             .await;
 
-            // TODO(chris): read `cross_validate` from config
-            let cross_validate = true;
-            if cross_validate {
-                let (valid_checkpoint_idx, valid_checkpoint) = checkpoints
-                    .iter()
-                    .enumerate()
-                    .find_map(|(i, x)| {
-                        if x.is_some() {
-                            Some((i, x.clone().unwrap()))
-                        } else {
-                            None
+                // TODO(chris): read `cross_validate` from config
+                let cross_validate = true;
+                if cross_validate {
+                    let (valid_checkpoint_idx, valid_checkpoint) = checkpoints
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, x)| {
+                            if x.is_some() {
+                                Some((i, x.clone().unwrap()))
+                            } else {
+                                None
+                            }
+                        })
+                        .expect("There should be at least one RPC server returning a checkpoint");
+                    for (i, x) in checkpoints.iter().enumerate() {
+                        if i == valid_checkpoint_idx {
+                            continue;
                         }
-                    })
-                    .expect("There should be at least one RPC server returning a checkpoint");
-                for (i, x) in checkpoints.iter().enumerate() {
-                    if i == valid_checkpoint_idx {
-                        continue;
-                    }
-                    // ignore the None value because it's warned above
-                    let eq = x.is_none() || x.as_ref().unwrap() == &valid_checkpoint;
-                    if !eq {
-                        error!("getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}", x, checkpoints[valid_checkpoint_idx])
+                        // ignore the None value because it's warned above
+                        let eq = x.is_none() || x.as_ref().unwrap() == &valid_checkpoint;
+                        if !eq {
+                            error!("getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}", x, checkpoints[valid_checkpoint_idx])
+                        }
                     }
                 }
-            }
 
-            if seq % 100 == 0 {
-                debug!("Finished processing checkpoint {seq}")
+                if seq % 100 == 0 {
+                    debug!("Finished processing checkpoint {seq}")
+                }
             }
         }
         Ok(())
@@ -322,9 +324,8 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
 
 pub async fn check_transactions(
     clients: &Arc<RwLock<Vec<SuiClient>>>,
-    digests: &[TransactionDigest]
+    digests: &[TransactionDigest],
 ) {
-
     let read = clients.read().await;
     let clients = read.clone();
 
@@ -333,7 +334,10 @@ pub async fn check_transactions(
             let start_time = Instant::now();
             let transactions = client
                 .read_api()
-                .multi_get_transactions_with_options(digests.to_vec(), SuiTransactionResponseOptions::full_content())
+                .multi_get_transactions_with_options(
+                    digests.to_vec(),
+                    SuiTransactionResponseOptions::full_content(),
+                )
                 .await;
             let elapsed_time = start_time.elapsed();
             println!(
@@ -344,7 +348,6 @@ pub async fn check_transactions(
         } // add closing brace here
     }))
     .await;
-
 
     if transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
