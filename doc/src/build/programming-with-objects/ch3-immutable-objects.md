@@ -14,7 +14,7 @@ To convert an object into an immutable object, call the following function in th
 public native fun freeze_object<T: key>(obj: T);
 ```
 
-The makes the specified object immutable. This is a non-reversible operation. You should freeze an object only when you are certain that you don't need to mutate it.
+This call makes the specified object immutable. This is a non-reversible operation. You should freeze an object only when you are certain that you don't need to mutate it.
 
 Add an entry function to the [color_object module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move) to turn an existing (owned) `ColorObject` into an immutable object:
 
@@ -57,9 +57,9 @@ Since immutable objects can never be mutated, there's no data race, even when mu
 
 ### Test immutable object
 
-Previously, you used the `test_scenario::take_from_sender<T>` function to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_from_sender` returns an object by value, which allows you to mutate, delete or transfer it.
+Previously, you used the `test_scenario::take_from_sender<T>` function to take an object from the global storage that's owned by the sender of the transaction in a unit test. And `take_from_sender` returns an object by value, which allows you to mutate, delete, or transfer it.
 
-To take an immutable object, use a new function: `test_scenario::take_immutable<T>`. This is required because you can access immutable objects only through read-only references. The `test_scenario` runtime keeps track of the usage of this immutable object. If the object is not returned via `test_scenario::return_immutable` before the start of the next transaction, the test stops.
+To take an immutable object, use a new function: `test_scenario::take_immutable<T>`. This is required because you can access immutable objects only through read-only references. The `test_scenario` runtime keeps track of the usage of this immutable object. If the compiler does not return the object via `test_scenario::return_immutable` before the start of the next transaction, the test stops.
 
 To see it work in action, (`ColorObjectTests::test_immutable`):
 

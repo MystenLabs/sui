@@ -2,7 +2,7 @@
 title: Chapter 6 - Collections
 ---
 
-This previous chapter, [Dynamic Fields](ch5-dynamic-fields.md), introduced a way to extend existing objects with *dynamic fields*. Note that it's possible to delete an object that still has (potentially non-`drop`) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for *on-chain collection types* which could be holding unboundedly many key-value pairs as dynamic fields.
+The previous chapter, [Dynamic Fields](ch5-dynamic-fields.md), introduced a way to extend existing objects with *dynamic fields*. Note that it's possible to delete an object that still has (potentially non-`drop`) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for *on-chain collection types* which could be holding unboundedly many key-value pairs as dynamic fields.
 
 This chapter describes two such collections -- `Table` and `Bag` -- built using dynamic fields, but with additional support to count the number of entries they contain, and protect against accidental deletion when non-empty.
 

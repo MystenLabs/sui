@@ -2,7 +2,7 @@
 title: Chapter 5 - Dynamic Fields
 ---
 
-Previous chapters described various ways to use object fields to store primitive data and other objects (wrapping), but there are a few limitations to this approach:
+Previous chapters describe various ways to use object fields to store primitive data and other objects (wrapping), but there are a few limitations to this approach:
 
 1. Object's have a finite set of fields keyed by identifiers that are fixed when its module is published (i.e. limited to the fields in the `struct` declaration).
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fees in transactions. In addition, there is an upper bound on object size.
