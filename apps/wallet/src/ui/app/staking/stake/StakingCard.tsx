@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCoinDecimals } from '@mysten/core';
+import { ArrowLeft16 } from '@mysten/icons';
 import {
     getTransactionDigest,
     SUI_TYPE_ARG,
@@ -28,20 +29,18 @@ import {
 } from './utils/transaction';
 import { createValidationSchema } from './utils/validation';
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Collapse } from '_app/shared/collapse';
-import Icon, { SuiIcons } from '_components/icon';
+import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { parseAmount } from '_helpers';
 import { useSigner, useGetCoinBalance } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { trackEvent } from '_src/shared/plausible';
-import { Text } from '_src/ui/app/shared/text';
 
 import type { FormikHelpers } from 'formik';
 
@@ -343,37 +342,25 @@ function StakingCard() {
                                 className="w-full px-0 pb-0 mx-0"
                             >
                                 <Button
-                                    size="large"
-                                    mode="neutral"
-                                    href="/stake"
+                                    size="tall"
+                                    variant="secondary"
+                                    to="/stake"
                                     disabled={isSubmitting}
-                                    className="!text-steel-darker w-1/2"
-                                >
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className="text-body text-gray-65 font-normal"
-                                    />
-                                    Back
-                                </Button>
+                                    before={<ArrowLeft16 />}
+                                    text="Back"
+                                />
                                 <Button
-                                    size="large"
-                                    mode="primary"
+                                    size="tall"
+                                    variant="primary"
                                     onClick={submitForm}
-                                    className="w-1/2"
                                     disabled={
                                         !isValid ||
                                         isSubmitting ||
                                         (unstake && !delegationId)
                                     }
-                                >
-                                    {isSubmitting ? (
-                                        <LoadingIndicator color="inherit" />
-                                    ) : unstake ? (
-                                        'Unstake Now'
-                                    ) : (
-                                        'Stake Now'
-                                    )}
-                                </Button>
+                                    loading={isSubmitting}
+                                    text={unstake ? 'Unstake Now' : 'Stake Now'}
+                                />
                             </Menu>
                         </BottomMenuLayout>
                     )}

@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowLeft16 } from '@mysten/icons';
 import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '_app/hooks/useActiveAddress';
-import Button from '_app/shared/button';
+import { Button } from '_app/shared/ButtonUI';
 import { Collapse } from '_app/shared/collapse';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -56,7 +57,6 @@ const FILTER_PROPERTIES = ['id', 'url', 'name'];
 
 function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const nftId = searchParams.get('objectId');
     const accountAddress = useActiveAddress();
 
@@ -174,24 +174,19 @@ function NFTDetailsPage() {
                             ) : null}
                             <div className="flex-1 flex items-end mb-3">
                                 <Button
-                                    mode="primary"
-                                    className="flex-1"
+                                    variant="primary"
                                     disabled={!isTransferable}
+                                    to={`/nft-transfer/${nftId}`}
                                     title={
                                         isTransferable
                                             ? undefined
                                             : "Unable to send. NFT doesn't have public transfer method"
                                     }
-                                    onClick={() => {
-                                        navigate(`/nft-transfer/${nftId}`);
-                                    }}
-                                >
-                                    Send NFT
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className="rotate-180 text-xs"
-                                    />
-                                </Button>
+                                    text="Send NFT"
+                                    after={
+                                        <ArrowLeft16 className="rotate-180 text-xs" />
+                                    }
+                                />
                             </div>
                         </div>
                     </>

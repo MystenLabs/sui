@@ -3,6 +3,7 @@
 
 import { useFeature } from '@growthbook/growthbook-react';
 import { calculateAPY } from '@mysten/core';
+import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import { useMemo } from 'react';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
@@ -11,14 +12,13 @@ import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { useSystemState } from '../useSystemState';
+import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import { Card } from '_app/shared/card';
 import { CardItem } from '_app/shared/card/CardItem';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
 import Alert from '_components/alert';
-import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { FEATURES } from '_src/shared/experimentation/features';
 
@@ -196,50 +196,36 @@ export function DelegationDetailCard({
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
                             <Button
-                                size="large"
-                                mode="outline"
-                                href={stakeByValidatorAddress}
-                                className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
+                                size="tall"
+                                variant="outline"
+                                to={stakeByValidatorAddress}
+                                before={<StakeAdd16 />}
+                                text="Stake SUI"
                                 disabled={!stakingEnabled}
-                            >
-                                <Icon
-                                    icon={SuiIcons.Add}
-                                    className="font-normal"
-                                />
-                                Stake SUI
-                            </Button>
+                            />
+
                             {Boolean(totalStake) && delegationId && (
                                 <Button
-                                    size="large"
-                                    mode="outline"
-                                    href={
+                                    size="tall"
+                                    variant="outline"
+                                    to={
                                         stakeByValidatorAddress +
                                         '&unstake=true'
                                     }
-                                    className="border-bg-steel-dark border-solid w-full hover:border-bg-steel-darker"
-                                >
-                                    <Icon
-                                        icon={SuiIcons.Remove}
-                                        className="text-heading6 font-normal"
-                                    />
-                                    Unstake SUI
-                                </Button>
+                                    text="Unstake SUI"
+                                    before={<StakeRemove16 />}
+                                />
                             )}
                         </div>
                     </div>
                 </Content>
                 <Button
-                    size="large"
-                    mode="neutral"
-                    href="/stake"
-                    className="!text-steel-darker"
-                >
-                    <Icon
-                        icon={SuiIcons.ArrowLeft}
-                        className="text-body text-gray-60 font-normal"
-                    />
-                    Back
-                </Button>
+                    size="tall"
+                    variant="secondary"
+                    to="/stake"
+                    before={<ArrowLeft16 />}
+                    text="Back"
+                />
             </BottomMenuLayout>
         </div>
     );
