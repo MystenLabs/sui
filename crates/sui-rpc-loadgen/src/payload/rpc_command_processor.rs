@@ -320,13 +320,23 @@ pub async fn check_transactions(
     clients: &[SuiClient],
     digests: &[TransactionDigest]
 ) {
-    let transactions = join_all(clients.iter().map(|client| async {
-        client
-            .read_api()
-            .multi_get_transactions_with_options(digests.to_vec(), SuiTransactionResponseOptions::full_content())
-            .await
+    let transactions = join_all(clients.iter().map(|client| {
+        async move {
+            let start_time = Instant::now();
+            let transactions = client
+                .read_api()
+                .multi_get_transactions_with_options(digests.to_vec(), SuiTransactionResponseOptions::full_content())
+                .await;
+            let elapsed_time = start_time.elapsed();
+            println!(
+                "MultiGetTransactions Request latency {:.4}",
+                elapsed_time.as_secs_f64()
+            );
+            transactions
+        } // add closing brace here
     }))
     .await;
+
 
     if transactions.len() == 2 {
         if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
