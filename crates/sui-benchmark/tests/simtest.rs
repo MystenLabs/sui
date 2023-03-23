@@ -235,7 +235,7 @@ mod test {
         );
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin);
-        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_max_version();
+        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_min_version();
         let system_state_observer = {
             let mut system_state_observer =
                 SystemStateObserver::new(proxy.clone(), protocol_config);
