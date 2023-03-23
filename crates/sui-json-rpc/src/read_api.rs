@@ -26,12 +26,12 @@ use tracing::debug;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
-    ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, EventFilter,
+    MoveFunctionArgType, ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
     SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiTransaction, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage, EventFilter,
+    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{
@@ -930,15 +930,19 @@ async fn get_display_object_by_type(
 ) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
     let mut events = fullnode_api
         .state
-        .query_events(EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)), None, 1, true)
+        .query_events(
+            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+            None,
+            1,
+            true,
+        )
         .await?;
 
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
     if let Some(event) = events.pop() {
-        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..]).map_err(|e| {
-            anyhow!("Failed to deserialize 'VersionUpdatedEvent': {e}")
-        })?;
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])
+            .map_err(|e| anyhow!("Failed to deserialize 'VersionUpdatedEvent': {e}"))?;
 
         Ok(Some(display))
     } else {
