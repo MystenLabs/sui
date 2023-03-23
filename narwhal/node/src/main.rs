@@ -22,7 +22,7 @@ use node::{
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
 };
 use prometheus::Registry;
-use std::{sync::Arc};
+use std::sync::Arc;
 use storage::NodeStorage;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
