@@ -17,6 +17,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Authority {
     /// The id under which we identify this authority across Narwhal
+    #[serde(skip)]
     id: AuthorityIdentifier,
     /// The authority's main PublicKey which is used to verify the content they sign.
     protocol_key: PublicKey,
@@ -30,6 +31,7 @@ pub struct Authority {
     network_key: NetworkPublicKey,
     /// There are secondary indexes that should be initialised before we are ready to use the
     /// authority - this bool protect us for premature use.
+    #[serde(skip)]
     initialised: bool,
 }
 
@@ -98,6 +100,7 @@ pub struct Committee {
     /// The authorities of epoch.
     authorities: BTreeMap<PublicKey, Authority>,
     /// Keeps and index of the Authorities by their respective identifier
+    #[serde(skip)]
     authorities_by_id: BTreeMap<AuthorityIdentifier, Authority>,
     /// The epoch number of this committee
     epoch: Epoch,

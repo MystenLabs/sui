@@ -143,7 +143,7 @@ async fn main() -> Result<(), eyre::Report> {
             let worker_keypair = read_network_keypair_from_file(worker_key_file)
                 .expect("Failed to load the node's worker keypair");
 
-            let committee_file = matches.value_of("committee").unwrap();
+            let committee_file = sub_matches.value_of("committee").unwrap();
             let mut committee = Committee::import(committee_file)
                 .context("Failed to load the committee information")?;
             committee.load();
