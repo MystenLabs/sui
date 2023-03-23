@@ -27,7 +27,7 @@ pub struct RequestBatchResponse {
     pub batch: Option<Batch>,
 }
 
-/// Used by primary to bulk request batches.
+/// Used by primary to bulk request batches from workers local store.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestBatchesRequest {
     pub batch_digests: Vec<BatchDigest>,

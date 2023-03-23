@@ -233,16 +233,27 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             batches: Vec::with_capacity(num_certs),
         };
 
-        let mut workers_for_certificates: HashSet<NetworkPublicKey> = HashSet::new();
-        let mut batch_digests: HashMap<WorkerId, HashSet<BatchDigest>> = HashMap::new();
+        let mut batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::new();
 
-        let mut num_batches = 0;
         for cert in &sub_dag.certificates {
             for (digest, (worker_id, _)) in cert.header.payload.iter() {
                 let workers = self.network.workers_for_certificate(cert, worker_id);
-                workers_for_certificates.extend(workers);
-                batch_digests.entry(*worker_id).or_default().insert(*digest);
-                num_batches += 1;
+                batch_digests_and_workers
+                    .entry(*worker_id)
+                    .and_modify(|(batch_set, worker_set)| {
+                        worker_set.extend(workers.clone());
+                        batch_set.insert(*digest);
+                    })
+                    .or_insert_with(|| {
+                        let mut batch_set = HashSet::new();
+                        let mut worker_set = HashSet::new();
+                        worker_set.extend(workers);
+                        batch_set.insert(*digest);
+                        (batch_set, worker_set)
+                    });
             }
         }
 
@@ -254,17 +265,14 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             .committed_subdag_batch_count
             .observe(num_batches as f64);
         let fetched_batches = self
-            .fetch_batches_from_worker(
-                batch_digests,
-                workers_for_certificates.into_iter().collect(),
-            )
+            .fetch_batches_from_worker(batch_digests_and_workers)
             .await;
         drop(fetched_batches_timer);
 
         // Map all fetched batches to their respective certificates and submit as
         // consensus output
         for cert in &sub_dag.certificates {
-            let mut output_batches = Vec::with_capacity(num_batches);
+            let mut output_batches = Vec::with_capacity(cert.header.payload.len());
             let output_cert = cert.clone();
 
             self.metrics
@@ -279,7 +287,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 self.metrics.subscriber_processed_batches.inc();
                 let batch = fetched_batches
                     .get(digest)
-                    .expect("[Protocol violation] Batch not found in fetched batches from certificate authors");
+                    .expect("[Protocol violation] Batch not found in fetched batches from workers of certificate signers");
 
                 debug!(
                     "Adding fetched batch {digest} from certificate {} to consensus output",
@@ -300,12 +308,14 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
     /// requests to remote worker if not found locally
     async fn fetch_batches_from_worker(
         &self,
-        batch_digests: HashMap<WorkerId, HashSet<BatchDigest>>,
-        workers: Vec<NetworkPublicKey>,
+        batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        >,
     ) -> HashMap<BatchDigest, Batch> {
         let mut fetched_batches = HashMap::new();
 
-        for (worker_id, digests) in batch_digests {
+        for (worker_id, (digests, workers)) in batch_digests_and_workers {
             debug!(
                 "Attempting to fetch {} digests from {} worker_{worker_id}'s",
                 digests.len(),
@@ -334,7 +344,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             }
 
             if remaining_digests.is_empty() {
-                return fetched_batches;
+                continue;
             }
 
             let _timer = self.metrics.subscriber_remote_fetch_latency.start_timer();
@@ -365,12 +375,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 }
 
                 if remaining_digests.is_empty() {
-                    return fetched_batches;
+                    break;
                 }
             }
-
-            // Should never reach here, as we should keep looping until we have all batches remotely or locally.
-            error!("Failed to fetch all required batches from workers. Remaining batches: {remaining_digests:?}");
         }
         fetched_batches
     }
@@ -686,15 +693,21 @@ mod tests {
 
     #[tokio::test]
     pub async fn test_fetcher() {
-        let mut network = TestSubscriberNetwork::new();
+        let mut network = TestSubscriberNetwork::new(1);
         let batch1 = Batch::new(vec![vec![1]]);
         let batch2 = Batch::new(vec![vec![2]]);
-        let bulk_batches: HashMap<WorkerId, HashSet<BatchDigest>> = HashMap::from_iter(vec![(
+        let batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::from_iter(vec![(
             0,
-            HashSet::from_iter(vec![batch1.digest(), batch2.digest()]),
+            (
+                HashSet::from_iter(vec![batch1.digest(), batch2.digest()]),
+                HashSet::from_iter(test_pks(&[1, 2])),
+            ),
         )]);
-        network.put(&[1, 2], batch1.clone());
-        network.put(&[2, 3], batch2.clone());
+        network.put(0, &[1, 2], batch1.clone());
+        network.put(0, &[2, 3], batch2.clone());
         let fetcher = Fetcher {
             network,
             metrics: Arc::new(ExecutorMetrics::default()),
@@ -704,7 +717,49 @@ mod tests {
             (batch2.digest(), batch2.clone()),
         ]);
         let fetched_batches = fetcher
-            .fetch_batches_from_worker(bulk_batches, test_pks(&[1, 2]))
+            .fetch_batches_from_worker(batch_digests_and_workers)
+            .await;
+        assert_eq!(fetched_batches, expected_batches);
+    }
+
+    #[tokio::test]
+    pub async fn test_fetcher_multi_worker() {
+        let mut network = TestSubscriberNetwork::new(2);
+        let batch1 = Batch::new(vec![vec![1]]);
+        let batch2 = Batch::new(vec![vec![2]]);
+        let batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::from_iter(vec![
+            (
+                0,
+                (
+                    HashSet::from_iter(vec![batch2.digest()]),
+                    HashSet::from_iter(test_pks(&[3, 4])),
+                ),
+            ),
+            (
+                1,
+                (
+                    HashSet::from_iter(vec![batch1.digest()]),
+                    HashSet::from_iter(test_pks(&[1, 2])),
+                ),
+            ),
+        ]);
+        // one batch available locally on worker 1
+        network.put(1, &[1, 2, 3], batch1.clone());
+        // othe batch available remotely on worker 0
+        network.put(0, &[4, 5], batch2.clone());
+        let fetcher = Fetcher {
+            network,
+            metrics: Arc::new(ExecutorMetrics::default()),
+        };
+        let expected_batches = HashMap::from_iter(vec![
+            (batch1.digest(), batch1.clone()),
+            (batch2.digest(), batch2.clone()),
+        ]);
+        let fetched_batches = fetcher
+            .fetch_batches_from_worker(batch_digests_and_workers)
             .await;
         assert_eq!(fetched_batches, expected_batches);
     }
@@ -713,17 +768,23 @@ mod tests {
     pub async fn test_fetcher_locally_with_remaining() {
         // Limit is set to two batches in test request_batches(). Request 3 batches
         // and ensure another request is sent to get the remaining batches.
-        let mut network = TestSubscriberNetwork::new();
+        let mut network = TestSubscriberNetwork::new(1);
         let batch1 = Batch::new(vec![vec![1]]);
         let batch2 = Batch::new(vec![vec![2]]);
         let batch3 = Batch::new(vec![vec![3]]);
-        let batches_to_fetch: HashMap<WorkerId, HashSet<BatchDigest>> = HashMap::from_iter(vec![(
+        let batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::from_iter(vec![(
             0,
-            HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
+            (
+                HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
+                HashSet::from_iter(test_pks(&[1, 2, 3])),
+            ),
         )]);
-        network.put(&[0, 1, 2], batch1.clone());
-        network.put(&[0, 2, 3], batch2.clone());
-        network.put(&[0, 3, 4], batch3.clone());
+        network.put(0, &[0, 1, 2], batch1.clone());
+        network.put(0, &[0, 2, 3], batch2.clone());
+        network.put(0, &[0, 3, 4], batch3.clone());
         let fetcher = Fetcher {
             network,
             metrics: Arc::new(ExecutorMetrics::default()),
@@ -734,7 +795,7 @@ mod tests {
             (batch3.digest(), batch3.clone()),
         ]);
         let fetched_batches = fetcher
-            .fetch_batches_from_worker(batches_to_fetch, test_pks(&[1, 2, 3]))
+            .fetch_batches_from_worker(batch_digests_and_workers)
             .await;
         assert_eq!(fetched_batches, expected_batches);
     }
@@ -743,17 +804,23 @@ mod tests {
     pub async fn test_fetcher_remote_with_remaining() {
         // Limit is set to two batches in test request_batches(). Request 3 batches
         // and ensure another request is sent to get the remaining batches.
-        let mut network = TestSubscriberNetwork::new();
+        let mut network = TestSubscriberNetwork::new(1);
         let batch1 = Batch::new(vec![vec![1]]);
         let batch2 = Batch::new(vec![vec![2]]);
         let batch3 = Batch::new(vec![vec![3]]);
-        let batches_to_fetch: HashMap<WorkerId, HashSet<BatchDigest>> = HashMap::from_iter(vec![(
+        let batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::from_iter(vec![(
             0,
-            HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
+            (
+                HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
+                HashSet::from_iter(test_pks(&[2, 3, 4])),
+            ),
         )]);
-        network.put(&[3, 4], batch1.clone());
-        network.put(&[2, 3], batch2.clone());
-        network.put(&[2, 3, 4], batch3.clone());
+        network.put(0, &[3, 4], batch1.clone());
+        network.put(0, &[2, 3], batch2.clone());
+        network.put(0, &[2, 3, 4], batch3.clone());
         let fetcher = Fetcher {
             network,
             metrics: Arc::new(ExecutorMetrics::default()),
@@ -764,24 +831,30 @@ mod tests {
             (batch3.digest(), batch3.clone()),
         ]);
         let fetched_batches = fetcher
-            .fetch_batches_from_worker(batches_to_fetch, test_pks(&[2, 3, 4]))
+            .fetch_batches_from_worker(batch_digests_and_workers)
             .await;
         assert_eq!(fetched_batches, expected_batches);
     }
 
     #[tokio::test]
     pub async fn test_fetcher_local_and_remote() {
-        let mut network = TestSubscriberNetwork::new();
+        let mut network = TestSubscriberNetwork::new(1);
         let batch1 = Batch::new(vec![vec![1]]);
         let batch2 = Batch::new(vec![vec![2]]);
         let batch3 = Batch::new(vec![vec![3]]);
-        let batches_to_fetch: HashMap<WorkerId, HashSet<BatchDigest>> = HashMap::from_iter(vec![(
+        let batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::from_iter(vec![(
             0,
-            HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
+            (
+                HashSet::from_iter(vec![batch1.digest(), batch2.digest(), batch3.digest()]),
+                HashSet::from_iter(test_pks(&[1, 2, 3, 4])),
+            ),
         )]);
-        network.put(&[0, 1, 2, 3], batch1.clone());
-        network.put(&[2, 3, 4], batch2.clone());
-        network.put(&[1, 4], batch3.clone());
+        network.put(0, &[0, 1, 2, 3], batch1.clone());
+        network.put(0, &[2, 3, 4], batch2.clone());
+        network.put(0, &[1, 4], batch3.clone());
         let fetcher = Fetcher {
             network,
             metrics: Arc::new(ExecutorMetrics::default()),
@@ -792,7 +865,7 @@ mod tests {
             (batch3.digest(), batch3.clone()),
         ]);
         let fetched_batches = fetcher
-            .fetch_batches_from_worker(batches_to_fetch, test_pks(&[1, 2, 3, 4]))
+            .fetch_batches_from_worker(batch_digests_and_workers)
             .await;
         assert_eq!(fetched_batches, expected_batches);
     }
@@ -800,17 +873,17 @@ mod tests {
     #[tokio::test]
     pub async fn test_fetcher_max_digest_limit() {
         telemetry_subscribers::init_for_testing();
-        let mut network = TestSubscriberNetwork::new();
+        let mut network = TestSubscriberNetwork::new(1);
         let max_digests_per_request = 10;
         let mut expected_batches = Vec::new();
         for i in 0..max_digests_per_request {
             let batch = Batch::new(vec![vec![i]]);
-            network.put(&[0, 1, 2, 3], batch.clone());
+            network.put(0, &[0, 1, 2, 3], batch.clone());
             expected_batches.push(batch);
         }
         // only one batch not available locally
         let batch = Batch::new(vec![vec![11]]);
-        network.put(&[1, 2, 3], batch.clone());
+        network.put(0, &[1, 2, 3], batch.clone());
 
         expected_batches.push(batch);
 
@@ -819,55 +892,91 @@ mod tests {
                 .iter()
                 .map(|batch| (batch.digest(), batch.clone())),
         );
-        let batches_to_fetch: HashMap<WorkerId, HashSet<BatchDigest>> = HashMap::from_iter(vec![(
+        let batch_digests_and_workers: HashMap<
+            WorkerId,
+            (HashSet<BatchDigest>, HashSet<NetworkPublicKey>),
+        > = HashMap::from_iter(vec![(
             0,
-            HashSet::from_iter(expected_batches.clone().into_keys()),
+            (
+                HashSet::from_iter(expected_batches.clone().into_keys()),
+                HashSet::from_iter(test_pks(&[1, 2, 3])),
+            ),
         )]);
         let fetcher = Fetcher {
             network,
             metrics: Arc::new(ExecutorMetrics::default()),
         };
         let fetched_batches = fetcher
-            .fetch_batches_from_worker(batches_to_fetch, test_pks(&[1, 2, 3]))
+            .fetch_batches_from_worker(batch_digests_and_workers)
             .await;
         assert_eq!(fetched_batches, expected_batches);
     }
 
     struct TestSubscriberNetwork {
-        data: HashMap<BatchDigest, HashMap<NetworkPublicKey, Batch>>,
-        my: NetworkPublicKey,
+        data: HashMap<WorkerId, HashMap<BatchDigest, HashMap<NetworkPublicKey, Batch>>>,
+        worker_cache: HashMap<NetworkPublicKey, WorkerId>,
+        my: HashMap<WorkerId, NetworkPublicKey>,
     }
 
     impl TestSubscriberNetwork {
-        pub fn new() -> Self {
-            let my = test_pk(0);
+        pub fn new(workers: u8) -> Self {
+            let mut my = HashMap::new();
+            let mut worker_cache = HashMap::new();
+            for i in 0..workers {
+                let pk = test_pk(i);
+                // Not ideal but keys 0..workers are reserved for local worker keys.
+                my.insert(i as u32, pk.clone());
+                worker_cache.insert(pk, i as u32);
+            }
             let data = Default::default();
-            Self { data, my }
+            Self {
+                data,
+                worker_cache,
+                my,
+            }
         }
 
-        pub fn put(&mut self, keys: &[u8], batch: Batch) {
+        pub fn put(&mut self, worker_id: WorkerId, keys: &[u8], batch: Batch) {
             let digest = batch.digest();
-            let entry = self.data.entry(digest).or_default();
+            let entry = self
+                .data
+                .entry(worker_id)
+                .or_default()
+                .entry(digest)
+                .or_default();
             for key in keys {
                 let key = test_pk(*key);
-                entry.insert(key, batch.clone());
+                entry.insert(key.clone(), batch.clone());
+                if let Some(existing_worker_id) = self.worker_cache.insert(key, worker_id) {
+                    assert!(
+                        existing_worker_id == worker_id,
+                        "Worker key should be unique across worker ids"
+                    );
+                }
             }
         }
     }
 
     #[async_trait]
     impl SubscriberNetwork for TestSubscriberNetwork {
-        fn my_worker(&self, _worker_id: &WorkerId) -> NetworkPublicKey {
-            self.my.clone()
+        fn my_worker(&self, worker_id: &WorkerId) -> NetworkPublicKey {
+            self.my.get(worker_id).expect("invalid worker id").clone()
         }
 
         fn workers_for_certificate(
             &self,
             certificate: &Certificate,
-            _worker_id: &WorkerId,
+            worker_id: &WorkerId,
         ) -> Vec<NetworkPublicKey> {
             let digest = certificate.header.payload.keys().next().unwrap();
-            self.data.get(digest).unwrap().keys().cloned().collect()
+            self.data
+                .get(worker_id)
+                .unwrap()
+                .get(digest)
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect()
         }
 
         async fn request_batches(
@@ -885,9 +994,17 @@ mod tests {
             let mut remaining_batch_digests = digests_to_fetch
                 .drain(min(max_digests_limit, digests_to_fetch.len())..)
                 .collect::<Vec<_>>();
+            let worker_id = self.worker_cache.get(&worker).unwrap();
 
             for digest in digests_to_fetch {
-                if let Some(batch) = self.data.get(&digest).unwrap().get(&worker) {
+                if let Some(batch) = self
+                    .data
+                    .get(worker_id)
+                    .unwrap()
+                    .get(&digest)
+                    .unwrap()
+                    .get(&worker)
+                {
                     if batches.len() < max_response_size {
                         batches.push(batch.clone());
                     } else {
