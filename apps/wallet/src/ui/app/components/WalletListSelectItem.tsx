@@ -8,6 +8,11 @@ import { useEffect, useRef } from 'react';
 
 import { Text } from '../shared/text';
 
+export enum SELECTION_MODE {
+    DISCONNECT = 'disconnect',
+    SELECT = 'select',
+}
+
 const styles = cva(
     'transition flex flex-row flex-nowrap items-center gap-3 py-2 cursor-pointer',
     {
@@ -77,12 +82,12 @@ export function WalletListSelectItem({
         };
     }, [isNew]);
 
-    const disconnectModeActive = mode === 'disconnect';
-    const selectModeActive = mode === 'select';
+    const isActiveModeDisconnect = mode === SELECTION_MODE.DISCONNECT;
+    const isActiveModeSelect = mode === SELECTION_MODE.SELECT;
 
     return (
         <div ref={elementRef} className={styles({ selected, mode, disabled })}>
-            {selectModeActive ? (
+            {isActiveModeSelect ? (
                 <CheckFill16
                     className={cx(
                         selected ? 'text-success' : 'text-gray-50',
@@ -90,7 +95,7 @@ export function WalletListSelectItem({
                     )}
                 />
             ) : null}
-            {disconnectModeActive && selected ? (
+            {isActiveModeDisconnect && selected ? (
                 <XFill16 className="text-issue-dark text-base font-bold" />
             ) : null}
             <Text
@@ -98,21 +103,21 @@ export function WalletListSelectItem({
                 variant="body"
                 weight="semibold"
                 color={
-                    selected && disconnectModeActive
+                    selected && isActiveModeDisconnect
                         ? 'issue-dark'
                         : 'steel-darker'
                 }
             >
                 {formatAddress(address)}
             </Text>
-            {disconnectModeActive && !selected ? (
+            {isActiveModeDisconnect && !selected ? (
                 <div className="flex flex-1 justify-end text-issue-dark">
                     <Text variant="subtitle" weight="normal">
                         Disconnect
                     </Text>
                 </div>
             ) : null}
-            {selectModeActive && isNew ? (
+            {isActiveModeSelect && isNew ? (
                 <div className="flex-1 flex justify-end">
                     <Text variant="subtitleSmall" color="steel">
                         NEW
