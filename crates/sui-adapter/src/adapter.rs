@@ -62,8 +62,12 @@ pub fn default_verifier_config(
         max_per_fun_meter_units,
         max_per_mod_meter_units,
     ) = if is_metered {
-        // TODO: change these to pull from protocol config
-        (None, None, Some(6_000_000), Some(6_000_000))
+        (
+            Some(protocol_config.max_back_edges_per_function() as usize),
+            Some(protocol_config.max_back_edges_per_module() as usize),
+            Some(protocol_config.max_verifier_meter_ticks_per_function() as u128),
+            Some(protocol_config.max_meter_ticks_per_module() as u128),
+        )
     } else {
         (None, None, None, None)
     };

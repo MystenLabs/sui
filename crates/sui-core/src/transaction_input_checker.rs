@@ -393,10 +393,14 @@ pub fn check_non_system_packages_to_be_published(
     transaction: &TransactionData,
     protocol_config: &ProtocolConfig,
 ) -> UserInputResult<()> {
-    if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
-        pt.non_system_packages_to_be_published()
-            .try_for_each(|q| run_metered_bytecode_verifier(q, protocol_config))
-            .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() })?;
+    // Only meter non-system TXes
+    if !transaction.is_system_tx() {
+        if let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() {
+            pt.non_system_packages_to_be_published()
+                .try_for_each(|q| run_metered_bytecode_verifier(q, protocol_config))
+                .map_err(|e| UserInputError::PackageVerificationTimedout { err: e.to_string() })?;
+        }
     }
+
     Ok(())
 }
