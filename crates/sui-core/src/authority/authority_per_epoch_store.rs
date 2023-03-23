@@ -767,24 +767,6 @@ impl AuthorityPerEpochStore {
                 .map(SharedInputObject::into_id_and_version)
                 .collect();
 
-            let mut versions_to_write = Vec::new();
-            for id in &uninitialized_objects {
-                // Note: we don't actually need to read from the transaction here, as no writer
-                // can update parent_sync_store until after get_or_init_next_object_versions
-                // completes.
-                versions_to_write.push(
-                    match parent_sync_store.get_latest_parent_entry_ref(*id)? {
-                        Some(objref) => (*id, objref.1),
-                        None => (
-                            *id,
-                            *initial_versions
-                                .get(id)
-                                .expect("object cannot be missing from shared_input_objects"),
-                        ),
-                    },
-                );
-            }
-
             let versions_to_write = uninitialized_objects.iter().map(|id| {
                 // Note: we don't actually need to read from the transaction here, as no writer
                 // can update parent_sync_store until after get_or_init_next_object_versions

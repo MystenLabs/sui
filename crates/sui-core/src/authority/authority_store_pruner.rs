@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store_types::{ObjectContentDigest, StoreData};
+use crate::authority::authority_store_types::{ObjectContentDigest, StoreData, StoreObject};
 use crate::checkpoints::CheckpointStore;
 use mysten_metrics::monitored_scope;
 use std::cmp::{max, min};
@@ -54,11 +54,13 @@ impl AuthorityStorePruner {
         for object in perpetual_db
             .objects
             .multi_get(object_keys_to_prune.iter())?
+            .into_iter()
+            .flatten()
         {
-            if let Some(StoreData::IndirectObject(indirect_object)) =
-                object.map(|o| o.into_inner().data)
-            {
-                *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+            if let StoreObject::Value(obj) = object.into_inner() {
+                if let StoreData::IndirectObject(indirect_object) = obj.data {
+                    *indirect_objects.entry(indirect_object.digest).or_default() -= 1;
+                }
             }
         }
 
@@ -255,7 +257,8 @@ mod tests {
     use crate::authority::authority_store_pruner::DeletionMethod;
     use crate::authority::authority_store_tables::AuthorityPerpetualTables;
     use crate::authority::authority_store_types::{
-        get_store_object_pair, ObjectContentDigest, StoreData, StoreObjectPair, StoreObjectWrapper,
+        get_store_object_pair, ObjectContentDigest, StoreData, StoreObject, StoreObjectPair,
+        StoreObjectWrapper,
     };
     #[cfg(not(target_env = "msvc"))]
     use pprof::Symbol;
@@ -378,11 +381,13 @@ mod tests {
                     &db.objects,
                     [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
                 )?;
-                if let StoreData::IndirectObject(metadata) = obj.into_inner().data {
-                    batch = batch.merge_batch(
-                        &db.indirect_move_objects,
-                        [(metadata.digest, indirect_obj.unwrap())],
-                    )?;
+                if let StoreObject::Value(o) = obj.into_inner() {
+                    if let StoreData::IndirectObject(metadata) = o.data {
+                        batch = batch.merge_batch(
+                            &db.indirect_move_objects,
+                            [(metadata.digest, indirect_obj.unwrap())],
+                        )?;
+                    }
                 }
             }
         }
