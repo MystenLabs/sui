@@ -76,9 +76,13 @@ export function WalletListSelectItem({
             clearTimeout(timeout);
         };
     }, [isNew]);
+
+    const disconnectModeActive = mode === 'disconnect';
+    const selectModeActive = mode === 'select';
+
     return (
         <div ref={elementRef} className={styles({ selected, mode, disabled })}>
-            {mode === 'select' ? (
+            {selectModeActive ? (
                 <CheckFill16
                     className={cx(
                         selected ? 'text-success' : 'text-gray-50',
@@ -86,7 +90,7 @@ export function WalletListSelectItem({
                     )}
                 />
             ) : null}
-            {mode === 'disconnect' && selected ? (
+            {disconnectModeActive && selected ? (
                 <XFill16 className="text-issue-dark text-base font-bold" />
             ) : null}
             <Text
@@ -94,21 +98,21 @@ export function WalletListSelectItem({
                 variant="body"
                 weight="semibold"
                 color={
-                    selected && mode === 'disconnect'
+                    selected && disconnectModeActive
                         ? 'issue-dark'
                         : 'steel-darker'
                 }
             >
                 {formatAddress(address)}
             </Text>
-            {mode === 'disconnect' && !selected ? (
+            {disconnectModeActive && !selected ? (
                 <div className="flex flex-1 justify-end text-issue-dark">
                     <Text variant="subtitle" weight="normal">
                         Disconnect
                     </Text>
                 </div>
             ) : null}
-            {mode === 'select' && isNew ? (
+            {selectModeActive && isNew ? (
                 <div className="flex-1 flex justify-end">
                     <Text variant="subtitleSmall" color="steel">
                         NEW
