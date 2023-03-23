@@ -512,6 +512,18 @@ impl Command {
         }
     }
 
+    fn non_system_packages_to_be_published(&self) -> Option<&Vec<Vec<u8>>> {
+        match self {
+            Command::Upgrade(v, _, _, _) => Some(v),
+            Command::Publish(v, _) => Some(v),
+            Command::MoveCall(_)
+            | Command::TransferObjects(_, _)
+            | Command::SplitCoins(_, _)
+            | Command::MergeCoins(_, _)
+            | Command::MakeMoveVec(_, _) => None,
+        }
+    }
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => call.validity_check(config)?,
@@ -666,6 +678,12 @@ impl ProgrammableTransaction {
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn non_system_packages_to_be_published(&self) -> impl Iterator<Item = &Vec<Vec<u8>>> + '_ {
+        self.commands
+            .iter()
+            .filter_map(|q| q.non_system_packages_to_be_published())
     }
 }
 

@@ -251,6 +251,18 @@ pub struct ProtocolConfig {
     /// Maximum length of a vector in Move. Enforced by the VM during execution, and for constants, by the verifier.
     max_move_vector_len: Option<u64>,
 
+    /// Maximum number of back edges in Move function. Enforced by the bytecode verifier at signing.
+    max_back_edges_per_function: Option<u64>,
+
+    /// Maximum number of back edges in Move module. Enforced by the bytecode verifier at signing.
+    max_back_edges_per_module: Option<u64>,
+
+    /// Maximum number of meter `ticks` spent verifying a Move function. Enforced by the bytecode verifier at signing.
+    max_verifier_meter_ticks_per_function: Option<u64>,
+
+    /// Maximum number of meter `ticks` spent verifying a Move function. Enforced by the bytecode verifier at signing.
+    max_meter_ticks_per_module: Option<u64>,
+
     // === Object runtime internal operation limits ====
     /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
     object_runtime_max_num_cached_objects: Option<u64>,
@@ -578,6 +590,19 @@ impl ProtocolConfig {
     }
     pub fn max_move_vector_len(&self) -> u64 {
         self.max_move_vector_len.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_back_edges_per_function(&self) -> u64 {
+        self.max_back_edges_per_function.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_back_edges_per_module(&self) -> u64 {
+        self.max_back_edges_per_module.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_verifier_meter_ticks_per_function(&self) -> u64 {
+        self.max_verifier_meter_ticks_per_function
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_meter_ticks_per_module(&self) -> u64 {
+        self.max_meter_ticks_per_module.expect(CONSTANT_ERR_MSG)
     }
     pub fn object_runtime_max_num_cached_objects(&self) -> u64 {
         self.object_runtime_max_num_cached_objects
@@ -977,6 +1002,19 @@ impl ProtocolConfig {
                 max_num_transferred_move_object_ids_system_tx: Some(2048 * 16),
                 max_event_emit_size: Some(250 * 1024),
                 max_move_vector_len: Some(256 * 1024),
+
+                /// TODO: Is this too low/high?
+                max_back_edges_per_function: Some(10_000),
+
+                /// TODO:  Is this too low/high?
+                max_back_edges_per_module: Some(10_000),
+
+                /// TODO: Is this too low/high?
+                max_verifier_meter_ticks_per_function: Some(6_000_000),
+
+                /// TODO: Is this too low/high?
+                max_meter_ticks_per_module: Some(6_000_000),
+
                 object_runtime_max_num_cached_objects: Some(1000),
                 object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
                 object_runtime_max_num_store_entries: Some(1000),

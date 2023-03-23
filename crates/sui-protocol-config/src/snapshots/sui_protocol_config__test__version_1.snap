@@ -40,6 +40,10 @@ max_num_transferred_move_object_ids: 2048
 max_num_transferred_move_object_ids_system_tx: 32768
 max_event_emit_size: 256000
 max_move_vector_len: 262144
+max_back_edges_per_function: 10000
+max_back_edges_per_module: 10000
+max_verifier_meter_ticks_per_function: 6000000
+max_meter_ticks_per_module: 6000000
 object_runtime_max_num_cached_objects: 1000
 object_runtime_max_num_cached_objects_system_tx: 16000
 object_runtime_max_num_store_entries: 1000
