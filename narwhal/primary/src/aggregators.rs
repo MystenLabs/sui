@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::PrimaryMetrics;
-use config::{Committee, Stake};
-use crypto::{PublicKey, Signature};
-use fastcrypto::traits::EncodeDecodeBase64;
+use config::{AuthorityIdentifier, Committee, Stake};
+use crypto::Signature;
 use std::collections::HashSet;
 use std::sync::Arc;
 use types::{
@@ -17,8 +16,8 @@ use types::{
 /// Aggregates votes for a particular header into a certificate.
 pub struct VotesAggregator {
     weight: Stake,
-    votes: Vec<(PublicKey, Signature)>,
-    used: HashSet<PublicKey>,
+    votes: Vec<(AuthorityIdentifier, Signature)>,
+    used: HashSet<AuthorityIdentifier>,
     metrics: Arc<PrimaryMetrics>,
 }
 
@@ -44,12 +43,12 @@ impl VotesAggregator {
 
         // Ensure it is the first time this authority votes.
         ensure!(
-            self.used.insert(author.clone()),
-            DagError::AuthorityReuse(author.encode_base64())
+            self.used.insert(author),
+            DagError::AuthorityReuse(author.to_string())
         );
 
-        self.votes.push((author.clone(), vote.signature));
-        self.weight += committee.stake(&author);
+        self.votes.push((author, vote.signature));
+        self.weight += committee.stake_by_id(author);
 
         self.metrics
             .votes_received_last_round
@@ -71,7 +70,7 @@ impl VotesAggregator {
 pub struct CertificatesAggregator {
     weight: Stake,
     certificates: Vec<Certificate>,
-    used: HashSet<PublicKey>,
+    used: HashSet<AuthorityIdentifier>,
 }
 
 impl CertificatesAggregator {
@@ -91,12 +90,12 @@ impl CertificatesAggregator {
         let origin = certificate.origin();
 
         // Ensure it is the first time this authority votes.
-        if !self.used.insert(origin.clone()) {
+        if !self.used.insert(origin) {
             return None;
         }
 
         self.certificates.push(certificate);
-        self.weight += committee.stake(&origin);
+        self.weight += committee.stake_by_id(origin);
         if self.weight >= committee.quorum_threshold() {
             // Note that we do not reset the weight here. If this function is called again and
             // the proposer didn't yet advance round, we can add extra certificates as parents.

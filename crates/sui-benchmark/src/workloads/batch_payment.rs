@@ -95,7 +95,12 @@ impl Payload for BatchPaymentTestPayload {
             vec![amount; num_recipients],
             sender,
             &self.state.keypair(&sender).unwrap(),
-            Some(*self.system_state_observer.reference_gas_price.borrow()),
+            Some(
+                self.system_state_observer
+                    .state
+                    .borrow()
+                    .reference_gas_price,
+            ),
         )
     }
 }

@@ -109,7 +109,7 @@ impl SupportedProtocolVersions {
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize)]
+#[derive(Default, Clone, Serialize, Debug)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
@@ -134,7 +134,7 @@ struct FeatureFlags {
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
 #[skip_serializing_none]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
@@ -997,9 +997,10 @@ impl ProtocolConfig {
                 storage_gas_price: Some(1),
                 max_transactions_per_checkpoint: Some(1000),
                 max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
-                // require 2f+1 + 0.75 * f stake for automatic protocol upgrades.
-                // TODO: tune based on experience in testnet
-                buffer_stake_for_protocol_upgrade_bps: Some(7500),
+
+                // For now, perform upgrades with a bare quorum of validators.
+                // MUSTFIX: This number should be increased to at least 2000 (20%) for mainnet.
+                buffer_stake_for_protocol_upgrade_bps: Some(0),
 
                 /// === Native Function Costs ===
                 // `address` module

@@ -1,6 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![allow(clippy::mutable_key_type)]
+
 use super::*;
 
 use crate::consensus::ConsensusRound;
@@ -24,17 +26,16 @@ async fn commit_one() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
 
     // Make one certificate with round 5 to trigger the commits.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, keys[0].clone(), 5, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 5, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -90,9 +91,9 @@ async fn dead_node() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     // Make the certificates.
-    let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-    keys.sort(); // Ensure we don't remove one of the leaders.
-    let _ = keys.pop().unwrap();
+    let mut ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+    ids.sort(); // Ensure we don't remove one of the leaders.
+    let _ = ids.pop().unwrap();
 
     let genesis = Certificate::genesis(&committee)
         .iter()
@@ -100,7 +101,7 @@ async fn dead_node() {
         .collect::<BTreeSet<_>>();
 
     let (mut certificates, _) =
-        test_utils::make_optimal_certificates(&committee, 1..=9, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=9, &genesis, &ids);
 
     // Spawn the consensus engine and sink the primary channel.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
@@ -151,7 +152,7 @@ async fn dead_node() {
     let mut sequence = committed.into_iter();
     for i in 1..=15 {
         let output = sequence.next().unwrap();
-        let expected = ((i - 1) / keys.len() as u64) + 1;
+        let expected = ((i - 1) / ids.len() as u64) + 1;
         assert_eq!(output.round(), expected);
     }
     let output = sequence.next().unwrap();
@@ -164,8 +165,8 @@ async fn dead_node() {
 async fn not_enough_support() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-    keys.sort();
+    let mut ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+    ids.sort();
 
     let genesis = Certificate::genesis(&committee)
         .iter()
@@ -175,17 +176,17 @@ async fn not_enough_support() {
     let mut certificates = VecDeque::new();
 
     // Round 1: Fully connected graph.
-    let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
+    let nodes: Vec<_> = ids.iter().take(3).cloned().collect();
     let (out, parents) = test_utils::make_optimal_certificates(&committee, 1..=1, &genesis, &nodes);
     certificates.extend(out);
 
     // Round 2: Fully connect graph. But remember the digest of the leader. Note that this
     // round is the only one with 4 certificates.
     let (leader_2_digest, certificate) =
-        test_utils::mock_certificate(&committee, keys[0].clone(), 2, parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 2, parents.clone());
     certificates.push_back(certificate);
 
-    let nodes: Vec<_> = keys.iter().skip(1).cloned().collect();
+    let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
     let (out, mut parents) =
         test_utils::make_optimal_certificates(&committee, 2..=2, &parents, &nodes);
     certificates.extend(out);
@@ -193,34 +194,31 @@ async fn not_enough_support() {
     // Round 3: Only node 0 links to the leader of round 2.
     let mut next_parents = BTreeSet::new();
 
-    let name = &keys[1];
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let name = ids[1];
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
-    let name = &keys[2];
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let name = ids[2];
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
-    let name = &keys[0];
+    let name = ids[0];
     parents.insert(leader_2_digest);
-    let (digest, certificate) =
-        test_utils::mock_certificate(&committee, name.clone(), 3, parents.clone());
+    let (digest, certificate) = test_utils::mock_certificate(&committee, name, 3, parents.clone());
     certificates.push_back(certificate);
     next_parents.insert(digest);
 
     parents = next_parents.clone();
 
     // Rounds 4, 5, and 6: Fully connected graph.
-    let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
+    let nodes: Vec<_> = ids.iter().take(3).cloned().collect();
     let (out, parents) = test_utils::make_optimal_certificates(&committee, 4..=6, &parents, &nodes);
     certificates.extend(out);
 
     // Round 7: Send a single certificate to trigger the commits.
-    let (_, certificate) = test_utils::mock_certificate(&committee, keys[0].clone(), 7, parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 7, parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -289,8 +287,8 @@ async fn not_enough_support() {
 async fn missing_leader() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let mut keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
-    keys.sort();
+    let mut ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+    ids.sort();
 
     let genesis = Certificate::genesis(&committee)
         .iter()
@@ -300,17 +298,16 @@ async fn missing_leader() {
     let mut certificates = VecDeque::new();
 
     // Remove the leader for rounds 1 and 2.
-    let nodes: Vec<_> = keys.iter().skip(1).cloned().collect();
+    let nodes: Vec<_> = ids.iter().skip(1).cloned().collect();
     let (out, parents) = test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &nodes);
     certificates.extend(out);
 
     // Add back the leader for rounds 3, 4, 5 and 6.
-    let (out, parents) = test_utils::make_optimal_certificates(&committee, 3..=6, &parents, &keys);
+    let (out, parents) = test_utils::make_optimal_certificates(&committee, 3..=6, &parents, &ids);
     certificates.extend(out);
 
     // Add a certificate of round 7 to commit the leader of round 4.
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, keys[0].clone(), 7, parents.clone());
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[0], 7, parents.clone());
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
@@ -373,8 +370,8 @@ async fn missing_leader() {
 #[tokio::test]
 async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
-    let mut committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let mut committee: Committee = fixture.committee();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
     // Run for a few epochs.
     for epoch in 0..5 {
@@ -413,16 +410,11 @@ async fn restart_with_new_committee() {
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         let (mut certificates, next_parents) =
-            test_utils::make_certificates_with_epoch(&committee, 1..=4, epoch, &genesis, &keys);
+            test_utils::make_certificates_with_epoch(&committee, 1..=4, epoch, &genesis, &ids);
 
         // Make one certificate with round 5 to trigger the commits.
-        let (_, certificate) = test_utils::mock_certificate_with_epoch(
-            &committee,
-            keys[0].clone(),
-            5,
-            epoch,
-            next_parents,
-        );
+        let (_, certificate) =
+            test_utils::mock_certificate_with_epoch(&committee, ids[0], 5, epoch, next_parents);
         certificates.push_back(certificate);
 
         // Feed all certificates to the consensus. Only the last certificate should trigger
@@ -445,7 +437,7 @@ async fn restart_with_new_committee() {
         assert_eq!(output.round(), 2);
 
         // Move to the next epoch.
-        committee.epoch = epoch + 1;
+        committee = committee.advance_epoch(epoch + 1);
         tx_shutdown.send().unwrap();
 
         // Ensure consensus stopped.

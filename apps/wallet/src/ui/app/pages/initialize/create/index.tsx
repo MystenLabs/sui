@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ArrowRight16 } from '@mysten/icons';
 import { Formik, Form, Field } from 'formik';
 import { useNavigate } from 'react-router-dom';
 
 import { createMnemonicValidation } from './validation';
-import Button from '_app/shared/button';
+import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
-import Loading from '_components/loading';
 import { useAppDispatch } from '_hooks';
 import PasswordFields from '_pages/initialize/shared/password-fields';
 import { createVault } from '_redux/slices/account';
@@ -85,17 +85,11 @@ const CreatePage = () => {
                         <Button
                             type="submit"
                             disabled={!isValid || isSubmitting}
-                            mode="primary"
-                            size="large"
-                        >
-                            <Loading loading={isSubmitting}>
-                                Create Wallet
-                                <Icon
-                                    icon={SuiIcons.ArrowRight}
-                                    className="font-thin text-subtitle"
-                                />
-                            </Loading>
-                        </Button>
+                            size="tall"
+                            text="Create Wallet"
+                            loading={isSubmitting}
+                            after={<ArrowRight16 />}
+                        />
                     </Form>
                 )}
             </Formik>

@@ -10,7 +10,7 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
-use crate::digests::{CertificateDigest, TransactionEventsDigest};
+use crate::digests::{CertificateDigest, SenderSignedDataDigest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
@@ -306,6 +306,12 @@ impl From<u128> for CallArg {
     fn from(n: u128) -> Self {
         // unwrap safe because every u128 value is BCS-serializable
         CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<ObjectRef> for CallArg {
+    fn from(obj: ObjectRef) -> Self {
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj))
     }
 }
 
@@ -1714,6 +1720,13 @@ impl SenderSignedData {
     pub fn tx_signatures_mut_for_testing(&mut self) -> &mut Vec<GenericSignature> {
         &mut self.inner_mut().tx_signatures
     }
+
+    pub fn full_message_digest(&self) -> SenderSignedDataDigest {
+        let mut digest = DefaultHash::default();
+        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        let hash = digest.finalize();
+        SenderSignedDataDigest::new(hash.into())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
@@ -1965,10 +1978,6 @@ impl CertifiedTransaction {
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
-    }
-
-    pub fn verify_sender_signatures(&self) -> SuiResult {
-        self.data().verify(None)
     }
 }
 

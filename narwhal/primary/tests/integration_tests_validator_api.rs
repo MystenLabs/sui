@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{BlockSynchronizerParameters, Committee, Parameters};
+use config::{AuthorityIdentifier, BlockSynchronizerParameters, Committee, Parameters};
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
@@ -43,8 +42,6 @@ async fn test_get_collections() {
     let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
-
-    let name = author.public_key();
     let signer = author.keypair().copy();
 
     let worker_id = 0;
@@ -104,7 +101,7 @@ async fn test_get_collections() {
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
-        name.clone(),
+        author.authority().clone(),
         signer.copy(),
         author.network_keypair().copy(),
         committee.clone(),
@@ -141,7 +138,7 @@ async fn test_get_collections() {
 
     // Spawn a `Worker` instance.
     Worker::spawn(
-        name.clone(),
+        author.authority().clone(),
         worker_keypair,
         worker_id,
         committee.clone(),
@@ -240,8 +237,6 @@ async fn test_remove_collections() {
     let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
-
-    let name = author.public_key();
     let signer = author.keypair().copy();
 
     let worker_id = 0;
@@ -310,7 +305,7 @@ async fn test_remove_collections() {
         watch::channel(ConsensusRound::default());
 
     Primary::spawn(
-        name.clone(),
+        author.authority().clone(),
         signer.copy(),
         author.network_keypair().copy(),
         committee.clone(),
@@ -369,7 +364,7 @@ async fn test_remove_collections() {
 
     // Spawn a `Worker` instance.
     Worker::spawn(
-        name.clone(),
+        author.authority().clone(),
         worker_keypair,
         worker_id,
         committee.clone(),
@@ -516,7 +511,7 @@ async fn test_read_causal_signed_certificates() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .collect::<Vec<_>>();
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
@@ -556,11 +551,10 @@ async fn test_read_causal_signed_certificates() {
         ..Parameters::default()
     };
     let keypair_1 = authority_1.keypair().copy();
-    let name_1 = keypair_1.public().clone();
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -596,12 +590,11 @@ async fn test_read_causal_signed_certificates() {
         ..Parameters::default()
     };
     let keypair_2 = authority_2.keypair().copy();
-    let name_2 = keypair_2.public().clone();
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -696,7 +689,6 @@ async fn test_read_causal_unsigned_certificates() {
         ..Parameters::default()
     };
     let keypair_1 = authority_1.keypair().copy();
-    let name_1 = authority_1.public_key();
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -704,7 +696,6 @@ async fn test_read_causal_unsigned_certificates() {
     };
     let keypair_2 = authority_2.keypair().copy();
     let network_keypair_2 = authority_2.network_keypair().copy();
-    let name_2 = authority_2.public_key();
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
@@ -751,10 +742,9 @@ async fn test_read_causal_unsigned_certificates() {
         1..=4,
         &genesis,
         &committee
-            .authorities
-            .keys()
-            .cloned()
-            .collect::<Vec<PublicKey>>(),
+            .authorities()
+            .map(|authority| authority.id())
+            .collect::<Vec<AuthorityIdentifier>>(),
     );
 
     collection_digests.extend(
@@ -789,7 +779,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -823,7 +813,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         keypair_2.copy(),
         network_keypair_2,
         committee.clone(),
@@ -973,9 +963,6 @@ async fn test_get_collections_with_missing_certificates() {
     )
     .await;
 
-    let name_1 = authority_1.public_key();
-    let name_2 = authority_2.public_key();
-
     let worker_id = 0;
     let worker_1_keypair = authority_1.worker(worker_id).keypair().copy();
     let worker_2_keypair = authority_2.worker(worker_id).keypair().copy();
@@ -999,7 +986,7 @@ async fn test_get_collections_with_missing_certificates() {
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         authority_1.keypair().copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -1036,7 +1023,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
-        name_1,
+        authority_1.authority().clone(),
         worker_1_keypair,
         worker_id,
         committee.clone(),
@@ -1070,7 +1057,7 @@ async fn test_get_collections_with_missing_certificates() {
     };
 
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         authority_2.keypair().copy(),
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -1099,7 +1086,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
-        name_2,
+        authority_2.authority().clone(),
         worker_2_keypair,
         worker_id,
         committee.clone(),

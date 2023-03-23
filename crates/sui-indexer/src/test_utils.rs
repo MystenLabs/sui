@@ -38,22 +38,17 @@ pub async fn start_test_indexer(
 pub struct SuiTransactionResponseBuilder<'a> {
     response: SuiTransactionResponse,
     full_response: &'a SuiTransactionResponse,
-    required_fields: &'a SuiTransactionResponse,
 }
 
 impl<'a> SuiTransactionResponseBuilder<'a> {
-    pub fn new(
-        full_response: &'a SuiTransactionResponse,
-        required_fields: &'a SuiTransactionResponse,
-    ) -> Self {
+    pub fn new(full_response: &'a SuiTransactionResponse) -> Self {
         Self {
             response: SuiTransactionResponse::default(),
             full_response,
-            required_fields,
         }
     }
 
-    pub fn with_transaction(mut self) -> Self {
+    pub fn with_input(mut self) -> Self {
         self.response = SuiTransactionResponse {
             transaction: self.full_response.transaction.clone(),
             ..self.response
@@ -61,7 +56,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
         self
     }
 
-    pub fn with_raw_transaction(mut self) -> Self {
+    pub fn with_raw_input(mut self) -> Self {
         self.response = SuiTransactionResponse {
             raw_transaction: self.full_response.raw_transaction.clone(),
             ..self.response
@@ -111,19 +106,6 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
         self
     }
 
-    pub fn with_all(mut self) -> Self {
-        self.response = SuiTransactionResponse {
-            transaction: self.full_response.transaction.clone(),
-            raw_transaction: self.full_response.raw_transaction.clone(),
-            effects: self.full_response.effects.clone(),
-            events: self.full_response.events.clone(),
-            balance_changes: self.full_response.balance_changes.clone(),
-            object_changes: self.full_response.object_changes.clone(),
-            ..self.response
-        };
-        self
-    }
-
     pub fn build(self) -> SuiTransactionResponse {
         SuiTransactionResponse {
             transaction: self.response.transaction,
@@ -132,7 +114,8 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
             events: self.response.events,
             balance_changes: self.response.balance_changes,
             object_changes: self.response.object_changes,
-            ..self.required_fields.clone()
+            // Use full response for any fields that aren't showable
+            ..self.full_response.clone()
         }
     }
 }

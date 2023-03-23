@@ -16,12 +16,12 @@ async fn test_new_epoch() {
     // give some time for nodes to bootstrap
     tokio::time::sleep(Duration::from_secs(2)).await;
     let authority = cluster.authority(0);
-    let name = authority.name.clone();
+    let public_key = authority.public_key.clone();
 
     // Test gRPC server with client call
     let mut client = authority.new_configuration_client().await;
 
-    let public_key = PublicKeyProto::from(name);
+    let public_key = PublicKeyProto::from(public_key);
     let stake_weight = 1;
     let primary_address = Some(MultiAddrProto {
         address: "/ip4/127.0.0.1".to_string(),
@@ -60,7 +60,7 @@ async fn test_new_network_info() {
     // Test gRPC server with client call
     let mut client = authority.new_configuration_client().await;
 
-    let public_keys: Vec<_> = committee.authorities.keys().cloned().collect();
+    let public_keys: Vec<_> = committee.keys();
 
     let mut validators = Vec::new();
     for public_key in public_keys.iter() {
@@ -110,7 +110,7 @@ async fn test_get_primary_address() {
 
     let committee = cluster.committee.clone();
     let authority = cluster.authority(0);
-    let name = authority.name.clone();
+    let name = authority.name;
 
     // Test gRPC server with client call
     let mut client = authority.new_configuration_client().await;
@@ -123,7 +123,7 @@ async fn test_get_primary_address() {
     assert_eq!(
         actual_result.primary_address.unwrap().address,
         committee
-            .primary(&name)
+            .primary_by_id(&name)
             .expect("Our public key or worker id is not in the committee")
             .to_string()
     )

@@ -32,20 +32,19 @@ async fn test_recovery() {
     let committee = fixture.committee();
 
     // Make certificates for rounds 1 and 2.
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=2, &genesis, &ids);
 
     // Make two certificate (f+1) with round 3 to trigger the commits.
     let (_, certificate) =
-        test_utils::mock_certificate(&committee, keys[0].clone(), 3, next_parents.clone());
+        test_utils::mock_certificate(&committee, ids[0], 3, next_parents.clone());
     certificates.push_back(certificate);
-    let (_, certificate) =
-        test_utils::mock_certificate(&committee, keys[1].clone(), 3, next_parents);
+    let (_, certificate) = test_utils::mock_certificate(&committee, ids[1], 3, next_parents);
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// similar to dynamic_field_tests but over multiple transactions, as this uses a different code path
-// test duplicate add
 
 //# init --addresses a=0x0 --accounts A
 

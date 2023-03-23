@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{aggregators::VotesAggregator, metrics::PrimaryMetrics, synchronizer::Synchronizer};
 
-use config::Committee;
-use crypto::{NetworkPublicKey, PublicKey, Signature};
+use config::{AuthorityIdentifier, Committee};
+use crypto::{NetworkPublicKey, Signature};
 use fastcrypto::signature_service::SignatureService;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -36,8 +36,8 @@ pub mod certifier_tests;
 /// It receives headers to propose from Proposer via `rx_headers`, and sends out certificates to be
 /// broadcasted by calling `Synchronizer::accept_own_certificate()`.
 pub struct Certifier {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The identifier of this primary.
+    authority_id: AuthorityIdentifier,
     /// The committee information.
     committee: Committee,
     /// The persistent storage keyed to headers.
@@ -70,7 +70,7 @@ impl Certifier {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         header_store: HeaderStore,
         certificate_store: CertificateStore,
@@ -84,7 +84,7 @@ impl Certifier {
         spawn_logged_monitored_task!(
             async move {
                 Self {
-                    name,
+                    authority_id,
                     committee,
                     header_store,
                     certificate_store,
@@ -122,7 +122,7 @@ impl Certifier {
         network: anemo::Network,
         committee: Committee,
         certificate_store: CertificateStore,
-        authority: PublicKey,
+        authority: AuthorityIdentifier,
         target: NetworkPublicKey,
         header: Header,
     ) -> DagResult<Vote> {
@@ -232,7 +232,7 @@ impl Certifier {
 
     #[instrument(level = "debug", skip_all, fields(header_digest = ?header.digest()))]
     async fn propose_header(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         header_store: HeaderStore,
         certificate_store: CertificateStore,
@@ -260,12 +260,12 @@ impl Certifier {
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
-        let vote = Vote::new(&header, &name, &signature_service).await;
+        let vote = Vote::new(&header, &authority_id, &signature_service).await;
         let mut certificate = votes_aggregator.append(vote, &committee, &header)?;
 
         // Trigger vote requests.
         let peers = committee
-            .others_primaries(&name)
+            .others_primaries_by_id(authority_id)
             .into_iter()
             .map(|(name, _, network_key)| (name, network_key));
         let mut requests: FuturesUnordered<_> = peers
@@ -352,7 +352,10 @@ impl Certifier {
 
     // Main loop listening to incoming messages.
     pub async fn run(mut self) -> DagResult<Self> {
-        info!("Certifier on node {} has started successfully.", self.name);
+        info!(
+            "Core on node {} has started successfully.",
+            self.authority_id
+        );
         loop {
             let result = tokio::select! {
                 // We also receive here our new headers created by the `Proposer`.
@@ -364,7 +367,7 @@ impl Certifier {
                     }
                     self.cancel_proposed_header = Some(tx_cancel);
 
-                    let name = self.name.clone();
+                    let name = self.authority_id;
                     let committee = self.committee.clone();
                     let header_store = self.header_store.clone();
                     let certificate_store = self.certificate_store.clone();

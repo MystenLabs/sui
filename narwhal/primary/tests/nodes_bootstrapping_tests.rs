@@ -33,7 +33,7 @@ async fn test_response_error_after_shutdown_external_consensus() {
 
     // send a sample rounds request
     let request = tonic::Request::new(RoundsRequest {
-        public_key: Some(PublicKeyProto::from(authority.name.clone())),
+        public_key: Some(PublicKeyProto::from(authority.public_key.clone())),
     });
     let response = client.rounds(request).await;
 

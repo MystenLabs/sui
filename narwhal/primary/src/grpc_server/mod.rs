@@ -7,10 +7,9 @@ use crate::{
     grpc_server::{metrics::EndpointMetrics, proposer::NarwhalProposer},
     BlockRemover, BlockWaiter,
 };
-use config::Committee;
+use config::{AuthorityIdentifier, Committee};
 use consensus::dag::Dag;
 
-use crypto::PublicKey;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::Multiaddr;
 use std::{sync::Arc, time::Duration};
@@ -25,7 +24,7 @@ mod proposer;
 mod validator;
 
 pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static> {
-    name: PublicKey,
+    authority_id: AuthorityIdentifier,
     // Multiaddr of gRPC server
     socket_address: Multiaddr,
     block_waiter: BlockWaiter<SynchronizerHandler>,
@@ -42,7 +41,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<SynchronizerHandler> {
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         socket_address: Multiaddr,
         block_waiter: BlockWaiter<SynchronizerHandler>,
         block_remover: BlockRemover,
@@ -57,7 +56,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         spawn_logged_monitored_task!(
             async move {
                 let _ = Self {
-                    name,
+                    authority_id,
                     socket_address,
                     block_waiter,
                     block_remover,
@@ -92,7 +91,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         let narwhal_proposer = NarwhalProposer::new(self.dag, self.committee.clone());
         let narwhal_configuration = NarwhalConfiguration::new(
             self.committee
-                .primary(&self.name)
+                .primary_by_id(&self.authority_id)
                 .expect("Our public key is not in the committee"),
             self.committee.clone(),
         );

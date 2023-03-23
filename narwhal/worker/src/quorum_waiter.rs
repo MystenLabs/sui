@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::batch_maker::MAX_PARALLEL_BATCH;
-use config::{Committee, Stake, WorkerCache, WorkerId};
-use crypto::PublicKey;
+use config::{Authority, Committee, Stake, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use mysten_metrics::{monitored_future, spawn_logged_monitored_task};
@@ -20,8 +19,8 @@ pub mod quorum_waiter_tests;
 
 /// The QuorumWaiter waits for 2f authorities to acknowledge reception of a batch.
 pub struct QuorumWaiter {
-    /// The public key of this authority.
-    name: PublicKey,
+    /// This authority.
+    authority: Authority,
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
@@ -40,7 +39,7 @@ impl QuorumWaiter {
     /// Spawn a new QuorumWaiter.
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority: Authority,
         id: WorkerId,
         committee: Committee,
         worker_cache: WorkerCache,
@@ -51,7 +50,7 @@ impl QuorumWaiter {
         spawn_logged_monitored_task!(
             async move {
                 Self {
-                    name,
+                    authority,
                     id,
                     committee,
                     worker_cache,
@@ -91,7 +90,7 @@ impl QuorumWaiter {
                     // Broadcast the batch to the other workers.
                     let workers: Vec<_> = self
                         .worker_cache
-                        .others_workers_by_id(&self.name, &self.id)
+                        .others_workers_by_id(self.authority.protocol_key(), &self.id)
                         .into_iter()
                         .map(|(name, info)| (name, info.name))
                         .collect();
@@ -113,7 +112,7 @@ impl QuorumWaiter {
                     // delivered and we send its digest to the primary (that will include it into
                     // the dag). This should reduce the amount of syncing.
                     let threshold = self.committee.quorum_threshold();
-                    let mut total_stake = self.committee.stake(&self.name);
+                    let mut total_stake = self.authority.stake();
 
                     pipeline.push(async move {
                         // A future that sends to 2/3 stake then returns. Also prints a warning

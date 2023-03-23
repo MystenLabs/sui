@@ -452,13 +452,12 @@ async fn execute_checkpoint(
     //   get_unexecuted_transactions()
     // - Second, we execute all remaining transactions.
 
-    let (mut execution_digests, mut all_tx_digests, mut executable_txns) =
-        get_unexecuted_transactions(
-            checkpoint.clone(),
-            authority_store.clone(),
-            checkpoint_store.clone(),
-            epoch_store.clone(),
-        );
+    let (execution_digests, all_tx_digests, executable_txns) = get_unexecuted_transactions(
+        checkpoint.clone(),
+        authority_store.clone(),
+        checkpoint_store.clone(),
+        epoch_store.clone(),
+    );
 
     let tx_count = execution_digests.len();
     debug!(
@@ -469,18 +468,7 @@ async fn execute_checkpoint(
     );
     metrics.checkpoint_transaction_count.report(tx_count as u64);
 
-    // Pull out change_epoch tx (if exists) so that we can special case its execution last
-    let end_of_epoch = if let Some(index) = executable_txns
-        .iter()
-        .position(|tx| tx.transaction_data().is_change_epoch_tx())
-    {
-        executable_txns.remove(index);
-        all_tx_digests.remove(index);
-        execution_digests.remove(index);
-        true
-    } else {
-        false
-    };
+    let end_of_epoch = checkpoint.end_of_epoch_data.is_some();
 
     let effects = execute_transactions(
         execution_digests,
