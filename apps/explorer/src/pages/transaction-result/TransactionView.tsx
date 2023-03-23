@@ -198,7 +198,7 @@ export function TransactionView({
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
-            <div className="mt-5 mb-10">
+            <div className="mb-10">
                 <PageHeader
                     type="Transaction"
                     title={getTransactionDigest(transaction)}

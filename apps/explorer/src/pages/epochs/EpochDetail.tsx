@@ -8,7 +8,7 @@ import { validatorsTableData } from '../validators/Validators';
 import { getMockEpochData, mockCheckpointsTable } from './mocks';
 import { EpochStats } from './stats/EpochStats';
 
-import { SuiAmount } from '~/components/transaction-card/TxCardUtils';
+import { SuiAmount } from '~/components/transactions/TxCardUtils';
 import { useGetSystemObject } from '~/hooks/useGetObject';
 import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { EpochProgress } from '~/pages/epochs/stats/EpochProgress';

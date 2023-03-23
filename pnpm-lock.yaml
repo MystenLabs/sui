@@ -22,6 +22,7 @@ importers:
       '@sentry/react': ^7.43.0
       '@sentry/tracing': ^7.43.0
       '@tailwindcss/aspect-ratio': ^0.4.2
+      '@tailwindcss/forms': ^0.5.3
       '@tanstack/react-query': ^4.26.1
       '@types/react': ^18.0.28
       bignumber.js: ^9.1.1
@@ -46,6 +47,7 @@ importers:
     devDependencies:
       '@headlessui/tailwindcss': 0.1.2_tailwindcss@3.2.7
       '@tailwindcss/aspect-ratio': 0.4.2_tailwindcss@3.2.7
+      '@tailwindcss/forms': 0.5.3_tailwindcss@3.2.7
       '@types/react': 18.0.28
       eslint: 8.36.0
       eslint-config-prettier: 8.7.0_eslint@8.36.0
@@ -5601,6 +5603,15 @@ packages:
     peerDependencies:
       tailwindcss: '>=2.0.0 || >=3.0.0 || >=3.0.0-alpha.1'
     dependencies:
+      tailwindcss: 3.2.7_postcss@8.4.21
+    dev: true
+
+  /@tailwindcss/forms/0.5.3_tailwindcss@3.2.7:
+    resolution: {integrity: sha512-y5mb86JUoiUgBjY/o6FJSFZSEttfb3Q5gllE4xoKjAAD+vBrnIhE4dViwUuow3va8mpH4s9jyUbUbrRGoRdc2Q==}
+    peerDependencies:
+      tailwindcss: '>=3.0.0 || >= 3.0.0-alpha.1'
+    dependencies:
+      mini-svg-data-uri: 1.4.4
       tailwindcss: 3.2.7_postcss@8.4.21
     dev: true
 
@@ -14038,6 +14049,11 @@ packages:
     dependencies:
       schema-utils: 4.0.0
       webpack: 5.76.2_webpack-cli@5.0.1
+    dev: true
+
+  /mini-svg-data-uri/1.4.4:
+    resolution: {integrity: sha512-r9deDe9p5FJUPZAk3A59wGH7Ii9YrjjWw0jmw/liSbHl2CHiyXj6FcDXDu2K3TjVAXqiJdaw3xxwlZZr9E6nHg==}
+    hasBin: true
     dev: true
 
   /minimatch/3.1.2:

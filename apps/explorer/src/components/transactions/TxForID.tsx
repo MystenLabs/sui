@@ -2,17 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
-import { type GetTxnDigestsResponse } from '@mysten/sui.js';
+import {
+    type SuiTransactionResponse,
+    type GetTxnDigestsResponse,
+} from '@mysten/sui.js';
 import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import PaginationLogic from '../pagination/PaginationLogic';
-import {
-    type TxnData,
-    genTableDataFromTxData,
-    getDataOnTxDigests,
-} from './TxCardUtils';
+import { genTableDataFromTxData, getDataOnTxDigests } from './TxCardUtils';
 
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
@@ -36,7 +35,11 @@ const getTx = async (
 
 const viewFn = (results: any) => <TxForIDView showData={results} />;
 
-function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
+function TxForIDView({
+    showData,
+}: {
+    showData: SuiTransactionResponse[] | undefined;
+}) {
     if (!showData || showData.length === 0) return null;
 
     const tableData = genTableDataFromTxData(showData);
@@ -50,7 +53,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
 
 function TxForID({ id, category }: { id: string; category: categoryType }) {
     const [showData, setData] = useState<{
-        data?: TxnData[];
+        data?: SuiTransactionResponse[];
         loadState: string;
     }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
@@ -67,7 +70,7 @@ function TxForID({ id, category }: { id: string; category: categoryType }) {
                     getDataOnTxDigests(rpc, transactions)
                         .then((data) => {
                             setData({
-                                data: data as TxnData[],
+                                data,
                                 loadState: 'loaded',
                             });
                         })

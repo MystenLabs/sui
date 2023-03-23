@@ -45,7 +45,7 @@ export function ObjectResult() {
     const isPackage = resp.objType === PACKAGE_TYPE_NAME;
 
     return (
-        <div className="mt-5 mb-10">
+        <div className="mb-10">
             <PageHeader
                 type={isPackage ? 'Package' : 'Object'}
                 title={resp.id}
