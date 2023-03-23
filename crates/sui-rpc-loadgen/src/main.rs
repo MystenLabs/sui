@@ -140,9 +140,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // todo: make flexible
     let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {
         let start = data.start;
-        let end = data.end.unwrap_or(455246);
+        let end = data.end.unwrap_or(455246); // todo: adjustable upper limit
         let num_chunks = opts.num_threads;
-        let chunk_size = (end - start) / num_chunks as u64; // todo: adjustable limit
+        let chunk_size = (end - start) / num_chunks as u64;
         (0..num_chunks)
             .map(|i| {
                 let start_checkpoint = start + (i as u64) * chunk_size;
