@@ -543,6 +543,21 @@ mod sim_only_tests {
         expect_upgrade_failed(&test_cluster).await;
     }
 
+    #[sim_test]
+    async fn sui_system_mock_smoke_test() {
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, START,
+            ))
+            .with_objects([sui_system_package_object("mock_sui_systems/base")])
+            .build()
+            .await
+            .unwrap();
+        // Make sure we can survive at least one epoch.
+        test_cluster.wait_for_epoch(None).await;
+    }
+
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
         assert_eq!(system_state.protocol_version(), final_version);
