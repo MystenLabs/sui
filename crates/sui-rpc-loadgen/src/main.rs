@@ -74,20 +74,6 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "multi-get-transactions")]
-    MultiGetTransactions {
-        #[clap(flatten)]
-        common: CommonOptions,
-        /// Default to start from checkpoint 0
-        #[clap(short, long, default_value_t = 0)]
-        start_checkpoint: u64,
-
-        /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
-        #[clap(short, long)]
-        end_checkpoint: Option<u64>,
-        #[clap(short, long, multiple = true)]
-        digests: Option<Vec<TransactionDigest>>,
-    },
 }
 
 fn get_keypair() -> Result<(SuiAddress, String)> {
@@ -153,22 +139,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
     // todo: make flexible
-    let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {        
+    let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {
         let start = data.start;
         let end = data.end.unwrap_or(455246);
         let num_chunks = opts.num_threads;
-        let chunk_size = (end - start) / num_chunks as u64;
-        let chunk_size = 455246 / num_chunks; // todo: adjustable limit
+        let chunk_size = (end - start) / num_chunks as u64; // todo: adjustable limit
         (0..num_chunks)
             .map(|i| {
                 let start_checkpoint = start + (i as u64) * chunk_size;
                 let end_checkpoint = start + ((i + 1) as u64) * chunk_size;
-
-                let end = (i + 1) * chunk_size;
                 Command::new_get_checkpoints(
                     start_checkpoint,
-                    Some(end_checkpoint),                    
-                    data.verify_transaction,        
+                    Some(end_checkpoint),
+                    data.verify_transaction,
                 )
             })
             .collect()
