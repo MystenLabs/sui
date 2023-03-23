@@ -88,9 +88,23 @@ impl Payload for AdversarialTestPayload {
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
         let payload_type: AdversarialPayloadType = rand::random();
-        let gas_budget = self.system_state_observer.protocol_config.max_tx_gas();
-        let payload_args =
-            self.get_payload_args(&payload_type, &self.system_state_observer.protocol_config);
+        let gas_budget = self
+            .system_state_observer
+            .state
+            .borrow()
+            .protocol_config
+            .as_ref()
+            .expect("Protocol config not in system state")
+            .max_tx_gas();
+        let payload_args = self.get_payload_args(
+            &payload_type,
+            self.system_state_observer
+                .state
+                .borrow()
+                .protocol_config
+                .as_ref()
+                .expect("Protocol config not in system state"),
+        );
 
         self.state.move_call(
             self.sender,
@@ -100,7 +114,10 @@ impl Payload for AdversarialTestPayload {
             vec![],
             payload_args.args,
             gas_budget,
-            *self.system_state_observer.reference_gas_price.borrow(),
+            self.system_state_observer
+                .state
+                .borrow()
+                .reference_gas_price,
         )
     }
 }
@@ -247,7 +264,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let gas = &self.init_gas;
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("src/workloads/data/adversarial");
-        let gas_price = *system_state_observer.reference_gas_price.borrow();
+        let gas_price = system_state_observer.state.borrow().reference_gas_price;
         let transaction =
             create_publish_move_package_transaction(gas.0, path, gas.1, &gas.2, Some(gas_price));
         let effects = proxy.execute_transaction(transaction.into()).await.unwrap();

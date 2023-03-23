@@ -97,12 +97,11 @@ async fn main() -> Result<()> {
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for system state observer")?
                 .clone(),
-            protocol_config,
         );
-        system_state_observer.reference_gas_price.changed().await?;
+        system_state_observer.state.changed().await?;
         eprintln!(
-            "Found reference gas price from system state object = {:?}",
-            *system_state_observer.reference_gas_price.borrow()
+            "Found new state (reference gas price and/or protocol config) from system state object = {:?}",
+            system_state_observer.state.borrow().reference_gas_price
         );
         Arc::new(system_state_observer)
     };
