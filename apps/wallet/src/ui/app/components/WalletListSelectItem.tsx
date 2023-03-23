@@ -89,7 +89,17 @@ export function WalletListSelectItem({
             {mode === 'disconnect' && selected ? (
                 <XFill16 className="text-issue-dark text-base font-bold" />
             ) : null}
-            <Text mono variant="body" weight="semibold">
+            {/* Secondary/BodySmall-SB */}
+            <Text
+                mono
+                variant="body"
+                weight="semibold"
+                color={
+                    selected && mode === 'disconnect'
+                        ? 'issue-dark'
+                        : 'steel-darker'
+                }
+            >
                 {formatAddress(address)}
             </Text>
             {mode === 'disconnect' && !selected ? (
