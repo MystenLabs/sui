@@ -217,6 +217,10 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
     ) -> Result<()> {
         let clients = self.get_clients().await?;
 
+        if let Some(digests) = &op.digests {
+            check_transactions(&self.clients, digests);
+        }
+
         // TODO(will) handle digests as input
         let checkpoints = &op.checkpoints;
 
@@ -317,9 +321,13 @@ impl<'a> ProcessPayload<'a, &'a MultiGetTransactions> for RpcCommandProcessor {
 }
 
 pub async fn check_transactions(
-    clients: &[SuiClient],
+    clients: &Arc<RwLock<Vec<SuiClient>>>,
     digests: &[TransactionDigest]
 ) {
+
+    let read = clients.read().await;
+    let clients = read.clone();
+
     let transactions = join_all(clients.iter().map(|client| {
         async move {
             let start_time = Instant::now();
