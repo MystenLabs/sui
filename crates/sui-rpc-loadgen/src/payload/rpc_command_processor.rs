@@ -336,7 +336,7 @@ pub async fn check_transactions(
             .read_api()
             .multi_get_transactions_with_options(
                 digests.to_vec(),
-                SuiTransactionResponseOptions::new(),
+                SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
             )
             .await;
         let elapsed_time = start_time.elapsed();
@@ -363,7 +363,8 @@ pub async fn check_transactions(
             }
 
             for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-                if a.digest != b.digest {
+                // Todo: allow more comparisons
+                if a != b {
                     warn!(
                         "Transaction response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
                         digests[i], a, b
