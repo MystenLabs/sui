@@ -1,6 +1,6 @@
 ---
 AuthorityIdentifier:
-  NEWTYPESTRUCT: U8
+  NEWTYPESTRUCT: U16
 Batch:
   STRUCT:
     - transactions:

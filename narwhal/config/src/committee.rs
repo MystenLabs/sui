@@ -7,7 +7,6 @@ use crypto::{NetworkPublicKey, PublicKey, PublicKeyBytes};
 use fastcrypto::traits::EncodeDecodeBase64;
 use mysten_network::Multiaddr;
 use mysten_util_mem::MallocSizeOf;
-use once_cell::sync::OnceCell;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -99,8 +98,7 @@ pub struct Committee {
     /// The authorities of epoch.
     authorities: BTreeMap<PublicKey, Authority>,
     /// Keeps and index of the Authorities by their respective identifier
-    #[serde(skip)]
-    authorities_by_id: OnceCell<BTreeMap<AuthorityIdentifier, Authority>>,
+    authorities_by_id: BTreeMap<AuthorityIdentifier, Authority>,
     /// The epoch number of this committee
     epoch: Epoch,
 }
@@ -140,6 +138,11 @@ impl Committee {
         };
         committee.load();
 
+        assert_eq!(
+            committee.authorities_by_id.len(),
+            committee.authorities.len()
+        );
+
         // ensure all the authorities are ordered in incremented manner with their ids - just some
         // extra confirmation here.
         for (index, (_, authority)) in committee.authorities.iter().enumerate() {
@@ -151,18 +154,15 @@ impl Committee {
 
     /// Loads the committee internal secondary indexes.
     pub fn load(&mut self) {
-        self.authorities_by_id.get_or_init(|| {
-            let mut authorities = BTreeMap::new();
-
-            for (identifier, (_key, authority)) in (0_u16..).zip(self.authorities.iter_mut()) {
+        self.authorities_by_id = (0_u16..)
+            .zip(self.authorities.iter_mut())
+            .map(|(identifier, (_key, authority))| {
                 let id = AuthorityIdentifier(identifier);
                 authority.initialise(id);
 
-                authorities.insert(id, authority.clone());
-            }
-
-            authorities
-        });
+                (id, authority.clone())
+            })
+            .collect();
     }
 
     /// Returns the current epoch.
@@ -172,24 +172,17 @@ impl Committee {
 
     /// Provided an identifier it returns the corresponding authority
     pub fn authority(&self, identifier: &AuthorityIdentifier) -> Option<&Authority> {
-        self.authorities_by_id
-            .get()
-            .expect("Should have been initialised already")
-            .get(identifier)
+        self.authorities_by_id.get(identifier)
     }
 
     /// Provided an identifier it returns the corresponding authority - if is not found then it panics
     pub fn authority_safe(&self, identifier: &AuthorityIdentifier) -> &Authority {
-        self.authorities_by_id
-            .get()
-            .expect("Should have been initialised already")
-            .get(identifier)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Authority with id {:?} should have been in committee",
-                    identifier
-                )
-            })
+        self.authorities_by_id.get(identifier).unwrap_or_else(|| {
+            panic!(
+                "Authority with id {:?} should have been in committee",
+                identifier
+            )
+        })
     }
 
     pub fn authority_by_key(&self, key: &PublicKey) -> Option<&Authority> {
@@ -226,8 +219,6 @@ impl Committee {
 
     pub fn stake_by_id(&self, id: AuthorityIdentifier) -> Stake {
         self.authorities_by_id
-            .get()
-            .unwrap()
             .get(&id)
             .map_or_else(|| 0, |authority| authority.stake)
     }
@@ -276,8 +267,6 @@ impl Committee {
     /// Returns the primary address of the target primary.
     pub fn primary_by_id(&self, to: &AuthorityIdentifier) -> Result<Multiaddr, ConfigError> {
         self.authorities_by_id
-            .get()
-            .expect("Should have been initialised already")
             .get(to)
             .map(|x| x.primary_address.clone())
             .ok_or_else(|| ConfigError::NotInCommittee(to.0.to_string()))
@@ -483,18 +472,15 @@ mod tests {
         let committee = Committee::new(authorities, 10);
 
         // THEN
-        let authorities = committee.authorities_by_id.get().unwrap();
-        assert_eq!(authorities.len() as u64, num_of_authorities);
+        assert_eq!(committee.authorities_by_id.len() as u64, num_of_authorities);
 
-        for (identifier, authority) in committee.authorities_by_id.get().unwrap().iter() {
+        for (identifier, authority) in committee.authorities_by_id.iter() {
             assert_eq!(*identifier, authority.id());
         }
 
         // AND ensure authorities are returned in the same order
         for ((id, authority_1), (public_key, authority_2)) in committee
             .authorities_by_id
-            .get()
-            .unwrap()
             .iter()
             .zip(committee.authorities)
         {
