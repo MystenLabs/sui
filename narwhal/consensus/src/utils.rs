@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
-use crypto::PublicKeyBytes;
 use std::collections::HashSet;
 use tracing::debug;
 use types::{Certificate, CertificateDigest, Round};
@@ -88,7 +87,7 @@ pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificat
             let mut skip = already_ordered.contains(&digest);
             skip |= state
                 .last_committed
-                .get(&PublicKeyBytes::from(&certificate.origin()))
+                .get(&certificate.origin())
                 .map_or_else(|| false, |r| &certificate.round() <= r);
             if !skip {
                 buffer.push(certificate);

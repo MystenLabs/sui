@@ -58,6 +58,7 @@ mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-executor = { path = "../../narwhal/executor" }
 narwhal-node = { path = "../../narwhal/node" }
+narwhal-crypto = { path = "../../narwhal/crypto" }
 narwhal-types = { path = "../../narwhal/types" }
 narwhal-worker = { path = "../../narwhal/worker" }
 telemetry-subscribers.workspace = true

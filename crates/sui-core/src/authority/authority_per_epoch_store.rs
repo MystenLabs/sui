@@ -1514,7 +1514,8 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
-            certificate: consensus_output,
+            certificate: _consensus_output,
+            certificate_author,
             consensus_index,
             transaction,
         }) = transaction;
@@ -1533,13 +1534,12 @@ impl AuthorityPerEpochStore {
                     );
                     return Ok(None);
                 }
-                let authority = (&consensus_output.header.author).into();
-                if self.has_sent_end_of_publish(&authority)? {
+                if self.has_sent_end_of_publish(&certificate_author)? {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
                     // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
-                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", authority.concise(), certificate.digest());
+                    warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", certificate_author.concise(), certificate.digest());
                     return Ok(None);
                 }
                 // Safe because signatures are verified when VerifiedSequencedConsensusTransaction

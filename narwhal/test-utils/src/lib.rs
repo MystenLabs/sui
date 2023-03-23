@@ -4,12 +4,12 @@
 
 use anemo::async_trait;
 use config::{
-    utils::get_available_port, Authority, Committee, Epoch, Stake, WorkerCache, WorkerId,
-    WorkerIndex, WorkerInfo,
+    utils::get_available_port, Authority, AuthorityIdentifier, Committee, CommitteeBuilder, Epoch,
+    Stake, WorkerCache, WorkerId, WorkerIndex, WorkerInfo,
 };
 use crypto::{
     to_intent_message, KeyPair, NarwhalAuthoritySignature, NetworkKeyPair, NetworkPublicKey,
-    PublicKey, PublicKeyBytes, Signature,
+    PublicKey, Signature,
 };
 use fastcrypto::{
     hash::Hash as _,
@@ -17,6 +17,7 @@ use fastcrypto::{
 };
 use indexmap::IndexMap;
 use mysten_network::Multiaddr;
+use once_cell::sync::OnceCell;
 use rand::{
     rngs::{OsRng, StdRng},
     thread_rng, Rng, SeedableRng,
@@ -139,7 +140,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     .expect("Failed creating database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
+        LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
         SEQUENCE_CF;<SequenceNumber, CommittedSubDagShell>
     );
 
@@ -383,9 +384,9 @@ pub fn make_optimal_certificates(
     committee: &Committee,
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
-    keys: &[PublicKey],
+    ids: &[AuthorityIdentifier],
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
-    make_certificates(committee, range, initial_parents, keys, 0.0)
+    make_certificates(committee, range, initial_parents, ids, 0.0)
 }
 
 // Outputs rounds worth of certificates with optimal parents, signed
@@ -393,7 +394,7 @@ pub fn make_optimal_signed_certificates(
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
     committee: &Committee,
-    keys: &[KeyPair],
+    keys: &[(AuthorityIdentifier, KeyPair)],
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
     make_signed_certificates(range, initial_parents, committee, keys, 0.0)
 }
@@ -418,10 +419,10 @@ fn this_cert_parents(
 fn rounds_of_certificates(
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
-    keys: &[PublicKey],
+    ids: &[AuthorityIdentifier],
     failure_probability: f64,
     make_one_certificate: impl Fn(
-        PublicKey,
+        AuthorityIdentifier,
         Round,
         BTreeSet<CertificateDigest>,
     ) -> (CertificateDigest, Certificate),
@@ -432,11 +433,10 @@ fn rounds_of_certificates(
 
     for round in range {
         next_parents.clear();
-        for name in keys {
+        for id in ids {
             let this_cert_parents = this_cert_parents(&parents, failure_probability);
 
-            let (digest, certificate) =
-                make_one_certificate(name.clone(), round, this_cert_parents);
+            let (digest, certificate) = make_one_certificate(*id, round, this_cert_parents);
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }
@@ -450,12 +450,12 @@ pub fn make_certificates(
     committee: &Committee,
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
-    keys: &[PublicKey],
+    ids: &[AuthorityIdentifier],
     failure_probability: f64,
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
     let generator = |pk, round, parents| mock_certificate(committee, pk, round, parents);
 
-    rounds_of_certificates(range, initial_parents, keys, failure_probability, generator)
+    rounds_of_certificates(range, initial_parents, ids, failure_probability, generator)
 }
 
 // Creates certificates for the provided rounds but also having slow nodes.
@@ -470,13 +470,13 @@ pub fn make_certificates_with_slow_nodes(
     committee: &Committee,
     range: RangeInclusive<Round>,
     initial_parents: Vec<Certificate>,
-    keys: &[PublicKey],
-    slow_nodes: &[(PublicKey, f64)],
+    names: &[AuthorityIdentifier],
+    slow_nodes: &[(AuthorityIdentifier, f64)],
 ) -> (VecDeque<Certificate>, Vec<Certificate>) {
     // ensure provided slow nodes do not account > f
     let slow_nodes_stake: Stake = slow_nodes
         .iter()
-        .map(|(key, _)| committee.authorities.get(key).unwrap().stake)
+        .map(|(key, _)| committee.authority(key).unwrap().stake())
         .sum();
 
     assert!(slow_nodes_stake < committee.validity_threshold());
@@ -487,11 +487,10 @@ pub fn make_certificates_with_slow_nodes(
 
     for round in range {
         next_parents.clear();
-        for name in keys {
+        for name in names {
             let this_cert_parents =
                 this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes);
-            let (_, certificate) =
-                mock_certificate(committee, name.clone(), round, this_cert_parents);
+            let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
         }
@@ -507,9 +506,9 @@ pub fn make_certificates_with_slow_nodes(
 // If probability to use it is 1.0, then the parent node will ALWAYS be used.
 // We always make sure to include our "own" certificate, thus the `name` property is needed.
 fn this_cert_parents_with_slow_nodes(
-    name: &PublicKey,
+    authority_id: &AuthorityIdentifier,
     ancestors: Vec<Certificate>,
-    slow_nodes: &[(PublicKey, f64)],
+    slow_nodes: &[(AuthorityIdentifier, f64)],
 ) -> BTreeSet<CertificateDigest> {
     let mut parents = BTreeSet::new();
     for parent in ancestors {
@@ -517,7 +516,7 @@ fn this_cert_parents_with_slow_nodes(
         // one we want to create the certificate for.
         if let Some((_, inclusion_probability)) = slow_nodes
             .iter()
-            .find(|(key, _)| *key != *name && *key == parent.header.author)
+            .find(|(id, _)| *id != *authority_id && *id == parent.header.author)
         {
             let f: f64 = thread_rng().gen_range(0_f64..1_f64);
 
@@ -542,7 +541,7 @@ pub fn make_certificates_with_epoch(
     range: RangeInclusive<Round>,
     epoch: Epoch,
     initial_parents: &BTreeSet<CertificateDigest>,
-    keys: &[PublicKey],
+    keys: &[AuthorityIdentifier],
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
     let mut certificates = VecDeque::new();
     let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
@@ -552,7 +551,7 @@ pub fn make_certificates_with_epoch(
         next_parents.clear();
         for name in keys {
             let (digest, certificate) =
-                mock_certificate_with_epoch(committee, name.clone(), round, epoch, parents.clone());
+                mock_certificate_with_epoch(committee, *name, round, epoch, parents.clone());
             certificates.push_back(certificate);
             next_parents.insert(digest);
         }
@@ -566,17 +565,20 @@ pub fn make_signed_certificates(
     range: RangeInclusive<Round>,
     initial_parents: &BTreeSet<CertificateDigest>,
     committee: &Committee,
-    keys: &[KeyPair],
+    keys: &[(AuthorityIdentifier, KeyPair)],
     failure_probability: f64,
 ) -> (VecDeque<Certificate>, BTreeSet<CertificateDigest>) {
-    let public_keys = keys.iter().map(|k| k.public().clone()).collect::<Vec<_>>();
+    let ids = keys
+        .iter()
+        .map(|(authority, _)| *authority)
+        .collect::<Vec<_>>();
     let generator =
         |pk, round, parents| mock_signed_certificate(keys, pk, round, parents, committee);
 
     rounds_of_certificates(
         range,
         initial_parents,
-        &public_keys[..],
+        &ids[..],
         failure_probability,
         generator,
     )
@@ -586,7 +588,7 @@ pub fn make_signed_certificates(
 // Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate(
     committee: &Committee,
-    origin: PublicKey,
+    origin: AuthorityIdentifier,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
@@ -597,7 +599,7 @@ pub fn mock_certificate(
 // Note: the certificate is signed by a random key rather than its author
 pub fn mock_certificate_with_epoch(
     committee: &Committee,
-    origin: PublicKey,
+    origin: AuthorityIdentifier,
     round: Round,
     epoch: Epoch,
     parents: BTreeSet<CertificateDigest>,
@@ -617,8 +619,8 @@ pub fn mock_certificate_with_epoch(
 
 // Creates one signed certificate from a set of signers - the signers must include the origin
 pub fn mock_signed_certificate(
-    signers: &[KeyPair],
-    origin: PublicKey,
+    signers: &[(AuthorityIdentifier, KeyPair)],
+    origin: AuthorityIdentifier,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
     committee: &Committee,
@@ -635,10 +637,9 @@ pub fn mock_signed_certificate(
     let cert = Certificate::new_unsigned(committee, header.clone(), Vec::new()).unwrap();
 
     let mut votes = Vec::new();
-    for signer in signers {
-        let pk = signer.public();
+    for (name, signer) in signers {
         let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
-        votes.push((pk.clone(), sig))
+        votes.push((*name, sig))
     }
     let cert = Certificate::new(committee, header, votes).unwrap();
     (cert.digest(), cert)
@@ -649,6 +650,7 @@ pub struct Builder<R = OsRng> {
     committee_size: NonZeroUsize,
     number_of_workers: NonZeroUsize,
     randomize_ports: bool,
+    epoch: Epoch,
 }
 
 impl Default for Builder {
@@ -660,6 +662,7 @@ impl Default for Builder {
 impl Builder {
     pub fn new() -> Self {
         Self {
+            epoch: Epoch::default(),
             rng: OsRng,
             committee_size: NonZeroUsize::new(4).unwrap(),
             number_of_workers: NonZeroUsize::new(4).unwrap(),
@@ -684,9 +687,15 @@ impl<R> Builder<R> {
         self
     }
 
+    pub fn epoch(mut self, epoch: Epoch) -> Self {
+        self.epoch = epoch;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> Builder<N> {
         Builder {
             rng,
+            epoch: self.epoch,
             committee_size: self.committee_size,
             number_of_workers: self.number_of_workers,
             randomize_ports: self.randomize_ports,
@@ -696,7 +705,7 @@ impl<R> Builder<R> {
 
 impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
     pub fn build(mut self) -> CommitteeFixture {
-        let authorities = (0..self.committee_size.get())
+        let mut authorities: Vec<AuthorityFixture> = (0..self.committee_size.get())
             .map(|_| {
                 AuthorityFixture::generate(
                     StdRng::from_rng(&mut self.rng).unwrap(),
@@ -712,15 +721,37 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
             })
             .collect();
 
+        // create the committee in order to assign the ids to the authorities
+        let mut committee_builder = CommitteeBuilder::new(self.epoch);
+        for a in authorities.iter() {
+            committee_builder = committee_builder.add_authority(
+                a.public_key().clone(),
+                a.stake,
+                a.address.clone(),
+                a.network_public_key(),
+            );
+        }
+        let committee = committee_builder.build();
+
+        // Update the Fixtures with the id assigned from the committee
+        for authority in authorities.iter_mut() {
+            let a = committee
+                .authority_by_key(authority.keypair.public())
+                .unwrap();
+            authority.authority = OnceCell::with_value(a.clone());
+        }
+
         CommitteeFixture {
             authorities,
-            epoch: Epoch::default(),
+            committee,
+            epoch: self.epoch,
         }
     }
 }
 
 pub struct CommitteeFixture {
     authorities: Vec<AuthorityFixture>,
+    committee: Committee,
     epoch: Epoch,
 }
 
@@ -734,18 +765,7 @@ impl CommitteeFixture {
     }
 
     pub fn committee(&self) -> Committee {
-        Committee {
-            epoch: self.epoch,
-            authorities: self
-                .authorities
-                .iter()
-                .map(|a| {
-                    let pubkey = a.public_key();
-                    let authority = a.authority();
-                    (pubkey, authority)
-                })
-                .collect(),
-        }
+        self.committee.clone()
     }
 
     pub fn worker_cache(&self) -> WorkerCache {
@@ -794,7 +814,7 @@ impl CommitteeFixture {
             .map(|a| {
                 let builder = types::HeaderBuilder::default();
                 builder
-                    .author(a.public_key())
+                    .author(a.id())
                     .round(round)
                     .epoch(0)
                     .parents(parents.clone())
@@ -812,7 +832,7 @@ impl CommitteeFixture {
             .flat_map(|a| {
                 // we should not re-sign using the key of the authority
                 // that produced the header
-                if a.public_key() == header.author {
+                if a.id() == header.author {
                     None
                 } else {
                     Some(a.vote(header))
@@ -830,23 +850,10 @@ impl CommitteeFixture {
             .collect();
         Certificate::new(&committee, header.clone(), votes).unwrap()
     }
-
-    /// Add a new authority to the commit by randoming generating a key
-    pub fn add_authority(&mut self) {
-        let authority = AuthorityFixture::generate(
-            StdRng::from_rng(OsRng).unwrap(),
-            NonZeroUsize::new(4).unwrap(),
-            get_available_port,
-        );
-        self.authorities.push(authority)
-    }
-
-    pub fn bump_epoch(&mut self) {
-        self.epoch += 1
-    }
 }
 
 pub struct AuthorityFixture {
+    authority: OnceCell<Authority>,
     keypair: KeyPair,
     network_keypair: NetworkKeyPair,
     stake: Stake,
@@ -855,6 +862,14 @@ pub struct AuthorityFixture {
 }
 
 impl AuthorityFixture {
+    pub fn id(&self) -> AuthorityIdentifier {
+        self.authority.get().unwrap().id()
+    }
+
+    pub fn authority(&self) -> &Authority {
+        self.authority.get().unwrap()
+    }
+
     pub fn keypair(&self) -> &KeyPair {
         &self.keypair
     }
@@ -894,14 +909,6 @@ impl AuthorityFixture {
         self.network_keypair.public().clone()
     }
 
-    pub fn authority(&self) -> Authority {
-        Authority {
-            stake: self.stake,
-            primary_address: self.address.clone(),
-            network_key: self.network_keypair.public().clone(),
-        }
-    }
-
     pub fn worker_index(&self) -> WorkerIndex {
         WorkerIndex(
             self.workers
@@ -928,9 +935,9 @@ impl AuthorityFixture {
 
     pub fn header_builder(&self, committee: &Committee) -> types::HeaderBuilder {
         types::HeaderBuilder::default()
-            .author(self.public_key())
+            .author(self.id())
             .round(1)
-            .epoch(committee.epoch)
+            .epoch(committee.epoch())
             .parents(
                 Certificate::genesis(committee)
                     .iter()
@@ -940,7 +947,7 @@ impl AuthorityFixture {
     }
 
     pub fn vote(&self, header: &Header) -> Vote {
-        Vote::new_with_signer(header, self.keypair.public(), &self.keypair)
+        Vote::new_with_signer(header, &self.id(), &self.keypair)
     }
 
     fn generate<R, P>(mut rng: R, number_of_workers: NonZeroUsize, mut get_port: P) -> Self
@@ -964,6 +971,7 @@ impl AuthorityFixture {
             .collect();
 
         Self {
+            authority: OnceCell::new(),
             keypair,
             network_keypair,
             stake: 1,

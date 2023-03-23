@@ -18,8 +18,8 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
-use config::{Committee, Parameters, WorkerCache, WorkerId};
-use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey, PublicKey};
+use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
+use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
@@ -50,8 +50,8 @@ use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
 use crate::transactions_server::TxServer;
 
 pub struct Worker {
-    /// The public key of this authority.
-    primary_name: PublicKey,
+    /// This authority.
+    authority: Authority,
     // The private-public key pair of this worker.
     keypair: NetworkKeyPair,
     /// The id of this worker used for index-based lookup by other NW nodes.
@@ -68,7 +68,7 @@ pub struct Worker {
 
 impl Worker {
     pub fn spawn(
-        primary_name: PublicKey,
+        authority: Authority,
         keypair: NetworkKeyPair,
         id: WorkerId,
         committee: Committee,
@@ -87,7 +87,7 @@ impl Worker {
 
         // Define a worker instance.
         let worker = Self {
-            primary_name: primary_name.clone(),
+            authority: authority.clone(),
             keypair,
             id,
             committee: committee.clone(),
@@ -142,7 +142,7 @@ impl Worker {
         }
 
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
-            name: worker.primary_name.clone(),
+            authority_id: worker.authority.id(),
             id: worker.id,
             committee: worker.committee.clone(),
             worker_cache: worker.worker_cache.clone(),
@@ -155,7 +155,7 @@ impl Worker {
         // Receive incoming messages from other workers.
         let address = worker
             .worker_cache
-            .worker(&primary_name, &id)
+            .worker(authority.protocol_key(), &id)
             .expect("Our public key or worker id is not in the worker cache")
             .worker_address;
         let address = address
@@ -163,13 +163,10 @@ impl Worker {
             .unwrap();
         let addr = address.to_anemo_address().unwrap();
 
-        let epoch_string: String = committee.epoch.to_string();
+        let epoch_string: String = committee.epoch().to_string();
 
         // Set up anemo Network.
-        let our_primary_peer_id = committee
-            .network_key(&primary_name)
-            .map(|public_key| PeerId(public_key.0.to_bytes()))
-            .unwrap();
+        let our_primary_peer_id = PeerId(authority.network_key().0.to_bytes());
         let primary_to_worker_router = anemo::Router::new()
             .add_rpc_service(primary_service)
             // Add an Authorization Layer to ensure that we only service requests from our primary
@@ -285,7 +282,7 @@ impl Worker {
 
         let other_workers = worker
             .worker_cache
-            .others_workers_by_id(&primary_name, &id)
+            .others_workers_by_id(authority.protocol_key(), &id)
             .into_iter()
             .map(|(_, info)| (info.name, info.worker_address));
 
@@ -300,16 +297,11 @@ impl Worker {
         }
 
         // Connect worker to its corresponding primary.
-        let primary_address = committee
-            .primary(&primary_name)
-            .expect("Our primary is not in the committee");
-
-        let primary_network_key = committee
-            .network_key(&primary_name)
-            .expect("Our primary is not in the committee");
-
-        let (peer_id, address) =
-            Self::add_peer_in_network(&network, primary_network_key.clone(), &primary_address);
+        let (peer_id, address) = Self::add_peer_in_network(
+            &network,
+            authority.network_key(),
+            &authority.primary_address(),
+        );
         peer_types.insert(peer_id, "our_primary".to_string());
         info!(
             "Adding our primary with peer id {} and address {}",
@@ -318,8 +310,8 @@ impl Worker {
 
         // update the peer_types with the "other_primary". We do not add them in the Network
         // struct, otherwise the networking library will try to connect to it
-        let other_primaries: Vec<(PublicKey, Multiaddr, NetworkPublicKey)> =
-            committee.others_primaries(&primary_name);
+        let other_primaries: Vec<(AuthorityIdentifier, Multiaddr, NetworkPublicKey)> =
+            committee.others_primaries_by_id(authority.id());
         for (_, _, network_key) in other_primaries {
             peer_types.insert(
                 PeerId(network_key.0.to_bytes()),
@@ -350,7 +342,7 @@ impl Worker {
         );
 
         let primary_connector_handle = PrimaryConnector::spawn(
-            primary_network_key,
+            authority.network_key(),
             shutdown_receivers.pop().unwrap(),
             rx_our_batch,
             rx_others_batch,
@@ -379,7 +371,7 @@ impl Worker {
             id,
             worker
                 .worker_cache
-                .worker(&worker.primary_name, &worker.id)
+                .worker(authority.protocol_key(), &worker.id)
                 .expect("Our public key or worker id is not in the worker cache")
                 .transactions
         );
@@ -461,7 +453,7 @@ impl Worker {
         // We first receive clients' transactions from the network.
         let address = self
             .worker_cache
-            .worker(&self.primary_name, &self.id)
+            .worker(self.authority.protocol_key(), &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
@@ -494,7 +486,7 @@ impl Worker {
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
         // the batch to the `Processor`.
         let quorum_waiter_handle = QuorumWaiter::spawn(
-            self.primary_name.clone(),
+            self.authority.clone(),
             self.id,
             self.committee.clone(),
             self.worker_cache.clone(),

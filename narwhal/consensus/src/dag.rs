@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::Committee;
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee};
 use dag::node_dag::{NodeDag, NodeDagError};
 use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -47,7 +46,7 @@ struct InnerDag {
     dag: NodeDag<Certificate>,
 
     /// Secondary index: An authority-aware map of the DAG's vertex Certificates
-    vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
+    vertices: RwLock<BTreeMap<(AuthorityIdentifier, Round), CertificateDigest>>,
 
     /// Metrics handler
     metrics: Arc<ConsensusMetrics>,
@@ -65,9 +64,9 @@ pub struct Dag {
 #[derive(Debug, Error)]
 pub enum ValidatorDagError {
     #[error("No remaining certificates in Dag for this authority: {0}")]
-    OutOfCertificates(PublicKey),
+    OutOfCertificates(AuthorityIdentifier),
     #[error("No known certificates for this authority: {0} at round {1}")]
-    NoCertificateForCoordinates(PublicKey, Round),
+    NoCertificateForCoordinates(AuthorityIdentifier, Round),
     // an invariant violation at the level of the generic DAG (unrelated to Certificate specifics)
     #[error("Dag invariant violation {0}")]
     DagInvariantViolation(#[from] NodeDagError),
@@ -82,7 +81,7 @@ enum DagCommand {
     Contains(CertificateDigest, oneshot::Sender<bool>),
     HasEverContained(CertificateDigest, oneshot::Sender<bool>),
     Rounds(
-        PublicKey,
+        AuthorityIdentifier,
         oneshot::Sender<Result<RangeInclusive<Round>, ValidatorDagError>>,
     ),
     ReadCausal(
@@ -90,7 +89,7 @@ enum DagCommand {
         oneshot::Sender<Result<Vec<CertificateDigest>, ValidatorDagError>>,
     ),
     NodeReadCausal(
-        (PublicKey, Round),
+        (AuthorityIdentifier, Round),
         oneshot::Sender<Result<Vec<CertificateDigest>, ValidatorDagError>>,
     ),
     Remove(
@@ -109,7 +108,7 @@ impl InnerDag {
         rx_primary: metered_channel::Receiver<Certificate>,
         rx_commands: Receiver<DagCommand>,
         dag: NodeDag<Certificate>,
-        vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
+        vertices: RwLock<BTreeMap<(AuthorityIdentifier, Round), CertificateDigest>>,
         metrics: Arc<ConsensusMetrics>,
         rx_shutdown: ConditionalBroadcastReceiver,
     ) -> Self {
@@ -155,8 +154,8 @@ impl InnerDag {
                         DagCommand::HasEverContained(dig, sender) => {
                             let _ = sender.send(self.has_ever_contained(dig));
                         }
-                        DagCommand::Rounds(pk, sender) => {
-                            let _ = sender.send(self.rounds(pk));
+                        DagCommand::Rounds(id, sender) => {
+                            let _ = sender.send(self.rounds(id));
                         },
                         DagCommand::Remove(dig, sender) => {
                             let _ = sender.send(self.remove(dig));
@@ -165,8 +164,8 @@ impl InnerDag {
                             let res = self.read_causal(dig);
                             let _ = sender.send(res.map(|r| r.collect()));
                         },
-                        DagCommand::NodeReadCausal((pk, round), sender) => {
-                            let res = self.node_read_causal(pk, round);
+                        DagCommand::NodeReadCausal((id, round), sender) => {
+                            let res = self.node_read_causal(id, round);
                             let _ = sender.send(res.map(|r| r.collect()));
                         },
                         DagCommand::NotifyRead(dig, sender) => {
@@ -224,7 +223,10 @@ impl InnerDag {
 
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
     #[instrument(level = "trace", skip_all, fields(origin = ?origin), err)]
-    fn rounds(&mut self, origin: PublicKey) -> Result<RangeInclusive<Round>, ValidatorDagError> {
+    fn rounds(
+        &mut self,
+        origin: AuthorityIdentifier,
+    ) -> Result<RangeInclusive<Round>, ValidatorDagError> {
         // Our garbage collection is a mark-and-sweep algorithm, where the mark part is in `make_compressible` and
         // `read_causal` triggers a sweep.
         // To make sure we don't return rounds as live when wouldn't be seen as such from a subsequent `read_causal`
@@ -243,7 +245,7 @@ impl InnerDag {
         let (earliest, latest) = {
             // Perform the actual round probe
             let vertices = self.vertices.read().unwrap();
-            let range = vertices.range((origin.clone(), Round::MIN)..(origin.clone(), Round::MAX));
+            let range = vertices.range((origin, Round::MIN)..(origin, Round::MAX));
 
             // In non-pathological cases, the range is non-empty, and has a lot of dropped nodes towards the beginning
             // yet this can't be a take_while because the DAG removal may be non-contiguous.
@@ -278,11 +280,11 @@ impl InnerDag {
     #[instrument(level = "trace", skip_all, fields(origin = ?origin, round = ?round), err)]
     fn node_read_causal(
         &self,
-        origin: PublicKey,
+        origin: AuthorityIdentifier,
         round: Round,
     ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError> {
         let vertices = self.vertices.read().unwrap();
-        let start_digest = vertices.get(&(origin.clone(), round)).ok_or(
+        let start_digest = vertices.get(&(origin, round)).ok_or(
             ValidatorDagError::NoCertificateForCoordinates(origin, round),
         )?;
         self.read_causal(*start_digest)
@@ -424,7 +426,7 @@ impl Dag {
     /// Returns the oldest and newest rounds for which a validator has (live) certificates in the DAG
     pub async fn rounds(
         &self,
-        origin: PublicKey,
+        origin: AuthorityIdentifier,
     ) -> Result<RangeInclusive<Round>, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
@@ -462,7 +464,7 @@ impl Dag {
     /// passed as argument.
     pub async fn node_read_causal(
         &self,
-        origin: PublicKey,
+        origin: AuthorityIdentifier,
         round: Round,
     ) -> Result<Vec<CertificateDigest>, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();

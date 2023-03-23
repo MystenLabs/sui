@@ -17,14 +17,14 @@ async fn inner_dag_insert_one() {
     // Make certificates for rounds 1 to 4.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
+        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // set up a Dag
@@ -42,14 +42,14 @@ async fn test_dag_read_notify() {
     // Make certificates for rounds 1 to 4.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
+        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
     let certs = certificates.clone().into_iter().map(|c| (c.digest(), c));
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -83,7 +83,7 @@ async fn test_dag_read_notify() {
 async fn test_dag_new_has_genesis_and_its_not_live() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -103,7 +103,7 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
 
     // But the genesis does not come out in read_causal, as is is compressed the moment we add more nodes
     let (certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=1, &genesis, &keys);
+        make_optimal_certificates(&committee, 1..=1, &genesis, &ids);
     let mut certs_to_insert = certificates.clone();
 
     // Feed the additional certificates to the Dag
@@ -135,7 +135,7 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
 async fn test_dag_compresses_empty_blocks() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -151,7 +151,7 @@ async fn test_dag_compresses_empty_blocks() {
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
-        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &keys);
+        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &ids);
     // make those empty
     for mut cert in certificates.iter_mut() {
         cert.header.payload = IndexMap::new();
@@ -170,7 +170,7 @@ async fn test_dag_compresses_empty_blocks() {
 
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) =
-        make_optimal_certificates(&committee, 2..=2, &next_parents, &keys);
+        make_optimal_certificates(&committee, 2..=2, &next_parents, &ids);
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
@@ -203,7 +203,7 @@ async fn test_dag_compresses_empty_blocks() {
 async fn test_dag_rounds_after_compression() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -219,7 +219,7 @@ async fn test_dag_rounds_after_compression() {
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
-        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &keys);
+        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &ids);
     // make those empty
     for mut cert in certificates.iter_mut() {
         cert.header.payload = IndexMap::new();
@@ -233,7 +233,7 @@ async fn test_dag_rounds_after_compression() {
 
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) =
-        make_optimal_certificates(&committee, 2..=2, &next_parents, &keys);
+        make_optimal_certificates(&committee, 2..=2, &next_parents, &ids);
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
@@ -242,7 +242,7 @@ async fn test_dag_rounds_after_compression() {
 
     // Do not trigger read_causal on all the newly inserted certs
     // Test rounds: they reflect that the round of compressible certificates is gone
-    for pub_key in keys {
+    for pub_key in ids {
         assert_eq!(dag.rounds(pub_key).await.unwrap(), 2..=2)
     }
 }
@@ -252,14 +252,14 @@ async fn dag_mutation_failures() {
     // Make certificates for rounds 1 to 4.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
+        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -294,8 +294,8 @@ async fn dag_mutation_failures() {
     }
 
     // Check no authority has live vertexes beyond 1
-    for authority in keys.clone() {
-        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 0..=0)
+    for authority in ids.clone() {
+        assert_eq!(dag.rounds(authority).await.unwrap(), 0..=0)
     }
 
     // Feed the certificates to the Dag in order
@@ -304,14 +304,14 @@ async fn dag_mutation_failures() {
     }
 
     // Check all authorities have live vertexes 1..=4 (genesis is compressible)
-    for authority in keys.clone() {
-        assert_eq!(dag.rounds(authority.clone()).await.unwrap(), 1..=4)
+    for authority in ids.clone() {
+        assert_eq!(dag.rounds(authority).await.unwrap(), 1..=4)
     }
 
     // We have only inserted from round 0 to 4 => round 5 queries should fail
-    for authority in keys {
+    for authority in ids {
         assert!(matches!(
-            dag.node_read_causal(authority.clone(), 5).await,
+            dag.node_read_causal(authority, 5).await,
             Err(ValidatorDagError::NoCertificateForCoordinates(_, 5))
         ))
     }
@@ -322,14 +322,14 @@ async fn dag_insert_one_and_rounds_node_read() {
     // Make certificates for rounds 1 to 4.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
+        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // set up a Dag
@@ -344,8 +344,8 @@ async fn dag_insert_one_and_rounds_node_read() {
     }
 
     // we fed 4 complete rounds, and genesis is compressible => rounds(pk) = 1..=4
-    for authority in keys.clone() {
-        assert_eq!(1..=4, dag.rounds(authority.clone()).await.unwrap());
+    for authority in ids.clone() {
+        assert_eq!(1..=4, dag.rounds(authority).await.unwrap());
     }
 
     // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices:
@@ -360,7 +360,7 @@ async fn dag_insert_one_and_rounds_node_read() {
     }
 
     // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices
-    for authority in keys {
+    for authority in ids {
         assert_eq!(13, dag.node_read_causal(authority, 4).await.unwrap().len());
     }
 }
@@ -370,14 +370,14 @@ async fn dag_insert_and_remove_reads() {
     // Make certificates for rounds 1 to 4.
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let mut genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) =
-        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
+        make_optimal_certificates(&committee, 1..=4, &genesis, &ids);
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // set up a Dag
@@ -397,7 +397,7 @@ async fn dag_insert_and_remove_reads() {
 
     // on optimal certificates (we ack all of the prior round), we BFT 1 + 3 * 4 vertices
     // (round 0 disappeared)
-    for authority in keys {
+    for authority in ids {
         assert_eq!(13, dag.node_read_causal(authority, 4).await.unwrap().len());
     }
 

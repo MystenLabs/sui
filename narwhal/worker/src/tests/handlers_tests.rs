@@ -15,14 +15,14 @@ async fn synchronize() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let authority_id = fixture.authorities().next().unwrap().id();
     let id = 0;
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
 
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id,
         id,
         committee,
         worker_cache,
@@ -38,7 +38,7 @@ async fn synchronize() {
     let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
-        target: target_primary.public_key(),
+        target: target_primary.id(),
         is_certified: false,
     };
 
@@ -90,14 +90,14 @@ async fn synchronize_when_batch_exists() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let authority_id = fixture.authorities().next().unwrap().id();
     let id = 0;
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
 
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id,
         id,
         committee,
         worker_cache,
@@ -117,7 +117,7 @@ async fn synchronize_when_batch_exists() {
     let target_primary = fixture.authorities().nth(1).unwrap();
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
-        target: target_primary.public_key(),
+        target: target_primary.id(),
         is_certified: false,
     };
 
@@ -136,7 +136,7 @@ async fn delete_batches() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let authority_id = fixture.authorities().next().unwrap().id();
     let id = 0;
 
     // Create a new test store.
@@ -147,7 +147,7 @@ async fn delete_batches() {
 
     // Send a delete request.
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id,
         id,
         committee,
         worker_cache,

@@ -70,7 +70,7 @@ impl ConsensusProtocol for Tusk {
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake(&x.origin()))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
@@ -125,7 +125,7 @@ impl ConsensusProtocol for Tusk {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name.to_string(), round);
+            debug!("Latest commit of {}: Round {}", name, round);
         }
 
         Ok((Outcome::Commit, committed_sub_dags))
@@ -158,7 +158,7 @@ impl Tusk {
         cfg_if::cfg_if! {
             if #[cfg(test)] {
                 // consensus tests rely on returning the same leader.
-                let leader = committee.authorities.iter().next().expect("Empty authorities table!").0;
+                let leader = committee.authorities().next().expect("Empty authorities table!");
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
                 let leader = &committee.leader(round);
@@ -166,7 +166,7 @@ impl Tusk {
         }
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(leader))
+        dag.get(&round).and_then(|x| x.get(&leader.id()))
     }
 }
 
@@ -189,7 +189,7 @@ mod tests {
         // process certificates for rounds, check we don't grow the dag too much
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         let genesis = Certificate::genesis(&committee)
             .iter()
@@ -232,7 +232,7 @@ mod tests {
         // process certificates for rounds, check we don't grow the dag too much
         let fixture = CommitteeFixture::builder().build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         let genesis = Certificate::genesis(&committee)
             .iter()

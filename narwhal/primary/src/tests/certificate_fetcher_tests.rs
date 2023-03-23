@@ -6,8 +6,7 @@ use crate::{
 };
 use anemo::async_trait;
 use anyhow::Result;
-use config::{Epoch, WorkerId};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Epoch, WorkerId};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -128,7 +127,7 @@ fn verify_certificates_not_in_store(
 // Note: this should always mimic the Header struct, only changing the visibility of the id field to public
 #[allow(dead_code)]
 struct BadHeader {
-    pub author: PublicKey,
+    pub author: AuthorityIdentifier,
     pub round: Round,
     pub epoch: Epoch,
     pub payload: IndexMap<BatchDigest, WorkerId>,
@@ -142,7 +141,7 @@ async fn fetch_certificates_basic() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let fake_primary = fixture.authorities().nth(1).unwrap();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let gc_depth: Round = 50;
@@ -170,7 +169,7 @@ async fn fetch_certificates_basic() {
 
     // Make a synchronizer for certificates.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         gc_depth,
@@ -204,7 +203,7 @@ async fn fetch_certificates_basic() {
 
     // Make a certificate fetcher
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
-        name.clone(),
+        id,
         fixture.committee(),
         client_network.clone(),
         certificate_store.clone(),
@@ -365,10 +364,7 @@ async fn fetch_certificates_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header) };
-    let wrong_header = BadHeader {
-        id: OnceCell::with_value(HeaderDigest::default()),
-        ..cert_header
-    };
+    let wrong_header = BadHeader { ..cert_header };
     let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
     cert.header = wolf_header;
     certs.push(cert);

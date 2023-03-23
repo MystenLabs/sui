@@ -24,7 +24,7 @@ async fn propose_header() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let id = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -42,7 +42,7 @@ async fn propose_header() {
 
     // Set up network.
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -54,9 +54,9 @@ async fn propose_header() {
 
     // Set up remote primaries responding with votes.
     let mut primary_networks = Vec::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let address = committee.primary(&primary.public_key()).unwrap();
-        let name = primary.public_key();
+        let name = primary.id();
         let signature_service = SignatureService::new(primary.keypair().copy());
         let vote = Vote::new(&proposed_header, &name, &signature_service).await;
         let mut mock_server = MockPrimaryToPrimary::new();
@@ -95,7 +95,7 @@ async fn propose_header() {
 
     // Spawn the core.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -109,8 +109,9 @@ async fn propose_header() {
         None,
         metrics.clone(),
     ));
+
     let _handle = Certifier::spawn(
-        name,
+        id,
         committee.clone(),
         header_store.clone(),
         certificate_store.clone(),
@@ -138,7 +139,7 @@ async fn propose_header_failure() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -156,7 +157,7 @@ async fn propose_header_failure() {
 
     // Set up network.
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&authority_id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -168,7 +169,7 @@ async fn propose_header_failure() {
 
     // Set up remote primaries responding with votes.
     let mut primary_networks = Vec::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != authority_id) {
         let address = committee.primary(&primary.public_key()).unwrap();
         let mut mock_server = MockPrimaryToPrimary::new();
         mock_server
@@ -192,7 +193,7 @@ async fn propose_header_failure() {
 
     // Spawn the core.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -206,8 +207,9 @@ async fn propose_header_failure() {
         None,
         metrics.clone(),
     ));
+
     let _handle = Certifier::spawn(
-        name,
+        authority_id,
         committee.clone(),
         header_store.clone(),
         certificate_store.clone(),
@@ -235,7 +237,7 @@ async fn shutdown_core() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let id: AuthorityIdentifier = primary.id();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
@@ -253,7 +255,7 @@ async fn shutdown_core() {
 
     // Make a synchronizer for the core.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -271,7 +273,7 @@ async fn shutdown_core() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -283,7 +285,7 @@ async fn shutdown_core() {
 
     // Spawn the core.
     let handle = Certifier::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         header_store.clone(),
         certificate_store.clone(),
