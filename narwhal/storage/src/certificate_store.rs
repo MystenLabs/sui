@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use fastcrypto::hash::Hash;
+use lru::LruCache;
+use parking_lot::Mutex;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
 
 use crate::NotifySubscribers;
@@ -34,6 +38,8 @@ pub struct CertificateStore {
     certificate_id_by_origin: DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
     /// The pub/sub to notify for a write that happened for a certificate digest id
     notify_subscribers: NotifySubscribers<CertificateDigest, Certificate>,
+    /// An LRU cache to keep recent certificates
+    cache: Arc<Mutex<LruCache<CertificateDigest, Certificate>>>,
 }
 
 impl CertificateStore {
@@ -47,6 +53,9 @@ impl CertificateStore {
             certificate_id_by_round,
             certificate_id_by_origin,
             notify_subscribers: NotifySubscribers::new(),
+            cache: Arc::new(Mutex::new(LruCache::new(
+                NonZeroUsize::new(100 * 60).unwrap(),
+            ))), // 100 certificates for 60 rounds (roughly certificates for a minute)
         }
     }
 
@@ -84,6 +93,9 @@ impl CertificateStore {
         if result.is_ok() {
             self.notify_subscribers.notify(&id, &certificate);
         }
+
+        // insert in cache
+        self.cache.lock().put(id, certificate);
 
         result
     }
@@ -131,10 +143,15 @@ impl CertificateStore {
         let result = batch.write();
 
         if result.is_ok() {
-            for (_id, certificate) in certificates {
+            for (_id, certificate) in &certificates {
                 self.notify_subscribers
-                    .notify(&certificate.digest(), &certificate);
+                    .notify(&certificate.digest(), certificate);
             }
+        }
+
+        let mut guard = self.cache.lock();
+        for (id, certificate) in certificates {
+            guard.put(id, certificate);
         }
 
         result
@@ -148,6 +165,10 @@ impl CertificateStore {
                 "Injected error in certificate store read"
             )))
         });
+
+        if let Some(certificate) = self.cache.lock().get(&id) {
+            return Ok(Some(certificate.clone()));
+        }
 
         self.certificates_by_id.get(&id)
     }
@@ -179,6 +200,10 @@ impl CertificateStore {
                 "Injected error in certificate store contains_digest"
             )))
         });
+
+        if self.cache.lock().contains(id) {
+            return Ok(true);
+        }
 
         self.certificates_by_id.contains_key(id)
     }
@@ -241,7 +266,13 @@ impl CertificateStore {
         batch = batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
 
         // execute the batch (atomically) and return the result
-        batch.write()
+        let result = batch.write();
+
+        if result.is_ok() {
+            let _ = self.cache.lock().pop(&id);
+        }
+
+        result
     }
 
     /// Deletes multiple certificates in an atomic way.
@@ -264,10 +295,19 @@ impl CertificateStore {
         batch = batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
 
         // delete the certificates by its ids
-        batch = batch.delete_batch(&self.certificates_by_id, ids)?;
+        batch = batch.delete_batch(&self.certificates_by_id, ids.clone())?;
 
         // execute the batch (atomically) and return the result
-        batch.write()
+        let result = batch.write();
+
+        if result.is_ok() {
+            let mut guard = self.cache.lock();
+            for id in ids {
+                guard.pop(&id);
+            }
+        }
+
+        result
     }
 
     /// Retrieves all the certificates with round >= the provided round.

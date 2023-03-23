@@ -20,6 +20,8 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 config = { path = "../config", package = "narwhal-config" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 fail = "0.5.1"
+lru = "0.10"
+parking_lot = "0.12.1"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
