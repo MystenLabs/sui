@@ -8,7 +8,6 @@ use std::{
 
 use move_binary_format::{
     access::ModuleAccess,
-    compatibility::Compatibility,
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
     CompiledModule,
@@ -41,8 +40,8 @@ use sui_types::{
         ProgrammableTransaction,
     },
     move_package::{
-        is_valid_package_upgrade_policy, normalize_deserialized_modules, MovePackage, UpgradeCap,
-        UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
+        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+        UpgradeTicket,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -581,38 +580,20 @@ fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
     upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
     policy: u8,
 ) -> Result<(), ExecutionError> {
-    let check_struct_and_pub_function_linking = true;
-    let check_struct_layout = true;
-    let check_friend_linking = false;
-    let compatiblity_checker = Compatibility::new(
-        check_struct_and_pub_function_linking,
-        check_struct_layout,
-        check_friend_linking,
-    );
     // Make sure this is a known upgrade policy.
-    if !is_valid_package_upgrade_policy(&policy) {
+    let Ok(policy) = UpgradePolicy::try_from(policy) else {
         return Err(ExecutionError::from_kind(
             ExecutionErrorKind::PackageUpgradeError {
                 upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy },
             },
         ));
-    }
-
-    // TODO(tzakian): We currently only support compatible upgrades. Need to add in support for
-    // additive and dep-only upgrades as well.
-    if policy != UPGRADE_POLICY_COMPATIBLE {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::FeatureNotYetSupported,
-            format!("Upgrade policy {policy} not yet supported"),
-        ));
-    }
+    };
 
     let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version()) else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
     let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
-
     for (name, cur_module) in current_normalized {
         let msg = format!("Existing module {name} not found in next version of package");
         let Some(new_module) = new_normalized.remove(&name) else {
@@ -624,7 +605,7 @@ fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
             ));
         };
 
-        if let Err(e) = compatiblity_checker.check(&cur_module, &new_module) {
+        if let Err(e) = policy.check_compatibility(&cur_module, &new_module) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
