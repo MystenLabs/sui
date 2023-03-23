@@ -46,7 +46,7 @@ pub trait IndexerStore {
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
 
-    fn get_total_transaction_number(&self) -> Result<i64, IndexerError>;
+    fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;
 
     // TODO: combine all get_transaction* methods
     fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError>;
@@ -135,7 +135,9 @@ pub trait IndexerStore {
         limit: usize,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_total_address_number(&self) -> Result<u64, IndexerError>;
+    fn get_total_addresses(&self) -> Result<u64, IndexerError>;
+    fn get_total_objects(&self) -> Result<u64, IndexerError>;
+    fn get_total_packages(&self) -> Result<u64, IndexerError>;
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;

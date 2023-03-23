@@ -41,7 +41,9 @@ impl<S: IndexerStore> ReadApi<S> {
     }
 
     fn get_total_transaction_number_internal(&self) -> Result<u64, IndexerError> {
-        self.state.get_total_transaction_number().map(|n| n as u64)
+        self.state
+            .get_total_transaction_number_from_checkpoints()
+            .map(|n| n as u64)
     }
 
     fn get_transaction_with_options_internal(

@@ -1977,6 +1977,63 @@
       }
     },
     {
+      "name": "suix_getTotalAddresses",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return total address count",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "suix_getTotalObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return total object count",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "suix_getTotalPackages",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return total package count",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
       "name": "unsafe_batchTransaction",
       "tags": [
         {

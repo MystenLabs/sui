@@ -48,6 +48,18 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo> {
         Ok(self.state.get_current_epoch()?)
     }
+
+    async fn get_total_packages(&self) -> RpcResult<u64> {
+        Ok(self.state.get_total_packages()?)
+    }
+
+    async fn get_total_addresses(&self) -> RpcResult<u64> {
+        Ok(self.state.get_total_addresses()?)
+    }
+
+    async fn get_total_objects(&self) -> RpcResult<u64> {
+        Ok(self.state.get_total_objects()?)
+    }
 }
 
 impl<S> SuiRpcModule for ExtendedApi<S>
