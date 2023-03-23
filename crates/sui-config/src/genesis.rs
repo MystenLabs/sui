@@ -757,25 +757,19 @@ impl Builder {
         genesis
     }
 
+    /// Validates the entire state of the build, no matter what the internal state is (input
+    /// collection phase or output phase)
     pub fn validate(&self) -> Result<(), anyhow::Error> {
+        self.validate_inputs()?;
+        self.validate_output();
+        Ok(())
+    }
+
+    /// Runs through validation checks on the input values present in the builder
+    fn validate_inputs(&self) -> Result<(), anyhow::Error> {
         if !self.parameters.allow_insertion_of_extra_objects && !self.objects.is_empty() {
             bail!("extra objects are disallowed");
         }
-
-        let GenesisChainParameters {
-            protocol_version,
-            chain_start_timestamp_ms,
-            epoch_duration_ms,
-            stake_subsidy_start_epoch,
-            stake_subsidy_initial_distribution_amount,
-            stake_subsidy_period_length,
-            stake_subsidy_decrease_rate,
-            max_validator_count,
-            min_validator_joining_stake,
-            validator_low_stake_threshold,
-            validator_very_low_stake_threshold,
-            validator_low_stake_grace_period,
-        } = self.parameters.to_genesis_chain_parameters();
 
         for validator in self.validators.values() {
             validator.validate().with_context(|| {
@@ -793,9 +787,31 @@ impl Builder {
             );
         }
 
+        Ok(())
+    }
+
+    /// Runs through validation checks on the generated output (the initial chain state) based on
+    /// the input values present in the builder
+    fn validate_output(&self) {
+        // If genesis hasn't been built yet, just early return as there is nothing to validate yet
         let Some(unsigned_genesis) = self.unsigned_genesis_checkpoint() else {
-            return Ok(());
+            return;
         };
+
+        let GenesisChainParameters {
+            protocol_version,
+            chain_start_timestamp_ms,
+            epoch_duration_ms,
+            stake_subsidy_start_epoch,
+            stake_subsidy_initial_distribution_amount,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
+        } = self.parameters.to_genesis_chain_parameters();
 
         let system_state = unsigned_genesis
             .sui_system_object()
@@ -963,7 +979,7 @@ impl Builder {
         let committee = system_state.get_current_epoch_committee().committee;
         for signature in self.signatures.values() {
             if self.validators.get(&signature.authority).is_none() {
-                bail!("found signature for unknown validator: {:#?}", signature);
+                panic!("found signature for unknown validator: {:#?}", signature);
             }
 
             signature
@@ -974,8 +990,6 @@ impl Builder {
                 )
                 .expect("signature should be valid");
         }
-
-        Ok(())
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
