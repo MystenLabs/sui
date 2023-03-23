@@ -78,8 +78,21 @@ impl<S: IndexerStore> ReadApi<S> {
             .map(|digest| digest.base58_encode())
             .collect::<Vec<_>>();
         let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
-
-        let tx_full_resp_futures = tx_vec.into_iter().map(|tx| {
+        let ordered_tx_vec = digest_strs
+            .iter()
+            .filter_map(|digest| {
+                tx_vec
+                    .iter()
+                    .find(|txn| txn.transaction_digest == *digest)
+                    .cloned()
+            })
+            .collect::<Vec<_>>();
+        if ordered_tx_vec.len() != tx_vec.len() {
+            return Err(IndexerError::PostgresReadError(
+                "Transaction count changed after reorder, this should never happen.".to_string(),
+            ));
+        }
+        let tx_full_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
             self.state
                 .compose_full_transaction_response(tx, options.clone())
         });
