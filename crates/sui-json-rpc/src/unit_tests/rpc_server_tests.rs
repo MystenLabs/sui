@@ -66,6 +66,22 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+    let response = http_client
+        .get_object_with_options(
+            ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+            Some(SuiObjectDataOptions::new().with_display()),
+        )
+        .await;
+    assert!(response.is_ok());
+    let response: SuiObjectResponse = response?;
+    assert!(response.into_object().unwrap().display.is_none());
+    Ok(())
+}
+
 #[sim_test]
 async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;

@@ -906,7 +906,9 @@ async fn get_display_fields(
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> RpcResult<Option<BTreeMap<String, String>>> {
-    let (object_type, layout) = get_object_type_and_struct(original_object, original_layout)?;
+    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else{
+        return Ok(None)
+    };
     if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
         return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
     }
@@ -975,14 +977,13 @@ async fn get_display_object_id(
 fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
-) -> RpcResult<(StructTag, MoveStruct)> {
-    let object_type = o
-        .type_()
-        .ok_or_else(|| anyhow!("Failed to extract object type"))?
-        .clone()
-        .into();
-    let move_struct = get_move_struct(o, layout)?;
-    Ok((object_type, move_struct))
+) -> RpcResult<Option<(StructTag, MoveStruct)>> {
+    if let Some(object_type) = o.type_() {
+        let move_struct = get_move_struct(o, layout)?;
+        Ok(Some((object_type.clone().into(), move_struct)))
+    } else {
+        Ok(None)
+    }
 }
 
 fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> RpcResult<MoveStruct> {
