@@ -110,6 +110,7 @@ impl StateAccumulator {
             })
             .collect::<HashSet<ObjectKey>>();
 
+        // process removals from the set
         let modified_at_digests = self
             .authority_store
             .perpetual_tables
@@ -124,19 +125,7 @@ impl StateAccumulator {
             })
             .collect::<Vec<ObjectDigest>>();
 
-        // process removals from the set
-        acc.remove_all(
-            effects
-                .iter()
-                .flat_map(|fx| {
-                    fx.deleted()
-                        .iter()
-                        .map(|oref| oref.2)
-                        .chain(modified_at_digests.clone().into_iter())
-                        .collect::<Vec<ObjectDigest>>()
-                })
-                .collect::<HashSet<ObjectDigest>>(),
-        );
+        acc.remove_all(modified_at_digests);
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);
