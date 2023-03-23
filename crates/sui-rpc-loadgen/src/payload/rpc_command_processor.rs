@@ -345,7 +345,7 @@ pub async fn check_transactions(
                 elapsed_time.as_secs_f64()
             );
             transactions
-        } // add closing brace here
+        }
     }))
     .await;
 
