@@ -39,9 +39,7 @@ function SignaturePanel({
                 <DescriptionItem title="Address">
                     <AddressLink
                         noTruncate
-                        address={normalizeSuiAddress(
-                            signature.pubKey.toSuiAddress()
-                        )}
+                        address={signature.pubKey.toSuiAddress()}
                     />
                 </DescriptionItem>
                 <DescriptionItem title="Signature">
