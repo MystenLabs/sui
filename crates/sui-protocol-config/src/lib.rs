@@ -109,7 +109,7 @@ impl SupportedProtocolVersions {
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize)]
+#[derive(Default, Clone, Serialize, Debug)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
@@ -134,7 +134,7 @@ struct FeatureFlags {
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
 #[skip_serializing_none]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
