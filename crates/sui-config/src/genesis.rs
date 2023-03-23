@@ -377,7 +377,7 @@ impl GenesisValidatorInfo {
         }
 
         if self.info.commission_rate > 10000 {
-            bail!("commisison rate must be lower than 100%");
+            bail!("commissions rate must be lower than 100%");
         }
 
         let protocol_pubkey = AuthorityPublicKey::from_bytes(self.info.protocol_key.as_ref())?;
@@ -813,9 +813,15 @@ impl Builder {
             validator_low_stake_grace_period,
         } = self.parameters.to_genesis_chain_parameters();
 
-        let system_state = unsigned_genesis
-            .sui_system_object()
-            .into_genesis_version_for_tooling();
+        // In non-testing code, genesis type must always be V1.
+        #[cfg(not(msim))]
+        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object();
+
+        #[cfg(msim)]
+        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object() else {
+            // Types other than V1 used in simtests do not need to be validated.
+            return;
+        };
 
         assert_eq!(
             self.validators.len(),
