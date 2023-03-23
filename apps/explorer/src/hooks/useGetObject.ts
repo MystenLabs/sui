@@ -26,7 +26,7 @@ export function useGetObject(
                     showOwner: true,
                     showPreviousTransaction: true,
                     showStorageRebate: true,
-                    showDisplay: true,
+                    // showDisplay: true,
                 },
             }),
         { enabled: !!normalizedObjId }

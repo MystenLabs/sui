@@ -28,6 +28,7 @@ interface Props {
     id?: string;
     name: string;
     code: string;
+    language?: Language;
 }
 
 interface TypeReference {
@@ -58,7 +59,7 @@ function unwrapTypeReference(
     return null;
 }
 
-function ModuleView({ id, name, code }: Props) {
+function ModuleView({ id, name, code, language = 'rust' as Language }: Props) {
     const { data: normalizedModule } = useNormalizedMoveModule(id, name);
     const normalizedModuleReferences = useMemo(() => {
         const typeReferences: Record<string, TypeReference> = {};
@@ -90,7 +91,7 @@ function ModuleView({ id, name, code }: Props) {
                 <Highlight
                     {...defaultProps}
                     code={code}
-                    language={'rust' as Language}
+                    language={language}
                     theme={undefined}
                 >
                     {({
