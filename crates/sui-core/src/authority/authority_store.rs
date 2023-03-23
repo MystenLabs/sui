@@ -798,6 +798,7 @@ impl AuthorityStore {
             written,
             deleted,
             events,
+            max_binary_format_version: _,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
