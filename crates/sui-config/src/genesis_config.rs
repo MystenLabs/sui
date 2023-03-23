@@ -3,10 +3,12 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
 use anyhow::Result;
+use fastcrypto::traits::KeyPair;
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_types::multiaddr::Multiaddr;
@@ -231,6 +233,10 @@ const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 pub const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
+    /// A predictable rng seed used to generate benchmark configs. This seed may also be needed
+    /// by other crates (e.g. the load generators).
+    pub const BENCHMARKS_RNG_SEED: u64 = 0;
+
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
             DEFAULT_NUMBER_OF_AUTHORITIES,
@@ -309,6 +315,83 @@ impl GenesisConfig {
             accounts,
             ..Default::default()
         }
+    }
+
+    /// Generate a genesis config allowing to easily bootstrap a network for benchmarking purposes. This
+    /// function is ultimately used to print the genesis blob and all validators configs. All keys and
+    /// parameters are predictable to facilitate benchmarks orchestration. Only the main ip addresses of
+    /// the validators are specified (as those are often dictated by the cloud provider hosing the testbed).
+    pub fn new_for_benchmarks(ips: &[String]) -> Self {
+        // Set the validator's configs.
+        let mut rng = StdRng::seed_from_u64(Self::BENCHMARKS_RNG_SEED);
+        let validator_config_info: Vec<_> = ips
+            .iter()
+            .map(|ip| {
+                ValidatorConfigInfo {
+                    consensus_address: "/ip4/127.0.0.1/tcp/8083/http".parse().unwrap(),
+                    consensus_internal_worker_address: None,
+                    genesis_info: ValidatorGenesisInfo::from_base_ip(
+                        AuthorityKeyPair::generate(&mut rng), // key_pair
+                        NetworkKeyPair::generate(&mut rng),   // worker_key_pair
+                        SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng)), // account_key_pair
+                        NetworkKeyPair::generate(&mut rng),   // network_key_pair
+                        Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
+                        ip.to_string(),
+                        500, // port_offset
+                    ),
+                }
+            })
+            .collect();
+
+        // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
+        // enough gas objects for most types of benchmarks).
+        let genesis_gas_objects = Self::benchmark_gas_object_id_offsets(ips.len())
+            .into_iter()
+            .map(|id| ObjectConfigRange {
+                offset: id,
+                count: 5000,
+                gas_value: 18446744073709551615,
+            })
+            .collect();
+
+        // Make a predictable address that will own all gas objects.
+        let gas_key = Self::benchmark_gas_key();
+        let gas_address = SuiAddress::from(&gas_key.public());
+
+        // Set the initial gas objects.
+        let account_config = AccountConfig {
+            address: Some(gas_address),
+            gas_objects: vec![],
+            gas_object_ranges: Some(genesis_gas_objects),
+        };
+
+        // Make a new genesis configuration.
+        GenesisConfig {
+            validator_config_info: Some(validator_config_info),
+            parameters: GenesisCeremonyParameters::new(),
+            committee_size: ips.len(),
+            grpc_load_shed: None,
+            grpc_concurrency_limit: None,
+            accounts: vec![account_config],
+        }
+    }
+
+    /// Generate a predictable and fixed key that will own all gas objects used for benchmarks.
+    /// This function may be called by other parts of the codebase (e.g. load generators) to
+    /// get the same keypair used for genesis (hence the importance of the seedable rng).
+    pub fn benchmark_gas_key() -> SuiKeyPair {
+        let mut rng = StdRng::seed_from_u64(Self::BENCHMARKS_RNG_SEED);
+        SuiKeyPair::Ed25519(NetworkKeyPair::generate(&mut rng))
+    }
+
+    /// Generate several predictable and fixed gas object id offsets for benchmarks. Load generators
+    /// and other benchmark facilities may also need to retrieve these id offsets (hence the importance
+    /// of the seedable rng).
+    pub fn benchmark_gas_object_id_offsets(quantity: usize) -> Vec<ObjectID> {
+        let mut rng = StdRng::seed_from_u64(Self::BENCHMARKS_RNG_SEED);
+        (0..quantity)
+            .map(|_| ObjectID::random_from_rng(&mut rng))
+            .collect()
     }
 }
 
