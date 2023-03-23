@@ -9,7 +9,11 @@ module sui_system::stake_subsidy {
     use sui::bag;
     use sui::tx_context::TxContext;
 
+    friend sui_system::genesis;
     friend sui_system::sui_system_state_inner;
+
+    #[test_only]
+    friend sui_system::governance_test_utils;
 
     struct StakeSubsidy has store {
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
@@ -37,7 +41,7 @@ module sui_system::stake_subsidy {
 
     public(friend) fun create(
         balance: Balance<SUI>,
-        initial_stake_subsidy_amount: u64,
+        initial_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
         ctx: &mut TxContext,
@@ -51,7 +55,7 @@ module sui_system::stake_subsidy {
         StakeSubsidy {
             balance,
             distribution_counter: 0,
-            current_distribution_amount: initial_stake_subsidy_amount,
+            current_distribution_amount: initial_distribution_amount,
             stake_subsidy_period_length,
             stake_subsidy_decrease_rate,
             extra_fields: bag::new(ctx),

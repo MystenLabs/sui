@@ -20,6 +20,7 @@ mod test {
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::checkpoints::CheckpointStore;
     use sui_macros::{register_fail_points, sim_test};
+    use sui_protocol_config::ProtocolConfig;
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
@@ -236,8 +237,8 @@ mod test {
         let bank = BenchmarkBank::new(proxy.clone(), primary_gas, pay_coin);
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
-            if let Ok(_) = system_state_observer.reference_gas_price.changed().await {
-                info!("Got the reference gas price from system state object");
+            if let Ok(_) = system_state_observer.state.changed().await {
+                info!("Got the new state (reference gas price and/or protocol config) from system state object");
             }
             Arc::new(system_state_observer)
         };

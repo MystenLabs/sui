@@ -34,7 +34,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
--  [Function `burn_`](#0x2_coin_burn_)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
 -  [Function `update_description`](#0x2_coin_update_description)
@@ -231,7 +230,7 @@ matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code
 
 <a name="0x2_coin_ENotEnough"></a>
 
-For when trying to split a coin more times than its balance allows.
+Trying to split a coin more times than its balance allows.
 
 
 <pre><code><b>const</b> <a href="coin.md#0x2_coin_ENotEnough">ENotEnough</a>: u64 = 2;
@@ -241,7 +240,7 @@ For when trying to split a coin more times than its balance allows.
 
 <a name="0x2_coin_EBadWitness"></a>
 
-For when a type passed to create_supply is not a one-time witness.
+A type passed to create_supply is not a one-time witness.
 
 
 <pre><code><b>const</b> <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>: u64 = 0;
@@ -251,7 +250,7 @@ For when a type passed to create_supply is not a one-time witness.
 
 <a name="0x2_coin_EInvalidArg"></a>
 
-For when invalid arguments are passed to a function.
+Invalid arguments are passed to a function.
 
 
 <pre><code><b>const</b> <a href="coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>: u64 = 1;
@@ -930,7 +929,7 @@ Destroy the coin <code>c</code> and decrease the total supply in <code>cap</code
 accordingly.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): u64
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;): u64
 </code></pre>
 
 
@@ -939,7 +938,7 @@ accordingly.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="coin.md#0x2_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;): u64 {
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;): u64 {
     <b>let</b> <a href="coin.md#0x2_coin_Coin">Coin</a> { id, <a href="balance.md#0x2_balance">balance</a> } = c;
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> cap.total_supply, <a href="balance.md#0x2_balance">balance</a>)
@@ -983,43 +982,6 @@ Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code
 ) {
     <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_mint">mint</a>(c, amount, ctx), recipient)
 }
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_burn_"></a>
-
-## Function `burn_`
-
-Burn a Coin and reduce the total_supply. Invokes <code><a href="coin.md#0x2_coin_burn">burn</a>()</code>.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_burn_">burn_</a>&lt;T&gt;(cap: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, c: <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
-    <a href="coin.md#0x2_coin_burn">burn</a>(cap, c);
-}
-</code></pre>
-
-
-
-</details>
-
-<details>
-<summary>Specification</summary>
-
-
-
-<pre><code><b>include</b> <a href="coin.md#0x2_coin_Burn">Burn</a>&lt;T&gt;;
 </code></pre>
 
 

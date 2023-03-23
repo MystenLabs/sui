@@ -596,7 +596,7 @@ async fn test_reconfig_with_committee_change_basic() {
     // Validator information from genesis contains public network addresses that we need to commit on-chain.
     let new_validator = new_configs
         .genesis
-        .validator_set()
+        .validator_set_for_tooling()
         .into_iter()
         .find(|v| {
             let name: AuthorityName = v.verified_metadata().sui_pubkey_bytes();
@@ -785,13 +785,13 @@ async fn test_reconfig_with_committee_change_stress() {
 
     let initial_pubkeys: Vec<_> = initial_network
         .genesis
-        .validator_set()
+        .validator_set_for_tooling()
         .iter()
         .map(|v| v.verified_metadata().sui_pubkey_bytes())
         .collect();
     let mut standby_nodes: Vec<_> = validator_superset
         .genesis
-        .validator_set()
+        .validator_set_for_tooling()
         .into_iter()
         .map(|val| {
             let node_config = validator_superset

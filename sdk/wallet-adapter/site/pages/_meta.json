@@ -1,7 +1,8 @@
 {
   "index": "Introduction",
-  "another": "Another Page",
-  "advanced": "Advanced (A Folder)",
+  "getting-started": "Getting Started",
+  "docs": "API",
+  "advanced": "Advanced",
   "demo": {
     "title": "Demo",
     "type": "page"

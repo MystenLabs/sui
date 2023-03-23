@@ -122,7 +122,7 @@ impl WorkloadConfiguration {
             .flatten()
             .map(|x| (x.workload_params, x.workload_builder))
             .unzip();
-        let reference_gas_price = *system_state_observer.reference_gas_price.borrow();
+        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workloads = bank
             .generate(workload_builders, reference_gas_price, chunk_size)
             .await?;

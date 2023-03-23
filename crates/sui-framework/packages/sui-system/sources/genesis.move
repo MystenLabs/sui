@@ -12,10 +12,9 @@ module sui_system::genesis {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::{Self, Validator};
     use sui_system::validator_set;
+    use sui_system::sui_system_state_inner;
+    use sui_system::stake_subsidy;
     use std::option::{Option, Self};
-
-    /// Stake subisidy to be given out in the very first epoch in Mist (1 million * 10^9).
-    const INIT_STAKE_SUBSIDY_AMOUNT: u64 = 1_000_000_000_000_000;
 
     struct GenesisValidatorMetadata has drop, copy {
         name: vector<u8>,
@@ -42,13 +41,21 @@ module sui_system::genesis {
 
     struct GenesisChainParameters has drop, copy {
         protocol_version: u64,
-        system_state_version: u64,
-        governance_start_epoch: u64,
         chain_start_timestamp_ms: u64,
         epoch_duration_ms: u64,
-        initial_stake_subsidy_distribution_amount: u64,
+
+        // Stake Subsidy parameters
+        stake_subsidy_start_epoch: u64,
+        stake_subsidy_initial_distribution_amount: u64,
         stake_subsidy_period_length: u64,
         stake_subsidy_decrease_rate: u16,
+
+        // Validator committee parameters
+        max_validator_count: u64,
+        min_validator_joining_stake: u64,
+        validator_low_stake_threshold: u64,
+        validator_very_low_stake_threshold: u64,
+        validator_low_stake_grace_period: u64,
     }
 
     struct TokenDistributionSchedule {
@@ -153,19 +160,36 @@ module sui_system::genesis {
         // Activate all validators
         activate_validators(&mut validators);
 
+        let system_parameters = sui_system_state_inner::create_system_parameters(
+            genesis_chain_parameters.epoch_duration_ms,
+            genesis_chain_parameters.stake_subsidy_start_epoch,
+
+            // Validator committee parameters
+            genesis_chain_parameters.max_validator_count,
+            genesis_chain_parameters.min_validator_joining_stake,
+            genesis_chain_parameters.validator_low_stake_threshold,
+            genesis_chain_parameters.validator_very_low_stake_threshold,
+            genesis_chain_parameters.validator_low_stake_grace_period,
+
+            ctx,
+        );
+
+        let stake_subsidy = stake_subsidy::create(
+            subsidy_fund,
+            genesis_chain_parameters.stake_subsidy_initial_distribution_amount,
+            genesis_chain_parameters.stake_subsidy_period_length,
+            genesis_chain_parameters.stake_subsidy_decrease_rate,
+            ctx,
+        );
+
         sui_system::create(
             sui_system_state_id,
             validators,
-            subsidy_fund,
             storage_fund,
             genesis_chain_parameters.protocol_version,
-            genesis_chain_parameters.system_state_version,
-            genesis_chain_parameters.governance_start_epoch,
             genesis_chain_parameters.chain_start_timestamp_ms,
-            genesis_chain_parameters.epoch_duration_ms,
-            genesis_chain_parameters.initial_stake_subsidy_distribution_amount,
-            genesis_chain_parameters.stake_subsidy_period_length,
-            genesis_chain_parameters.stake_subsidy_decrease_rate,
+            system_parameters,
+            stake_subsidy,
             ctx,
         );
     }

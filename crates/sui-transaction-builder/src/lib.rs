@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 
 use anyhow::{anyhow, bail, ensure, Ok};
-use move_binary_format::file_format::SignatureToken;
+use move_binary_format::{file_format::SignatureToken, file_format_common::VERSION_MAX};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use std::result::Result;
@@ -436,7 +436,7 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        let compiled_module = package.deserialize_module(module)?;
+        let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
 
         // TODO set the Mode from outside?
         resolve_and_type_check::<Mode>(
@@ -478,6 +478,44 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
             gas_budget,
             gas_price,
         ))
+    }
+
+    pub async fn upgrade(
+        &self,
+        sender: SuiAddress,
+        package_id: ObjectID,
+        compiled_modules: Vec<Vec<u8>>,
+        dep_ids: Vec<ObjectID>,
+        upgrade_capability: ObjectID,
+        upgrade_policy: u8,
+        digest: Vec<u8>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        let gas_price = self.0.get_reference_gas_price().await?;
+        let gas = self
+            .select_gas(sender, gas, gas_budget, vec![], gas_price)
+            .await?;
+        let upgrade_cap = self
+            .0
+            .get_object_with_options(upgrade_capability, SuiObjectDataOptions::new().with_owner())
+            .await?
+            .into_object()?;
+        let cap_owner = upgrade_cap
+            .owner
+            .ok_or_else(|| anyhow!("Unable to determine ownership of upgrade capability"))?;
+        TransactionData::new_upgrade(
+            sender,
+            gas,
+            package_id,
+            compiled_modules,
+            dep_ids,
+            (upgrade_cap.object_ref(), cap_owner),
+            upgrade_policy,
+            digest,
+            gas_budget,
+            gas_price,
+        )
     }
 
     // TODO: consolidate this with Pay transactions

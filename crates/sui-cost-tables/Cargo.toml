@@ -22,5 +22,5 @@ once_cell = "1.16"
 # can compare untiered vs tiered gas account in the MoveVM across the system.
 [features]
 # Uncomment this line and and the line below and then rebuild to turn on tiered gas metering.
-#default = ["tiered-gas"]
-#tiered-gas = ["move-vm-test-utils/tiered-gas"]
+default = ["tiered-gas"]
+tiered-gas = ["move-vm-test-utils/tiered-gas"]

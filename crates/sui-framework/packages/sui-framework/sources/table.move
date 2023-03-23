@@ -17,87 +17,86 @@
 /// assert!(&table1 != &table2, 0);
 /// ```
 module sui::table {
+    use sui::object::{Self, UID};
+    use sui::dynamic_field as field;
+    use sui::tx_context::TxContext;
 
-use sui::object::{Self, UID};
-use sui::dynamic_field as field;
-use sui::tx_context::TxContext;
+    // Attempted to destroy a non-empty table
+    const ETableNotEmpty: u64 = 0;
 
-// Attempted to destroy a non-empty table
-const ETableNotEmpty: u64 = 0;
-
-struct Table<phantom K: copy + drop + store, phantom V: store> has key, store {
-    /// the ID of this table
-    id: UID,
-    /// the number of key-value pairs in the table
-    size: u64,
-}
-
-/// Creates a new, empty table
-public fun new<K: copy + drop + store, V: store>(ctx: &mut TxContext): Table<K, V> {
-    Table {
-        id: object::new(ctx),
-        size: 0,
+    struct Table<phantom K: copy + drop + store, phantom V: store> has key, store {
+        /// the ID of this table
+        id: UID,
+        /// the number of key-value pairs in the table
+        size: u64,
     }
-}
 
-/// Adds a key-value pair to the table `table: &mut Table<K, V>`
-/// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry with
-/// that key `k: K`.
-public fun add<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K, v: V) {
-    field::add(&mut table.id, k, v);
-    table.size = table.size + 1;
-}
+    /// Creates a new, empty table
+    public fun new<K: copy + drop + store, V: store>(ctx: &mut TxContext): Table<K, V> {
+        Table {
+            id: object::new(ctx),
+            size: 0,
+        }
+    }
 
-/// Immutable borrows the value associated with the key in the table `table: &Table<K, V>`.
-/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
-/// that key `k: K`.
-public fun borrow<K: copy + drop + store, V: store>(table: &Table<K, V>, k: K): &V {
-    field::borrow(&table.id, k)
-}
+    /// Adds a key-value pair to the table `table: &mut Table<K, V>`
+    /// Aborts with `sui::dynamic_field::EFieldAlreadyExists` if the table already has an entry with
+    /// that key `k: K`.
+    public fun add<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K, v: V) {
+        field::add(&mut table.id, k, v);
+        table.size = table.size + 1;
+    }
 
-/// Mutably borrows the value associated with the key in the table `table: &mut Table<K, V>`.
-/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
-/// that key `k: K`.
-public fun borrow_mut<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K): &mut V {
-    field::borrow_mut(&mut table.id, k)
-}
+    /// Immutable borrows the value associated with the key in the table `table: &Table<K, V>`.
+    /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
+    /// that key `k: K`.
+    public fun borrow<K: copy + drop + store, V: store>(table: &Table<K, V>, k: K): &V {
+        field::borrow(&table.id, k)
+    }
 
-/// Removes the key-value pair in the table `table: &mut Table<K, V>` and returns the value.
-/// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
-/// that key `k: K`.
-public fun remove<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K): V {
-    let v = field::remove(&mut table.id, k);
-    table.size = table.size - 1;
-    v
-}
+    /// Mutably borrows the value associated with the key in the table `table: &mut Table<K, V>`.
+    /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
+    /// that key `k: K`.
+    public fun borrow_mut<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K): &mut V {
+        field::borrow_mut(&mut table.id, k)
+    }
 
-/// Returns true iff there is a value associated with the key `k: K` in table `table: &Table<K, V>`
-public fun contains<K: copy + drop + store, V: store>(table: &Table<K, V>, k: K): bool {
-    field::exists_with_type<K, V>(&table.id, k)
-}
+    /// Removes the key-value pair in the table `table: &mut Table<K, V>` and returns the value.
+    /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
+    /// that key `k: K`.
+    public fun remove<K: copy + drop + store, V: store>(table: &mut Table<K, V>, k: K): V {
+        let v = field::remove(&mut table.id, k);
+        table.size = table.size - 1;
+        v
+    }
 
-/// Returns the size of the table, the number of key-value pairs
-public fun length<K: copy + drop + store, V: store>(table: &Table<K, V>): u64 {
-    table.size
-}
+    /// Returns true iff there is a value associated with the key `k: K` in table `table: &Table<K, V>`
+    public fun contains<K: copy + drop + store, V: store>(table: &Table<K, V>, k: K): bool {
+        field::exists_with_type<K, V>(&table.id, k)
+    }
 
-/// Returns true iff the table is empty (if `length` returns `0`)
-public fun is_empty<K: copy + drop + store, V: store>(table: &Table<K, V>): bool {
-    table.size == 0
-}
+    /// Returns the size of the table, the number of key-value pairs
+    public fun length<K: copy + drop + store, V: store>(table: &Table<K, V>): u64 {
+        table.size
+    }
 
-/// Destroys an empty table
-/// Aborts with `ETableNotEmpty` if the table still contains values
-public fun destroy_empty<K: copy + drop + store, V: store>(table: Table<K, V>) {
-    let Table { id, size } = table;
-    assert!(size == 0, ETableNotEmpty);
-    object::delete(id)
-}
+    /// Returns true iff the table is empty (if `length` returns `0`)
+    public fun is_empty<K: copy + drop + store, V: store>(table: &Table<K, V>): bool {
+        table.size == 0
+    }
 
-/// Drop a possibly non-empty table.
-/// Usable only if the value type `V` has the `drop` ability
-public fun drop<K: copy + drop + store, V: drop + store>(table: Table<K, V>) {
-    let Table { id, size: _ } = table;
-    object::delete(id)
-}
+    /// Destroys an empty table
+    /// Aborts with `ETableNotEmpty` if the table still contains values
+    public fun destroy_empty<K: copy + drop + store, V: store>(table: Table<K, V>) {
+        let Table { id, size } = table;
+        assert!(size == 0, ETableNotEmpty);
+        object::delete(id)
+    }
+
+    /// Drop a possibly non-empty table.
+    /// Usable only if the value type `V` has the `drop` ability
+    public fun drop<K: copy + drop + store, V: drop + store>(table: Table<K, V>) {
+        let Table { id, size: _ } = table;
+        object::delete(id)
+    }
 }

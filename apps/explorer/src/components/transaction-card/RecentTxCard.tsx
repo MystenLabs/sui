@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '@mysten/core';
+import { ArrowRight12 } from '@mysten/icons';
 import { type JsonRpcProvider } from '@mysten/sui.js';
 import { type QueryStatus, useQuery } from '@tanstack/react-query';
 import cl from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
-import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TabFooter from '../../components/tabs/TabFooter';
 import Pagination from '../pagination/Pagination';
 import {
@@ -19,6 +19,7 @@ import {
 
 import styles from './RecentTxCard.module.css';
 
+import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
 import { Banner } from '~/ui/Banner';
 import { Link } from '~/ui/Link';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -27,7 +28,6 @@ import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
-const TRUNCATE_LENGTH = 10;
 const NUMBER_OF_TX_PER_PAGE = 20;
 const DEFAULT_PAGINATION_TYPE = 'more button';
 
@@ -37,7 +37,7 @@ const TRANSACTION_POLL_TIME = TRANSACTION_POLL_TIME_SECONDS * 1000;
 
 const AUTO_REFRESH_ID = 'auto-refresh';
 
-type PaginationType = 'more button' | 'pagination' | 'none';
+export type PaginationType = 'more button' | 'pagination' | 'none';
 
 function generateStartEndRange(
     txCount: number,
@@ -54,7 +54,7 @@ function generateStartEndRange(
     };
 }
 
-// TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
+// TODO: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
     rpc: JsonRpcProvider,
     totalTx: number,
@@ -92,18 +92,16 @@ async function getRecentTransactions(
 type Props = {
     paginationtype?: PaginationType;
     txPerPage?: number;
-    truncateLength?: number;
 };
 
 // TODO: Remove this when we refactor pagiantion:
-const statusToLoadState: Record<QueryStatus, string> = {
+export const statusToLoadState: Record<QueryStatus, string> = {
     error: 'fail',
     loading: 'pending',
     success: 'loaded',
 };
 
 export function LatestTxCard({
-    truncateLength = TRUNCATE_LENGTH,
     paginationtype = DEFAULT_PAGINATION_TYPE,
     txPerPage: initialTxPerPage,
 }: Props) {
@@ -204,7 +202,7 @@ export function LatestTxCard({
                         <Link to="/transactions">
                             <div className="flex items-center gap-2">
                                 More Transactions{' '}
-                                <ArrowRight fill="currentColor" />
+                                <ArrowRight12 fill="currentColor" />
                             </div>
                         </Link>
                     </div>
@@ -231,11 +229,13 @@ export function LatestTxCard({
     return (
         <div className={cl(styles.txlatestresults, styles[paginationtype])}>
             <TabGroup size="lg">
-                <div className="relative">
+                <div className="relative flex items-center">
                     <TabList>
                         <Tab>Transactions</Tab>
+                        <Tab>Checkpoints</Tab>
                     </TabList>
-                    <div className="absolute inset-y-0 right-0 -top-1">
+
+                    <div className="absolute inset-y-0 right-0 text-2xl">
                         <PlayPause
                             paused={paused}
                             onChange={handlePauseChange}
@@ -252,7 +252,7 @@ export function LatestTxCard({
                             />
                         ) : (
                             <PlaceholderTable
-                                rowCount={15}
+                                rowCount={txPerPage}
                                 rowHeight="16px"
                                 colHeadings={[
                                     'Transaction ID',
@@ -272,6 +272,14 @@ export function LatestTxCard({
                         )}
                         {paginationtype !== 'none' &&
                             PaginationWithStatsOrStatsWithLink}
+                    </TabPanel>
+                    <TabPanel>
+                        <CheckpointsTable
+                            initialItemsPerPage={NUMBER_OF_TX_PER_PAGE}
+                            refetchInterval={TRANSACTION_POLL_TIME}
+                            shouldRefetch={!paused}
+                            paginationType={paginationtype}
+                        />
                     </TabPanel>
                 </TabPanels>
             </TabGroup>

@@ -377,7 +377,6 @@ module sui_system::validator_set_tests {
             0, // low_stake_threshold
             0, // very_low_stake_threshold
             0, // low_stake_grace_period
-            0, // governance_start_epoch
             test_scenario::ctx(scenario)
         );
 
@@ -404,7 +403,6 @@ module sui_system::validator_set_tests {
             low_stake_threshold,
             very_low_stake_threshold,
             low_stake_grace_period,
-            0, //governance_start_epoch
             test_scenario::ctx(scenario)
         );
 

@@ -3,7 +3,7 @@
 
 use criterion::*;
 
-use sui_core::batch_bls_verifier::{BatchCertificateVerifierMetrics, VerifiedCertificateCache};
+use sui_core::signature_verifier::{VerifiedDigestCache, VerifiedDigestCacheMetrics};
 use sui_types::digests::CertificateDigest;
 
 use criterion::Criterion;
@@ -25,8 +25,11 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
     assert_eq!(chunks.len(), cpus);
 
     let registry = prometheus::Registry::new();
-    let metrics = BatchCertificateVerifierMetrics::new(&registry);
-    let cache = VerifiedCertificateCache::new(metrics);
+    let metrics = VerifiedDigestCacheMetrics::new(&registry);
+    let cache = VerifiedDigestCache::<CertificateDigest>::new(
+        metrics.certificate_signatures_cache_hits.clone(),
+        metrics.certificate_signatures_cache_evictions.clone(),
+    );
 
     let mut group = c.benchmark_group("digest-caching");
     group.throughput(Throughput::Elements(chunk_size as u64));
@@ -37,10 +40,10 @@ fn verified_cert_cache_bench(c: &mut Criterion) {
                 let threads = chunks.iter().map(|chunk| {
                     s.spawn(|| {
                         for digest in &**chunk {
-                            if cache.is_cert_verified(digest) {
+                            if cache.is_cached(digest) {
                                 continue;
                             } else {
-                                cache.cache_cert_verified(*digest);
+                                cache.cache_digest(*digest);
                             }
                         }
                     })

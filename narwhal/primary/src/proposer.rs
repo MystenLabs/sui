@@ -76,6 +76,8 @@ pub struct Proposer {
     proposer_store: ProposerStore,
     /// The current round of the dag.
     round: Round,
+    /// Last time the round has been updated
+    last_round_timestamp: Option<TimestampMs>,
     /// Signals a new narwhal round
     tx_narwhal_round_updates: watch::Sender<Round>,
     /// Holds the certificates' ids waiting to be included in the next header.
@@ -137,6 +139,7 @@ impl Proposer {
                     tx_narwhal_round_updates,
                     proposer_store,
                     round: 0,
+                    last_round_timestamp: None,
                     last_parents: genesis,
                     last_leader: None,
                     digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
@@ -458,7 +461,24 @@ impl Proposer {
                 // Advance to the next round.
                 self.round += 1;
                 let _ = self.tx_narwhal_round_updates.send(self.round);
+
+                // Update the metrics
                 self.metrics.current_round.set(self.round as i64);
+                let current_timestamp = now();
+                let reason = if max_delay_timed_out {
+                    "max_timeout"
+                } else if enough_digests {
+                    "threshold_size_reached"
+                } else {
+                    "min_timeout"
+                };
+                if let Some(t) = &self.last_round_timestamp {
+                    self.metrics
+                        .proposal_latency
+                        .with_label_values(&[reason])
+                        .observe((current_timestamp - t) as f64);
+                }
+                self.last_round_timestamp = Some(current_timestamp);
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.
@@ -466,14 +486,6 @@ impl Proposer {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok((header, digests)) => {
-                        let reason = if max_delay_timed_out {
-                            "max_timeout"
-                        } else if enough_digests {
-                            "threshold_size_reached"
-                        } else {
-                            "min_timeout"
-                        };
-
                         // Save the header
                         opt_latest_header = Some(header);
                         header_repeat_timer = Box::pin(sleep(header_resend_timeout));

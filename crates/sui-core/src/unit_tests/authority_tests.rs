@@ -2907,7 +2907,7 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+        let async_batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,
@@ -3205,7 +3205,7 @@ async fn test_sui_system_state_nop_upgrade() {
     let new_system_state_version = SUI_SYSTEM_STATE_TESTING_VERSION1;
 
     // Dummy change epoch with the new protocol version and system state version.
-    let pt = construct_advance_epoch_pt(AdvanceEpochParams {
+    let pt = construct_advance_epoch_pt(&AdvanceEpochParams {
         epoch: 1,
         next_protocol_version: ProtocolVersion::from(new_protocol_version),
         storage_charge: 0,
@@ -4989,6 +4989,7 @@ fn test_choose_next_system_packages() {
     let committee = Committee::new_simple_test_committee().0;
     let v = &committee.voting_rights;
     let mut protocol_config = ProtocolConfig::get_for_max_version();
+    protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
 
     // all validators agree on new system packages, but without a new protocol version, so no
     // upgrade.

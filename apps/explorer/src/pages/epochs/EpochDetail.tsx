@@ -5,8 +5,7 @@ import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
 import { Navigate } from 'react-router-dom';
 
 import { validatorsTableData } from '../validators/Validators';
-import { CheckpointsTable } from './CheckpointsTable';
-import { getMockEpochData } from './mocks';
+import { getMockEpochData, mockCheckpointsTable } from './mocks';
 import { EpochStats } from './stats/EpochStats';
 
 import { SuiAmount } from '~/components/transaction-card/TxCardUtils';
@@ -28,10 +27,6 @@ function EpochDetail() {
 
     const { data, isError, isLoading } = useGetSystemObject();
 
-    const active = data?.activeValidators.length;
-    const pending = 0; // data?.pending_active_validators.contents.size;
-    const atRisk = 0; // data?.pending_removals.length;
-
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
             limit: data?.activeValidators.length || 0,
@@ -48,11 +43,7 @@ function EpochDetail() {
     if (isLoading || validatorsEventsLoading) return <LoadingSpinner />;
     if (!data || !validatorEvents) return null;
 
-    const validatorsTable = validatorsTableData(
-        data.activeValidators,
-        data.epoch,
-        validatorEvents?.data
-    );
+    const validatorsTable = validatorsTableData(data, validatorEvents.data);
 
     return (
         <div className="flex flex-col space-y-16">
@@ -77,7 +68,7 @@ function EpochDetail() {
                 <EpochStats label="Rewards">
                     <Stats label="Stake Subsidies" tooltip="Stake Subsidies">
                         <SuiAmount
-                            amount={data.stakeSubsidyCurrentEpochAmount}
+                            amount={data.stakeSubsidyCurrentDistributionAmount}
                         />
                     </Stats>
                     <Stats label="Total Rewards" tooltip="Total Rewards">
@@ -97,17 +88,17 @@ function EpochDetail() {
                         suffix="validators"
                         data={[
                             {
-                                value: active ?? 0,
+                                value: data.activeValidators.length,
                                 label: 'Active',
                                 color: '#589AEA',
                             },
                             {
-                                value: pending ?? 0,
+                                value: data.pendingActiveValidatorsSize,
                                 label: 'New',
                                 color: '#6FBCF0',
                             },
                             {
-                                value: atRisk ?? 0,
+                                value: data.atRiskValidators.length,
                                 label: 'At Risk',
                                 color: '#FF794B',
                             },
@@ -123,7 +114,10 @@ function EpochDetail() {
                 </TabList>
                 <TabPanels className="mt-4">
                     <TabPanel>
-                        <CheckpointsTable epoch={data.epoch} />
+                        <TableCard
+                            data={mockCheckpointsTable.data}
+                            columns={mockCheckpointsTable.columns}
+                        />
                     </TabPanel>
                     <TabPanel>
                         {validatorsTable ? (

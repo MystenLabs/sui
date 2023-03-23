@@ -10,6 +10,7 @@
 -  [Struct `SystemEpochInfoEvent`](#0x3_sui_system_state_inner_SystemEpochInfoEvent)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0x3_sui_system_state_inner_create)
+-  [Function `create_system_parameters`](#0x3_sui_system_state_inner_create_system_parameters)
 -  [Function `request_add_validator_candidate`](#0x3_sui_system_state_inner_request_add_validator_candidate)
 -  [Function `request_remove_validator_candidate`](#0x3_sui_system_state_inner_request_remove_validator_candidate)
 -  [Function `request_add_validator`](#0x3_sui_system_state_inner_request_add_validator)
@@ -54,6 +55,7 @@
 -  [Function `validator_staking_pool_id`](#0x3_sui_system_state_inner_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x3_sui_system_state_inner_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
+-  [Function `get_storage_fund_balance`](#0x3_sui_system_state_inner_get_storage_fund_balance)
 -  [Function `upgrade_system_state`](#0x3_sui_system_state_inner_upgrade_system_state)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
 -  [Module Specification](#@Module_Specification_1)
@@ -102,17 +104,51 @@ A list of system config parameters.
 
 <dl>
 <dt>
-<code>governance_start_epoch: u64</code>
-</dt>
-<dd>
- The starting epoch in which various on-chain governance features take effect:
- - stake subsidies are paid out
-</dd>
-<dt>
 <code>epoch_duration_ms: u64</code>
 </dt>
 <dd>
  The duration of an epoch, in milliseconds.
+</dd>
+<dt>
+<code>stake_subsidy_start_epoch: u64</code>
+</dt>
+<dd>
+ The starting epoch in which stake subsidies start being paid out
+</dd>
+<dt>
+<code>max_validator_count: u64</code>
+</dt>
+<dd>
+ Maximum number of active validators at any moment.
+ We do not allow the number of validators in any epoch to go above this.
+</dd>
+<dt>
+<code>min_validator_joining_stake: u64</code>
+</dt>
+<dd>
+ Lower-bound on the amount of stake required to become a validator.
+</dd>
+<dt>
+<code>validator_low_stake_threshold: u64</code>
+</dt>
+<dd>
+ Validators with stake amount below <code>validator_low_stake_threshold</code> are considered to
+ have low stake and will be escorted out of the validator set after being below this
+ threshold for more than <code>validator_low_stake_grace_period</code> number of epochs.
+</dd>
+<dt>
+<code>validator_very_low_stake_threshold: u64</code>
+</dt>
+<dd>
+ Validators with stake below <code>validator_very_low_stake_threshold</code> will be removed
+ immediately at epoch change, no grace period.
+</dd>
+<dt>
+<code>validator_low_stake_grace_period: u64</code>
+</dt>
+<dd>
+ A validator can have stake below <code>validator_low_stake_threshold</code>
+ for this many epochs before being kicked out.
 </dd>
 <dt>
 <code>extra_fields: <a href="_Bag">bag::Bag</a></code>
@@ -213,6 +249,24 @@ The top-level object containing all information of the Sui system.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
  MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
+</dd>
+<dt>
+<code>safe_mode_storage_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>safe_mode_computation_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>safe_mode_storage_rebates: u64</code>
+</dt>
+<dd>
+
 </dd>
 <dt>
 <code>epoch_start_timestamp_ms: u64</code>
@@ -421,6 +475,15 @@ the epoch advancement transaction.
 
 
 
+<a name="0x3_sui_system_state_inner_ESafeModeGasNotProcessed"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>: u64 = 7;
+</code></pre>
+
+
+
 <a name="0x3_sui_system_state_inner_EStakedSuiFromWrongEpoch"></a>
 
 
@@ -430,55 +493,11 @@ the epoch advancement transaction.
 
 
 
-<a name="0x3_sui_system_state_inner_MAX_VALIDATOR_COUNT"></a>
-
-Maximum number of active validators at any moment.
-We do not allow the number of validators in any epoch to go above this.
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>: u64 = 150;
-</code></pre>
+<a name="0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
 
 
 
-<a name="0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE"></a>
-
-Lower-bound on the amount of stake required to become a validator.
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>: u64 = 30000000000000000;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>: u64 = 7;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD"></a>
-
-Validators with stake amount below <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a></code> are considered to
-have low stake and will be escorted out of the validator set after being below this
-threshold for more than <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a></code> number of epochs.
-And validators with stake below <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a></code> will be removed
-immediately at epoch change, no grace period.
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>: u64 = 25000000000000000;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>: u64 = 20000000000000000;
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
 </code></pre>
 
 
@@ -491,7 +510,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, stake_subsidy_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, system_state_version: u64, governance_start_epoch: u64, epoch_start_timestamp_ms: u64, epoch_duration_ms: u64, initial_stake_subsidy_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">sui_system_state_inner::SystemParameters</a>, <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
 </code></pre>
 
 
@@ -502,16 +521,11 @@ This function will be called only once in genesis.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(
     validators: <a href="">vector</a>&lt;Validator&gt;,
-    stake_subsidy_fund: Balance&lt;SUI&gt;,
     storage_fund: Balance&lt;SUI&gt;,
     protocol_version: u64,
-    system_state_version: u64,
-    governance_start_epoch: u64,
     epoch_start_timestamp_ms: u64,
-    epoch_duration_ms: u64,
-    initial_stake_subsidy_distribution_amount: u64,
-    stake_subsidy_period_length: u64,
-    stake_subsidy_decrease_rate: u16,
+    parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">SystemParameters</a>,
+    <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: StakeSubsidy,
     ctx: &<b>mut</b> TxContext,
 ): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
     <b>let</b> validators = <a href="validator_set.md#0x3_validator_set_new">validator_set::new</a>(validators, ctx);
@@ -519,28 +533,65 @@ This function will be called only once in genesis.
     <b>let</b> system_state = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
         epoch: 0,
         protocol_version,
-        system_state_version,
+        system_state_version: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>,
         validators,
         storage_fund,
-        parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">SystemParameters</a> {
-            governance_start_epoch,
-            epoch_duration_ms,
-            extra_fields: <a href="_new">bag::new</a>(ctx),
-        },
+        parameters,
         reference_gas_price,
         validator_report_records: <a href="_empty">vec_map::empty</a>(),
-        <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x3_stake_subsidy_create">stake_subsidy::create</a>(
-            stake_subsidy_fund,
-            initial_stake_subsidy_distribution_amount,
-            stake_subsidy_period_length,
-            stake_subsidy_decrease_rate,
-            ctx
-        ),
+        <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>,
         safe_mode: <b>false</b>,
+        safe_mode_storage_rewards: <a href="_zero">balance::zero</a>(),
+        safe_mode_computation_rewards: <a href="_zero">balance::zero</a>(),
+        safe_mode_storage_rebates: 0,
         epoch_start_timestamp_ms,
         extra_fields: <a href="_new">bag::new</a>(ctx),
     };
     system_state
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_create_system_parameters"></a>
+
+## Function `create_system_parameters`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create_system_parameters">create_system_parameters</a>(epoch_duration_ms: u64, stake_subsidy_start_epoch: u64, max_validator_count: u64, min_validator_joining_stake: u64, validator_low_stake_threshold: u64, validator_very_low_stake_threshold: u64, validator_low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">sui_system_state_inner::SystemParameters</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create_system_parameters">create_system_parameters</a>(
+    epoch_duration_ms: u64,
+    stake_subsidy_start_epoch: u64,
+
+    // Validator committee parameters
+    max_validator_count: u64,
+    min_validator_joining_stake: u64,
+    validator_low_stake_threshold: u64,
+    validator_very_low_stake_threshold: u64,
+    validator_low_stake_grace_period: u64,
+    ctx: &<b>mut</b> TxContext,
+): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">SystemParameters</a> {
+    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">SystemParameters</a> {
+        epoch_duration_ms,
+        stake_subsidy_start_epoch,
+        max_validator_count,
+        min_validator_joining_stake,
+        validator_low_stake_threshold,
+        validator_very_low_stake_threshold,
+        validator_low_stake_grace_period,
+        extra_fields: <a href="_new">bag::new</a>(ctx),
+    }
 }
 </code></pre>
 
@@ -553,7 +604,7 @@ This function will be called only once in genesis.
 ## Function `request_add_validator_candidate`
 
 Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
-stakes in their staking pool. Once they have at least <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a></code> amount of stake they
+stakes in their staking pool. Once they have at least <code>MIN_VALIDATOR_JOINING_STAKE</code> amount of stake they
 can call <code>request_add_validator</code> to officially become an active validator at the next epoch.
 Aborts if the caller is already a pending or active validator, or a validator candidate.
 Note: <code>proof_of_possession</code> MUST be a valid signature using sui_address and protocol_pubkey_bytes.
@@ -667,11 +718,11 @@ epoch has already reached the maximum.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>assert</b>!(
-        <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MAX_VALIDATOR_COUNT">MAX_VALIDATOR_COUNT</a>,
+        <a href="validator_set.md#0x3_validator_set_next_epoch_validator_count">validator_set::next_epoch_validator_count</a>(&self.validators) &lt; self.parameters.max_validator_count,
         <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ELimitExceeded">ELimitExceeded</a>,
     );
 
-    <a href="validator_set.md#0x3_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_MIN_VALIDATOR_JOINING_STAKE">MIN_VALIDATOR_JOINING_STAKE</a>, ctx);
+    <a href="validator_set.md#0x3_validator_set_request_add_validator">validator_set::request_add_validator</a>(&<b>mut</b> self.validators, self.parameters.min_validator_joining_stake, ctx);
 }
 </code></pre>
 
@@ -1263,6 +1314,8 @@ The change will only take effects starting from the next epoch.
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <b>let</b> network_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(network_address));
     <a href="validator.md#0x3_validator_update_next_epoch_network_address">validator::update_next_epoch_network_address</a>(<a href="validator.md#0x3_validator">validator</a>, network_address);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1326,6 +1379,8 @@ The change will only take effects starting from the next epoch.
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <b>let</b> p2p_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address));
     <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">validator::update_next_epoch_p2p_address</a>(<a href="validator.md#0x3_validator">validator</a>, p2p_address);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1515,6 +1570,8 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <a href="validator.md#0x3_validator_update_next_epoch_protocol_pubkey">validator::update_next_epoch_protocol_pubkey</a>(<a href="validator.md#0x3_validator">validator</a>, protocol_pubkey, proof_of_possession);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1577,6 +1634,8 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <a href="validator.md#0x3_validator_update_next_epoch_worker_pubkey">validator::update_next_epoch_worker_pubkey</a>(<a href="validator.md#0x3_validator">validator</a>, worker_pubkey);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1638,6 +1697,8 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
     <a href="validator.md#0x3_validator_update_next_epoch_network_pubkey">validator::update_next_epoch_network_pubkey</a>(<a href="validator.md#0x3_validator">validator</a>, network_pubkey);
+    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
+    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
@@ -1720,6 +1781,14 @@ gas coins.
         <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>,
     );
 
+    // Accumulate the gas summary during safe_mode before processing any rewards:
+    <b>let</b> safe_mode_storage_rewards = <a href="_withdraw_all">balance::withdraw_all</a>(&<b>mut</b> self.safe_mode_storage_rewards);
+    <a href="_join">balance::join</a>(&<b>mut</b> storage_reward, safe_mode_storage_rewards);
+    <b>let</b> safe_mode_computation_rewards = <a href="_withdraw_all">balance::withdraw_all</a>(&<b>mut</b> self.safe_mode_computation_rewards);
+    <a href="_join">balance::join</a>(&<b>mut</b> computation_reward, safe_mode_computation_rewards);
+    storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
+    self.safe_mode_storage_rebates = 0;
+
     <b>let</b> total_validators_stake = <a href="validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
     <b>let</b> storage_fund_balance = <a href="_value">balance::value</a>(&self.storage_fund);
     <b>let</b> total_stake = storage_fund_balance + total_validators_stake;
@@ -1728,8 +1797,8 @@ gas coins.
     <b>let</b> computation_charge = <a href="_value">balance::value</a>(&computation_reward);
 
     // Include stake subsidy in the rewards given out <b>to</b> validators and stakers.
-    // Delay distributing any stake subsidies until after `governance_start_epoch`.
-    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = <b>if</b> (<a href="_epoch">tx_context::epoch</a>(ctx) &gt;= self.parameters.governance_start_epoch) {
+    // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
+    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = <b>if</b> (<a href="_epoch">tx_context::epoch</a>(ctx) &gt;= self.parameters.stake_subsidy_start_epoch) {
         <a href="stake_subsidy.md#0x3_stake_subsidy_advance_epoch">stake_subsidy::advance_epoch</a>(&<b>mut</b> self.<a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>)
     } <b>else</b> {
         <a href="_zero">balance::zero</a>()
@@ -1766,10 +1835,9 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
-        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_THRESHOLD">VALIDATOR_LOW_STAKE_THRESHOLD</a>,
-        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_VERY_LOW_STAKE_THRESHOLD">VALIDATOR_VERY_LOW_STAKE_THRESHOLD</a>,
-        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_VALIDATOR_LOW_STAKE_GRACE_PERIOD">VALIDATOR_LOW_STAKE_GRACE_PERIOD</a>,
-        self.parameters.governance_start_epoch,
+        self.parameters.validator_low_stake_threshold,
+        self.parameters.validator_very_low_stake_threshold,
+        self.parameters.validator_low_stake_grace_period,
         ctx,
     );
 
@@ -1812,6 +1880,10 @@ gas coins.
         }
     );
     self.safe_mode = <b>false</b>;
+    // Double check that the gas from safe mode <b>has</b> been processed.
+    <b>assert</b>!(self.safe_mode_storage_rebates == 0
+        && <a href="_value">balance::value</a>(&self.safe_mode_storage_rewards) == 0
+        && <a href="_value">balance::value</a>(&self.safe_mode_computation_rewards) == 0, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>);
     storage_rebate
 }
 </code></pre>
@@ -1832,7 +1904,7 @@ system running and continue making epoch changes.
 version
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1845,6 +1917,9 @@ version
     self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>,
     new_epoch: u64,
     next_protocol_version: u64,
+    storage_reward: Balance&lt;SUI&gt;,
+    computation_reward: Balance&lt;SUI&gt;,
+    storage_rebate: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
@@ -1852,7 +1927,11 @@ version
 
     self.epoch = new_epoch;
     self.protocol_version = next_protocol_version;
+
     self.safe_mode = <b>true</b>;
+    <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_storage_rewards, storage_reward);
+    <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_computation_rewards, computation_reward);
+    self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
 }
 </code></pre>
 
@@ -2061,6 +2140,30 @@ Returns all the validators who are currently reporting <code>addr</code>
     } <b>else</b> {
         <a href="_empty">vec_set::empty</a>()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_get_storage_fund_balance"></a>
+
+## Function `get_storage_fund_balance`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): u64 {
+    <a href="_value">balance::value</a>(&self.storage_fund)
 }
 </code></pre>
 

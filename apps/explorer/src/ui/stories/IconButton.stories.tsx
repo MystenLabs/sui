@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { X12 } from '@mysten/icons';
 import { type StoryObj, type Meta } from '@storybook/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -27,5 +28,5 @@ export const CloseIcon: StoryObj<IconButtonProps> = {
             <IconButton disabled {...props} />
         </div>
     ),
-    args: { icon: 'x' },
+    args: { icon: X12 },
 };

@@ -39,7 +39,7 @@ fn genesis_config_snapshot_matches() {
 
     let fake_obj_id = ObjectID::from(fake_addr);
     let mut genesis_config = GenesisConfig::for_local_testing();
-    genesis_config.parameters.timestamp_ms = 0;
+    genesis_config.parameters.chain_start_timestamp_ms = 0;
     for account in &mut genesis_config.accounts {
         account.address = Some(fake_addr);
         for gas_obj in &mut account.gas_objects {
@@ -56,10 +56,11 @@ fn populated_genesis_snapshot_matches() {
     let (_account_keys, objects) = genesis_config
         .generate_accounts(&mut StdRng::from_seed([0; 32]))
         .unwrap();
-    let key: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let account_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let mut rng = StdRng::from_seed([0; 32]);
+    let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
+    let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rng).1;
+    let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut rng).1;
+    let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rng).1;
     let validator = ValidatorInfo {
         name: "0".into(),
         protocol_key: key.public().into(),
@@ -82,13 +83,15 @@ fn populated_genesis_snapshot_matches() {
         .add_objects(objects)
         .add_validator(validator, pop)
         .with_parameters(GenesisCeremonyParameters {
-            timestamp_ms: 10,
+            chain_start_timestamp_ms: 10,
             ..GenesisCeremonyParameters::new()
         })
         .add_validator_signature(&key)
         .build();
     assert_yaml_snapshot!(genesis.sui_system_wrapper_object());
-    assert_yaml_snapshot!(genesis.sui_system_object());
+    assert_yaml_snapshot!(genesis
+        .sui_system_object()
+        .into_genesis_version_for_tooling());
     assert_yaml_snapshot!(genesis.clock());
     // Serialized `genesis` is not static and cannot be snapshot tested.
 }
