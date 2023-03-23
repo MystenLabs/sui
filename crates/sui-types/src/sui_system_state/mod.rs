@@ -26,7 +26,9 @@ pub mod sui_system_state_summary;
 #[cfg(msim)]
 mod simtest_sui_system_state_inner;
 #[cfg(msim)]
-use self::simtest_sui_system_state_inner::SimTestSuiSystemStateInnerV1;
+use self::simtest_sui_system_state_inner::{
+    SimTestSuiSystemStateInnerV1, SimTestSuiSystemStateInnerV2,
+};
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 
@@ -35,7 +37,9 @@ pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 
 #[cfg(msim)]
-const SUI_SYSTEM_STATE_SIM_TEST_V1: u64 = 18446744073709551605; // u64::MAX - 10
+pub const SUI_SYSTEM_STATE_SIM_TEST_V1: u64 = 18446744073709551605; // u64::MAX - 10
+#[cfg(msim)]
+pub const SUI_SYSTEM_STATE_SIM_TEST_V2: u64 = 18446744073709551606; // u64::MAX - 9
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 /// This repreents the object with 0x5 ID.
@@ -86,6 +90,8 @@ pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
     #[cfg(msim)]
     SimTestV1(SimTestSuiSystemStateInnerV1),
+    #[cfg(msim)]
+    SimTestV2(SimTestSuiSystemStateInnerV2),
 }
 
 /// This is the fixed type used by genesis.
@@ -161,6 +167,19 @@ where
                     },
                 )?;
             Ok(SuiSystemState::SimTestV1(result))
+        }
+        #[cfg(msim)]
+        SUI_SYSTEM_STATE_SIM_TEST_V2 => {
+            let result: SimTestSuiSystemStateInnerV2 =
+                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
+                    |err| {
+                        SuiError::DynamicFieldReadError(format!(
+                            "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
+                            id, wrapper.version, err
+                        ))
+                    },
+                )?;
+            Ok(SuiSystemState::SimTestV2(result))
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
             "Unsupported SuiSystemState version: {}",
