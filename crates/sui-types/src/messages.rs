@@ -63,7 +63,7 @@ pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
 // Approximate size of `EpochId` type in bytes
 pub const APPROX_SIZE_OF_EPOCH_ID: usize = 10;
 // Approximate size of `GasCostSummary` type in bytes
-pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 30;
+pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 40;
 // Approximate size of `Option<TransactionEventsDigest>` type in bytes
 pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
 // Approximate size of `TransactionDigest` type in bytes
@@ -2947,6 +2947,7 @@ impl Default for TransactionEffectsV1 {
                 computation_cost: 0,
                 storage_cost: 0,
                 storage_rebate: 0,
+                non_refundable_storage_fee: 0,
             },
             modified_at_versions: Vec::new(),
             shared_objects: Vec::new(),
