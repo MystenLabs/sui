@@ -94,7 +94,7 @@ module adversarial::adversarial {
     public fun add_dynamic_fields(obj: &mut Obj, n: u64) {
         let i = 0;
         while (i < n) {
-            add<u64, u64>(&mut obj.id, (i as u64), (i as u64));
+            add<u64, u64>(&mut obj.id, i, i);
             i = i + 1;
         };
     }
@@ -102,7 +102,7 @@ module adversarial::adversarial {
     public fun read_n_dynamic_fields(obj: &mut Obj, n: u64) {
         let i = 0;
         while (i < n) {
-            let _ = borrow<u64, u64>(&obj.id, (i as u64));
+            let _ = borrow<u64, u64>(&obj.id, i);
             i = i + 1;
         };
     }

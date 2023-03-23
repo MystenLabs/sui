@@ -10,7 +10,7 @@ use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectRef};
-use sui_types::messages::{CallArg, ObjectArg};
+use sui_types::messages::{CallArg, ObjectArg, TransactionEffectsAPI};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
 use test_utils::messages::create_publish_move_package_transaction;
@@ -71,18 +71,16 @@ impl std::fmt::Display for AdversarialTestPayload {
 
 impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
-        // // Sometimes useful when figuring out why things failed
-        // let stat = match effects {
-        //     ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
-        //     ExecutionEffects::SuiTransactionEffects(_) => unimplemented!("Not impl"),
-        // };
-        // println!("ERRR: {:?}", stat);
-        // println!("ERRR: {:?}", self.state);
-        // important to keep this as a sanity check that we don't hit protocol limits or run out of gas as things change elsewhere.
-        // adversarial tests aren't much use if they don't have effects :)
+        // Sometimes useful when figuring out why things failed
+        let stat = match effects {
+            ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
+            ExecutionEffects::SuiTransactionEffects(_) => unimplemented!("Not impl"),
+        };
+
         debug_assert!(
             effects.is_ok(),
-            "Adversarial transactions should never abort"
+            "Adversarial transactions should never abort: {:?}",
+            stat
         );
 
         self.state.update(effects);
@@ -90,22 +88,9 @@ impl Payload for AdversarialTestPayload {
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
         let payload_type: AdversarialPayloadType = rand::random();
-
         let gas_budget = self.system_state_observer.protocol_config.max_tx_gas();
-        let mut payload_args =
-            get_payload_args(&payload_type, &self.system_state_observer.protocol_config);
-
-        if let AdversarialPayloadType::DynamicFieldsCount = payload_type {
-            // Add the dynamic field parent
-            payload_args.args.insert(
-                0,
-                CallArg::Object(ObjectArg::SharedObject {
-                    id: self.df_parent_obj_ref.0,
-                    initial_shared_version: self.df_parent_obj_ref.1,
-                    mutable: true,
-                }),
-            );
-        }
+        let payload_args =
+            self.get_payload_args(&payload_type, &self.system_state_observer.protocol_config);
 
         self.state.move_call(
             self.sender,
@@ -117,6 +102,47 @@ impl Payload for AdversarialTestPayload {
             gas_budget,
             *self.system_state_observer.reference_gas_price.borrow(),
         )
+    }
+}
+
+impl AdversarialTestPayload {
+    fn get_payload_args(
+        &self,
+        payload_type: &AdversarialPayloadType,
+        protocol_config: &ProtocolConfig,
+    ) -> AdversarialPayloadArgs {
+        match payload_type {
+            AdversarialPayloadType::ObjectsSize => AdversarialPayloadArgs {
+                fn_name: "create_shared_objects".to_owned(),
+                args: [
+                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                    (NUM_OBJECTS / 10).into(),
+                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                    (protocol_config.max_move_object_size() / 10).into(),
+                ]
+                .to_vec(),
+            },
+            AdversarialPayloadType::EventSize => AdversarialPayloadArgs {
+                fn_name: "emit_events".to_owned(),
+                args: [
+                    protocol_config.max_num_event_emit().into(),
+                    protocol_config.max_event_emit_size().into(),
+                ]
+                .to_vec(),
+            },
+            AdversarialPayloadType::DynamicFieldsCount => AdversarialPayloadArgs {
+                fn_name: "read_n_dynamic_fields".to_owned(),
+                args: [
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: self.df_parent_obj_ref.0,
+                        initial_shared_version: self.df_parent_obj_ref.1,
+                        mutable: true,
+                    }),
+                    NUM_DYNAMIC_FIELDS.into(),
+                ]
+                .to_vec(),
+            },
+        }
     }
 }
 
@@ -276,34 +302,4 @@ impl Workload<dyn Payload> for AdversarialWorkload {
 struct AdversarialPayloadArgs {
     pub fn_name: String,
     pub args: Vec<CallArg>,
-}
-
-fn get_payload_args(
-    payload_type: &AdversarialPayloadType,
-    protocol_config: &ProtocolConfig,
-) -> AdversarialPayloadArgs {
-    match payload_type {
-        AdversarialPayloadType::ObjectsSize => AdversarialPayloadArgs {
-            fn_name: "create_shared_objects".to_owned(),
-            args: [
-                // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                (NUM_OBJECTS / 10).into(),
-                // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                (protocol_config.max_move_object_size() / 10).into(),
-            ]
-            .to_vec(),
-        },
-        AdversarialPayloadType::EventSize => AdversarialPayloadArgs {
-            fn_name: "emit_events".to_owned(),
-            args: [
-                protocol_config.max_num_event_emit().into(),
-                protocol_config.max_event_emit_size().into(),
-            ]
-            .to_vec(),
-        },
-        AdversarialPayloadType::DynamicFieldsCount => AdversarialPayloadArgs {
-            fn_name: "read_n_dynamic_fields".to_owned(),
-            args: [NUM_DYNAMIC_FIELDS.into()].to_vec(),
-        },
-    }
 }
