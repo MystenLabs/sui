@@ -5,6 +5,8 @@ use futures::StreamExt;
 use std::future;
 use sui::client_commands::SuiClientCommands;
 use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_json_rpc_types::{EventFilter, SuiTransactionResponseQuery};
 use sui_sdk::{SuiClientBuilder, SUI_COIN_TYPE};

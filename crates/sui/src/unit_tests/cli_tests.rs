@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io::Read;
+use std::io::Read;
+use std::os::unix::prelude::FileExt;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
@@ -17,18 +19,22 @@ use sui::{
     config::SuiClientConfig,
     sui_commands::SuiCommand,
 };
-use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
+use sui_config::{
+    genesis_config::{AccountConfig, GenesisConfig, ObjectConfig},
+    Config, NodeConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
+};
 use sui_config::{
     NetworkConfig, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
     SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
+use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     BigInt, OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionEffects, SuiTransactionEffectsAPI,
+    SuiObjectResponseQuery, SuiTransactionEffects, SuiTransactionEffects, SuiTransactionEffectsAPI,
 };
-use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
 use sui_types::base_types::{ObjectType, SuiAddress};
 use sui_types::crypto::{
@@ -62,6 +68,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         force: false,
         from_config: None,
         epoch_duration_ms: None,
+        benchmark_ips: None,
     }
     .execute()
     .await?;
@@ -99,10 +106,72 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         force: false,
         from_config: None,
         epoch_duration_ms: None,
+        benchmark_ips: None,
     }
     .execute()
     .await;
     assert!(matches!(result, Err(..)));
+
+    temp_dir.close()?;
+    Ok(())
+}
+
+#[sim_test]
+async fn test_genesis_for_benchmarks() -> Result<(), anyhow::Error> {
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
+
+    // Make some (meaningless) ip addresses for the committee.
+    let benchmark_ips = vec![
+        "1.1.1.1".into(),
+        "1.1.1.2".into(),
+        "1.1.1.3".into(),
+        "1.1.1.4".into(),
+        "1.1.1.5".into(),
+    ];
+    let committee_size = benchmark_ips.len();
+
+    // Print all the genesis and config files.
+    SuiCommand::Genesis {
+        working_dir: Some(working_dir.to_path_buf()),
+        write_config: None,
+        force: false,
+        from_config: None,
+        epoch_duration_ms: None,
+        benchmark_ips: Some(benchmark_ips.clone()),
+    }
+    .execute()
+    .await?;
+
+    // Get all the newly created file names.
+    let files = read_dir(working_dir)?
+        .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
+        .collect::<Vec<_>>();
+
+    // We expect one file per validator (the validator's configs) as well as various network
+    // and client configuration files. We particularly care about the genesis blob, the keystore
+    // containing the key of the initial gas objects, and the validators' configuration files.
+    assert!(files.contains(&SUI_GENESIS_FILENAME.to_string()));
+    assert!(files.contains(&SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME.to_string()));
+    for i in 0..committee_size {
+        assert!(files.contains(&sui_config::validator_config_file(i)));
+    }
+
+    // Check the network config and ensure each validator boots on the specified ip address.
+    for (i, expected_ip) in benchmark_ips.into_iter().enumerate() {
+        let config_path = &working_dir.join(sui_config::validator_config_file(i));
+        let config = NodeConfig::load(config_path)?;
+        let socket_address = sui_types::multiaddr::to_socket_addr(&config.network_address).unwrap();
+        assert_eq!(expected_ip, socket_address.ip().to_string());
+    }
+
+    // Ensure the keystore containing the genesis gas objects is created as expected.
+    let path = working_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
+    let keystore = FileBasedKeystore::new(&path)?;
+    let expected_gas_key = GenesisConfig::benchmark_gas_key();
+    let expected_gas_address = SuiAddress::from(&expected_gas_key.public());
+    let stored_gas_key = keystore.get_key(&expected_gas_address)?;
+    assert_eq!(&expected_gas_key, stored_gas_key);
 
     temp_dir.close()?;
     Ok(())
@@ -851,6 +920,145 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         .unwrap_err()
         .to_string()
         .contains("DependentPackageNotFound"));
+    Ok(())
+}
+
+// TODO(tzakian): When we remove the upgrade feature flag un-ignore this test.
+// This test will fail until the protocol config allows upgrades (doesn't work with an override).
+#[sim_test]
+#[ignore]
+async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_upgrade");
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish {
+        package_path: package_path.clone(),
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: 20_000,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let SuiClientCommandResult::Publish(response) = resp else {
+        unreachable!("Invalid response");
+    };
+
+    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+    let package = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::Immutable))
+        .unwrap();
+
+    let cap = effects
+        .created()
+        .iter()
+        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
+        .unwrap();
+
+    // Hacky for now: we need to add the correct `published-at` field to the Move toml file.
+    // In the future once we have automated address management replace this logic!
+    let tmp_dir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &package_path,
+        tmp_dir.path(),
+        &fs_extra::dir::CopyOptions::default(),
+    )
+    .unwrap();
+    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
+    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
+    let mut move_toml = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&upgrade_pkg_path)
+        .unwrap();
+    upgrade_pkg_path.pop();
+
+    let mut buf = String::new();
+    move_toml.read_to_string(&mut buf).unwrap();
+
+    // Add a `published-at = "0x<package_object_id>"` to the Move manifest.
+    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
+    let idx = lines.iter().position(|s| s == "[package]").unwrap();
+    lines.insert(
+        idx + 1,
+        format!(
+            "published-at = \"{}\"",
+            package.reference.object_id.to_hex_uncompressed()
+        ),
+    );
+    let new = lines.join("\n");
+    move_toml.write_at(new.as_bytes(), 0).unwrap();
+
+    // Now run the upgrade
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Upgrade {
+        package_path: upgrade_pkg_path,
+        upgrade_capability: cap.reference.object_id,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: 20_000,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await?;
+
+    resp.print(true);
+
+    let SuiClientCommandResult::Upgrade(response) = resp else {
+        unreachable!("Invalid upgrade response");
+    };
+    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+
+    assert!(effects.status.is_ok());
+
+    let obj_ids = effects
+        .created()
+        .iter()
+        .map(|refe| refe.reference.object_id)
+        .collect::<Vec<_>>();
+
+    // Check the objects
+    for obj_id in obj_ids {
+        get_parsed_object_assert_existence(obj_id, context).await;
+    }
+
     Ok(())
 }
 

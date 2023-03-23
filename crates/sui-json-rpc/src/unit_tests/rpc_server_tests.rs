@@ -10,6 +10,8 @@ use crate::api::{
     WriteApiClient,
 };
 use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
