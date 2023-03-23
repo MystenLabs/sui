@@ -76,11 +76,11 @@ pub enum ClapCommand {
         common: CommonOptions,
         /// Default to start from checkpoint 0
         #[clap(short, long, default_value_t = 0)]
-        start: u64,
+        start_checkpoint: u64,
 
         /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
         #[clap(short, long)]
-        end: Option<u64>,
+        end_checkpoint: Option<u64>,
         #[clap(short, long, multiple = true)]
         digests: Option<Vec<TransactionDigest>>,
     },
@@ -133,11 +133,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         ClapCommand::MultiGetTransactions {
             common,
-            start,
-            end,
+            start_checkpoint,
+            end_checkpoint,
             digests,
         } => (
-            Command::new_multi_get_transactions(start, end, digests),
+            Command::new_multi_get_transactions(start_checkpoint, end_checkpoint, digests),
             common,
         ),
     };

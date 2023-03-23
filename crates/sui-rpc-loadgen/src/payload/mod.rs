@@ -64,14 +64,15 @@ impl Command {
     }
 
     pub fn new_multi_get_transactions(
-        start: CheckpointSequenceNumber,
-        end: Option<CheckpointSequenceNumber>,
+        start_checkpoint: CheckpointSequenceNumber,
+        end_checkpoint: Option<CheckpointSequenceNumber>,
         digests: Option<Vec<TransactionDigest>>,
     ) -> Self {
-        println!("in new_multi_get_transactions, {:?}, {}", start, end.unwrap_or(0));
         Self {
             data: CommandData::MultiGetTransactions(MultiGetTransactions {
-                checkpoints: GetCheckpoints {start, end },
+                checkpoints: GetCheckpoints {
+                    start: start_checkpoint,
+                    end: end_checkpoint },
                 digests,
             }),
             ..Default::default()
