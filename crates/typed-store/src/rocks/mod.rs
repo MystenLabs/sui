@@ -12,7 +12,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache};
+use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, UniversalCompactOptions};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -1858,6 +1858,11 @@ pub fn default_db_options() -> DBOptions {
     opt.options.set_block_based_table_factory(&block_options);
     // Set memtable bloomfilter.
     opt.options.set_memtable_prefix_bloom_ratio(0.02);
+
+    // Compaction policy.
+    opt.options
+        .set_universal_compaction_options(&UniversalCompactOptions::default());
+    opt.options.set_num_levels(20);
 
     opt
 }
