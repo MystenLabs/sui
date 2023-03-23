@@ -30,7 +30,7 @@ use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tracing::{debug, error, error_span, info, instrument, trace, warn, Instrument};
+use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
@@ -51,11 +51,7 @@ use sui_json_rpc_types::{
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
-use sui_storage::write_ahead_log::WriteAheadLog;
-use sui_storage::{
-    write_ahead_log::{DBTxGuard, TxGuard},
-    IndexStore,
-};
+use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
     default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
@@ -91,7 +87,7 @@ use sui_types::{
 };
 use typed_store::Map;
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, InputKey, ObjectLockStatus};
 use crate::authority::authority_store_pruner::AuthorityStorePruner;
@@ -101,7 +97,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::event_handler::EventHandler;
-use crate::execution_driver::{execution_process, EXECUTION_MAX_ATTEMPTS};
+use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::VerifiedDigestCacheMetrics;
 use crate::stake_aggregator::StakeAggregator;
@@ -145,9 +141,6 @@ pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
 // Reject a transaction if the number of pending transactions depending on the object
 // is above the threshold.
 pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
-
-type CertTxGuard<'a> =
-    DBTxGuard<'a, TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>;
 
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
@@ -754,12 +747,6 @@ impl AuthorityState {
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
         // very common to receive the same tx multiple times simultaneously due to gossip, so we
         // may as well hold the lock and save the cpu time for other requests.
-        //
-        // Note that this lock has some false contention (since it uses a MutexTable), so you can't
-        // assume that different txes can execute concurrently. This is probably the fastest way
-        // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
-        // epsilon of txes) while solutions without false contention have slightly higher cost
-        // for every tx.
         let tx_guard = epoch_store.acquire_tx_guard(certificate).await?;
 
         self.process_certificate(tx_guard, certificate, epoch_store)
@@ -804,7 +791,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn process_certificate(
         &self,
-        tx_guard: CertTxGuard<'_>,
+        tx_guard: CertTxGuard,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
@@ -841,23 +828,6 @@ impl AuthorityState {
             });
         }
 
-        // first check to see if we have already executed and committed the tx
-        // to the WAL
-        if let Some((inner_temporary_storage, effects)) =
-            epoch_store.wal().get_execution_output(&digest)?
-        {
-            self.commit_cert_and_notify(
-                certificate,
-                inner_temporary_storage,
-                &effects,
-                tx_guard,
-                execution_guard,
-                epoch_store,
-            )
-            .await?;
-            return Ok(effects);
-        }
-
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
@@ -874,20 +844,7 @@ impl AuthorityState {
             Ok(res) => res,
         };
 
-        // Write tx output to WAL as first commit phase. In second phase
-        // we write from WAL to permanent storage. The purpose of this scheme
-        // is to allow for retrying phase 2 from phase 1 in the case where we
-        // fail mid-write. We prefer this over making the write to permanent
-        // storage atomic as this allows for sharding storage across nodes, which
-        // would be more difficult in the alternative.
-        epoch_store
-            .wal()
-            .write_execution_output(&digest, (inner_temporary_store.clone(), effects.clone()))?;
-
-        // Insert an await in between write_execution_output and commit so that tests can observe
-        // and test the interruption.
-        #[cfg(any(test, msim))]
-        tokio::task::yield_now().await;
+        fail_point_async!("crash");
 
         self.commit_cert_and_notify(
             certificate,
@@ -906,7 +863,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         inner_temporary_store: InnerTemporaryStore,
         effects: &TransactionEffects,
-        tx_guard: CertTxGuard<'_>,
+        tx_guard: CertTxGuard,
         _execution_guard: ExecutionLockReadGuard<'_>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
@@ -1662,7 +1619,7 @@ impl AuthorityState {
             name,
             secret,
             epoch_store: ArcSwap::new(epoch_store.clone()),
-            database: store.clone(),
+            database: store,
             indexes,
             event_handler: Arc::new(EventHandler::default()),
             checkpoint_store,
@@ -1674,13 +1631,6 @@ impl AuthorityState {
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
         });
-
-        // Process tx recovery log first, so that checkpoint recovery (below)
-        // doesn't observe partially-committed txes.
-        state
-            .process_tx_recovery_log(&epoch_store)
-            .await
-            .expect("Could not fully process recovery log at startup!");
 
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
@@ -1795,35 +1745,6 @@ impl AuthorityState {
         epoch_store.insert_pending_execution(&executable_txns)?;
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
-    }
-
-    // Continually pop in-progress txes from the WAL and try to drive them to completion.
-    pub async fn process_tx_recovery_log(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
-        while let Some((cert, tx_guard)) = epoch_store.wal().read_one_recoverable_tx().await? {
-            let digest = tx_guard.tx_id();
-            debug!(?digest, "replaying failed cert from log");
-
-            if tx_guard.retry_num() >= EXECUTION_MAX_ATTEMPTS {
-                // All in-progress transactions must eventually succeed.
-                panic!(
-                    "Transaction {:?} still failing after {} retries",
-                    digest, EXECUTION_MAX_ATTEMPTS
-                );
-            }
-
-            if let Err(e) = self
-                .process_certificate(tx_guard, &cert.into(), epoch_store)
-                .instrument(error_span!("process_tx_recovery_log", tx_digest = ?digest))
-                .await
-            {
-                warn!(?digest, "Failed to process in-progress certificate: {e}");
-            }
-        }
-
-        Ok(())
     }
 
     fn create_owner_index_if_empty(
@@ -2814,6 +2735,7 @@ impl AuthorityState {
         } else {
             None
         };
+
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
         epoch_store.insert_tx_cert_and_effects_signature(
@@ -2821,6 +2743,9 @@ impl AuthorityState {
             certificate.certificate_sig(),
             effects_sig.as_ref(),
         )?;
+
+        // Allow testing what happens if we crash here.
+        fail_point_async!("crash");
 
         self.database
             .update_state(

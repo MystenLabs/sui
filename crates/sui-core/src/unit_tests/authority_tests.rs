@@ -35,7 +35,7 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
     SuiTransactionEffectsAPI, SuiTypeTag,
 };
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_async, sim_test};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
@@ -2284,9 +2284,13 @@ impl<F: Future> Future for LimitedPoll<F> {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     telemetry_subscribers::init_for_testing();
+
+    // insert a yield point at every crash failpoint so we can probe the execution path and verify
+    // that it can be resumed after every fail point.
+    register_fail_point_async("crash", tokio::task::yield_now);
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -2358,16 +2362,6 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         interrupted_count += 1;
 
         let epoch_store = authority_state.epoch_store_for_testing();
-        let g = epoch_store
-            .acquire_tx_guard(&VerifiedExecutableTransaction::new_from_certificate(
-                shared_object_cert.clone(),
-            ))
-            .await
-            .unwrap();
-
-        // assert that the tx was dropped mid-stream due to the timeout.
-        assert_eq!(g.retry_num(), 1);
-        std::mem::drop(g);
 
         // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
         // Must manually enqueue the cert to transaction manager because send_consensus_no_execution
@@ -2386,6 +2380,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     }
 
     // ensure we tested something
+    dbg!(interrupted_count);
     assert!(interrupted_count >= 1);
 }
 

@@ -707,8 +707,14 @@ impl AuthorityStore {
                 [(transaction_digest, effects_digest)],
             )?;
 
+        // test crashing before writing the batch
+        fail_point_async!("crash");
+
         // Commit.
         write_batch.write()?;
+
+        // test crashing before notifying
+        fail_point_async!("crash");
 
         self.executed_effects_notify_read
             .notify(transaction_digest, effects);

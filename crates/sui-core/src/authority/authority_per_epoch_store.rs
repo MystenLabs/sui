@@ -14,7 +14,6 @@ use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use sui_storage::write_ahead_log::{DBWriteAheadLog, WriteAheadLog};
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::committee::Committee;
@@ -34,7 +33,7 @@ use typed_store::rocks::{
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
-use crate::authority::{AuthorityStore, CertTxGuard, ResolverWrapper};
+use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
     CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
     PendingCheckpointInfo,
@@ -59,7 +58,7 @@ use std::cmp::Ordering as CmpOrdering;
 use sui_adapter::adapter;
 use sui_macros::fail_point;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
-use sui_storage::mutex_table::MutexGuard;
+use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
@@ -69,7 +68,6 @@ use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
-use sui_types::temporary_store::InnerTemporaryStore;
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
@@ -84,7 +82,16 @@ const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
 
+// CertLockGuard and CertTxGuard are functionally identical right now, but we retain a distinction
+// anyway. If we need to support distributed object storage, having this distinction will be
+// useful, as we will most likely have to re-implement a retry / write-ahead-log at that point.
 pub struct CertLockGuard(MutexGuard);
+pub struct CertTxGuard(CertLockGuard);
+
+impl CertTxGuard {
+    pub fn release(self) {}
+    pub fn commit_tx(self) {}
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
@@ -138,11 +145,9 @@ pub struct AuthorityPerEpochStore {
     /// Lock ordering: this is a 'leaf' lock, no other locks should be acquired in the scope of this lock
     /// In particular, this lock is always acquired after taking read or write lock on reconfig state
     pending_consensus_certificates: Mutex<HashSet<TransactionDigest>>,
-    /// A write-ahead/recovery log used to ensure we finish fully processing certs after errors or
-    /// crashes.
-    wal: Arc<
-        DBWriteAheadLog<TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>,
-    >,
+
+    /// MutexTable for transaction locks (prevent concurrent execution of same transaction)
+    mutex_table: MutexTable<TransactionDigest>,
 
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
@@ -322,6 +327,8 @@ impl AuthorityEpochTables {
     }
 }
 
+pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
+
 impl AuthorityPerEpochStore {
     pub fn new(
         name: AuthorityName,
@@ -342,8 +349,6 @@ impl AuthorityPerEpochStore {
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
-        let wal_path = AuthorityEpochTables::path(epoch_id, parent_path).join("recovery_log");
-        let wal = Arc::new(DBWriteAheadLog::new(wal_path));
         let epoch_alive_notify = NotifyOnce::new();
         let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
@@ -387,7 +392,7 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             end_of_publish: Mutex::new(end_of_publish),
             pending_consensus_certificates: Mutex::new(pending_consensus_certificates),
-            wal,
+            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
@@ -431,14 +436,6 @@ impl AuthorityPerEpochStore {
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
         )
-    }
-
-    pub fn wal(
-        &self,
-    ) -> &Arc<
-        DBWriteAheadLog<TrustedExecutableTransaction, (InnerTemporaryStore, TransactionEffects)>,
-    > {
-        &self.wal
     }
 
     pub fn committee(&self) -> &Committee {
@@ -496,13 +493,12 @@ impl AuthorityPerEpochStore {
         cert: &VerifiedExecutableTransaction,
     ) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
-        let guard = self.wal.begin_tx(digest, cert.serializable_ref()).await?;
-        Ok(guard)
+        Ok(CertTxGuard(self.acquire_tx_lock(digest).await))
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
     pub async fn acquire_tx_lock(&self, digest: &TransactionDigest) -> CertLockGuard {
-        CertLockGuard(self.wal.acquire_lock(digest).await)
+        CertLockGuard(self.mutex_table.acquire_lock(*digest).await)
     }
 
     pub fn store_reconfig_state(&self, new_state: &ReconfigState) -> SuiResult {
