@@ -6,6 +6,7 @@ mod payload;
 
 use anyhow::Result;
 use clap::Parser;
+use sui_types::digests::TransactionDigest;
 use std::error::Error;
 use std::time::Duration;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -73,6 +74,16 @@ pub enum ClapCommand {
     MultiGetTransactions {
         #[clap(flatten)]
         common: CommonOptions,
+        // this is where the vector goes
+        /// Default to start from checkpoint 0
+        #[clap(short, long, default_value_t = 0)]
+        start: u64,
+
+        /// inclusive, use `getLatestCheckpointSequenceNumber` if `None`
+        #[clap(short, long)]
+        end: Option<u64>,
+        #[clap(short, long, multiple = true)]
+        digests: Option<Vec<TransactionDigest>>
     },
 }
 
@@ -119,8 +130,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ClapCommand::GetCheckpoints { common, start, end } => {
             (Command::new_get_checkpoints(start, end), common)
         }
-        ClapCommand::MultiGetTransactions { common } => {
-            (Command::new_multi_get_transactions(), common)
+        ClapCommand::MultiGetTransactions { common, start, end, digests } => {
+            (Command::new_multi_get_transactions(start, end, digests), common)
         }
     };
 
