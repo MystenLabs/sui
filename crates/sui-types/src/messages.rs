@@ -29,7 +29,6 @@ use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
-use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
@@ -49,7 +48,7 @@ use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use thiserror::Error;
-use tracing::{debug, instrument};
+use tracing::debug;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
