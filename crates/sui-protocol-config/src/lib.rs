@@ -1305,7 +1305,7 @@ impl ProtocolConfig {
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
-                storage_gas_price: Some(1),
+                storage_gas_price: Some(76),
                 max_transactions_per_checkpoint: Some(10_000),
                 max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
 
