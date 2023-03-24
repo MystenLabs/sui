@@ -33,7 +33,6 @@ of the type at once.
 -  [Constants](#@Constants_0)
 -  [Function `new_request`](#0x2_transfer_policy_new_request)
 -  [Function `new`](#0x2_transfer_policy_new)
--  [Function `new_protected`](#0x2_transfer_policy_new_protected)
 -  [Function `withdraw`](#0x2_transfer_policy_withdraw)
 -  [Function `destroy_and_withdraw`](#0x2_transfer_policy_destroy_and_withdraw)
 -  [Function `confirm_request`](#0x2_transfer_policy_confirm_request)
@@ -45,14 +44,13 @@ of the type at once.
 -  [Function `remove_rule`](#0x2_transfer_policy_remove_rule)
 -  [Function `uid`](#0x2_transfer_policy_uid)
 -  [Function `uid_mut_as_owner`](#0x2_transfer_policy_uid_mut_as_owner)
+-  [Function `item`](#0x2_transfer_policy_item)
 -  [Function `paid`](#0x2_transfer_policy_paid)
 -  [Function `from`](#0x2_transfer_policy_from)
--  [Function `metadata_mut`](#0x2_transfer_policy_metadata_mut)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::type_name</a>;
-<b>use</b> <a href="bag.md#0x2_bag">0x2::bag</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
@@ -85,6 +83,14 @@ from the item type (<code>T</code>) owner on purchase attempt.
 
 <dl>
 <dt>
+<code>item: <a href="object.md#0x2_object_ID">object::ID</a></code>
+</dt>
+<dd>
+ The ID of the transferred item. Although the <code>T</code> has no
+ constraints, the main use case for this module is to work
+ with Objects.
+</dd>
+<dt>
 <code>paid: u64</code>
 </dt>
 <dd>
@@ -97,14 +103,6 @@ from the item type (<code>T</code>) owner on purchase attempt.
 <dd>
  The ID of the Kiosk / Safe the object is being sold from.
  Can be used by the TransferPolicy implementors.
-</dd>
-<dt>
-<code>metadata: <a href="bag.md#0x2_bag_Bag">bag::Bag</a></code>
-</dt>
-<dd>
- A Bag of custom details attached to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
- The attachments must be resolved before the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>
- can be completed and unpacked to accept the transfer.
 </dd>
 <dt>
 <code>receipts: <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;</code>
@@ -275,22 +273,22 @@ Trying to <code>withdraw</code> more than there is.
 
 
 
-<a name="0x2_transfer_policy_EIllegalRule"></a>
-
-A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
-
-
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0x2_transfer_policy_ENotOwner"></a>
 
 Trying to <code>withdraw</code> or <code>close_and_withdraw</code> with a wrong Cap.
 
 
 <pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="0x2_transfer_policy_EIllegalRule"></a>
+
+A completed rule is not set in the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+
+
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EIllegalRule">EIllegalRule</a>: u64 = 1;
 </code></pre>
 
 
@@ -335,7 +333,7 @@ created, it must be confirmed in the <code>confirm_request</code> call otherwise
 the transaction will fail.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(paid: u64, from: <a href="object.md#0x2_object_ID">object::ID</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(item: <a href="object.md#0x2_object_ID">object::ID</a>, paid: u64, from: <a href="object.md#0x2_object_ID">object::ID</a>): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;
 </code></pre>
 
 
@@ -345,14 +343,9 @@ the transaction will fail.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(
-    paid: u64, from: ID, ctx: &<b>mut</b> TxContext
+    item: ID, paid: u64, from: ID
 ): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt; {
-    <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> {
-        paid,
-        from,
-        receipts: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(),
-        metadata: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx)
-    }
+    <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>() }
 }
 </code></pre>
 
@@ -399,50 +392,12 @@ kiosks.
 
 </details>
 
-<a name="0x2_transfer_policy_new_protected"></a>
-
-## Function `new_protected`
-
-Special case for the <code>sui::collectible</code> module to be able to register a
-type without a <code>Publisher</code> object. Is not magical and a similar logic
-can be implemented for the regular <code>new_transfer_policy_cap</code> call for
-wrapped types.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_protected">new_protected</a>&lt;T&gt;(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_protected">new_protected</a>&lt;T&gt;(
-    ctx: &<b>mut</b> TxContext
-): (<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
-    <b>let</b> id = <a href="object.md#0x2_object_new">object::new</a>(ctx);
-    <b>let</b> policy_id = <a href="object.md#0x2_object_uid_to_inner">object::uid_to_inner</a>(&id);
-
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
-
-    (
-        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>() },
-        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), policy_id }
-    )
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0x2_transfer_policy_withdraw"></a>
 
 ## Function `withdraw`
 
-Withdraw some amount of profits from the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>. If amount is not
-specified, all profits are withdrawn.
+Withdraw some amount of profits from the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>. If amount
+is not specified, all profits are withdrawn.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, amount: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
@@ -455,7 +410,10 @@ specified, all profits are withdrawn.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_withdraw">withdraw</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;, amount: Option&lt;u64&gt;, ctx: &<b>mut</b> TxContext
+    self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
+    cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
+    amount: Option&lt;u64&gt;,
+    ctx: &<b>mut</b> TxContext
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
 
@@ -522,7 +480,7 @@ Note: unless there's a policy for <code>T</code> to allow transfers,
 Kiosk trades will not be possible.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): (u64, <a href="object.md#0x2_object_ID">object::ID</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): (<a href="object.md#0x2_object_ID">object::ID</a>, u64, <a href="object.md#0x2_object_ID">object::ID</a>)
 </code></pre>
 
 
@@ -533,8 +491,8 @@ Kiosk trades will not be possible.
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_confirm_request">confirm_request</a>&lt;T&gt;(
     self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, request: <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;
-): (u64, ID) {
-    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { paid, from, receipts, metadata } = request;
+): (ID, u64, ID) {
+    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> { item, paid, from, receipts } = request;
     <b>let</b> completed = <a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(receipts);
     <b>let</b> total = <a href="_length">vector::length</a>(&completed);
 
@@ -546,8 +504,7 @@ Kiosk trades will not be possible.
         total = total - 1;
     };
 
-    <a href="bag.md#0x2_bag_destroy_empty">bag::destroy_empty</a>(metadata);
-    (paid, from)
+    (item, paid, from)
 }
 </code></pre>
 
@@ -781,6 +738,29 @@ to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">Tra
 
 </details>
 
+<a name="0x2_transfer_policy_item"></a>
+
+## Function `item`
+
+Get the <code>item</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_item">item</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): <a href="object.md#0x2_object_ID">object::ID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_item">item</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): ID { self.item }
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_transfer_policy_paid"></a>
 
 ## Function `paid`
@@ -821,29 +801,6 @@ Get the <code>from</code> field of the <code><a href="transfer_policy.md#0x2_tra
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_from">from</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): ID { self.from }
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_transfer_policy_metadata_mut"></a>
-
-## Function `metadata_mut`
-
-Get the <code>metadata_mut</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_metadata_mut">metadata_mut</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;): &<b>mut</b> <a href="bag.md#0x2_bag_Bag">bag::Bag</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_metadata_mut">metadata_mut</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;): &<b>mut</b> Bag { &<b>mut</b> self.metadata }
 </code></pre>
 
 
