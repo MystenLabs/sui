@@ -10,7 +10,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 
 use sui_core::authority::AuthorityState;
-use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{BigInt, SuiCommittee};
 use sui_json_rpc_types::{DelegatedStake, Stake, StakeStatus};
 use sui_open_rpc::Module;
 use sui_types::base_types::{MoveObjectType, ObjectID, SuiAddress};
@@ -123,8 +123,8 @@ impl GovernanceReadApi {
                 delegations.push(Stake {
                     staked_sui_id: stake.id(),
                     // TODO: this might change when we implement warm up period.
-                    stake_request_epoch: stake.activation_epoch() - 1,
-                    stake_active_epoch: stake.activation_epoch(),
+                    stake_request_epoch: (stake.activation_epoch() - 1).into(),
+                    stake_active_epoch: stake.activation_epoch().into(),
                     principal: stake.principal(),
                     status,
                 })
@@ -219,9 +219,9 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .into_sui_system_state_summary())
     }
 
-    async fn get_reference_gas_price(&self) -> RpcResult<u64> {
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        Ok(epoch_store.reference_gas_price())
+        Ok(epoch_store.reference_gas_price().into())
     }
 }
 

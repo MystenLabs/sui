@@ -104,7 +104,7 @@ module sui_system::genesis {
                 p2p_address,
                 primary_address,
                 worker_address,
-                balance::split(&mut sui_supply, 10000),
+                balance::split(&mut sui_supply, 2500),
                 ctx
             );
 

@@ -13,17 +13,17 @@ use std::collections::BTreeMap;
 use sui_json_rpc::api::{validate_limit, ReadApiClient, ReadApiServer, QUERY_MAX_RESULT_LIMIT};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType, ObjectsPage,
-    Page, SuiGetPastObjectRequest, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
-    SuiMoveNormalizedStruct, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiTransactionResponse, SuiTransactionResponseOptions,
-    SuiTransactionResponseQuery, TransactionsPage,
+    BigInt, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
+    ObjectsPage, Page, SuiCheckpointSequenceNumber, SuiGetPastObjectRequest,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
+    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+    TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TxSequenceNumber};
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::query::TransactionFilter;
 
 pub(crate) struct ReadApi<S> {
@@ -317,14 +317,14 @@ where
             .await
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<u64> {
+    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
         if !self
             .migrated_methods
             .contains(&"get_total_transaction_number".to_string())
         {
             return self.fullnode.get_total_transaction_number().await;
         }
-        Ok(self.get_total_transaction_number_internal()?)
+        Ok(self.get_total_transaction_number_internal()?.into())
     }
 
     async fn query_transactions(
@@ -467,14 +467,18 @@ where
             .await
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<CheckpointSequenceNumber> {
+    async fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> RpcResult<SuiCheckpointSequenceNumber> {
         if !self
             .migrated_methods
             .contains(&"get_latest_checkpoint_sequence_number".to_string())
         {
             return self.fullnode.get_latest_checkpoint_sequence_number().await;
         }
-        Ok(self.get_latest_checkpoint_sequence_number_internal()?)
+        Ok(self
+            .get_latest_checkpoint_sequence_number_internal()?
+            .into())
     }
 
     async fn get_checkpoint(&self, id: CheckpointId) -> RpcResult<Checkpoint> {
@@ -489,7 +493,7 @@ where
 
     async fn get_checkpoints(
         &self,
-        cursor: Option<CheckpointSequenceNumber>,
+        cursor: Option<SuiCheckpointSequenceNumber>,
         limit: Option<usize>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {

@@ -303,8 +303,8 @@ pub async fn metadata(
             coins: coins.clone(),
             objects: objects.clone(),
             total_coin_value,
-            gas_price: 1,
-            budget,
+            gas_price,
+            budget: budget * gas_price,
         })?;
 
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;
@@ -314,8 +314,8 @@ pub async fn metadata(
         return Err(Error::TransactionDryRunError(error.to_string()));
     }
 
-    let budget =
-        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
+    let budget = <u64>::from(effects.gas_cost_summary().computation_cost)
+        + <u64>::from(effects.gas_cost_summary().storage_cost);
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

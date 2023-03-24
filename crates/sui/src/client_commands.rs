@@ -143,6 +143,10 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        /// Do not Sign transaction, output Base64-encoded Serialized Output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Upgrade Move modules
@@ -585,6 +589,7 @@ impl SuiClientCommands {
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
+                serialize_output,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -609,6 +614,12 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializePublish(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    )));
+                }
+
                 let signature =
                     context
                         .config
@@ -1598,6 +1609,9 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SerializeTransferSui(data) => {
                 writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
             }
+            SuiClientCommandResult::SerializePublish(data) => {
+                writeln!(writer, "Raw tx_bytes to execute: {}", data)?;
+            }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
             }
@@ -1798,6 +1812,7 @@ pub enum SuiClientCommandResult {
     Envs(Vec<SuiEnv>, Option<String>),
     CreateExampleNFT(SuiObjectResponse),
     SerializeTransferSui(String),
+    SerializePublish(String),
     ExecuteSignedTx(SuiTransactionResponse),
     NewEnv(SuiEnv),
 }

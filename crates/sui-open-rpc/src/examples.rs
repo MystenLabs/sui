@@ -285,7 +285,7 @@ impl RpcExampleProvider {
     fn get_checkpoint_example(&mut self) -> Examples {
         let result = Checkpoint {
             epoch: 5000,
-            sequence_number: 1000,
+            sequence_number: 1000.into(),
             digest: CheckpointDigest::new(self.rng.gen()),
             network_total_transactions: 792385,
             previous_digest: Some(CheckpointDigest::new(self.rng.gen())),
@@ -300,7 +300,7 @@ impl RpcExampleProvider {
             "sui_getCheckpoint",
             vec![ExamplePairing::new(
                 "Get checkpoint",
-                vec![("id", json!(CheckpointId::SequenceNumber(1000)))],
+                vec![("id", json!(CheckpointId::SequenceNumber(1000.into())))],
                 json!(result),
             )],
         )
@@ -480,13 +480,13 @@ impl RpcExampleProvider {
             digest: *tx_digest,
             effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: SuiExecutionStatus::Success,
-                executed_epoch: 0,
+                executed_epoch: 0.into(),
                 modified_at_versions: vec![],
                 gas_used: SuiGasCostSummary {
-                    computation_cost: 100,
-                    storage_cost: 100,
-                    storage_rebate: 10,
-                    non_refundable_storage_fee: 0,
+                    computation_cost: 100.into(),
+                    storage_cost: 100.into(),
+                    storage_rebate: 10.into(),
+                    non_refundable_storage_fee: 0.into(),
                 },
                 shared_objects: vec![],
                 transaction_digest: TransactionDigest::new(self.rng.gen()),

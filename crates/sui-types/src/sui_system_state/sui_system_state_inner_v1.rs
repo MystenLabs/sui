@@ -564,6 +564,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                         narwhal_primary_address: metadata.primary_address.clone(),
                         narwhal_worker_address: metadata.worker_address.clone(),
                         voting_power: validator.voting_power,
+                        hostname: metadata.name.clone(),
                     }
                 })
                 .collect(),

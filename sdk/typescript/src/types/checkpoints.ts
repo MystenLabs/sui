@@ -53,7 +53,7 @@ export const ExecutionDigests = object({
 
 export const Checkpoint = object({
   epoch: number(),
-  sequenceNumber: number(),
+  sequenceNumber: string(),
   digest: CheckpointDigest,
   networkTotalTransactions: number(),
   previousDigest: optional(CheckpointDigest),
@@ -67,7 +67,7 @@ export type Checkpoint = Infer<typeof Checkpoint>;
 
 export const CheckpointPage = object({
   data: array(Checkpoint),
-  nextCursor: union([number(), literal(null)]),
+  nextCursor: union([string(), literal(null)]),
   hasNextPage: boolean(),
 });
 export type CheckpointPage = Infer<typeof CheckpointPage>;

@@ -227,6 +227,8 @@ It is recommended and often required that the `sui` binary release/version match
 
 ### Updating On-chain Metadata
 
+You can leverage [Validator Tool](validator_tool.md) to perform majority of the following tasks.
+
 An active/pending validator can update its on-chain metadata by submitting a transaction. Some metadata changes take effect immediately, including:
 * name
 * description

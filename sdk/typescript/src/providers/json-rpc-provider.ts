@@ -54,7 +54,7 @@ import {
   WebsocketClientOptions,
 } from '../rpc/websocket-client';
 import { requestSuiFromFaucet } from '../rpc/faucet-client';
-import { any, is, number, array } from 'superstruct';
+import { any, is, array, string } from 'superstruct';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
@@ -596,25 +596,28 @@ export class JsonRpcProvider {
   /**
    * Get total number of transactions
    */
-  async getTotalTransactionNumber(): Promise<number> {
-    return await this.client.requestWithType(
+
+  async getTotalTransactionNumber(): Promise<bigint> {
+    const resp = await this.client.requestWithType(
       'sui_getTotalTransactionNumber',
       [],
-      number(),
+      string(),
       this.options.skipDataValidation,
     );
+    return BigInt(resp);
   }
 
   /**
    * Getting the reference gas price for the network
    */
-  async getReferenceGasPrice(): Promise<number> {
-    return await this.client.requestWithType(
+  async getReferenceGasPrice(): Promise<bigint> {
+    const resp = await this.client.requestWithType(
       'sui_getReferenceGasPrice',
       [],
-      number(),
+      string(),
       this.options.skipDataValidation,
     );
+    return BigInt(resp);
   }
 
   /**
@@ -698,7 +701,7 @@ export class JsonRpcProvider {
     transaction: Transaction | string | Uint8Array;
     sender: SuiAddress;
     /** Default to use the network reference gas price stored in the Sui System State object */
-    gasPrice?: number | null;
+    gasPrice?: bigint | number | null;
     /** optional. Default to use the current epoch number stored in the Sui System State object */
     epoch?: number | null;
   }): Promise<DevInspectResults> {
@@ -788,13 +791,14 @@ export class JsonRpcProvider {
   /**
    * Get the sequence number of the latest checkpoint that has been executed
    */
-  async getLatestCheckpointSequenceNumber(): Promise<number> {
-    return await this.client.requestWithType(
+  async getLatestCheckpointSequenceNumber(): Promise<string> {
+    const resp = await this.client.requestWithType(
       'sui_getLatestCheckpointSequenceNumber',
       [],
-      number(),
+      string(),
       this.options.skipDataValidation,
     );
+    return String(resp);
   }
 
   /**
@@ -802,7 +806,7 @@ export class JsonRpcProvider {
    */
   async getCheckpoint(input: {
     /** The checkpoint digest or sequence number */
-    id: CheckpointDigest | number;
+    id: CheckpointDigest | string;
   }): Promise<Checkpoint> {
     return await this.client.requestWithType(
       'sui_getCheckpoint',
@@ -820,7 +824,7 @@ export class JsonRpcProvider {
      * An optional paging cursor. If provided, the query will start from the next item after the specified cursor.
      * Default to start from the first item if not specified.
      */
-    cursor?: number;
+    cursor?: string;
     /** Maximum item returned per page, default to 100 if not specified. */
     limit?: number;
     /** query result ordering, default to false (ascending order), oldest record first */

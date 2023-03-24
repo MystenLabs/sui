@@ -122,7 +122,7 @@ impl ReadApi {
     }
 
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_total_transaction_number().await?)
+        Ok(self.api.http.get_total_transaction_number().await?.into())
     }
 
     pub async fn get_transactions_in_range_deprecated(
@@ -192,7 +192,8 @@ impl ReadApi {
             .api
             .http
             .get_latest_checkpoint_sequence_number()
-            .await?)
+            .await?
+            .into())
     }
 
     pub fn get_transactions_stream(
@@ -235,7 +236,7 @@ impl ReadApi {
 
     // TODO(devx): we can probably cache this given an epoch
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 
     pub async fn dry_run_transaction(
@@ -552,6 +553,6 @@ impl GovernanceApi {
 
     /// Return the reference gas price for the network
     pub async fn get_reference_gas_price(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_reference_gas_price().await?)
+        Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 }
