@@ -16,23 +16,24 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, SuiTransactionEvents, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    DevInspectResults, DryRunTransactionResponse, SuiTransaction, SuiTransactionEvents,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionKind,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionEffectsAPI,
+    TransactionKind,
 };
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::messages::{TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
 use crate::api::WriteApiServer;
-use crate::balance_changes::get_balance_change_from_effect;
+use crate::balance_changes::get_balance_changes_from_effect;
 use crate::error::Error;
 use crate::read_api::get_transaction_data_and_digest;
-use crate::{get_object_change_from_effect, ObjectProviderCache, SuiRpcModule};
+use crate::{get_object_changes, ObjectProviderCache, SuiRpcModule};
 
 pub struct TransactionExecutionApi {
     state: Arc<AuthorityState>,
@@ -75,9 +76,9 @@ impl TransactionExecutionApi {
         for sig in signatures {
             sigs.push(GenericSignature::from_bytes(&sig.to_vec()?)?);
         }
-
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), sigs);
-        let tx = txn.data().clone().try_into()?;
+        let tx = SuiTransaction::try_from(txn.data().clone(), epoch_store.module_cache())?;
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data())?
         } else {
@@ -114,14 +115,20 @@ impl TransactionExecutionApi {
 
                 let object_cache = ObjectProviderCache::new(self.state.clone());
                 let balance_changes = if opts.show_balance_changes {
-                    Some(get_balance_change_from_effect(&object_cache, &effects.effects).await?)
+                    Some(get_balance_changes_from_effect(&object_cache, &effects.effects).await?)
                 } else {
                     None
                 };
                 let object_changes = if opts.show_object_changes {
                     Some(
-                        get_object_change_from_effect(&object_cache, sender, &effects.effects)
-                            .await?,
+                        get_object_changes(
+                            &object_cache,
+                            sender,
+                            effects.effects.modified_at_versions(),
+                            effects.effects.all_changed_objects(),
+                            effects.effects.all_deleted(),
+                        )
+                        .await?,
                     )
                 } else {
                     None

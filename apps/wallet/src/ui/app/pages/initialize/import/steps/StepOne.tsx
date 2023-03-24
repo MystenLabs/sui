@@ -86,7 +86,7 @@ export default function StepOne({ next, data, mode }: StepProps) {
                                                     );
                                                 const words = inputText
                                                     .trim()
-                                                    .split(' ')
+                                                    .split(/\W/)
                                                     .map((aWord) =>
                                                         aWord.trim()
                                                     )

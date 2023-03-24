@@ -237,16 +237,17 @@ impl ToolCommand {
             ToolCommand::DumpValidators { genesis, concise } => {
                 let genesis = Genesis::load(genesis).unwrap();
                 if !concise {
-                    println!("{:#?}", genesis.validator_set());
+                    println!("{:#?}", genesis.validator_set_for_tooling());
                 } else {
-                    for (i, val_info) in genesis.validator_set().iter().enumerate() {
+                    for (i, val_info) in genesis.validator_set_for_tooling().iter().enumerate() {
+                        let metadata = val_info.verified_metadata();
                         println!(
                             "#{:<2} {:<20} {:?<66} {:?} {}",
                             i,
-                            val_info.name(),
-                            val_info.protocol_key(),
-                            val_info.network_address(),
-                            anemo::PeerId(val_info.network_key().0.to_bytes()),
+                            metadata.name,
+                            metadata.protocol_pubkey,
+                            metadata.net_address,
+                            anemo::PeerId(metadata.network_pubkey.0.to_bytes()),
                         )
                     }
                 }
@@ -261,7 +262,7 @@ impl ToolCommand {
             } => {
                 let clients = make_clients(genesis)?;
 
-                for (name, (_val, client)) in clients {
+                for (name, (_, client)) in clients {
                     let resp = client
                         .handle_checkpoint(CheckpointRequest {
                             sequence_number,

@@ -43,23 +43,22 @@ describe('Transaction Builders', () => {
     toolbox = await setup();
   });
 
-  it('SplitCoin + TransferObjects', async () => {
+  it('SplitCoins + TransferObjects', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const tx = new Transaction();
-    const coin_0 = coins[0].details as SuiObjectData;
+    const coin_0 = coins[0].data as SuiObjectData;
 
-    const coin = tx.splitCoin(
-      tx.object(coin_0.objectId),
+    const coin = tx.splitCoins(tx.object(coin_0.objectId), [
       tx.pure(DEFAULT_GAS_BUDGET * 2),
-    );
+    ]);
     tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('MergeCoins', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
-    const coin_0 = coins[0].details as SuiObjectData;
-    const coin_1 = coins[1].details as SuiObjectData;
+    const coin_0 = coins[0].data as SuiObjectData;
+    const coin_1 = coins[1].data as SuiObjectData;
     const tx = new Transaction();
     tx.mergeCoins(tx.object(coin_0.objectId), [tx.object(coin_1.objectId)]);
     await validateTransaction(toolbox.signer, tx);
@@ -82,14 +81,14 @@ describe('Transaction Builders', () => {
 
   it('MoveCall Shared Object', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
-    const coin_2 = coins[2].details as SuiObjectData;
+    const coin_2 = coins[2].data as SuiObjectData;
 
     const [{ suiAddress: validatorAddress }] =
       await toolbox.getActiveValidators();
 
     const tx = new Transaction();
     tx.moveCall({
-      target: '0x2::sui_system::request_add_stake',
+      target: '0x3::sui_system::request_add_stake',
       arguments: [
         tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
         tx.object(coin_2.objectId),
@@ -100,9 +99,9 @@ describe('Transaction Builders', () => {
     await validateTransaction(toolbox.signer, tx);
   });
 
-  it('SplitCoin from gas object + TransferObjects', async () => {
+  it('SplitCoins from gas object + TransferObjects', async () => {
     const tx = new Transaction();
-    const coin = tx.splitCoin(tx.gas, tx.pure(1));
+    const coin = tx.splitCoins(tx.gas, [tx.pure(1)]);
     tx.transferObjects([coin], tx.pure(DEFAULT_RECIPIENT));
     await validateTransaction(toolbox.signer, tx);
   });
@@ -116,7 +115,7 @@ describe('Transaction Builders', () => {
   it('TransferObject', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const tx = new Transaction();
-    const coin_0 = coins[2].details as SuiObjectData;
+    const coin_0 = coins[2].data as SuiObjectData;
 
     tx.transferObjects(
       [tx.object(coin_0.objectId)],

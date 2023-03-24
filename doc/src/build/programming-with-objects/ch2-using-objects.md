@@ -2,12 +2,13 @@
 title: Chapter 2 - Using Objects
 ---
 
-In [Chapter 1](./ch1-object-basics.md) we covered how to define, create and take ownership of a Sui object in Move. In this chapter we will look at how to use objects that you own in Move calls.
+The [Object Basics](./ch1-object-basics.md) chapter covered how to define, create and take ownership of a Sui object in Sui Move. This chapter describes how to use objects that you own in Sui Move calls.
 
-Sui authentication mechanisms ensure only you can use objects owned by you in Move calls. (We will cover non-owned objects in future chapters.) To use an object in Move calls, pass them as parameters to an [entry function](../move/index.md#entry-functions). Similar to Rust, there are a few ways to pass parameters:
+Sui authentication mechanisms ensure only you can use objects owned by you in Sui Move calls. To use an object in Sui Move calls, pass them as parameters to an [entry function](../move/index.md#entry-functions). Similar to Rust, there are a few ways to pass parameters, as described in the following sections.
 
 ### Pass objects by reference
-There are two ways to pass objects by reference: read-only references (`&T`) and mutable references (`&mut T`). Read-only references allow you to read data from the object, while mutable references allow you to mutate the data in the object. Let's try to add a function that would allow us to update one of `ColorObject`'s values with another `ColorObject`'s value. This will exercise using both read-only references and mutable references.
+
+There are two ways to pass objects by reference: read-only references (`&T`) and mutable references (`&mut T`). Read-only references allow you to read data from the object, while mutable references allow you to mutate the data in the object. To add a function that allows you to update one of the values of `ColorObject` with another value of `ColorObject`. This exercises both using read-only references and mutable references.
 
 The `ColorObject` we defined in the previous chapter looks like:
 ```rust
@@ -18,7 +19,9 @@ struct ColorObject has key {
     blue: u8,
 }
 ```
-Now let's add this function:
+
+Now, add this function:
+
 ```rust
 /// Copies the values of `from_object` into `into_object`.
 public entry fun copy_into(from_object: &ColorObject, into_object: &mut ColorObject) {
@@ -27,15 +30,19 @@ public entry fun copy_into(from_object: &ColorObject, into_object: &mut ColorObj
     into_object.blue = from_object.blue;
 }
 ```
-> :bulb: We declared this function with the `entry` modifier to be callable as an entry function from transactions.
 
-In the above function signature, `from_object` can be a read-only reference because we only need to read its fields; conversely, `into_object` must be a mutable reference since we need to mutate it. In order for a transaction to make a call to the `copy_into` function, **the sender of the transaction must be the owner of both of `from_object` and `into_object`**.
+Declare this function with the `entry` modifier so that it is callable as an entry function from transactions.
 
-> :bulb: Although `from_object` is a read-only reference in this transaction, it is still a mutable object in Sui storage--another transaction could be sent to mutate the object at the same time! To prevent this, Sui must lock any mutable object used as a transaction input, even when it's passed as a read-only reference. In addition, only an object's owner can send a transaction that locks the object.
+In the preceding function signature, `from_object` can be a read-only reference because you only need to read its fields. Conversely, `into_object` must be a mutable reference since you need to mutate it. For a transaction to make a call to the `copy_into` function, the sender of the transaction must be the owner of both `from_object` and `into_object`.
 
-Let's write a unit test to see how we could interact with multiple objects of the same type in tests.
-In the previous chapter, we introduced the `take_from_sender<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_from_sender<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new, test-only APIs. The first is `tx_context::last_created_object_id(ctx)`, which returns the ID of the most recently created object. The second is `test_scenario::take_from_sender_by_id<T>`, which returns an object of type `T` with a specific object ID.
-Now let's take a look at the test (`test_copy_into`):
+Although `from_object` is a read-only reference in this transaction, it is still a mutable object in Sui storage--another transaction could be sent to mutate the object at the same time. To prevent this, Sui must lock any mutable object used as a transaction input, even when it's passed as a read-only reference. In addition, only an object's owner can send a transaction that locks the object.
+
+The following section describes how to write a unit test to learn how to interact with multiple objects of the same type in tests.
+
+The previous chapter introduced the `take_from_sender<T>` function, which takes an object of type `T` from the global storage created by previous transactions. However, if there are multiple objects of the same type, `take_from_sender<T>` is no longer able to determine which one to return. To solve this problem, use two new, test-only functions. The first is `tx_context::last_created_object_id(ctx)`, which returns the ID of the most recently created object. The second is `test_scenario::take_from_sender_by_id<T>`, which returns an object of type `T` with a specific object ID.
+
+Create the test `test_copy_into` as shown in this example:
+
 ```rust
 let owner = @0x1;
 let scenario_val = test_scenario::begin(owner);
@@ -50,7 +57,9 @@ let (id1, id2) = {
     (id1, id2)
 };
 ```
-The above code created two objects. Note that right after each call, we make a call to `tx_context::last_created_object_id` to get the ID of the object just created. At the end we have `id1` and `id2` capturing the IDs of the two objects. Next we retrieve both of them and test the `copy_into` function:
+
+The preceding code creates two objects. Note that right after each call, it makes a call to `tx_context::last_created_object_id` to get the ID of the object the call created. At the end, `id1` and `id2` capture the IDs of the two objects. Next, retrieve both of them and test the `copy_into` function:
+
 ```rust
 test_scenario::next_tx(scenario, owner);
 {
@@ -65,7 +74,9 @@ test_scenario::next_tx(scenario, owner);
     test_scenario::return_to_sender(scenario, obj2);
 };
 ```
-We used `take_from_sender_by_id` to take both objects using different IDs. We then used `copy_into` to update `obj1`'s value using `obj2`'s. We can verify that the mutation works:
+
+This uses `take_from_sender_by_id` to take both objects using different IDs. Use `copy_into` to update the value for `obj1` using the value for `obj2`. You can verify that the mutation works:
+
 ```rust
 test_scenario::next_tx(scenario, owner);
 {
@@ -78,31 +89,38 @@ test_scenario::end(scenario_val);
 ```
 
 ### Pass objects by value
-Objects can also be passed by value into an entry function. By doing so, the object is moved out of Sui storage. It is then up to the Move code to decide where this object should go.
 
-> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `UID` as its first field, and the [UID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) does not have the `drop` ability, the Sui object struct type [cannot](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have the `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
+You can also pass objects by value into an entry function. By doing so, the object is moved out of Sui storage. It is then up to the Sui Move code to decide where this object should go.
 
-There are two ways we can deal with a pass-by-value Sui object in Move:
-- delete the object
-- transfer the object
+Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `UID` as its first field, and the [UID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) does not have the `drop` ability, the Sui object struct type cannot have the [drop](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (for example, transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described in the following sections.
 
-#### Option 1. Delete the object
-If the intention is to actually delete the object, we can unpack the object. This can be done only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). Upon unpacking, if any field is also of struct type, recursive unpacking and deletion will be required.
+There are two ways to handle a pass-by-value Sui object in Move:
+ * delete the object
+ * transfer the object
 
-However, the `id` field of a Sui object requires special handling. We must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
+#### Delete the object
+
+If the intention is to actually delete the object, unpack it. You can do this only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). If any field is also of struct type, you must use recursive unpacking and deletion when you unpack the object.
+
+However, the `id` field of a Sui object requires special handling. You must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
+
 ```rust
 public fun delete(id: UID) { ... }
 ```
-Let's define a function in the `ColorObject` module that allows us to delete the object:
+
+Define a function in the `ColorObject` module that allows us to delete the object:
+
 ```rust
     public entry fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
         object::delete(id);
     }
 ```
-As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `id` (which has type `UID`) cannot be dropped and must be explicitly deleted through the `object::delete` API. At the end of this call, the object will no longer be stored on-chain.
 
-We can add a unit test for it, as well:
+The object unpacks and generates individual fields. You can drop all of the u8 values, which are primitive types. However, you can't drop the `id`, which has type `UID`, and must explicitly delete it using the `object::delete` API. At the end of this call, the object is no longer stored on-chain.
+
+To add a unit test for it:
+
 ```rust
 let owner = @0x1;
 // Create a ColorObject and transfer it to @owner.
@@ -125,18 +143,23 @@ test_scenario::next_tx(scenario, &owner);
 };
 test_scenario::end(scenario_val);
 ```
-The first part is the same as what we have seen in [Chapter 1](./ch1-object-basics.md#writing-unit-tests), which creates a new `ColorObject` and puts it in the owner's account. The second transaction is what we are testing: retrieve the object from the storage and then delete it. Since the object is deleted, there is no need (in fact, it is impossible) to return it to the storage. The last part of the test checks that the object is indeed no longer in the global storage and hence cannot be retrieved from there.
+
+The first part of the example repeats the example used in [Object Basics](./ch1-object-basics.md#writing-unit-tests), and creates a new `ColorObject` and puts it in the owner's account. The second transaction gets tested. It retrieves the object from the storage and then delete it. Since the object is deleted, there is no need (in fact, it is impossible) to return it to the storage. The last part of the test checks that the object is indeed no longer in the global storage and hence cannot be retrieved from there.
 
 #### Option 2. Transfer the object
-The owner of the object may want to transfer it to another address. To support this, the `ColorObject` module will need to define a `transfer` API:
+
+The owner of the object might want to transfer it to another address. To support this, the `ColorObject` module needs to define a `transfer` function:
+
 ```rust
 public entry fun transfer(object: ColorObject, recipient: address) {
     transfer::transfer(object, recipient)
 }
 ```
->:bulb: One cannot call `transfer::transfer` directly as it is not an `entry` function.
 
-Let's add a test for transferring too. First of all, we create an object in `owner`'s account and then transfer it to a different account `recipient`:
+You cannot call `transfer::transfer` directly as it is not an `entry` function.
+
+Add a test for transferring too. First, create an object in the account of the `owner`, and then transfer it to a different account `recipient`:
+
 ```rust
 let owner = @0x1;
 // Create a ColorObject and transfer it to @owner.
@@ -155,7 +178,9 @@ test_scenario::next_tx(scenario, owner);
     transfer::transfer(object, recipient, ctx);
 };
 ```
-Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the transfer, we can verify that `owner` no longer owns the object, while `recipient` now owns it:
+
+Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the transfer, you can verify that `owner` no longer owns the object, and `recipient` now owns it:
+
 ```rust
 // Check that owner no longer owns the object.
 test_scenario::next_tx(scenario, owner);
@@ -171,47 +196,63 @@ test_scenario::end(scenario_val);
 ```
 
 ### On-chain interactions
-Now it's time to try this out on-chain. Assuming you have already followed the instructions in [Chapter 1](./ch1-object-basics.md#on-chain-interactions), you should already have the package published and a new object created.
-Now we can try to transfer it to another address. First let's see what other addresses you own:
+
+Next, try this out on-chain. Assuming you followed the instructions in [Object Basics](./ch1-object-basics.md#on-chain-interactions), you should have a published package and a new object created.
+
+To transfer it to another address, first check the addresses available:
+
+```shell
+sui client addresses
 ```
-$ sui client addresses
+
+Choose an address other than the active address. If you have only one address, create another address using the [Sui Client CLI](../cli-client.md#create-a-new-account-address).
+
+For this example, the recipient address is: `0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446`. Save it as a variable for convenience:
+
+```shell
+export RECIPIENT=0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446
 ```
-Since the default current address is the first address, let's pick the second address in the list as the recipient. In my case, I have `0x1416f3d5af469905b0580b9af843ec82d02efd30`. Let's save it for convenience:
-```
-$ export RECIPIENT=0x1416f3d5af469905b0580b9af843ec82d02efd30
-```
-Now let's transfer the object to this address:
-```
+
+Now, transfer the object to the address:
+
+```shell
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "transfer" --args \"$OBJECT\" \"$RECIPIENT\"
 ```
+
 Now let's see what objects the `RECIPIENT` owns:
-```
+
+```shell
 $ sui client objects $RECIPIENT
 ```
-We should be able to see that one of the objects in the list is the new `ColorObject`! This means the transfer was successful.
 
-Let's also try to delete this object:
-```
+You should see the `ColorObject` listed. This means the transfer succeeded.
+
+To delete this object:
+
+```shell
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"$OBJECT\"
 ```
-Oops. It will error out and complain that the address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
 
-In order to operate on this object, we need to switch our client address to `$RECIPIENT`:
-```
+The command returns an error indicating that the address is unable to lock the object. This is a valid error because the address used for the command, the active address, no longer owns the object.
+
+To operate on this object, use the recipient address, `$RECIPIENT`:
+
+```shell
 $ sui client switch --address $RECIPIENT
 ```
-And try the deletion again:
-```
+
+And try the to delete the object again:
+
+```shell
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"$OBJECT\"
 ```
-In the output, you will see in the `Transaction Effects` section a list of deleted objects.
-This shows that the object was successfully deleted. If we run this again:
-```
+
+In the `Transaction Effects` section of the output, you see a list of deleted objects.
+
+This shows that the object was successfully deleted. If you run the command again:
+
+```shell
 $ sui client objects $RECIPIENT
 ```
-We will see that this object is no longer there in the address.
 
-In this chapter you learned:
-- to pass objects by reference
-- to pass objects by value (deleting or transferring them)
-- to transfer and interact with objects on-chain
+You see that the object is no longer listed for the address.

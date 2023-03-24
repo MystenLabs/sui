@@ -100,7 +100,7 @@ module examples::hero {
         let admin = admin();
         // ensure this is being initialized by the expected admin authenticator
         assert!(&tx_context::sender(ctx) == &admin, ENOT_ADMIN);
-        transfer::transfer(
+        transfer::public_transfer(
             GameAdmin {
                 id: object::new(ctx),
                 boars_created: 0,
@@ -210,7 +210,7 @@ module examples::hero {
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
-        transfer::transfer(payment, admin());
+        transfer::public_transfer(payment, admin());
 
         // magic of the sword is proportional to the amount you paid, up to
         // a max. one can only imbue a sword with so much magic
@@ -225,7 +225,7 @@ module examples::hero {
     public entry fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
-        transfer::transfer(hero, tx_context::sender(ctx))
+        transfer::public_transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -248,7 +248,7 @@ module examples::hero {
     ) {
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
-        transfer::transfer(
+        transfer::public_transfer(
             Potion { id: object::new(ctx), potency },
             player
         )
@@ -264,7 +264,7 @@ module examples::hero {
     ) {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
-        transfer::transfer(
+        transfer::public_transfer(
             Boar { id: object::new(ctx), hp, strength },
             player
         )
@@ -317,7 +317,7 @@ module examples::hero {
             let treasury_cap = test_scenario::take_from_sender<TreasuryCap<EXAMPLE>>(scenario);
             let ctx = test_scenario::ctx(scenario);
             let coins = coin::mint(&mut treasury_cap, 500, ctx);
-            transfer::transfer(coins, copy player);
+            transfer::public_transfer(coins, copy player);
             test_scenario::return_to_sender(scenario, treasury_cap);
         };
         // Player purchases a hero with the coins

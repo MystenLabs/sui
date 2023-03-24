@@ -2,8 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
-use config::{Committee, Epoch, WorkerId};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, Epoch, WorkerId};
 use fastcrypto::hash::Hash as _;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
@@ -41,8 +40,8 @@ const DEFAULT_HEADER_RESEND_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
 pub struct Proposer {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
     /// The committee information.
     committee: Committee,
     /// The threshold number of batches that can trigger
@@ -69,13 +68,15 @@ pub struct Proposer {
     rx_parents: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
     rx_our_digests: Receiver<OurDigestMessage>,
-    /// Sends newly created headers to the `Core`.
+    /// Sends newly created headers to the `Certifier`.
     tx_headers: Sender<Header>,
 
     /// The proposer store for persisting the last header.
     proposer_store: ProposerStore,
     /// The current round of the dag.
     round: Round,
+    /// Last time the round has been updated
+    last_round_timestamp: Option<TimestampMs>,
     /// Signals a new narwhal round
     tx_narwhal_round_updates: watch::Sender<Round>,
     /// Holds the certificates' ids waiting to be included in the next header.
@@ -101,7 +102,7 @@ impl Proposer {
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
@@ -122,7 +123,7 @@ impl Proposer {
         spawn_logged_monitored_task!(
             async move {
                 Self {
-                    name,
+                    authority_id,
                     committee,
                     header_num_of_batches_threshold,
                     max_header_num_of_batches,
@@ -137,6 +138,7 @@ impl Proposer {
                     tx_narwhal_round_updates,
                     proposer_store,
                     round: 0,
+                    last_round_timestamp: None,
                     last_parents: genesis,
                     last_leader: None,
                     digests: VecDeque::with_capacity(2 * max_header_num_of_batches),
@@ -169,7 +171,7 @@ impl Proposer {
 
         let num_of_included_digests = header.payload.len();
 
-        // Send the new header to the `Core` that will broadcast and process it.
+        // Send the new header to the `Certifier` that will broadcast and certify it.
         self.tx_headers
             .send(header.clone())
             .await
@@ -217,7 +219,7 @@ impl Proposer {
         }
 
         let header = Header::new(
-            self.name.clone(),
+            self.authority_id,
             this_round,
             this_epoch,
             header_digests
@@ -229,15 +231,15 @@ impl Proposer {
         .await;
 
         let leader_and_support = if this_round % 2 == 0 {
-            let leader_name = self.committee.leader(this_round);
-            if self.name == leader_name {
+            let authority = self.committee.leader(this_round);
+            if self.authority_id == authority.id() {
                 "even_round_is_leader"
             } else {
                 "even_round_not_leader"
             }
         } else {
-            let leader_name = self.committee.leader(this_round - 1);
-            if parents.iter().any(|c| c.origin() == leader_name) {
+            let authority = self.committee.leader(this_round - 1);
+            if parents.iter().any(|c| c.origin() == authority.id()) {
                 "odd_round_gives_support"
             } else {
                 "odd_round_no_support"
@@ -312,7 +314,7 @@ impl Proposer {
             // round, we set a lower max timeout value to increase its chance of committing
             // the leader.
             NetworkModel::PartiallySynchronous
-                if self.committee.leader(self.round + 1) == self.name =>
+                if self.committee.leader(self.round + 1).id() == self.authority_id =>
             {
                 self.max_header_delay / 2
             }
@@ -329,7 +331,7 @@ impl Proposer {
             // min delay value to increase the chance of committing the leader.
             NetworkModel::PartiallySynchronous
                 if self.committee.size() > 1
-                    && self.committee.leader(self.round + 1) == self.name =>
+                    && self.committee.leader(self.round + 1).id() == self.authority_id =>
             {
                 Duration::ZERO
             }
@@ -341,11 +343,11 @@ impl Proposer {
 
     /// Update the last leader certificate. This is only relevant in partial synchrony.
     fn update_leader(&mut self) -> bool {
-        let leader_name = self.committee.leader(self.round);
+        let leader = self.committee.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
-            .find(|x| x.origin() == leader_name)
+            .find(|x| x.origin() == leader.id())
             .cloned();
 
         if let Some(leader) = self.last_leader.as_ref() {
@@ -359,7 +361,7 @@ impl Proposer {
     /// (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
-        if self.committee.leader(self.round + 1) == self.name {
+        if self.committee.leader(self.round + 1).id() == self.authority_id {
             return true;
         }
 
@@ -371,7 +373,7 @@ impl Proposer {
         let mut votes_for_leader = 0;
         let mut no_votes = 0;
         for certificate in &self.last_parents {
-            let stake = self.committee.stake(&certificate.origin());
+            let stake = self.committee.stake_by_id(certificate.origin());
             if certificate.header.parents.contains(&leader) {
                 votes_for_leader += stake;
             } else {
@@ -428,7 +430,7 @@ impl Proposer {
 
         info!(
             "Proposer on node {} has started successfully with header resend timeout {:?}.",
-            self.name, header_resend_timeout
+            self.authority_id, header_resend_timeout
         );
         loop {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
@@ -458,7 +460,24 @@ impl Proposer {
                 // Advance to the next round.
                 self.round += 1;
                 let _ = self.tx_narwhal_round_updates.send(self.round);
+
+                // Update the metrics
                 self.metrics.current_round.set(self.round as i64);
+                let current_timestamp = now();
+                let reason = if max_delay_timed_out {
+                    "max_timeout"
+                } else if enough_digests {
+                    "threshold_size_reached"
+                } else {
+                    "min_timeout"
+                };
+                if let Some(t) = &self.last_round_timestamp {
+                    self.metrics
+                        .proposal_latency
+                        .with_label_values(&[reason])
+                        .observe((current_timestamp - t) as f64);
+                }
+                self.last_round_timestamp = Some(current_timestamp);
                 debug!("Dag moved to round {}", self.round);
 
                 // Make a new header.
@@ -466,14 +485,6 @@ impl Proposer {
                     Err(e @ DagError::ShuttingDown) => debug!("{e}"),
                     Err(e) => panic!("Unexpected error: {e}"),
                     Ok((header, digests)) => {
-                        let reason = if max_delay_timed_out {
-                            "max_timeout"
-                        } else if enough_digests {
-                            "threshold_size_reached"
-                        } else {
-                            "min_timeout"
-                        };
-
                         // Save the header
                         opt_latest_header = Some(header);
                         header_repeat_timer = Box::pin(sleep(header_resend_timeout));

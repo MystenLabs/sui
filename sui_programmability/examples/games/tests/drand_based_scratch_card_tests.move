@@ -11,7 +11,7 @@ module games::drand_based_scratch_card_tests {
     use games::drand_based_scratch_card;
 
     fun mint(addr: address, amount: u64, scenario: &mut Scenario) {
-        transfer::transfer(coin::mint_for_testing<SUI>(amount, test_scenario::ctx(scenario)), addr);
+        transfer::public_transfer(coin::mint_for_testing<SUI>(amount, test_scenario::ctx(scenario)), addr);
         test_scenario::next_tx(scenario, addr);
     }
 
@@ -63,7 +63,7 @@ module games::drand_based_scratch_card_tests {
             i = i + 1;
         };
         // This value may change if the object ID is changed.
-        assert!(i == 49, 1);
+        assert!(i == 21, 1);
 
         // Claim the reward.
         let winner = test_scenario::take_from_sender<drand_based_scratch_card::Winner>(scenario);

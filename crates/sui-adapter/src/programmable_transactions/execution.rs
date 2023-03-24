@@ -50,7 +50,7 @@ use sui_verifier::{
     entry_points_verifier::{
         TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
     },
-    private_generics::{EVENT_MODULE, TRANSFER_MODULE},
+    private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     INIT_FN_NAME,
 };
 
@@ -193,7 +193,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             }
             vec![]
         }
-        Command::SplitCoin(coin_arg, amount_arg) => {
+        Command::SplitCoins(coin_arg, amount_args) => {
             let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
             let ObjectContents::Coin(coin) = &mut obj.contents else {
                 let e = ExecutionErrorKind::command_argument_error(
@@ -203,12 +203,19 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 let msg = format!("Expected a coin but got an object of type {}", obj.type_);
                 return Err(ExecutionError::new_with_source(e, msg));
             };
-            let amount: u64 = context.by_value_arg(CommandKind::SplitCoin, 1, amount_arg)?;
-            let new_coin_id = context.fresh_id()?;
-            let new_coin = coin.split(amount, UID::new(new_coin_id))?;
-            let coin_type = obj.type_.clone();
+            let split_coins = amount_args
+                .into_iter()
+                .map(|amount_arg| {
+                    let amount: u64 =
+                        context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
+                    let new_coin_id = context.fresh_id()?;
+                    let new_coin = coin.split(amount, UID::new(new_coin_id))?;
+                    let coin_type = obj.type_.clone();
+                    Ok(Value::Object(ObjectValue::coin(coin_type, new_coin)?))
+                })
+                .collect::<Result<_, ExecutionError>>()?;
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
-            vec![Value::Object(ObjectValue::coin(coin_type, new_coin)?)]
+            split_coins
         }
         Command::MergeCoins(target_arg, coin_args) => {
             let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
@@ -528,6 +535,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
     // Full backwards compatibility except that we allow friend function signatures to change.
     check_compatibility(
+        context,
         &current_package,
         &upgraded_package_modules,
         upgrade_ticket.policy,
@@ -557,7 +565,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     )])
 }
 
-fn check_compatibility<'a>(
+fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
+    context: &ExecutionContext<E, S>,
     existing_package: &MovePackage,
     upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
     policy: u8,
@@ -588,7 +597,7 @@ fn check_compatibility<'a>(
         ));
     }
 
-    let Ok(current_normalized) = existing_package.normalize() else {
+    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version()) else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
@@ -715,8 +724,11 @@ fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     let modules = module_bytes
         .iter()
         .map(|b| {
-            CompiledModule::deserialize(b)
-                .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+            CompiledModule::deserialize_with_max_version(
+                b,
+                context.protocol_config.move_binary_format_version(),
+            )
+            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         })
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;
@@ -908,14 +920,14 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         .map_err(|e| context.convert_vm_error(e))?;
     let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
     let return_value_kinds = match function_kind {
-        FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::Init => {
+        FunctionKind::Init => {
             assert_invariant!(
                 signature.return_.is_empty(),
-                "entry functions must have no return values"
+                "init functions must have no return values"
             );
             vec![]
         }
-        FunctionKind::NonEntry => {
+        FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
             check_non_entry_signature::<_, _, Mode>(context, module_id, function, &signature)?
         }
     };
@@ -1025,14 +1037,17 @@ fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
     function: &IdentStr,
     type_arguments: &[Type],
 ) -> Result<(), ExecutionError> {
-    let ident = (module_id.address(), module_id.name());
-    if ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+    let module_ident = (module_id.address(), module_id.name());
+    if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::NonEntryFunctionInvoked,
             format!("Cannot directly call functions in sui::{}", EVENT_MODULE),
         ));
     }
-    if ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
+
+    if module_ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE)
+        && PRIVATE_TRANSFER_FUNCTIONS.contains(&function)
+    {
         for ty in type_arguments {
             let abilities = context
                 .session

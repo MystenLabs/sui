@@ -10,15 +10,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::builder::ConfigBuilder;
-use sui_config::{NodeConfig, ValidatorInfo};
+use sui_config::NodeConfig;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_core::safe_client::SafeClientMetricsBase;
 use sui_core::test_utils::make_transfer_sui_transaction;
-use sui_framework::{SuiFramework, SystemPackage};
+use sui_framework::{SuiSystem, SystemPackage};
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
     KeypairTraits, ToFromBytes,
@@ -31,6 +31,7 @@ use sui_types::messages::{
     VerifiedTransaction,
 };
 use sui_types::object::{generate_test_gas_objects_with_owner, Object};
+use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemStateTrait};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
@@ -255,26 +256,12 @@ async fn test_passive_reconfig() {
         .await
         .unwrap();
 
-    let mut epoch_rx = test_cluster
-        .fullnode_handle
-        .sui_node
-        .subscribe_to_epoch_change();
-
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
         .map(|v| v.parse().unwrap())
         .unwrap_or(4);
 
-    timeout(Duration::from_secs(60), async move {
-        while let Ok((committee, _)) = epoch_rx.recv().await {
-            info!("received epoch {}", committee.epoch());
-            if committee.epoch() >= target_epoch {
-                break;
-            }
-        }
-    })
-    .await
-    .expect("Timed out waiting for cluster to target epoch");
+    test_cluster.wait_for_epoch(Some(target_epoch)).await;
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -337,16 +324,7 @@ async fn test_create_advance_epoch_tx_race() {
         .await
         .unwrap();
 
-    let mut epoch_rx = test_cluster
-        .fullnode_handle
-        .sui_node
-        .subscribe_to_epoch_change();
-
-    // wait for cluster to reconfigure.
-    timeout(Duration::from_secs(30), epoch_rx.recv())
-        .await
-        .expect("Timed out waiting for cluster to reconfigure")
-        .unwrap();
+    test_cluster.wait_for_epoch(None).await;
 
     // Allow time for paused node to execute change epoch tx via state sync.
     sleep(Duration::from_secs(5)).await;
@@ -380,26 +358,12 @@ async fn test_reconfig_with_failing_validator() {
         .with_restart_delay_secs(2, 4)
         .run();
 
-    let mut epoch_rx = test_cluster
-        .fullnode_handle
-        .sui_node
-        .subscribe_to_epoch_change();
-
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
         .map(|v| v.parse().unwrap())
         .unwrap_or(4);
 
-    timeout(Duration::from_secs(60), async move {
-        while let Ok((committee, _)) = epoch_rx.recv().await {
-            info!("received epoch {}", committee.epoch());
-            if committee.epoch() >= target_epoch {
-                break;
-            }
-        }
-    })
-    .await
-    .expect("Timed out waiting for cluster to target epoch");
+    test_cluster.wait_for_epoch(Some(target_epoch)).await;
 }
 
 #[sim_test]
@@ -486,7 +450,7 @@ async fn test_inactive_validator_pool_read() {
 
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         address,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],
@@ -514,12 +478,10 @@ async fn test_inactive_validator_pool_read() {
             .state()
             .get_sui_system_state_object_for_testing()
             .unwrap();
-        let version = system_state.version();
         let inactive_pool_id = system_state
             .into_sui_system_state_summary()
             .inactive_pools_id;
         let validator = get_validator_from_table(
-            version,
             node.state().db().as_ref(),
             inactive_pool_id,
             &ID::new(staking_pool_id),
@@ -584,23 +546,32 @@ async fn test_reconfig_with_committee_change_basic() {
     // The order of validator_set() and validator_configs() is also different.
     // TODO: We should really fix the above inconveniences.
     let public_keys: HashSet<_> = init_configs
-        .validator_set()
+        .validator_configs
         .iter()
-        .map(|v| v.protocol_key())
+        .map(|config| config.protocol_public_key())
         .collect();
-    let new_validator = new_configs
-        .validator_set()
-        .into_iter()
-        .find(|v| !public_keys.contains(&v.protocol_key()))
-        .unwrap();
+    // Node configs contain things such as private keys, which we need to send transactions.
     let new_node_config = new_configs
-        .validator_configs()
+        .validator_configs
         .iter()
         .find(|v| !public_keys.contains(&v.protocol_public_key()))
         .unwrap();
+    // Validator information from genesis contains public network addresses that we need to commit on-chain.
+    let new_validator = new_configs
+        .genesis
+        .validator_set_for_tooling()
+        .into_iter()
+        .find(|v| {
+            let name: AuthorityName = v.verified_metadata().sui_pubkey_bytes();
+            !public_keys.contains(&name)
+        })
+        .unwrap();
     info!(
         "New validator is: {:?}",
-        new_validator.protocol_key.concise()
+        new_validator
+            .verified_metadata()
+            .sui_pubkey_bytes()
+            .concise()
     );
 
     let mut authorities = spawn_test_authorities(&init_configs).await;
@@ -613,8 +584,8 @@ async fn test_reconfig_with_committee_change_basic() {
             .map(|obj| obj.compute_object_reference())
             .collect::<Vec<_>>(),
         stake.compute_object_reference(),
-        &new_validator,
         new_node_config,
+        new_validator.verified_metadata(),
     )
     .await;
 
@@ -776,24 +747,28 @@ async fn test_reconfig_with_committee_change_stress() {
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     let initial_pubkeys: Vec<_> = initial_network
-        .validator_set()
+        .genesis
+        .validator_set_for_tooling()
         .iter()
-        .map(|v| v.protocol_key())
+        .map(|v| v.verified_metadata().sui_pubkey_bytes())
         .collect();
-    let mut standby_nodes: Vec<(ValidatorInfo, &NodeConfig)> = validator_superset
-        .validator_set()
+    let mut standby_nodes: Vec<_> = validator_superset
+        .genesis
+        .validator_set_for_tooling()
         .into_iter()
         .map(|val| {
             let node_config = validator_superset
                 .validator_configs()
                 .iter()
                 .find(|config| {
-                    config.protocol_public_key().as_bytes() == val.protocol_key().as_bytes()
+                    config.protocol_public_key() == val.verified_metadata().sui_pubkey_bytes()
                 })
                 .unwrap();
             (val, node_config)
         })
-        .filter(|(val, _node)| !initial_pubkeys.contains(&val.protocol_key()))
+        .filter(|(val, _node)| {
+            !initial_pubkeys.contains(&val.verified_metadata().sui_pubkey_bytes())
+        })
         .collect();
     assert_eq!(standby_nodes.len(), 6);
 
@@ -807,15 +782,15 @@ async fn test_reconfig_with_committee_change_stress() {
         assert_eq!(joining_validators.len(), 2);
 
         // request to add new validators
-        for (validator_info, node_config) in joining_validators.clone() {
+        for (validator, node_config) in joining_validators.clone() {
             let sender = node_config.sui_address();
             let (gas_objects, stake) = object_map.get(&sender).unwrap();
             let effects = execute_join_committee_txes(
                 &validator_handles,
                 gas_objects.clone(),
                 *stake,
-                &validator_info,
                 node_config,
+                validator.verified_metadata(),
             )
             .await;
 
@@ -860,7 +835,7 @@ async fn test_reconfig_with_committee_change_stress() {
         // bookkeeping and verification for joined validators
         let joined_auths: Vec<_> = joining_validators
             .iter()
-            .map(|(val, _node)| val.protocol_key())
+            .map(|(val, _node)| val.verified_metadata().sui_pubkey_bytes())
             .collect();
 
         assert_eq!(joined_auths.len(), 2);
@@ -933,21 +908,18 @@ async fn execute_join_committee_txes(
     authorities: &[SuiNodeHandle],
     gas_objects: Vec<ObjectRef>,
     stake: ObjectRef,
-    val: &ValidatorInfo,
     node_config: &NodeConfig,
+    val: &VerifiedValidatorMetadataV1,
 ) -> Vec<CertifiedTransactionEffects> {
+    assert_eq!(node_config.protocol_public_key(), val.sui_pubkey_bytes());
     let mut effects_ret = vec![];
-    let sender = node_config.sui_address();
-    assert_eq!(
-        node_config.protocol_public_key().as_bytes(),
-        val.protocol_key().as_bytes()
-    );
+    let sender = val.sui_address;
     let proof_of_possession = generate_proof_of_possession(node_config.protocol_key_pair(), sender);
 
     // Step 1: Add the new node as a validator candidate.
     let candidate_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
@@ -958,18 +930,18 @@ async fn execute_join_committee_txes(
                 initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
                 mutable: true,
             }),
-            CallArg::Pure(bcs::to_bytes(&val.protocol_key().as_bytes().to_vec()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(val.network_key().as_bytes()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(val.worker_key().as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.protocol_pubkey.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.network_pubkey.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.worker_pubkey.as_bytes()).unwrap()),
             CallArg::Pure(bcs::to_bytes(proof_of_possession.as_ref()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(val.name().as_bytes()).unwrap()),
-            CallArg::Pure(bcs::to_bytes("description".as_bytes()).unwrap()),
-            CallArg::Pure(bcs::to_bytes("image_url".as_bytes()).unwrap()),
-            CallArg::Pure(bcs::to_bytes("project_url".as_bytes()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.network_address()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.p2p_address()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.narwhal_primary_address()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&val.narwhal_worker_address()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.name.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.description.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.image_url.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(val.project_url.as_bytes()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.net_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.p2p_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.primary_address).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&val.worker_address).unwrap()),
             CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
@@ -986,7 +958,7 @@ async fn execute_join_committee_txes(
     // Step 2: Give the candidate enough stake.
     let stake_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_stake").to_owned(),
         vec![],
@@ -1012,7 +984,7 @@ async fn execute_join_committee_txes(
     // Step 3: Convert the candidate to an active valdiator.
     let activation_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator").to_owned(),
         vec![],
@@ -1041,7 +1013,7 @@ async fn execute_leave_committee_txes(
 ) -> CertifiedTransactionEffects {
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         node_config.sui_address(),
-        SuiFramework::ID,
+        SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_remove_validator").to_owned(),
         vec![],

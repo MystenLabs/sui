@@ -6,7 +6,7 @@ import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { Form } from 'formik';
 import { useMemo } from 'react';
 
-import { useTransactionGasBudget } from '../../hooks';
+import { useTransactionGasBudget, useActiveAddress } from '../../hooks';
 import { GAS_SYMBOL } from '../../redux/slices/sui-objects/Coin';
 import { Heading } from '../../shared/heading';
 import { useGetTimeBeforeEpochNumber } from '../useGetTimeBeforeEpochNumber';
@@ -41,7 +41,11 @@ export function UnStakeForm({
         () => createUnstakeTransaction(stakedSuiId),
         [stakedSuiId]
     );
-    const { data: gasBudget } = useTransactionGasBudget(transaction);
+    const activeAddress = useActiveAddress();
+    const { data: gasBudget } = useTransactionGasBudget(
+        activeAddress,
+        transaction
+    );
 
     const { data: currentEpochEndTime } = useGetTimeBeforeEpochNumber(
         epoch + 1 || 0

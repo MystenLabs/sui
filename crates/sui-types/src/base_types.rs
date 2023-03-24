@@ -4,7 +4,6 @@
 
 use crate::coin::Coin;
 use crate::coin::CoinMetadata;
-use crate::coin::LockedCoin;
 use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
@@ -76,6 +75,16 @@ mod base_types_tests;
 )]
 pub struct SequenceNumber(u64);
 
+impl SequenceNumber {
+    pub fn one_before(&self) -> Option<SequenceNumber> {
+        if self.0 == 0 {
+            None
+        } else {
+            Some(SequenceNumber(self.0 - 1))
+        }
+    }
+}
+
 pub type TxSequenceNumber = u64;
 
 impl fmt::Display for SequenceNumber {
@@ -117,7 +126,7 @@ pub enum MoveObjectType {
     Other(StructTag),
     /// A SUI coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
     GasCoin,
-    /// A record of a staked SUI coin (i.e., 0x2::staking_pool::StakedSui)
+    /// A record of a staked SUI coin (i.e., 0x3::staking_pool::StakedSui)
     StakedSui,
     /// A non-SUI coin type (i.e., 0x2::coin::Coin<T> where T != 0x2::sui::SUI)
     Coin(TypeTag),
@@ -204,13 +213,6 @@ impl MoveObjectType {
         match self {
             MoveObjectType::StakedSui => true,
             MoveObjectType::GasCoin | MoveObjectType::Coin(_) | MoveObjectType::Other(_) => false,
-        }
-    }
-
-    pub fn is_locked_coin(&self) -> bool {
-        match self {
-            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
-            MoveObjectType::Other(s) => LockedCoin::is_locked_coin(s),
         }
     }
 

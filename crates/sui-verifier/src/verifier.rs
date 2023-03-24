@@ -4,6 +4,7 @@
 //! This module contains the public APIs supported by the bytecode verifier.
 
 use move_binary_format::file_format::CompiledModule;
+use move_bytecode_verifier::meter::DummyMeter;
 use sui_types::{error::ExecutionError, move_package::FnInfoMap};
 
 use crate::{
@@ -18,7 +19,7 @@ pub fn verify_module(
 ) -> Result<(), ExecutionError> {
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
-    id_leak_verifier::verify_module(module)?;
+    id_leak_verifier::verify_module(module, &mut DummyMeter)?;
     private_generics::verify_module(module)?;
     entry_points_verifier::verify_module(module, fn_info_map)?;
     one_time_witness_verifier::verify_module(module, fn_info_map)

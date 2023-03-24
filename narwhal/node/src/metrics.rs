@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use axum::{http::StatusCode, routing::get, Extension, Router};
-use config::WorkerId;
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, WorkerId};
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::multiaddr::{to_socket_addr, Multiaddr};
 use prometheus::{Registry, TextEncoder};
@@ -17,16 +16,16 @@ pub fn new_registry() -> Registry {
     Registry::new_custom(None, None).unwrap()
 }
 
-pub fn primary_metrics_registry(name: PublicKey) -> Registry {
+pub fn primary_metrics_registry(authority_id: AuthorityIdentifier) -> Registry {
     let mut labels = HashMap::new();
-    labels.insert("node_name".to_string(), name.to_string());
+    labels.insert("node_name".to_string(), authority_id.to_string());
 
     Registry::new_custom(Some(PRIMARY_METRICS_PREFIX.to_string()), Some(labels)).unwrap()
 }
 
-pub fn worker_metrics_registry(worker_id: WorkerId, name: PublicKey) -> Registry {
+pub fn worker_metrics_registry(worker_id: WorkerId, authority_id: AuthorityIdentifier) -> Registry {
     let mut labels = HashMap::new();
-    labels.insert("node_name".to_string(), name.to_string());
+    labels.insert("node_name".to_string(), authority_id.to_string());
     labels.insert("worker_id".to_string(), worker_id.to_string());
 
     Registry::new_custom(Some(WORKER_METRICS_PREFIX.to_string()), Some(labels)).unwrap()

@@ -170,10 +170,12 @@ pub(crate) mod private {
     impl<T> SealedIntent for IntentMessage<T> {}
 }
 
-/// Hashing intent is used to prevent hash collision when hashing a message.
+/// A 1-byte domain separator for hashing Object ID in Sui. It is starting from 0xf0
+/// to ensure no hashing collision for any ObjectID vs SuiAddress which is derived
+/// as the hash of `flag || pubkey`. See `sui_types::crypto::SignatureScheme::flag()`.
 #[derive(Serialize_repr, Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum HashingIntentScope {
-    ChildObjectId = 0,
-    RegularObjectId = 1,
+    ChildObjectId = 0xf0,
+    RegularObjectId = 0xf1,
 }

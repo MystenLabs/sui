@@ -33,18 +33,19 @@ use sui_types::error::SuiError;
 use shared_crypto::intent::Intent;
 use sui_framework_build::compiled_package::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
-    gather_dependencies, BuildConfig,
+    gather_dependencies, root_published_at, BuildConfig, CompiledPackage, PackageDependencies,
 };
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
-    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
+    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiRawData, SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::move_package::UpgradeCap;
 use sui_types::signature::GenericSignature;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -120,6 +121,45 @@ pub enum SuiClientCommands {
             default_value = "."
         )]
         package_path: PathBuf,
+
+        /// Package build options
+        #[clap(flatten)]
+        build_config: MoveBuildConfig,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        /// If not provided, a gas object with at least gas_budget value will be selected
+        #[clap(long)]
+        gas: Option<ObjectID>,
+
+        /// Gas budget for running module initializers
+        #[clap(long)]
+        gas_budget: u64,
+
+        /// Publish the package without checking whether compiling dependencies from source results
+        /// in bytecode matching the dependencies found on-chain.
+        #[clap(long)]
+        skip_dependency_verification: bool,
+
+        /// Also publish transitive dependencies that have not already been published.
+        #[clap(long)]
+        with_unpublished_dependencies: bool,
+    },
+
+    /// Upgrade Move modules
+    #[clap(name = "upgrade")]
+    Upgrade {
+        /// Path to directory containing a Move package
+        #[clap(
+            name = "package_path",
+            global = true,
+            parse(from_os_str),
+            default_value = "."
+        )]
+        package_path: PathBuf,
+
+        /// ID of the upgrade capability for the package being upgraded.
+        #[clap(long)]
+        upgrade_capability: ObjectID,
 
         /// Package build options
         #[clap(flatten)]
@@ -458,6 +498,86 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = Ok(match self {
+            SuiClientCommands::Upgrade {
+                package_path,
+                upgrade_capability,
+                build_config,
+                gas,
+                gas_budget,
+                skip_dependency_verification,
+                with_unpublished_dependencies,
+            } => {
+                let sender = context.try_get_object_owner(&gas).await?;
+                let sender = sender.unwrap_or(context.active_address()?);
+
+                let client = context.get_client().await?;
+                let (dependencies, compiled_modules, compiled_package, package_id) =
+                    compile_package(
+                        &client,
+                        build_config,
+                        package_path,
+                        with_unpublished_dependencies,
+                        skip_dependency_verification,
+                    )
+                    .await?;
+
+                let resp = context
+                    .get_client()
+                    .await?
+                    .read_api()
+                    .get_object_with_options(
+                        upgrade_capability,
+                        SuiObjectDataOptions::default().with_bcs().with_owner(),
+                    )
+                    .await?;
+
+                let Some(data) = resp.data else {
+                    return Err(anyhow!("Could not find upgrade capability at {upgrade_capability}"))
+                };
+
+                let upgrade_cap: UpgradeCap = data
+                    .bcs
+                    .ok_or_else(|| {
+                        anyhow!("Fetch upgrade capability object but no data was returned")
+                    })?
+                    .try_as_move()
+                    .ok_or_else(|| anyhow!("Upgrade capability is not a Move Object"))?
+                    .deserialize()?;
+                // We keep the existing policy -- no fancy policies or changing the upgrade
+                // policy at the moment. To change the policy you can call a Move function in the
+                // `package` module to change this policy.
+                let upgrade_policy = upgrade_cap.policy;
+                let package_digest =
+                    compiled_package.get_package_digest(with_unpublished_dependencies);
+
+                let data = client
+                    .transaction_builder()
+                    .upgrade(
+                        sender,
+                        package_id.unwrap(),
+                        compiled_modules,
+                        dependencies.published.into_values().collect(),
+                        upgrade_capability,
+                        upgrade_policy,
+                        package_digest.to_vec(),
+                        gas,
+                        gas_budget,
+                    )
+                    .await?;
+                let signature =
+                    context
+                        .config
+                        .keystore
+                        .sign_secure(&sender, &data, Intent::default())?;
+                let response = context
+                    .execute_transaction(
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
+                    )
+                    .await?;
+
+                SuiClientCommandResult::Upgrade(response)
+            }
             SuiClientCommands::Publish {
                 package_path,
                 gas,
@@ -469,62 +589,15 @@ impl SuiClientCommands {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
-                let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
-                let run_bytecode_verifier = true;
-                let print_diags_to_stderr = true;
-
-                let config = BuildConfig {
-                    config,
-                    run_bytecode_verifier,
-                    print_diags_to_stderr,
-                };
-
-                let resolution_graph = config.resolution_graph(&package_path)?;
-                let dependencies = gather_dependencies(&resolution_graph);
-
-                check_invalid_dependencies(&dependencies.invalid)?;
-
-                if !with_unpublished_dependencies {
-                    check_unpublished_dependencies(&dependencies.unpublished)?;
-                };
-
-                let compiled_package = build_from_resolution_graph(
-                    package_path,
-                    resolution_graph,
-                    run_bytecode_verifier,
-                    print_diags_to_stderr,
-                )?;
-
-                if !compiled_package.is_framework() {
-                    if let Some(already_published) = compiled_package.published_root_module() {
-                        return Err(SuiError::ModulePublishFailure {
-                            error: format!(
-                                "Modules must all have 0x0 as their addresses. \
-                                 Violated by module {:?}",
-                                already_published.self_id(),
-                            ),
-                        }
-                        .into());
-                    }
-                }
-
                 let client = context.get_client().await?;
-                let compiled_modules =
-                    compiled_package.get_package_bytes(with_unpublished_dependencies);
-
-                if !skip_dependency_verification {
-                    BytecodeSourceVerifier::new(client.read_api(), false)
-                        .verify_package_deps(&compiled_package.package)
-                        .await?;
-                    eprintln!(
-                        "{}",
-                        "Successfully verified dependencies on-chain against source."
-                            .bold()
-                            .green(),
-                    );
-                } else {
-                    eprintln!("{}", "Skipping dependency verification".bold().yellow());
-                }
+                let (dependencies, compiled_modules, _, _) = compile_package(
+                    &client,
+                    build_config,
+                    package_path,
+                    with_unpublished_dependencies,
+                    skip_dependency_verification,
+                )
+                .await?;
 
                 let data = client
                     .transaction_builder()
@@ -817,7 +890,6 @@ impl SuiClientCommands {
                 let client = context.get_client().await?;
                 let address_object = client
                     .read_api()
-                    // TODO: (jian) fill in later
                     .get_owned_objects(
                         address,
                         Some(SuiObjectResponseQuery::new_with_options(
@@ -1102,6 +1174,74 @@ impl SuiClientCommands {
     }
 }
 
+async fn compile_package(
+    client: &SuiClient,
+    build_config: MoveBuildConfig,
+    package_path: PathBuf,
+    with_unpublished_dependencies: bool,
+    skip_dependency_verification: bool,
+) -> Result<
+    (
+        PackageDependencies,
+        Vec<Vec<u8>>,
+        CompiledPackage,
+        Option<ObjectID>,
+    ),
+    anemo::Error,
+> {
+    let config = resolve_lock_file_path(build_config, Some(package_path.clone()))?;
+    let run_bytecode_verifier = true;
+    let print_diags_to_stderr = true;
+    let config = BuildConfig {
+        config,
+        run_bytecode_verifier,
+        print_diags_to_stderr,
+    };
+    let resolution_graph = config.resolution_graph(&package_path)?;
+    let dependencies = gather_dependencies(&resolution_graph);
+    let package_id = root_published_at(&resolution_graph);
+    check_invalid_dependencies(&dependencies.invalid)?;
+    if !with_unpublished_dependencies {
+        check_unpublished_dependencies(&dependencies.unpublished)?;
+    };
+    let compiled_package = build_from_resolution_graph(
+        package_path,
+        resolution_graph,
+        run_bytecode_verifier,
+        print_diags_to_stderr,
+    )?;
+    if !compiled_package.is_system_package() {
+        if let Some(already_published) = compiled_package.published_root_module() {
+            return Err(SuiError::ModulePublishFailure {
+                error: format!(
+                    "Modules must all have 0x0 as their addresses. \
+                           Violated by module {:?}",
+                    already_published.self_id(),
+                ),
+            }
+            .into());
+        }
+    }
+    if with_unpublished_dependencies {
+        compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
+    }
+    let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
+    if !skip_dependency_verification {
+        BytecodeSourceVerifier::new(client.read_api(), false)
+            .verify_package_deps(&compiled_package.package)
+            .await?;
+        eprintln!(
+            "{}",
+            "Successfully verified dependencies on-chain against source."
+                .bold()
+                .green(),
+        );
+    } else {
+        eprintln!("{}", "Skipping dependency verification".bold().yellow());
+    }
+    Ok((dependencies, compiled_modules, compiled_package, package_id))
+}
+
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
@@ -1114,10 +1254,10 @@ impl WalletContext {
         request_timeout: Option<std::time::Duration>,
     ) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
-            err.context(format!(
-                "Cannot open wallet config file at {:?}",
+            anyhow!(
+                "Cannot open wallet config file at {:?}. Err: {err}",
                 config_path
-            ))
+            )
         })?;
 
         let config = config.persisted(config_path);
@@ -1211,15 +1351,13 @@ impl WalletContext {
             .await?;
 
         for object in responses {
-            match object {
-                SuiObjectResponse::Exists(o) => {
-                    if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
-                        // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o.clone()));
-                    }
+            let o = object.data;
+            if let Some(o) = o {
+                if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
+                    // Okay to unwrap() since we already checked type
+                    let gas_coin = GasCoin::try_from(&o)?;
+                    values_objects.push((gas_coin.value(), o.clone()));
                 }
-                _ => continue,
             }
         }
 
@@ -1293,7 +1431,8 @@ impl Display for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            SuiClientCommandResult::Publish(response) => {
+            SuiClientCommandResult::Upgrade(response)
+            | SuiClientCommandResult::Publish(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
             SuiClientCommandResult::Object(object_read) => {
@@ -1358,7 +1497,6 @@ impl Display for SuiClientCommandResult {
                 )?;
                 writeln!(writer, "{}", ["-"; 165].join(""))?;
                 for oref in object_refs {
-                    // TODO (jian): fix unwrap and clone later
                     let obj = oref.clone().into_object().unwrap();
 
                     let owner_type = match obj.owner {
@@ -1631,6 +1769,7 @@ impl SuiClientCommandResult {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
+    Upgrade(SuiTransactionResponse),
     Publish(SuiTransactionResponse),
     VerifySource,
     Object(SuiObjectResponse),

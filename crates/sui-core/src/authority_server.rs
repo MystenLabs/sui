@@ -5,7 +5,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
-use narwhal_types::TransactionsClient;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
@@ -16,7 +15,8 @@ use sui_network::{
     tonic,
 };
 use sui_types::multiaddr::Multiaddr;
-use sui_types::{error::*, messages::*, sui_system_state::SuiSystemStateInnerBenchmark};
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::{error::*, messages::*};
 use sui_types::{
     fp_ensure,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
@@ -25,7 +25,7 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
+use crate::consensus_adapter::{ConnectionMonitorStatusForTests, LazyNarwhalClient};
 use crate::{
     authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -78,17 +78,14 @@ impl AuthorityServer {
         state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
     ) -> Self {
-        let consensus_client = Box::new(TransactionsClient::new(
-            mysten_network::client::connect_lazy(&consensus_address)
-                .expect("Failed to connect to consensus"),
-        ));
-
-        let consensus_adapter = ConsensusAdapter::new(
-            consensus_client,
+        let consensus_adapter = Arc::new(ConsensusAdapter::new(
+            Box::new(LazyNarwhalClient::new(consensus_address)),
             state.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
+            100_000,
+            100_000,
             ConsensusAdapterMetrics::new_test(),
-        );
+        ));
 
         let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
 
@@ -260,9 +257,14 @@ impl ValidatorService {
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
-        let transaction = transaction.verify().tap_err(|_| {
-            metrics.signature_errors.inc();
-        })?;
+        epoch_store
+            .signature_verifier
+            .verify_tx(transaction.data())
+            .tap_err(|_| {
+                metrics.signature_errors.inc();
+            })?;
+        let transaction = VerifiedTransaction::new_from_verified(transaction);
+
         tx_verif_metrics_guard.stop_and_record();
 
         let tx_digest = transaction.digest();
@@ -359,7 +361,10 @@ impl ValidatorService {
         let certificate = {
             let certificate = {
                 let _timer = metrics.cert_verification_latency.start_timer();
-                epoch_store.batch_verifier.verify_cert(certificate).await?
+                epoch_store
+                    .signature_verifier
+                    .verify_cert(certificate)
+                    .await?
             };
 
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
@@ -487,12 +492,8 @@ impl Validator for ValidatorService {
     async fn get_system_state_object(
         &self,
         _request: tonic::Request<SystemStateRequest>,
-    ) -> Result<tonic::Response<SuiSystemStateInnerBenchmark>, tonic::Status> {
-        let response = self
-            .state
-            .database
-            .get_sui_system_state_object()?
-            .into_benchmark_version();
+    ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
+        let response = self.state.database.get_sui_system_state_object()?;
 
         return Ok(tonic::Response::new(response));
     }

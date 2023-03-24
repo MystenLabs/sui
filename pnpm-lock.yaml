@@ -22,6 +22,7 @@ importers:
       '@sentry/react': ^7.43.0
       '@sentry/tracing': ^7.43.0
       '@tailwindcss/aspect-ratio': ^0.4.2
+      '@tailwindcss/forms': ^0.5.3
       '@tanstack/react-query': ^4.26.1
       '@types/react': ^18.0.28
       bignumber.js: ^9.1.1
@@ -46,6 +47,7 @@ importers:
     devDependencies:
       '@headlessui/tailwindcss': 0.1.2_tailwindcss@3.2.7
       '@tailwindcss/aspect-ratio': 0.4.2_tailwindcss@3.2.7
+      '@tailwindcss/forms': 0.5.3_tailwindcss@3.2.7
       '@types/react': 18.0.28
       eslint: 8.36.0
       eslint-config-prettier: 8.7.0_eslint@8.36.0
@@ -460,6 +462,35 @@ importers:
       webpack-cli: 5.0.1_webpack@5.76.2
       webpack-merge: 5.8.0
 
+  dapps/sponsored-transactions:
+    specifiers:
+      '@mysten/sui.js': workspace:*
+      '@mysten/wallet-kit': workspace:*
+      '@types/react': ^18.0.28
+      '@types/react-dom': ^18.0.11
+      '@vitejs/plugin-react': ^3.1.0
+      autoprefixer: ^10.4.13
+      postcss: ^8.4.19
+      react: ^18.2.0
+      react-dom: ^18.2.0
+      tailwindcss: ^3.2.4
+      typescript: ^4.9.3
+      vite: ^4.2.0
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    devDependencies:
+      '@mysten/sui.js': link:../../sdk/typescript
+      '@mysten/wallet-kit': link:../../sdk/wallet-adapter/wallet-kit
+      '@types/react': 18.0.28
+      '@types/react-dom': 18.0.11
+      '@vitejs/plugin-react': 3.1.0_vite@4.2.0
+      autoprefixer: 10.4.14_postcss@8.4.21
+      postcss: 8.4.21
+      tailwindcss: 3.2.7_postcss@8.4.21
+      typescript: 4.9.5
+      vite: 4.2.0
+
   sdk/bcs:
     specifiers:
       '@size-limit/preset-small-lib': ^8.2.4
@@ -664,6 +695,7 @@ importers:
       next: ^13.2.4
       nextra: latest
       nextra-theme-docs: latest
+      prettier: ^2.8.6
       react: ^18.2.0
       react-dom: ^18.2.0
       typescript: ^4.9.4
@@ -677,6 +709,7 @@ importers:
     devDependencies:
       '@types/node': 18.15.3
       '@types/react': 18.0.28
+      prettier: 2.8.6
       typescript: 4.9.5
 
   sdk/wallet-adapter/wallet-kit:
@@ -5570,6 +5603,15 @@ packages:
     peerDependencies:
       tailwindcss: '>=2.0.0 || >=3.0.0 || >=3.0.0-alpha.1'
     dependencies:
+      tailwindcss: 3.2.7_postcss@8.4.21
+    dev: true
+
+  /@tailwindcss/forms/0.5.3_tailwindcss@3.2.7:
+    resolution: {integrity: sha512-y5mb86JUoiUgBjY/o6FJSFZSEttfb3Q5gllE4xoKjAAD+vBrnIhE4dViwUuow3va8mpH4s9jyUbUbrRGoRdc2Q==}
+    peerDependencies:
+      tailwindcss: '>=3.0.0 || >= 3.0.0-alpha.1'
+    dependencies:
+      mini-svg-data-uri: 1.4.4
       tailwindcss: 3.2.7_postcss@8.4.21
     dev: true
 
@@ -14009,6 +14051,11 @@ packages:
       webpack: 5.76.2_webpack-cli@5.0.1
     dev: true
 
+  /mini-svg-data-uri/1.4.4:
+    resolution: {integrity: sha512-r9deDe9p5FJUPZAk3A59wGH7Ii9YrjjWw0jmw/liSbHl2CHiyXj6FcDXDu2K3TjVAXqiJdaw3xxwlZZr9E6nHg==}
+    hasBin: true
+    dev: true
+
   /minimatch/3.1.2:
     resolution: {integrity: sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw==}
     dependencies:
@@ -15981,6 +16028,12 @@ packages:
 
   /prettier/2.8.4:
     resolution: {integrity: sha512-vIS4Rlc2FNh0BySk3Wkd6xmwxB0FpOndW5fisM5H8hsZSxU2VWVB5CWIkIjWvrHjIhxk2g3bfMKM87zNTrZddw==}
+    engines: {node: '>=10.13.0'}
+    hasBin: true
+    dev: true
+
+  /prettier/2.8.6:
+    resolution: {integrity: sha512-mtuzdiBbHwPEgl7NxWlqOkithPyp4VN93V7VeHVWBF+ad3I5avc0RVDT4oImXQy9H/AqxA2NSQH8pSxHW6FYbQ==}
     engines: {node: '>=10.13.0'}
     hasBin: true
     dev: true

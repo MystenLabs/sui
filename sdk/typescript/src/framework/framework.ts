@@ -17,6 +17,7 @@ import { CoinStruct } from '../types/coin';
 import { StructTag } from '../types/sui-bcs';
 import { Infer, literal, number, object, string, union } from 'superstruct';
 
+export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
 export const MOVE_STDLIB_ADDRESS = '0x1';
 export const OBJECT_MODULE_NAME = 'object';
@@ -34,6 +35,12 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = SuiObjectResponse | SuiMoveObject;
+
+export function isObjectDataFull(
+  resp: ObjectData | ObjectDataFull,
+): resp is SuiObjectResponse {
+  return !!(resp as SuiObjectResponse).data || !!(resp as SuiMoveObject).type;
+}
 
 export const CoinMetadataStruct = object({
   decimals: number(),
@@ -123,7 +130,7 @@ export class Coin {
   }
 
   private static getType(data: ObjectData): string | undefined {
-    if ('status' in data) {
+    if (isObjectDataFull(data)) {
       return getObjectType(data);
     }
     return data.type;

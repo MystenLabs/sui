@@ -140,13 +140,18 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
+    env:
+      MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: cargo simtest
         run: |
-          MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
+          scripts/simtest/cargo-simtest simtest
+      - name: check new tests for flakiness
+        run: |
+          scripts/simtest/stress-new-tests.sh
 
   rosetta-validation:
     needs: diff
@@ -271,7 +276,7 @@ jobs:
           command: build
 
       - name: Prover Run
-        working-directory: crates/sui-framework
+        working-directory: crates/sui-framework/packages
         run: |
           set -o pipefail
           DOTNET_ROOT="$HOME/.dotnet"
@@ -281,7 +286,8 @@ jobs:
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          /home/runner/.cargo/bin/cargo run -p sui -- move prove
+          /home/runner/.cargo/bin/cargo run -p sui -- move prove -p sui-framework
+          /home/runner/.cargo/bin/cargo run -p sui -- move prove -p sui-system
 
   indexer:
     name: indexer

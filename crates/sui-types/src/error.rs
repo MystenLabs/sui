@@ -9,16 +9,14 @@ use crate::{
     object::Owner,
 };
 use fastcrypto::error::FastCryptoError;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::{
-    errors::{Location, PartialVMError, VMError},
-    file_format::FunctionDefinitionIndex,
-};
+use move_binary_format::{access::ModuleAccess, errors::VMError};
+use move_binary_format::{errors::Location, file_format::FunctionDefinitionIndex};
 use move_core_types::{
-    resolver::{ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -82,6 +80,8 @@ pub enum UserInputError {
         provided_obj_ref: ObjectRef,
         current_version: SequenceNumber,
     },
+    #[error("Package verification failed: {err:?}")]
+    PackageVerificationTimedout { err: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
     #[error("Mutable parameter provided, immutable parameter expected.")]
@@ -185,6 +185,41 @@ pub enum UserInputError {
     Unsupported(String),
 }
 
+#[derive(
+    Eq,
+    PartialEq,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    AsRefStr,
+    IntoStaticStr,
+    JsonSchema,
+    Error,
+)]
+#[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
+pub enum SuiObjectResponseError {
+    #[error("Object {:?} does not exist.", object_id)]
+    NotExists { object_id: ObjectID },
+    #[error(
+        "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
+        object_id,
+        version,
+        digest
+    )]
+    Deleted {
+        object_id: ObjectID,
+        /// Object version.
+        version: SequenceNumber,
+        /// Base64 string representing the object digest
+        digest: ObjectDigest,
+    },
+    #[error("Unknown Error.")]
+    Unknown,
+    // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
+}
+
 /// Custom error type for Sui.
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
@@ -192,6 +227,10 @@ pub enum UserInputError {
 pub enum SuiError {
     #[error("Error checking transaction input objects: {:?}", error)]
     UserInputError { error: UserInputError },
+
+    #[error("Error checking transaction object: {:?}", error)]
+    SuiObjectResponseError { error: SuiObjectResponseError },
+
     #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
 
@@ -265,7 +304,7 @@ pub enum SuiError {
     // Move module publishing related errors
     #[error("Failed to verify the Move module, reason: {error:?}.")]
     ModuleVerificationFailure { error: String },
-    #[error("Failed to verify the Move module, reason: {error:?}.")]
+    #[error("Failed to deserialize the Move module, reason: {error:?}.")]
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
@@ -372,6 +411,8 @@ pub enum SuiError {
     FullNodeInvalidTxRangeQuery { error: String },
 
     // Errors related to the authority-consensus interface.
+    #[error("Failed to submit transaction to consensus: {0}")]
+    FailedToSubmitToConsensus(String),
     #[error("Failed to connect with consensus node: {0}")]
     ConsensusConnectionBroken(String),
     #[error("Failed to hear back from consensus: {0}")]
@@ -448,6 +489,16 @@ pub enum SuiError {
 #[repr(u64)]
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+/// Sub-status codes for the `UNKNOWN_VERIFICATION_ERROR` VM Status Code which provides more context
+/// TODO: add more Vm Status errors. We use `UNKNOWN_VERIFICATION_ERROR` as a catchall for now.
+pub enum VMMVerifierErrorSubStatusCode {
+    MULTIPLE_RETURN_VALUES_NOT_ALLOWED = 0,
+    INVALID_OBJECT_CREATION = 1,
+}
+
+#[repr(u64)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 /// Sub-status codes for the `MEMORY_LIMIT_EXCEEDED` VM Status Code which provides more context
 pub enum VMMemoryLimitExceededSubStatusCode {
     EVENT_COUNT_LIMIT_EXCEEDED = 0,
@@ -468,26 +519,9 @@ impl From<sui_protocol_config::Error> for SuiError {
     }
 }
 
-// TODO these are both horribly wrong, categorization needs to be considered
-impl From<PartialVMError> for SuiError {
-    fn from(error: PartialVMError) -> Self {
-        SuiError::ModuleVerificationFailure {
-            error: error.to_string(),
-        }
-    }
-}
-
 impl From<ExecutionError> for SuiError {
     fn from(error: ExecutionError) -> Self {
         SuiError::ExecutionError(error.to_string())
-    }
-}
-
-impl From<VMError> for SuiError {
-    fn from(error: VMError) -> Self {
-        SuiError::ModuleVerificationFailure {
-            error: error.to_string(),
-        }
     }
 }
 
@@ -551,6 +585,12 @@ impl TryFrom<SuiError> for UserInputError {
 impl From<UserInputError> for SuiError {
     fn from(error: UserInputError) -> Self {
         SuiError::UserInputError { error }
+    }
+}
+
+impl From<SuiObjectResponseError> for SuiError {
+    fn from(error: SuiObjectResponseError) -> Self {
+        SuiError::SuiObjectResponseError { error }
     }
 }
 
@@ -695,7 +735,7 @@ impl From<ExecutionErrorKind> for ExecutionError {
 pub fn convert_vm_error<
     'r,
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E>,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + LinkageResolver<Error = E>,
 >(
     error: VMError,
     vm: &'r MoveVM,

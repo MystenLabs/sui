@@ -9,10 +9,8 @@
 
 use base_types::SequenceNumber;
 use messages::{CallArg, ObjectArg};
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{StructTag, TypeTag},
-};
+pub use move_core_types::language_storage::TypeTag;
+use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use object::OBJECT_START_VERSION;
 
 use base_types::ObjectID;
@@ -67,8 +65,13 @@ pub const MOVE_STDLIB_OBJECT_ID: ObjectID = ObjectID::from_address(MOVE_STDLIB_A
 
 /// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID
-pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = get_hex_address_two();
+pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = address_from_single_byte(2);
 pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_FRAMEWORK_ADDRESS);
+
+/// 0x3-- account address where sui system modules are stored
+/// Same as the ObjectID
+pub const SUI_SYSTEM_ADDRESS: AccountAddress = address_from_single_byte(3);
+pub const SUI_SYSTEM_PACKAGE_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_ADDRESS);
 
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
@@ -84,9 +87,18 @@ pub const SUI_SYSTEM_OBJ_CALL_ARG: CallArg = CallArg::Object(ObjectArg::SharedOb
 pub const SUI_CLOCK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(6);
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
-const fn get_hex_address_two() -> AccountAddress {
+/// Return `true` if `id` is a special system package that can be upgraded at epoch boundaries
+/// All new system package ID's must be added here
+pub fn is_system_package(id: ObjectID) -> bool {
+    matches!(
+        id,
+        MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID | SUI_SYSTEM_PACKAGE_ID
+    )
+}
+
+const fn address_from_single_byte(b: u8) -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];
-    addr[AccountAddress::LENGTH - 1] = 2u8;
+    addr[AccountAddress::LENGTH - 1] = b;
     AccountAddress::new(addr)
 }
 
@@ -104,14 +116,11 @@ pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
     ParsedType::parse(s)?.into_type_tag(&resolve_address)
 }
 
-pub fn is_system_package(id: ObjectID) -> bool {
-    matches!(id, MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID)
-}
-
 fn resolve_address(addr: &str) -> Option<AccountAddress> {
     match addr {
         "std" => Some(MOVE_STDLIB_ADDRESS),
         "sui" => Some(SUI_FRAMEWORK_ADDRESS),
+        "sui_system" => Some(SUI_SYSTEM_ADDRESS),
         _ => None,
     }
 }

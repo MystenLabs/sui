@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{account_address::AccountAddress, ident_str};
-use sui_framework::{system_package_ids, MoveStdlib, SuiFramework, SystemPackage};
+use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
@@ -197,7 +197,9 @@ async fn test_upgrade_package_happy_path() {
         .get_package(&new_package.0 .0)
         .unwrap()
         .unwrap();
-    let normalized_modules = package.normalize().unwrap();
+    let normalized_modules = package
+        .normalize(ProtocolConfig::get_for_max_version().move_binary_format_version())
+        .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .exposed_functions
@@ -521,7 +523,7 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
         let deps = if use_empty_deps {
             vec![]
         } else {
-            system_package_ids()
+            vec![SuiFramework::ID, MoveStdlib::ID]
         };
         let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, deps, modules);
         move_call! {

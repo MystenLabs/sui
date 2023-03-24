@@ -21,7 +21,7 @@ test.describe('Owned Objects', () => {
         const tx = await mint(address);
 
         const [nft] = getCreatedObjects(tx)!;
-        await page.goto(`/address/0x${address}`);
+        await page.goto(`/address/${address}`);
 
         // Find a reference to the NFT:
         await page.getByText(nft.reference.objectId.slice(0, 4)).click();
@@ -29,6 +29,6 @@ test.describe('Owned Objects', () => {
 
         // Find a reference to the owning address:
         await page.getByText(address.slice(0, 4)).click();
-        await expect(page).toHaveURL(`/address/0x${address}`);
+        await expect(page).toHaveURL(`/address/${address}`);
     });
 });

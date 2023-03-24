@@ -32,7 +32,7 @@ module frenemies::registry {
     const MAX_NAME_SIZE: u64 = 64;
 
     fun init(ctx: &mut TxContext) {
-        transfer::share_object(Registry {
+        transfer::public_share_object(Registry {
             id: object::new(ctx),
             players: table::new(ctx),
         })

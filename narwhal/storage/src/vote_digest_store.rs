@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::NodeStorage;
-use crypto::PublicKey;
+use config::AuthorityIdentifier;
 use store::reopen;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{rocks::DBMap, Map, TypedStoreError};
@@ -11,11 +11,11 @@ use types::{Vote, VoteInfo};
 /// The storage for the last votes digests per authority
 #[derive(Clone)]
 pub struct VoteDigestStore {
-    store: DBMap<PublicKey, VoteInfo>,
+    store: DBMap<AuthorityIdentifier, VoteInfo>,
 }
 
 impl VoteDigestStore {
-    pub fn new(vote_digest_store: DBMap<PublicKey, VoteInfo>) -> VoteDigestStore {
+    pub fn new(vote_digest_store: DBMap<AuthorityIdentifier, VoteInfo>) -> VoteDigestStore {
         Self {
             store: vote_digest_store,
         }
@@ -29,7 +29,7 @@ impl VoteDigestStore {
             &[NodeStorage::VOTES_CF],
         )
         .expect("Cannot open database");
-        let map = reopen!(&rocksdb, NodeStorage::VOTES_CF;<PublicKey, VoteInfo>);
+        let map = reopen!(&rocksdb, NodeStorage::VOTES_CF;<AuthorityIdentifier, VoteInfo>);
         VoteDigestStore::new(map)
     }
 
@@ -40,7 +40,10 @@ impl VoteDigestStore {
     }
 
     /// Read the vote info based on the provided corresponding header author key
-    pub fn read(&self, header_author: &PublicKey) -> Result<Option<VoteInfo>, TypedStoreError> {
+    pub fn read(
+        &self,
+        header_author: &AuthorityIdentifier,
+    ) -> Result<Option<VoteInfo>, TypedStoreError> {
         self.store.get(header_author)
     }
 }

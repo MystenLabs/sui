@@ -4,7 +4,7 @@
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::multiaddr::Multiaddr;
-use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -33,25 +33,56 @@ pub struct SuiSystemStateSummary {
     /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
     /// It can be reset once we are able to successfully execute advance_epoch.
     pub safe_mode: bool,
+    /// Amount of storage rewards accumulated (and not yet distributed) during safe mode.
+    pub safe_mode_storage_rewards: u64,
+    /// Amount of computation rewards accumulated (and not yet distributed) during safe mode.
+    pub safe_mode_computation_rewards: u64,
+    /// Amount of storage rebates accumulated (and not yet burned) during safe mode.
+    pub safe_mode_storage_rebates: u64,
     /// Unix timestamp of the current epoch start
     pub epoch_start_timestamp_ms: u64,
 
     // System parameters
-    /// The starting epoch in which various on-chain governance features take effect.
-    pub governance_start_epoch: u64,
-
     /// The duration of an epoch, in milliseconds.
     pub epoch_duration_ms: u64,
 
+    /// The starting epoch in which stake subsidies start being paid out
+    pub stake_subsidy_start_epoch: u64,
+
+    /// Maximum number of active validators at any moment.
+    /// We do not allow the number of validators in any epoch to go above this.
+    pub max_validator_count: u64,
+
+    /// Lower-bound on the amount of stake required to become a validator.
+    pub min_validator_joining_stake: u64,
+
+    /// Validators with stake amount below `validator_low_stake_threshold` are considered to
+    /// have low stake and will be escorted out of the validator set after being below this
+    /// threshold for more than `validator_low_stake_grace_period` number of epochs.
+    pub validator_low_stake_threshold: u64,
+
+    /// Validators with stake below `validator_very_low_stake_threshold` will be removed
+    /// immediately at epoch change, no grace period.
+    pub validator_very_low_stake_threshold: u64,
+
+    /// A validator can have stake below `validator_low_stake_threshold`
+    /// for this many epochs before being kicked out.
+    pub validator_low_stake_grace_period: u64,
+
     // Stake subsidy information
-    /// This counter may be different from the current epoch number if
-    /// in some epochs we decide to skip the subsidy.
-    pub stake_subsidy_epoch_counter: u64,
     /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
     pub stake_subsidy_balance: u64,
+    /// This counter may be different from the current epoch number if
+    /// in some epochs we decide to skip the subsidy.
+    pub stake_subsidy_distribution_counter: u64,
     /// The amount of stake subsidy to be drawn down per epoch.
     /// This amount decays and decreases over time.
-    pub stake_subsidy_current_epoch_amount: u64,
+    pub stake_subsidy_current_distribution_amount: u64,
+    /// Number of distributions to occur before the distribution amount decays.
+    pub stake_subsidy_period_length: u64,
+    /// The rate at which the distribution amount decays at the end of each
+    /// period. Expressed in basis points.
+    pub stake_subsidy_decrease_rate: u16,
 
     // Validator set
     /// Total amount of stake from all active validators at the beginning of the epoch.
@@ -94,6 +125,8 @@ impl SuiSystemStateSummary {
                 name,
                 NetworkMetadata {
                     network_address: Multiaddr::try_from(validator.net_address.clone()).unwrap(),
+                    narwhal_primary_address: Multiaddr::try_from(validator.primary_address.clone())
+                        .unwrap(),
                 },
             );
         }
@@ -112,17 +145,17 @@ impl SuiSystemStateSummary {
 pub struct SuiValidatorSummary {
     // Metadata
     pub sui_address: SuiAddress,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub protocol_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub network_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub worker_pubkey_bytes: Vec<u8>,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Base58")]
+    #[schemars(with = "Base64")]
+    #[serde_as(as = "Base64")]
     pub proof_of_possession_bytes: Vec<u8>,
     pub name: String,
     pub description: String,
@@ -132,17 +165,17 @@ pub struct SuiValidatorSummary {
     pub p2p_address: String,
     pub primary_address: String,
     pub worker_address: String,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_protocol_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_proof_of_possession: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_network_pubkey_bytes: Option<Vec<u8>>,
-    #[schemars(with = "Option<Base58>")]
-    #[serde_as(as = "Option<Base58>")]
+    #[schemars(with = "Option<Base64>")]
+    #[serde_as(as = "Option<Base64>")]
     pub next_epoch_worker_pubkey_bytes: Option<Vec<u8>>,
     pub next_epoch_net_address: Option<String>,
     pub next_epoch_p2p_address: Option<String>,

@@ -137,7 +137,7 @@ This should be called only once during genesis creation.
         <a href="_none">option::none</a>(),
         ctx
     );
-    <a href="transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(metadata);
+    <a href="transfer.md#0x2_transfer_public_freeze_object">transfer::public_freeze_object</a>(metadata);
     <b>let</b> supply = <a href="coin.md#0x2_coin_treasury_into_supply">coin::treasury_into_supply</a>(treasury);
     <b>let</b> total_sui = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> supply, <a href="sui.md#0x2_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>);
     <a href="balance.md#0x2_balance_destroy_supply">balance::destroy_supply</a>(supply);
@@ -165,7 +165,7 @@ This should be called only once during genesis creation.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>(c: <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;<a href="sui.md#0x2_sui_SUI">SUI</a>&gt;, recipient: <b>address</b>) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(c, recipient)
+    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, recipient)
 }
 </code></pre>
 

@@ -88,11 +88,9 @@ export function ModuleFunction({
             const result = await signAndExecuteTransaction({
                 transaction: tx,
                 options: {
-                    contentOptions: {
-                        showEffects: true,
-                        showEvents: true,
-                        showInput: true,
-                    },
+                    showEffects: true,
+                    showEvents: true,
+                    showInput: true,
                 },
             });
             if (getExecutionStatusType(result) === 'failure') {

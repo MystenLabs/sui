@@ -14,10 +14,12 @@ const TabSizeContext = createContext<TabSize | null | undefined>(null);
 
 export const TabPanels = HeadlessTab.Panels;
 
-export type TabPanelProps = ExtractProps<typeof HeadlessTab.Panel>;
+export type TabPanelProps = ExtractProps<typeof HeadlessTab.Panel> & {
+    noGap?: boolean;
+};
 
-export function TabPanel(props: TabPanelProps) {
-    return <HeadlessTab.Panel className="my-4" {...props} />;
+export function TabPanel({ noGap = false, ...props }: TabPanelProps) {
+    return <HeadlessTab.Panel className={noGap ? '' : 'my-4'} {...props} />;
 }
 
 export type TabGroupProps = ExtractProps<typeof HeadlessTab.Group> & {

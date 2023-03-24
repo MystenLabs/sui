@@ -21,11 +21,10 @@ use sui_framework::natives::{self, object_runtime::ObjectRuntime, NativesCostTab
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     digests::TransactionDigest, in_memory_storage::InMemoryStorage, messages::InputObjects,
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
-const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 
 #[derive(Parser)]
 pub struct Test {
@@ -91,7 +90,7 @@ pub fn run_move_unit_tests(
             report_stacktrace_on_abort: true,
             ..config
         },
-        natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
+        natives::all_natives(),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::stdout(),

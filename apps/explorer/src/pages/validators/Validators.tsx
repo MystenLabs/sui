@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { calculateAPY, roundFloat } from '@mysten/core';
-import { type SuiValidatorSummary, type SuiEvent } from '@mysten/sui.js';
+import { type SuiSystemStateSummary, type SuiEvent } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -24,39 +24,37 @@ import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 
 const APY_DECIMALS = 3;
 
-// This constant needs to match the constant in the on-chain smart contract sui_system::VALIDATOR_LOW_STAKE_THRESHOLD.
-const VALIDATOR_LOW_STAKE_THRESHOLD = 25_000_000_000_000_000;
-
 const NodeMap = lazy(() => import('../../components/node-map'));
 
 export function validatorsTableData(
-    validators: SuiValidatorSummary[],
-    epoch: number,
-    validatorsEvents: SuiEvent[]
+    systemState: SuiSystemStateSummary,
+    validatorEvents: SuiEvent[]
 ) {
     return {
-        data: validators.map((validator) => {
+        data: systemState.activeValidators.map((validator) => {
             const validatorName = validator.name;
             const totalStake = validator.stakingPoolSuiBalance;
             const img = validator.imageUrl;
 
             const event = getValidatorMoveEvent(
-                validatorsEvents,
+                validatorEvents,
                 validator.suiAddress
             );
-
             return {
                 name: {
                     name: validatorName,
                     logo: validator.imageUrl,
                 },
                 stake: totalStake,
-                apy: calculateAPY(validator, epoch),
+                apy: calculateAPY(validator, systemState.epoch),
+                nextEpochGasPrice: validator.nextEpochGasPrice,
                 commission: +validator.commissionRate / 100,
                 img: img,
                 address: validator.suiAddress,
                 lastReward: event?.stake_rewards || 0,
-                atRisk: totalStake < VALIDATOR_LOW_STAKE_THRESHOLD,
+                atRisk: systemState.atRiskValidators.some(
+                    ([address]) => address === validator.suiAddress
+                ),
             };
         }),
         columns: [
@@ -112,6 +110,12 @@ export function validatorsTableData(
             {
                 header: 'Stake',
                 accessorKey: 'stake',
+                enableSorting: true,
+                cell: (props: any) => <StakeColumn stake={props.getValue()} />,
+            },
+            {
+                header: 'Next Epoch Gas Price',
+                accessorKey: 'nextEpochGasPrice',
                 enableSorting: true,
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
             },
@@ -227,14 +231,7 @@ function ValidatorPageResult() {
 
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
-
-        const validators = data.activeValidators;
-
-        return validatorsTableData(
-            validators,
-            +data.epoch,
-            validatorEvents.data
-        );
+        return validatorsTableData(data, validatorEvents.data);
     }, [validatorEvents, data]);
 
     const defaultSorting = [{ id: 'stake', desc: false }];
@@ -249,10 +246,6 @@ function ValidatorPageResult() {
 
     return (
         <div>
-            <Heading as="h1" variant="heading2/bold">
-                Validators
-            </Heading>
-
             <div className="mt-8 grid gap-5 md:grid-cols-2">
                 <Card spacing="lg">
                     <div className="flex w-full basis-full flex-col gap-8">

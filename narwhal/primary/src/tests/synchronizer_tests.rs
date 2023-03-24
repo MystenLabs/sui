@@ -4,6 +4,7 @@ use crate::{
     common::create_db_stores, metrics::PrimaryMetrics, synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
+use config::Committee;
 use consensus::consensus::ConsensusRound;
 use consensus::utils::gc_round;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
@@ -17,7 +18,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
+use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
 use tokio::sync::{oneshot, watch};
 use types::{error::DagError, Certificate, PreSubscribedBroadcastSender, Round};
 
@@ -28,7 +29,7 @@ async fn accept_certificates() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -43,7 +44,7 @@ async fn accept_certificates() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -59,7 +60,7 @@ async fn accept_certificates() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&authority_id)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -130,7 +131,7 @@ async fn accept_suspended_certificates() {
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
@@ -142,7 +143,7 @@ async fn accept_suspended_certificates() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -163,12 +164,15 @@ async fn accept_suspended_certificates() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
-    let (certificates, _next_parents) =
+    let keys: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
+    let (certificates, next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();
 
-    // Try to aceept certificates from round 2 and above. All of them should be suspended.
+    // Try to aceept certificates from round 2 to 5. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
         match synchronizer
@@ -208,6 +212,24 @@ async fn accept_suspended_certificates() {
             Err(e) => panic!("Unexpected error {e}"),
         }
     }
+
+    // Create a certificate > 100 rounds above the highest local round.
+    let (_digest, cert) = mock_signed_certificate(
+        keys.as_slice(),
+        certificates.last().cloned().unwrap().origin(),
+        200,
+        next_parents,
+        &committee,
+    );
+    // The certificate should not be accepted or suspended.
+    match synchronizer
+        .try_accept_certificate(cert.clone(), &network)
+        .await
+    {
+        Ok(()) => panic!("Unexpected success!"),
+        Err(DagError::TooNew(_, _, _)) => {}
+        Err(e) => panic!("Unexpected error {e}!"),
+    }
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -217,7 +239,7 @@ async fn synchronizer_recover_basic() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -232,7 +254,7 @@ async fn synchronizer_recover_basic() {
 
     // Make Synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -248,7 +270,7 @@ async fn synchronizer_recover_basic() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&name)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -284,7 +306,7 @@ async fn synchronizer_recover_basic() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -336,7 +358,7 @@ async fn synchronizer_recover_partial_certs() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -351,7 +373,7 @@ async fn synchronizer_recover_partial_certs() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -367,7 +389,7 @@ async fn synchronizer_recover_partial_certs() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&name)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -402,7 +424,7 @@ async fn synchronizer_recover_partial_certs() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -449,7 +471,7 @@ async fn synchronizer_recover_previous_round() {
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().last().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
-    let name = primary.public_key();
+    let name = primary.id();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -464,7 +486,7 @@ async fn synchronizer_recover_previous_round() {
 
     // Make a synchronizer.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -480,7 +502,7 @@ async fn synchronizer_recover_previous_round() {
     ));
 
     let own_address = committee
-        .primary(&name)
+        .primary_by_id(&name)
         .unwrap()
         .to_anemo_address()
         .unwrap();
@@ -499,7 +521,7 @@ async fn synchronizer_recover_previous_round() {
         .collect::<BTreeSet<_>>();
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (all_certificates, _next_parents) =
@@ -529,7 +551,7 @@ async fn synchronizer_recover_previous_round() {
     let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let _synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        name,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -559,7 +581,7 @@ async fn synchronizer_recover_previous_round() {
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
     let fixture = CommitteeFixture::builder().build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let name = fixture.authorities().next().unwrap().id();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -610,7 +632,7 @@ async fn deliver_certificate_using_dag() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
@@ -636,7 +658,7 @@ async fn deliver_certificate_using_dag() {
 #[tokio::test]
 async fn deliver_certificate_using_store() {
     let fixture = CommitteeFixture::builder().build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let name = fixture.authorities().next().unwrap().id();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -674,7 +696,7 @@ async fn deliver_certificate_using_store() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
@@ -700,7 +722,7 @@ async fn deliver_certificate_using_store() {
 #[tokio::test]
 async fn deliver_certificate_not_found_parents() {
     let fixture = CommitteeFixture::builder().build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let name = fixture.authorities().next().unwrap().id();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -738,7 +760,7 @@ async fn deliver_certificate_not_found_parents() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .take(3)
         .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
@@ -772,7 +794,6 @@ async fn sync_batches_drops_old() {
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
     let author = fixture.authorities().nth(2).unwrap();
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
@@ -785,7 +806,7 @@ async fn sync_batches_drops_old() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        primary.id(),
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -851,7 +872,6 @@ async fn gc_suspended_certificates() {
     let worker_cache = fixture.worker_cache();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
 
     let (_header_store, certificate_store, payload_store) = create_db_stores();
@@ -863,7 +883,7 @@ async fn gc_suspended_certificates() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        primary.id(),
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ GC_DEPTH,
@@ -879,12 +899,15 @@ async fn gc_suspended_certificates() {
     ));
 
     // Make fake certificates.
-    let committee = fixture.committee();
+    let committee: Committee = fixture.committee();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
+    let keys: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=5, &genesis, &committee, keys.as_slice());
     let certificates = certificates.into_iter().collect_vec();

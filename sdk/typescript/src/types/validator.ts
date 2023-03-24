@@ -46,8 +46,10 @@ export const DelegatedStake = object({
 
 export const StakeSubsidyFields = object({
   balance: object({ value: number() }),
-  currentEpochAmount: number(),
-  epochCounter: number(),
+  distribution_counter: number(),
+  current_distribution_amount: number(),
+  stake_subsidy_period_length: number(),
+  stake_subsidy_decrease_rate: number(),
 });
 
 export const StakeSubsidy = object({
@@ -154,12 +156,22 @@ export const SuiSystemStateSummary = object({
   storageFund: number(),
   referenceGasPrice: number(),
   safeMode: boolean(),
+  safeModeStorageRewards: number(),
+  safeModeComputationRewards: number(),
+  safeModeStorageRebates: number(),
   epochStartTimestampMs: number(),
-  governanceStartEpoch: number(),
   epochDurationMs: number(),
-  stakeSubsidyEpochCounter: number(),
+  stakeSubsidyStartEpoch: number(),
+  maxValidatorCount: number(),
+  minValidatorJoiningStake: number(),
+  validatorLowStakeThreshold: number(),
+  validatorVeryLowStakeThreshold: number(),
+  validatorLowStakeGracePeriod: number(),
   stakeSubsidyBalance: number(),
-  stakeSubsidyCurrentEpochAmount: number(),
+  stakeSubsidyDistributionCounter: number(),
+  stakeSubsidyCurrentDistributionAmount: number(),
+  stakeSubsidyPeriodLength: number(),
+  stakeSubsidyDecreaseRate: number(),
   totalStake: number(),
   activeValidators: array(SuiValidatorSummary),
   pendingActiveValidatorsId: string(),

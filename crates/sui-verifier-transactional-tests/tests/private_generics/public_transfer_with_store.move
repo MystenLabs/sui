@@ -14,20 +14,20 @@ module a::m {
 //# publish --dependencies a
 module t1::m {
     fun t(s: a::m::S) {
-        sui::transfer::transfer(s, @100)
+        sui::transfer::public_transfer(s, @100)
     }
 }
 
 //# publish --dependencies a
 module t3::m {
     fun t(s: a::m::S) {
-        sui::transfer::freeze_object(s)
+        sui::transfer::public_freeze_object(s)
     }
 }
 
 //# publish --dependencies a
 module t4::m {
     fun t(s: a::m::S) {
-        sui::transfer::share_object(s)
+        sui::transfer::public_share_object(s)
     }
 }

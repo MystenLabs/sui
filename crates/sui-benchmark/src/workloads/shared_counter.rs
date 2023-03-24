@@ -50,7 +50,12 @@ impl Payload for SharedCounterTestPayload {
             self.counter_initial_shared_version,
             self.gas.1,
             &self.gas.2,
-            Some(*self.system_state_observer.reference_gas_price.borrow()),
+            Some(
+                self.system_state_observer
+                    .state
+                    .borrow()
+                    .reference_gas_price,
+            ),
         )
     }
 }
@@ -167,7 +172,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
         if self.basics_package_id.is_some() {
             return;
         }
-        let gas_price = *system_state_observer.reference_gas_price.borrow();
+        let gas_price = system_state_observer.state.borrow().reference_gas_price;
         let (head, tail) = self
             .init_gas
             .split_first()

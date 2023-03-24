@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as PauseIcon } from './icons/pause.svg';
-import { ReactComponent as PlayIcon } from './icons/play.svg';
+import { AutorefreshPause24, AutorefreshPlay24 } from '@mysten/icons';
+
+import { IconButton } from './IconButton';
 
 export interface PlayPauseProps {
     paused?: boolean;
@@ -12,13 +13,11 @@ export interface PlayPauseProps {
 // TODO: Have this leverage the `IconButton` component:
 export function PlayPause({ paused, onChange }: PlayPauseProps) {
     return (
-        <button
-            type="button"
+        <IconButton
             aria-label={paused ? 'Paused' : 'Playing'}
+            icon={paused ? AutorefreshPlay24 : AutorefreshPause24}
             onClick={onChange}
             className="cursor-pointer border-none bg-transparent text-steel hover:text-steel-darker"
-        >
-            {paused ? <PlayIcon /> : <PauseIcon />}
-        </button>
+        />
     );
 }

@@ -17,7 +17,7 @@ use crate::Page;
 
 pub type CheckpointPage = Page<Checkpoint, CheckpointSequenceNumber>;
 
-#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
     /// Checkpoint's epoch ID

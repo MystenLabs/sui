@@ -10,6 +10,7 @@ use std::task::{Context, Poll};
 use std::{convert::TryInto, env};
 
 use bcs;
+use fastcrypto::hash::MultisetHash;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
@@ -35,7 +36,7 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
     SuiTransactionEffectsAPI, SuiTypeTag,
 };
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_async, sim_test};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
@@ -62,6 +63,7 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::state_accumulator::StateAccumulator;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
@@ -118,16 +120,6 @@ impl TestCallArg {
 }
 
 const MAX_GAS: u64 = 10000;
-
-// Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
-fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
-    assert_eq!(o1.digest(), o2.digest());
-    // in this ser/de context it's relevant to compare signatures
-    assert_eq!(
-        o1.auth_sig().signature.as_ref(),
-        o2.auth_sig().signature.as_ref()
-    );
-}
 
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
@@ -239,7 +231,7 @@ async fn test_dry_run_transaction() {
         .await
         .unwrap();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-    let gas_usage = response.effects.gas_used();
+    let gas_usage = response.effects.gas_cost_summary();
 
     // Make sure that objects are not mutated after dry run.
     let gas_object_version = fullnode
@@ -269,7 +261,7 @@ async fn test_dry_run_transaction() {
         .dry_exec_transaction(txn_data, transaction_digest)
         .await
         .unwrap();
-    let gas_usage_no_gas = response.effects.gas_used();
+    let gas_usage_no_gas = response.effects.gas_cost_summary();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
     assert_eq!(gas_usage, gas_usage_no_gas);
 }
@@ -333,7 +325,7 @@ async fn test_dev_inspect_object_by_bytes() {
     // random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_used().computation_cost > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
@@ -343,7 +335,7 @@ async fn test_dev_inspect_object_by_bytes() {
     } = exec_results;
     assert!(mutable_reference_outputs.is_empty());
     assert!(return_values.is_empty());
-    let dev_inspect_gas_summary = effects.gas_used().clone();
+    let dev_inspect_gas_summary = effects.gas_cost_summary().clone();
 
     // actually make the call to make an object
     let effects = call_move_(
@@ -402,7 +394,7 @@ async fn test_dev_inspect_object_by_bytes() {
     // but random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_used().computation_cost > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -506,7 +498,7 @@ async fn test_dev_inspect_unowned_object() {
     // random gas and input object are mutated
     assert_eq!(effects.mutated().len(), 2);
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_used().computation_cost > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -619,7 +611,7 @@ async fn test_dev_inspect_dynamic_field() {
     assert_eq!(effects.mutated().len(), 1);
     // nothing is deleted
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_used().computation_cost > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
     let SuiExecutionResult {
@@ -1418,7 +1410,10 @@ async fn test_transfer_package() {
         .await
         .unwrap()
         .unwrap();
-    let package_object_ref = authority_state.get_framework_object_ref().await.unwrap();
+    let package_object_ref = authority_state
+        .get_sui_system_package_object_ref()
+        .await
+        .unwrap();
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
         sender,
@@ -1540,7 +1535,18 @@ pub async fn send_and_confirm_transaction_(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    //
+    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
+    // for testing and regression detection
+    let state_acc = StateAccumulator::new(authority.database.clone());
+    let mut state = state_acc.accumulate_live_object_set();
     let result = authority.try_execute_for_test(&certificate).await?;
+    let state_after = state_acc.accumulate_live_object_set();
+    let effects_acc = state_acc.accumulate_effects(vec![result.inner().data().clone()]);
+    state.union(&effects_acc);
+
+    assert_eq!(state_after.digest(), state.digest());
+
     if let Some(fullnode) = fullnode {
         fullnode.try_execute_for_test(&certificate).await?;
     }
@@ -2005,7 +2011,7 @@ async fn test_transaction_expiration() {
     let epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let mut expired_data = data.clone();
 
-    *expired_data.expiration_mut() = TransactionExpiration::Epoch(0);
+    *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
     let expired_transaction = to_sender_signed_transaction(expired_data, &sender_key);
     let result = authority_state
         .handle_transaction(&epoch_store, expired_transaction)
@@ -2014,7 +2020,7 @@ async fn test_transaction_expiration() {
     assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
 
     // Non expired transaction signed without issue
-    *data.expiration_mut() = TransactionExpiration::Epoch(10);
+    *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
     let transaction = to_sender_signed_transaction(data, &sender_key);
     authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -2185,17 +2191,6 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         .await
         .unwrap();
     signed_effects.into_message().status().unwrap();
-    let account = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-
-    assert!(authority_state
-        .db()
-        .parent(&(object_id, account.version(), account.digest()))
-        .unwrap()
-        .is_some());
 }
 
 #[tokio::test]
@@ -2252,22 +2247,6 @@ async fn test_handle_confirmation_transaction_ok() {
         .unwrap();
     assert_eq!(new_account.owner, recipient);
     assert_eq!(next_sequence_number, new_account.version());
-    let opt_cert = {
-        let refx = authority_state
-            .db()
-            .parent(&(object_id, new_account.version(), new_account.digest()))
-            .unwrap()
-            .unwrap();
-        authority_state
-            .get_certified_transaction(&refx, &authority_state.epoch_store_for_testing())
-            .unwrap()
-    };
-    if let Some(certified_transaction) = opt_cert {
-        // valid since our test authority should not update its certificate set
-        compare_certified_transactions(&certified_transaction, &certified_transfer_transaction);
-    } else {
-        panic!("parent certificate not avaailable from the authority!");
-    }
 
     // Check locks are set and archived correctly
     assert!(authority_state
@@ -2285,16 +2264,6 @@ async fn test_handle_confirmation_transaction_ok() {
         .await
         .expect("Exists")
         .is_none());
-
-    // Check that all the parents are returned.
-    assert_eq!(
-        authority_state
-            .get_parent_iterator(object_id, None)
-            .await
-            .unwrap()
-            .count(),
-        2
-    );
 }
 
 struct LimitedPoll<F: Future> {
@@ -2328,9 +2297,13 @@ impl<F: Future> Future for LimitedPoll<F> {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     telemetry_subscribers::init_for_testing();
+
+    // insert a yield point at every crash failpoint so we can probe the execution path and verify
+    // that it can be resumed after every fail point.
+    register_fail_point_async("crash", tokio::task::yield_now);
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -2402,16 +2375,6 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
         interrupted_count += 1;
 
         let epoch_store = authority_state.epoch_store_for_testing();
-        let g = epoch_store
-            .acquire_tx_guard(&VerifiedExecutableTransaction::new_from_certificate(
-                shared_object_cert.clone(),
-            ))
-            .await
-            .unwrap();
-
-        // assert that the tx was dropped mid-stream due to the timeout.
-        assert_eq!(g.retry_num(), 1);
-        std::mem::drop(g);
 
         // Now run the tx to completion. Interrupted tx should be retriable via TransactionManager.
         // Must manually enqueue the cert to transaction manager because send_consensus_no_execution
@@ -2430,6 +2393,7 @@ async fn test_handle_certificate_with_shared_object_interrupted_retry() {
     }
 
     // ensure we tested something
+    dbg!(interrupted_count);
     assert!(interrupted_count >= 1);
 }
 
@@ -2745,7 +2709,7 @@ async fn test_get_latest_parent_entry_genesis() {
     let authority_state = init_state().await;
     // There should not be any object with ID zero
     assert!(authority_state
-        .get_latest_parent_entry(ObjectID::ZERO)
+        .get_object_or_tombstone(ObjectID::ZERO)
         .await
         .unwrap()
         .is_none());
@@ -2800,18 +2764,17 @@ async fn test_get_latest_parent_entry() {
     .unwrap();
 
     // Check entry for object to be deleted is returned
-    let (obj_ref, tx) = authority_state
-        .get_latest_parent_entry(new_object_id1)
+    let obj_ref = authority_state
+        .get_object_or_tombstone(new_object_id1)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, update_version);
-    assert_eq!(*effects.transaction_digest(), tx);
 
     let delete_version = SequenceNumber::lamport_increment([obj_ref.1, effects.gas_object().0 .1]);
 
-    let effects = call_move(
+    let _effects = call_move(
         &authority_state,
         &gas_object_id,
         &sender,
@@ -2834,31 +2797,29 @@ async fn test_get_latest_parent_entry() {
     x[last_index] = u8::MAX - x[last_index];
     let unknown_object_id: ObjectID = x.try_into().unwrap();
     assert!(authority_state
-        .get_latest_parent_entry(unknown_object_id)
+        .get_object_or_tombstone(unknown_object_id)
         .await
         .unwrap()
         .is_none());
 
     // Check gas object is returned.
-    let (obj_ref, tx) = authority_state
-        .get_latest_parent_entry(gas_object_id)
+    let obj_ref = authority_state
+        .get_object_or_tombstone(gas_object_id)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, gas_object_id);
     assert_eq!(obj_ref.1, delete_version);
-    assert_eq!(*effects.transaction_digest(), tx);
 
     // Check entry for deleted object is returned
-    let (obj_ref, tx) = authority_state
-        .get_latest_parent_entry(new_object_id1)
+    let obj_ref = authority_state
+        .get_object_or_tombstone(new_object_id1)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, delete_version);
     assert_eq!(obj_ref.2, ObjectDigest::OBJECT_DIGEST_DELETED);
-    assert_eq!(*effects.transaction_digest(), tx);
 }
 
 #[tokio::test]
@@ -2904,7 +2865,7 @@ async fn test_authority_persist() {
         fs::create_dir(&epoch_store_path).unwrap();
         let registry = Registry::new();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-        let async_batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&registry);
+        let async_batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&registry);
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,
@@ -3172,15 +3133,12 @@ async fn test_sui_system_state_nop_upgrade() {
     use sui_adapter::execution_engine::{construct_advance_epoch_pt, AdvanceEpochParams};
     use sui_adapter::programmable_transactions;
     use sui_types::sui_system_state::SUI_SYSTEM_STATE_TESTING_VERSION1;
-    use sui_types::{
-        MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
-    };
+    use sui_types::SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION;
 
     let authority_state = init_state().await;
 
     let protocol_config = ProtocolConfig::get_for_version(ProtocolVersion::MIN);
-    let native_functions =
-        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let native_functions = sui_framework::natives::all_natives();
     let move_vm = adapter::new_move_vm(native_functions.clone(), &protocol_config)
         .expect("We defined natives to not fail here");
     let mut temporary_store = TemporaryStore::new(
@@ -3205,7 +3163,7 @@ async fn test_sui_system_state_nop_upgrade() {
     let new_system_state_version = SUI_SYSTEM_STATE_TESTING_VERSION1;
 
     // Dummy change epoch with the new protocol version and system state version.
-    let pt = construct_advance_epoch_pt(AdvanceEpochParams {
+    let pt = construct_advance_epoch_pt(&AdvanceEpochParams {
         epoch: 1,
         next_protocol_version: ProtocolVersion::from(new_protocol_version),
         storage_charge: 0,
@@ -3376,8 +3334,8 @@ async fn test_store_revert_transfer_sui() {
         Owner::AddressOwner(sender),
     );
     assert_eq!(
-        db.get_latest_parent_entry(gas_object_id).unwrap().unwrap(),
-        (gas_object_ref, TransactionDigest::genesis()),
+        db.get_object_or_tombstone(gas_object_id).unwrap().unwrap(),
+        gas_object_ref
     );
     // Transaction should not be deleted on revert in case it's needed
     // to execute a future state sync checkpoint.
@@ -4989,6 +4947,7 @@ fn test_choose_next_system_packages() {
     let committee = Committee::new_simple_test_committee().0;
     let v = &committee.voting_rights;
     let mut protocol_config = ProtocolConfig::get_for_max_version();
+    protocol_config.set_buffer_stake_for_protocol_upgrade_bps_for_testing(7500);
 
     // all validators agree on new system packages, but without a new protocol version, so no
     // upgrade.

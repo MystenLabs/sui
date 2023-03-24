@@ -6,11 +6,11 @@ import { ChevronDown16, Copy16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js';
 import { cx } from 'class-variance-authority';
 
+import { AccountBadge } from '../../AccountBadge';
 import { AccountActions } from './AccountActions';
-import { AccountType } from '_src/background/keyring/Account';
+import { type AccountType } from '_src/background/keyring/Account';
 import { useCopyToClipboard } from '_src/ui/app/hooks/useCopyToClipboard';
 import { Heading } from '_src/ui/app/shared/heading';
-import { Text } from '_src/ui/app/shared/text';
 
 export type AccountProps = {
     address: string;
@@ -50,7 +50,7 @@ export function Account({ address, accountType }: AccountProps) {
                         </div>
                         <Copy16
                             onClick={copyCallback}
-                            className="transition text-base leading-none text-gray-60 active:text-gray-60 hover:text-hero-darkest cursor-pointer p1"
+                            className="transition text-base leading-none text-gray-60 active:text-gray-60 group-hover:text-hero-darkest cursor-pointer p1"
                         />
                         <ChevronDown16 className="transition text-base leading-none text-gray-60 ui-open:rotate-180 ui-open:text-hero-darkest group-hover:text-hero-darkest" />
                     </Disclosure.Button>
@@ -73,33 +73,4 @@ export function Account({ address, accountType }: AccountProps) {
             )}
         </Disclosure>
     );
-}
-
-type AccountBadgeProps = {
-    accountType: AccountType;
-};
-
-function AccountBadge({ accountType }: AccountBadgeProps) {
-    let badgeText: string | null = null;
-    switch (accountType) {
-        case AccountType.LEDGER:
-            badgeText = 'Ledger';
-            break;
-        case AccountType.IMPORTED:
-            badgeText = 'Imported';
-            break;
-        case AccountType.DERIVED:
-            badgeText = null;
-            break;
-        default:
-            throw new Error(`Encountered unknown account type ${accountType}`);
-    }
-
-    return badgeText ? (
-        <div className="bg-gray-40 rounded-2xl border border-solid border-gray-45 py-1 px-1.5">
-            <Text variant="captionSmallExtra" color="steel-dark">
-                {badgeText}
-            </Text>
-        </div>
-    ) : null;
 }

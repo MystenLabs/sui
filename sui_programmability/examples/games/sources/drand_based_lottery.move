@@ -93,7 +93,7 @@ module games::drand_based_lottery {
             participants: 0,
             winner: option::none(),
         };
-        transfer::share_object(game);
+        transfer::public_share_object(game);
     }
 
     /// Anyone can close the game by providing the randomness of round-2.
@@ -122,7 +122,7 @@ module games::drand_based_lottery {
             participant_index: game.participants,
         };
         game.participants = game.participants + 1;
-        transfer::transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(ticket, tx_context::sender(ctx));
     }
 
     /// The winner can redeem its ticket.
@@ -134,7 +134,7 @@ module games::drand_based_lottery {
             id: object::new(ctx),
             game_id: ticket.game_id,
         };
-        transfer::transfer(winner, tx_context::sender(ctx));
+        transfer::public_transfer(winner, tx_context::sender(ctx));
     }
 
     // Note that a ticket can be deleted before the game was completed.

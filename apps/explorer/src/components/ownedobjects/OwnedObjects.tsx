@@ -4,7 +4,6 @@
 import { useRpcClient } from '@mysten/core';
 import {
     Coin,
-    getObjectFields,
     getObjectId,
     PaginatedObjectsResponse,
     is,
@@ -60,29 +59,30 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                     options: {
                         showType: true,
                         showContent: true,
+                        showDisplay: true,
                     },
                 })
                 .then((results) => {
                     setResults(
                         results
-                            .filter(({ status }) => status === 'Exists')
+                            .filter(({ data }) => data !== undefined)
                             .map(
                                 (resp) => {
-                                    const contents = getObjectFields(resp);
-                                    const url = parseImageURL(contents);
-
-                                    const name = extractName(contents);
-                                    const objType = parseObjectType(resp);
-                                    const balanceValue = Coin.getBalance(resp);
+                                    const displayMeta =
+                                        typeof resp.data === 'object' &&
+                                        'display' in resp.data
+                                            ? resp.data.display
+                                            : undefined;
+                                    const url = parseImageURL(displayMeta);
                                     return {
                                         id: getObjectId(resp),
-                                        Type: objType,
+                                        Type: parseObjectType(resp),
                                         _isCoin: Coin.isCoin(resp),
                                         display: url
                                             ? transformURL(url)
                                             : undefined,
-                                        balance: balanceValue,
-                                        name: name,
+                                        balance: Coin.getBalance(resp),
+                                        name: extractName(displayMeta) || '',
                                     };
                                 }
                                 // TODO - add back version

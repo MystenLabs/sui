@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Number Suffix
+// TODO: Support bigint:
 export const numberSuffix = (num: number): string => {
     if (num >= 1000000) {
         return (num / 1000000).toFixed(1) + 'M';
@@ -11,6 +12,3 @@ export const numberSuffix = (num: number): string => {
     }
     return num.toString();
 };
-
-export const isBigIntOrNumber = (val: any): val is bigint | number =>
-    typeof val === 'bigint' || typeof val === 'number';

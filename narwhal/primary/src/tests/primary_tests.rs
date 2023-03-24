@@ -8,10 +8,9 @@ use crate::{
     NUM_SHUTDOWN_RECEIVERS,
 };
 use bincode::Options;
-use config::{Committee, Parameters, WorkerId};
+use config::{AuthorityIdentifier, Committee, Parameters, WorkerId};
 use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{PublicKey, PublicKeyBytes};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -55,7 +54,6 @@ async fn get_network_peers_from_admin_server() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let authority_1 = fixture.authorities().next().unwrap();
-    let name_1 = authority_1.public_key();
     let signer_1 = authority_1.keypair().copy();
 
     let worker_id = 0;
@@ -88,7 +86,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn Primary 1
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         signer_1,
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -134,7 +132,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
-        name_1,
+        authority_1.authority().clone(),
         worker_1_keypair.copy(),
         worker_id,
         committee.clone(),
@@ -179,7 +177,6 @@ async fn get_network_peers_from_admin_server() {
     assert_eq!(1, resp.len());
 
     let authority_2 = fixture.authorities().nth(1).unwrap();
-    let name_2 = authority_2.public_key();
     let signer_2 = authority_2.keypair().copy();
 
     let primary_2_parameters = Parameters {
@@ -211,7 +208,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         signer_2,
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -300,8 +297,8 @@ async fn test_request_vote_send_missing_parents() {
         .build();
     let target = fixture.authorities().next().unwrap();
     let author = fixture.authorities().nth(2).unwrap();
-    let target_name = target.public_key();
-    let author_name = author.public_key();
+    let target_id = target.id();
+    let author_id = author.id();
     let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -317,7 +314,7 @@ async fn test_request_vote_send_missing_parents() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        target_name.clone(),
+        target_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -332,7 +329,7 @@ async fn test_request_vote_send_missing_parents() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name: target_name.clone(),
+        authority_id: target_id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -351,9 +348,12 @@ async fn test_request_vote_send_missing_parents() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
+    let ids: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
     let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=3, &genesis, &committee, keys.as_slice());
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
     let round_2_parents = round_2_certs[..(NUM_PARENTS / 2)].to_vec();
@@ -362,7 +362,7 @@ async fn test_request_vote_send_missing_parents() {
     // Create a test header.
     let test_header = author
         .header_builder(&fixture.committee())
-        .author(author_name)
+        .author(author_id)
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
@@ -444,8 +444,8 @@ async fn test_request_vote_accept_missing_parents() {
         .build();
     let target = fixture.authorities().next().unwrap();
     let author = fixture.authorities().nth(2).unwrap();
-    let target_name = target.public_key();
-    let author_name = author.public_key();
+    let target_id = target.id();
+    let author_id = author.id();
     let worker_cache = fixture.worker_cache();
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -461,7 +461,7 @@ async fn test_request_vote_accept_missing_parents() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        target_name.clone(),
+        target_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -476,7 +476,7 @@ async fn test_request_vote_accept_missing_parents() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name: target_name.clone(),
+        authority_id: target_id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -495,9 +495,12 @@ async fn test_request_vote_accept_missing_parents() {
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.keypair().copy()).collect();
+    let ids: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
     let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=3, &genesis, &committee, keys.as_slice());
+        make_optimal_signed_certificates(1..=3, &genesis, &committee, ids.as_slice());
     let all_certificates = certificates.into_iter().collect_vec();
     let round_1_certs = all_certificates[..NUM_PARENTS].to_vec();
     let round_2_certs = all_certificates[NUM_PARENTS..(NUM_PARENTS * 2)].to_vec();
@@ -507,7 +510,7 @@ async fn test_request_vote_accept_missing_parents() {
     // Create a test header.
     let test_header = author
         .header_builder(&fixture.committee())
-        .author(author_name)
+        .author(author_id)
         .round(3)
         .parents(round_2_certs.iter().map(|c| c.digest()).collect())
         .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
@@ -581,7 +584,7 @@ async fn test_request_vote_missing_batches() {
         .build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -597,7 +600,7 @@ async fn test_request_vote_missing_batches() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        authority_id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -612,7 +615,7 @@ async fn test_request_vote_missing_batches() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name: name.clone(),
+        authority_id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -627,7 +630,7 @@ async fn test_request_vote_missing_batches() {
 
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != authority_id) {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
@@ -658,7 +661,7 @@ async fn test_request_vote_missing_batches() {
         .collect();
 
     // Set up mock worker.
-    let author_key = author.public_key();
+    let author_id = author.id();
     let worker = primary.worker(1);
     let worker_address = &worker.info().worker_address;
     let mut mock_server = MockPrimaryToWorker::new();
@@ -666,7 +669,7 @@ async fn test_request_vote_missing_batches() {
         .expect_synchronize()
         .withf(move |request| {
             let digests: HashSet<_> = request.body().digests.iter().cloned().collect();
-            digests == test_digests && request.body().target == author_key
+            digests == test_digests && request.body().target == author_id
         })
         .times(1)
         .return_once(|_| Ok(anemo::Response::new(())));
@@ -706,7 +709,7 @@ async fn test_request_vote_already_voted() {
         .build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -722,7 +725,7 @@ async fn test_request_vote_already_voted() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -737,7 +740,7 @@ async fn test_request_vote_already_voted() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name: name.clone(),
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -752,7 +755,7 @@ async fn test_request_vote_already_voted() {
 
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
@@ -864,7 +867,7 @@ async fn test_fetch_certificates_handler() {
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let id = fixture.authorities().next().unwrap().id();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
@@ -880,7 +883,7 @@ async fn test_fetch_certificates_handler() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -895,7 +898,7 @@ async fn test_fetch_certificates_handler() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -940,9 +943,9 @@ async fn test_fetch_certificates_handler() {
     // Authority 3: 1 2 3 4
     // This is unrealistic because in practice a certificate can only be stored with 2f+1 parents
     // already in store. But this does not matter for testing here.
-    let mut authorities = Vec::<PublicKey>::new();
+    let mut authorities = Vec::<AuthorityIdentifier>::new();
     for i in 0..total_authorities {
-        authorities.push(certificates[i].header.author.clone());
+        authorities.push(certificates[i].header.author);
         for j in 0..=i {
             let cert = certificates[i + j * total_authorities].clone();
             assert_eq!(&cert.header.author, authorities.last().unwrap());
@@ -1002,7 +1005,6 @@ async fn test_fetch_certificates_handler() {
                 authorities
                     .clone()
                     .into_iter()
-                    .map(|a| PublicKeyBytes::from(&a))
                     .zip(
                         skip_rounds_vec
                             .into_iter()
@@ -1033,7 +1035,7 @@ async fn test_process_payload_availability_success() {
         .committee_size(NonZeroUsize::new(4).unwrap())
         .build();
     let author = fixture.authorities().next().unwrap();
-    let name = author.public_key();
+    let id = author.id();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
@@ -1049,7 +1051,7 @@ async fn test_process_payload_availability_success() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -1064,7 +1066,7 @@ async fn test_process_payload_availability_success() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -1167,8 +1169,8 @@ async fn test_process_payload_availability_when_failures() {
         payload_map,
     ) = store::reopen!(&rocksdb,
         test_utils::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
-        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
+        test_utils::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>,
         test_utils::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     let certificate_store = CertificateStore::new(
@@ -1184,7 +1186,7 @@ async fn test_process_payload_availability_when_failures() {
         .build();
     let committee = fixture.committee();
     let author = fixture.authorities().next().unwrap();
-    let name = author.public_key();
+    let id = author.id();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
@@ -1200,7 +1202,7 @@ async fn test_process_payload_availability_when_failures() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -1215,7 +1217,7 @@ async fn test_process_payload_availability_when_failures() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -1283,7 +1285,7 @@ async fn test_request_vote_created_at_in_future() {
         .build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let author = fixture.authorities().nth(2).unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
@@ -1299,7 +1301,7 @@ async fn test_request_vote_created_at_in_future() {
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
@@ -1314,7 +1316,7 @@ async fn test_request_vote_created_at_in_future() {
         metrics.clone(),
     ));
     let handler = PrimaryReceiverHandler {
-        name: name.clone(),
+        authority_id: id,
         committee: fixture.committee(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
@@ -1329,7 +1331,7 @@ async fn test_request_vote_created_at_in_future() {
 
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let header = primary
             .header_builder(&fixture.committee())
             .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)

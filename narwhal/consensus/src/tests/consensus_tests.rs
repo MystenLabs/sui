@@ -17,7 +17,6 @@ use crate::consensus::ConsensusRound;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use crypto::PublicKeyBytes;
 use types::{Certificate, PreSubscribedBroadcastSender, ReputationScores};
 
 /// This test is trying to compare the output of the Consensus algorithm when:
@@ -46,13 +45,13 @@ async fn test_consensus_recovery_with_bullshark() {
     let committee = fixture.committee();
 
     // AND make certificates for rounds 1 to 7 (inclusive)
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis = Certificate::genesis(&committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (certificates, _next_parents) =
-        test_utils::make_optimal_certificates(&committee, 1..=7, &genesis, &keys);
+        test_utils::make_optimal_certificates(&committee, 1..=7, &genesis, &ids);
 
     // AND Spawn the consensus engine.
     let (tx_waiter, rx_waiter) = test_utils::test_channel!(100);
@@ -131,11 +130,11 @@ async fn test_consensus_recovery_with_bullshark() {
     // AND the last committed store should be updated correctly
     let last_committed = consensus_store.read_last_committed();
 
-    for key in keys.clone() {
-        let last_round = *last_committed.get(&PublicKeyBytes::from(&key)).unwrap();
+    for id in ids.clone() {
+        let last_round = *last_committed.get(&id).unwrap();
 
         // For the leader of round 6 we expect to have last committed round of 6.
-        if key == Bullshark::leader_authority(&committee, 6) {
+        if id == Bullshark::leader_authority(&committee, 6) {
             assert_eq!(last_round, 6);
         } else {
             // For the others should be 5.

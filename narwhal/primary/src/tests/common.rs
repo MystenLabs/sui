@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::WorkerId;
+use config::{AuthorityIdentifier, WorkerId};
 use crypto::NetworkKeyPair;
 use std::time::Duration;
 use storage::{CertificateStore, HeaderStore, PayloadStore};
@@ -14,7 +14,6 @@ use types::{
     WorkerSynchronizeMessage,
 };
 
-use crypto::PublicKeyBytes;
 use storage::PayloadToken;
 use store::rocks::MetricConf;
 use tokio::{task::JoinHandle, time::Instant};
@@ -44,8 +43,8 @@ pub fn create_db_stores() -> (HeaderStore, CertificateStore, PayloadStore) {
     ) = reopen!(&rocksdb,
         HEADERS_CF;<HeaderDigest, Header>,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
-        CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
-        CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
+        CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
+        CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (

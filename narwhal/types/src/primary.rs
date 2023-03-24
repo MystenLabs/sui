@@ -7,17 +7,17 @@ use crate::{
     CertificateDigestProto,
 };
 use bytes::Bytes;
-use config::{Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
+use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
-    to_intent_message, AggregateSignature, NarwhalAuthorityAggregateSignature,
-    NarwhalAuthoritySignature, PublicKey, PublicKeyBytes, Signature,
+    to_intent_message, AggregateSignature, AggregateSignatureBytes,
+    NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, PublicKey, Signature,
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, InsecureDefault, Signer, VerifyingKey},
+    traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
@@ -94,6 +94,10 @@ impl Batch {
             metadata: Metadata::default(),
         }
     }
+
+    pub fn size(&self) -> usize {
+        self.transactions.iter().map(|t| t.len()).sum()
+    }
 }
 
 #[derive(
@@ -150,12 +154,12 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     }
 }
 
-#[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
+#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
     // Primary that created the header. Must be the same primary that broadcasted the header.
     // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
-    pub author: PublicKey,
+    pub author: AuthorityIdentifier,
     pub round: Round,
     pub epoch: Epoch,
     pub created_at: TimestampMs,
@@ -202,7 +206,7 @@ impl HeaderBuilder {
 
 impl Header {
     pub async fn new(
-        author: PublicKey,
+        author: AuthorityIdentifier,
         round: Round,
         epoch: Epoch,
         payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
@@ -243,34 +247,23 @@ impl Header {
         );
 
         // Ensure the authority has voting rights.
-        let voting_rights = committee.stake(&self.author);
+        let voting_rights = committee.stake_by_id(self.author);
         ensure!(
             voting_rights > 0,
-            DagError::UnknownAuthority(self.author.encode_base64())
+            DagError::UnknownAuthority(self.author.to_string())
         );
 
         // Ensure all worker ids are correct.
         for (worker_id, _) in self.payload.values() {
             worker_cache
-                .worker(&self.author, worker_id)
+                .worker(
+                    committee.authority(&self.author).unwrap().protocol_key(),
+                    worker_id,
+                )
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
         Ok(())
-    }
-}
-
-impl Default for Header {
-    fn default() -> Self {
-        Self {
-            author: PublicKey::insecure_default(),
-            round: Round::default(),
-            epoch: Epoch::default(),
-            created_at: TimestampMs::default(),
-            payload: IndexMap::default(),
-            parents: BTreeSet::default(),
-            digest: OnceCell::default(),
-        }
     }
 }
 
@@ -329,7 +322,7 @@ impl fmt::Debug for Header {
             "{}: B{}({}, E{}, {}B)",
             self.digest.get().cloned().unwrap_or_default(),
             self.round,
-            self.author.encode_base64(),
+            self.author,
             self.epoch,
             self.payload
                 .keys()
@@ -341,7 +334,7 @@ impl fmt::Debug for Header {
 
 impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "B{}({})", self.round, self.author.encode_base64())
+        write!(f, "B{}({})", self.round, self.author)
     }
 }
 
@@ -359,9 +352,9 @@ pub struct Vote {
     pub header_digest: HeaderDigest,
     pub round: Round,
     pub epoch: Epoch,
-    pub origin: PublicKey,
+    pub origin: AuthorityIdentifier,
     // Author of this vote.
-    pub author: PublicKey,
+    pub author: AuthorityIdentifier,
     // Signature of the HeaderDigest.
     pub signature: <PublicKey as VerifyingKey>::Sig,
 }
@@ -369,15 +362,15 @@ pub struct Vote {
 impl Vote {
     pub async fn new(
         header: &Header,
-        author: &PublicKey,
+        author: &AuthorityIdentifier,
         signature_service: &SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
     ) -> Self {
         let vote = Self {
             header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
-            origin: header.author.clone(),
-            author: author.clone(),
+            origin: header.author,
+            author: *author,
             signature: Signature::default(),
         };
         let signature = signature_service
@@ -386,7 +379,7 @@ impl Vote {
         Self { signature, ..vote }
     }
 
-    pub fn new_with_signer<S>(header: &Header, author: &PublicKey, signer: &S) -> Self
+    pub fn new_with_signer<S>(header: &Header, author: &AuthorityIdentifier, signer: &S) -> Self
     where
         S: Signer<Signature>,
     {
@@ -394,8 +387,8 @@ impl Vote {
             header_digest: header.digest(),
             round: header.round,
             epoch: header.epoch,
-            origin: header.author.clone(),
-            author: author.clone(),
+            origin: header.author,
+            author: *author,
             signature: Signature::default(),
         };
 
@@ -403,29 +396,6 @@ impl Vote {
         let signature = Signature::new_secure(&to_intent_message(vote_digest), signer);
 
         Self { signature, ..vote }
-    }
-
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
-        // Ensure the header is from the correct epoch.
-        ensure!(
-            self.epoch == committee.epoch(),
-            DagError::InvalidEpoch {
-                expected: committee.epoch(),
-                received: self.epoch
-            }
-        );
-
-        // Ensure the authority has voting rights.
-        ensure!(
-            committee.stake(&self.author) > 0,
-            DagError::UnknownAuthority(self.author.encode_base64())
-        );
-
-        // Check the signature.
-        let vote_digest: Digest<{ crypto::DIGEST_LENGTH }> = self.digest().into();
-        self.signature
-            .verify_secure(&to_intent_message(vote_digest), &self.author)
-            .map_err(|_| DagError::InvalidSignature)
     }
 }
 #[derive(
@@ -482,8 +452,8 @@ impl fmt::Debug for Vote {
             "{}: V{}({}, {}, E{})",
             self.digest(),
             self.round,
-            self.author.encode_base64(),
-            self.origin.encode_base64(),
+            self.author,
+            self.origin,
             self.epoch
         )
     }
@@ -499,7 +469,7 @@ impl PartialEq for Vote {
 #[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
 pub struct Certificate {
     pub header: Header,
-    aggregated_signature: AggregateSignature,
+    pub aggregated_signature: AggregateSignatureBytes,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
     pub metadata: Metadata,
@@ -508,11 +478,10 @@ pub struct Certificate {
 impl Certificate {
     pub fn genesis(committee: &Committee) -> Vec<Self> {
         committee
-            .authorities
-            .keys()
-            .map(|name| Self {
+            .authorities()
+            .map(|authority| Self {
                 header: Header {
-                    author: name.clone(),
+                    author: authority.id(),
                     epoch: committee.epoch(),
                     ..Header::default()
                 },
@@ -521,10 +490,10 @@ impl Certificate {
             .collect()
     }
 
-    pub fn new(
+    pub fn new_unverified(
         committee: &Committee,
         header: Header,
-        votes: Vec<(PublicKey, Signature)>,
+        votes: Vec<(AuthorityIdentifier, Signature)>,
     ) -> DagResult<Certificate> {
         Self::new_unsafe(committee, header, votes, true)
     }
@@ -532,12 +501,12 @@ impl Certificate {
     pub fn new_unsigned(
         committee: &Committee,
         header: Header,
-        votes: Vec<(PublicKey, Signature)>,
+        votes: Vec<(AuthorityIdentifier, Signature)>,
     ) -> DagResult<Certificate> {
         Self::new_unsafe(committee, header, votes, false)
     }
 
-    pub fn new_test_empty(author: PublicKey) -> Self {
+    pub fn new_test_empty(author: AuthorityIdentifier) -> Self {
         let header = Header {
             author,
             ..Default::default()
@@ -551,24 +520,23 @@ impl Certificate {
     fn new_unsafe(
         committee: &Committee,
         header: Header,
-        votes: Vec<(PublicKey, Signature)>,
+        votes: Vec<(AuthorityIdentifier, Signature)>,
         check_stake: bool,
     ) -> DagResult<Certificate> {
         let mut votes = votes;
-        votes.sort_by_key(|(pk, _)| pk.clone());
+        votes.sort_by_key(|(pk, _)| *pk);
         let mut votes: VecDeque<_> = votes.into_iter().collect();
 
         let mut weight = 0;
-        let keys = committee.keys();
         let mut sigs = Vec::new();
 
-        let filtered_votes = keys
-            .iter()
+        let filtered_votes = committee
+            .authorities()
             .enumerate()
-            .filter(|(_, &pk)| {
-                if !votes.is_empty() && pk == &votes.front().unwrap().0 {
+            .filter(|(_, authority)| {
+                if !votes.is_empty() && authority.id() == votes.front().unwrap().0 {
                     sigs.push(votes.pop_front().unwrap());
-                    weight += &committee.stake(pk);
+                    weight += authority.stake();
                     // If there are repeats, also remove them
                     while !votes.is_empty() && votes.front().unwrap() == sigs.last().unwrap() {
                         votes.pop_front().unwrap();
@@ -585,7 +553,7 @@ impl Certificate {
         // Ensure that all authorities in the set of votes are known
         ensure!(
             votes.is_empty(),
-            DagError::UnknownAuthority(votes.front().unwrap().0.encode_base64())
+            DagError::UnknownAuthority(votes.front().unwrap().0.to_string())
         );
 
         // Ensure that the authorities have enough weight
@@ -605,7 +573,7 @@ impl Certificate {
 
         Ok(Certificate {
             header,
-            aggregated_signature,
+            aggregated_signature: AggregateSignatureBytes::from(&aggregated_signature),
             signed_authorities,
             metadata: Metadata::default(),
         })
@@ -613,12 +581,12 @@ impl Certificate {
 
     /// This function requires that certificate was verified against given committee
     pub fn signed_authorities(&self, committee: &Committee) -> Vec<PublicKey> {
-        assert_eq!(committee.epoch, self.epoch());
+        assert_eq!(committee.epoch(), self.epoch());
         let (_stake, pks) = self.signed_by(committee);
         pks
     }
 
-    fn signed_by(&self, committee: &Committee) -> (Stake, Vec<PublicKey>) {
+    pub fn signed_by(&self, committee: &Committee) -> (Stake, Vec<PublicKey>) {
         // Ensure the certificate has a quorum.
         let mut weight = 0;
 
@@ -627,15 +595,15 @@ impl Certificate {
         let pks = committee
             .authorities()
             .enumerate()
-            .filter(|(i, (_, auth))| match auth_indexes.get(auth_iter) {
+            .filter(|(i, authority)| match auth_indexes.get(auth_iter) {
                 Some(index) if *index == *i as u32 => {
-                    weight += auth.stake;
+                    weight += authority.stake();
                     auth_iter += 1;
                     true
                 }
                 _ => false,
             })
-            .map(|(_, (pk, _))| pk.clone())
+            .map(|(_, authority)| authority.protocol_key().clone())
             .collect();
         (weight, pks)
     }
@@ -669,7 +637,8 @@ impl Certificate {
 
         // Verify the signatures
         let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(self.digest());
-        self.aggregated_signature
+        AggregateSignature::try_from(&self.aggregated_signature)
+            .map_err(|_| DagError::InvalidSignature)?
             .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
 
@@ -684,8 +653,8 @@ impl Certificate {
         self.header.epoch
     }
 
-    pub fn origin(&self) -> PublicKey {
-        self.header.author.clone()
+    pub fn origin(&self) -> AuthorityIdentifier {
+        self.header.author
     }
 }
 
@@ -762,7 +731,7 @@ impl fmt::Debug for Certificate {
             "{}: C{}({}, {}, E{})",
             self.digest(),
             self.round(),
-            self.origin().encode_base64(),
+            self.origin(),
             self.header.digest(),
             self.epoch()
         )
@@ -800,7 +769,9 @@ pub struct SendCertificateRequest {
 
 /// Response from peers after receiving a certificate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SendCertificateResponse {}
+pub struct SendCertificateResponse {
+    pub accepted: bool,
+}
 
 /// Used by the primary to request a vote from other primaries on newly produced headers.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -843,15 +814,15 @@ pub struct FetchCertificatesRequest {
     /// - rounds of certificates to be skipped from the response and
     /// - the GC round.
     /// These rounds are skipped because the requestor already has them.
-    pub skip_rounds: Vec<(PublicKeyBytes, Vec<u8>)>,
+    pub skip_rounds: Vec<(AuthorityIdentifier, Vec<u8>)>,
     /// Maximum number of certificates that should be returned.
     pub max_items: usize,
 }
 
 impl FetchCertificatesRequest {
     #[allow(clippy::mutable_key_type)]
-    pub fn get_bounds(&self) -> (Round, BTreeMap<PublicKeyBytes, BTreeSet<Round>>) {
-        let skip_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>> = self
+    pub fn get_bounds(&self) -> (Round, BTreeMap<AuthorityIdentifier, BTreeSet<Round>>) {
+        let skip_rounds: BTreeMap<AuthorityIdentifier, BTreeSet<Round>> = self
             .skip_rounds
             .iter()
             .filter_map(|(k, serialized)| {
@@ -861,7 +832,7 @@ impl FetchCertificatesRequest {
                             .into_iter()
                             .map(|r| self.exclusive_lower_bound + r as Round)
                             .collect();
-                        Some((k.clone(), rounds))
+                        Some((*k, rounds))
                     }
                     Err(e) => {
                         warn!("Failed to deserialize RoaringBitmap {e}");
@@ -877,7 +848,7 @@ impl FetchCertificatesRequest {
     pub fn set_bounds(
         mut self,
         gc_round: Round,
-        skip_rounds: BTreeMap<PublicKeyBytes, BTreeSet<Round>>,
+        skip_rounds: BTreeMap<AuthorityIdentifier, BTreeSet<Round>>,
     ) -> Self {
         self.exclusive_lower_bound = gc_round;
         self.skip_rounds = skip_rounds
@@ -932,7 +903,7 @@ impl PayloadAvailabilityResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSynchronizeMessage {
     pub digests: Vec<BatchDigest>,
-    pub target: PublicKey,
+    pub target: AuthorityIdentifier,
     // Used to indicate to the worker that it does not need to fully validate
     // the batch it receives because it is part of a certificate. Only digest
     // verification is required.

@@ -71,7 +71,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                         />
                     </DescriptionItem>
                     <DescriptionItem title="Public Key">
-                        <Text variant="p1/medium" color="gray-90">
+                        <Text variant="p1/medium" color="steel-darker">
                             {validatorPublicKey}
                         </Text>
                     </DescriptionItem>

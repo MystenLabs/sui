@@ -7,8 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
     genTableDataFromTxData,
     getDataOnTxDigests,
-    type TxnData,
-} from '~/components/transaction-card/TxCardUtils';
+} from '~/components/transactions/TxCardUtils';
 import { TableCard } from '~/ui/TableCard';
 
 export function CheckpointTransactions({
@@ -25,7 +24,7 @@ export function CheckpointTransactions({
             // todo: replace this with `sui_queryTransactions` call when we are
             // able to query by checkpoint digest
             const txData = await getDataOnTxDigests(rpc, transactions!);
-            return genTableDataFromTxData(txData as TxnData[]);
+            return genTableDataFromTxData(txData);
         },
         { enabled: !!transactions.length }
     );

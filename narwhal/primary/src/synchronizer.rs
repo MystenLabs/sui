@@ -2,13 +2,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{rpc::Status, Network, Request, Response};
-use config::{Committee, Epoch, WorkerCache};
+use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
-use crypto::{NetworkPublicKey, PublicKey};
+use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
-use mysten_common::notify_once::NotifyOnce;
+use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::spawn_monitored_task;
 use network::{
     anemo_ext::{NetworkExt, WaitingPeer},
@@ -46,9 +46,13 @@ use crate::{aggregators::CertificatesAggregator, metrics::PrimaryMetrics, CHANNE
 #[path = "tests/synchronizer_tests.rs"]
 pub mod synchronizer_tests;
 
+/// Only try to accept or suspend a certificate, if it is within this limit above the
+/// locally highest processed round.
+const NEW_CERTIFICATE_ROUND_LIMIT: Round = 100;
+
 struct Inner {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
     /// Committee of the current epoch.
     committee: Committee,
     /// The worker information cache.
@@ -161,7 +165,7 @@ impl Inner {
             .highest_processed_round
             .fetch_max(certificate.round(), Ordering::AcqRel)
             .max(certificate.round());
-        let certificate_source = if self.name.eq(&certificate.origin()) {
+        let certificate_source = if self.authority_id.eq(&certificate.origin()) {
             "own"
         } else {
             "other"
@@ -258,7 +262,7 @@ pub struct Synchronizer {
 
 impl Synchronizer {
     pub fn new(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         worker_cache: WorkerCache,
         gc_depth: Round,
@@ -275,14 +279,14 @@ impl Synchronizer {
         let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
         let highest_processed_round = certificate_store.highest_round_number();
-        let highest_created_certificate = certificate_store.last_round(&name).unwrap();
+        let highest_created_certificate = certificate_store.last_round(authority_id).unwrap();
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =
             broadcast::channel(CHANNEL_CAPACITY);
         let (tx_certificate_acceptor, mut rx_certificate_acceptor) =
             mpsc::channel(CHANNEL_CAPACITY);
         let inner = Arc::new(Inner {
-            name,
+            authority_id,
             committee: committee.clone(),
             worker_cache,
             gc_depth,
@@ -396,7 +400,7 @@ impl Synchronizer {
             let mut senders = inner_senders.certificate_senders.lock();
             for (name, _, network_key) in inner_senders
                 .committee
-                .others_primaries(&inner_senders.name)
+                .others_primaries_by_id(inner_senders.authority_id)
                 .into_iter()
             {
                 senders.spawn(Self::push_certificates(
@@ -587,7 +591,7 @@ impl Synchronizer {
             certificate.round()
         );
 
-        let certificate_source = if self.inner.name.eq(&certificate.origin()) {
+        let certificate_source = if self.inner.authority_id.eq(&certificate.origin()) {
             "own"
         } else {
             "other"
@@ -627,6 +631,20 @@ impl Synchronizer {
         self.inner.batch_tasks.lock().spawn(async move {
             Synchronizer::sync_batches_internal(inner, &header, sync_network, max_age, true).await
         });
+
+        let highest_processed_round = self.inner.highest_processed_round.load(Ordering::Acquire);
+        if highest_processed_round + NEW_CERTIFICATE_ROUND_LIMIT < certificate.round() {
+            self.inner
+                .tx_certificate_fetcher
+                .send(certificate.clone())
+                .await
+                .map_err(|_| DagError::ShuttingDown)?;
+            return Err(DagError::TooNew(
+                certificate.digest().into(),
+                certificate.round(),
+                highest_processed_round,
+            ));
+        }
 
         let (sender, receiver) = oneshot::channel();
         self.inner
@@ -726,7 +744,7 @@ impl Synchronizer {
     // TODO: move this to proposer, since this naturally follows after a certificate is created.
     async fn push_certificates(
         network: Network,
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         network_key: NetworkPublicKey,
         mut rx_own_certificate_broadcast: broadcast::Receiver<Certificate>,
     ) {
@@ -761,11 +779,11 @@ impl Synchronizer {
                     let cert = match result {
                         Ok(cert) => cert,
                         Err(broadcast::error::RecvError::Closed) => {
-                            trace!("Certificate sender {name} is shutting down!");
+                            trace!("Certificate sender {authority_id} is shutting down!");
                             return;
                         }
                         Err(broadcast::error::RecvError::Lagged(e)) => {
-                            warn!("Certificate broadcaster {name} lagging! {e}");
+                            warn!("Certificate broadcaster {authority_id} lagging! {e}");
                             // Re-run the loop to receive again.
                             continue;
                         }
@@ -830,7 +848,7 @@ impl Synchronizer {
         max_age: Round,
         is_certified: bool,
     ) -> DagResult<()> {
-        if header.author == inner.name {
+        if header.author == inner.authority_id {
             debug!("skipping sync_batches for header {header}: no need to sync payload from own workers");
             return Ok(());
         }
@@ -875,7 +893,14 @@ impl Synchronizer {
             let inner = inner.clone();
             let worker_name = inner
                 .worker_cache
-                .worker(&inner.name, &worker_id)
+                .worker(
+                    inner
+                        .committee
+                        .authority(&inner.authority_id)
+                        .unwrap()
+                        .protocol_key(),
+                    &worker_id,
+                )
                 .expect("Author of valid header is not in the worker cache")
                 .name;
             let network = network.clone();
@@ -888,7 +913,7 @@ impl Synchronizer {
                 let digests = digests.clone();
                 let message = WorkerSynchronizeMessage {
                     digests: digests.clone(),
-                    target: header.author.clone(),
+                    target: header.author,
                     is_certified,
                 };
                 let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));

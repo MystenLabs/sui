@@ -161,6 +161,15 @@ export function ValidatorStats({
                                     tooltip="Latest Narwhal round for this epoch."
                                     unavailable
                                 />
+                                <Stats
+                                    label="Next Epoch Gas Price"
+                                    tooltip="This validator's gas price quote for the next epoch."
+                                >
+                                    <DelegationAmount
+                                        amount={validatorData.nextEpochGasPrice}
+                                        isStats
+                                    />
+                                </Stats>
                             </div>
                         </div>
                     </div>

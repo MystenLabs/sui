@@ -7,8 +7,10 @@ use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
 use move_core_types::parser::parse_struct_tag;
+use move_core_types::resolver::ModuleResolver;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
@@ -17,6 +19,7 @@ use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
 use sui::client_commands::EXAMPLE_NFT_NAME;
 use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
+use sui_json_rpc::error::Error;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
@@ -205,7 +208,7 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectResponse::Exists(SuiObjectData {
+        let result = SuiObjectResponse::new_with_data(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     coin.to_object(SequenceNumber::from_u64(1)),
@@ -466,15 +469,24 @@ impl RpcExampleProvider {
             version: object_ref.1,
             digest: ObjectDigest::new(self.rng.gen()),
         };
+        struct NoOpsModuleResolver;
+        impl ModuleResolver for NoOpsModuleResolver {
+            type Error = Error;
+            fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+                Ok(None)
+            }
+        }
         let result = SuiTransactionResponse {
             digest: *tx_digest,
             effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: SuiExecutionStatus::Success,
                 executed_epoch: 0,
+                modified_at_versions: vec![],
                 gas_used: SuiGasCostSummary {
                     computation_cost: 100,
                     storage_cost: 100,
                     storage_rebate: 10,
+                    non_refundable_storage_fee: 0,
                 },
                 shared_objects: vec![],
                 transaction_digest: TransactionDigest::new(self.rng.gen()),
@@ -505,7 +517,7 @@ impl RpcExampleProvider {
             balance_changes: None,
             timestamp_ms: None,
             transaction: Some(SuiTransaction {
-                data: SuiTransactionData::try_from(data1).unwrap(),
+                data: SuiTransactionData::try_from(data1, &&mut NoOpsModuleResolver).unwrap(),
                 tx_signatures: signatures.clone(),
             }),
             raw_transaction,

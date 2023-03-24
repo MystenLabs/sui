@@ -3,16 +3,17 @@
 
 import { CoinFormat, useFormatCoin } from '@mysten/core';
 import {
-    getTransactionKindName,
-    getTransactionKind,
-    getTransactionSender,
-    SUI_TYPE_ARG,
-    getExecutionStatusType,
-    getTotalGasUsed,
     getExecutionStatusError,
-    type SuiTransactionResponse,
+    getExecutionStatusType,
     getGasData,
+    getTotalGasUsed,
     getTransactionDigest,
+    getTransactionKind,
+    getTransactionKindName,
+    getTransactionSender,
+    type ProgrammableTransaction,
+    SUI_TYPE_ARG,
+    type SuiTransactionResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -28,10 +29,11 @@ import TxLinks from './TxLinks';
 
 import styles from './TransactionResult.module.css';
 
+import { ProgrammableTransactionView } from '~/pages/transaction-result/programmable-transaction-view';
 import { Banner } from '~/ui/Banner';
 import { DateCard } from '~/ui/DateCard';
-import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
-import { ObjectLink } from '~/ui/InternalLink';
+import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
+import { CheckpointSequenceLink, ObjectLink } from '~/ui/InternalLink';
 import { PageHeader } from '~/ui/PageHeader';
 import { StatAmount } from '~/ui/StatAmount';
 import { TableHeader } from '~/ui/TableHeader';
@@ -190,16 +192,21 @@ export function TransactionView({
     const isSponsoredTransaction = gasOwner !== sender;
 
     const timestamp = transaction.timestampMs;
+    const transactionKindName = getTransactionKindName(
+        getTransactionKind(transaction)!
+    );
 
     return (
         <div className={clsx(styles.txdetailsbg)}>
-            <div className="mt-5 mb-10">
+            <div className="mb-10">
                 <PageHeader
                     type="Transaction"
                     title={getTransactionDigest(transaction)}
-                    subtitle={getTransactionKindName(
-                        getTransactionKind(transaction)!
-                    )}
+                    subtitle={
+                        transactionKindName !== 'ProgrammableTransaction'
+                            ? transactionKindName
+                            : undefined
+                    }
                     status={getExecutionStatusType(transaction)}
                 />
                 {txError && (
@@ -293,6 +300,32 @@ export function TransactionView({
                                 </div>
                             </section>
                         </div>
+
+                        {transactionKindName === 'ProgrammableTransaction' && (
+                            <ProgrammableTransactionView
+                                transaction={
+                                    transaction.transaction!.data
+                                        .transaction as ProgrammableTransaction
+                                }
+                            />
+                        )}
+
+                        {transaction.checkpoint && (
+                            <section className="py-12">
+                                <TableHeader>Checkpoint Detail</TableHeader>
+                                <div className="pt-4">
+                                    <DescriptionItem title="Checkpoint Seq. Number">
+                                        <CheckpointSequenceLink
+                                            noTruncate
+                                            sequence={String(
+                                                transaction.checkpoint
+                                            )}
+                                        />
+                                    </DescriptionItem>
+                                </div>
+                            </section>
+                        )}
+
                         <div data-testid="gas-breakdown" className="mt-8">
                             <TableHeader
                                 subText={

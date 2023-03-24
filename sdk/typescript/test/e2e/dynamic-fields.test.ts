@@ -22,7 +22,7 @@ describe('Dynamic Fields Reading API', () => {
         filter: { StructType: `${packageId}::dynamic_fields_test::Test` },
       })
       .then(function (objects) {
-        const data = objects.data[0].details as SuiObjectData;
+        const data = objects.data[0].data as SuiObjectData;
         parentObjectId = data.objectId;
       });
   });
@@ -64,6 +64,7 @@ describe('Dynamic Fields Reading API', () => {
       parentId: parentObjectId,
       name: objDofName,
     });
-    expect(dynamicObjectField.status).toEqual('Exists');
+
+    expect(dynamicObjectField).not.toEqual({});
   });
 });

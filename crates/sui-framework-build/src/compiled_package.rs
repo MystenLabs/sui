@@ -42,11 +42,11 @@ use sui_types::{
     base_types::ObjectID,
     error::{SuiError, SuiResult},
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
-use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME};
+use crate::{MOVE_STDLIB_PACKAGE_NAME, SUI_PACKAGE_NAME, SUI_SYSTEM_PACKAGE_NAME};
 
 /// Wrapper around the core Move `CompiledPackage` with some Sui-specific traits and info
 pub struct CompiledPackage {
@@ -342,8 +342,14 @@ impl CompiledPackage {
             .collect()
     }
 
+    /// Get bytecode modules from the Sui System that are used by this package
+    pub fn get_sui_system_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+        self.get_modules_and_deps()
+            .filter(|m| *m.self_id().address() == SUI_SYSTEM_ADDRESS)
+    }
+
     /// Get bytecode modules from the Sui Framework that are used by this package
-    pub fn get_framework_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+    pub fn get_sui_framework_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == SUI_FRAMEWORK_ADDRESS)
     }
@@ -360,18 +366,43 @@ impl CompiledPackage {
     // TODO: replace this with actual versioning checks instead of hacky byte-for-byte comparisons
     pub fn verify_framework_version(
         &self,
+        ext_sui_system: Vec<CompiledModule>,
         ext_sui_framework: Vec<CompiledModule>,
         ext_move_stdlib: Vec<CompiledModule>,
     ) -> SuiResult<()> {
         // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
         // compiled modules directly.
-        let ext_framework_modules = Modules::new(ext_sui_framework.iter());
-        let pkg_framework_modules: Vec<&CompiledModule> = self.get_framework_modules().collect();
+        let ext_sui_system_modules = Modules::new(ext_sui_system.iter());
+        let pkg_sui_system_modules: Vec<&CompiledModule> = self.get_sui_system_modules().collect();
+
+        // compare sui-system modules pulled as dependencies (if any - a developer may choose to use only
+        // stdlib) with sui-system modules bundled with the distribution
+        if !pkg_sui_system_modules.is_empty()
+            && ext_sui_system_modules != Modules::new(pkg_sui_system_modules)
+        {
+            return Err(SuiError::ModuleVerificationFailure {
+            error: "Sui system package version mismatch detected.\
+		    Make sure that you are using a GitHub dep in your Move.toml:\
+		    \
+                    [dependencies]
+                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-system\", rev = \"devnet\" }
+`                   \
+                    If that does not fix the issue, your `sui` binary is likely out of date--try \
+                    cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
+                .to_string(),
+        });
+        }
+
+        // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
+        // compiled modules directly.
+        let ext_sui_framework_modules = Modules::new(ext_sui_framework.iter());
+        let pkg_sui_framework_modules: Vec<&CompiledModule> =
+            self.get_sui_framework_modules().collect();
 
         // compare framework modules pulled as dependencies (if any - a developer may choose to use only
         // stdlib) with framework modules bundled with the distribution
-        if !pkg_framework_modules.is_empty()
-            && ext_framework_modules != Modules::new(pkg_framework_modules)
+        if !pkg_sui_framework_modules.is_empty()
+            && ext_sui_framework_modules != Modules::new(pkg_sui_framework_modules)
         {
             // note: this advice is overfitted to the most common failure modes we see:
             // user is trying to publish to testnet, but has a `sui` binary and Sui Framework
@@ -383,7 +414,7 @@ impl CompiledPackage {
 		    Make sure that you are using a GitHub dep in your Move.toml:\
 		    \
                     [dependencies]
-                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework\", rev = \"devnet\" }
+                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-framework\", rev = \"devnet\" }
 `                   \
                     If that does not fix the issue, your `sui` binary is likely out of date--try \
                     cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
@@ -476,9 +507,11 @@ impl CompiledPackage {
     }
 
     /// Checks whether this package corresponds to a built-in framework
-    pub fn is_framework(&self) -> bool {
+    pub fn is_system_package(&self) -> bool {
         let package_name = self.package.compiled_package_info.package_name.as_str();
-        package_name == SUI_PACKAGE_NAME || package_name == MOVE_STDLIB_PACKAGE_NAME
+        package_name == SUI_SYSTEM_PACKAGE_NAME
+            || package_name == SUI_PACKAGE_NAME
+            || package_name == MOVE_STDLIB_PACKAGE_NAME
     }
 
     /// Checks for root modules with non-zero package addresses.  Returns an arbitrary one, if one
@@ -495,6 +528,61 @@ impl CompiledPackage {
                 }
                 _ => None,
             })
+    }
+
+    pub fn verify_unpublished_dependencies(
+        &self,
+        unpublished_deps: &BTreeSet<Symbol>,
+    ) -> SuiResult<()> {
+        if unpublished_deps.is_empty() {
+            return Ok(());
+        }
+
+        let errors = self
+            .package
+            .deps_compiled_units
+            .iter()
+            .filter_map(|(p, m)| {
+                if !unpublished_deps.contains(p) {
+                    return None;
+                }
+                match &m.unit {
+                    CompiledUnitEnum::Module(m) if m.module.address() != &AccountAddress::ZERO => {
+                        Some(format!(
+                            " - {}::{} in dependency {}",
+                            m.module.address(),
+                            m.name,
+                            p
+                        ))
+                    }
+                    CompiledUnitEnum::Module(_) => None,
+                    CompiledUnitEnum::Script(_) => {
+                        unimplemented!("Scripts are not supported in Sui Move")
+                    }
+                }
+            })
+            .collect::<Vec<String>>();
+
+        if errors.is_empty() {
+            return Ok(());
+        }
+
+        let mut error_message = vec![];
+        error_message.push(
+            "The following modules in package dependencies set a non-zero self-address:".into(),
+        );
+        error_message.extend(errors);
+        error_message.push(
+            "If these packages really are unpublished, their self-addresses should be set \
+	     to \"0x0\" in the [addresses] section of the manifest when publishing. If they \
+	     are already published, ensure they specify the address in the `published-at` of \
+	     their Move.toml manifest."
+                .into(),
+        );
+
+        Err(SuiError::ModulePublishFailure {
+            error: error_message.join("\n"),
+        })
     }
 }
 
@@ -583,6 +671,18 @@ pub fn gather_dependencies(resolution_graph: &ResolvedGraph) -> PackageDependenc
         unpublished,
         invalid,
     }
+}
+
+pub fn root_published_at(resolution_graph: &ResolvedGraph) -> Option<ObjectID> {
+    let published_at = resolution_graph
+        .package_table
+        .get(&resolution_graph.graph.root_package)
+        .unwrap()
+        .source_package
+        .package
+        .custom_properties
+        .get(&Symbol::from(PUBLISHED_AT_MANIFEST_FIELD))?;
+    ObjectID::from_str(published_at.as_str()).ok()
 }
 
 pub fn check_unpublished_dependencies(unpublished: &BTreeSet<Symbol>) -> Result<(), SuiError> {

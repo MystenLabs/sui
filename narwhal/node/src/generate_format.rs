@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
+use config::{CommitteeBuilder, Epoch, WorkerIndex, WorkerInfo};
 use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
     hash::Hash,
@@ -16,6 +16,7 @@ use types::{
     WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
+#[allow(clippy::mutable_key_type)]
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(TracerConfig::default());
     let mut samples = Samples::new();
@@ -44,34 +45,29 @@ fn get_registry() -> Result<Registry> {
     let signature = kp.sign(msg);
     tracer.trace_value(&mut samples, &signature)?;
 
-    let committee = Committee {
-        epoch: Epoch::default(),
-        authorities: keys
-            .iter()
-            .zip(network_keys.iter())
-            .enumerate()
-            .map(|(i, (kp, network_key))| {
-                let id = kp.public();
-                let primary_address: Multiaddr =
-                    format!("/ip4/127.0.0.1/udp/{}", 100 + i).parse().unwrap();
-                (
-                    id.clone(),
-                    Authority {
-                        stake: 1,
-                        primary_address,
-                        network_key: network_key.public().clone(),
-                    },
-                )
-            })
-            .collect(),
-    };
+    let mut committee_builder = CommitteeBuilder::new(Epoch::default());
+    for (i, (kp, network_key)) in keys.iter().zip(network_keys.iter()).enumerate() {
+        let primary_address: Multiaddr = format!("/ip4/127.0.0.1/udp/{}", 100 + i).parse().unwrap();
+
+        committee_builder = committee_builder.add_authority(
+            kp.public().clone(),
+            1,
+            primary_address,
+            network_key.public().clone(),
+        );
+    }
+
+    let committee = committee_builder.build();
 
     let certificates: Vec<Certificate> = Certificate::genesis(&committee);
+
+    // Find the author id inside the committee
+    let authority = committee.authority_by_key(kp.public()).unwrap();
 
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
     let header_builder = HeaderBuilder::default();
     let header = header_builder
-        .author(kp.public().clone())
+        .author(authority.id())
         .epoch(0)
         .created_at(0)
         .round(1)
@@ -87,9 +83,12 @@ fn get_registry() -> Result<Registry> {
     let worker_pk = network_keys[0].public().clone();
     let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
     let signature = keys[0].sign(certificate.digest().as_ref());
-    let certificate =
-        Certificate::new_unsigned(&committee, header.clone(), vec![(pk.clone(), signature)])
-            .unwrap();
+    let certificate = Certificate::new_unsigned(
+        &committee,
+        header.clone(),
+        vec![(authority.id(), signature)],
+    )
+    .unwrap();
 
     tracer.trace_value(&mut samples, &header)?;
     tracer.trace_value(&mut samples, &certificate)?;
@@ -121,7 +120,7 @@ fn get_registry() -> Result<Registry> {
     };
     let sync = WorkerSynchronizeMessage {
         digests: vec![BatchDigest([0u8; 32])],
-        target: pk,
+        target: authority.id(),
         is_certified: true,
     };
 

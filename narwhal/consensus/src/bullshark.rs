@@ -6,8 +6,7 @@ use crate::{
     consensus::{ConsensusProtocol, ConsensusState, Dag},
     utils, ConsensusError, Outcome,
 };
-use config::{Committee, Stake};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use std::sync::Arc;
 use tokio::time::Instant;
@@ -123,7 +122,7 @@ impl ConsensusProtocol for Bullshark {
             .expect("We should have the whole history by now")
             .values()
             .filter(|(_, x)| x.header.parents.contains(leader_digest))
-            .map(|(_, x)| self.committee.stake(&x.origin()))
+            .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
         self.last_leader_election = LastRound {
@@ -224,7 +223,7 @@ impl ConsensusProtocol for Bullshark {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name.to_string(), round);
+            debug!("Latest commit of {}: Round {}", name, round);
         }
 
         self.metrics
@@ -257,7 +256,7 @@ impl Bullshark {
     // Returns the PublicKey of the authority which is the leader for the provided `round`.
     // Pay attention that this method will return always the first authority as the leader
     // when used under a test environment.
-    pub fn leader_authority(committee: &Committee, round: Round) -> PublicKey {
+    pub fn leader_authority(committee: &Committee, round: Round) -> AuthorityIdentifier {
         assert_eq!(
             round % 2,
             0,
@@ -271,13 +270,13 @@ impl Bullshark {
                 // we can always divide by 2 to get a monotonically incremented sequence,
                 // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
                 // start with base zero 0.
-                let next_leader = (round/2 - 1) as usize % committee.authorities.len();
-                let authorities = committee.authorities.iter().collect::<Vec<_>>();
+                let next_leader = (round/2 - 1) as usize % committee.size();
+                let authorities = committee.authorities().collect::<Vec<_>>();
 
-                authorities.get(next_leader).unwrap().0.clone()
+                authorities.get(next_leader).unwrap().id()
             } else {
                 // Elect the leader in a stake-weighted choice seeded by the round
-                committee.leader(round)
+                committee.leader(round).id()
             }
         }
     }
@@ -341,7 +340,7 @@ impl Bullshark {
         // when score is zero.
         assert_eq!(
             state.last_consensus_reputation_score.total_authorities() as usize,
-            self.committee.authorities.len()
+            self.committee.size()
         );
 
         state.last_consensus_reputation_score.clone()

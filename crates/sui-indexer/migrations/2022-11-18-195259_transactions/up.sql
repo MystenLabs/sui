@@ -19,6 +19,7 @@ CREATE TABLE transactions (
     checkpoint_sequence_number  BIGINT       NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,
     transaction_kind            TEXT         NOT NULL,
+    command_count               BIGINT       NOT NULL,
     -- object related
     created                     TEXT[]       NOT NULL,
     mutated                     TEXT[]       NOT NULL,

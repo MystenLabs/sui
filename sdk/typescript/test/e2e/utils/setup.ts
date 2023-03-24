@@ -21,9 +21,9 @@ import {
   SuiAddress,
   ObjectId,
   normalizeSuiObjectId,
+  FaucetRateLimitError,
 } from '../../../src';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError } from '../../../src/rpc/faucet-client';
 
 const TEST_ENDPOINTS = localnetConnection;
 const DEFAULT_FAUCET_URL =
@@ -193,7 +193,7 @@ export async function paySui(
     ).data[0].coinObjectId;
 
   recipients.forEach((recipient, i) => {
-    const coin = tx.splitCoin(tx.object(coinId!), tx.pure(amounts![i]));
+    const coin = tx.splitCoins(tx.object(coinId!), [tx.pure(amounts![i])]);
     tx.transferObjects([coin], tx.pure(recipient));
   });
 

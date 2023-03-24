@@ -3,24 +3,29 @@
 
 use std::fmt::{self, Display, Formatter, Write};
 
-use enum_dispatch::enum_dispatch;
 use fastcrypto::encoding::Base64;
+use move_binary_format::access::ModuleAccess;
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::TypeTag;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use move_core_types::identifier::IdentStr;
+use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::value::MoveTypeLayout;
 use serde_with::{serde_as, DisplayFromStr};
 
-use sui_json::SuiJsonValue;
+use enum_dispatch::enum_dispatch;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use sui_types::digests::TransactionEventsDigest;
+use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages::{
-    Argument, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
-    InputObjectKind, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
+    Argument, CallArg, Command, ExecuteTransactionRequestType, ExecutionStatus, GenesisObject,
+    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
     TransactionData, TransactionDataAPI, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, TransactionKind, VersionedProtocolMessage,
 };
@@ -30,6 +35,7 @@ use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
+use sui_types::storage::{DeleteKind, WriteKind};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -227,6 +233,10 @@ impl SuiTransactionResponse {
             ..Default::default()
         }
     }
+
+    pub fn status_ok(&self) -> Option<bool> {
+        self.effects.as_ref().map(|e| e.status().is_ok())
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -288,10 +298,8 @@ impl Display for SuiTransactionKind {
     }
 }
 
-impl TryFrom<TransactionKind> for SuiTransactionKind {
-    type Error = anyhow::Error;
-
-    fn try_from(tx: TransactionKind) -> Result<Self, Self::Error> {
+impl SuiTransactionKind {
+    fn try_from(tx: TransactionKind, module_cache: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match tx {
             TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
                 epoch: e.epoch,
@@ -310,10 +318,17 @@ impl TryFrom<TransactionKind> for SuiTransactionKind {
                     commit_timestamp_ms: p.commit_timestamp_ms,
                 })
             }
-            TransactionKind::ProgrammableTransaction(p) => {
-                Self::ProgrammableTransaction(p.try_into()?)
-            }
+            TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
+                SuiProgrammableTransaction::try_from(p, module_cache)?,
+            ),
         })
+    }
+
+    pub fn command_count(&self) -> usize {
+        match self {
+            Self::ProgrammableTransaction(p) => p.commands.len(),
+            _ => 1,
+        }
     }
 }
 
@@ -353,10 +368,23 @@ pub trait SuiTransactionEffectsAPI {
     fn dependencies(&self) -> &[TransactionDigest];
     fn executed_epoch(&self) -> EpochId;
     fn transaction_digest(&self) -> &TransactionDigest;
-    fn gas_used(&self) -> &SuiGasCostSummary;
+    fn gas_cost_summary(&self) -> &SuiGasCostSummary;
 
     /// Return an iterator of mutated objects, but excluding the gas object.
     fn mutated_excluding_gas(&self) -> Vec<OwnedObjectRef>;
+    fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+    fn all_changed_objects(&self) -> Vec<(&OwnedObjectRef, WriteKind)>;
+    fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)>;
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    rename = "TransactionEffectsModifiedAtVersions",
+    rename_all = "camelCase"
+)]
+pub struct SuiTransactionEffectsModifiedAtVersions {
+    object_id: ObjectID,
+    sequence_number: SequenceNumber,
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -368,6 +396,10 @@ pub struct SuiTransactionEffectsV1 {
     /// The epoch when this transaction was executed.
     pub executed_epoch: EpochId,
     pub gas_used: SuiGasCostSummary,
+    /// The version that every modified (mutated or deleted) object had before it was modified by
+    /// this transaction.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modified_at_versions: Vec<SuiTransactionEffectsModifiedAtVersions>,
     /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shared_objects: Vec<SuiObjectRef>,
@@ -451,7 +483,7 @@ impl SuiTransactionEffectsAPI for SuiTransactionEffectsV1 {
         &self.transaction_digest
     }
 
-    fn gas_used(&self) -> &SuiGasCostSummary {
+    fn gas_cost_summary(&self) -> &SuiGasCostSummary {
         &self.gas_used
     }
 
@@ -460,6 +492,43 @@ impl SuiTransactionEffectsAPI for SuiTransactionEffectsV1 {
             .iter()
             .filter(|o| *o != &self.gas_object)
             .cloned()
+            .collect()
+    }
+
+    fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
+        self.modified_at_versions
+            .iter()
+            .map(|v| (v.object_id, v.sequence_number))
+            .collect::<Vec<_>>()
+    }
+
+    fn all_changed_objects(&self) -> Vec<(&OwnedObjectRef, WriteKind)> {
+        self.mutated
+            .iter()
+            .map(|owner_ref| (owner_ref, WriteKind::Mutate))
+            .chain(
+                self.created
+                    .iter()
+                    .map(|owner_ref| (owner_ref, WriteKind::Create)),
+            )
+            .chain(
+                self.unwrapped
+                    .iter()
+                    .map(|owner_ref| (owner_ref, WriteKind::Unwrap)),
+            )
+            .collect()
+    }
+
+    fn all_deleted_objects(&self) -> Vec<(&SuiObjectRef, DeleteKind)> {
+        self.deleted
+            .iter()
+            .map(|r| (r, DeleteKind::Normal))
+            .chain(
+                self.unwrapped_then_deleted
+                    .iter()
+                    .map(|r| (r, DeleteKind::UnwrapThenDelete)),
+            )
+            .chain(self.wrapped.iter().map(|r| (r, DeleteKind::Wrap)))
             .collect()
     }
 }
@@ -478,6 +547,17 @@ impl TryFrom<TransactionEffects> for SuiTransactionEffects {
             1 => Ok(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: effect.status().clone().into(),
                 executed_epoch: effect.executed_epoch(),
+                modified_at_versions: effect
+                    .modified_at_versions()
+                    .iter()
+                    .copied()
+                    .map(
+                        |(object_id, sequence_number)| SuiTransactionEffectsModifiedAtVersions {
+                            object_id,
+                            sequence_number,
+                        },
+                    )
+                    .collect(),
                 gas_used: effect.gas_cost_summary().clone().into(),
                 shared_objects: to_sui_object_ref(effect.shared_objects().to_vec()),
                 transaction_digest: *effect.transaction_digest(),
@@ -730,6 +810,7 @@ pub struct SuiGasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,
     pub storage_rebate: u64,
+    pub non_refundable_storage_fee: u64,
 }
 
 impl From<GasCostSummary> for SuiGasCostSummary {
@@ -738,6 +819,18 @@ impl From<GasCostSummary> for SuiGasCostSummary {
             computation_cost: s.computation_cost,
             storage_cost: s.storage_cost,
             storage_rebate: s.storage_rebate,
+            non_refundable_storage_fee: s.non_refundable_storage_fee,
+        }
+    }
+}
+
+impl From<SuiGasCostSummary> for GasCostSummary {
+    fn from(s: SuiGasCostSummary) -> Self {
+        Self {
+            computation_cost: s.computation_cost,
+            storage_cost: s.storage_cost,
+            storage_rebate: s.storage_rebate,
+            non_refundable_storage_fee: s.non_refundable_storage_fee,
         }
     }
 }
@@ -826,10 +919,11 @@ impl Display for SuiTransactionData {
     }
 }
 
-impl TryFrom<TransactionData> for SuiTransactionData {
-    type Error = anyhow::Error;
-
-    fn try_from(data: TransactionData) -> Result<Self, Self::Error> {
+impl SuiTransactionData {
+    pub fn try_from(
+        data: TransactionData,
+        module_cache: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
         let message_version = data
             .message_version()
             .expect("TransactionData defines message_version()");
@@ -844,7 +938,7 @@ impl TryFrom<TransactionData> for SuiTransactionData {
             price: data.gas_price(),
             budget: data.gas_budget(),
         };
-        let transaction = data.into_kind().try_into()?;
+        let transaction = SuiTransactionKind::try_from(data.into_kind(), module_cache)?;
         match message_version {
             1 => Ok(SuiTransactionData::V1(SuiTransactionDataV1 {
                 transaction,
@@ -866,12 +960,13 @@ pub struct SuiTransaction {
     pub tx_signatures: Vec<GenericSignature>,
 }
 
-impl TryFrom<SenderSignedData> for SuiTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(data: SenderSignedData) -> Result<Self, Self::Error> {
+impl SuiTransaction {
+    pub fn try_from(
+        data: SenderSignedData,
+        module_cache: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            data: data.intent_message().value.clone().try_into()?,
+            data: SuiTransactionData::try_from(data.intent_message().value.clone(), module_cache)?,
             tx_signatures: data.tx_signatures().to_vec(),
         })
     }
@@ -933,7 +1028,7 @@ pub enum SuiInputObjectKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiProgrammableTransaction {
     /// Input objects or primitive values
-    pub inputs: Vec<SuiJsonValue>,
+    pub inputs: Vec<SuiCallArg>,
     /// The commands to be executed sequentially. A failure in any command will
     /// result in the failure of the entire transaction.
     pub commands: Vec<SuiCommand>,
@@ -951,18 +1046,82 @@ impl Display for SuiProgrammableTransaction {
     }
 }
 
-impl TryFrom<ProgrammableTransaction> for SuiProgrammableTransaction {
-    type Error = anyhow::Error;
-
-    fn try_from(value: ProgrammableTransaction) -> Result<Self, Self::Error> {
+impl SuiProgrammableTransaction {
+    fn try_from(
+        value: ProgrammableTransaction,
+        module_cache: &impl GetModule,
+    ) -> Result<Self, anyhow::Error> {
         let ProgrammableTransaction { inputs, commands } = value;
+        let input_types = Self::resolve_input_type(&inputs, &commands, module_cache);
         Ok(SuiProgrammableTransaction {
             inputs: inputs
                 .into_iter()
-                .map(|arg| arg.try_into())
+                .zip(input_types)
+                .map(|(arg, layout)| SuiCallArg::try_from(arg, layout.as_ref()))
                 .collect::<Result<_, _>>()?,
             commands: commands.into_iter().map(SuiCommand::from).collect(),
         })
+    }
+
+    fn resolve_input_type(
+        inputs: &Vec<CallArg>,
+        commands: &[Command],
+        module_cache: &impl GetModule,
+    ) -> Vec<Option<MoveTypeLayout>> {
+        let mut result_types = vec![None; inputs.len()];
+        for command in commands.iter() {
+            match command {
+                Command::MoveCall(c) => {
+                    let id = ModuleId::new(c.package.into(), c.module.clone());
+                    let Some(types) = get_signature_types(id, c.function.as_ident_str(), module_cache) else {
+                        return result_types;
+                    };
+                    for (arg, type_) in c.arguments.iter().zip(types) {
+                        if let &Argument::Input(i) = arg {
+                            result_types[i as usize] = type_;
+                        }
+                    }
+                }
+                Command::SplitCoins(_, amounts) => {
+                    for arg in amounts {
+                        if let &Argument::Input(i) = arg {
+                            result_types[i as usize] = Some(MoveTypeLayout::U64);
+                        }
+                    }
+                }
+                Command::TransferObjects(_, Argument::Input(i)) => {
+                    result_types[(*i) as usize] = Some(MoveTypeLayout::Address);
+                }
+                _ => {}
+            }
+        }
+        result_types
+    }
+}
+
+fn get_signature_types(
+    id: ModuleId,
+    function: &IdentStr,
+    module_cache: &impl GetModule,
+) -> Option<Vec<Option<MoveTypeLayout>>> {
+    use std::borrow::Borrow;
+    if let Ok(Some(module)) = module_cache.get_module_by_id(&id) {
+        let module: &CompiledModule = module.borrow();
+        let view = BinaryIndexedView::Module(module);
+        let func = module
+            .function_handles
+            .iter()
+            .find(|f| module.identifier_at(f.name) == function)?;
+        Some(
+            module
+                .signature_at(func.parameters)
+                .0
+                .iter()
+                .map(|s| primitive_type(&view, &[], s).1)
+                .collect(),
+        )
+    } else {
+        None
     }
 }
 
@@ -976,9 +1135,9 @@ pub enum SuiCommand {
     /// (public transfer) and either the previous owner must be an address or the object must
     /// be newly created.
     TransferObjects(Vec<SuiArgument>, SuiArgument),
-    /// `(&mut Coin<T>, u64)` -> `Coin<T>`
-    /// It splits off some amount into a new coin
-    SplitCoin(SuiArgument, SuiArgument),
+    /// `(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>`
+    /// It splits off some amounts into a new coins with those amounts
+    SplitCoins(SuiArgument, Vec<SuiArgument>),
     /// `(&mut Coin<T>, Vec<Coin<T>>)`
     /// It merges n-coins into the first coin
     MergeCoins(SuiArgument, Vec<SuiArgument>),
@@ -1015,7 +1174,11 @@ impl Display for SuiCommand {
                 write_sep(f, objs, ",")?;
                 write!(f, "],{addr})")
             }
-            Self::SplitCoin(coin, amount) => write!(f, "SplitCoin({coin},{amount})"),
+            Self::SplitCoins(coin, amounts) => {
+                write!(f, "SplitCoins({coin},")?;
+                write_sep(f, amounts, ",")?;
+                write!(f, ")")
+            }
             Self::MergeCoins(target, coins) => {
                 write!(f, "MergeCoins({target},")?;
                 write_sep(f, coins, ",")?;
@@ -1045,7 +1208,10 @@ impl From<Command> for SuiCommand {
                 args.into_iter().map(SuiArgument::from).collect(),
                 arg.into(),
             ),
-            Command::SplitCoin(a1, a2) => SuiCommand::SplitCoin(a1.into(), a2.into()),
+            Command::SplitCoins(arg, args) => SuiCommand::SplitCoins(
+                arg.into(),
+                args.into_iter().map(SuiArgument::from).collect(),
+            ),
             Command::MergeCoins(arg, args) => SuiCommand::MergeCoins(
                 arg.into(),
                 args.into_iter().map(SuiArgument::from).collect(),
@@ -1287,4 +1453,90 @@ impl TransactionBytes {
 pub struct OwnedObjectRef {
     pub owner: Owner,
     pub reference: SuiObjectRef,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum SuiCallArg {
+    // Needs to become an Object Ref or Object ID, depending on object type
+    Object(SuiObjectArg),
+    // pure value, bcs encoded
+    Pure(SuiPureValue),
+}
+
+impl SuiCallArg {
+    pub fn try_from(
+        value: CallArg,
+        layout: Option<&MoveTypeLayout>,
+    ) -> Result<Self, anyhow::Error> {
+        Ok(match value {
+            CallArg::Pure(p) => SuiCallArg::Pure(SuiPureValue {
+                value_type: layout.map(|l| l.try_into()).transpose()?,
+                value: SuiJsonValue::from_bcs_bytes(layout, &p)?,
+            }),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, digest))) => {
+                SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject {
+                    object_id: id,
+                    version,
+                    digest,
+                })
+            }
+            CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => SuiCallArg::Object(SuiObjectArg::SharedObject {
+                object_id: id,
+                initial_shared_version,
+                mutable,
+            }),
+        })
+    }
+
+    pub fn pure(&self) -> Option<&SuiJsonValue> {
+        match self {
+            SuiCallArg::Pure(v) => Some(&v.value),
+            _ => None,
+        }
+    }
+
+    pub fn object(&self) -> Option<&ObjectID> {
+        match self {
+            SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. })
+            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
+                Some(object_id)
+            }
+            _ => None,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiPureValue {
+    #[schemars(with = "Option<String>")]
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    value_type: Option<TypeTag>,
+    value: SuiJsonValue,
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "objectType", rename_all = "camelCase")]
+pub enum SuiObjectArg {
+    // A Move object, either immutable, or owned mutable.
+    #[serde(rename_all = "camelCase")]
+    ImmOrOwnedObject {
+        object_id: ObjectID,
+        version: SequenceNumber,
+        digest: ObjectDigest,
+    },
+    // A Move object that's shared.
+    // SharedObject::mutable controls whether caller asks for a mutable reference to shared object.
+    #[serde(rename_all = "camelCase")]
+    SharedObject {
+        object_id: ObjectID,
+        initial_shared_version: SequenceNumber,
+        mutable: bool,
+    },
 }

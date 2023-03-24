@@ -49,6 +49,8 @@ impl Ceremony {
 pub enum CeremonyCommand {
     Init,
 
+    ValidateState,
+
     AddValidator {
         #[clap(long)]
         name: String,
@@ -116,6 +118,11 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             builder.save(dir)?;
         }
 
+        CeremonyCommand::ValidateState => {
+            let builder = Builder::load(&dir)?;
+            builder.validate()?;
+        }
+
         CeremonyCommand::AddValidator {
             name,
             validator_key_file,
@@ -141,7 +148,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     name,
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
-                    account_key: account_keypair.public(),
+                    account_address: SuiAddress::from(&account_keypair.public()),
                     network_key: network_keypair.public().clone(),
                     gas_price: 1,
                     commission_rate: 0,
@@ -276,7 +283,7 @@ mod test {
                     name: format!("validator-{i}"),
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().clone(),
-                    account_key: account_keypair.public().clone().into(),
+                    account_address: SuiAddress::from(account_keypair.public()),
                     network_key: network_keypair.public().clone(),
                     gas_price: 1,
                     commission_rate: 0,
@@ -344,6 +351,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Build the unsigned checkpoint
@@ -364,6 +378,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Finalize the Ceremony and build the Genesis object

@@ -97,6 +97,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
                 computation_cost: checkpoint.total_computation_cost as u64,
                 storage_cost: checkpoint.total_storage_cost as u64,
                 storage_rebate: checkpoint.total_storage_rebate as u64,
+                non_refundable_storage_fee: 0,
             },
             network_total_transactions: checkpoint.total_transactions_from_genesis as u64,
             timestamp_ms: checkpoint.timestamp_ms as u64,

@@ -26,7 +26,7 @@ pub fn process_certificates(c: &mut Criterion) {
 
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
     for size in &BATCH_SIZES {
         let gc_depth = 12;

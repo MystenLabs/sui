@@ -228,19 +228,27 @@ where
         command_kind: CommandKind<'_>,
         arg: Argument,
     ) -> Result<V, CommandArgumentError> {
-        if matches!(arg, Argument::GasCoin) && !matches!(command_kind, CommandKind::TransferObjects)
-        {
-            return Err(CommandArgumentError::InvalidGasCoinUsage);
-        }
-        if self.arg_is_borrowed(&arg) {
-            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
-        }
+        let is_borrowed = self.arg_is_borrowed(&arg);
         let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
         let is_copyable = if let Some(val) = val_opt {
             val.is_copyable()
         } else {
-            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
+            return Err(CommandArgumentError::InvalidValueUsage);
         };
+        // If it was taken, we catch this above.
+        // If it was not copyable and was borrowed, error as it creates a dangling reference in
+        // effect.
+        // We allow copyable values to be copied out even if borrowed, as we do not care about
+        // referential transparency at this level.
+        if !is_copyable && is_borrowed {
+            return Err(CommandArgumentError::InvalidValueUsage);
+        }
+        // Gas coin cannot be taken by value, except in TransferObjects
+        if matches!(arg, Argument::GasCoin) && !matches!(command_kind, CommandKind::TransferObjects)
+        {
+            return Err(CommandArgumentError::InvalidGasCoinUsage);
+        }
+        // Immutable objects and shared objects cannot be taken by value
         if matches!(
             input_metadata_opt,
             Some(InputObjectMetadata {
@@ -275,18 +283,29 @@ where
         &mut self,
         arg: Argument,
     ) -> Result<V, CommandArgumentError> {
+        // mutable borrowing requires unique usage
         if self.arg_is_borrowed(&arg) {
-            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
+            return Err(CommandArgumentError::InvalidValueUsage);
         }
         self.borrowed.insert(arg, /* is_mut */ true);
         let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
-        if val_opt.is_none() {
-            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
-        }
+        let is_copyable = if let Some(val) = val_opt {
+            val.is_copyable()
+        } else {
+            // error if taken
+            return Err(CommandArgumentError::InvalidValueUsage);
+        };
         if input_metadata_opt.is_some() && !input_metadata_opt.unwrap().is_mutable_input {
             return Err(CommandArgumentError::InvalidObjectByMutRef);
         }
-        V::try_from_value(val_opt.take().unwrap())
+        // if it is copyable, don't take it as we allow for the value to be copied even if
+        // mutably borrowed
+        let val = if is_copyable {
+            val_opt.as_ref().unwrap().clone()
+        } else {
+            val_opt.take().unwrap()
+        };
+        V::try_from_value(val)
     }
 
     /// Mimics an immutable borrow by cloning the argument value without setting its value to None
@@ -301,13 +320,16 @@ where
             .map_err(|e| command_argument_error(e, arg_idx))
     }
     fn borrow_arg_<V: TryFromValue>(&mut self, arg: Argument) -> Result<V, CommandArgumentError> {
+        // immutable borrowing requires the value was not mutably borrowed.
+        // If it was copied, that is okay.
+        // If it was taken/moved, we will find out below
         if self.arg_is_mut_borrowed(&arg) {
-            return Err(CommandArgumentError::InvalidUsageOfBorrowedValue);
+            return Err(CommandArgumentError::InvalidValueUsage);
         }
         self.borrowed.insert(arg, /* is_mut */ false);
         let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
         if val_opt.is_none() {
-            return Err(CommandArgumentError::InvalidUsageOfTakenValue);
+            return Err(CommandArgumentError::InvalidValueUsage);
         }
         V::try_from_value(val_opt.as_ref().unwrap().clone())
     }
@@ -332,8 +354,8 @@ where
         };
         let old_value = value_opt.replace(value);
         assert_invariant!(
-            old_value.is_none(),
-            "Should never restore a non-taken value. \
+            old_value.is_none() || old_value.unwrap().is_copyable(),
+            "Should never restore a non-taken value, unless it is copyable. \
             The take+restore is an implementation detail of mutable references"
         );
         Ok(())
@@ -476,12 +498,17 @@ where
                             //   the last usage must be by value in order to "lie" and say that the
                             //   last usage is actually a take instead of a clone
                             // - Otherwise, an error
-                            if abilities.has_drop() {
-                            } else if abilities.has_copy()
-                                && !matches!(last_usage_kind, Some(UsageKind::ByValue))
+                            if abilities.has_drop()
+                                || (abilities.has_copy()
+                                    && matches!(last_usage_kind, Some(UsageKind::ByValue)))
                             {
-                                let msg = "The value has copy, but not drop. \
-                                Its last usage must be by-value so it can be taken.";
+                            } else {
+                                let msg = if abilities.has_copy() {
+                                    "The value has copy, but not drop. \
+                                    Its last usage must be by-value so it can be taken."
+                                } else {
+                                    "Unused value without drop"
+                                };
                                 return Err(ExecutionError::new_with_source(
                                     ExecutionErrorKind::UnusedValueWithoutDrop {
                                         result_idx: i as u16,

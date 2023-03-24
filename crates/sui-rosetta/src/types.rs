@@ -25,7 +25,7 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::{
-    SUI_FRAMEWORK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 
 use crate::errors::{Error, ErrorType};
@@ -893,12 +893,12 @@ impl InternalOperation {
                     let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
                     (validator, state, amount)
                 };
-                let coin = builder.command(Command::SplitCoin(Argument::GasCoin, amount));
+                let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
 
                 let arguments = vec![system_state, coin, validator];
 
                 builder.command(Command::move_call(
-                    SUI_FRAMEWORK_OBJECT_ID,
+                    SUI_SYSTEM_PACKAGE_ID,
                     SUI_SYSTEM_MODULE_NAME.to_owned(),
                     ADD_STAKE_FUN_NAME.to_owned(),
                     vec![],
@@ -929,7 +929,7 @@ impl InternalOperation {
 
                     let arguments = vec![system_state, id];
                     builder.command(Command::move_call(
-                        SUI_FRAMEWORK_OBJECT_ID,
+                        SUI_SYSTEM_PACKAGE_ID,
                         SUI_SYSTEM_MODULE_NAME.to_owned(),
                         WITHDRAW_STAKE_FUN_NAME.to_owned(),
                         vec![],

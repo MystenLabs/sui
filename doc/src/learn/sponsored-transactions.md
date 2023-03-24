@@ -11,16 +11,6 @@ You can use Sui Sponsored transactions to:
  * Sponsor transactions you initiate as the sponsor.
  * Provide a wildcard GasData object to users. The object covers the gas fees for a user transaction. The GasData object covers any fee amount determined for the transaction as long as the budget is sufficient.
 
-## Considerations for Sponsored Transactions
-
-Before you implement or agree to a sponsored transaction, you should consider the following information.
-In a sponsored transaction, the sponsor’s gas object covers fees for the transaction. This is contrary to certain types of Sui transaction types in which the gas object itself also transfers. As a result, Sui does not support sponsoring the following Sui transaction types:
- * [TransferSui](https://docs.sui.io/sui-jsonrpc#sui_transferSui)
- * [PaySui](https://docs.sui.io/sui-jsonrpc#sui_paySui)
- * [PayAllSui](https://docs.sui.io/sui-jsonrpc#sui_payAllSui)
-
- Also note that you can’t use Sponsored Transaction with `BatchTransaction`, which will be deprecated in a future release.
-
 ## Potential Risks Using Sponsored Transactions
 
 The most significant potential risk when using sponsored transactions is [equivocation](../learn/sui-glossary#equivocation). In some cases under certain conditions, a sponsored transaction can result in all associated owned objects, including gas in a locked state when examined by Sui validators. To avoid double spending, validators lock objects as they validate transactions. An equivocation occurs when an owned object’s pair (`ObjectID`, `SequenceNumber`) is concurrently used in multiple non-finalized transactions.
@@ -54,8 +44,7 @@ pub struct GasLessTransactionData {
 ## Create a sponsor-initiated sponsored transaction  
 
 A sponsor-initiated sponsored transaction involves the following steps:
- 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. 
- You can send the unsigned `TransactionData` via email, SMS, or an application interface.
+ 1. A sponsor constructs a `TransactionData` object that contains the transaction details and associated gas fee data. The sponsor signs it to generate a `Signature` before sending it to a user. You can send the unsigned `TransactionData` via email, SMS, or an application interface.
  1. The user checks the transaction and signs it to generate the second `Signature` for the transaction.
  1. The user submits the dual-signed transaction to a Sui Full node or sponsor to execute it.
 

@@ -16,11 +16,13 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod event_handler;
 mod execution_driver;
+mod math;
 pub mod metrics;
 pub mod module_cache_metrics;
 pub mod narwhal_manager;
 pub mod quorum_driver;
 pub mod safe_client;
+mod scoring_decision;
 mod stake_aggregator;
 pub mod state_accumulator;
 pub mod storage;
@@ -41,6 +43,6 @@ mod move_package_upgrade_tests;
 mod pay_sui_tests;
 pub mod test_authority_clients;
 
-pub mod batch_bls_verifier;
+pub mod signature_verifier;
 
 pub const SUI_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");

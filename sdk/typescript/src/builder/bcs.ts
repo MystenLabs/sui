@@ -66,7 +66,7 @@ export const builder = new BCS(bcs)
     /**
      * Split `amount` from a `coin`.
      */
-    SplitCoin: { coin: ARGUMENT, amount: ARGUMENT },
+    SplitCoins: { coin: ARGUMENT, amounts: [VECTOR, ARGUMENT] },
     /**
      * Merge Vector of Coins (`sources`) into a `destination`.
      */

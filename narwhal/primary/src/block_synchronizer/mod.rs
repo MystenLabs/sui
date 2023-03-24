@@ -9,9 +9,9 @@ use crate::{
 };
 use anemo::PeerId;
 use anyhow::anyhow;
-use config::{Committee, Parameters, WorkerCache, WorkerId};
+use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::traits::ToFromBytes;
-use crypto::{NetworkPublicKey, PublicKey};
+use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash;
 use futures::{
     future::{join_all, BoxFuture},
@@ -145,8 +145,8 @@ impl PendingIdentifier {
 }
 
 pub struct BlockSynchronizer {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
 
     /// The committee information.
     committee: Committee,
@@ -185,7 +185,7 @@ pub struct BlockSynchronizer {
 impl BlockSynchronizer {
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         committee: Committee,
         worker_cache: WorkerCache,
         rx_shutdown: ConditionalBroadcastReceiver,
@@ -199,7 +199,7 @@ impl BlockSynchronizer {
             async move {
                 let _ = &parameters;
                 Self {
-                    name,
+                    authority_id,
                     committee,
                     worker_cache,
                     rx_shutdown,
@@ -237,7 +237,7 @@ impl BlockSynchronizer {
 
         info!(
             "BlockSynchronizer on node {} has started successfully.",
-            self.name
+            self.authority_id
         );
         loop {
             tokio::select! {
@@ -381,7 +381,7 @@ impl BlockSynchronizer {
         };
         let primaries: Vec<_> = self
             .committee
-            .others_primaries(&self.name)
+            .others_primaries_by_id(self.authority_id)
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
@@ -441,7 +441,7 @@ impl BlockSynchronizer {
         // Create a future to broadcast certificate requests.
         let network_keys: Vec<_> = self
             .committee
-            .others_primaries(&self.name)
+            .others_primaries_by_id(self.authority_id)
             .into_iter()
             .map(|(_name, _address, network_key)| network_key)
             .collect();
@@ -536,7 +536,7 @@ impl BlockSynchronizer {
                 .map(|(batch, (worker_id, _))| (batch, worker_id))
                 .collect();
 
-            let payload_available = if certificate.header.author == self.name {
+            let payload_available = if certificate.header.author == self.authority_id {
                 trace!(
                     "Certificate with id {} is our own, no need to check in storage.",
                     certificate.digest()
@@ -593,7 +593,7 @@ impl BlockSynchronizer {
 
         for peer in peers.peers().values() {
             let target = match self.committee.authority_by_network_key(&peer.name) {
-                Some((name, _authority)) => name,
+                Some(authority) => authority.id(),
                 None => {
                     error!(
                         "could not look up authority for network key {:?}",
@@ -602,7 +602,7 @@ impl BlockSynchronizer {
                     continue;
                 }
             };
-            self.send_synchronize_payload_requests(target.clone(), peer.assigned_values())
+            self.send_synchronize_payload_requests(target, peer.assigned_values())
                 .await
         }
 
@@ -633,7 +633,7 @@ impl BlockSynchronizer {
     #[instrument(level = "trace", skip_all, fields(peer_name = ?primary_peer_name, num_certificates = certificates.len()))]
     async fn send_synchronize_payload_requests(
         &mut self,
-        primary_peer_name: PublicKey,
+        primary_peer_name: AuthorityIdentifier,
         certificates: Vec<Certificate>,
     ) {
         let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());
@@ -641,13 +641,19 @@ impl BlockSynchronizer {
         for (worker_id, batch_ids) in batches_by_worker {
             let worker_name = self
                 .worker_cache
-                .worker(&self.name, &worker_id)
+                .worker(
+                    self.committee
+                        .authority(&self.authority_id)
+                        .unwrap()
+                        .protocol_key(),
+                    &worker_id,
+                )
                 .expect("Worker id not found")
                 .name;
 
             let message = WorkerSynchronizeMessage {
                 digests: batch_ids,
-                target: primary_peer_name.clone(),
+                target: primary_peer_name,
                 is_certified: true,
             };
             let _ = self.network.unreliable_send(worker_name, &message);

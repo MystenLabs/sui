@@ -16,13 +16,7 @@ import {
   assign,
   nullable,
 } from 'superstruct';
-import { SuiEvent } from './events';
-import {
-  ObjectDigest,
-  SuiGasData,
-  SuiMovePackage,
-  SuiObjectRef,
-} from './objects';
+
 import {
   ObjectId,
   ObjectOwner,
@@ -32,6 +26,13 @@ import {
   TransactionDigest,
   TransactionEventDigest,
 } from './common';
+import { SuiEvent } from './events';
+import {
+  ObjectDigest,
+  SuiGasData,
+  SuiMovePackage,
+  SuiObjectRef,
+} from './objects';
 
 // TODO: support u64
 export const EpochId = number();
@@ -65,29 +66,55 @@ export const SuiArgument = union([
   object({ Result: number() }),
   object({ NestedResult: tuple([number(), number()]) }),
 ]);
+export type SuiArgument = Infer<typeof SuiArgument>;
+
+export const MoveCallSuiCommand = object({
+  arguments: optional(array(SuiArgument)),
+  type_arguments: optional(array(string())),
+  package: ObjectId,
+  module: string(),
+  function: string(),
+});
+export type MoveCallSuiCommand = Infer<typeof MoveCallSuiCommand>;
 
 export const SuiCommand = union([
-  object({
-    MoveCall: object({
-      arguments: array(SuiArgument),
-      type_arguments: array(string()),
-      package: ObjectId,
-      module: string(),
-      function: string(),
-    }),
-  }),
+  object({ MoveCall: MoveCallSuiCommand }),
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
-  object({ SplitCoin: tuple([SuiArgument, SuiAddress]) }),
+  object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ Publish: SuiMovePackage }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
 ]);
 
+export const SuiCallArg = union([
+  object({
+    type: literal('pure'),
+    valueType: optional(string()),
+    value: SuiJsonValue,
+  }),
+  object({
+    type: literal('object'),
+    objectType: literal('immOrOwnedObject'),
+    objectId: ObjectId,
+    version: SequenceNumber,
+    digest: ObjectDigest,
+  }),
+  object({
+    type: literal('object'),
+    objectType: literal('sharedObject'),
+    objectId: ObjectId,
+    initialSharedVersion: SequenceNumber,
+    mutable: boolean(),
+  }),
+]);
+export type SuiCallArg = Infer<typeof SuiCallArg>;
+
 export const ProgrammableTransaction = object({
-  commands: array(),
-  inputs: array(SuiJsonValue),
+  commands: array(SuiCommand),
+  inputs: array(SuiCallArg),
 });
 export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
+export type ProgrammableTransactionCommand = Infer<typeof SuiCommand>;
 
 /**
  * 1. WaitForEffectsCert: waits for TransactionEffectsCert and then returns to the client.
@@ -150,6 +177,7 @@ export const GasCostSummary = object({
   computationCost: number(),
   storageCost: number(),
   storageRebate: number(),
+  nonRefundableStorageFee: number(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -170,6 +198,10 @@ export const OwnedObjectRef = object({
   reference: SuiObjectRef,
 });
 export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
+export const TransactionEffectsModifiedAtVersions = object({
+  objectId: ObjectId,
+  sequenceNumber: SequenceNumber,
+});
 
 export const TransactionEffects = object({
   // Eventually this will become union(literal('v1'), literal('v2'), ...)
@@ -179,6 +211,8 @@ export const TransactionEffects = object({
   status: ExecutionStatus,
   /** The epoch when this transaction was executed */
   executedEpoch: EpochId,
+  /** The version that every modified (mutated or deleted) object had before it was modified by this transaction. **/
+  modifiedAtVersions: optional(array(TransactionEffectsModifiedAtVersions)),
   gasUsed: GasCostSummary,
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects: optional(array(SuiObjectRef)),
@@ -239,8 +273,6 @@ export const DevInspectResults = object({
   error: optional(string()),
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
-
-export type GatewayTxSeqNumber = number;
 
 export const GetTxnDigestsResponse = array(TransactionDigest);
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;

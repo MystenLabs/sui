@@ -14,6 +14,7 @@ import {
 } from '@mysten/sui.js';
 
 import { DescriptionItem, DescriptionList } from '~/ui/DescriptionList';
+import { AddressLink } from '~/ui/InternalLink';
 import { Tab, TabGroup, TabList } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
 
@@ -36,10 +37,12 @@ function SignaturePanel({
                     </Text>
                 </DescriptionItem>
                 <DescriptionItem title="Address">
-                    <Text variant="p1/medium" color="steel-darker">
-                        0x
-                        {signature.pubKey.toSuiAddress()}
-                    </Text>
+                    <AddressLink
+                        noTruncate
+                        address={normalizeSuiAddress(
+                            signature.pubKey.toSuiAddress()
+                        )}
+                    />
                 </DescriptionItem>
                 <DescriptionItem title="Signature">
                     <Text variant="p1/medium" color="steel-darker">
@@ -57,8 +60,7 @@ function getSignatureFromAddress(
 ) {
     return signatures.find(
         (signature) =>
-            normalizeSuiAddress(signature.pubKey.toSuiAddress()) ===
-            normalizeSuiAddress(suiAddress)
+            signature.pubKey.toSuiAddress() === normalizeSuiAddress(suiAddress)
     );
 }
 
@@ -92,7 +94,7 @@ export function Signatures({ transaction }: Props) {
         : null;
 
     return (
-        <div className="flex-col gap-8">
+        <div className="flex flex-col gap-8">
             {userSignature && (
                 <SignaturePanel
                     title="User Signature"

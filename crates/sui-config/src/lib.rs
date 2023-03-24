@@ -27,6 +27,7 @@ pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
 pub const SUI_KEYSTORE_FILENAME: &str = "sui.keystore";
+pub const SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME: &str = "benchmark.keystore";
 pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
 pub const SUI_DEV_NET_URL: &str = "https://fullnode.devnet.sui.io:443";
 
@@ -51,6 +52,10 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
         }
         Ok(dir)
     })
+}
+
+pub fn validator_config_file(i: usize) -> String {
+    format!("validator-config-{}.yaml", i)
 }
 
 pub trait Config
