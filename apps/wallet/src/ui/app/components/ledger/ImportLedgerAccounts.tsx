@@ -18,6 +18,7 @@ import {
     LedgerAccountList,
     type SelectableLedgerAccount,
 } from './LedgerAccountList';
+import { getSuiApplicationErrorMessage } from './LedgerExceptions';
 import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
@@ -51,12 +52,7 @@ export function ImportLedgerAccounts() {
             );
         },
         onError: (error) => {
-            if (error instanceof LockedDeviceError) {
-                toast.error('Your device is locked. Unlock it and try again.');
-            } else {
-                toast.error('Make sure the Sui app is open on your device.');
-            }
-            console.log('ERROR', error);
+            toast.error(getSuiApplicationErrorMessage(error));
             navigate(accountsUrl, { replace: true });
         },
     });
