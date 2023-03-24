@@ -2080,7 +2080,7 @@
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_ObjectRead_and_ObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
         }
       }
     },
