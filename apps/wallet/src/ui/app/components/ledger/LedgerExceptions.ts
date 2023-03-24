@@ -15,6 +15,13 @@ export class LedgerNoTransportMechanismError extends Error {
     }
 }
 
+export class LedgerDeviceNotFoundError extends Error {
+    constructor(message: string) {
+        super(message);
+        Object.setPrototypeOf(this, LedgerDeviceNotFoundError.prototype);
+    }
+}
+
 // Connection methods from the Ledger transport libraries don't throw well-structured
 // errors, so we can use this utility to form more explicit and structured errors
 export function convertErrorToLedgerConnectionFailedError(error: unknown) {
