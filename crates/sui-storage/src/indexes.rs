@@ -883,7 +883,7 @@ impl IndexStore {
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(owner.clone(), starting_object_id))?
+            .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
             .filter(move |((object_owner, _), obj_info)| {
                 let to_include: bool = match &filter {
