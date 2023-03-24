@@ -2,37 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::dummy_policy {
-    use sui::coin::Coin;
-    use sui::sui::SUI;
-    use sui::transfer_policy::{
-        Self as policy,
-        TransferPolicy,
-        TransferPolicyCap,
-        TransferRequest
-    };
-
-    struct Rule has drop {}
-    struct Config has store, drop {}
-
-    public fun set<T>(
-        policy: &mut TransferPolicy<T>,
-        cap: &TransferPolicyCap<T>
-    ) {
-        policy::add_rule(Rule {}, policy, cap, Config {})
-    }
-
-    public fun pay<T>(
-        policy: &mut TransferPolicy<T>,
-        request: &mut TransferRequest<T>,
-        payment: Coin<SUI>
-    ) {
-        policy::add_to_balance(Rule {}, policy, payment);
-        policy::add_receipt(Rule {}, request);
-    }
-}
-
-#[test_only]
 module sui::malicious_policy {
     use sui::transfer_policy::{Self as policy, TransferRequest};
 
@@ -63,7 +32,7 @@ module sui::transfer_policy_tests {
         let (policy, cap) = prepare(ctx);
 
         // time to make a new transfer request
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -78,7 +47,7 @@ module sui::transfer_policy_tests {
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
 
         dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
         policy::confirm_request(&policy, request);
@@ -98,7 +67,7 @@ module sui::transfer_policy_tests {
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -115,7 +84,7 @@ module sui::transfer_policy_tests {
         dummy_policy::set(&mut policy, &cap);
         dummy_policy::set(&mut policy, &cap);
 
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
         policy::confirm_request(&policy, request);
 
         wrapup(policy, cap, ctx);
@@ -130,7 +99,7 @@ module sui::transfer_policy_tests {
 
         // now require everyone to pay any amount
         dummy_policy::set(&mut policy, &cap);
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
+        let request = policy::new_request(fresh_id(ctx), 10_000, fresh_id(ctx));
 
         // try to add receipt from another rule
         malicious_policy::cheat(&mut request);

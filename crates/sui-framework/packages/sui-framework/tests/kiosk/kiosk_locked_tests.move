@@ -4,10 +4,10 @@
 #[test_only]
 /// Test illustrating how an asset can be forever locked in the Kiosk.
 module sui::kiosk_locked_test {
-    use sui::kiosk::{Self, PlacedWitness};
+    use sui::kiosk;
+    use sui::item_placed_policy as locked_policy;
     use sui::kiosk_test_utils::{Self as test, Asset};
     use sui::transfer_policy as policy;
-    use sui::witness_policy;
     use sui::transfer;
 
     #[test]
@@ -24,17 +24,18 @@ module sui::kiosk_locked_test {
         // - require "PlacedWitness" on purchase
         // - place an asset into the Kiosk so it can only be sold
         kiosk::policy_set_no_taking(&mut policy, &policy_cap);
-        witness_policy::set<Asset, PlacedWitness<Asset>>(&mut policy, &policy_cap);
+        locked_policy::set(&mut policy, &policy_cap);
         kiosk::place_and_list(&mut kiosk, &kiosk_cap, &policy, item, 1000);
 
         // Bob the Buyer
         // - places the item into his Kiosk and gets the proof
         // - prove placing and confirm request
         let (bob_kiosk, bob_kiosk_cap) = test::get_kiosk(ctx);
-        let (item, request) = kiosk::purchase<Asset>(&mut kiosk, item_id, payment, ctx);
-        let placed_proof = kiosk::place(&mut bob_kiosk, &bob_kiosk_cap, &policy, item);
+        let (item, request) = kiosk::purchase<Asset>(&mut kiosk, item_id, payment);
+        kiosk::place(&mut bob_kiosk, &bob_kiosk_cap, &policy, item);
 
-        witness_policy::prove(placed_proof, &policy, &mut request);
+        // The difference!
+        locked_policy::prove(&mut request, &mut bob_kiosk);
         policy::confirm_request(&policy, request);
 
         // Carl the Cleaner;

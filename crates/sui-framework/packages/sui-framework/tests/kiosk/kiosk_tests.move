@@ -53,7 +53,7 @@ module sui::kiosk_tests {
 
         kiosk::place_and_list(&mut kiosk, &owner_cap, &policy, asset, AMT);
         let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment, ctx);
+        let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment);
         policy::confirm_request(&mut policy, request);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
@@ -71,7 +71,7 @@ module sui::kiosk_tests {
 
         kiosk::place_and_list(&mut kiosk, &owner_cap, &policy, asset, AMT);
         let payment = coin::mint_for_testing<SUI>(AMT + 1, ctx);
-        let (_asset, request) = kiosk::purchase(&mut kiosk, item_id, payment, ctx);
+        let (_asset, request) = kiosk::purchase(&mut kiosk, item_id, payment);
         policy::confirm_request(&mut policy, request);
 
         abort 1337
@@ -87,7 +87,7 @@ module sui::kiosk_tests {
         kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
         let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &owner_cap, item_id, AMT, ctx);
         let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment, ctx);
+        let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment);
         policy::confirm_request(&mut policy, request);
 
         test::return_kiosk(kiosk, owner_cap, ctx);

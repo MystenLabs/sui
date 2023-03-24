@@ -30,13 +30,10 @@ module sui::transfer_policy {
     use sui::object::{Self, ID, UID};
     use sui::vec_set::{Self, VecSet};
     use sui::dynamic_field as df;
-    use sui::bag::{Self, Bag};
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::event;
-
-    friend sui::collectible;
 
     /// The number of receipts does not match the `TransferPolicy` requirement.
     const EPolicyNotSatisfied: u64 = 0;
@@ -54,16 +51,16 @@ module sui::transfer_policy {
     /// A "Hot Potato" forcing the buyer to get a transfer permission
     /// from the item type (`T`) owner on purchase attempt.
     struct TransferRequest<phantom T> {
+        /// The ID of the transferred item. Although the `T` has no
+        /// constraints, the main use case for this module is to work
+        /// with Objects.
+        item: ID,
         /// Amount of SUI paid for the item. Can be used to
         /// calculate the fee / transfer policy enforcement.
         paid: u64,
         /// The ID of the Kiosk / Safe the object is being sold from.
         /// Can be used by the TransferPolicy implementors.
         from: ID,
-        /// A Bag of custom details attached to the `TransferRequest`.
-        /// The attachments must be resolved before the `TransferRequest`
-        /// can be completed and unpacked to accept the transfer.
-        metadata: Bag,
         /// Collected Receipts. Used to verify that all of the rules
         /// were followed and `TransferRequest` can be confirmed.
         receipts: VecSet<TypeName>
@@ -107,14 +104,9 @@ module sui::transfer_policy {
     /// created, it must be confirmed in the `confirm_request` call otherwise
     /// the transaction will fail.
     public fun new_request<T>(
-        paid: u64, from: ID, ctx: &mut TxContext
+        item: ID, paid: u64, from: ID
     ): TransferRequest<T> {
-        TransferRequest {
-            paid,
-            from,
-            receipts: vec_set::empty(),
-            metadata: bag::new(ctx)
-        }
+        TransferRequest { item, paid, from, receipts: vec_set::empty() }
     }
 
     /// Register a type in the Kiosk system and receive an `TransferPolicyCap`
@@ -136,28 +128,13 @@ module sui::transfer_policy {
         )
     }
 
-    /// Special case for the `sui::collectible` module to be able to register a
-    /// type without a `Publisher` object. Is not magical and a similar logic
-    /// can be implemented for the regular `new_transfer_policy_cap` call for
-    /// wrapped types.
-    public(friend) fun new_protected<T>(
-        ctx: &mut TxContext
-    ): (TransferPolicy<T>, TransferPolicyCap<T>) {
-        let id = object::new(ctx);
-        let policy_id = object::uid_to_inner(&id);
-
-        event::emit(TransferPolicyCreated<T> { id: policy_id });
-
-        (
-            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
-            TransferPolicyCap { id: object::new(ctx), policy_id }
-        )
-    }
-
-    /// Withdraw some amount of profits from the `TransferPolicy`. If amount is not
-    /// specified, all profits are withdrawn.
+    /// Withdraw some amount of profits from the `TransferPolicy`. If amount
+    /// is not specified, all profits are withdrawn.
     public fun withdraw<T>(
-        self: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>, amount: Option<u64>, ctx: &mut TxContext
+        self: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>,
+        amount: Option<u64>,
+        ctx: &mut TxContext
     ): Coin<SUI> {
         assert!(object::id(self) == cap.policy_id, ENotOwner);
 
@@ -195,8 +172,8 @@ module sui::transfer_policy {
     /// Kiosk trades will not be possible.
     public fun confirm_request<T>(
         self: &TransferPolicy<T>, request: TransferRequest<T>
-    ): (u64, ID) {
-        let TransferRequest { paid, from, receipts, metadata } = request;
+    ): (ID, u64, ID) {
+        let TransferRequest { item, paid, from, receipts } = request;
         let completed = vec_set::into_keys(receipts);
         let total = vector::length(&completed);
 
@@ -208,8 +185,7 @@ module sui::transfer_policy {
             total = total - 1;
         };
 
-        bag::destroy_empty(metadata);
-        (paid, from)
+        (item, paid, from)
     }
 
     // === Rules Logic ===
@@ -282,66 +258,12 @@ module sui::transfer_policy {
         &mut self.id
     }
 
+    /// Get the `item` field of the `TransferRequest`.
+    public fun item<T>(self: &TransferRequest<T>): ID { self.item }
+
     /// Get the `paid` field of the `TransferRequest`.
     public fun paid<T>(self: &TransferRequest<T>): u64 { self.paid }
 
     /// Get the `from` field of the `TransferRequest`.
     public fun from<T>(self: &TransferRequest<T>): ID { self.from }
-
-    /// Get the `metadata_mut` field of the `TransferRequest`.
-    public fun metadata_mut<T>(self: &mut TransferRequest<T>): &mut Bag { &mut self.metadata }
 }
-
-#[test_only]
-/// An example module implementing a fixed commission for the `TransferPolicy`.
-/// Follows the "transfer rules" layout and implements each of the steps.
-module sui::fixed_commission {
-    use sui::sui::SUI;
-    use sui::coin::Coin;
-    use sui::transfer_policy::{
-        Self as policy,
-        TransferPolicy,
-        TransferRequest,
-        TransferPolicyCap
-    };
-
-    /// Expected amount does not match the passed one.
-    const EIncorrectAmount: u64 = 0;
-
-    /// Custom witness-key which also acts as a key for the policy.
-    struct Rule has drop {}
-
-    /// Fixed commission on all sales.
-    struct Commission has store, drop { amount: u64 }
-
-    /// Creator action: adds a Rule;
-    /// Set a FixedCommission requirement for the TransferPolicy.
-    public fun set<T>(
-        policy: &mut TransferPolicy<T>,
-        cap: &TransferPolicyCap<T>,
-        amount: u64
-    ) {
-        policy::add_rule(Rule {}, policy, cap, Commission { amount });
-    }
-
-    /// Creator action: remove the rule from the policy.
-    /// Can be performed freely at any time, this method only helps fill-in type params.
-    public fun unset<T>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {
-        policy::remove_rule<T, Rule, Commission>(policy, cap)
-    }
-
-    /// Buyer action: perform required action;
-    /// Complete the requirement on `TransferRequest`. In this case - pay the fixed fee.
-    public fun pay<T>(
-        policy: &mut TransferPolicy<T>, request: &mut TransferRequest<T>, coin: Coin<SUI>
-    ) {
-        let paid = policy::paid(request);
-        let config: &Commission = policy::get_rule(Rule {}, policy);
-
-        assert!(paid == config.amount, EIncorrectAmount);
-
-        policy::add_to_balance(Rule {}, policy, coin);
-        policy::add_receipt(Rule {}, request);
-    }
-}
-

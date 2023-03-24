@@ -4,7 +4,6 @@
 /// Kiosk is a primitive for building open, zero-fee trading platforms
 /// with a high degree of customization over transfer policies.
 
-///
 /// The system has 3 main audiences:
 ///
 /// 1. Creators: for a type to be tradable in the Kiosk ecosystem,
@@ -47,9 +46,6 @@ module sui::kiosk {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::event;
-
-    // Collectible is a special case to avoid storing `Publisher`.
-    friend sui::collectible;
 
     /// Trying to withdraw profits and sender is not owner.
     const ENotOwner: u64 = 0;
@@ -124,12 +120,7 @@ module sui::kiosk {
     /// item is listed without a `PurchaseCap`, exclusive is set to `false`.
     struct Listing has store, copy, drop { id: ID, is_exclusive: bool }
 
-    /// Dynamic field key for a `Lock` - mechanic that does not allow items
-    /// of a type leave the `Kiosk` ever unless the lock is disabled by the
-    /// creator of the item.
-    struct KioskLock<phantom T: key + store> has store, copy, drop {}
-
-    // === TransferPolicy settings ===
+    // === TransferPolicy customization ===
 
     /// A custom key that can be attached to the `TransferPolicy` to disallow
     /// taking an item from the `Kiosk`.
@@ -145,19 +136,6 @@ module sui::kiosk {
         id: ID,
         price: u64
     }
-
-    // === Confirmations ===
-
-    /// Created in the call to `place` function and can be used as the
-    /// confirmation that kiosk::place was called for a `T`.
-    struct PlacedWitness<phantom T: key + store> has drop {}
-
-    /// Created in the call to `list` function and serves as the proof
-    /// that an item `T` was listed in the `Kiosk`.
-    struct ListedWitness<phantom T: key + store> has drop {}
-
-    /// Created in the `return_purchase_cap` and proves the action.
-    struct CapReturnedWitness<phantom T: key + store> has drop {}
 
     // === Kiosk packing and unpacking ===
 
@@ -216,11 +194,10 @@ module sui::kiosk {
     /// locked in the `Kiosk` forever.
     public fun place<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, _policy: &TransferPolicy<T>, item: T
-    ): PlacedWitness<T> {
+    ) {
         assert!(object::id(self) == cap.for, ENotOwner);
         self.item_count = self.item_count + 1;
-        dof::add(&mut self.id, Item { id: object::id(&item) }, item);
-        PlacedWitness {}
+        dof::add(&mut self.id, Item { id: object::id(&item) }, item)
     }
 
     /// Take any object from the Kiosk.
@@ -230,7 +207,7 @@ module sui::kiosk {
     ): T {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(!df::exists_(transfer_policy::uid(policy), NoTaking {}), ETakingNotAllowed);
-        assert!(!df::exists_(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
+        assert!(!is_listed_exclusively(self, id), EListedExclusively);
 
         self.item_count = self.item_count - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
@@ -243,19 +220,18 @@ module sui::kiosk {
     /// Performs an authorization check to make sure only owner can sell.
     public fun list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
-    ): ListedWitness<T> {
+    ) {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
+        assert!(!is_listed_exclusively(self, id), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
-        event::emit(ItemListed<T> { kiosk: object::id(self), id, price });
-        ListedWitness {}
+        event::emit(ItemListed<T> { kiosk: object::id(self), id, price })
     }
 
     /// Calls `place` and `list` together - simplifies the flow.
     public fun place_and_list<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, policy: &TransferPolicy<T>, item: T, price: u64
-    ): ListedWitness<T> {
+    ) {
         let id = object::id(&item);
         place(self, cap, policy, item);
         list<T>(self, cap, id, price)
@@ -269,7 +245,7 @@ module sui::kiosk {
     /// request their approval (by calling some function) so that the trade can be
     /// finalized.
     public fun purchase<T: key + store>(
-        self: &mut Kiosk, id: ID, payment: Coin<SUI>, ctx: &mut TxContext
+        self: &mut Kiosk, id: ID, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
         let price = df::remove<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
         let inner = dof::remove<Item, T>(&mut self.id, Item { id });
@@ -278,7 +254,7 @@ module sui::kiosk {
         assert!(price == coin::value(&payment), EIncorrectAmount);
         balance::join(&mut self.profits, coin::into_balance(payment));
 
-        (inner, transfer_policy::new_request(price, object::id(self), ctx))
+        (inner, transfer_policy::new_request(id, price, object::id(self)))
     }
 
     // === Trading Functionality: Exclusive listing with `PurchaseCap` ===
@@ -289,7 +265,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_(&self.id, Listing { id, is_exclusive: false }), EAlreadyListed);
+        assert!(!is_listed(self, id), EAlreadyListed);
 
         let uid = object::new(ctx);
         df::add(&mut self.id, Listing { id, is_exclusive: true }, min_price);
@@ -305,7 +281,7 @@ module sui::kiosk {
     /// Unpack the `PurchaseCap` and call `purchase`. Sets the payment amount
     /// as the price for the listing making sure it's no less than `min_amount`.
     public fun purchase_with_cap<T: key + store>(
-        self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>, ctx: &mut TxContext
+        self: &mut Kiosk, purchase_cap: PurchaseCap<T>, payment: Coin<SUI>
     ): (T, TransferRequest<T>) {
         let PurchaseCap { id, item_id, kiosk_id, min_price } = purchase_cap;
         let paid = coin::value(&payment);
@@ -317,20 +293,19 @@ module sui::kiosk {
         df::add(&mut self.id, Listing { id: item_id, is_exclusive: false }, paid);
         object::delete(id);
 
-        purchase<T>(self, item_id, payment, ctx)
+        purchase<T>(self, item_id, payment)
     }
 
     /// Return the `PurchaseCap` without making a purchase; remove an active offer and
     /// allow the item for taking. Can only be returned to its `Kiosk`, aborts otherwise.
     public fun return_purchase_cap<T: key + store>(
         self: &mut Kiosk, purchase_cap: PurchaseCap<T>
-    ): CapReturnedWitness<T> {
+    ) {
         let PurchaseCap { id, item_id, kiosk_id, min_price: _ } = purchase_cap;
 
         assert!(object::id(self) == kiosk_id, EWrongKiosk);
         df::remove<Listing, u64>(&mut self.id, Listing { id: item_id, is_exclusive: true });
-        object::delete(id);
-        CapReturnedWitness {}
+        object::delete(id)
     }
 
     /// Withdraw profits from the Kiosk.
@@ -353,8 +328,19 @@ module sui::kiosk {
     // === Kiosk fields access ===
 
     /// Check whether the an `item` is present in the `Kiosk`.
-    public fun has_item(self: &Kiosk, item_id: ID): bool {
-        dof::exists_(&self.id, Item { id: item_id })
+    public fun has_item(self: &Kiosk, item: ID): bool {
+        dof::exists_(&self.id, Item { id: item })
+    }
+
+    /// Check whether an `item` is listed (exclusively or non exclusively).
+    public fun is_listed(self: &Kiosk, item: ID): bool {
+        df::exists_(&self.id, Listing { id: item, is_exclusive: false })
+        || is_listed_exclusively(self, item)
+    }
+
+    /// Check whether there's a `PurchaseCap` issued for an item.
+    public fun is_listed_exclusively(self: &Kiosk, item: ID): bool {
+        df::exists_(&self.id, Listing { id: item, is_exclusive: true })
     }
 
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
@@ -419,13 +405,21 @@ module sui::kiosk {
         self.min_price
     }
 
-    // === Locking functionality ===
+    // === TransferPolicy Owner Methods ===
 
-    public fun policy_set_no_taking<T: key + store>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {
+    /// Disallow `take` function for the type `T`; requires `TransferPolicy` for `T`
+    public fun policy_set_no_taking<T: key + store>(
+        policy: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>
+    ) {
         df::add(transfer_policy::uid_mut_as_owner(policy, cap), NoTaking {}, true);
     }
 
-    public fun policy_unset_no_taking<T: key + store>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {
+    /// Allow `take` function for the type `T`; requires `TransferPolicy` for `T`
+    public fun policy_unset_no_taking<T: key + store>(
+        policy: &mut TransferPolicy<T>,
+        cap: &TransferPolicyCap<T>
+    ) {
         let _: bool = df::remove(transfer_policy::uid_mut_as_owner(policy, cap), NoTaking {});
     }
 }

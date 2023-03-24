@@ -7,7 +7,7 @@
 /// Other fields can be omitted by using an `option::none()`.
 /// Custom metadata can be created and passed into the `Collectible` but that would
 /// require additional work on the creator side to set up metadata creation methods.
-module sui::collectible {
+module nfts::collectible {
     use std::vector as vec;
     use std::string::String;
     use std::option::{Self, Option};
@@ -78,7 +78,7 @@ module sui::collectible {
         assert!(sui::types::is_one_time_witness(&otw), ENotOneTimeWitness);
 
         let publisher = package::claim(otw, ctx);
-        let display = display::new_protected<Collectible<T>>(ctx);
+        let display = display::new<T>(&publisher, ctx);
         let (policy, policy_cap) = transfer_policy::new_protected<Collectible<T>>(ctx);
 
         assert!(package::from_module<T>(&publisher), EModuleDoesNotContainT);
