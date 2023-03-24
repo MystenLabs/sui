@@ -240,6 +240,7 @@ diesel::table! {
         computation_cost -> Int8,
         storage_cost -> Int8,
         storage_rebate -> Int8,
+        non_refundable_storage_fee -> Int8,
         gas_price -> Int8,
         raw_transaction -> Bytea,
         transaction_content -> Text,
