@@ -226,14 +226,49 @@ impl Orchestrator {
         // Select instances to configure.
         let instances = self.select_instances(parameters)?;
 
+        // TODO: There should be no need to generate these files locally; we can generate them
+        // directly on the remote machines.
+        SuiProtocol::print_files(&instances);
+
         // Generate the configuration file, genesis, and gas keystore.
-        let command = self.protocol_commands.genesis_command(instances.iter());
-        let repo_name = self.settings.repository_name();
-        let ssh_command =
-            SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
-        self.ssh_manager
-            .execute(instances.iter(), &ssh_command)
-            .await?;
+        // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
+        for (i, instance) in instances.iter().enumerate() {
+            display::status(format!("{}/{}", i + 1, instances.len()));
+
+            // Connect to the instance.
+            let connection = self
+                .ssh_manager
+                .connect(instance.ssh_address())
+                .await?
+                .with_timeout(&Some(Duration::from_secs(180)));
+
+            // Upload all configuration files.
+            for source in SuiProtocol::configuration_files() {
+                let destination = source.file_name().expect("Config file is directory");
+                let mut file = File::open(&source).expect("Cannot open config file");
+                let mut buf = Vec::new();
+                file.read_to_end(&mut buf).expect("Cannot read config file");
+                connection.upload(destination, &buf)?;
+            }
+
+            // Generate the genesis files.
+            let command = [
+                "source $HOME/.cargo/env",
+                &self.protocol_commands.genesis_config_command(),
+            ]
+            .join(" && ");
+            let repo_name = self.settings.repository_name();
+            connection.execute_from_path(command, repo_name)?;
+        }
+
+        // // Generate the genesis configuration file and the keystore allowing access to gas objects.
+        // let command = self.protocol_commands.genesis_command(instances.iter());
+        // let repo_name = self.settings.repository_name();
+        // let ssh_command =
+        //     SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
+        // self.ssh_manager
+        //     .execute(instances.iter(), &ssh_command)
+        //     .await?;
 
         display::done();
         Ok(())
@@ -323,10 +358,11 @@ impl Orchestrator {
             let mut genesis = working_dir.clone();
             genesis.push("sui_config");
             genesis.push("genesis.blob");
-            // let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
-            let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
+            let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
+            // let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
             let keystore = format!(
-                "~/working_dir/sui_config/{}",
+                // "~/working_dir/sui_config/{}",
+                "~/{}",
                 SuiProtocol::GAS_KEYSTORE_FILE
             );
 
@@ -337,7 +373,7 @@ impl Orchestrator {
                     "--genesis-blob-path {} --keystore-path {keystore}",
                     genesis.display()
                 ),
-                &format!("--primary-gas-id {:#x}", gas_id),
+                &format!("--primary-gas-id {}", gas_id),
                 "bench",
                 &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
                 &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
