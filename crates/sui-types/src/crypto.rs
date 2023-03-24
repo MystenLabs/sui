@@ -546,13 +546,7 @@ where
     get_key_pair_from_rng(&mut OsRng)
 }
 
-pub const TEST_COMMITTEE_SIZE: usize = 4;
-
-pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
-    random_committee_key_pairs_of_size(TEST_COMMITTEE_SIZE)
-}
-
-/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+/// Generate a random committee key pairs with a given committee size
 pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..size)
