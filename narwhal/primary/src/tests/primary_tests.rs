@@ -26,8 +26,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::PayloadToken;
 use storage::{CertificateStore, VoteDigestStore};
+use storage::{CertificateStoreCache, PayloadToken};
 use storage::{NodeStorage, PayloadStore};
 use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
 use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
@@ -60,7 +60,7 @@ async fn get_network_peers_from_admin_server() {
     let worker_1_keypair = authority_1.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let (tx_new_certificates, rx_new_certificates) = types::metered_channel::channel(
         CHANNEL_CAPACITY,
@@ -1177,6 +1177,7 @@ async fn test_process_payload_availability_when_failures() {
         certificate_map,
         certificate_digest_by_round_map,
         certificate_digest_by_origin_map,
+        CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None),
     );
     let payload_store = PayloadStore::new(payload_map);
 

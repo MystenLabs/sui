@@ -1230,10 +1230,10 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return one or more [DelegatedStake]",
+      "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
       "params": [
         {
-          "name": "staked_sui_id",
+          "name": "staked_sui_ids",
           "required": true,
           "schema": {
             "type": "array",
@@ -3377,10 +3377,18 @@
       "DryRunTransactionResponse": {
         "type": "object",
         "required": [
+          "balanceChanges",
           "effects",
-          "events"
+          "events",
+          "objectChanges"
         ],
         "properties": {
+          "balanceChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
           },
@@ -3388,6 +3396,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "objectChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectChange"
             }
           }
         }
@@ -5528,6 +5542,20 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Unstaked"
+                ]
+              }
+            }
           }
         ],
         "required": [
@@ -6534,6 +6562,7 @@
           "referenceGasPrice",
           "safeMode",
           "safeModeComputationRewards",
+          "safeModeNonRefundableStorageFee",
           "safeModeStorageRebates",
           "safeModeStorageRewards",
           "stakeSubsidyBalance",
@@ -6544,7 +6573,8 @@
           "stakeSubsidyStartEpoch",
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
-          "storageFund",
+          "storageFundNonRefundableBalance",
+          "storageFundTotalObjectStorageRebates",
           "systemStateVersion",
           "totalStake",
           "validatorCandidatesId",
@@ -6670,6 +6700,12 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "safeModeNonRefundableStorageFee": {
+            "description": "Amount of non-refundable storage fee accumulated during safe mode.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "safeModeStorageRebates": {
             "description": "Amount of storage rebates accumulated (and not yet burned) during safe mode.",
             "type": "integer",
@@ -6732,8 +6768,14 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "storageFund": {
-            "description": "The storage fund balance.",
+          "storageFundNonRefundableBalance": {
+            "description": "The non-refundable portion of the storage fund coming from storage reinvestment, non-refundable storage rebates and any leftover staking rewards.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageFundTotalObjectStorageRebates": {
+            "description": "The storage rebates of all the objects on-chain stored in the storage fund.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -7410,6 +7452,44 @@
             "properties": {
               "ToAddress": {
                 "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by sender and recipient address.",
+            "type": "object",
+            "required": [
+              "FromAndToAddress"
+            ],
+            "properties": {
+              "FromAndToAddress": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "properties": {
+                  "from": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by transaction kind",
+            "type": "object",
+            "required": [
+              "TransactionKind"
+            ],
+            "properties": {
+              "TransactionKind": {
+                "type": "string"
               }
             },
             "additionalProperties": false

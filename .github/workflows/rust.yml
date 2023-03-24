@@ -254,7 +254,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: mystenlabs/cargo-deny-action@main
 
   move-prover:
     name: move-prover

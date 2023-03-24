@@ -20,9 +20,6 @@ module sui::display {
     use std::vector;
     use std::string::String;
 
-    // Collectible is a special case to avoid storing `Publisher`.
-    friend sui::collectible;
-
     /// For when T does not belong to the package `Publisher`.
     const ENotOwner: u64 = 0;
 
@@ -83,13 +80,6 @@ module sui::display {
     /// with data right away via cheaper `set_owned` method.
     public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
         assert!(is_authorized<T>(pub), ENotOwner);
-        create_internal(ctx)
-    }
-
-    /// Protected method to create an empty Display for the `Collectible<T>`.
-    /// Similar result can be achieved by freezing the Publisher for the
-    /// Container package.
-    public(friend) fun new_protected<T: key>(ctx: &mut TxContext): Display<T> {
         create_internal(ctx)
     }
 

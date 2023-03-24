@@ -223,7 +223,7 @@ async fn test_dry_run_transaction() {
 
     let transaction_digest = *transaction.digest();
 
-    let response = fullnode
+    let (response, _, _) = fullnode
         .dry_exec_transaction(
             transaction.data().intent_message().value.clone(),
             transaction_digest,
@@ -257,7 +257,7 @@ async fn test_dry_run_transaction() {
         txn_data.gas_budget(),
         txn_data.gas_price(),
     );
-    let response = fullnode
+    let (response, _, _) = fullnode
         .dry_exec_transaction(txn_data, transaction_digest)
         .await
         .unwrap();
@@ -287,7 +287,7 @@ async fn test_dry_run_no_gas_big_transfer() {
 
     let signed = to_sender_signed_transaction(data, &sender_key);
 
-    let dry_run_res = fullnode
+    let (dry_run_res, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),
@@ -5165,7 +5165,7 @@ async fn test_for_inc_201_dry_run() {
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let DryRunTransactionResponse { events, .. } = fullnode
+    let (DryRunTransactionResponse { events, .. }, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),

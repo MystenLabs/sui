@@ -324,14 +324,14 @@ impl IndexerStore for PgIndexerStore {
         Ok(checkpoint.total_transactions_from_genesis)
     }
 
-    fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError> {
+    fn get_transaction_by_digest(&self, tx_digest: &str) -> Result<Transaction, IndexerError> {
         read_only!(&self.cp, |conn| {
             transactions_dsl::transactions
-                .filter(transactions_dsl::transaction_digest.eq(txn_digest))
+                .filter(transactions_dsl::transaction_digest.eq(tx_digest))
                 .first::<Transaction>(conn)
         })
         .context(&format!(
-            "Failed reading transaction with digest {txn_digest}"
+            "Failed reading transaction with digest {tx_digest}"
         ))
     }
 
@@ -407,25 +407,25 @@ impl IndexerStore for PgIndexerStore {
 
     fn multi_get_transactions_by_digests(
         &self,
-        txn_digests: &[String],
+        tx_digests: &[String],
     ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
             transactions_dsl::transactions
-                .filter(transactions_dsl::transaction_digest.eq_any(txn_digests))
+                .filter(transactions_dsl::transaction_digest.eq_any(tx_digests))
                 .load::<Transaction>(conn)
         })
         .context(&format!(
-            "Failed reading transactions with digests {txn_digests:?}"
+            "Failed reading transactions with digests {tx_digests:?}"
         ))
     }
 
     fn get_transaction_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
         read_only!(&self.cp, |conn| {
-            txn_digest
+            tx_digest
                 .as_ref()
                 .map(|digest| {
                     let mut boxed_query = transactions_dsl::transactions
@@ -442,7 +442,7 @@ impl IndexerStore for PgIndexerStore {
                 .transpose()
         })
         .context(&format!(
-            "Failed reading transaction sequence with digest {txn_digest:?}"
+            "Failed reading transaction sequence with digest {tx_digest:?}"
         ))
     }
 
@@ -526,11 +526,11 @@ impl IndexerStore for PgIndexerStore {
 
     fn get_move_call_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
         read_only!(&self.cp, |conn| {
-            txn_digest
+            tx_digest
                 .as_ref()
                 .map(|digest| {
                     let mut boxed_query = move_calls_dsl::move_calls
@@ -546,17 +546,17 @@ impl IndexerStore for PgIndexerStore {
                 .transpose()
         })
         .context(&format!(
-            "Failed reading move call sequence with digest {txn_digest:?}"
+            "Failed reading move call sequence with digest {tx_digest:?}"
         ))
     }
 
     fn get_input_object_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
         read_only!(&self.cp, |conn| {
-            txn_digest
+            tx_digest
                 .as_ref()
                 .map(|digest| {
                     let mut boxed_query = input_objects_dsl::input_objects
@@ -572,21 +572,21 @@ impl IndexerStore for PgIndexerStore {
                 .transpose()
         })
         .context(&format!(
-            "Failed reading input object sequence with digest {txn_digest:?}"
+            "Failed reading input object sequence with digest {tx_digest:?}"
         ))
     }
 
     fn get_recipient_sequence_by_digest(
         &self,
-        txn_digest: Option<String>,
+        tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
         read_only!(&self.cp, |conn| {
-            txn_digest
+            tx_digest
                 .as_ref()
-                .map(|txn_digest| {
+                .map(|tx_digest| {
                     let mut boxed_query = recipients_dsl::recipients
-                        .filter(recipients_dsl::transaction_digest.eq(txn_digest))
+                        .filter(recipients_dsl::transaction_digest.eq(tx_digest))
                         .into_boxed();
                     if is_descending {
                         boxed_query = boxed_query.order(recipients_dsl::id.desc());
@@ -598,7 +598,7 @@ impl IndexerStore for PgIndexerStore {
                 .transpose()
         })
         .context(&format!(
-            "Failed reading recipients sequence with digest {txn_digest:?}"
+            "Failed reading recipients sequence with digest {tx_digest:?}"
         ))
     }
 
@@ -632,6 +632,41 @@ impl IndexerStore for PgIndexerStore {
                     .load::<String>(conn)
             }
         }).context(&format!("Failed reading all transaction digests with start_sequence {start_sequence:?} and limit {limit}"))
+    }
+
+    fn get_transaction_digest_page_by_transaction_kind(
+        &self,
+        kind: String,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        read_only!(&self.cp, |conn| {
+            let mut boxed_query = transactions_dsl::transactions
+                .filter(transactions_dsl::transaction_kind.eq(kind.clone()))
+                .into_boxed();
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    boxed_query = boxed_query.filter(transactions_dsl::id.lt(start_sequence));
+                } else {
+                    boxed_query = boxed_query.filter(transactions_dsl::id.gt(start_sequence));
+                }
+            }
+
+            if is_descending {
+                boxed_query
+                    .order(transactions_dsl::id.desc())
+                    .limit((limit) as i64)
+                    .select(transactions_dsl::transaction_digest)
+                    .load::<String>(conn)
+            } else {
+                boxed_query
+                    .order(transactions_dsl::id.asc())
+                    .limit((limit) as i64)
+                    .select(transactions_dsl::transaction_digest)
+                    .load::<String>(conn)
+            }
+        }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
     fn get_transaction_digest_page_by_mutated_object(
@@ -799,9 +834,10 @@ impl IndexerStore for PgIndexerStore {
         )
     }
 
-    fn get_transaction_digest_page_by_recipient_address(
+    fn get_transaction_digest_page_by_sender_recipient_address(
         &self,
-        recipient_address: String,
+        from: Option<String>,
+        to: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
@@ -810,10 +846,10 @@ impl IndexerStore for PgIndexerStore {
             "SELECT transaction_digest as digest_name FROM (
                 SELECT transaction_digest, max(id) AS max_id
                 FROM recipients
-                WHERE recipient = '{}' {} GROUP BY transaction_digest
+                WHERE recipient = '{}' {} {} GROUP BY transaction_digest
                 ORDER BY max_id {} LIMIT {}
             ) AS t",
-            recipient_address,
+            to,
             if let Some(start_sequence) = start_sequence {
                 if is_descending {
                     format!("AND id < {}", start_sequence)
@@ -823,12 +859,17 @@ impl IndexerStore for PgIndexerStore {
             } else {
                 "".to_string()
             },
+            if let Some(from) = from {
+                format!("AND sender = '{}'", from)
+            } else {
+                "".to_string()
+            },
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
         Ok(
             read_only!(&self.cp, |conn| { diesel::sql_query(sql_query).load(conn) })
-                .context(&format!("Failed reading transaction digests by recipient address {recipient_address} with start_sequence {start_sequence:?} and limit {limit}"))?
+                .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
                 .collect(),

@@ -37,19 +37,20 @@ module sui::safe_mode_tests {
             test_scenario::next_tx(scenario, @0x1);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x1), 1);
-            test_utils::assert_eq(sui_system::get_storage_fund_balance(&mut system_state), 1000);
+            test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1000);
             test_scenario::return_shared(system_state);
         };
 
         advance_epoch_safe_mode_with_reward_amounts(
-            8,
+            48,
             20,
             30,
+            2,
             scenario,
         );
-        let rebates = advance_epoch_with_reward_amounts_return_rebate(16, 40, 30, scenario);
+        let rebates = advance_epoch_with_reward_amounts_return_rebate(32, 40, 30, 6, scenario);
 
-        // 30 from safe mode epoch, 30 from current epoch.
+        // 30 from safe mode epoch and 30 from current epoch.
         test_utils::assert_eq(balance::value(&rebates), 60);
         test_utils::destroy(rebates);
 
@@ -61,8 +62,12 @@ module sui::safe_mode_tests {
         test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x3), 15);
         test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x4), 15);
 
-        // Storage fund is 1000 + 8 + 16 - 30 - 30 = 964. 4 leftover due to integer division.
-        test_utils::assert_eq(sui_system::get_storage_fund_balance(&mut system_state), 968);
+        // Storage fund is 1000 + 48 + 32 - 30 - 30 = 1020. 4 leftover due to integer division.
+        test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1024);
+
+        // Storage charges are deposited and storage rebates are taken out of the object rebate
+        // portion of the fund so its balance is 48 + 32 - 30 - 30 - 2 - 6 = 12.
+        test_utils::assert_eq(sui_system::get_storage_fund_object_rebates(&mut system_state), 12);
 
         test_scenario::return_shared(system_state);
         test_scenario::end(scenario_val);

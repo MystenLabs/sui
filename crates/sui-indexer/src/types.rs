@@ -247,6 +247,7 @@ impl SuiTransactionFullResponse {
                     transaction_digest: self.digest.to_string(),
                     checkpoint_sequence_number: checkpoint as i64,
                     epoch: epoch as i64,
+                    sender: self.transaction.data.sender().to_string(),
                     recipient: address.to_string(),
                 }),
                 _ => None,

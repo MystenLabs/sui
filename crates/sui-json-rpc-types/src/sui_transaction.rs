@@ -332,6 +332,15 @@ impl SuiTransactionKind {
             _ => 1,
         }
     }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::ChangeEpoch(_) => "ChangeEpoch",
+            Self::Genesis(_) => "Genesis",
+            Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
+            Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -636,9 +645,12 @@ impl Display for SuiTransactionEffects {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct DryRunTransactionResponse {
     pub effects: SuiTransactionEffects,
     pub events: SuiTransactionEvents,
+    pub object_changes: Vec<ObjectChange>,
+    pub balance_changes: Vec<BalanceChange>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]

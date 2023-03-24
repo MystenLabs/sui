@@ -230,6 +230,16 @@ pub enum AggregatorProcessTransactionError {
         conflicting_tx_digests:
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
+
+    #[error(
+        "{} of the validators by stake are overloaded with transactions pending execution. Validator errors: {:?}",
+        overloaded_stake,
+        errors
+    )]
+    SystemOverload {
+        overloaded_stake: StakeUnit,
+        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -261,6 +271,8 @@ struct ProcessTransactionState {
     non_retryable_stake: StakeUnit,
     // This includes both object and package not found sui errors.
     object_or_package_not_found_stake: StakeUnit,
+    // Validators that are overloaded with txns pending execution.
+    overloaded_stake: StakeUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -1002,6 +1014,7 @@ where
             errors: vec![],
             object_or_package_not_found_stake: 0,
             non_retryable_stake: 0,
+            overloaded_stake: 0,
             retryable: true,
             conflicting_tx_digests: Default::default(),
         };
@@ -1056,14 +1069,22 @@ where
                                     // we cannot retry.
                                     state.object_or_package_not_found_stake += weight;
                                 }
+                                else if err.is_overload() {
+                                    // Special case for validator overload too. Once we have >= 2f + 1
+                                    // overloaded validators we consider the system overloaded so we exit
+                                    // and notify the user.
+                                    state.overloaded_stake += weight;
+                                }
                                 else if !retryable && !self.record_conflicting_transaction_if_any(&mut state, name, weight, &err) {
                                     // Error is neither retryable or a potentially retryable conflicting transaction.
                                     state.non_retryable_stake += weight;
                                 }
                                 state.errors.push((err, vec![name], weight));
 
-                                if state.non_retryable_stake >= validity_threshold || state.object_or_package_not_found_stake >= quorum_threshold {
-                                    // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found,
+                                if state.non_retryable_stake >= validity_threshold
+                                    || state.object_or_package_not_found_stake >= quorum_threshold
+                                    || state.overloaded_stake >= quorum_threshold {
+                                    // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
                                     // so we no longer consider the transaction state as retryable.
                                     state.retryable = false;
                                     ReduceOutput::Failed(state)
@@ -1094,6 +1115,16 @@ where
         original_tx_digest: &TransactionDigest,
         state: ProcessTransactionState,
     ) -> AggregatorProcessTransactionError {
+        let quorum_threshold = self.committee.quorum_threshold();
+
+        // Return system overload error if we see >= 2f + 1 overloaded stake.
+        if state.overloaded_stake >= quorum_threshold {
+            return AggregatorProcessTransactionError::SystemOverload {
+                overloaded_stake: state.overloaded_stake,
+                errors: state.errors,
+            };
+        }
+
         if !state.retryable {
             return AggregatorProcessTransactionError::FatalTransaction {
                 errors: state.errors,
@@ -1105,7 +1136,6 @@ where
         {
             let good_stake = state.tx_signatures.total_votes();
             let retryable_stake = self.get_retryable_stake(&state);
-            let quorum_threshold = self.committee.quorum_threshold();
 
             if good_stake + retryable_stake >= quorum_threshold {
                 return AggregatorProcessTransactionError::RetryableConflictingTransaction {
@@ -1141,7 +1171,7 @@ where
                 conflicting_tx_digests: state.conflicting_tx_digests,
             }
         } else {
-            // No conflicting transaction and transaction state is still retryable.
+            // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
             AggregatorProcessTransactionError::RetryableTransaction {
                 errors: state.errors,
             }

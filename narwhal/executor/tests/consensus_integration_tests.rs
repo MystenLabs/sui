@@ -22,7 +22,7 @@ use types::{Certificate, PreSubscribedBroadcastSender, Round, TransactionProto};
 #[tokio::test]
 async fn test_recovery() {
     // Create storage
-    let storage = NodeStorage::reopen(temp_dir());
+    let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;

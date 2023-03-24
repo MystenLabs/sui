@@ -56,7 +56,10 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
         .or_insert(BTreeMap::new());
     entry.insert(
         "Storage Fund".to_string(),
-        (STR_SUI, system_object.storage_fund.value()),
+        (
+            STR_SUI,
+            system_object.storage_fund.non_refundable_balance.value(),
+        ),
     );
     entry.insert(
         "Stake Subsidy".to_string(),

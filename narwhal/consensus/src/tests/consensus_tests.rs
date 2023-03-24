@@ -34,7 +34,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let _guard = setup_tracing();
 
     // GIVEN
-    let storage = NodeStorage::reopen(temp_dir());
+    let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
@@ -154,7 +154,7 @@ async fn test_consensus_recovery_with_bullshark() {
     let (tx_consensus_round_updates, _rx_consensus_round_updates) =
         watch::channel(ConsensusRound::default());
 
-    let storage = NodeStorage::reopen(temp_dir());
+    let storage = NodeStorage::reopen(temp_dir(), None);
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;

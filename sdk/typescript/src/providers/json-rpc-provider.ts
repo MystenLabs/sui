@@ -483,10 +483,7 @@ export class JsonRpcProvider {
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const filters = [
-      { filter: { InputObject: objectID } },
-      { filter: { MutatedObject: objectID } },
-    ];
+    const filters = [{ InputObject: objectID }, { ChangedObject: objectID }];
     if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
       throw new Error('Invalid Sui Object id');
     }
@@ -630,6 +627,25 @@ export class JsonRpcProvider {
     return await this.client.requestWithType(
       'sui_getStakes',
       [input.owner],
+      array(DelegatedStake),
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
+   * Return the delegated stakes queried by id.
+   */
+  async getStakesByIds(input: {
+    stakedSuiIds: ObjectId[];
+  }): Promise<DelegatedStake[]> {
+    input.stakedSuiIds.forEach((id) => {
+      if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
+        throw new Error(`Invalid Sui Stake id ${id}`);
+      }
+    });
+    return await this.client.requestWithType(
+      'sui_getStakesByIds',
+      [input.stakedSuiIds],
       array(DelegatedStake),
       this.options.skipDataValidation,
     );

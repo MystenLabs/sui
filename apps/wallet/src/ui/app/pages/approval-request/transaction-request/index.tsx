@@ -32,8 +32,8 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     }, [txRequest.tx.data, addressForTransaction]);
 
     const handleOnSubmit = useCallback(
-        (approved: boolean) => {
-            dispatch(
+        async (approved: boolean) => {
+            await dispatch(
                 respondToTransactionRequest({
                     approved,
                     txRequestID: txRequest.id,

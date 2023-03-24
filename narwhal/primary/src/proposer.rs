@@ -475,7 +475,7 @@ impl Proposer {
                     self.metrics
                         .proposal_latency
                         .with_label_values(&[reason])
-                        .observe((current_timestamp - t) as f64);
+                        .observe(((current_timestamp - t) / 1000) as f64);
                 }
                 self.last_round_timestamp = Some(current_timestamp);
                 debug!("Dag moved to round {}", self.round);

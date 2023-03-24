@@ -31,7 +31,11 @@ describe('Governance API', () => {
     const stakes = await toolbox.provider.getStakes({
       owner: toolbox.address(),
     });
+    const stakesById = await toolbox.provider.getStakesByIds({
+      stakedSuiIds: [stakes[0].stakes[0].stakedSuiId],
+    });
     expect(stakes.length).greaterThan(0);
+    expect(stakesById[0].stakes[0]).toEqual(stakes[0].stakes[0]);
   });
 
   it('test requestWithdrawStake', async () => {

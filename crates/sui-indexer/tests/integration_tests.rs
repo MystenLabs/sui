@@ -308,6 +308,16 @@ pub mod pg_integration_test {
             tx_from_query_response.data.last().unwrap().digest
         );
 
+        let tx_kind_query = SuiTransactionResponseQuery::new_with_filter(
+            TransactionFilter::TransactionKind("ProgrammableTransaction".to_string()),
+        );
+        let tx_kind_query_response = indexer_rpc_client
+            .query_transactions(tx_kind_query, None, None, None)
+            .await?;
+        assert!(!tx_kind_query_response.has_next_page);
+        // first is payment, second is NFT creation
+        assert_eq!(tx_kind_query_response.data.len(), 2);
+
         // query tx with recipient address
         let to_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(recipient));
@@ -322,6 +332,22 @@ pub mod pg_integration_test {
             tx_to_query_response.data.last().unwrap().digest
         );
 
+        // query tx with both sender and recipient addresses
+        let from_to_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAndToAddress {
+                from: sender,
+                to: recipient,
+            });
+        let tx_from_to_query_response = indexer_rpc_client
+            .query_transactions(from_to_query, None, None, None)
+            .await?;
+        assert!(!tx_from_to_query_response.has_next_page);
+        assert_eq!(tx_from_to_query_response.data.len(), 1);
+        assert_eq!(
+            tx_response.digest,
+            tx_from_to_query_response.data.first().unwrap().digest
+        );
+
         // query tx with mutated object id
         let mutation_query = SuiTransactionResponseQuery::new_with_filter(
             TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
@@ -329,7 +355,7 @@ pub mod pg_integration_test {
         let tx_mutation_query_response = indexer_rpc_client
             .query_transactions(mutation_query, None, None, None)
             .await?;
-        // the coin is first created by genesis txn, then transferred by the above txn
+        // the coin is first created by genesis tx, then transferred by the above tx
         assert!(!tx_mutation_query_response.has_next_page);
         assert_eq!(tx_mutation_query_response.data.len(), 2);
         assert_eq!(
@@ -369,6 +395,7 @@ pub mod pg_integration_test {
             tx_move_call_query_response.data.first().unwrap().digest,
             nft_digest
         );
+
         Ok(())
     }
 

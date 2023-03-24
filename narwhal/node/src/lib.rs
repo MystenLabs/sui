@@ -4,7 +4,7 @@ use config::WorkerId;
 use executor::SubscriberError;
 use futures::future::try_join_all;
 use futures::stream::FuturesUnordered;
-pub use storage::NodeStorage;
+pub use storage::{CertificateStoreCacheMetrics, NodeStorage};
 use thiserror::Error;
 
 pub mod execution_state;

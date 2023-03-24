@@ -51,7 +51,7 @@ export function validatorsTableData(
                 commission: +validator.commissionRate / 100,
                 img: img,
                 address: validator.suiAddress,
-                lastReward: event?.stake_rewards || 0,
+                lastReward: +event?.pool_staking_reward || 0,
                 atRisk: systemState.atRiskValidators.some(
                     ([address]) => address === validator.suiAddress
                 ),
@@ -138,7 +138,7 @@ export function validatorsTableData(
                     const commissionRate = props.getValue();
                     return (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {commissionRate > 0 ? `${commissionRate}%` : '--'}
+                            {commissionRate}%
                         </Text>
                     );
                 },
@@ -149,7 +149,7 @@ export function validatorsTableData(
                 cell: (props: any) => {
                     const lastReward = props.getValue();
                     return lastReward > 0 ? (
-                        <StakeColumn stake={lastReward} hideCoinSymbol />
+                        <StakeColumn stake={lastReward} />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
@@ -223,7 +223,7 @@ function ValidatorPageResult() {
         let totalRewards = 0;
 
         validatorEvents.data.forEach(({ parsedJson }) => {
-            totalRewards += +parsedJson!.stake_rewards;
+            totalRewards += +parsedJson!.pool_staking_reward;
         });
 
         return totalRewards;

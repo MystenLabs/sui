@@ -29,10 +29,12 @@ pub struct MoveCall {
 }
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = recipients)]
 pub struct Recipient {
     pub id: Option<i64>,
     pub transaction_digest: String,
     pub checkpoint_sequence_number: i64,
     pub epoch: i64,
+    pub sender: String,
     pub recipient: String,
 }

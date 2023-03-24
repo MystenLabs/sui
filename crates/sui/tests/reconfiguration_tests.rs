@@ -264,6 +264,22 @@ async fn test_passive_reconfig() {
         .unwrap_or(4);
 
     test_cluster.wait_for_epoch(Some(target_epoch)).await;
+
+    test_cluster
+        .swarm
+        .validators()
+        .next()
+        .unwrap()
+        .get_node_handle()
+        .unwrap()
+        .with(|node| {
+            let commitments = node
+                .state()
+                .get_epoch_state_commitments(0)
+                .unwrap()
+                .unwrap();
+            assert_eq!(commitments.len(), 0);
+        });
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.

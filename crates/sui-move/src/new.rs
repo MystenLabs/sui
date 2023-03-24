@@ -8,8 +8,8 @@ use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 const SUI_PKG_NAME: &str = "Sui";
 
-// Use devnet by default. Probably want to add options to make this configurable later
-const SUI_PKG_PATH: &str = "{ git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-framework\", rev = \"devnet\" }";
+// Use testnet by default. Probably want to add options to make this configurable later
+const SUI_PKG_PATH: &str = "{ git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-framework\", rev = \"testnet\" }";
 
 #[derive(Parser)]
 pub struct New {
