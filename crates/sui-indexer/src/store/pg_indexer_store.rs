@@ -101,6 +101,22 @@ impl PgIndexerStore {
     ) -> Result<sui_types::object::Object, IndexerError> {
         let pg_object = read_only!(&self.cp, |conn| {
             objects_history::dsl::objects_history
+                .select((
+                    objects_history::epoch,
+                    objects_history::checkpoint,
+                    objects_history::object_id,
+                    objects_history::version,
+                    objects_history::object_digest,
+                    objects_history::owner_type,
+                    objects_history::owner_address,
+                    objects_history::initial_shared_version,
+                    objects_history::previous_transaction,
+                    objects_history::object_type,
+                    objects_history::object_status,
+                    objects_history::has_public_transfer,
+                    objects_history::storage_rebate,
+                    objects_history::bcs,
+                ))
                 .filter(objects_history::object_id.eq(object_id.to_string()))
                 .filter(objects_history::version.eq(version.value() as i64))
                 .first::<Object>(conn)
@@ -122,6 +138,22 @@ impl PgIndexerStore {
     ) -> Result<Option<sui_types::object::Object>, IndexerError> {
         let pg_object = read_only!(&self.cp, |conn| {
             objects_history::dsl::objects_history
+                .select((
+                    objects_history::epoch,
+                    objects_history::checkpoint,
+                    objects_history::object_id,
+                    objects_history::version,
+                    objects_history::object_digest,
+                    objects_history::owner_type,
+                    objects_history::owner_address,
+                    objects_history::initial_shared_version,
+                    objects_history::previous_transaction,
+                    objects_history::object_type,
+                    objects_history::object_status,
+                    objects_history::has_public_transfer,
+                    objects_history::storage_rebate,
+                    objects_history::bcs,
+                ))
                 .filter(objects_history::object_id.eq(id.to_string()))
                 .filter(objects_history::version.le(version.value() as i64))
                 .order_by(objects_history::version.desc())
