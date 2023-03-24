@@ -337,7 +337,7 @@ impl Orchestrator {
                     "--genesis-blob-path {} --keystore-path {keystore}",
                     genesis.display()
                 ),
-                &format!("--primary-gas-id {gas_id}"),
+                &format!("--primary-gas-id {:#x}", gas_id),
                 "bench",
                 &format!("--num-workers 100 --in-flight-ratio 50 --target-qps {load_share}"),
                 &format!("--shared-counter {shared_counter} --transfer-object {transfer_objects}"),
@@ -347,7 +347,7 @@ impl Orchestrator {
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
-        println!("--> {}", command(0));
+        println!("\n\n--> {}\n\n", command(0));
 
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
@@ -358,7 +358,7 @@ impl Orchestrator {
             .execute(instances.iter(), &ssh_command)
             .await?;
 
-        display::done();
+        // display::done();
         Ok(())
     }
 
