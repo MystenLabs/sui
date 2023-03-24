@@ -19,6 +19,7 @@ The Sui Client CLI supports the following commands:
 | `addresses` | Obtain the Addresses managed by the client. |
 | `call` | Call Move function. |
 | `create-example-nft` | Create an example NFT. |
+| `dynamic-field` | Query a dynamic field by address. |
 | `envs` | List all Sui environments. |
 | `execute-signed-tx` | Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute. |
 | `gas` | Obtain all gas objects owned by the address. |
@@ -34,13 +35,13 @@ The Sui Client CLI supports the following commands:
 | `publish` | Publish Move modules. |
 | `serialize-transfer-sui` | Serialize a transfer that can be signed. This is useful when user prefers to take the data to sign elsewhere. |
 | `split-coin` | Split a coin object into multiple coins. |
-| `switch` | Switch active address and network (e.g., devnet, local rpc server). |
-| `sync` | Synchronize client state with authorities. |
+| `switch` | Switch active address and network (e.g., devnet, local RPC server). |
 | `transfer` | Transfer object. |
 | `transfer-sui` | Transfer SUI, and pay gas with the same SUI coin object. If amount is specified, transfers only the amount. If not specified, transfers the object. |
+| `upgrade` | Upgrade a Move module. |
 | `verify-source` | Verify local Move packages against on-chain packages, and optionally their dependencies. |
 
-**Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
+**Note:** The `clear`, `echo`, `env`, and `exit` commands exist only in the interactive shell.
 
 Use `sui client -h` to see a list of supported commands.
 
