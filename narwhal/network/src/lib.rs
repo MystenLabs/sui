@@ -11,6 +11,7 @@
 
 pub mod admin;
 pub mod anemo_ext;
+pub mod client;
 pub mod connectivity;
 pub mod epoch_filter;
 pub mod failpoints;
@@ -22,7 +23,8 @@ mod traits;
 pub use crate::{
     retry::RetryConfig,
     traits::{
-        PrimaryToPrimaryRpc, PrimaryToWorkerRpc, ReliableNetwork, UnreliableNetwork, WorkerRpc,
+        PrimaryToPrimaryRpc, PrimaryToWorkerClient, PrimaryToWorkerRpc, ReliableNetwork,
+        UnreliableNetwork, WorkerRpc, WorkerToPrimaryClient,
     },
 };
 

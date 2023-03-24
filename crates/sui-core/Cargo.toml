@@ -57,6 +57,7 @@ mysten-common.workspace = true
 mysten-metrics = { path = "../mysten-metrics" }
 narwhal-config = { path = "../../narwhal/config" }
 narwhal-executor = { path = "../../narwhal/executor" }
+narwhal-network = { path = "../../narwhal/network" }
 narwhal-node = { path = "../../narwhal/node" }
 narwhal-crypto = { path = "../../narwhal/crypto" }
 narwhal-types = { path = "../../narwhal/types" }

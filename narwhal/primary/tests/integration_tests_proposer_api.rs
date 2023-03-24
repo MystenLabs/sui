@@ -12,6 +12,7 @@ use fastcrypto::{
 };
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
+use network::client::NetworkClient;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use rand::thread_rng;
@@ -39,6 +40,7 @@ async fn test_rounds_errors() {
     let network_keypair = author.network_keypair().copy();
     let authority_id = author.id();
     let name = keypair.public().clone();
+    let client = NetworkClient::new_from_keypair(&author.network_keypair());
 
     let other_keypair = KeyPair::generate(&mut thread_rng());
 
@@ -112,6 +114,7 @@ async fn test_rounds_errors() {
         committee.clone(),
         worker_cache,
         parameters.clone(),
+        client,
         store_primary.header_store,
         store_primary.certificate_store,
         store_primary.proposer_store,
@@ -176,6 +179,7 @@ async fn test_rounds_return_successful_response() {
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
     let public_key = author.keypair().public().clone();
+    let client = NetworkClient::new_from_keypair(&author.network_keypair());
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -214,6 +218,7 @@ async fn test_rounds_return_successful_response() {
         committee.clone(),
         worker_cache,
         parameters.clone(),
+        client,
         store_primary.header_store,
         store_primary.certificate_store,
         store_primary.proposer_store,
@@ -286,6 +291,9 @@ async fn test_node_read_causal_signed_certificates() {
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
     let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
+
+    let client_1 = NetworkClient::new_from_keypair(&authority_1.network_keypair());
+    let client_2 = NetworkClient::new_from_keypair(&authority_2.network_keypair());
 
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 
@@ -375,6 +383,7 @@ async fn test_node_read_causal_signed_certificates() {
         committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
+        client_1,
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
         primary_store_1.proposer_store.clone(),
@@ -414,6 +423,7 @@ async fn test_node_read_causal_signed_certificates() {
         committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
+        client_2,
         primary_store_2.header_store,
         primary_store_2.certificate_store,
         primary_store_2.proposer_store,

@@ -9,6 +9,7 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Committee, Epoch, Parameters, WorkerCache, WorkerId};
 use narwhal_executor::ExecutionState;
+use narwhal_network::client::NetworkClient;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
@@ -75,12 +76,12 @@ impl NarwhalManagerMetrics {
 }
 
 pub struct NarwhalManager {
-    storage_base_path: PathBuf,
     primary_keypair: AuthorityKeyPair,
     network_keypair: NetworkKeyPair,
     worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
     primary_node: PrimaryNode,
     worker_nodes: WorkerNodes,
+    storage_base_path: PathBuf,
     running: Mutex<Running>,
     metrics: NarwhalManagerMetrics,
     store_cache_metrics: CertificateStoreCacheMetrics,
@@ -141,6 +142,9 @@ impl NarwhalManager {
         let store_path = self.get_store_path(committee.epoch());
         let store = NodeStorage::reopen(store_path, Some(self.store_cache_metrics.clone()));
 
+        // Create a new client.
+        let network_client = NetworkClient::new_from_keypair(&self.network_keypair);
+
         let name = self.primary_keypair.public().clone();
 
         tracing::info!("Starting up Narwhal for epoch {}", committee.epoch());
@@ -156,6 +160,7 @@ impl NarwhalManager {
                     self.network_keypair.copy(),
                     committee.clone(),
                     worker_cache.clone(),
+                    network_client.clone(),
                     &store,
                     execution_state.clone(),
                 )
@@ -193,6 +198,7 @@ impl NarwhalManager {
                     id_keypair_copy,
                     committee.clone(),
                     worker_cache.clone(),
+                    network_client.clone(),
                     &store,
                     tx_validator.clone(),
                 )
