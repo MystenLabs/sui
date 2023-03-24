@@ -8,7 +8,7 @@ import {
     LedgerConnectionFailedError,
     LedgerDeviceNotFoundError,
     LedgerNoTransportMechanismError,
-} from '../components/ledger/ledgerExceptions';
+} from '../components/ledger/ledgerErrors';
 
 /**
  * Helper method for producing user-friendly error messages from Signer operations
