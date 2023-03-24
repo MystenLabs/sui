@@ -381,11 +381,11 @@ impl Proposer {
             }
         }
 
-        let mut enough_votes = votes_for_leader >= self.committee.validity_threshold();
+        let mut enough_votes = votes_for_leader >= self.committee.quorum_threshold();
         if enough_votes {
             if let Some(leader) = self.last_leader.as_ref() {
                 debug!(
-                    "Got enough support for leader {} at round {}",
+                    "Got more than enough support for leader {} at round {}",
                     leader.origin(),
                     self.round
                 );
