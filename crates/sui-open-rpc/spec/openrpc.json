@@ -1230,10 +1230,10 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return one or more [DelegatedStake]",
+      "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
       "params": [
         {
-          "name": "staked_sui_id",
+          "name": "staked_sui_ids",
           "required": true,
           "schema": {
             "type": "array",
@@ -5539,6 +5539,20 @@
                 "type": "string",
                 "enum": [
                   "Active"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Unstaked"
                 ]
               }
             }

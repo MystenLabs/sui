@@ -633,6 +633,25 @@ export class JsonRpcProvider {
   }
 
   /**
+   * Return the delegated stakes queried by id.
+   */
+  async getStakesByIds(input: {
+    stakedSuiIds: ObjectId[];
+  }): Promise<DelegatedStake[]> {
+    input.stakedSuiIds.forEach((id) => {
+      if (!id || !isValidSuiObjectId(normalizeSuiObjectId(id))) {
+        throw new Error(`Invalid Sui Stake id ${id}`);
+      }
+    });
+    return await this.client.requestWithType(
+      'sui_getStakesByIds',
+      [input.stakedSuiIds],
+      array(DelegatedStake),
+      this.options.skipDataValidation,
+    );
+  }
+
+  /**
    * Return the latest system state content.
    */
   async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
