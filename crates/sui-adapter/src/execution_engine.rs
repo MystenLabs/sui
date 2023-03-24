@@ -138,8 +138,6 @@ fn charge_gas_for_object_read<S>(
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
-    // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
-    // fetching only unique objects.
     let total_size = temporary_store
         .objects()
         .iter()
@@ -172,8 +170,15 @@ fn execute_transaction<
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
     let is_system = transaction_kind.is_system_tx();
-    // We must charge object read gas inside here during transaction execution, because if this fails
-    // we must still ensure an effect is committed and all objects versions incremented.
+    // At this point no charge has been applied yet
+    debug_assert!(
+        u64::from(gas_status.gas_used()) == 0
+            && gas_status.storage_rebate() == 0
+            && gas_status.storage_gas_units() == 0,
+        "No gas charges must be applied yet"
+    );
+    // We must charge object read here during transaction execution, because if this fails
+    // we must still ensure an effect is committed and all objects versions incremented
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
         let mut execution_result = execution_loop::<Mode, _>(
