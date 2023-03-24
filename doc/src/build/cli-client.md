@@ -41,7 +41,7 @@ The Sui Client CLI supports the following commands:
 | `upgrade` | Upgrade a Move module. |
 | `verify-source` | Verify local Move packages against on-chain packages, and optionally their dependencies. |
 
-**Note:** The `clear`, `echo`, `env` and `exit` commands exist only in the interactive shell.
+**Note:** The `clear`, `echo`, `env`, and `exit` commands exist only in the interactive shell.
 
 Use `sui client -h` to see a list of supported commands.
 
