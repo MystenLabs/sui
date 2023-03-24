@@ -41,6 +41,7 @@ pub struct Transaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub non_refundable_storage_fee: i64,
     pub gas_price: i64,
     // BCS bytes of SenderSignedData
     pub raw_transaction: Vec<u8>,
@@ -160,6 +161,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
         let computation_cost = <u64>::from(gas_summary.computation_cost);
         let storage_cost = <u64>::from(gas_summary.storage_cost);
         let storage_rebate = <u64>::from(gas_summary.storage_rebate);
+        let non_refundable_storage_fee = <u64>::from(gas_summary.non_refundable_storage_fee);
 
         Ok(Transaction {
             id: None,
@@ -187,6 +189,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             computation_cost: computation_cost as i64,
             storage_cost: storage_cost as i64,
             storage_rebate: storage_rebate as i64,
+            non_refundable_storage_fee: non_refundable_storage_fee as i64,
             raw_transaction: tx_resp.raw_transaction,
             transaction_content: tx_json,
             transaction_effects_content: txn_effect_json,
