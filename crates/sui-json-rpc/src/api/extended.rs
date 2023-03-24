@@ -4,7 +4,10 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::{CheckpointId, EpochInfo, EpochPage, NetworkMetrics, ObjectsPage, SuiObjectResponseQuery};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage,
+    SuiObjectResponseQuery,
+};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{EpochId, ObjectID};
 
@@ -40,6 +43,10 @@ pub trait ExtendedApi {
     ) -> RpcResult<ObjectsPage>;
 
     /// Return Network metrics
-    #[method(name = "getTotalAddresses")]
+    #[method(name = "getNetworkMetrics")]
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics>;
+
+    /// Return Network metrics
+    #[method(name = "getMoveCallMetrics")]
+    async fn get_move_call_metrics(&self) -> RpcResult<MoveCallMetrics>;
 }

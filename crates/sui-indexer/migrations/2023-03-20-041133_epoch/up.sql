@@ -1,3 +1,15 @@
+CREATE MATERIALIZED VIEW epoch_network_metrics AS
+SELECT (SELECT MAX(t1.count)::float8 / 10
+        FROM (SELECT SUM(total_transactions) count
+              FROM checkpoints
+              WHERE timestamp_ms / 10000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)) / 10)::BIGINT
+              GROUP BY (timestamp_ms / 10000)) t1) AS tps_30_days,
+       (SELECT MAX(t1.count)::float8 / 10
+        FROM (SELECT SUM(total_commands) count
+              FROM checkpoints
+              WHERE timestamp_ms / 10000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)) / 10)::BIGINT
+              GROUP BY (timestamp_ms / 10000)) t1) AS cps_30_days;
+
 CREATE TABLE epochs
 (
     epoch                           BIGINT PRIMARY KEY,
@@ -27,3 +39,62 @@ CREATE TABLE epochs
 );
 CREATE INDEX epochs_start_index ON epochs (epoch_start_timestamp ASC);
 CREATE INDEX epochs_end_index ON epochs (epoch_end_timestamp ASC NULLS LAST);
+
+-- update epoch_network_metrics on every epoch
+CREATE OR REPLACE FUNCTION objects_modified_func() RETURNS TRIGGER AS
+$body$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        REFRESH MATERIALIZED VIEW epoch_network_metrics;
+        REFRESH MATERIALIZED VIEW epoch_move_call_metrics;
+        RETURN NEW;
+    ELSEIF (TG_OP = 'UPDATE') THEN
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        RETURN OLD;
+    ELSE
+        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - Other action occurred: %, at %',TG_OP,NOW();
+        RETURN NULL;
+    END IF;
+
+EXCEPTION
+    WHEN data_exception THEN
+        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - UDF ERROR [DATA EXCEPTION] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
+        RETURN NULL;
+    WHEN unique_violation THEN
+        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - UDF ERROR [UNIQUE] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
+        RETURN NULL;
+    WHEN OTHERS THEN
+        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - UDF ERROR [OTHER] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
+        RETURN NULL;
+END;
+$body$
+    LANGUAGE plpgsql;
+
+CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
+(SELECT 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+ FROM move_calls
+ WHERE epoch >
+       (SELECT MIN(epoch)
+        FROM epochs
+        WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '3 days'::INTERVAL)) * 1000)::BIGINT)
+ GROUP BY move_package, move_module, move_function
+ LIMIT 10)
+UNION ALL
+(SELECT 7::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+ FROM move_calls
+ WHERE epoch >
+       (SELECT MIN(epoch)
+        FROM epochs
+        WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '7 days'::INTERVAL)) * 1000)::BIGINT)
+ GROUP BY move_package, move_module, move_function
+ LIMIT 10)
+UNION ALL
+(SELECT 30::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
+ FROM move_calls
+ WHERE epoch >
+       (SELECT MIN(epoch)
+        FROM epochs
+        WHERE epoch_start_timestamp > ((EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - '30 days'::INTERVAL)) * 1000)::BIGINT)
+ GROUP BY move_package, move_module, move_function
+ LIMIT 10);

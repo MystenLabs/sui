@@ -1969,7 +1969,24 @@
       }
     },
     {
-      "name": "suix_getTotalAddresses",
+      "name": "suix_getMoveCallMetrics",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return Network metrics",
+      "params": [],
+      "result": {
+        "name": "MoveCallMetrics",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/MoveCallMetrics"
+        }
+      }
+    },
+    {
+      "name": "suix_getNetworkMetrics",
       "tags": [
         {
           "name": "Extended API"
@@ -4133,6 +4150,70 @@
           }
         ]
       },
+      "MoveCallMetrics": {
+        "type": "object",
+        "required": [
+          "rank30Days",
+          "rank3Days",
+          "rank7Days"
+        ],
+        "properties": {
+          "rank30Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "rank3Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "rank7Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
+      },
       "MoveCallParams": {
         "type": "object",
         "required": [
@@ -4187,6 +4268,25 @@
             "additionalProperties": false
           }
         ]
+      },
+      "MoveFunctionName": {
+        "type": "object",
+        "required": [
+          "function",
+          "module",
+          "package"
+        ],
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
       },
       "MovePackage": {
         "type": "object",
@@ -4355,7 +4455,9 @@
         "type": "object",
         "required": [
           "cps30Days",
+          "currentCheckpoint",
           "currentCps",
+          "currentEpoch",
           "currentTps",
           "totalAddresses",
           "totalObjects",
@@ -4368,10 +4470,22 @@
             "type": "number",
             "format": "double"
           },
+          "currentCheckpoint": {
+            "description": "Current checkpoint number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "currentCps": {
             "description": "Current TPS - Sui Command per Second.",
             "type": "number",
             "format": "double"
+          },
+          "currentEpoch": {
+            "description": "Current epoch number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
           },
           "currentTps": {
             "description": "Current TPS - Transaction per Second.",

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // integration test with standalone postgresql database
-//#[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 pub mod pg_integration_test {
     use std::env;
     use std::str::FromStr;
@@ -871,18 +871,23 @@ pub mod pg_integration_test {
             .unwrap();
         assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
         assert_eq!(
-            checkpoint.sequence_number as u64,
+            <u64>::from(checkpoint.sequence_number),
             prev_epoch_last_checkpoint_id
         );
         assert!(checkpoint.end_of_epoch_data.is_some());
 
         assert_eq!(checkpoint.epoch, current_epoch.epoch - 1);
-        assert_eq!(checkpoint.sequence_number, prev_epoch_last_checkpoint_id);
+        assert_eq!(
+            <u64>::from(checkpoint.sequence_number),
+            prev_epoch_last_checkpoint_id
+        );
 
         // cross check with FN
         let fn_cp = test_cluster
             .rpc_client()
-            .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
+            .get_checkpoint(CheckpointId::SequenceNumber(
+                prev_epoch_last_checkpoint_id.into(),
+            ))
             .await
             .unwrap();
 

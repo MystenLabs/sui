@@ -4,8 +4,8 @@
 use async_trait::async_trait;
 
 use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, NetworkMetrics,
-    SuiObjectData, SuiObjectDataFilter, SuiTransactionResponseOptions,
+    Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
+    NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionResponseOptions,
 };
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::CheckpointDigest;
@@ -166,6 +166,7 @@ pub trait IndexerStore {
     ) -> Result<Vec<Transaction>, IndexerError>;
 
     fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
+    fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;

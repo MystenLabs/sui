@@ -17,11 +17,13 @@ use diesel::{QueryDsl, RunQueryDsl};
 use fastcrypto::hash::Digest;
 use fastcrypto::traits::ToFromBytes;
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::identifier::Identifier;
 use tracing::info;
 
 use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, EventPage, NetworkMetrics, SuiEvent, SuiObjectDataFilter,
+    CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics, MoveFunctionName,
+    NetworkMetrics, SuiEvent, SuiObjectDataFilter,
 };
 use sui_json_rpc_types::{
     SuiTransaction, SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents,
@@ -42,7 +44,7 @@ use crate::errors::{Context, IndexerError};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
-use crate::models::network_metrics::DBNetworkMetrics;
+use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::Object;
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
@@ -964,6 +966,40 @@ impl IndexerStore for PgIndexerStore {
             diesel::sql_query("SELECT * FROM network_metrics;").get_result::<DBNetworkMetrics>(conn)
         })?;
         Ok(metrics.into())
+    }
+
+    fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
+        let metrics = read_only!(&self.cp, |conn| {
+            diesel::sql_query("SELECT * FROM network_metrics;")
+                .get_results::<DBMoveCallMetrics>(conn)
+        })?;
+
+        let mut d3 = vec![];
+        let mut d7 = vec![];
+        let mut d30 = vec![];
+        for m in metrics {
+            let package = ObjectID::from_str(&m.move_package);
+            let module = Identifier::from_str(m.move_module.as_str());
+            let function = Identifier::from_str(m.move_function.as_str());
+            if let (Ok(package), Ok(module), Ok(function)) = (package, module, function) {
+                let fun = MoveFunctionName {
+                    package,
+                    module,
+                    function,
+                };
+                match m.count {
+                    3 => d3.push((fun, m.count as usize)),
+                    7 => d7.push((fun, m.count as usize)),
+                    30 => d30.push((fun, m.count as usize)),
+                    _ => {}
+                }
+            }
+        }
+        Ok(MoveCallMetrics {
+            rank_3_days: d3,
+            rank_7_days: d7,
+            rank_30_days: d30,
+        })
     }
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
