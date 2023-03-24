@@ -191,7 +191,7 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
 
-    /// Maximum number of gas units that a single MoveCall transaction can use. Enforced by the Sui adapter.
+    /// Maximum number of MIST that a single MoveCall transaction can use. Enforced by the Sui adapter.
     max_tx_gas: Option<u64>,
 
     /// Maximum number of nested loops. Enforced by the Move bytecode verifier.
@@ -281,8 +281,7 @@ pub struct ProtocolConfig {
     object_runtime_max_num_store_entries_system_tx: Option<u64>,
 
     // === Execution gas costs ====
-    // note: Option<per-instruction and native function gas costs live in the sui-cost-tables crate
-    /// Base cost for any Sui transaction
+    /// Minimum cost (and gas budget) for any Sui transaction
     base_tx_cost_fixed: Option<u64>,
 
     /// Additional cost for a transaction that publishes a package
@@ -1253,7 +1252,7 @@ impl ProtocolConfig {
                 move_binary_format_version: Some(6),
                 max_move_object_size: Some(250 * 1024),
                 max_move_package_size: Some(100 * 1024),
-                max_tx_gas: Some(10_000_000_000),
+                max_tx_gas: Some(100_000_000_000),
                 max_loop_depth: Some(5),
                 max_generic_instantiation_length: Some(32),
                 max_function_parameters: Some(128),
@@ -1291,7 +1290,7 @@ impl ProtocolConfig {
                 object_runtime_max_num_cached_objects_system_tx: Some(1000 * 16),
                 object_runtime_max_num_store_entries: Some(1000),
                 object_runtime_max_num_store_entries_system_tx: Some(1000 * 16),
-                base_tx_cost_fixed: Some(110_000),
+                base_tx_cost_fixed: Some(1_100),
                 package_publish_cost_fixed: Some(1_000),
                 base_tx_cost_per_byte: Some(0),
                 package_publish_cost_per_byte: Some(80),
@@ -1323,7 +1322,7 @@ impl ProtocolConfig {
                 address_from_u256_cost_base: Some(52),
 
                 // `dynamic_field` module
-                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
                 dynamic_field_hash_type_and_key_cost_base: Some(100),
                 dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
                 dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),

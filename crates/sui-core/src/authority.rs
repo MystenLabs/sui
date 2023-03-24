@@ -61,7 +61,7 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::error::UserInputError;
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, SuiCostTable, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -1179,8 +1179,8 @@ impl AuthorityState {
         );
         let gas_status = SuiGasStatus::new_with_budget(
             max_tx_gas,
-            GasPrice::from(gas_price),
-            storage_gas_price.into(),
+            gas_price,
+            storage_gas_price,
             SuiCostTable::new(protocol_config),
         );
         let move_vm = Arc::new(

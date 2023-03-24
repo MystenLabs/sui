@@ -204,18 +204,16 @@ async fn check_gas(
         // check balance and coins consistency
         let protocol_config = epoch_store.protocol_config();
         let cost_table = SuiCostTable::new(protocol_config);
-        gas::check_gas_balance(
-            gas_object,
-            more_gas_objects,
-            gas_budget,
-            gas_price,
-            &cost_table,
-        )?;
+        gas::check_gas_balance(gas_object, more_gas_objects, gas_budget, &cost_table)?;
 
         // make the gas status to be used by execution
         let storage_gas_price = protocol_config.storage_gas_price();
-        gas::start_gas_metering(gas_budget, gas_price, storage_gas_price, cost_table)
-            .map_err(|e| e.into())
+        Ok(SuiGasStatus::new_with_budget(
+            gas_budget,
+            gas_price,
+            storage_gas_price,
+            cost_table,
+        ))
     }
 }
 

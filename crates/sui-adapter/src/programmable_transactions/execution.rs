@@ -689,7 +689,7 @@ fn vm_move_call<S: StorageView>(
             function,
             type_arguments,
             serialized_arguments,
-            context.gas_status.create_move_gas_status(),
+            context.gas_status.move_gas_status(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 
@@ -783,7 +783,7 @@ fn publish_and_verify_modules<S: StorageView>(
             AccountAddress::from(package_id),
             // TODO: publish_module_bundle() currently doesn't charge gas.
             // Do we want to charge there?
-            context.gas_status.create_move_gas_status(),
+            context.gas_status.move_gas_status(),
         )
         .map_err(|e| context.convert_vm_error(e))?;
 

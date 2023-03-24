@@ -119,7 +119,7 @@ impl TestCallArg {
     }
 }
 
-const MAX_GAS: u64 = 10000;
+const MAX_GAS: u64 = 1000000;
 
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
@@ -263,7 +263,14 @@ async fn test_dry_run_transaction_block() {
         .unwrap();
     let gas_usage_no_gas = response.effects.gas_cost_summary();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
-    assert_eq!(gas_usage, gas_usage_no_gas);
+    // computation and storage charges are the same.
+    // Rebate and non refundable fees cannot match because objects passed in are
+    // different
+    assert_eq!(
+        gas_usage.computation_cost,
+        gas_usage_no_gas.computation_cost
+    );
+    assert_eq!(gas_usage.storage_cost, gas_usage_no_gas.storage_cost);
 }
 
 #[tokio::test]
@@ -368,9 +375,16 @@ async fn test_dev_inspect_object_by_bytes() {
         .unwrap()
         .contents()
         .to_vec();
-    // gas used should be the same
+    // gas used should be the same, except for storage rebates and non refundable fees
     let actual_gas_used: SuiGasCostSummary = effects.gas_cost_summary().clone().into();
-    assert_eq!(actual_gas_used, dev_inspect_gas_summary);
+    assert_eq!(
+        actual_gas_used.computation_cost,
+        dev_inspect_gas_summary.computation_cost
+    );
+    assert_eq!(
+        actual_gas_used.storage_cost,
+        dev_inspect_gas_summary.storage_cost
+    );
 
     // use the created object directly, via its bytes
     let DevInspectResults {
@@ -1123,7 +1137,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 async fn test_upgrade_module_is_feature_gated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 100000);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 1000000);
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
 
@@ -1719,7 +1733,7 @@ async fn test_package_size_limit() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, u64::MAX);
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, MAX_GAS);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let mut package = Vec::new();
     let mut modules_size = 0;
@@ -1954,7 +1968,7 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
         sender,
         Some(GAS_VALUE_FOR_TESTING),
         object.compute_object_reference(),
-        200,
+        20000,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let result = send_and_confirm_transaction(&authority_state, transaction)
@@ -2588,7 +2602,7 @@ async fn test_move_call_insufficient_gas() {
         .await
         .unwrap()
         .into_message();
-    let gas_used = effects.gas_cost_summary().gas_used();
+    let gas_used = effects.gas_cost_summary().net_gas_usage() as u64;
 
     let obj_ref = authority_state
         .get_object(&object_id)
@@ -2612,7 +2626,7 @@ async fn test_move_call_insufficient_gas() {
         obj_ref,
         recipient,
         gas_ref,
-        gas_used - 5,
+        gas_used - 150,
     );
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);
@@ -5053,7 +5067,7 @@ async fn test_gas_smashing() {
         coin_num: u64,
         budget: u64,
         success: bool,
-    ) -> u64 {
+    ) -> i64 {
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_coins = make_gas_coins(sender, reference_gas_used, coin_num);
         let gas_coin_ids: Vec<_> = gas_coins.iter().map(|obj| obj.id()).collect();
@@ -5085,27 +5099,30 @@ async fn test_gas_smashing() {
             &state.get_object(&gas_coin_ids[0]).await.unwrap().unwrap(),
         )
         .unwrap();
-        let gas_used = effects.gas_cost_summary().gas_used();
-        assert!(reference_gas_used > balance);
-        assert_eq!(reference_gas_used, balance + gas_used);
+        let gas_used = effects.gas_cost_summary().net_gas_usage();
+        if gas_used < 0 {
+            assert_eq!(reference_gas_used, balance - (-gas_used as u64))
+        } else {
+            assert_eq!(reference_gas_used, balance + gas_used as u64)
+        };
         gas_used
     }
 
     // get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
     let gas_used = run_and_check(100_000, 1, 100_000, true).await;
+    assert!(gas_used > 0);
+    let gas_used = gas_used as u64;
 
-    // add something to the gas used to account for multiple gas coins being charged for
-    let reference_gas_used = gas_used + 1_000;
-    let three_coin_gas = run_and_check(reference_gas_used, 3, reference_gas_used, true).await;
-    run_and_check(reference_gas_used, 10, reference_gas_used - 100, true).await;
+    // multiple coins will get bigger rebate so those must succeed with original gas used
+    run_and_check(gas_used, 3, gas_used, true).await;
+    run_and_check(gas_used, 10, gas_used - 100, true).await;
 
     // make less then required to succeed
-    let reference_gas_used = gas_used - 1;
-    run_and_check(reference_gas_used, 2, reference_gas_used - 10, false).await;
-    run_and_check(reference_gas_used, 30, reference_gas_used, false).await;
-    // use a small amount less than what 3 coins above reported (with success)
-    run_and_check(three_coin_gas, 3, three_coin_gas - 1, false).await;
+    let reference_gas_used = gas_used / 3;
+    run_and_check(reference_gas_used, 2, reference_gas_used, false).await;
+    // 30 coins gets a ton of rebate and there is no way to make it fail
+    run_and_check(reference_gas_used, 30, reference_gas_used, true).await;
 }
 
 #[tokio::test]
@@ -5162,7 +5179,7 @@ async fn test_for_inc_201_dry_run() {
     builder.publish_immutable(modules, system_package_ids());
     let kind = TransactionKind::programmable(builder.finish());
 
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], MAX_GAS, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
     let (DryRunTransactionBlockResponse { events, .. }, _, _) = fullnode
@@ -5215,7 +5232,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.publish_immutable(modules, vec![]);
     let kind = TransactionKind::programmable(builder.finish());
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 100000, 1);
     let signed = to_sender_signed_transaction(txn_data, &key);
     let txn_effects = send_and_confirm_transaction(&state, signed)
         .await
@@ -5245,7 +5262,7 @@ async fn test_publish_transitive_dependencies_ok() {
     builder.publish_immutable(modules, vec![*package_c_id]); // Note: B depends on C
 
     let kind = TransactionKind::programmable(builder.finish());
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 100000, 1);
     let signed = to_sender_signed_transaction(txn_data, &key);
     let txn_effects = send_and_confirm_transaction(&state, signed)
         .await
@@ -5276,7 +5293,7 @@ async fn test_publish_transitive_dependencies_ok() {
     builder.publish_immutable(modules, vec![*package_b_id, *package_c_id]); // Note: A depends on B and C.
 
     let kind = TransactionKind::programmable(builder.finish());
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 100000, 1);
     let signed = to_sender_signed_transaction(txn_data, &key);
     let txn_effects = send_and_confirm_transaction(&state, signed)
         .await
@@ -5316,17 +5333,16 @@ async fn test_publish_transitive_dependencies_ok() {
     builder.publish_immutable(modules, deps);
 
     let kind = TransactionKind::programmable(builder.finish());
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 10000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![gas_ref], 1000000, 1);
     let signed = to_sender_signed_transaction(txn_data, &key);
 
-    let status = send_and_confirm_transaction(&state, signed)
+    let data = send_and_confirm_transaction(&state, signed)
         .await
         .unwrap()
         .1
-        .into_data()
-        .into_status();
+        .into_data();
 
-    assert!(status.is_ok())
+    assert!(data.into_status().is_ok())
 }
 
 #[tokio::test]

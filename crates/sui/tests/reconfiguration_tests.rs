@@ -60,7 +60,7 @@ async fn advance_epoch_tx_test() {
             let (_system_state, effects) = state
                 .create_and_execute_advance_epoch_tx(
                     &state.epoch_store_for_testing(),
-                    &GasCostSummary::new(0, 0, 0),
+                    &GasCostSummary::new(0, 0, 0, 0),
                     0, // checkpoint
                     0, // epoch_start_timestamp_ms
                 )
@@ -568,7 +568,7 @@ async fn test_inactive_validator_pool_read() {
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        100000,
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
@@ -1045,7 +1045,7 @@ async fn execute_add_validator_candidate_tx(
             CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
-        10000,
+        100000,
     )
     .unwrap();
     let transaction =
@@ -1091,7 +1091,7 @@ async fn execute_join_committee_txes(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(stake)),
             CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        10000,
+        100000,
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
@@ -1115,7 +1115,7 @@ async fn execute_join_committee_txes(
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        100000,
     )
     .unwrap();
     let transaction =
@@ -1146,7 +1146,7 @@ async fn execute_leave_committee_tx(
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        1000000,
     )
     .unwrap();
 

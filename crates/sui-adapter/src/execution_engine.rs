@@ -165,14 +165,14 @@ fn execute_transaction<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     // First smash gas into the first coin if more than 1 was provided
-    let gas_object_ref = match temporary_store.smash_gas(gas) {
+    let gas_object_ref = match temporary_store.smash_gas(gas, &gas_status) {
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
     let is_system = transaction_kind.is_system_tx();
     // At this point no charge has been applied yet
     debug_assert!(
-        u64::from(gas_status.gas_used()) == 0
+        gas_status.move_gas_status().gas_used_pre_gas_price() == 0
             && gas_status.storage_rebate() == 0
             && gas_status.storage_gas_units() == 0,
         "No gas charges must be applied yet"
@@ -223,9 +223,12 @@ fn execute_transaction<
         };
         execution_result
     });
-    if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
-    }
+    let cost_summary = if !gas_status.is_unmetered() {
+        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas)
+    } else {
+        // println!("GAS - gas_summary: unmetered transaction");
+        GasCostSummary::default()
+    };
     if !is_system {
         #[cfg(debug_assertions)]
         {
@@ -237,7 +240,6 @@ fn execute_transaction<
             // objects (including coins). this can violate conservation, but it's expected
         }
     }
-    let cost_summary = gas_status.summary();
     (cost_summary, result)
 }
 

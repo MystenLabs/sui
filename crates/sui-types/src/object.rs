@@ -744,7 +744,8 @@ impl Object {
 
 // Testing-related APIs.
 impl Object {
-    /// Get the total amount of SUI embedded in `self`, including both Move objects and the storage rebate
+    /// Get the total amount of SUI embedded in `self`,
+    /// including both Move objects and the storage rebate
     pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
         Ok(self.storage_rebate
             + match &self.data {
@@ -789,12 +790,14 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
-        Self {
+        let mut obj = Self {
             owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
-        }
+        };
+        assign_storage_rebate(&mut obj);
+        obj
     }
 
     pub fn with_object_owner_for_testing(id: ObjectID, owner: ObjectID) -> Self {
@@ -804,12 +807,14 @@ impl Object {
             version: OBJECT_START_VERSION,
             contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
-        Self {
+        let mut obj = Self {
             owner: Owner::ObjectOwner(owner.into()),
             data,
             previous_transaction: TransactionDigest::genesis(),
             storage_rebate: 0,
-        }
+        };
+        assign_storage_rebate(&mut obj);
+        obj
     }
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
@@ -844,11 +849,13 @@ impl Object {
     /// For testing purposes only
     pub fn new_gas_with_balance_and_owner_for_testing(value: u64, owner: SuiAddress) -> Self {
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, ObjectID::random(), value);
-        Object::new_move(
+        let mut obj = Object::new_move(
             obj,
             Owner::AddressOwner(owner),
             TransactionDigest::genesis(),
-        )
+        );
+        assign_storage_rebate(&mut obj);
+        obj
     }
 
     /// Generate a new gas coin object with default balance and random owner.
@@ -908,6 +915,14 @@ where
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect()
+}
+
+fn assign_storage_rebate(obj: &mut Object) {
+    let protocol_config = ProtocolConfig::get_for_max_version();
+    let size = obj.object_size_for_gas_metering();
+    let cost_per_byte = protocol_config.obj_data_cost_refundable();
+    let storage_gas_price = protocol_config.storage_gas_price();
+    obj.storage_rebate = size as u64 * cost_per_byte * storage_gas_price;
 }
 
 #[allow(clippy::large_enum_variant)]
