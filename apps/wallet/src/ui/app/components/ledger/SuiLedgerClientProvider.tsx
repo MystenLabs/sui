@@ -14,7 +14,8 @@ import {
 } from 'react';
 
 import {
-    LedgerConnectionFailedError,
+    convertErrorToLedgerConnectionFailedError,
+    LedgerDeviceNotFoundError,
     LedgerNoTransportMechanismError,
 } from './ledgerErrors';
 
@@ -24,7 +25,9 @@ type SuiLedgerClientProviderProps = {
 
 type SuiLedgerClientContextValue = {
     suiLedgerClient: SuiLedgerClient | undefined;
-    connectToLedger: () => Promise<SuiLedgerClient>;
+    connectToLedger: (
+        requestPermissionsFirst?: boolean
+    ) => Promise<SuiLedgerClient>;
 };
 
 const SuiLedgerClientContext = createContext<
@@ -36,27 +39,35 @@ export function SuiLedgerClientProvider({
 }: SuiLedgerClientProviderProps) {
     const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
 
+    const resetSuiLedgerClient = useCallback(async () => {
+        await suiLedgerClient?.transport.close();
+        setSuiLedgerClient(undefined);
+    }, [suiLedgerClient]);
+
     useEffect(() => {
-        const onDisconnect = () => {
-            setSuiLedgerClient(undefined);
+        // NOTE: The disconnect event is fired when someone physically disconnects
+        // their Ledger device in addition to when user's exit out of an application
+        suiLedgerClient?.transport.on('disconnect', resetSuiLedgerClient);
+        return () => {
+            suiLedgerClient?.transport.off('disconnect', resetSuiLedgerClient);
         };
+    }, [resetSuiLedgerClient, suiLedgerClient?.transport]);
 
-        suiLedgerClient?.transport.on('disconnect', onDisconnect);
-        return () => suiLedgerClient?.transport.off('disconnect', onDisconnect);
-    }, [suiLedgerClient?.transport]);
-
-    const connectToLedger = useCallback(async () => {
-        if (suiLedgerClient?.transport) {
+    const connectToLedger = useCallback(
+        async (requestPermissionsFirst = false) => {
             // If we've already connected to a Ledger device, we need
             // to close the connection before we try to re-connect
-            await suiLedgerClient.transport.close();
-        }
+            await resetSuiLedgerClient();
 
-        const ledgerTransport = await requestConnectionToLedger();
-        const ledgerClient = new SuiLedgerClient(ledgerTransport);
-        setSuiLedgerClient(ledgerClient);
-        return ledgerClient;
-    }, [suiLedgerClient]);
+            const ledgerTransport = requestPermissionsFirst
+                ? await requestLedgerConnection()
+                : await openLedgerConnection();
+            const ledgerClient = new SuiLedgerClient(ledgerTransport);
+            setSuiLedgerClient(ledgerClient);
+            return ledgerClient;
+        },
+        [resetSuiLedgerClient]
+    );
 
     const contextValue: SuiLedgerClientContextValue = useMemo(() => {
         return {
@@ -76,23 +87,43 @@ export function useSuiLedgerClient() {
     const suiLedgerClientContext = useContext(SuiLedgerClientContext);
     if (!suiLedgerClientContext) {
         throw new Error(
-            'useSuiLedgerClient use must be within SuiLedgerClientContext'
+            'useSuiLedgerClient must be used within SuiLedgerClientContext'
         );
     }
     return suiLedgerClientContext;
 }
 
-async function requestConnectionToLedger() {
+async function requestLedgerConnection() {
+    const ledgerTransportClass = await getLedgerTransportClass();
     try {
-        if (await TransportWebHID.isSupported()) {
-            return await TransportWebHID.request();
-        } else if (await TransportWebUSB.isSupported()) {
-            return await TransportWebUSB.request();
-        }
+        return await ledgerTransportClass.request();
     } catch (error) {
-        throw new LedgerConnectionFailedError(
-            "Unable to connect to the user's Ledger device"
+        throw convertErrorToLedgerConnectionFailedError(error);
+    }
+}
+
+async function openLedgerConnection() {
+    const ledgerTransportClass = await getLedgerTransportClass();
+    let ledgerTransport: TransportWebHID | TransportWebUSB | null | undefined;
+
+    try {
+        ledgerTransport = await ledgerTransportClass.openConnected();
+    } catch (error) {
+        throw convertErrorToLedgerConnectionFailedError(error);
+    }
+    if (!ledgerTransport) {
+        throw new LedgerDeviceNotFoundError(
+            "The user doesn't have a Ledger device connected to their machine"
         );
+    }
+    return ledgerTransport;
+}
+
+async function getLedgerTransportClass() {
+    if (await TransportWebHID.isSupported()) {
+        return TransportWebHID;
+    } else if (await TransportWebUSB.isSupported()) {
+        return TransportWebUSB;
     }
     throw new LedgerNoTransportMechanismError(
         "There are no supported transport mechanisms to connect to the user's Ledger device"
