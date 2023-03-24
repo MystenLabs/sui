@@ -51,7 +51,7 @@ async fn reject_invalid_clients_transactions() {
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
     let myself = my_primary.worker(worker_id);
-    let name = my_primary.public_key();
+    let public_key = my_primary.public_key();
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -75,7 +75,7 @@ async fn reject_invalid_clients_transactions() {
 
     // Spawn a `Worker` instance with a reject-all validator.
     Worker::spawn(
-        name.clone(),
+        my_primary.authority().clone(),
         myself.keypair(),
         worker_id,
         committee.clone(),
@@ -90,7 +90,10 @@ async fn reject_invalid_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
+    let address = worker_cache
+        .worker(&public_key, &worker_id)
+        .unwrap()
+        .transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
@@ -103,7 +106,7 @@ async fn reject_invalid_clients_transactions() {
     let res = client.submit_transaction(txn).await;
     assert!(res.is_err());
 
-    let worker_pk = worker_cache.worker(&name, &worker_id).unwrap().name;
+    let worker_pk = worker_cache.worker(&public_key, &worker_id).unwrap().name;
 
     let batch = batch();
     let batch_message = WorkerBatchMessage {
@@ -140,7 +143,7 @@ async fn handle_clients_transactions() {
     let worker_id = 0;
     let my_primary = fixture.authorities().next().unwrap();
     let myself = my_primary.worker(worker_id);
-    let name = my_primary.public_key();
+    let authority_public_key = my_primary.public_key();
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -164,7 +167,7 @@ async fn handle_clients_transactions() {
 
     // Spawn a `Worker` instance.
     Worker::spawn(
-        name.clone(),
+        my_primary.authority().clone(),
         myself.keypair(),
         worker_id,
         committee.clone(),
@@ -212,7 +215,10 @@ async fn handle_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = worker_cache.worker(&name, &worker_id).unwrap().transactions;
+    let address = worker_cache
+        .worker(&authority_public_key, &worker_id)
+        .unwrap()
+        .transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let client = TransactionsClient::new(channel);
@@ -254,7 +260,6 @@ async fn get_network_peers_from_admin_server() {
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
     let authority_1 = fixture.authorities().next().unwrap();
-    let name_1 = authority_1.public_key();
     let signer_1 = authority_1.keypair().copy();
 
     let worker_id = 0;
@@ -273,7 +278,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn Primary 1
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         signer_1,
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -318,7 +323,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
-        name_1,
+        authority_1.authority().clone(),
         worker_1_keypair.copy(),
         worker_id,
         committee.clone(),
@@ -375,7 +380,6 @@ async fn get_network_peers_from_admin_server() {
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     let authority_2 = fixture.authorities().nth(1).unwrap();
-    let name_2 = authority_2.public_key();
     let signer_2 = authority_2.keypair().copy();
 
     let worker_2_keypair = authority_2.worker(worker_id).keypair().copy();
@@ -396,7 +400,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         signer_2,
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -442,7 +446,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
-        name_2,
+        authority_2.authority().clone(),
         worker_2_keypair.copy(),
         worker_id,
         committee.clone(),

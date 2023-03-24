@@ -24,4 +24,16 @@ pub trait ExtendedApi {
     /// Return current epoch info
     #[method(name = "getCurrentEpoch")]
     async fn get_current_epoch(&self) -> RpcResult<EpochInfo>;
+
+    /// Return total address count
+    #[method(name = "getTotalAddresses")]
+    async fn get_total_addresses(&self) -> RpcResult<u64>;
+
+    /// Return total object count
+    #[method(name = "getTotalObjects")]
+    async fn get_total_objects(&self) -> RpcResult<u64>;
+
+    /// Return total package count
+    #[method(name = "getTotalPackages")]
+    async fn get_total_packages(&self) -> RpcResult<u64>;
 }

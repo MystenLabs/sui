@@ -24,27 +24,23 @@ export const testEd25519SerializedLegacy = Object.freeze({
 export const testEd25519Legacy = fromExportedKeypair(
     testEd25519SerializedLegacy
 );
-export const testEd25519AddressLegacy = `0x${testEd25519Legacy
+export const testEd25519AddressLegacy = testEd25519Legacy
     .getPublicKey()
-    .toSuiAddress()}`;
+    .toSuiAddress();
 
 export const testEd25519Serialized = Object.freeze({
     schema: 'ED25519',
     privateKey: 'a3R0jvXpEziZLHsbX1DogdyGm8AK87HScEK+JJHwaV8=',
 } as const);
 export const testEd25519 = fromExportedKeypair(testEd25519Serialized);
-export const testEd25519Address = `0x${testEd25519
-    .getPublicKey()
-    .toSuiAddress()}`;
+export const testEd25519Address = testEd25519.getPublicKey().toSuiAddress();
 
 export const testSecp256k1Serialized = Object.freeze({
     schema: 'Secp256k1',
     privateKey: '4DD3CUtZvbc9Ur69tTvKaLeIDptxNa9qZcpkyXWjVGY=',
 } as const);
 export const testSecp256k1 = fromExportedKeypair(testSecp256k1Serialized);
-export const testSecp256k1Address = `0x${testSecp256k1
-    .getPublicKey()
-    .toSuiAddress()}`;
+export const testSecp256k1Address = testSecp256k1.getPublicKey().toSuiAddress();
 type TestDataVault = typeof testDataVault1;
 /**
  * A test vault with 2 keypairs

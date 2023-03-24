@@ -755,3 +755,10 @@ impl Default for SuiSystemStateInnerV1 {
         }
     }
 }
+
+/// Rust version of the Move sui::validator_cap::UnverifiedValidatorOperationCap type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct UnverifiedValidatorOperationCapV1 {
+    pub id: ObjectID,
+    pub authorizer_validator_address: SuiAddress,
+}

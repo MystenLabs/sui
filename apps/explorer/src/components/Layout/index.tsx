@@ -39,7 +39,7 @@ export function Layout() {
                             >
                                 <div className="w-full">
                                     <Header />
-                                    <main className="relative z-10 min-h-screen bg-offwhite py-2">
+                                    <main className="relative z-10 min-h-screen bg-offwhite">
                                         <section className="mx-auto max-w-[1440px] py-10 px-5 2xl:px-0">
                                             <Outlet />
                                         </section>

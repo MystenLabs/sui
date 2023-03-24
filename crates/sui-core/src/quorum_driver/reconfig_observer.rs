@@ -3,8 +3,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use sui_protocol_config::ProtocolVersion;
-use sui_types::committee::Committee;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 
@@ -27,7 +26,7 @@ pub trait ReconfigObserver<A> {
 /// A ReconfigObserver that subscribes to a reconfig channel of new committee.
 /// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
-    reconfig_rx: tokio::sync::broadcast::Receiver<(Committee, ProtocolVersion)>,
+    reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
     authority_store: Arc<AuthorityStore>,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
@@ -36,7 +35,7 @@ pub struct OnsiteReconfigObserver {
 
 impl OnsiteReconfigObserver {
     pub fn new(
-        reconfig_rx: tokio::sync::broadcast::Receiver<(Committee, ProtocolVersion)>,
+        reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
         authority_store: Arc<AuthorityStore>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
@@ -95,8 +94,12 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
         }
         loop {
             match self.reconfig_rx.recv().await {
-                Ok((committee, _protocol_version)) => {
-                    info!("Got reconfig message: {}", committee);
+                Ok(system_state) => {
+                    let committee = system_state.get_current_epoch_committee();
+                    info!(
+                        "Got reconfig message. New committee: {}",
+                        committee.committee
+                    );
                     if committee.epoch() > quorum_driver.current_epoch() {
                         let authority_agg =
                             self.create_authority_aggregator_from_system_state().await;

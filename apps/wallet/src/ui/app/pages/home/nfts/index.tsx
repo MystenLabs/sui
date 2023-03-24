@@ -25,7 +25,7 @@ function NftsPage() {
         (obj) => !Coin.isCoin(obj)
     );
     const nfts = nft_objects?.map((nft) => {
-        const nft_details = nft.details as SuiObjectData;
+        const nft_details = nft.data as SuiObjectData;
         return nft_details;
     });
 

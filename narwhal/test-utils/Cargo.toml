@@ -16,6 +16,7 @@ tempfile = "3.3.0"
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tonic = "0.8.2"
 tracing = "0.1.36"
+once_cell = "1.16"
 
 config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true

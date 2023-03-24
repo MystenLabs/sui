@@ -1,4 +1,6 @@
 ---
+AuthorityIdentifier:
+  NEWTYPESTRUCT: U16
 Batch:
   STRUCT:
     - transactions:
@@ -30,9 +32,7 @@ CertificateDigest:
 Header:
   STRUCT:
     - author:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 96
+        TYPENAME: AuthorityIdentifier
     - round: U64
     - epoch: U64
     - created_at: U64
@@ -86,8 +86,6 @@ WorkerSynchronizeMessage:
         SEQ:
           TYPENAME: BatchDigest
     - target:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 96
+        TYPENAME: AuthorityIdentifier
     - is_certified: BOOL
 

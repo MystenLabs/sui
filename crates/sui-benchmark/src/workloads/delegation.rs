@@ -52,7 +52,12 @@ impl Payload for DelegationTestPayload {
                 self.validator,
                 self.sender,
                 &self.keypair,
-                Some(*self.system_state_observer.reference_gas_price.borrow()),
+                Some(
+                    self.system_state_observer
+                        .state
+                        .borrow()
+                        .reference_gas_price,
+                ),
             ),
             None => make_transfer_sui_transaction(
                 self.gas,
@@ -60,7 +65,12 @@ impl Payload for DelegationTestPayload {
                 Some(1),
                 self.sender,
                 &self.keypair,
-                Some(*self.system_state_observer.reference_gas_price.borrow()),
+                Some(
+                    self.system_state_observer
+                        .state
+                        .borrow()
+                        .reference_gas_price,
+                ),
             ),
         }
     }

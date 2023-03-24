@@ -183,7 +183,7 @@ progress.
  permits.
 </dd>
 <dt>
-<code><a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;</code>
+<code>digest: <a href="">vector</a>&lt;u8&gt;</code>
 </dt>
 <dd>
  (Immutable) SHA256 digest of the bytecode and transitive
@@ -725,7 +725,7 @@ sha3_256(sort(modules ++ deps))
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_ticket_digest">ticket_digest</a>(ticket: &<a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a>): &<a href="">vector</a>&lt;u8&gt; {
-    &ticket.<a href="digest.md#0x2_digest">digest</a>
+    &ticket.digest
 }
 </code></pre>
 
@@ -887,14 +887,14 @@ Issue a ticket authorizing an upgrade to a particular new bytecode
 not already been issued, and if the <code>policy</code> requested is at least as
 restrictive as the policy set out by the <code>cap</code>.
 
-The <code><a href="digest.md#0x2_digest">digest</a></code> supplied and the <code>policy</code> will both be checked by
+The <code>digest</code> supplied and the <code>policy</code> will both be checked by
 validators when running the upgrade.  I.e. the bytecode supplied in
 the upgrade must have a matching digest, and the changes relative to
 the parent package must be compatible with the policy in the ticket
 for the upgrade to succeed.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, <a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
+<pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, policy: u8, digest: <a href="">vector</a>&lt;u8&gt;): <a href="package.md#0x2_package_UpgradeTicket">package::UpgradeTicket</a>
 </code></pre>
 
 
@@ -906,7 +906,7 @@ for the upgrade to succeed.
 <pre><code><b>public</b> <b>fun</b> <a href="package.md#0x2_package_authorize_upgrade">authorize_upgrade</a>(
     cap: &<b>mut</b> <a href="package.md#0x2_package_UpgradeCap">UpgradeCap</a>,
     policy: u8,
-    <a href="digest.md#0x2_digest">digest</a>: <a href="">vector</a>&lt;u8&gt;
+    digest: <a href="">vector</a>&lt;u8&gt;
 ): <a href="package.md#0x2_package_UpgradeTicket">UpgradeTicket</a> {
     <b>let</b> id_zero = <a href="object.md#0x2_object_id_from_address">object::id_from_address</a>(@0x0);
     <b>assert</b>!(cap.<a href="package.md#0x2_package">package</a> != id_zero, <a href="package.md#0x2_package_EAlreadyAuthorized">EAlreadyAuthorized</a>);
@@ -919,7 +919,7 @@ for the upgrade to succeed.
         cap: <a href="object.md#0x2_object_id">object::id</a>(cap),
         <a href="package.md#0x2_package">package</a>,
         policy,
-        <a href="digest.md#0x2_digest">digest</a>,
+        digest,
     }
 }
 </code></pre>

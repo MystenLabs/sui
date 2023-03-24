@@ -17,6 +17,8 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
+use sui_core::consensus_adapter::SubmitToConsensus;
+use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot::Sender;
@@ -39,7 +41,6 @@ use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::ValidatorService;
-use sui_core::batch_bls_verifier::BatchCertificateVerifierMetrics;
 use sui_core::checkpoints::checkpoint_executor;
 use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
@@ -57,6 +58,7 @@ use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::narwhal_manager::{NarwhalConfiguration, NarwhalManager, NarwhalManagerMetrics};
+use sui_core::signature_verifier::VerifiedDigestCacheMetrics;
 use sui_core::state_accumulator::StateAccumulator;
 use sui_core::storage::RocksDbStore;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
@@ -76,7 +78,7 @@ use sui_network::api::ValidatorServer;
 use sui_network::discovery;
 use sui_network::discovery::TrustedPeerChangeEvent;
 use sui_network::{state_sync, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_HTTP2_KEEPALIVE_SEC};
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
+use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use sui_storage::IndexStore;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::Committee;
@@ -123,7 +125,7 @@ pub struct SuiNode {
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
-    end_of_epoch_channel: broadcast::Sender<(Committee, ProtocolVersion)>,
+    end_of_epoch_channel: broadcast::Sender<SuiSystemState>,
 
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
@@ -196,7 +198,7 @@ impl SuiNode {
             .get_epoch_start_configuration()?
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
-        let batch_verifier_metrics = BatchCertificateVerifierMetrics::new(&prometheus_registry);
+        let batch_verifier_metrics = VerifiedDigestCacheMetrics::new(&prometheus_registry);
 
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -414,7 +416,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<(Committee, ProtocolVersion)> {
+    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
     }
 
@@ -593,7 +595,6 @@ impl SuiNode {
             state_sync_handle,
             narwhal_manager,
             narwhal_epoch_data_remover,
-            committee,
             accumulator,
             connection_monitor_status,
             validator_server_handle,
@@ -612,7 +613,6 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
-        committee: Arc<Committee>,
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         validator_server_handle: JoinHandle<Result<()>>,
@@ -637,22 +637,22 @@ impl SuiNode {
 
         consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
+        let new_epoch_start_state = epoch_store.epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
+
         let consensus_handler = Arc::new(ConsensusHandler::new(
             epoch_store.clone(),
             checkpoint_service.clone(),
             state.transaction_manager().clone(),
             state.db(),
             low_scoring_authorities,
-            committee,
             connection_monitor_status
                 .authority_names_to_peer_ids
                 .load()
                 .clone(),
+            committee.clone(),
             state.metrics.clone(),
         ));
-
-        let new_epoch_start_state = epoch_store.epoch_start_state();
-        let committee = new_epoch_start_state.get_narwhal_committee();
 
         let transactions_addr = &config
             .consensus_config
@@ -875,18 +875,33 @@ impl SuiNode {
             if let Some(components) = &*self.validator_components.lock().await {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
+
+                let max_binary_format_version = cur_epoch_store
+                    .protocol_config()
+                    .move_binary_format_version();
                 let transaction =
                     ConsensusTransaction::new_capability_notification(AuthorityCapabilities::new(
                         self.state.name,
                         self.config
                             .supported_protocol_versions
                             .expect("Supported versions should be populated"),
-                        self.state.get_available_system_packages().await,
+                        self.state
+                            .get_available_system_packages(max_binary_format_version)
+                            .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
-                components
+                if let Err(e) = components
                     .consensus_adapter
-                    .submit(transaction, None, &cur_epoch_store)?;
+                    .submit_to_consensus(&transaction, &cur_epoch_store)
+                    .await
+                {
+                    warn!(
+                        ?transaction,
+                        "failed to submit capabilities to consensus {e}"
+                    );
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                };
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
@@ -894,6 +909,13 @@ impl SuiNode {
                 .state
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
+            if let Err(err) = self.end_of_epoch_channel.send(latest_system_state.clone()) {
+                warn!(
+                    "Failed to send end of epoch notification to subscriber: {:?}",
+                    err
+                );
+            }
+
             cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
             let new_epoch_start_state = latest_system_state.into_epoch_start_state();
             let next_epoch_committee = new_epoch_start_state.get_sui_committee();
@@ -921,10 +943,7 @@ impl SuiNode {
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
-            let _ = self.end_of_epoch_channel.send((
-                next_epoch_committee.clone(),
-                new_epoch_start_state.protocol_version(),
-            ));
+
             let _ = send_trusted_peer_change(
                 &self.config,
                 &self.trusted_peer_change_tx,
@@ -958,6 +977,15 @@ impl SuiNode {
                     )
                     .await;
 
+                #[cfg(msim)]
+                {
+                    self.check_is_consistent_state(
+                        self.accumulator.clone(),
+                        cur_epoch_store.epoch(),
+                        true,
+                    );
+                }
+
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
                     .await;
@@ -974,7 +1002,6 @@ impl SuiNode {
                             self.state_sync.clone(),
                             narwhal_manager,
                             narwhal_epoch_data_remover,
-                            Arc::new(next_epoch_committee.clone()),
                             self.accumulator.clone(),
                             self.connection_monitor_status.clone(),
                             validator_server_handle,

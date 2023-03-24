@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
-import TxForID from '../../components/transaction-card/TxForID';
+import TxForID from '../../components/transactions/TxForID';
 
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';

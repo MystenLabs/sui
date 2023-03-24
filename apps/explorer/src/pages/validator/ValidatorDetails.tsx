@@ -38,7 +38,7 @@ function ValidatorDetails() {
 
     if (isLoading || validatorsEventsLoading) {
         return (
-            <div className="mt-5 mb-10 flex items-center justify-center">
+            <div className="mb-10 flex items-center justify-center">
                 <LoadingSpinner />
             </div>
         );
@@ -46,7 +46,7 @@ function ValidatorDetails() {
 
     if (!validatorData || !data || !validatorEvents) {
         return (
-            <div className="mt-5 mb-10 flex items-center justify-center">
+            <div className="mb-10 flex items-center justify-center">
                 <Banner variant="error" spacing="lg" fullWidth>
                     No validator data found for {id}
                 </Banner>
@@ -55,7 +55,7 @@ function ValidatorDetails() {
     }
 
     return (
-        <div className="mt-5 mb-10">
+        <div className="mb-10">
             <div className="flex flex-col flex-nowrap gap-5 md:flex-row md:gap-0">
                 <ValidatorMeta validatorData={validatorData} />
             </div>

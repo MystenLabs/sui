@@ -237,7 +237,8 @@
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
-                  "storageRebate": 10
+                  "storageRebate": 10,
+                  "nonRefundableStorageFee": 0
                 },
                 "transactionDigest": "8UExPV121BEfWkbymSPDYhh23rVNh3MSWtC5juJ9JGMJ",
                 "mutated": [
@@ -442,7 +443,8 @@
               "epochRollingGasCostSummary": {
                 "computationCost": 0,
                 "storageCost": 0,
-                "storageRebate": 0
+                "storageRebate": 0,
+                "nonRefundableStorageFee": 0
               },
               "timestampMs": 1676911928,
               "transactions": [
@@ -630,7 +632,7 @@
         "name": "SuiObjectResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
+          "$ref": "#/components/schemas/SuiObjectResponse"
         }
       }
     },
@@ -987,7 +989,7 @@
         "name": "SuiObjectResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
+          "$ref": "#/components/schemas/SuiObjectResponse"
         }
       },
       "examples": [
@@ -1014,8 +1016,7 @@
           "result": {
             "name": "Result",
             "value": {
-              "status": "Exists",
-              "details": {
+              "data": {
                 "objectId": "0x53e4567ccafa5f36ce84c80aa8bc9be64e0d5ae796884274aef3005ae6733809",
                 "version": 1,
                 "digest": "33K5ZXJ3RyubvYaHuEnQ1QXmmbhgtrFwp199dnEbL4n7",
@@ -1094,7 +1095,7 @@
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_ObjectRead_and_ObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
         }
       },
       "examples": [
@@ -1434,7 +1435,8 @@
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
-                  "storageRebate": 10
+                  "storageRebate": 10,
+                  "nonRefundableStorageFee": 0
                 },
                 "transactionDigest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
                 "mutated": [
@@ -1565,7 +1567,7 @@
         "schema": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/ObjectRead"
+            "$ref": "#/components/schemas/SuiObjectResponse"
           }
         }
       }
@@ -1973,6 +1975,63 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_EpochInfo_and_uint64"
+        }
+      }
+    },
+    {
+      "name": "suix_getTotalAddresses",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return total address count",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "suix_getTotalObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return total object count",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "suix_getTotalPackages",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return total package count",
+      "params": [],
+      "result": {
+        "name": "u64",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         }
       }
     },
@@ -2476,7 +2535,7 @@
         },
         {
           "name": "coins",
-          "description": "Coin<SUI> or LockedCoin<SUI> object to stake",
+          "description": "Coin<SUI> object to stake",
           "required": true,
           "schema": {
             "type": "array",
@@ -3898,11 +3957,17 @@
         "type": "object",
         "required": [
           "computationCost",
+          "nonRefundableStorageFee",
           "storageCost",
           "storageRebate"
         ],
         "properties": {
           "computationCost": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "nonRefundableStorageFee": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
@@ -4651,6 +4716,7 @@
       "ObjectRead": {
         "oneOf": [
           {
+            "description": "The object exists and is found with this version",
             "type": "object",
             "required": [
               "details",
@@ -4663,12 +4729,13 @@
               "status": {
                 "type": "string",
                 "enum": [
-                  "Exists"
+                  "VersionFound"
                 ]
               }
             }
           },
           {
+            "description": "The object does not exist",
             "type": "object",
             "required": [
               "details",
@@ -4681,12 +4748,13 @@
               "status": {
                 "type": "string",
                 "enum": [
-                  "NotExists"
+                  "ObjectNotExists"
                 ]
               }
             }
           },
           {
+            "description": "The object is found to be deleted with this version",
             "type": "object",
             "required": [
               "details",
@@ -4699,7 +4767,71 @@
               "status": {
                 "type": "string",
                 "enum": [
-                  "Deleted"
+                  "ObjectDeleted"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The object exists but not found with this version",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "VersionNotFound"
+                ]
+              }
+            }
+          },
+          {
+            "description": "The asked object version is higher than the latest",
+            "type": "object",
+            "required": [
+              "details",
+              "status"
+            ],
+            "properties": {
+              "details": {
+                "type": "object",
+                "required": [
+                  "asked_version",
+                  "latest_version",
+                  "object_id"
+                ],
+                "properties": {
+                  "asked_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "latest_version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  },
+                  "object_id": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  }
+                }
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "VersionTooHigh"
                 ]
               }
             }
@@ -4739,6 +4871,78 @@
             ]
           }
         }
+      },
+      "ObjectResponseError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "code",
+              "object_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "notExists"
+                ]
+              },
+              "object_id": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code",
+              "digest",
+              "object_id",
+              "version"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "deleted"
+                ]
+              },
+              "digest": {
+                "description": "Base64 string representing the object digest",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  }
+                ]
+              },
+              "object_id": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "version": {
+                "description": "Object version.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "unknown"
+                ]
+              }
+            }
+          }
+        ]
       },
       "ObjectResponseQuery": {
         "type": "object",
@@ -4996,7 +5200,7 @@
           }
         }
       },
-      "Page_for_ObjectRead_and_ObjectID": {
+      "Page_for_SuiObjectResponse_and_ObjectID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -5007,7 +5211,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ObjectRead"
+              "$ref": "#/components/schemas/SuiObjectResponse"
             }
           },
           "hasNextPage": {
@@ -6120,6 +6324,31 @@
           }
         ]
       },
+      "SuiObjectResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectResponseError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "SuiProgrammableMoveCall": {
         "description": "The command for calling a Move function, either an entry function or a public function (which cannot return references).",
         "type": "object",
@@ -6892,6 +7121,13 @@
                   "v1"
                 ]
               },
+              "modifiedAtVersions": {
+                "description": "The version that every modified (mutated or deleted) object had before it was modified by this transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TransactionEffectsModifiedAtVersions"
+                }
+              },
               "mutated": {
                 "description": "ObjectRef and owner of mutated objects, including gas object.",
                 "type": "array",
@@ -6946,6 +7182,21 @@
             }
           }
         ]
+      },
+      "TransactionEffectsModifiedAtVersions": {
+        "type": "object",
+        "required": [
+          "objectId",
+          "sequenceNumber"
+        ],
+        "properties": {
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          },
+          "sequenceNumber": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
       },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Digest"

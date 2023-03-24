@@ -23,14 +23,17 @@ use sui_types::base_types::{ExecutionDigests, TransactionDigest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::clock::Clock;
 use sui_types::committee::CommitteeWithNetworkMetadata;
-use sui_types::crypto::DefaultHash;
+use sui_types::crypto::{
+    verify_proof_of_possession, AuthorityPublicKey, AuthoritySignInfoTrait, DefaultHash,
+};
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignature,
     SuiAuthoritySignature, ToFromBytes,
 };
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
-use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
+use sui_types::gas_coin::{GasCoin, TOTAL_SUPPLY_MIST};
+use sui_types::governance::StakedSui;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
@@ -44,8 +47,8 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemStateInnerGenesis,
-    SuiSystemStateTrait, SuiSystemStateWrapper, SuiValidatorGenesis,
+    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateTrait,
+    SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::{
@@ -133,8 +136,11 @@ impl Genesis {
         0
     }
 
-    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
-        self.sui_system_object().validators.active_validators
+    pub fn validator_set_for_tooling(&self) -> Vec<SuiValidatorGenesis> {
+        self.sui_system_object()
+            .into_genesis_version_for_tooling()
+            .validators
+            .active_validators
     }
 
     pub fn committee_with_network(&self) -> CommitteeWithNetworkMetadata {
@@ -151,10 +157,8 @@ impl Genesis {
             .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
-        get_sui_system_state(&self.objects())
-            .expect("Sui System State object must always exist")
-            .into_genesis_version()
+    pub fn sui_system_object(&self) -> SuiSystemState {
+        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 
     pub fn clock(&self) -> Clock {
@@ -316,19 +320,13 @@ impl UnsignedGenesis {
         0
     }
 
-    pub fn validator_set(&self) -> Vec<SuiValidatorGenesis> {
-        self.sui_system_object().validators.active_validators
-    }
-
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
         get_sui_system_state_wrapper(&self.objects())
             .expect("Sui System State Wrapper object must always exist")
     }
 
-    pub fn sui_system_object(&self) -> SuiSystemStateInnerGenesis {
-        get_sui_system_state(&self.objects())
-            .expect("Sui System State object must always exist")
-            .into_genesis_version()
+    pub fn sui_system_object(&self) -> SuiSystemState {
+        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 }
 
@@ -337,6 +335,62 @@ impl UnsignedGenesis {
 pub struct GenesisValidatorInfo {
     pub info: ValidatorInfo,
     pub proof_of_possession: AuthoritySignature,
+}
+
+impl GenesisValidatorInfo {
+    fn validate(&self) -> Result<(), anyhow::Error> {
+        if !self.info.name.is_ascii() {
+            bail!("name must be ascii");
+        }
+        if self.info.name.len() > 128 {
+            bail!("name must be <= 128 bytes long");
+        }
+
+        if !self.info.description.is_ascii() {
+            bail!("description must be ascii");
+        }
+        if self.info.description.len() > 150 {
+            bail!("description must be <= 150 bytes long");
+        }
+
+        if !self.info.network_address.to_string().is_ascii() {
+            bail!("network address must be ascii");
+        }
+        if !self.info.p2p_address.to_string().is_ascii() {
+            bail!("p2p address must be ascii");
+        }
+        if !self.info.narwhal_primary_address.to_string().is_ascii() {
+            bail!("primary address must be ascii");
+        }
+        if !self.info.narwhal_worker_address.to_string().is_ascii() {
+            bail!("worker address must be ascii");
+        }
+
+        if let Err(e) = self.info.p2p_address.to_anemo_address() {
+            bail!("p2p address must be valid anemo address: {e}");
+        }
+        if let Err(e) = self.info.narwhal_primary_address.to_anemo_address() {
+            bail!("primary address must be valid anemo address: {e}");
+        }
+        if let Err(e) = self.info.narwhal_worker_address.to_anemo_address() {
+            bail!("worker address must be valid anemo address: {e}");
+        }
+
+        if self.info.commission_rate > 10000 {
+            bail!("commisison rate must be lower than 100%");
+        }
+
+        let protocol_pubkey = AuthorityPublicKey::from_bytes(self.info.protocol_key.as_ref())?;
+        if let Err(e) = verify_proof_of_possession(
+            &self.proof_of_possession,
+            &protocol_pubkey,
+            self.info.account_address,
+        ) {
+            bail!("proof of possession is incorrect: {e}");
+        }
+
+        Ok(())
+    }
 }
 
 impl From<GenesisValidatorInfo> for GenesisValidatorMetadata {
@@ -625,6 +679,9 @@ impl Builder {
             return built_genesis.clone();
         }
 
+        // Verify that all input data is valid
+        self.validate().unwrap();
+
         let objects = self.objects.clone().into_values().collect::<Vec<_>>();
         let validators = self.validators.clone().into_values().collect::<Vec<_>>();
 
@@ -682,10 +739,8 @@ impl Builder {
             CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
-        let validators = self.validators.into_values().collect::<Vec<_>>();
-
         // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_sig().len(), validators.len() as u64);
+        assert_eq!(checkpoint.auth_sig().len(), self.validators.len() as u64);
 
         let genesis = Genesis {
             checkpoint,
@@ -696,23 +751,256 @@ impl Builder {
             objects,
         };
 
-        // Verify that all the validators were properly created onchain
-        let system_object = genesis.sui_system_object();
-        assert_eq!(system_object.epoch, 0);
-
-        for (validator, onchain_validator) in validators
-            .iter()
-            .map(|genesis_info| &genesis_info.info)
-            .zip(system_object.validators.active_validators.iter())
-        {
-            let metadata = onchain_validator.verified_metadata();
-            assert_eq!(validator.sui_address(), metadata.sui_address);
-            assert_eq!(validator.protocol_key(), metadata.sui_pubkey_bytes());
-            assert_eq!(validator.name(), &metadata.name);
-            assert_eq!(validator.network_address(), &metadata.net_address);
-        }
+        // Verify that all on-chain state was properly created
+        self.validate().unwrap();
 
         genesis
+    }
+
+    /// Validates the entire state of the build, no matter what the internal state is (input
+    /// collection phase or output phase)
+    pub fn validate(&self) -> Result<(), anyhow::Error> {
+        self.validate_inputs()?;
+        self.validate_output();
+        Ok(())
+    }
+
+    /// Runs through validation checks on the input values present in the builder
+    fn validate_inputs(&self) -> Result<(), anyhow::Error> {
+        if !self.parameters.allow_insertion_of_extra_objects && !self.objects.is_empty() {
+            bail!("extra objects are disallowed");
+        }
+
+        for validator in self.validators.values() {
+            validator.validate().with_context(|| {
+                format!(
+                    "metadata for validator {} is invalid",
+                    validator.info.name()
+                )
+            })?;
+        }
+
+        if let Some(token_distribution_schedule) = &self.token_distribution_schedule {
+            token_distribution_schedule.validate();
+            token_distribution_schedule.check_all_stake_operations_are_for_valid_validators(
+                self.validators.values().map(|v| v.info.sui_address()),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Runs through validation checks on the generated output (the initial chain state) based on
+    /// the input values present in the builder
+    fn validate_output(&self) {
+        // If genesis hasn't been built yet, just early return as there is nothing to validate yet
+        let Some(unsigned_genesis) = self.unsigned_genesis_checkpoint() else {
+            return;
+        };
+
+        let GenesisChainParameters {
+            protocol_version,
+            chain_start_timestamp_ms,
+            epoch_duration_ms,
+            stake_subsidy_start_epoch,
+            stake_subsidy_initial_distribution_amount,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
+        } = self.parameters.to_genesis_chain_parameters();
+
+        let system_state = unsigned_genesis
+            .sui_system_object()
+            .into_genesis_version_for_tooling();
+
+        assert_eq!(
+            self.validators.len(),
+            system_state.validators.active_validators.len()
+        );
+        for (validator, onchain_validator) in self
+            .validators
+            .values()
+            .zip(system_state.validators.active_validators.iter())
+        {
+            let metadata = onchain_validator.verified_metadata();
+            assert_eq!(validator.info.sui_address(), metadata.sui_address);
+            assert_eq!(validator.info.protocol_key(), metadata.sui_pubkey_bytes());
+            assert_eq!(validator.info.network_key, metadata.network_pubkey);
+            assert_eq!(validator.info.worker_key, metadata.worker_pubkey);
+            assert_eq!(
+                validator.proof_of_possession.as_ref().to_vec(),
+                metadata.proof_of_possession_bytes
+            );
+            assert_eq!(validator.info.name(), &metadata.name);
+            assert_eq!(validator.info.description, metadata.description);
+            assert_eq!(validator.info.image_url, metadata.image_url);
+            assert_eq!(validator.info.project_url, metadata.project_url);
+            assert_eq!(validator.info.network_address(), &metadata.net_address);
+            assert_eq!(validator.info.p2p_address, metadata.p2p_address);
+            assert_eq!(
+                validator.info.narwhal_primary_address,
+                metadata.primary_address
+            );
+            assert_eq!(
+                validator.info.narwhal_worker_address,
+                metadata.worker_address
+            );
+
+            assert_eq!(validator.info.gas_price, onchain_validator.gas_price);
+            assert_eq!(
+                validator.info.commission_rate,
+                onchain_validator.commission_rate
+            );
+        }
+
+        assert_eq!(system_state.epoch, 0);
+        assert_eq!(system_state.protocol_version, protocol_version);
+        assert_eq!(system_state.storage_fund.value(), 0);
+
+        assert_eq!(system_state.parameters.epoch_duration_ms, epoch_duration_ms);
+        assert_eq!(
+            system_state.parameters.stake_subsidy_start_epoch,
+            stake_subsidy_start_epoch,
+        );
+        assert_eq!(
+            system_state.parameters.max_validator_count,
+            max_validator_count,
+        );
+        assert_eq!(
+            system_state.parameters.min_validator_joining_stake,
+            min_validator_joining_stake,
+        );
+        assert_eq!(
+            system_state.parameters.validator_low_stake_threshold,
+            validator_low_stake_threshold,
+        );
+        assert_eq!(
+            system_state.parameters.validator_very_low_stake_threshold,
+            validator_very_low_stake_threshold,
+        );
+        assert_eq!(
+            system_state.parameters.validator_low_stake_grace_period,
+            validator_low_stake_grace_period,
+        );
+
+        assert_eq!(system_state.stake_subsidy.distribution_counter, 0);
+        assert_eq!(
+            system_state.stake_subsidy.current_distribution_amount,
+            stake_subsidy_initial_distribution_amount,
+        );
+        assert_eq!(
+            system_state.stake_subsidy.stake_subsidy_period_length,
+            stake_subsidy_period_length,
+        );
+        assert_eq!(
+            system_state.stake_subsidy.stake_subsidy_decrease_rate,
+            stake_subsidy_decrease_rate,
+        );
+
+        assert!(!system_state.safe_mode);
+        assert_eq!(
+            system_state.epoch_start_timestamp_ms,
+            chain_start_timestamp_ms,
+        );
+        assert_eq!(system_state.validators.pending_removals.len(), 0);
+        assert_eq!(
+            system_state
+                .validators
+                .pending_active_validators
+                .contents
+                .size,
+            0
+        );
+        assert_eq!(system_state.validators.inactive_validators.size, 0);
+        assert_eq!(system_state.validators.validator_candidates.size, 0);
+
+        // Check distribution is correct
+        let token_distribution_schedule = self.token_distribution_schedule.clone().unwrap();
+        assert_eq!(
+            system_state.stake_subsidy.balance.value(),
+            token_distribution_schedule.stake_subsidy_fund_mist
+        );
+
+        let mut gas_objects: BTreeMap<ObjectID, (&Object, GasCoin)> = unsigned_genesis
+            .objects()
+            .iter()
+            .filter_map(|o| GasCoin::try_from(o).ok().map(|g| (o.id(), (o, g))))
+            .collect();
+        let mut staked_sui_objects: BTreeMap<ObjectID, (&Object, StakedSui)> = unsigned_genesis
+            .objects()
+            .iter()
+            .filter_map(|o| StakedSui::try_from(o).ok().map(|s| (o.id(), (o, s))))
+            .collect();
+
+        for allocation in token_distribution_schedule.allocations {
+            if let Some(staked_with_validator) = allocation.staked_with_validator {
+                let staked_sui_object_id = staked_sui_objects
+                    .iter()
+                    .find(|(_k, (o, s))| {
+                        let Owner::AddressOwner(owner) = &o.owner else {
+                        panic!("gas object owner must be address owner");
+                    };
+                        *owner == allocation.recipient_address
+                            && s.principal() == allocation.amount_mist
+                            && s.validator_address() == staked_with_validator
+                    })
+                    .map(|(k, _)| *k)
+                    .expect("all allocations should be present");
+                let staked_sui_object = staked_sui_objects.remove(&staked_sui_object_id).unwrap();
+                assert_eq!(
+                    staked_sui_object.0.owner,
+                    Owner::AddressOwner(allocation.recipient_address)
+                );
+                assert_eq!(staked_sui_object.1.principal(), allocation.amount_mist);
+                assert_eq!(
+                    staked_sui_object.1.validator_address(),
+                    staked_with_validator
+                );
+            } else {
+                let gas_object_id = gas_objects
+                    .iter()
+                    .find(|(_k, (o, g))| {
+                        let Owner::AddressOwner(owner) = &o.owner else {
+                        panic!("gas object owner must be address owner");
+                    };
+                        *owner == allocation.recipient_address
+                            && g.value() == allocation.amount_mist
+                    })
+                    .map(|(k, _)| *k)
+                    .expect("all allocations should be present");
+                let gas_object = gas_objects.remove(&gas_object_id).unwrap();
+                assert_eq!(
+                    gas_object.0.owner,
+                    Owner::AddressOwner(allocation.recipient_address)
+                );
+                assert_eq!(gas_object.1.value(), allocation.amount_mist,);
+            }
+        }
+
+        // All Gas and staked objects should be accounted for
+        if !self.parameters.allow_insertion_of_extra_objects {
+            assert!(gas_objects.is_empty());
+            assert!(staked_sui_objects.is_empty());
+        }
+
+        let committee = system_state.get_current_epoch_committee().committee;
+        for signature in self.signatures.values() {
+            if self.validators.get(&signature.authority).is_none() {
+                panic!("found signature for unknown validator: {:#?}", signature);
+            }
+
+            signature
+                .verify_secure(
+                    unsigned_genesis.checkpoint(),
+                    Intent::default().with_scope(IntentScope::CheckpointSummary),
+                    &committee,
+                )
+                .expect("signature should be valid");
+        }
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, anyhow::Error> {
@@ -765,7 +1053,8 @@ impl Builder {
 
             let path = entry.path();
             let signature_bytes = fs::read(path)?;
-            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)?;
+            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)
+                .with_context(|| format!("unable to load validator signatrue for {path}"))?;
             signatures.insert(sigs.authority, sigs);
         }
 
@@ -780,7 +1069,8 @@ impl Builder {
             let path = entry.path();
             let validator_info_bytes = fs::read(path)?;
             let validator_info: GenesisValidatorInfo =
-                serde_yaml::from_slice(&validator_info_bytes)?;
+                serde_yaml::from_slice(&validator_info_bytes)
+                    .with_context(|| format!("unable to load validator info for {path}"))?;
             committee.insert(validator_info.info.protocol_key(), validator_info);
         }
 

@@ -234,7 +234,7 @@ Join everything in <code>coins</code> with <code>self</code>
         <a href="coin.md#0x2_coin_join">coin::join</a>(self, <a href="coin.md#0x2_coin">coin</a>);
         i = i + 1
     };
-    // <a href="safe.md#0x2_safe">safe</a> because we've drained the <a href="">vector</a>
+    // safe because we've drained the <a href="">vector</a>
     <a href="_destroy_empty">vector::destroy_empty</a>(coins)
 }
 </code></pre>

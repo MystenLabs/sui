@@ -10,7 +10,7 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, Signature, Signer, SuiSignatureInner,
     ToFromBytes,
 };
-use crate::digests::{CertificateDigest, TransactionEventsDigest};
+use crate::digests::{CertificateDigest, SenderSignedDataDigest, TransactionEventsDigest};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::{
@@ -63,7 +63,7 @@ pub const APPROX_SIZE_OF_EXECUTION_STATUS: usize = 120;
 // Approximate size of `EpochId` type in bytes
 pub const APPROX_SIZE_OF_EPOCH_ID: usize = 10;
 // Approximate size of `GasCostSummary` type in bytes
-pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 30;
+pub const APPROX_SIZE_OF_GAS_COST_SUMMARY: usize = 40;
 // Approximate size of `Option<TransactionEventsDigest>` type in bytes
 pub const APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST: usize = 40;
 // Approximate size of `TransactionDigest` type in bytes
@@ -309,6 +309,12 @@ impl From<u128> for CallArg {
     }
 }
 
+impl From<ObjectRef> for CallArg {
+    fn from(obj: ObjectRef) -> Self {
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj))
+    }
+}
+
 impl ObjectArg {
     pub fn id(&self) -> ObjectID {
         match self {
@@ -506,6 +512,18 @@ impl Command {
         }
     }
 
+    fn non_system_packages_to_be_published(&self) -> Option<&Vec<Vec<u8>>> {
+        match self {
+            Command::Upgrade(v, _, _, _) => Some(v),
+            Command::Publish(v, _) => Some(v),
+            Command::MoveCall(_)
+            | Command::TransferObjects(_, _)
+            | Command::SplitCoins(_, _)
+            | Command::MergeCoins(_, _)
+            | Command::MakeMoveVec(_, _) => None,
+        }
+    }
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Command::MoveCall(call) => call.validity_check(config)?,
@@ -660,6 +678,12 @@ impl ProgrammableTransaction {
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn non_system_packages_to_be_published(&self) -> impl Iterator<Item = &Vec<Vec<u8>>> + '_ {
+        self.commands
+            .iter()
+            .filter_map(|q| q.non_system_packages_to_be_published())
     }
 }
 
@@ -1714,6 +1738,13 @@ impl SenderSignedData {
     pub fn tx_signatures_mut_for_testing(&mut self) -> &mut Vec<GenericSignature> {
         &mut self.inner_mut().tx_signatures
     }
+
+    pub fn full_message_digest(&self) -> SenderSignedDataDigest {
+        let mut digest = DefaultHash::default();
+        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        let hash = digest.finalize();
+        SenderSignedDataDigest::new(hash.into())
+    }
 }
 
 impl VersionedProtocolMessage for SenderSignedData {
@@ -1965,10 +1996,6 @@ impl CertifiedTransaction {
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
         let hash = digest.finalize();
         CertificateDigest::new(hash.into())
-    }
-
-    pub fn verify_sender_signatures(&self) -> SuiResult {
-        self.data().verify(None)
     }
 }
 
@@ -2370,7 +2397,7 @@ pub enum CommandArgumentError {
     SecondaryIndexOutOfBounds { result_idx: u16, secondary_idx: u16 },
     #[error(
         "Invalid usage of result {result_idx}, \
-        expected a single result but found multiple return values"
+        expected a single result but found either no return values or multiple."
     )]
     InvalidResultArity { result_idx: u16 },
     #[error(
@@ -2379,16 +2406,12 @@ pub enum CommandArgumentError {
     )]
     InvalidGasCoinUsage,
     #[error(
-        "Invalid usage of borrowed value. \
+        "Invalid usage of value. \
         Mutably borrowed values require unique usage. \
-        Immutably borrowed values cannot be taken or borrowed mutably"
+        Immutably borrowed values cannot be taken or borrowed mutably. \
+        Taken values cannot be used again."
     )]
-    InvalidUsageOfBorrowedValue,
-    #[error(
-        "Invalid usage of already taken value. \
-        There is now no value available at this location"
-    )]
-    InvalidUsageOfTakenValue,
+    InvalidValueUsage,
     #[error("Immutable and shared objects cannot be passed by-value.")]
     InvalidObjectByValue,
     #[error("Immutable objects cannot be passed by mutable reference, &mut.")]
@@ -2924,6 +2947,7 @@ impl Default for TransactionEffectsV1 {
                 computation_cost: 0,
                 storage_cost: 0,
                 storage_rebate: 0,
+                non_refundable_storage_fee: 0,
             },
             modified_at_versions: Vec::new(),
             shared_objects: Vec::new(),

@@ -3,8 +3,9 @@
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
-use crate::types::SuiTransactionFullResponse;
+use crate::types::{SuiTransactionFullResponse, SuiTransactionFullResponseWithOptions};
 use async_trait::async_trait;
+use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
@@ -41,36 +42,65 @@ impl<S: IndexerStore> ReadApi<S> {
     }
 
     fn get_total_transaction_number_internal(&self) -> Result<u64, IndexerError> {
-        self.state.get_total_transaction_number().map(|n| n as u64)
+        self.state
+            .get_total_transaction_number_from_checkpoints()
+            .map(|n| n as u64)
     }
 
-    fn get_transaction_with_options_internal(
+    async fn get_transaction_with_options_internal(
         &self,
         digest: &TransactionDigest,
-        _options: Option<SuiTransactionResponseOptions>,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> Result<SuiTransactionResponse, IndexerError> {
-        // TODO(chris): support options in indexer
-        let txn_full_resp: SuiTransactionFullResponse = self
+        let tx = self
             .state
-            .get_transaction_by_digest(&digest.base58_encode())?
-            .try_into()?;
-        Ok(txn_full_resp.into())
+            .get_transaction_by_digest(&digest.base58_encode())?;
+        let tx_full_resp: SuiTransactionFullResponse = self
+            .state
+            .compose_full_transaction_response(tx, options.clone())
+            .await?;
+
+        let sui_transaction_response = SuiTransactionFullResponseWithOptions {
+            response: tx_full_resp,
+            options: options.unwrap_or_default(),
+        }
+        .into();
+        Ok(sui_transaction_response)
     }
 
-    fn multi_get_transactions_with_options_internal(
+    async fn multi_get_transactions_with_options_internal(
         &self,
         digests: &[TransactionDigest],
-        _options: Option<SuiTransactionResponseOptions>,
+        options: Option<SuiTransactionResponseOptions>,
     ) -> Result<Vec<SuiTransactionResponse>, IndexerError> {
         let digest_strs = digests
             .iter()
             .map(|digest| digest.base58_encode())
             .collect::<Vec<_>>();
         let tx_vec = self.state.multi_get_transactions_by_digests(&digest_strs)?;
-        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = tx_vec
+        let ordered_tx_vec = digest_strs
+            .iter()
+            .filter_map(|digest| {
+                tx_vec
+                    .iter()
+                    .find(|txn| txn.transaction_digest == *digest)
+                    .cloned()
+            })
+            .collect::<Vec<_>>();
+        if ordered_tx_vec.len() != tx_vec.len() {
+            return Err(IndexerError::PostgresReadError(
+                "Transaction count changed after reorder, this should never happen.".to_string(),
+            ));
+        }
+        let tx_full_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
+            self.state
+                .compose_full_transaction_response(tx, options.clone())
+        });
+        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = join_all(tx_full_resp_futures)
+            .await
             .into_iter()
-            .map(|txn| txn.try_into())
             .collect::<Result<Vec<_>, _>>()?;
+
         let tx_resp_vec: Vec<SuiTransactionResponse> =
             tx_full_resp_vec.into_iter().map(|txn| txn.into()).collect();
         Ok(tx_resp_vec)
@@ -340,7 +370,9 @@ where
                 .get_transaction_with_options(digest, options)
                 .await;
         }
-        Ok(self.get_transaction_with_options_internal(&digest, options)?)
+        Ok(self
+            .get_transaction_with_options_internal(&digest, options)
+            .await?)
     }
 
     async fn multi_get_transactions_with_options(
@@ -357,7 +389,9 @@ where
                 .multi_get_transactions_with_options(digests, options)
                 .await;
         }
-        Ok(self.multi_get_transactions_with_options_internal(&digests, options)?)
+        Ok(self
+            .multi_get_transactions_with_options_internal(&digests, options)
+            .await?)
     }
 
     async fn get_normalized_move_modules_by_package(

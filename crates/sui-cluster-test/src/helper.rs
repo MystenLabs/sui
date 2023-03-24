@@ -3,10 +3,9 @@
 
 use anyhow::bail;
 use move_core_types::language_storage::TypeTag;
-use sui_json_rpc_types::{
-    BalanceChange, SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-};
+use sui_json_rpc_types::{BalanceChange, SuiData, SuiObjectData, SuiObjectDataOptions};
 use sui_sdk::SuiClient;
+use sui_types::error::SuiObjectResponseError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{base_types::ObjectID, object::Owner, parse_sui_type_tag};
 use tracing::{debug, trace};
@@ -84,21 +83,28 @@ impl ObjectChecker {
 
         trace!("getting object {object_id}, info :: {object_info:?}");
 
-        match object_info {
-            SuiObjectResponse::NotExists(_) => {
+        match (object_info.data, object_info.error) {
+            (None, Some(SuiObjectResponseError::NotExists { object_id })) => {
                 panic!(
                     "Node can't find gas object {} with client {:?}",
                     object_id,
                     client.read_api()
                 )
             }
-            SuiObjectResponse::Deleted(_) => {
+            (
+                None,
+                Some(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version: _,
+                    digest: _,
+                }),
+            ) => {
                 if !self.is_deleted {
                     panic!("Gas object {} was deleted", object_id);
                 }
                 Ok(CheckerResultObject::new(None, None))
             }
-            SuiObjectResponse::Exists(object) => {
+            (Some(object), _) => {
                 if self.is_deleted {
                     panic!("Expect Gas object {} deleted, but it is not", object_id);
                 }
@@ -124,6 +130,9 @@ impl ObjectChecker {
                     return Ok(CheckerResultObject::new(Some(gas_coin), Some(object)));
                 }
                 Ok(CheckerResultObject::new(None, Some(object)))
+            }
+            (None, None) | (None, Some(SuiObjectResponseError::Unknown)) => {
+                panic!("Unexpected response: object not found and no specific error provided");
             }
         }
     }

@@ -49,6 +49,8 @@ impl Ceremony {
 pub enum CeremonyCommand {
     Init,
 
+    ValidateState,
+
     AddValidator {
         #[clap(long)]
         name: String,
@@ -114,6 +116,11 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         CeremonyCommand::Init => {
             let builder = Builder::new().with_protocol_version(protocol_version);
             builder.save(dir)?;
+        }
+
+        CeremonyCommand::ValidateState => {
+            let builder = Builder::load(&dir)?;
+            builder.validate()?;
         }
 
         CeremonyCommand::AddValidator {
@@ -344,6 +351,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Build the unsigned checkpoint
@@ -364,6 +378,13 @@ mod test {
                 },
             };
             command.run()?;
+
+            Ceremony {
+                path: Some(dir.path().into()),
+                protocol_version: None,
+                command: CeremonyCommand::ValidateState,
+            }
+            .run()?;
         }
 
         // Finalize the Ceremony and build the Genesis object

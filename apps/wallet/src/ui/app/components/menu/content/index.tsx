@@ -11,6 +11,7 @@ import {
     useNavigate,
 } from 'react-router-dom';
 
+import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
 import { ImportLedgerAccounts } from '../../ledger/ImportLedgerAccounts';
 import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
@@ -72,7 +73,16 @@ function MenuContent() {
                                 <Route
                                     path="/accounts"
                                     element={<AccountsSettings />}
-                                />
+                                >
+                                    {isLedgerIntegrationEnabled && (
+                                        <Route
+                                            path="connect-ledger-modal"
+                                            element={
+                                                <ConnectLedgerModalContainer />
+                                            }
+                                        />
+                                    )}
+                                </Route>
                                 <Route
                                     path="/export/:account"
                                     element={<ExportAccount />}

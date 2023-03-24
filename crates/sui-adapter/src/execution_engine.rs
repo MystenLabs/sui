@@ -83,6 +83,8 @@ pub fn execute_transaction_to_effects<
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
     let mut tx_ctx = TxContext::new(&transaction_signer, &transaction_digest, epoch_data);
+
+    #[cfg(debug_assertions)]
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
 
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
@@ -224,8 +226,12 @@ fn execute_transaction<
     if !is_system {
         #[cfg(debug_assertions)]
         {
-            // ensure that this transaction did not create or destroy SUI
-            temporary_store.check_sui_conserved().unwrap();
+            if !Mode::allow_arbitrary_values() {
+                // ensure that this transaction did not create or destroy SUI
+                temporary_store.check_sui_conserved().unwrap();
+            }
+            // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
+            // objects (including coins). this can violate conservation, but it's expected
         }
     }
     let cost_summary = gas_status.summary();
@@ -494,7 +500,13 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
         let modules: Vec<_> = modules
             .into_iter()
-            .map(|m| CompiledModule::deserialize(&m).unwrap())
+            .map(|m| {
+                CompiledModule::deserialize_with_max_version(
+                    &m,
+                    protocol_config.move_binary_format_version(),
+                )
+                .unwrap()
+            })
             .collect();
 
         let mut new_package =

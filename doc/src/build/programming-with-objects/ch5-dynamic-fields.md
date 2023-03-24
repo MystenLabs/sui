@@ -2,17 +2,17 @@
 title: Chapter 5 - Dynamic Fields
 ---
 
-In previous chapters, we walked through various ways to use object fields to store primitive data and other objects (wrapping), but there are a few limitations to this approach:
+Previous chapters describe various ways to use object fields to store primitive data and other objects (wrapping), but there are a few limitations to this approach:
 
 1. Object's have a finite set of fields keyed by identifiers that are fixed when its module is published (i.e. limited to the fields in the `struct` declaration).
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fees in transactions. In addition, there is an upper bound on object size.
-3. As we will see in future chapters, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be instantiated with one single type `T`, it is not suitable for this.
+3. Later chapters include use cases where you need to store a collection of objects of heterogeneous types. Since the Sui Move `vector` type must be instantiated with one single type `T`, it is not suitable for this.
 
 Fortunately, Sui provides *dynamic fields* with arbitrary names (not just identifiers), added and removed on-the-fly (not fixed at publish), which only affect gas when they are accessed, and can store heterogeneous values. This chapter introduces the libraries for interacting with this kind of field.
 
 ### Current Limitations
-There are some aspects of dynamic fields that are not yet behaving as designed in this early release. We are actively working on these areas, but watch out for:
-- Potential durability/consistency issues with dynamic field objects:  When a validator goes down and comes back up while processing a transaction with dynamic fields, it might be unable to process further transactions involving those objects.
+
+There are some aspects of dynamic fields that are not yet behaving as designed in this early release. Watch for potential durability/consistency issues with dynamic field objects. For example, if a validator goes offline and then reconnects while processing a transaction with dynamic fields, it might be unable to process further transactions involving those objects.
 
 ### Fields vs Object Fields
 
@@ -57,7 +57,7 @@ public fun add<Name: copy + drop + store, Value: key + store>(
 
 These functions add a field with name `name` and value `value` to `object`. To see it in action, consider these code snippets:
 
-First we define two object types for the parent and the child:
+First, define two object types for the parent and the child:
 
 ```rust
 struct Parent has key {
@@ -70,7 +70,7 @@ struct Child has key, store {
 }
 ```
 
-Now, we can define an API to add a `Child` object as a dynamic field of a `Parent` object:
+Next, define an API to add a `Child` object as a dynamic field of a `Parent` object:
 
 ```rust
 use sui::dynamic_object_field as ofield;
@@ -80,12 +80,12 @@ public entry fun add_child(parent: &mut Parent, child: Child) {
 }
 ```
 
-This function takes the `Child` object by value, and makes it a dynamic field of `parent` with name `b"child"` (a byte string of type `vector<u8>`). At the end of the `add_child` call, we have the following ownership relationship:
+This function takes the `Child` object by value and makes it a dynamic field of `parent` with name `b"child"` (a byte string of type `vector<u8>`). This call results in the following ownership relationship:
 
 1. Sender address (still) owns the `Parent` object.
 2. The `Parent` object owns the `Child` object, and can refer to it by the name `b"child"`.
 
-> :warning: It is an error to overwrite a field (attempt to add a field with the same Name type and value as one that is already defined), and a transaction that does this will abort.  Fields can be modified in-place by borrowing them mutably and can be overwritten safely (e.g. to change its value type) by removing the old value first (see below for details).
+It is an error to overwrite a field (attempt to add a field with the same Name type and value as one that is already defined), and a transaction that does this will fail.  Fields can be modified in-place by borrowing them mutably and can be overwritten safely (such as to change its value type) by removing the old value first.
 
 ### Accessing Dynamic Fields
 
@@ -109,9 +109,9 @@ public fun borrow_mut<Name: copy + drop + store, Value: store>(
 
 Where `object` is the UID of the object the field is defined on and `name` is the field's name.
 
-> :bulb: `sui::dynamic_object_field` has equivalent functions for object fields, but with the added constraint `Value: key + store`.
+**Note:** `sui::dynamic_object_field` has equivalent functions for object fields, but with the added constraint `Value: key + store`.
 
-Let's look at how to use these APIs with the `Parent` and `Child` types defined earlier:
+To use these APIs with the `Parent` and `Child` types defined earlier:
 
 ```rust
 use sui::dynamic_object_field as ofield;
@@ -132,15 +132,15 @@ The first function accepts a mutable reference to the `Child` object directly, a
 
 The second function accepts a mutable reference to the `Parent` object and accesses its dynamic field using `borrow_mut`, to pass to `mutate_child`. This can only be called on `Parent` objects that have a `b"child"` field defined. A `Child` object that has been added to a `Parent` *must* be accessed via its dynamic field, so it can only by mutated using `mutate_child_via_parent`, not `mutate_child`, even if its ID is known.
 
-> :warning: A transaction that attempts to borrow a field that does not exist will abort.
+**Important:** A transaction that attempts to borrow a field that does not exist will fail.
 
-> :warning: The `Value` type passed to `borrow` and `borrow_mut` must match the type of the stored field, or the transaction will abort.
+The `Value` type passed to `borrow` and `borrow_mut` must match the type of the stored field, or the transaction will abort.
 
-> :warning: Dynamic object field values *must* be accessed through these APIs.  A transaction that attempts to use those objects as inputs (by value or by reference), will be rejected for having invalid inputs.
+Dynamic object field values *must* be accessed through these APIs.  A transaction that attempts to use those objects as inputs (by value or by reference), will be rejected for having invalid inputs.
 
 ### Removing a Dynamic Field
 
-Similar to "unwrapping" an object held in a regular field, a dynamic field can be removed, exposing its value:
+Similar to unwrapping, an object held in a regular field, a dynamic field can be removed, exposing its value:
 
 ```rust
 module sui::dynamic_field {
@@ -157,7 +157,7 @@ This function takes a mutable reference to the ID of the `object` the field is d
 
 > :bulb: `sui::dynamic_object_field` has an equivalent function for object fields.
 
-The value that is returned can be interacted with just like any other value (because it is any other value).  For example, removed dynamic object field values can then be `delete`-d or `transfer`-ed to an address (e.g. back to the sender):
+The value that is returned can be interacted with just like any other value (because it is any other value). For example, removed dynamic object field values can then be `delete`-d or `transfer`-ed to an address (back to the sender):
 
 ```rust
 use sui::dynamic_object_field as ofield;
@@ -183,10 +183,10 @@ public entry fun reclaim_child(parent: &mut Parent, ctx: &mut TxContext) {
 }
 ```
 
-> :warning: Like with borrowing a field, a transaction that attempts to remove a non-existent field, or a field with a different `Value` type will abort.
+Similar to borrowing a field, a transaction that attempts to remove a non-existent field, or a field with a different `Value` type, fails.
 
 ### Deleting an Object with Dynamic Fields
 
-It is possible to delete an object that has dynamic fields still defined on it. Because field values can only be accessed via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability.
+It is possible to delete an object that has dynamic fields still defined on it. Because field values can be accessed only via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability.
 
-> :warning: Deleting an object that has dynamic fields still defined on it is permitted, but it will render all its fields inaccessible.
+Deleting an object that has dynamic fields still defined on it is permitted, but it will render all its fields inaccessible.

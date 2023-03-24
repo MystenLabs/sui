@@ -45,6 +45,8 @@ macro_rules! define_system_package {
 
             fn as_modules() -> Vec<CompiledModule> {
                 static MODULES: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
+                    // deserialization here uses overall max version of supported Move bytecode
+                    // rather than the max supported by the framework but it's OK
                     $Package::as_bytes().into_iter().map(|m| CompiledModule::deserialize(&m).unwrap()).collect()
                 });
                 Lazy::force(&MODULES).to_owned()

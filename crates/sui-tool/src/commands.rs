@@ -237,9 +237,9 @@ impl ToolCommand {
             ToolCommand::DumpValidators { genesis, concise } => {
                 let genesis = Genesis::load(genesis).unwrap();
                 if !concise {
-                    println!("{:#?}", genesis.validator_set());
+                    println!("{:#?}", genesis.validator_set_for_tooling());
                 } else {
-                    for (i, val_info) in genesis.validator_set().iter().enumerate() {
+                    for (i, val_info) in genesis.validator_set_for_tooling().iter().enumerate() {
                         let metadata = val_info.verified_metadata();
                         println!(
                             "#{:<2} {:<20} {:?<66} {:?} {}",

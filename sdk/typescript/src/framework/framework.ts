@@ -36,6 +36,12 @@ export const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = SuiObjectResponse | SuiMoveObject;
 
+export function isObjectDataFull(
+  resp: ObjectData | ObjectDataFull,
+): resp is SuiObjectResponse {
+  return !!(resp as SuiObjectResponse).data || !!(resp as SuiMoveObject).type;
+}
+
 export const CoinMetadataStruct = object({
   decimals: number(),
   name: string(),
@@ -124,7 +130,7 @@ export class Coin {
   }
 
   private static getType(data: ObjectData): string | undefined {
-    if ('status' in data) {
+    if (isObjectDataFull(data)) {
       return getObjectType(data);
     }
     return data.type;

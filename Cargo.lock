@@ -914,9 +914,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e246206a63c9830e118d12c894f56a82033da1a2361f5544deeee3df85c99d9"
+checksum = "2fb79c228270dcf2426e74864cabc94babb5dbab01a4314e702d2f16540e1591"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -5483,6 +5483,7 @@ dependencies = [
  "insta",
  "match_opt",
  "mysten-network",
+ "mysten-util-mem",
  "narwhal-crypto",
  "narwhal-test-utils",
  "rand 0.8.5",
@@ -5777,6 +5778,7 @@ dependencies = [
  "narwhal-storage",
  "narwhal-types",
  "narwhal-worker",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "telemetry-subscribers",
@@ -8508,6 +8510,7 @@ dependencies = [
  "sui-swarm",
  "sui-tool",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "test-utils",
@@ -8698,6 +8701,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
+ "narwhal-crypto",
  "narwhal-executor",
  "narwhal-node",
  "narwhal-test-utils",
@@ -8865,7 +8869,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-framework-test"
+name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
  "move-cli",
@@ -8978,6 +8982,7 @@ dependencies = [
  "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-transaction-builder",
@@ -9310,6 +9315,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-loadgen"
+version = "0.29.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "clap 3.2.23",
+ "dirs",
+ "eyre",
+ "futures",
+ "http",
+ "mysten-metrics",
+ "prometheus",
+ "rand 0.8.5",
+ "rocksdb",
+ "scopeguard",
+ "serde 1.0.152",
+ "shared-crypto",
+ "sui",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tower",
+ "tower-http 0.3.5",
+ "tracing",
+ "tracing-subscriber 0.3.16",
+ "typed-store",
+ "typed-store-derive",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-sdk"
 version = "0.29.0"
 dependencies = [
@@ -9328,6 +9376,7 @@ dependencies = [
  "shared-crypto",
  "sui",
  "sui-adapter",
+ "sui-config",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",

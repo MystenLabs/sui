@@ -177,6 +177,7 @@ export const GasCostSummary = object({
   computationCost: number(),
   storageCost: number(),
   storageRebate: number(),
+  nonRefundableStorageFee: number(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -197,6 +198,10 @@ export const OwnedObjectRef = object({
   reference: SuiObjectRef,
 });
 export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
+export const TransactionEffectsModifiedAtVersions = object({
+  objectId: ObjectId,
+  sequenceNumber: SequenceNumber,
+});
 
 export const TransactionEffects = object({
   // Eventually this will become union(literal('v1'), literal('v2'), ...)
@@ -206,6 +211,8 @@ export const TransactionEffects = object({
   status: ExecutionStatus,
   /** The epoch when this transaction was executed */
   executedEpoch: EpochId,
+  /** The version that every modified (mutated or deleted) object had before it was modified by this transaction. **/
+  modifiedAtVersions: optional(array(TransactionEffectsModifiedAtVersions)),
   gasUsed: GasCostSummary,
   /** The object references of the shared objects used in this transaction. Empty if no shared objects were used. */
   sharedObjects: optional(array(SuiObjectRef)),
@@ -266,8 +273,6 @@ export const DevInspectResults = object({
   error: optional(string()),
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
-
-export type GatewayTxSeqNumber = number;
 
 export const GetTxnDigestsResponse = array(TransactionDigest);
 export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;

@@ -3,20 +3,16 @@
 
 use anyhow::anyhow;
 use clap::{Parser, ValueEnum};
-use eyre::eyre;
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::authority::authority_store_types::StoreData;
+use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::epoch::committee_store::CommitteeStoreTables;
-use sui_storage::write_ahead_log::DBWriteAheadLogTables;
 use sui_storage::IndexStoreTables;
 use sui_types::base_types::{EpochId, ObjectID};
-use sui_types::messages::{SignedTransactionEffects, TrustedCertificate};
-use sui_types::temporary_store::InnerTemporaryStore;
 use typed_store::rocks::{default_db_options, MetricConf};
 use typed_store::traits::{Map, TableSummary};
 
@@ -24,7 +20,6 @@ use typed_store::traits::{Map, TableSummary};
 pub enum StoreName {
     Validator,
     Index,
-    Wal,
     Epoch,
     // TODO: Add the new checkpoint v2 tables.
 }
@@ -71,13 +66,6 @@ pub fn table_summary(
             IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .table_summary(table_name)
         }
-        StoreName::Wal => {
-            DBWriteAheadLogTables::<
-                TrustedCertificate,
-                (InnerTemporaryStore, SignedTransactionEffects),
-            >::get_read_only_handle(db_path, None, None, MetricConf::default())
-            .table_summary(table_name)
-        }
         StoreName::Epoch => {
             CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .table_summary(table_name)
@@ -98,20 +86,20 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
     for (key, value) in iter {
-        let value = value.migrate().into_inner();
-
-        if let StoreData::Move(object) = value.data {
-            if object_id != key.0 {
-                for (k, cnt) in data.iter() {
-                    total_bytes += k.len() * cnt;
-                    duplicated_bytes += k.len() * (cnt - 1);
-                    total_count += cnt;
-                    duplicate_count += cnt - 1;
+        if let StoreObject::Value(store_object) = value.migrate().into_inner() {
+            if let StoreData::Move(object) = store_object.data {
+                if object_id != key.0 {
+                    for (k, cnt) in data.iter() {
+                        total_bytes += k.len() * cnt;
+                        duplicated_bytes += k.len() * (cnt - 1);
+                        total_count += cnt;
+                        duplicate_count += cnt - 1;
+                    }
+                    object_id = key.0;
+                    data.clear();
                 }
-                object_id = key.0;
-                data.clear();
+                *data.entry(object.contents().to_vec()).or_default() += 1;
             }
-            *data.entry(object.contents().to_vec()).or_default() += 1;
         }
     }
     (total_count, duplicate_count, total_bytes, duplicated_bytes)
@@ -151,9 +139,6 @@ pub fn dump_table(
                 page_number,
             )
         }
-        StoreName::Wal => Err(eyre!(
-            "Dumping WAL not yet supported. It requires kmowing the value type"
-        )),
         StoreName::Epoch => {
             CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .dump(table_name, page_size, page_number)

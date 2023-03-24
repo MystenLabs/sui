@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{errors::SubscriberResult, metrics::ExecutorMetrics, ExecutionState};
 
-use config::{Committee, WorkerCache, WorkerId};
-use crypto::{NetworkPublicKey, PublicKey};
+use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
+use crypto::NetworkPublicKey;
 
 use futures::stream::FuturesOrdered;
 use futures::FutureExt;
@@ -49,7 +49,7 @@ struct Fetcher<Network> {
 }
 
 pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
-    name: PublicKey,
+    authority_id: AuthorityIdentifier,
     network: oneshot::Receiver<anemo::Network>,
     worker_cache: WorkerCache,
     committee: Committee,
@@ -81,7 +81,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
         ),
         spawn_logged_monitored_task!(
             create_and_run_subscriber(
-                name,
+                authority_id,
                 network,
                 worker_cache,
                 committee,
@@ -116,7 +116,7 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
 }
 
 async fn create_and_run_subscriber(
-    name: PublicKey,
+    authority_id: AuthorityIdentifier,
     network: oneshot::Receiver<anemo::Network>,
     worker_cache: WorkerCache,
     committee: Committee,
@@ -129,7 +129,7 @@ async fn create_and_run_subscriber(
     let network = network.await.expect("Failed to receive network");
     info!("Starting subscriber");
     let network = SubscriberNetworkImpl {
-        name,
+        authority_id,
         worker_cache,
         committee,
         network,
@@ -423,7 +423,7 @@ pub trait SubscriberNetwork: Send + Sync {
 }
 
 struct SubscriberNetworkImpl {
-    name: PublicKey,
+    authority_id: AuthorityIdentifier,
     network: anemo::Network,
     worker_cache: WorkerCache,
     committee: Committee,
@@ -433,7 +433,13 @@ struct SubscriberNetworkImpl {
 impl SubscriberNetwork for SubscriberNetworkImpl {
     fn my_worker(&self, worker_id: &WorkerId) -> NetworkPublicKey {
         self.worker_cache
-            .worker(&self.name, worker_id)
+            .worker(
+                self.committee
+                    .authority(&self.authority_id)
+                    .unwrap()
+                    .protocol_key(),
+                worker_id,
+            )
             .expect("Own worker not found in cache")
             .name
     }

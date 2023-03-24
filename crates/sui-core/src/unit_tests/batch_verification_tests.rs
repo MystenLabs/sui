@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::batch_bls_verifier::*;
+use crate::signature_verifier::*;
 use crate::test_utils::{make_cert_with_large_committee, make_dummy_tx};
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
@@ -112,8 +112,8 @@ async fn test_async_verifier() {
     let key_pairs = Arc::new(key_pairs);
 
     let registry = Registry::new();
-    let metrics = BatchCertificateVerifierMetrics::new(&registry);
-    let verifier = Arc::new(BatchCertificateVerifier::new(committee.clone(), metrics));
+    let metrics = VerifiedDigestCacheMetrics::new(&registry);
+    let verifier = Arc::new(SignatureVerifier::new(committee.clone(), metrics));
 
     let tasks: Vec<_> = (0..32)
         .into_iter()

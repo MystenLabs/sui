@@ -24,6 +24,6 @@ test('import wallet', async ({ page, extensionUrl }) => {
     await page.getByRole('button', { name: /Open Sui Wallet/ }).click();
     await expect(page.getByTestId('coin-page')).toBeVisible();
     await expect(
-        page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 4))
+        page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6))
     ).toBeVisible();
 });
