@@ -59,11 +59,14 @@ pub fn ecrecover(
     let hash = pop_arg!(args, u8);
 
     // Load the cost paramaters from the protocol config
-    let ecdsa_r1_ecrecover_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()
-        .ecdsa_r1_ecrecover_cost_params
-        .clone();
+    let (ecdsa_r1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table.ecdsa_r1_ecrecover_cost_params.clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
+
     let (base_cost, cost_per_byte, cost_per_block, block_size) = match hash {
         KECCAK256 => (
             ecdsa_r1_ecrecover_cost_params.ecdsa_r1_ecrecover_keccak256_cost_base,
@@ -79,10 +82,7 @@ pub fn ecrecover(
         ),
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
-            context.charge_gas(
-                ecdsa_r1_ecrecover_cost_params.ecdsa_r1_ecrecover_keccak256_cost_base
-                    + ecdsa_r1_ecrecover_cost_params.ecdsa_r1_ecrecover_sha256_cost_base,
-            );
+            context.charge_gas(crypto_invalid_arguments_cost);
 
             return Ok(NativeResult::err(
                 context.gas_used(),
@@ -153,12 +153,13 @@ pub fn secp256r1_verify(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 4);
     // Load the cost paramaters from the protocol config
-    let ecdsa_r1_secp256_r1_verify_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()
-        .ecdsa_r1_secp256_r1_verify_cost_params
-        .clone();
-
+    let (ecdsa_r1_secp256_r1_verify_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table.ecdsa_r1_secp256_r1_verify_cost_params.clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
     let hash = pop_arg!(args, u8);
     let (base_cost, cost_per_byte, cost_per_block, block_size) = match hash {
         KECCAK256 => (
@@ -179,12 +180,7 @@ pub fn secp256r1_verify(
         ),
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
-            context.charge_gas(
-                ecdsa_r1_secp256_r1_verify_cost_params
-                    .ecdsa_r1_secp256r1_verify_keccak256_cost_base
-                    + ecdsa_r1_secp256_r1_verify_cost_params
-                        .ecdsa_r1_secp256r1_verify_sha256_cost_base,
-            );
+            context.charge_gas(crypto_invalid_arguments_cost);
             return Ok(NativeResult::ok(
                 context.gas_used(),
                 smallvec![Value::bool(false)],

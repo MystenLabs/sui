@@ -17,7 +17,7 @@ mod validator;
 use crate::make_native;
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::identifier::Identifier;
+use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
 use move_vm_types::{
@@ -100,6 +100,7 @@ pub struct NativesCostTable {
     pub validator_validate_metadata_bcs_cost_params: ValidatorValidateMetadataBcsCostParams,
 
     // Crypto natives
+    pub crypto_invalid_arguments_cost: InternalGas,
     // bls12381
     pub bls12381_bls12381_min_sig_verify_cost_params: Bls12381Bls12381MinSigVerifyCostParams,
     pub bls12381_bls12381_min_pk_verify_cost_params: Bls12381Bls12381MinPkVerifyCostParams,
@@ -241,6 +242,7 @@ impl NativesCostTable {
             },
 
             // Crypto
+            crypto_invalid_arguments_cost: protocol_config.crypto_invalid_arguments_cost().into(),
             // ed25519
             ed25519_verify_cost_params: Ed25519VerifyCostParams {
                 ed25519_ed25519_verify_cost_base: protocol_config

@@ -433,6 +433,7 @@ pub struct ProtocolConfig {
     validator_validate_metadata_data_cost_per_byte: Option<u64>,
 
     // Crypto natives
+    crypto_invalid_arguments_cost: Option<u64>,
     // bls12381::bls12381_min_sig_verify
     bls12381_bls12381_min_sig_verify_cost_base: Option<u64>,
     bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Option<u64>,
@@ -898,6 +899,9 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn crypto_invalid_arguments_cost(&self) -> u64 {
+        self.crypto_invalid_arguments_cost.expect(CONSTANT_ERR_MSG)
+    }
     pub fn bls12381_bls12381_min_sig_verify_cost_base(&self) -> u64 {
         self.bls12381_bls12381_min_sig_verify_cost_base
             .expect(CONSTANT_ERR_MSG)
@@ -1366,6 +1370,7 @@ impl ProtocolConfig {
                 validator_validate_metadata_data_cost_per_byte: Some(0),
 
                 // Crypto
+                crypto_invalid_arguments_cost: Some(100),
                 // bls12381::bls12381_min_pk_verify
                 bls12381_bls12381_min_sig_verify_cost_base: Some(52),
                 bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Some(0),

@@ -102,6 +102,7 @@ types_is_one_time_witness_type_tag_cost_per_byte: 0
 types_is_one_time_witness_type_cost_per_byte: 0
 validator_validate_metadata_cost_base: 52
 validator_validate_metadata_data_cost_per_byte: 0
+crypto_invalid_arguments_cost: 100
 bls12381_bls12381_min_sig_verify_cost_base: 52
 bls12381_bls12381_min_sig_verify_msg_cost_per_byte: 0
 bls12381_bls12381_min_sig_verify_msg_cost_per_block: 0

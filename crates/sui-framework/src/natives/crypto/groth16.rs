@@ -38,12 +38,13 @@ pub fn prepare_verifying_key_internal(
     debug_assert!(args.len() == 2);
 
     // Load the cost paramaters from the protocol config
-    let groth16_prepare_verifying_key_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()
-        .groth16_prepare_verifying_key_cost_params
-        .clone();
-
+    let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table.groth16_prepare_verifying_key_cost_params.clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
     let bytes = pop_arg!(args, VectorRef);
     let verifying_key = bytes.as_bytes_ref();
 
@@ -60,12 +61,7 @@ pub fn prepare_verifying_key_internal(
         }
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
-            context.charge_gas(
-                groth16_prepare_verifying_key_cost_params
-                    .groth16_prepare_verifying_key_bls12381_cost_base
-                    + groth16_prepare_verifying_key_cost_params
-                        .groth16_prepare_verifying_key_bn254_cost_base,
-            );
+            context.charge_gas(crypto_invalid_arguments_cost);
             return Ok(NativeResult::err(context.gas_used(), INVALID_CURVE));
         }
     };
@@ -115,12 +111,15 @@ pub fn verify_groth16_proof_internal(
     debug_assert!(args.len() == 7);
 
     // Load the cost paramaters from the protocol config
-    let groth16_verify_groth16_proof_internal_cost_params = &context
-        .extensions()
-        .get::<NativesCostTable>()
-        .groth16_verify_groth16_proof_internal_cost_params
-        .clone();
-
+    let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table
+                .groth16_verify_groth16_proof_internal_cost_params
+                .clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
     let bytes5 = pop_arg!(args, VectorRef);
     let proof_points = bytes5.as_bytes_ref();
 
@@ -160,12 +159,7 @@ pub fn verify_groth16_proof_internal(
         ),
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
-            context.charge_gas(
-                groth16_verify_groth16_proof_internal_cost_params
-                    .groth16_verify_groth16_proof_internal_bls12381_cost_base
-                    + groth16_verify_groth16_proof_internal_cost_params
-                        .groth16_verify_groth16_proof_internal_bn254_cost_base,
-            );
+            context.charge_gas(crypto_invalid_arguments_cost);
             return Ok(NativeResult::err(context.gas_budget(), INVALID_CURVE));
         }
     };

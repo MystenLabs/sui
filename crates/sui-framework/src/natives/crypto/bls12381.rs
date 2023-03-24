@@ -18,7 +18,7 @@ use std::collections::VecDeque;
 
 use crate::natives::NativesCostTable;
 
-const BLS12381_BLOCK_SIZE: usize = 128;
+const BLS12381_BLOCK_SIZE: usize = 64;
 
 #[derive(Clone)]
 pub struct Bls12381Bls12381MinSigVerifyCostParams {
