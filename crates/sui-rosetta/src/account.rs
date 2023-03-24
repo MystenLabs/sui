@@ -14,7 +14,7 @@ use sui_types::base_types::SuiAddress;
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, SubAccount, SubAccountType,
+    Amount, Coin, SubAccount, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 
@@ -60,17 +60,17 @@ async fn get_sub_account_balances(
     client: &SuiClient,
     address: SuiAddress,
 ) -> Result<Vec<Amount>, Error> {
-    let mut amounts = match account_type {
+    let amounts = match account_type {
         SubAccountType::Stake => {
             let delegations = client.governance_api().get_stakes(address).await?;
             delegations.into_iter().fold(vec![], |mut amounts, stakes| {
                 for stake in &stakes.stakes {
                     if let StakeStatus::Active { .. } = stake.status {
-                        amounts.push(Amount::new_stake(
-                            stake.principal as i128,
-                            stake.staked_sui_id,
-                            stakes.validator_address,
-                        ));
+                        amounts.push(SubBalance {
+                            stake_id: stake.staked_sui_id,
+                            validator: stakes.validator_address,
+                            value: stake.principal as i128,
+                        });
                     }
                 }
                 amounts
@@ -81,11 +81,11 @@ async fn get_sub_account_balances(
             delegations.into_iter().fold(vec![], |mut amounts, stakes| {
                 for stake in &stakes.stakes {
                     if let StakeStatus::Pending = stake.status {
-                        amounts.push(Amount::new_stake(
-                            stake.principal as i128,
-                            stake.staked_sui_id,
-                            stakes.validator_address,
-                        ));
+                        amounts.push(SubBalance {
+                            stake_id: stake.staked_sui_id,
+                            validator: stakes.validator_address,
+                            value: stake.principal as i128,
+                        });
                     }
                 }
                 amounts
@@ -97,11 +97,11 @@ async fn get_sub_account_balances(
             delegations.into_iter().fold(vec![], |mut amounts, stakes| {
                 for stake in &stakes.stakes {
                     if let StakeStatus::Active { estimated_reward } = stake.status {
-                        amounts.push(Amount::new_stake(
-                            estimated_reward as i128,
-                            stake.staked_sui_id,
-                            stakes.validator_address,
-                        ));
+                        amounts.push(SubBalance {
+                            stake_id: stake.staked_sui_id,
+                            validator: stakes.validator_address,
+                            value: estimated_reward as i128,
+                        });
                     }
                 }
                 amounts
@@ -110,11 +110,11 @@ async fn get_sub_account_balances(
     };
 
     // Make sure there are always one amount returned
-    if amounts.is_empty() {
-        amounts.push(Amount::new(0))
-    }
-
-    Ok(amounts)
+    Ok(if amounts.is_empty() {
+        vec![Amount::new(0)]
+    } else {
+        vec![Amount::new_from_sub_balances(amounts)]
+    })
 }
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
