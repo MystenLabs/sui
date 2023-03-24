@@ -5,11 +5,9 @@ use crate::{errors::SubscriberResult, metrics::ExecutorMetrics, ExecutionState};
 use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
 use crypto::NetworkPublicKey;
 
-use futures::stream::FuturesOrdered;
-use futures::FutureExt;
-use futures::StreamExt;
+use futures::stream::{FuturesOrdered, FuturesUnordered};
+use futures::{FutureExt, StreamExt};
 
-use futures::stream::FuturesUnordered;
 use network::WorkerRpc;
 
 use anyhow::bail;
@@ -414,7 +412,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 Ok(request_batches_response) => {
                     let RequestBatchesResponse {
                         batches,
-                        remaining_batch_digests,
+                        is_size_limit_reached,
                     } = request_batches_response;
                     debug!("Locally found {} batches", batches.len());
                     for local_batch in batches {
@@ -426,10 +424,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                         fetched_batches.insert(local_batch.digest(), local_batch);
                     }
 
-                    digests_to_fetch = process_request_batches_remaining_batches(
-                        &digests_to_fetch,
-                        remaining_batch_digests,
-                    );
+                    if !is_size_limit_reached {
+                        break;
+                    }
                 }
                 Err(err) => {
                     if err.to_string().contains("Timeout") {
@@ -537,7 +534,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             }
             let RequestBatchesResponse {
                 batches,
-                remaining_batch_digests,
+                is_size_limit_reached,
             } = self
                 .network
                 .request_batches(
@@ -546,45 +543,28 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                     timeout,
                 )
                 .await?;
+            // Use this flag to determine if the worker returned a valid digest
+            // to protect against an adversarial worker returning size limit reached
+            // and no batches leading us to retry this worker forever or until
+            // we get batches from other workers.
+            let mut is_digest_received = false;
             for batch in batches {
                 let batch_digest = batch.digest();
                 if !digests_to_fetch.contains(&batch_digest) {
                     bail!("[Protocol violation] Worker {worker} returned batch with digest {batch_digest} which is not part of the requested digests: {digests:?}");
                 } else {
+                    is_digest_received = true;
                     verified_batches.insert(batch_digest, batch);
                     digests_to_fetch.remove(&batch_digest);
                 }
             }
-            digests_to_fetch = process_request_batches_remaining_batches(
-                &digests_to_fetch,
-                remaining_batch_digests,
-            );
+            if !is_size_limit_reached || !is_digest_received {
+                break;
+            }
         }
 
         Ok(verified_batches)
     }
-}
-
-fn process_request_batches_remaining_batches(
-    digests_to_fetch: &HashSet<BatchDigest>,
-    remaining_batch_digests: Vec<BatchDigest>,
-) -> HashSet<BatchDigest> {
-    let mut digests_to_refetch = HashSet::new();
-    if !remaining_batch_digests.is_empty() {
-        // Double check the remaining batches are what we were expecting.
-        digests_to_refetch = remaining_batch_digests
-            .into_iter()
-            .filter(|digest| {
-                if digests_to_fetch.contains(digest) {
-                    true
-                } else {
-                    warn!("Unexpected remaining batch digest returned from local worker: {digest}");
-                    false
-                }
-            })
-            .collect();
-    }
-    digests_to_refetch
 }
 
 // todo - make it generic so that other can reuse
@@ -687,8 +667,8 @@ mod tests {
     use crypto::NetworkKeyPair;
     use fastcrypto::hash::Hash;
     use fastcrypto::traits::KeyPair;
+    use itertools::Itertools;
     use rand::rngs::StdRng;
-    use std::cmp::min;
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -871,21 +851,22 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_fetcher_max_digest_limit() {
-        telemetry_subscribers::init_for_testing();
+    pub async fn test_fetcher_response_size_limit() {
         let mut network = TestSubscriberNetwork::new(1);
-        let max_digests_per_request = 10;
+        let num_digests = 12;
         let mut expected_batches = Vec::new();
-        for i in 0..max_digests_per_request {
+        // 6 batches available locally with response size limit of 2
+        for i in 0..num_digests / 2 {
             let batch = Batch::new(vec![vec![i]]);
             network.put(0, &[0, 1, 2, 3], batch.clone());
             expected_batches.push(batch);
         }
-        // only one batch not available locally
-        let batch = Batch::new(vec![vec![11]]);
-        network.put(0, &[1, 2, 3], batch.clone());
-
-        expected_batches.push(batch);
+        // 6 batches available locally with response size limit of 2
+        for i in (num_digests / 2)..num_digests {
+            let batch = Batch::new(vec![vec![i]]);
+            network.put(0, &[1, 2, 3], batch.clone());
+            expected_batches.push(batch);
+        }
 
         let expected_batches = HashMap::from_iter(
             expected_batches
@@ -985,37 +966,43 @@ mod tests {
             worker: NetworkPublicKey,
             _timeout: Duration,
         ) -> anyhow::Result<RequestBatchesResponse> {
-            let mut batches: Vec<Batch> = Vec::new();
             // Use this to simulate server side response size limit in RequestBatches
-            let max_response_size = 2;
-            let max_digests_limit = 5;
-            let mut digests_to_fetch = digests;
+            const MAX_REQUEST_BATCHES_RESPONSE_SIZE: usize = 2;
+            const MAX_READ_BATCH_DIGESTS: usize = 5;
 
-            let mut remaining_batch_digests = digests_to_fetch
-                .drain(min(max_digests_limit, digests_to_fetch.len())..)
-                .collect::<Vec<_>>();
+            let mut is_size_limit_reached = false;
+            let mut batches = Vec::new();
+            let mut total_size = 0;
+
+            let digests_chunks = digests
+                .chunks(MAX_READ_BATCH_DIGESTS)
+                .map(|chunk| chunk.to_vec())
+                .collect_vec();
             let worker_id = self.worker_cache.get(&worker).unwrap();
-
-            for digest in digests_to_fetch {
-                if let Some(batch) = self
-                    .data
-                    .get(worker_id)
-                    .unwrap()
-                    .get(&digest)
-                    .unwrap()
-                    .get(&worker)
-                {
-                    if batches.len() < max_response_size {
-                        batches.push(batch.clone());
-                    } else {
-                        remaining_batch_digests.push(digest);
+            for digests_chunk in digests_chunks {
+                for digest in digests_chunk {
+                    if let Some(batch) = self
+                        .data
+                        .get(worker_id)
+                        .unwrap()
+                        .get(&digest)
+                        .unwrap()
+                        .get(&worker)
+                    {
+                        if total_size < MAX_REQUEST_BATCHES_RESPONSE_SIZE {
+                            batches.push(batch.clone());
+                            total_size += batch.size();
+                        } else {
+                            is_size_limit_reached = true;
+                            break;
+                        }
                     }
                 }
             }
 
             Ok(RequestBatchesResponse {
                 batches,
-                remaining_batch_digests,
+                is_size_limit_reached,
             })
         }
     }
