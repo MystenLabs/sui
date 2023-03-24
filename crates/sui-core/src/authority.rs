@@ -64,8 +64,8 @@ use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
+    CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
+    CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
@@ -510,6 +510,24 @@ impl AuthorityState {
 
     pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
         self.committee_store.clone()
+    }
+
+    pub fn get_epoch_state_commitments(
+        &self,
+        epoch: EpochId,
+    ) -> SuiResult<Option<Vec<CheckpointCommitment>>> {
+        let commitments =
+            self.checkpoint_store
+                .get_epoch_last_checkpoint(epoch)?
+                .map(|checkpoint| {
+                    checkpoint
+                        .end_of_epoch_data
+                        .as_ref()
+                        .expect("Last checkpoint of epoch expected to have EndOfEpochData")
+                        .epoch_commitments
+                        .clone()
+                });
+        Ok(commitments)
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
