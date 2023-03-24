@@ -906,6 +906,17 @@ impl Builder {
             system_state.epoch_start_timestamp_ms,
             chain_start_timestamp_ms,
         );
+        assert_eq!(system_state.validators.pending_removals.len(), 0);
+        assert_eq!(
+            system_state
+                .validators
+                .pending_active_validators
+                .contents
+                .size,
+            0
+        );
+        assert_eq!(system_state.validators.inactive_validators.size, 0);
+        assert_eq!(system_state.validators.validator_candidates.size, 0);
 
         // Check distribution is correct
         let token_distribution_schedule = self.token_distribution_schedule.clone().unwrap();
