@@ -37,6 +37,7 @@ use sui_types::base_types::{ObjectType, SuiAddress};
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
+use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::messages::make_transactions_with_wallet_context;
@@ -285,16 +286,23 @@ async fn test_create_example_nft_command() {
     .unwrap();
 
     match result {
-        SuiClientCommandResult::CreateExampleNFT(SuiObjectResponse::Exists(obj)) => {
-            assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
-            assert_eq!(
-                obj.type_.clone().unwrap(),
-                ObjectType::from_str(&sui_framework_address_concat_string(
-                    "::devnet_nft::DevNetNFT"
-                ))
-                .unwrap()
-            );
-            Ok(obj)
+        SuiClientCommandResult::CreateExampleNFT(response) => {
+            if let Some(obj) = response.data {
+                assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
+                assert_eq!(
+                    obj.type_.clone().unwrap(),
+                    ObjectType::from_str(&sui_framework_address_concat_string(
+                        "::devnet_nft::DevNetNFT"
+                    ))
+                    .unwrap()
+                );
+                Ok(obj)
+            } else {
+                match response.error {
+                    Some(error) => Err(anyhow!("Error: {}", error)),
+                    None => Err(anyhow!("No data or error found in the response")),
+                }
+            }
         }
         _ => Err(anyhow!(
             "WalletCommands::CreateExampleNFT returns wrong type"
@@ -1133,22 +1141,30 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let mut_obj1 = if let SuiClientCommandResult::Object(SuiObjectResponse::Exists(object)) = resp {
-        object
+    let mut_obj1 = if let SuiClientCommandResult::Object(resp) = resp {
+        if let Some(obj) = resp.data {
+            obj
+        } else {
+            panic!()
+        }
     } else {
-        panic!()
+        panic!();
     };
 
-    let resp = SuiClientCommands::Object {
+    let resp2 = SuiClientCommands::Object {
         id: mut_obj2,
         bcs: false,
     }
     .execute(context)
     .await?;
-    let mut_obj2 = if let SuiClientCommandResult::Object(SuiObjectResponse::Exists(object)) = resp {
-        object
+    let mut_obj2 = if let SuiClientCommandResult::Object(resp2) = resp2 {
+        if let Some(obj) = resp2.data {
+            obj
+        } else {
+            panic!()
+        }
     } else {
-        panic!()
+        panic!();
     };
 
     let (gas, obj) = if mut_obj1.owner.unwrap().get_owner_address().unwrap() == address {
@@ -1223,7 +1239,11 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 #[test]
 // Test for issue https://github.com/MystenLabs/sui/issues/1078
 fn test_bug_1078() {
-    let read = SuiClientCommandResult::Object(SuiObjectResponse::NotExists(ObjectID::random()));
+    let read = SuiClientCommandResult::Object(SuiObjectResponse::new_with_error(
+        SuiObjectResponseError::NotExists {
+            object_id: ObjectID::random(),
+        },
+    ));
     let mut writer = String::new();
     // fmt ObjectRead should not fail.
     write!(writer, "{}", read).unwrap();
@@ -1417,11 +1437,7 @@ async fn get_object(id: ObjectID, context: &WalletContext) -> Option<SuiObjectDa
         .get_object_with_options(id, SuiObjectDataOptions::full_content())
         .await
         .unwrap();
-    if let SuiObjectResponse::Exists(o) = response {
-        Some(o)
-    } else {
-        None
-    }
+    response.data
 }
 
 async fn get_parsed_object_assert_existence(

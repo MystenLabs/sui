@@ -46,38 +46,23 @@ export function instanceOfDataType(object: any): object is DataType {
  * to make this more extensible and customizable for different Move types
  */
 export function translate(o: SuiObjectResponse): DataType {
-    switch (o.status) {
-        case 'Exists': {
-            return {
-                id: getObjectId(o),
-                version: getObjectVersion(o)!.toString(),
-                objType: parseObjectType(o),
-                owner: getObjectOwner(o)!,
-                data: {
-                    contents: getObjectFields(o) ?? getMovePackageContent(o)!,
-                    tx_digest: getObjectPreviousTransactionDigest(o),
-                },
-                display:
-                    (typeof o.details === 'object' &&
-                        'display' in o.details &&
-                        o.details.display) ||
-                    undefined,
-            };
-        }
-        case 'NotExists': {
-            // TODO: implement this
-            throw new Error(
-                `Implement me: Object ${getObjectId(o)} does not exist`
-            );
-        }
-        case 'Deleted': {
-            // TODO: implement this
-            throw new Error(
-                `Implement me: Object ${getObjectId(o)} has been deleted`
-            );
-        }
-        default: {
-            throw new Error(`Unexpected status ${o.status} for object ${o}`);
-        }
+    if (o.data) {
+        return {
+            id: getObjectId(o),
+            version: getObjectVersion(o)!.toString(),
+            objType: parseObjectType(o),
+            owner: getObjectOwner(o)!,
+            data: {
+                contents: getObjectFields(o) ?? getMovePackageContent(o)!,
+                tx_digest: getObjectPreviousTransactionDigest(o),
+            },
+            display:
+                (typeof o.data === 'object' &&
+                    'display' in o.data &&
+                    o.data.display) ||
+                undefined,
+        };
+    } else {
+        throw new Error(`${o.error}`);
     }
 }

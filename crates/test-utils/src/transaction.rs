@@ -13,8 +13,8 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::authority_client::AuthorityAPI;
 pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionDataAPI,
-    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -254,17 +254,21 @@ pub async fn create_devnet_nft(
     .execute(context)
     .await?;
 
-    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
-        SuiObjectResponse::Exists(obj),
-    ) = res
-    {
-        (
-            obj.object_id,
-            obj.previous_transaction
-                .expect("previous_transaction should not be None"),
-        )
+    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(ref response) = res {
+        if let Some(obj) = &response.data {
+            (
+                obj.object_id,
+                obj.previous_transaction
+                    .expect("previous_transaction should not be None"),
+            )
+        } else {
+            panic!(
+                "CreateExampleNFT command did not return data, got {:?}",
+                res
+            );
+        }
     } else {
-        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectResponse::Exists, got {:?}", res);
+        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT, got {:?}", res);
     };
 
     Ok((sender, object_id, digest))

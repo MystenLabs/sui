@@ -521,14 +521,19 @@ impl SuiClientCommands {
                     )
                     .await?;
 
-                let SuiObjectResponse::Exists(data) = context
+                let resp = context
                     .get_client()
                     .await?
                     .read_api()
-                    .get_object_with_options(upgrade_capability, SuiObjectDataOptions::default().with_bcs().with_owner())
-                    .await? else {
-                        return Err(anyhow!("Could not find upgrade capability at {upgrade_capability}"))
-                    };
+                    .get_object_with_options(
+                        upgrade_capability,
+                        SuiObjectDataOptions::default().with_bcs().with_owner(),
+                    )
+                    .await?;
+
+                let Some(data) = resp.data else {
+                    return Err(anyhow!("Could not find upgrade capability at {upgrade_capability}"))
+                };
 
                 let upgrade_cap: UpgradeCap = data
                     .bcs
@@ -1343,15 +1348,13 @@ impl WalletContext {
             .await?;
 
         for object in responses {
-            match object {
-                SuiObjectResponse::Exists(o) => {
-                    if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
-                        // Okay to unwrap() since we already checked type
-                        let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o.clone()));
-                    }
+            let o = object.data;
+            if let Some(o) = o {
+                if matches!( &o.type_, Some(type_)  if type_.is_gas_coin()) {
+                    // Okay to unwrap() since we already checked type
+                    let gas_coin = GasCoin::try_from(&o)?;
+                    values_objects.push((gas_coin.value(), o.clone()));
                 }
-                _ => continue,
             }
         }
 

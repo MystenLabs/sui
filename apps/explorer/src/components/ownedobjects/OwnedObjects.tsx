@@ -65,13 +65,13 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                 .then((results) => {
                     setResults(
                         results
-                            .filter(({ status }) => status === 'Exists')
+                            .filter(({ data }) => data !== undefined)
                             .map(
                                 (resp) => {
                                     const displayMeta =
-                                        typeof resp.details === 'object' &&
-                                        'display' in resp.details
-                                            ? resp.details.display
+                                        typeof resp.data === 'object' &&
+                                        'display' in resp.data
+                                            ? resp.data.display
                                             : undefined;
                                     const url = parseImageURL(displayMeta);
                                     return {

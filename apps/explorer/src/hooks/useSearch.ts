@@ -48,14 +48,14 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
     const normalized = normalizeSuiObjectId(query);
     if (!isValidSuiObjectId(normalized)) return null;
 
-    const { details, status } = await rpc.getObject({ id: normalized });
-    if (is(details, SuiObjectData) && status === 'Exists') {
+    const { data, error } = await rpc.getObject({ id: normalized });
+    if (is(data, SuiObjectData) && !error) {
         return {
             label: 'object',
             results: [
                 {
-                    id: details.objectId,
-                    label: details.objectId,
+                    id: data.objectId,
+                    label: data.objectId,
                     type: 'object',
                 },
             ],

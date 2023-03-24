@@ -16,6 +16,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
@@ -184,6 +185,41 @@ pub enum UserInputError {
     Unsupported(String),
 }
 
+#[derive(
+    Eq,
+    PartialEq,
+    Clone,
+    Debug,
+    Serialize,
+    Deserialize,
+    Hash,
+    AsRefStr,
+    IntoStaticStr,
+    JsonSchema,
+    Error,
+)]
+#[serde(tag = "code", rename = "ObjectResponseError", rename_all = "camelCase")]
+pub enum SuiObjectResponseError {
+    #[error("Object {:?} does not exist.", object_id)]
+    NotExists { object_id: ObjectID },
+    #[error(
+        "Object has been deleted object_id: {:?} at version: {:?} in digest {:?}",
+        object_id,
+        version,
+        digest
+    )]
+    Deleted {
+        object_id: ObjectID,
+        /// Object version.
+        version: SequenceNumber,
+        /// Base64 string representing the object digest
+        digest: ObjectDigest,
+    },
+    #[error("Unknown Error.")]
+    Unknown,
+    // TODO: also integrate SuiPastObjectResponse (VersionNotFound,  VersionTooHigh)
+}
+
 /// Custom error type for Sui.
 #[derive(
     Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash, AsRefStr, IntoStaticStr,
@@ -191,6 +227,10 @@ pub enum UserInputError {
 pub enum SuiError {
     #[error("Error checking transaction input objects: {:?}", error)]
     UserInputError { error: UserInputError },
+
+    #[error("Error checking transaction object: {:?}", error)]
+    SuiObjectResponseError { error: SuiObjectResponseError },
+
     #[error("Expecting a single owner, shared ownership found")]
     UnexpectedOwnerType,
 
@@ -543,6 +583,12 @@ impl TryFrom<SuiError> for UserInputError {
 impl From<UserInputError> for SuiError {
     fn from(error: UserInputError) -> Self {
         SuiError::UserInputError { error }
+    }
+}
+
+impl From<SuiObjectResponseError> for SuiError {
+    fn from(error: SuiObjectResponseError) -> Self {
+        SuiError::SuiObjectResponseError { error }
     }
 }
 

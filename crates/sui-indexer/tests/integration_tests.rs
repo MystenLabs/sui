@@ -35,6 +35,7 @@ pub mod pg_integration_test {
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
     use sui_types::digests::TransactionDigest;
+    use sui_types::error::SuiObjectResponseError;
     use sui_types::gas_coin::GasCoin;
     use sui_types::messages::ExecuteTransactionRequestType;
     use sui_types::object::ObjectFormatOptions;
@@ -63,9 +64,12 @@ pub mod pg_integration_test {
             .await?
             .data
             .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
-                _ => None,
+            .filter_map(|object_resp| {
+                if let Some(data) = object_resp.data {
+                    Some(data.object_id)
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -143,9 +147,12 @@ pub mod pg_integration_test {
             .await?
             .data
             .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data.object_id),
-                _ => None,
+            .filter_map(|object_resp| {
+                if let Some(data) = object_resp.data {
+                    Some(data.object_id)
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -472,11 +479,14 @@ pub mod pg_integration_test {
             .await?
             .data
             .into_iter()
-            .filter_map(|object_resp| match object_resp {
-                SuiObjectResponse::Exists(obj_data) => Some(obj_data),
-                _ => None,
+            .filter_map(|object_resp| {
+                if let Some(data) = object_resp.data {
+                    Some(data.object_id)
+                } else {
+                    None
+                }
             })
-            .any(|obj| obj.object_id == transferred_object);
+            .any(|obj| obj == transferred_object);
         assert!(object_correctly_transferred);
 
         Ok(())
@@ -712,26 +722,43 @@ pub mod pg_integration_test {
             .await
             .unwrap();
 
-        match resp {
-            SuiObjectResponse::Deleted(obj) => {
-                assert_eq!(obj.object_id, post_transfer_full_obj_data.object_id);
-                assert_eq!(obj.digest, post_transfer_full_obj_data.digest);
-                assert_eq!(obj.version.value(), 3);
+        match (&resp.data, &resp.error) {
+            (
+                None,
+                Some(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ) => {
+                assert_eq!(object_id, &post_transfer_full_obj_data.object_id);
+                assert_eq!(digest, &post_transfer_full_obj_data.digest);
+                assert_eq!(version.value(), 3);
             }
             _ => {
-                panic!("Expected SuiObjectResponse::Deleted, but got {:?}", resp);
+                panic!(
+                    "Expected SuiObjectResponse::Deleted, but got {:?}",
+                    resp.error
+                );
             }
         }
 
         // Not exists
-        let object_id = ObjectID::from([42; 32]);
+        let obj_id = ObjectID::from([42; 32]);
         let resp = indexer_rpc_client
-            .get_object_with_options(object_id, Some(show_all_content.clone()))
+            .get_object_with_options(obj_id, Some(show_all_content.clone()))
             .await
             .unwrap();
 
-        assert!(matches!(resp, SuiObjectResponse::NotExists(obj_id) if obj_id == object_id));
-        matches!(resp, SuiObjectResponse::NotExists(_));
+        if let Some(SuiObjectResponseError::NotExists { object_id }) = resp.error {
+            assert_eq!(object_id, obj_id)
+        } else {
+            panic!(
+                "Expected SuiObjectResponse::NotExists, but got {:?}",
+                resp.error
+            );
+        }
+
         Ok(())
     }
 
