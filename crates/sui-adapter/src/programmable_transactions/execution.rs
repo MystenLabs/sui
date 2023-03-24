@@ -463,7 +463,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
     let dependencies = fetch_packages(context, &dep_ids)?;
 
-    let mut modules = deserialize_modules::<_, _, Mode>(context, &module_bytes)?;
+    let (mut modules, module_map) = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
@@ -475,25 +475,15 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         generate_package_id(&mut modules, context.tx_context)?
     };
 
-    // TODO: avoid building the tables twice
-    let mut immediate_dependencies = BTreeSet::new();
-    for module in &modules {
-        immediate_dependencies.extend(
-            module
-                .immediate_dependencies()
-                .into_iter()
-                .map(|dep| ObjectID::from(*dep.address())),
-        );
-    }
-    immediate_dependencies.remove(&package_id);
-    let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
+    let linkage_table =
+        build_linkage_table(immediate_dependencies(&package_id, &modules), &dependencies)?;
     let type_origin_table = build_initial_type_origin_table(&modules);
     let mut session = context.create_session_with_linkage_context(
         package_id,
         Some(LinkageInfo::new(
             package_id,
-            linkage_table,
-            type_origin_table,
+            linkage_table.clone(),
+            &type_origin_table,
         )),
     )?;
 
@@ -513,8 +503,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    // new_package also initializes type origin table in the package object
-    let package_id = context.new_package(modules, &dependencies, None)?;
+    context.new_package(package_id, module_map, type_origin_table, linkage_table)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, _, Mode>(
             context,
@@ -627,24 +616,14 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
     // Run the move + sui verifier on the modules and publish them into the cache.
     let package_id = current_package.original_package_id();
-    let mut modules = deserialize_modules::<_, _, Mode>(context, &module_bytes)?;
+    let (mut modules, module_map) = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
     // substitute in the original package id for the `self` address in all of these modules.
     substitute_package_id(&mut modules, package_id)?;
 
     let new_package_object_id = context.tx_context.fresh_id();
 
-    // TODO: avoid building the tables twice
-    let mut immediate_dependencies = BTreeSet::new();
-    for module in &modules {
-        immediate_dependencies.extend(
-            module
-                .immediate_dependencies()
-                .into_iter()
-                .map(|dep| ObjectID::from(*dep.address())),
-        );
-    }
-    immediate_dependencies.remove(&package_id);
-    let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
+    let linkage_table =
+        build_linkage_table(immediate_dependencies(&package_id, &modules), &dependencies)?;
     let type_origin_table =
         build_upgraded_type_origin_table(&current_package, &modules, new_package_object_id)?;
 
@@ -652,8 +631,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         package_id,
         Some(LinkageInfo::new(
             package_id,
-            linkage_table,
-            type_origin_table,
+            linkage_table.clone(),
+            &type_origin_table,
         )),
     )?;
 
@@ -670,8 +649,9 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
     let upgraded_object_id = context.upgrade_package(
         &current_package,
-        upgraded_package_modules,
-        &dependencies,
+        module_map,
+        type_origin_table,
+        linkage_table,
         new_package_object_id,
     )?;
 
@@ -689,6 +669,25 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         },
         bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, upgraded_object_id)).unwrap(),
     )])
+}
+
+/// Same algorithm as in move_package::immediate_dependencies_and_module_map but we avoid building
+/// module map here
+fn immediate_dependencies(
+    root_pkg_id: &ObjectID,
+    modules: &[CompiledModule],
+) -> BTreeSet<ObjectID> {
+    let mut immediate_dependencies = BTreeSet::new();
+    for module in modules {
+        immediate_dependencies.extend(
+            module
+                .immediate_dependencies()
+                .into_iter()
+                .map(|dep| ObjectID::from(*dep.address())),
+        );
+    }
+    immediate_dependencies.remove(root_pkg_id);
+    immediate_dependencies
 }
 
 fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
@@ -851,25 +850,26 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
 
 fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
-    module_bytes: &[Vec<u8>],
-) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let modules = module_bytes
-        .iter()
-        .map(|b| {
-            CompiledModule::deserialize_with_max_version(
-                b,
-                context.protocol_config.move_binary_format_version(),
-            )
-            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
-        })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
+    module_bytes: Vec<Vec<u8>>,
+) -> Result<(Vec<CompiledModule>, BTreeMap<String, Vec<u8>>), ExecutionError> {
+    let mut modules = vec![];
+    let mut module_map = BTreeMap::new();
+    for b in module_bytes {
+        let deserialized = CompiledModule::deserialize_with_max_version(
+            &b,
+            context.protocol_config.move_binary_format_version(),
+        )
+        .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         .map_err(|e| context.convert_vm_error(e))?;
-
+        let name = &deserialized.name().to_string();
+        modules.push(deserialized);
+        module_map.insert(name.clone(), b);
+    }
     assert_invariant!(
         !modules.is_empty(),
         "input checker ensures package is not empty"
     );
-    Ok(modules)
+    Ok((modules, module_map))
 }
 
 fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(

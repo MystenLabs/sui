@@ -213,16 +213,36 @@ impl MovePackage {
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
         let self_id = ObjectID::from(*module.address());
-        let storage_id = self_id;
         let type_origin_table = build_initial_type_origin_table(&modules);
-        Self::from_module_iter_with_type_origin_table(
-            storage_id,
+
+        let (immediate_dependencies, module_map) =
+            Self::immediate_dependencies_and_module_map(&self_id, modules);
+        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
+        Self::new_initial_with_tables(
             self_id,
             version,
-            modules,
+            module_map,
             max_move_package_size,
             type_origin_table,
-            transitive_dependencies,
+            linkage_table,
+        )
+    }
+
+    pub fn new_initial_with_tables<'p>(
+        pkg_id: ObjectID,
+        version: SequenceNumber,
+        module_map: BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+    ) -> Result<Self, ExecutionError> {
+        Self::new(
+            pkg_id,
+            version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            linkage_table,
         )
     }
 
@@ -240,17 +260,63 @@ impl MovePackage {
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
         let self_id = ObjectID::from(*module.address());
         let type_origin_table = build_upgraded_type_origin_table(self, &modules, storage_id)?;
-        let mut new_version = self.version();
-        new_version.increment();
-        Self::from_module_iter_with_type_origin_table(
+        let (immediate_dependencies, module_map) =
+            Self::immediate_dependencies_and_module_map(&self_id, modules);
+        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
+
+        self.new_upgraded_with_tables(
             storage_id,
-            self_id,
-            new_version,
-            modules,
+            module_map,
             max_move_package_size,
             type_origin_table,
-            transitive_dependencies,
+            linkage_table,
         )
+    }
+
+    pub fn new_upgraded_with_tables(
+        &self,
+        storage_id: ObjectID,
+        module_map: BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+    ) -> Result<Self, ExecutionError> {
+        let mut new_version = self.version();
+        new_version.increment();
+        Self::new(
+            storage_id,
+            new_version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            linkage_table,
+        )
+    }
+
+    fn immediate_dependencies_and_module_map(
+        self_id: &ObjectID,
+        modules: impl IntoIterator<Item = CompiledModule>,
+    ) -> (BTreeSet<ObjectID>, BTreeMap<String, Vec<u8>>) {
+        let mut module_map = BTreeMap::new();
+        let mut immediate_dependencies = BTreeSet::new();
+
+        for module in modules {
+            let name = module.name().to_string();
+
+            immediate_dependencies.extend(
+                module
+                    .immediate_dependencies()
+                    .into_iter()
+                    .map(|dep| ObjectID::from(*dep.address())),
+            );
+
+            let mut bytes = Vec::new();
+            module.serialize(&mut bytes).unwrap();
+            module_map.insert(name, bytes);
+        }
+
+        immediate_dependencies.remove(&self_id);
+        (immediate_dependencies, module_map)
     }
 
     pub fn new_system(
@@ -300,45 +366,6 @@ impl MovePackage {
             linkage_table,
         )
         .expect("System packages are not subject to a size limit")
-    }
-
-    fn from_module_iter_with_type_origin_table<'p>(
-        storage_id: ObjectID,
-        self_id: ObjectID,
-        version: SequenceNumber,
-        modules: impl IntoIterator<Item = CompiledModule>,
-        max_move_package_size: u64,
-        type_origin_table: Vec<TypeOrigin>,
-        transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
-    ) -> Result<Self, ExecutionError> {
-        let mut module_map = BTreeMap::new();
-        let mut immediate_dependencies = BTreeSet::new();
-
-        for module in modules {
-            let name = module.name().to_string();
-
-            immediate_dependencies.extend(
-                module
-                    .immediate_dependencies()
-                    .into_iter()
-                    .map(|dep| ObjectID::from(*dep.address())),
-            );
-
-            let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
-            module_map.insert(name, bytes);
-        }
-
-        immediate_dependencies.remove(&self_id);
-        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
-        Self::new(
-            storage_id,
-            version,
-            module_map,
-            max_move_package_size,
-            type_origin_table,
-            linkage_table,
-        )
     }
 
     /// Return the size of the package in bytes
@@ -396,16 +423,7 @@ impl MovePackage {
     }
 
     pub fn type_origin_map(&self) -> BTreeMap<(String, String), ObjectID> {
-        self.type_origin_table
-            .iter()
-            .map(
-                |TypeOrigin {
-                     module_name,
-                     struct_name,
-                     package,
-                 }| { ((module_name.clone(), struct_name.clone()), *package) },
-            )
-            .collect()
+        type_origin_table_to_map(&self.type_origin_table)
     }
 
     pub fn linkage_table(&self) -> &BTreeMap<ObjectID, UpgradeInfo> {
@@ -664,4 +682,17 @@ pub fn build_upgraded_type_origin_table(
     } else {
         Ok(new_table)
     }
+}
+
+pub fn type_origin_table_to_map(table: &[TypeOrigin]) -> BTreeMap<(String, String), ObjectID> {
+    table
+        .iter()
+        .map(
+            |TypeOrigin {
+                 module_name,
+                 struct_name,
+                 package,
+             }| { ((module_name.clone(), struct_name.clone()), *package) },
+        )
+        .collect()
 }

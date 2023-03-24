@@ -28,7 +28,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
-    move_package::MovePackage,
+    move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, WriteKind},
 };
@@ -417,40 +417,44 @@ where
     }
 
     /// Create a new package
-    pub fn new_package<'p>(
+    pub fn new_package(
         &mut self,
-        modules: Vec<move_binary_format::CompiledModule>,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
-        version: Option<SequenceNumber>,
-    ) -> Result<ObjectID, ExecutionError> {
+        pkg_id: ObjectID,
+        module_map: BTreeMap<String, Vec<u8>>,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+    ) -> Result<(), ExecutionError> {
         // wrap the modules in an object, write it to the store
-        let object = Object::new_package(
-            modules,
-            version.unwrap_or(OBJECT_START_VERSION),
-            self.tx_context.digest(),
+        let object = Object::new_package_with_tables(
+            pkg_id,
+            OBJECT_START_VERSION,
+            module_map,
             self.protocol_config.max_move_package_size(),
-            dependencies,
+            type_origin_table,
+            linkage_table,
+            self.tx_context.digest(),
         )?;
-        let object_id = object.id();
         self.new_packages.push(object);
-        Ok(object_id)
+        Ok(())
     }
 
     /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
-    pub fn upgrade_package<'p>(
+    pub fn upgrade_package(
         &mut self,
         previous_package: &MovePackage,
-        new_modules: Vec<move_binary_format::CompiledModule>,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        module_map: BTreeMap<String, Vec<u8>>,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
         new_package_object_id: ObjectID,
     ) -> Result<ObjectID, ExecutionError> {
-        let object = Object::new_upgraded_package(
+        let object = Object::new_upgraded_package_with_tables(
             previous_package,
             new_package_object_id,
-            new_modules,
+            module_map,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
-            dependencies,
+            type_origin_table,
+            linkage_table,
         )?;
         let object_id = object.id();
         self.new_packages.push(object);

@@ -9,7 +9,7 @@ use sui_types::{
     base_types::ObjectID,
     error::SuiResult,
     error::{ExecutionError, ExecutionErrorKind},
-    move_package::{TypeOrigin, UpgradeInfo},
+    move_package::{type_origin_table_to_map, TypeOrigin, UpgradeInfo},
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver},
 };
@@ -30,18 +30,9 @@ impl LinkageInfo {
     pub fn new(
         pkg_id: ObjectID,
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
-        type_origin_table: Vec<TypeOrigin>,
+        type_origin_table: &[TypeOrigin],
     ) -> Self {
-        let type_origin_map = type_origin_table
-            .iter()
-            .map(
-                |TypeOrigin {
-                     module_name,
-                     struct_name,
-                     package,
-                 }| { ((module_name.clone(), struct_name.clone()), *package) },
-            )
-            .collect();
+        let type_origin_map = type_origin_table_to_map(type_origin_table);
         Self {
             pkg_id,
             linkage_table,

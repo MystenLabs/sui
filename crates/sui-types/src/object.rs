@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
@@ -22,7 +23,7 @@ use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInput
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::TOTAL_SUPPLY_MIST;
 use crate::is_system_package;
-use crate::move_package::MovePackage;
+use crate::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -584,20 +585,44 @@ impl Object {
         ))
     }
 
-    pub fn new_upgraded_package<'a>(
-        previous_package: &MovePackage,
-        new_package_id: ObjectID,
-        modules: Vec<CompiledModule>,
-        previous_transaction: TransactionDigest,
+    pub fn new_package_with_tables(
+        package_id: ObjectID,
+        version: SequenceNumber,
+        module_map: BTreeMap<String, Vec<u8>>,
         max_move_package_size: u64,
-        dependencies: impl IntoIterator<Item = &'a MovePackage>,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+        previous_transaction: TransactionDigest,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
-            Data::Package(previous_package.new_upgraded(
-                new_package_id,
-                modules,
+            Data::Package(MovePackage::new_initial_with_tables(
+                package_id,
+                version,
+                module_map,
                 max_move_package_size,
-                dependencies,
+                type_origin_table,
+                linkage_table,
+            )?),
+            previous_transaction,
+        ))
+    }
+
+    pub fn new_upgraded_package_with_tables<'a>(
+        previous_package: &MovePackage,
+        new_package_id: ObjectID,
+        module_map: BTreeMap<String, Vec<u8>>,
+        previous_transaction: TransactionDigest,
+        max_move_package_size: u64,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+    ) -> Result<Self, ExecutionError> {
+        Ok(Self::new_package_from_data(
+            Data::Package(previous_package.new_upgraded_with_tables(
+                new_package_id,
+                module_map,
+                max_move_package_size,
+                type_origin_table,
+                linkage_table,
             )?),
             previous_transaction,
         ))
