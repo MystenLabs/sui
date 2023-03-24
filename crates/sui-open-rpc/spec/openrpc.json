@@ -1076,7 +1076,7 @@
         },
         {
           "name": "limit",
-          "description": "Max number of items returned per page, default to [MAX_GET_OWNED_OBJECT_SIZE] if not specified.",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
           "schema": {
             "type": "integer",
             "format": "uint",
@@ -2032,6 +2032,55 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "suix_queryObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of queried objects. Note that this is an enhanced full node only api.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the objects query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "at_checkpoint",
+          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointId"
+          }
+        }
+      ],
+      "result": {
+        "name": "ObjectsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
         }
       }
     },
@@ -6266,6 +6315,36 @@
       "SuiObjectDataFilter": {
         "oneOf": [
           {
+            "type": "object",
+            "required": [
+              "MatchAll"
+            ],
+            "properties": {
+              "MatchAll": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiObjectDataFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MatchAny"
+            ],
+            "properties": {
+              "MatchAny": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiObjectDataFilter"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by type a specified Package.",
             "type": "object",
             "required": [
@@ -6318,6 +6397,71 @@
             "properties": {
               "StructType": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "AddressOwner"
+            ],
+            "properties": {
+              "AddressOwner": {
+                "$ref": "#/components/schemas/SuiAddress"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ObjectOwner"
+            ],
+            "properties": {
+              "ObjectOwner": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ObjectId"
+            ],
+            "properties": {
+              "ObjectId": {
+                "$ref": "#/components/schemas/ObjectID"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "ObjectIds"
+            ],
+            "properties": {
+              "ObjectIds": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectID"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Version"
+            ],
+            "properties": {
+              "Version": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
               }
             },
             "additionalProperties": false

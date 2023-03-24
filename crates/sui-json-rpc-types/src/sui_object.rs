@@ -22,7 +22,7 @@ use std::fmt::{Display, Formatter};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber,
-    TransactionDigest,
+    SuiAddress, TransactionDigest,
 };
 use sui_types::error::{SuiObjectResponseError, UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
@@ -975,6 +975,8 @@ pub struct SuiGetPastObjectRequest {
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum SuiObjectDataFilter {
+    MatchAll(Vec<SuiObjectDataFilter>),
+    MatchAny(Vec<SuiObjectDataFilter>),
     /// Query by type a specified Package.
     Package(ObjectID),
     /// Query by type a specified Move module.
@@ -992,6 +994,12 @@ pub enum SuiObjectDataFilter {
         #[serde_as(as = "DisplayFromStr")]
         StructTag,
     ),
+    AddressOwner(SuiAddress),
+    ObjectOwner(ObjectID),
+    ObjectId(ObjectID),
+    // allow querying for multiple object ids
+    ObjectIds(Vec<ObjectID>),
+    Version(u64),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]

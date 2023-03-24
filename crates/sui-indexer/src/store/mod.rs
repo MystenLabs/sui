@@ -7,6 +7,7 @@ pub use pg_indexer_store::PgIndexerStore;
 mod indexer_store;
 mod module_resolver;
 mod pg_indexer_store;
+mod query;
 
 mod diesel_marco {
     macro_rules! read_only {

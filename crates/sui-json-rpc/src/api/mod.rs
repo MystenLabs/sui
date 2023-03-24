@@ -46,7 +46,7 @@ pub const QUERY_MAX_RESULT_LIMIT: usize = 1000;
 // TODOD(chris): make this configurable
 pub const QUERY_MAX_RESULT_LIMIT_CHECKPOINTS: usize = 100;
 
-pub const MAX_GET_OWNED_OBJECT_LIMIT: usize = 256;
+pub const QUERY_MAX_RESULT_LIMIT_OBJECTS: usize = 256;
 
 pub fn cap_page_limit(limit: Option<usize>) -> usize {
     let limit = limit.unwrap_or_default();
