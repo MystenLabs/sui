@@ -25,15 +25,17 @@ use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionEffectsAPI,
     TransactionKind,
 };
+
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::messages::{TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
 
 use crate::api::WriteApiServer;
-use crate::balance_changes::get_balance_changes_from_effect;
 use crate::error::Error;
 use crate::read_api::get_transaction_data_and_digest;
-use crate::{get_object_changes, ObjectProviderCache, SuiRpcModule};
+use crate::{
+    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
+};
 
 pub struct TransactionExecutionApi {
     state: Arc<AuthorityState>,
@@ -150,6 +152,35 @@ impl TransactionExecutionApi {
             }
         }
     }
+
+    async fn dry_run_transaction(
+        &self,
+        tx_bytes: Base64,
+    ) -> Result<DryRunTransactionResponse, Error> {
+        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
+        let (resp, written_objects, transaction_effects) = self
+            .state
+            .dry_exec_transaction(txn_data.clone(), txn_digest)
+            .await?;
+        let object_cache = ObjectProviderCache::new_with_cache(self.state.clone(), written_objects);
+        let balance_changes =
+            get_balance_changes_from_effect(&object_cache, &transaction_effects).await?;
+        let object_changes = get_object_changes(
+            &object_cache,
+            txn_data.sender(),
+            transaction_effects.modified_at_versions(),
+            transaction_effects.all_changed_objects(),
+            transaction_effects.all_deleted(),
+        )
+        .await?;
+
+        Ok(DryRunTransactionResponse {
+            effects: resp.effects,
+            events: resp.events,
+            object_changes,
+            balance_changes,
+        })
+    }
 }
 
 #[async_trait]
@@ -182,11 +213,7 @@ impl WriteApiServer for TransactionExecutionApi {
     }
 
     async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
-        let (txn_data, txn_digest) = get_transaction_data_and_digest(tx_bytes)?;
-        Ok(self
-            .state
-            .dry_exec_transaction(txn_data, txn_digest)
-            .await?)
+        Ok(self.dry_run_transaction(tx_bytes).await?)
     }
 }
 

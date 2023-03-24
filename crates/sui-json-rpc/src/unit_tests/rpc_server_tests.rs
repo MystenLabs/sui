@@ -122,16 +122,25 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         .execute_transaction(
             tx_bytes1,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(
+                SuiTransactionResponseOptions::new()
+                    .with_effects()
+                    .with_object_changes(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionResponse {
+        effects,
+        object_changes,
+        ..
+    } = tx_response;
     assert_eq!(
         dryrun_response.effects.transaction_digest(),
         effects.unwrap().transaction_digest()
     );
+    assert_eq!(dryrun_response.object_changes, object_changes.unwrap());
     Ok(())
 }
 
@@ -717,14 +726,22 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-    http_client
+    let dryrun_response = http_client.dry_run_transaction(tx_bytes.clone()).await?;
+
+    let executed_response = http_client
         .execute_transaction(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new()),
+            Some(SuiTransactionResponseOptions::new().with_balance_changes()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
+
+    // Check coin balance changes on dry run
+    assert_eq!(
+        dryrun_response.balance_changes,
+        executed_response.balance_changes.unwrap()
+    );
 
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;

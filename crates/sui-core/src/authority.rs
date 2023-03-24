@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
@@ -1001,7 +1002,14 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
-    ) -> Result<DryRunTransactionResponse, anyhow::Error> {
+    ) -> Result<
+        (
+            DryRunTransactionResponse,
+            BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+            TransactionEffects,
+        ),
+        anyhow::Error,
+    > {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dry-exec is only supported on fullnodes"));
@@ -1075,15 +1083,27 @@ impl AuthorityState {
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
-        Ok(DryRunTransactionResponse {
-            effects: effects.try_into()?,
-            events: SuiTransactionEvents::try_from(
-                inner_temp_store.events.clone(),
-                tx_digest,
-                None,
-                &module_cache,
-            )?,
-        })
+        // Returning empty vector here because we recalculate changes in the rpc layer.
+        let object_changes = Vec::new();
+
+        // Returning empty vector here because we recalculate changes in the rpc layer.
+        let balance_changes = Vec::new();
+
+        Ok((
+            DryRunTransactionResponse {
+                effects: effects.clone().try_into()?,
+                events: SuiTransactionEvents::try_from(
+                    inner_temp_store.events.clone(),
+                    tx_digest,
+                    None,
+                    &module_cache,
+                )?,
+                object_changes,
+                balance_changes,
+            },
+            inner_temp_store.written,
+            effects,
+        ))
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
