@@ -43,10 +43,18 @@ impl CertificateStoreCacheMetrics {
     }
 }
 
+/// A cache trait to be used as temporary in-memory store when accessing the underlying
+/// certificate_store. Using the cache allows to skip rocksdb access giving us benefits
+/// both on less disk access (when value not in db's cache) and also avoiding any additional
+/// deserialization costs.
 pub trait Cache {
     fn write(&self, certificate: Certificate);
     fn write_all(&self, certificate: Vec<Certificate>);
     fn read(&self, digest: &CertificateDigest) -> Option<Certificate>;
+
+    /// Returns the certificates by performing a look up in the cache. The method is expected to
+    /// always return a result for every provided digest (when found will be Some, None otherwise)
+    /// and in the same order.
     fn read_all(
         &self,
         digests: Vec<CertificateDigest>,
@@ -56,6 +64,7 @@ pub trait Cache {
     fn remove_all(&self, digests: Vec<CertificateDigest>);
 }
 
+/// An LRU cache for the certificate store.
 #[derive(Clone)]
 pub struct CertificateStoreCache {
     cache: Arc<Mutex<LruCache<CertificateDigest, Certificate>>>,
@@ -94,6 +103,8 @@ impl Cache for CertificateStoreCache {
         }
     }
 
+    /// Fetches the certificate for the provided digest. This method will update the LRU record
+    /// and mark it as "last accessed".
     fn read(&self, digest: &CertificateDigest) -> Option<Certificate> {
         let mut guard = self.cache.lock();
         guard
@@ -102,6 +113,8 @@ impl Cache for CertificateStoreCache {
             .tap(|v| self.report_result(v.is_some()))
     }
 
+    /// Fetches the certificates for the provided digests. This method will update the LRU records
+    /// and mark them as "last accessed".
     fn read_all(
         &self,
         digests: Vec<CertificateDigest>,
@@ -121,6 +134,8 @@ impl Cache for CertificateStoreCache {
             .collect()
     }
 
+    /// Checks whether the value exists in the LRU cache. The method does not update the LRU record, thus
+    /// it will not count as a "last access" for the provided digest.
     fn contains(&self, digest: &CertificateDigest) -> bool {
         let guard = self.cache.lock();
         guard
@@ -141,7 +156,7 @@ impl Cache for CertificateStoreCache {
     }
 }
 
-/// An implementation that basically disables the caching functionality
+/// An implementation that basically disables the caching functionality when used for CertificateStore.
 #[derive(Clone)]
 struct NoCache {}
 
@@ -351,7 +366,7 @@ impl<T: Cache> CertificateStore<T> {
         });
 
         match self.certificate_id_by_origin.get(&(origin, round))? {
-            Some(d) => self.certificates_by_id.get(&d),
+            Some(d) => self.read(d),
             None => Ok(None),
         }
     }
@@ -387,6 +402,7 @@ impl<T: Cache> CertificateStore<T> {
         let mut found = HashMap::new();
         let mut missing = Vec::new();
 
+        // first find whatever we can from our local cache
         let ids: Vec<CertificateDigest> = ids.into_iter().collect();
         for (id, certificate) in self.cache.read_all(ids.clone()) {
             if let Some(certificate) = certificate {
@@ -396,6 +412,7 @@ impl<T: Cache> CertificateStore<T> {
             }
         }
 
+        // then fallback for all the misses on the storage
         let from_store = self.certificates_by_id.multi_get(&missing)?;
         from_store
             .iter()
@@ -598,7 +615,7 @@ impl<T: Cache> CertificateStore<T> {
             .next()
         {
             if name == origin {
-                return self.certificates_by_id.get(&digest);
+                return self.read(digest);
             }
         }
         Ok(None)
