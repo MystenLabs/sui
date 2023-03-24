@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use sui_config::genesis::UnsignedGenesis;
 use sui_types::sui_system_state::SuiValidatorGenesis;
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::ObjectID,
     coin::CoinMetadata,
     gas_coin::{GasCoin, MIST_PER_SUI, TOTAL_SUPPLY_MIST},
     governance::StakedSui,
@@ -37,9 +37,9 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
         .iter()
         .map(|v| (v.verified_metadata().name.as_str(), v))
         .collect::<BTreeMap<_, _>>();
-    let validator_address_map = validator_set
+    let validator_pool_id_map = validator_set
         .iter()
-        .map(|v| (v.verified_metadata().sui_address, v))
+        .map(|v| (v.staking_pool.id, v))
         .collect::<BTreeMap<_, _>>();
 
     let mut validator_options = validator_map
@@ -93,9 +93,7 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
                         .or_default();
                     entry.insert(object_id_str, (STR_STAKED_SUI, staked_sui.principal()));
                     // Assert pool id is associated with a knonw validator.
-                    let validator = validator_address_map
-                        .get(&staked_sui.validator_address())
-                        .unwrap();
+                    let validator = validator_pool_id_map.get(&staked_sui.pool_id()).unwrap();
                     assert_eq!(validator.staking_pool.id, staked_sui.pool_id());
 
                     staked_sui_map.insert(object.id(), staked_sui);
@@ -135,7 +133,7 @@ pub(crate) fn examine_genesis_checkpoint(genesis: UnsignedGenesis) {
                 println!("Examine Objects (total: {})", genesis.objects().len());
                 examine_object(
                     &owner_map,
-                    &validator_address_map,
+                    &validator_pool_id_map,
                     &package_map,
                     &sui_map,
                     &staked_sui_map,
@@ -182,7 +180,7 @@ fn examine_validators(
 
 fn examine_object(
     owner_map: &BTreeMap<ObjectID, Owner>,
-    validator_address_map: &BTreeMap<SuiAddress, &SuiValidatorGenesis>,
+    validator_pool_id_map: &BTreeMap<ObjectID, &SuiValidatorGenesis>,
     package_map: &BTreeMap<ObjectID, &MovePackage>,
     sui_map: &BTreeMap<ObjectID, GasCoin>,
     staked_sui_map: &BTreeMap<ObjectID, StakedSui>,
@@ -213,7 +211,7 @@ fn examine_object(
             }
             Ok(name) if name == STR_STAKED_SUI => {
                 for staked_sui_coin in staked_sui_map.values() {
-                    display_staked_sui(staked_sui_coin, validator_address_map, owner_map);
+                    display_staked_sui(staked_sui_coin, validator_pool_id_map, owner_map);
                 }
                 print_divider(STR_STAKED_SUI);
             }
@@ -353,12 +351,10 @@ fn display_sui(gas_coin: &GasCoin, owner_map: &BTreeMap<ObjectID, Owner>) {
 
 fn display_staked_sui(
     staked_sui: &StakedSui,
-    validator_address_map: &BTreeMap<SuiAddress, &SuiValidatorGenesis>,
+    validator_pool_id_map: &BTreeMap<ObjectID, &SuiValidatorGenesis>,
     owner_map: &BTreeMap<ObjectID, Owner>,
 ) {
-    let validator = validator_address_map
-        .get(&staked_sui.validator_address())
-        .unwrap();
+    let validator = validator_pool_id_map.get(&staked_sui.pool_id()).unwrap();
     println!("{:#?}", staked_sui);
     println!(
         "Staked to Validator: {}",

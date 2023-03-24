@@ -827,12 +827,18 @@ impl Builder {
             self.validators.len(),
             system_state.validators.active_validators.len()
         );
+        let mut address_to_pool_id = BTreeMap::new();
         for (validator, onchain_validator) in self
             .validators
             .values()
             .zip(system_state.validators.active_validators.iter())
         {
             let metadata = onchain_validator.verified_metadata();
+
+            // Validators should not have duplicate addresses so the result of insertion should be None.
+            assert!(address_to_pool_id
+                .insert(metadata.sui_address, onchain_validator.staking_pool.id)
+                .is_none());
             assert_eq!(validator.info.sui_address(), metadata.sui_address);
             assert_eq!(validator.info.protocol_key(), metadata.sui_pubkey_bytes());
             assert_eq!(validator.info.network_key, metadata.network_pubkey);
@@ -944,6 +950,9 @@ impl Builder {
 
         for allocation in token_distribution_schedule.allocations {
             if let Some(staked_with_validator) = allocation.staked_with_validator {
+                let staking_pool_id = *address_to_pool_id
+                    .get(&staked_with_validator)
+                    .expect("staking pool should exist");
                 let staked_sui_object_id = staked_sui_objects
                     .iter()
                     .find(|(_k, (o, s))| {
@@ -952,7 +961,7 @@ impl Builder {
                     };
                         *owner == allocation.recipient_address
                             && s.principal() == allocation.amount_mist
-                            && s.validator_address() == staked_with_validator
+                            && s.pool_id() == staking_pool_id
                     })
                     .map(|(k, _)| *k)
                     .expect("all allocations should be present");
@@ -962,10 +971,8 @@ impl Builder {
                     Owner::AddressOwner(allocation.recipient_address)
                 );
                 assert_eq!(staked_sui_object.1.principal(), allocation.amount_mist);
-                assert_eq!(
-                    staked_sui_object.1.validator_address(),
-                    staked_with_validator
-                );
+                assert_eq!(staked_sui_object.1.pool_id(), staking_pool_id);
+                assert_eq!(staked_sui_object.1.activation_epoch(), 0);
             } else {
                 let gas_object_id = gas_objects
                     .iter()

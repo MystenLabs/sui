@@ -7,7 +7,7 @@
     rust_2021_compatibility
 )]
 
-use base_types::SequenceNumber;
+use base_types::{SequenceNumber, SuiAddress};
 use messages::{CallArg, ObjectArg};
 pub use move_core_types::language_storage::TypeTag;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
@@ -132,5 +132,17 @@ pub trait MoveTypeTagTrait {
 impl MoveTypeTagTrait for u64 {
     fn get_type_tag() -> TypeTag {
         TypeTag::U64
+    }
+}
+
+impl MoveTypeTagTrait for ObjectID {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Address
+    }
+}
+
+impl MoveTypeTagTrait for SuiAddress {
+    fn get_type_tag() -> TypeTag {
+        TypeTag::Address
     }
 }

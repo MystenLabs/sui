@@ -22,7 +22,9 @@ use sui_types::id::ID;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
+use sui_types::sui_system_state::{
+    get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id, SuiSystemState,
+};
 
 use crate::api::GovernanceReadApiServer;
 use crate::error::Error;
@@ -77,17 +79,14 @@ impl GovernanceReadApi {
         let pools = stakes
             .into_iter()
             .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, s| {
-                pools
-                    .entry((s.pool_id(), s.validator_address()))
-                    .or_default()
-                    .push(s);
+                pools.entry(s.pool_id()).or_default().push(s);
                 pools
             });
 
         let system_state: SuiSystemStateSummary =
             self.get_system_state()?.into_sui_system_state_summary();
         let mut delegated_stakes = vec![];
-        for ((pool_id, validator_address), stakes) in pools {
+        for (pool_id, stakes) in pools {
             // Rate table and rate can be null when the pool is not active
             let rate_table = self
                 .get_exchange_rate_table(&system_state, &pool_id)
@@ -130,9 +129,10 @@ impl GovernanceReadApi {
                     status,
                 })
             }
-
+            let validator =
+                get_validator_by_pool_id(self.state.db().as_ref(), &system_state, pool_id)?;
             delegated_stakes.push(DelegatedStake {
-                validator_address,
+                validator_address: validator.sui_address,
                 staking_pool: pool_id,
                 stakes: delegations,
             })

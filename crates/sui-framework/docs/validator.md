@@ -834,7 +834,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
     <b>assert</b>!(stake_amount &gt; 0, 0);
     <b>let</b> stake_epoch = <a href="_epoch">tx_context::epoch</a>(ctx) + 1;
     <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
-        &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, stake, self.metadata.sui_address, staker_address, stake_epoch, ctx
+        &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, stake, staker_address, stake_epoch, ctx
     );
     // Process stake right away <b>if</b> staking pool is preactive.
     <b>if</b> (<a href="staking_pool.md#0x3_staking_pool_is_preactive">staking_pool::is_preactive</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)) {
@@ -886,7 +886,6 @@ Request to add stake to the validator's staking pool at genesis
     <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
         &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>,
         stake,
-        self.metadata.sui_address,
         staker_address,
         0, // epoch 0 -- <a href="genesis.md#0x3_genesis">genesis</a>
         ctx

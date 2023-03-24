@@ -3,7 +3,12 @@
 
 use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
+use crate::dynamic_field::get_dynamic_field_from_store;
+use crate::error::SuiError;
+use crate::id::ID;
 use crate::multiaddr::Multiaddr;
+use crate::storage::ObjectStore;
+use crate::sui_system_state::get_validator_from_table;
 use fastcrypto::encoding::Base64;
 use fastcrypto::traits::ToFromBytes;
 use schemars::JsonSchema;
@@ -299,4 +304,45 @@ impl Default for SuiValidatorSummary {
             exchange_rates_size: 0,
         }
     }
+}
+
+/// Given the staking pool id of a validator, return the validator's `SuiValidatorSummary`,
+/// works for validator candidates, active validators, as well as inactive validators.
+pub fn get_validator_by_pool_id<S>(
+    object_store: &S,
+    system_state: &SuiSystemStateSummary,
+    pool_id: ObjectID,
+) -> Result<SuiValidatorSummary, SuiError>
+where
+    S: ObjectStore,
+{
+    // First try to find in active validator set.
+    let active_validator = system_state
+        .active_validators
+        .iter()
+        .find(|v| v.staking_pool_id == pool_id);
+    if let Some(active) = active_validator {
+        return Ok(active.clone());
+    }
+    // Then try to fiind in inactive pools.
+    let inactive_table_id = system_state.inactive_pools_id;
+    if let Ok(inactive) =
+        get_validator_from_table(object_store, inactive_table_id, &ID::new(pool_id))
+    {
+        return Ok(inactive);
+    }
+    // Finally look up the candidates pool.
+    let candidate_address: SuiAddress = get_dynamic_field_from_store(
+        object_store,
+        system_state.staking_pool_mappings_id,
+        &ID::new(pool_id),
+    )
+    .map_err(|err| {
+        SuiError::SuiSystemStateReadError(format!(
+            "Failed to load candidate address from pool mappings: {:?}",
+            err
+        ))
+    })?;
+    let candidate_table_id = system_state.validator_candidates_id;
+    get_validator_from_table(object_store, candidate_table_id, &candidate_address)
 }

@@ -24,7 +24,6 @@ use sui_types::crypto::{
     KeypairTraits, ToFromBytes,
 };
 use sui_types::gas::GasCostSummary;
-use sui_types::id::ID;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
@@ -32,7 +31,10 @@ use sui_types::messages::{
 };
 use sui_types::object::{generate_test_gas_objects_with_owner, Object};
 use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
-use sui_types::sui_system_state::{get_validator_from_table, SuiSystemStateTrait};
+use sui_types::sui_system_state::{
+    get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
+    SuiSystemStateTrait,
+};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION};
 use test_utils::authority::start_node;
@@ -414,6 +416,83 @@ async fn test_validator_resign_effects() {
 }
 
 #[sim_test]
+async fn test_validator_candidate_pool_read() {
+    let new_validator_key = gen_keys(5).pop().unwrap();
+    let new_validator_address: SuiAddress = new_validator_key.public().into();
+
+    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
+
+    let init_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(4))
+        .with_objects(gas_objects.clone())
+        .build();
+
+    let new_configs = ConfigBuilder::new_with_temp_dir()
+        .rng(StdRng::from_seed([0; 32]))
+        .with_validator_account_keys(gen_keys(5))
+        .with_objects(gas_objects.clone())
+        .build();
+
+    let gas_objects: Vec<_> = gas_objects
+        .into_iter()
+        .map(|o| init_configs.genesis.object(o.id()).unwrap())
+        .collect();
+
+    // Generate a new validator config.
+    let public_keys: HashSet<_> = init_configs
+        .validator_configs
+        .iter()
+        .map(|config| config.protocol_public_key())
+        .collect();
+    // Node configs contain things such as private keys, which we need to send transactions.
+    let new_node_config = new_configs
+        .validator_configs
+        .iter()
+        .find(|v| !public_keys.contains(&v.protocol_public_key()))
+        .unwrap();
+    // Validator information from genesis contains public network addresses that we need to commit on-chain.
+    let new_validator = new_configs
+        .genesis
+        .validator_set_for_tooling()
+        .into_iter()
+        .find(|v| {
+            let name: AuthorityName = v.verified_metadata().sui_pubkey_bytes();
+            !public_keys.contains(&name)
+        })
+        .unwrap();
+
+    let authorities = spawn_test_authorities(&init_configs).await;
+    let _effects = execute_add_validator_candidate_tx(
+        &authorities,
+        gas_objects[3].compute_object_reference(),
+        new_node_config,
+        new_validator.verified_metadata(),
+    )
+    .await;
+    // Check that the candidate can be found in the candidate table now.
+    authorities[0].with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary();
+        assert_eq!(system_state.validator_candidates_size, 1);
+        let staking_pool_id = get_validator_from_table(
+            node.state().db().as_ref(),
+            system_state.validator_candidates_id,
+            &new_validator_address,
+        )
+        .unwrap()
+        .staking_pool_id;
+        let validator =
+            get_validator_by_pool_id(node.state().db().as_ref(), &system_state, staking_pool_id)
+                .unwrap();
+        assert_eq!(validator.sui_address, new_validator_address);
+    });
+}
+
+#[sim_test]
 async fn test_inactive_validator_pool_read() {
     let leaving_validator_account_key = gen_keys(5).pop().unwrap();
     let address: SuiAddress = leaving_validator_account_key.public().into();
@@ -447,6 +526,18 @@ async fn test_inactive_validator_pool_read() {
             .unwrap()
             .staking_pool_id
     });
+    authorities[0].with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary();
+        // Validator is active. Check that we can find its summary by staking pool id.
+        let validator =
+            get_validator_by_pool_id(node.state().db().as_ref(), &system_state, staking_pool_id)
+                .unwrap();
+        assert_eq!(validator.sui_address, address);
+    });
 
     let tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         address,
@@ -477,17 +568,13 @@ async fn test_inactive_validator_pool_read() {
         let system_state = node
             .state()
             .get_sui_system_state_object_for_testing()
-            .unwrap();
-        let inactive_pool_id = system_state
-            .into_sui_system_state_summary()
-            .inactive_pools_id;
-        let validator = get_validator_from_table(
-            node.state().db().as_ref(),
-            inactive_pool_id,
-            &ID::new(staking_pool_id),
-        )
-        .unwrap();
+            .unwrap()
+            .into_sui_system_state_summary();
+        let validator =
+            get_validator_by_pool_id(node.state().db().as_ref(), &system_state, staking_pool_id)
+                .unwrap();
         assert_eq!(validator.sui_address, address);
+        assert!(validator.staking_pool_deactivation_epoch.is_some());
     })
 }
 
@@ -618,7 +705,7 @@ async fn test_reconfig_with_committee_change_basic() {
             .is_validator(&node.state().epoch_store_for_testing()));
     });
 
-    let _effects = execute_leave_committee_txes(
+    let _effects = execute_leave_committee_tx(
         &authorities,
         gas_objects[3].compute_object_reference(),
         new_node_config,
@@ -815,7 +902,7 @@ async fn test_reconfig_with_committee_change_stress() {
             let sender = node_config.sui_address();
             let (gas_objects, stake) = object_map.get(&sender).unwrap();
             let effects =
-                execute_leave_committee_txes(&validator_handles, gas_objects[3], node_config).await;
+                execute_leave_committee_tx(&validator_handles, gas_objects[3], node_config).await;
 
             let gas_objects = vec![
                 gas_objects[0],
@@ -904,26 +991,22 @@ async fn test_reconfig_with_committee_change_stress() {
     assert_eq!(epoch, 3);
 }
 
-async fn execute_join_committee_txes(
+async fn execute_add_validator_candidate_tx(
     authorities: &[SuiNodeHandle],
-    gas_objects: Vec<ObjectRef>,
-    stake: ObjectRef,
+    gas_object: ObjectRef,
     node_config: &NodeConfig,
     val: &VerifiedValidatorMetadataV1,
-) -> Vec<CertifiedTransactionEffects> {
-    assert_eq!(node_config.protocol_public_key(), val.sui_pubkey_bytes());
-    let mut effects_ret = vec![];
+) -> CertifiedTransactionEffects {
     let sender = val.sui_address;
     let proof_of_possession = generate_proof_of_possession(node_config.protocol_key_pair(), sender);
 
-    // Step 1: Add the new node as a validator candidate.
     let candidate_tx_data = TransactionData::new_move_call_with_dummy_gas_price(
         sender,
         SuiSystem::ID,
         ident_str!("sui_system").to_owned(),
         ident_str!("request_add_validator_candidate").to_owned(),
         vec![],
-        gas_objects[0],
+        gas_object,
         vec![
             CallArg::Object(ObjectArg::SharedObject {
                 id: SUI_SYSTEM_STATE_OBJECT_ID,
@@ -952,6 +1035,23 @@ async fn execute_join_committee_txes(
         to_sender_signed_transaction(candidate_tx_data, node_config.account_key_pair());
     let effects = execute_transaction(authorities, transaction).await.unwrap();
     assert!(effects.status().is_ok());
+    effects
+}
+
+async fn execute_join_committee_txes(
+    authorities: &[SuiNodeHandle],
+    gas_objects: Vec<ObjectRef>,
+    stake: ObjectRef,
+    node_config: &NodeConfig,
+    val: &VerifiedValidatorMetadataV1,
+) -> Vec<CertifiedTransactionEffects> {
+    assert_eq!(node_config.protocol_public_key(), val.sui_pubkey_bytes());
+    let mut effects_ret = vec![];
+    let sender = val.sui_address;
+
+    // Step 1: Add the new node as a validator candidate.
+    let effects =
+        execute_add_validator_candidate_tx(authorities, gas_objects[0], node_config, val).await;
 
     effects_ret.push(effects);
 
@@ -1006,7 +1106,7 @@ async fn execute_join_committee_txes(
     effects_ret
 }
 
-async fn execute_leave_committee_txes(
+async fn execute_leave_committee_tx(
     authorities: &[SuiNodeHandle],
     gas: ObjectRef,
     node_config: &NodeConfig,
