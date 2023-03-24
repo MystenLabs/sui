@@ -361,8 +361,8 @@ impl Orchestrator {
             // let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
             let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
             let keystore = format!(
-                // "~/working_dir/sui_config/{}",
-                "~/{}",
+                "~/working_dir/sui_config/{}",
+                // "~/{}",
                 SuiProtocol::GAS_KEYSTORE_FILE
             );
 
@@ -380,10 +380,17 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", SuiProtocol::CLIENT_METRICS_PORT),
             ]
             .join(" ");
-            ["source $HOME/.cargo/env", &run].join(" && ")
+            [
+                &format!(
+                    "mv ~/{} ~/working_dir/sui_config/{}",
+                    SuiProtocol::GAS_KEYSTORE_FILE,
+                    SuiProtocol::GAS_KEYSTORE_FILE
+                ),
+                "source $HOME/.cargo/env",
+                &run,
+            ]
+            .join(" && ")
         };
-
-        println!("\n\n--> {}\n\n", command(0));
 
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
@@ -394,7 +401,7 @@ impl Orchestrator {
             .execute(instances.iter(), &ssh_command)
             .await?;
 
-        // display::done();
+        display::done();
         Ok(())
     }
 

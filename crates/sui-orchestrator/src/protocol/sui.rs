@@ -242,7 +242,6 @@ impl SuiProtocol {
     pub fn make_genesis_config(instances: &[Instance]) -> GenesisConfig {
         let gas_key = Self::gas_key();
         let gas_address = SuiAddress::from(&gas_key.public());
-        println!("GAS_ADDRESS: {gas_address:?}");
 
         // Set the validator's configs.
         let mut rng = StdRng::seed_from_u64(0);
