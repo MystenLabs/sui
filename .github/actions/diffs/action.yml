@@ -35,4 +35,3 @@ runs:
           - 'crates/sui-framework/sources/**'
           - 'crates/sui/src/sui_move/**'
           - 'Cargo.toml'
-          - 'Cargo.lock'
