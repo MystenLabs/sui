@@ -66,10 +66,16 @@ impl ProtocolCommands for SuiProtocol {
         let genesis = [
             "cargo run --release --bin sui --",
             "genesis",
-            &format!("-f --working-dir {working_dir} --benchmark-ips {ips:?}"),
+            &format!("-f --working-dir {working_dir} --benchmark-ips {ips}"),
         ]
         .join(" ");
-        [format!("mkdir -p {working_dir}"), genesis].join(" && ")
+
+        [
+            &format!("mkdir -p {working_dir}"),
+            "source $HOME/.cargo/env",
+            &genesis,
+        ]
+        .join(" && ")
     }
 
     fn node_command<'a, I>(&self, instances: I) -> Box<dyn Fn(usize) -> String>
@@ -156,7 +162,8 @@ impl SuiProtocol {
 
     /// Convert the ip of the validators' network addresses to 0.0.0.0.
     pub fn make_listen_addresses(instances: &[Instance]) -> Vec<Multiaddr> {
-        let genesis_config = Self::make_genesis_config(instances);
+        let ips: Vec<_> = instances.iter().map(|x| x.main_ip.to_string()).collect();
+        let genesis_config = GenesisConfig::new_for_benchmarks(&ips);
         let mut addresses = Vec::new();
         if let Some(validator_configs) = genesis_config.validator_config_info.as_ref() {
             for validator_info in validator_configs {
@@ -176,7 +183,7 @@ impl SuiProtocol {
     const CONFIG_DIR: &str = "sui_config";
     const GENESIS_BLOB: &str = "genesis.blob";
     const GENESIS_CONFIG_FILE: &str = "benchmark-genesis.yml";
-    pub const GAS_KEYSTORE_FILE: &str = "gas.keystore";
+    pub const GAS_KEYSTORE_FILE: &str = "benchmark.keystore";
 
     pub fn validator_configs(i: usize) -> String {
         format!("validator-config-{i}.yaml")
