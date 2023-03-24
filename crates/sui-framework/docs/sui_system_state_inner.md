@@ -250,7 +250,9 @@ The top-level object containing all information of the Sui system.
  Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
- MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
+ The rest of the fields starting with <code>safe_mode_</code> are accmulated during safe mode
+ when advance_epoch_safe_mode is executed. They will eventually be processed once we
+ are out of safe mode.
 </dd>
 <dt>
 <code>safe_mode_storage_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
