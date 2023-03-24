@@ -176,7 +176,7 @@ export const GasCostSummary = object({
   computationCost: string(),
   storageCost: string(),
   storageRebate: string(),
-  nonRefundableStorageFee: number(),
+  nonRefundableStorageFee: string(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 

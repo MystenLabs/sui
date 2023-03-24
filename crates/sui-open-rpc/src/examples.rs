@@ -486,7 +486,7 @@ impl RpcExampleProvider {
                     computation_cost: 100.into(),
                     storage_cost: 100.into(),
                     storage_rebate: 10.into(),
-                    non_refundable_storage_fee: 0,
+                    non_refundable_storage_fee: 0.into(),
                 },
                 shared_objects: vec![],
                 transaction_digest: TransactionDigest::new(self.rng.gen()),

@@ -812,7 +812,7 @@ pub struct SuiGasCostSummary {
     pub computation_cost: BigInt,
     pub storage_cost: BigInt,
     pub storage_rebate: BigInt,
-    pub non_refundable_storage_fee: u64,
+    pub non_refundable_storage_fee: BigInt,
 }
 
 impl From<GasCostSummary> for SuiGasCostSummary {
@@ -821,7 +821,7 @@ impl From<GasCostSummary> for SuiGasCostSummary {
             computation_cost: s.computation_cost.into(),
             storage_cost: s.storage_cost.into(),
             storage_rebate: s.storage_rebate.into(),
-            non_refundable_storage_fee: s.non_refundable_storage_fee,
+            non_refundable_storage_fee: s.non_refundable_storage_fee.into(),
         }
     }
 }
@@ -832,7 +832,7 @@ impl From<SuiGasCostSummary> for GasCostSummary {
             computation_cost: s.computation_cost.into(),
             storage_cost: s.storage_cost.into(),
             storage_rebate: s.storage_rebate.into(),
-            non_refundable_storage_fee: s.non_refundable_storage_fee,
+            non_refundable_storage_fee: s.non_refundable_storage_fee.into(),
         }
     }
 }
