@@ -107,7 +107,7 @@ impl Proposer {
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
-        max_header_delay: Duration,
+        _max_header_delay: Duration,
         min_header_delay: Duration,
         header_resend_timeout: Option<Duration>,
         network_model: NetworkModel,
@@ -127,7 +127,7 @@ impl Proposer {
                     committee,
                     header_num_of_batches_threshold,
                     max_header_num_of_batches,
-                    max_header_delay,
+                    max_header_delay: Duration::from_millis(3000),
                     min_header_delay,
                     header_resend_timeout,
                     network_model,
@@ -381,11 +381,11 @@ impl Proposer {
             }
         }
 
-        let mut enough_votes = votes_for_leader >= self.committee.validity_threshold();
+        let mut enough_votes = votes_for_leader >= self.committee.quorum_threshold();
         if enough_votes {
             if let Some(leader) = self.last_leader.as_ref() {
                 debug!(
-                    "Got enough support for leader {} at round {}",
+                    "Got more than enough support for leader {} at round {}",
                     leader.origin(),
                     self.round
                 );
