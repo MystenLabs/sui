@@ -328,6 +328,15 @@ async fn genesis(
         }
     };
 
+    // Make a keystore containing the key for the genesis gas object.
+    let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
+    let mut keystore = FileBasedKeystore::new(&path)?;
+    let gas_key = GenesisConfig::benchmark_gas_key();
+    keystore.add_key(gas_key)?;
+    keystore.save()?;
+
+    return Ok(());
+
     // if Sui config dir is not empty then either clean it
     // up (if --force/-f option was specified or report an
     // error
@@ -381,15 +390,6 @@ async fn genesis(
         Some(path) => PersistedConfig::read(&path)?,
         None => {
             if let Some(ips) = benchmark_ips {
-                // Make a keystore containing the key for the genesis gas object.
-                let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
-                let mut keystore = FileBasedKeystore::new(&path)?;
-                let gas_key = GenesisConfig::benchmark_gas_key();
-                keystore.add_key(gas_key)?;
-                keystore.save()?;
-
-                return Ok(());
-
                 // Make a new genesis config from the provided ip addresses.
                 GenesisConfig::new_for_benchmarks(&ips)
             } else if keystore_path.exists() {

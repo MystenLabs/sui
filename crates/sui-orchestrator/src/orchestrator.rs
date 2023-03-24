@@ -261,6 +261,7 @@ impl Orchestrator {
             connection.execute_from_path(command, repo_name)?;
         }
 
+        // TMP
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
         let command = self.protocol_commands.genesis_command(instances.iter());
         let repo_name = self.settings.repository_name();
@@ -269,6 +270,7 @@ impl Orchestrator {
         self.ssh_manager
             .execute(instances.iter(), &ssh_command)
             .await?;
+        // TMP
 
         display::done();
         Ok(())
@@ -381,11 +383,11 @@ impl Orchestrator {
             ]
             .join(" ");
             [
-                &format!(
-                    "mv ~/{} ~/working_dir/sui_config/{}",
-                    SuiProtocol::GAS_KEYSTORE_FILE,
-                    SuiProtocol::GAS_KEYSTORE_FILE
-                ),
+                // &format!(
+                //     "mv ~/{} ~/working_dir/sui_config/{}",
+                //     SuiProtocol::GAS_KEYSTORE_FILE,
+                //     SuiProtocol::GAS_KEYSTORE_FILE
+                // ),
                 "source $HOME/.cargo/env",
                 &run,
             ]
