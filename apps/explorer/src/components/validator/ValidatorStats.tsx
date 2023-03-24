@@ -66,11 +66,7 @@ export function ValidatorStats({
                             </Stats>
                         </div>
                         <div className="flex flex-col gap-8 lg:flex-row">
-                            <Stats
-                                label="Commission"
-                                tooltip="Coming soon"
-                                unavailable={commission <= 0}
-                            >
+                            <Stats label="Commission" tooltip="Coming soon">
                                 <Heading
                                     as="h3"
                                     variant="heading2/semibold"

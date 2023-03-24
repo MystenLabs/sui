@@ -138,7 +138,7 @@ export function validatorsTableData(
                     const commissionRate = props.getValue();
                     return (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {commissionRate > 0 ? `${commissionRate}%` : '--'}
+                            {commissionRate}%
                         </Text>
                     );
                 },
@@ -149,7 +149,7 @@ export function validatorsTableData(
                 cell: (props: any) => {
                     const lastReward = props.getValue();
                     return lastReward > 0 ? (
-                        <StakeColumn stake={lastReward} hideCoinSymbol />
+                        <StakeColumn stake={lastReward} />
                     ) : (
                         <Text variant="bodySmall/medium" color="steel-darker">
                             --
