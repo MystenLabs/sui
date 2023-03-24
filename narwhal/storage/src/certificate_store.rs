@@ -142,6 +142,7 @@ impl Cache for CertificateStoreCache {
 }
 
 /// An implementation that basically disables the caching functionality
+#[derive(Clone)]
 struct NoCache {}
 
 impl Cache for NoCache {
@@ -669,8 +670,8 @@ impl<T: Cache> CertificateStore<T> {
 
 #[cfg(test)]
 mod test {
-    use crate::certificate_store::CertificateStore;
-    use crate::CertificateStoreCache;
+    use crate::certificate_store::{CertificateStore, NoCache};
+    use crate::{Cache, CertificateStoreCache};
     use config::AuthorityIdentifier;
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
@@ -688,6 +689,38 @@ mod test {
     use types::{Certificate, CertificateDigest, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
+        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) =
+            create_db_maps(path);
+
+        let store_cache = CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None);
+
+        CertificateStore::new(
+            certificate_map,
+            certificate_id_by_round_map,
+            certificate_id_by_origin_map,
+            store_cache,
+        )
+    }
+
+    fn new_store_no_cache(path: std::path::PathBuf) -> CertificateStore<NoCache> {
+        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) =
+            create_db_maps(path);
+
+        CertificateStore::new(
+            certificate_map,
+            certificate_id_by_round_map,
+            certificate_id_by_origin_map,
+            NoCache {},
+        )
+    }
+
+    fn create_db_maps(
+        path: std::path::PathBuf,
+    ) -> (
+        DBMap<CertificateDigest, Certificate>,
+        DBMap<(Round, AuthorityIdentifier), CertificateDigest>,
+        DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
+    ) {
         const CERTIFICATES_CF: &str = "certificates";
         const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
         const CERTIFICATE_ID_BY_ORIGIN_CF: &str = "certificate_id_by_origin";
@@ -704,19 +737,10 @@ mod test {
         )
         .expect("Cannot open database");
 
-        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) = reopen!(&rocksdb,
+        reopen!(&rocksdb,
             CERTIFICATES_CF;<CertificateDigest, Certificate>,
             CERTIFICATE_ID_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
             CERTIFICATE_ID_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>
-        );
-
-        let store_cache = CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None);
-
-        CertificateStore::new(
-            certificate_map,
-            certificate_id_by_round_map,
-            certificate_id_by_origin_map,
-            store_cache,
         )
     }
 
@@ -751,9 +775,12 @@ mod test {
 
     #[tokio::test]
     async fn test_write_and_read() {
-        // GIVEN
-        let store = new_store(temp_dir());
+        test_write_and_read_by_store_type(new_store(temp_dir())).await;
+        test_write_and_read_by_store_type(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_write_and_read_by_store_type<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
 
@@ -771,9 +798,12 @@ mod test {
 
     #[tokio::test]
     async fn test_write_all_and_read_all() {
-        // GIVEN
-        let store = new_store(temp_dir());
+        test_write_all_and_read_all_by_store_type(new_store(temp_dir())).await;
+        test_write_all_and_read_all_by_store_type(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_write_all_and_read_all_by_store_type<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
         let ids = certs
@@ -1039,10 +1069,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_delete() {
-        // GIVEN
-        let store = new_store(temp_dir());
+    async fn test_delete_by_store_type() {
+        test_delete(new_store(temp_dir())).await;
+        test_delete(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_delete<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
 
@@ -1061,10 +1094,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_delete_all() {
-        // GIVEN
-        let store = new_store(temp_dir());
+    async fn test_delete_all_by_store_type() {
+        test_delete_all(new_store(temp_dir())).await;
+        test_delete_all(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_delete_all<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
 
