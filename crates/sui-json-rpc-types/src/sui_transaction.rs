@@ -810,6 +810,7 @@ pub struct SuiGasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,
     pub storage_rebate: u64,
+    pub non_refundable_storage_fee: u64,
 }
 
 impl From<GasCostSummary> for SuiGasCostSummary {
@@ -818,6 +819,7 @@ impl From<GasCostSummary> for SuiGasCostSummary {
             computation_cost: s.computation_cost,
             storage_cost: s.storage_cost,
             storage_rebate: s.storage_rebate,
+            non_refundable_storage_fee: s.non_refundable_storage_fee,
         }
     }
 }
@@ -828,6 +830,7 @@ impl From<SuiGasCostSummary> for GasCostSummary {
             computation_cost: s.computation_cost,
             storage_cost: s.storage_cost,
             storage_rebate: s.storage_rebate,
+            non_refundable_storage_fee: s.non_refundable_storage_fee,
         }
     }
 }

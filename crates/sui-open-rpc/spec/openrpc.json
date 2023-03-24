@@ -237,7 +237,8 @@
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
-                  "storageRebate": 10
+                  "storageRebate": 10,
+                  "nonRefundableStorageFee": 0
                 },
                 "transactionDigest": "8UExPV121BEfWkbymSPDYhh23rVNh3MSWtC5juJ9JGMJ",
                 "mutated": [
@@ -442,7 +443,8 @@
               "epochRollingGasCostSummary": {
                 "computationCost": 0,
                 "storageCost": 0,
-                "storageRebate": 0
+                "storageRebate": 0,
+                "nonRefundableStorageFee": 0
               },
               "timestampMs": 1676911928,
               "transactions": [
@@ -1433,7 +1435,8 @@
                 "gasUsed": {
                   "computationCost": 100,
                   "storageCost": 100,
-                  "storageRebate": 10
+                  "storageRebate": 10,
+                  "nonRefundableStorageFee": 0
                 },
                 "transactionDigest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
                 "mutated": [
@@ -3954,11 +3957,17 @@
         "type": "object",
         "required": [
           "computationCost",
+          "nonRefundableStorageFee",
           "storageCost",
           "storageRebate"
         ],
         "properties": {
           "computationCost": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "nonRefundableStorageFee": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
