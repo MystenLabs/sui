@@ -14,7 +14,7 @@ import { Stats } from '~/ui/Stats';
 type StatsCardProps = {
     validatorData: SuiValidatorSummary;
     epoch: number | string;
-    epochRewards: string;
+    epochRewards: number;
 };
 
 export function ValidatorStats({
