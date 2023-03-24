@@ -107,12 +107,16 @@ impl GovernanceReadApi {
         &self,
         stakes: Vec<(StakedSui, bool)>,
     ) -> Result<Vec<DelegatedStake>, Error> {
-        let pools = stakes
-            .into_iter()
-            .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, (stake, exists)| {
-                pools.entry(stake.pool_id()).or_default().push((stake, exists));
+        let pools = stakes.into_iter().fold(
+            BTreeMap::<_, Vec<_>>::new(),
+            |mut pools, (stake, exists)| {
                 pools
-            });
+                    .entry(stake.pool_id())
+                    .or_default()
+                    .push((stake, exists));
+                pools
+            },
+        );
 
         let system_state: SuiSystemStateSummary =
             self.get_system_state()?.into_sui_system_state_summary();
