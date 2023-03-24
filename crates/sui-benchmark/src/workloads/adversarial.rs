@@ -13,10 +13,10 @@ use sui_types::base_types::{random_object_ref, ObjectRef};
 use sui_types::messages::{CallArg, ObjectArg, TransactionEffectsAPI};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
-use test_utils::messages::create_publish_move_package_transaction;
+use test_utils::messages::create_publish_move_package_transaction_with_budget;
 
 use crate::in_memory_wallet::InMemoryWallet;
-use crate::system_state_observer::SystemStateObserver;
+use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::payload::Payload;
 use crate::workloads::{Gas, GasCoinConfig};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -29,15 +29,13 @@ use super::{
 /// Number of max size objects to create in the max object payload
 const NUM_OBJECTS: u64 = 2048;
 
-/// Maxinum number of dynamic fields we were able to create
-/// TODO: try to increase this value. Gas limits it
-const NUM_DYNAMIC_FIELDS: u64 = 33;
-
 #[derive(Debug, EnumCountMacro, EnumIter, Clone)]
 enum AdversarialPayloadType {
-    ObjectsSize = 1,
-    EventSize,
-    DynamicFieldsCount,
+    LargeObjects = 1,
+    LargeEvents,
+    DynamicFieldReads,
+    LargeTransientRuntimeVectors,
+    LargePureFunctionArgs,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
     // - MaxEffects (by creating a bunch of small objects) and mutating lots of objects
@@ -129,7 +127,7 @@ impl AdversarialTestPayload {
         protocol_config: &ProtocolConfig,
     ) -> AdversarialPayloadArgs {
         match payload_type {
-            AdversarialPayloadType::ObjectsSize => AdversarialPayloadArgs {
+            AdversarialPayloadType::LargeObjects => AdversarialPayloadArgs {
                 fn_name: "create_shared_objects".to_owned(),
                 args: [
                     // TODO: Raise this. Using a smaller value here as full value locks up local machine
@@ -139,7 +137,7 @@ impl AdversarialTestPayload {
                 ]
                 .to_vec(),
             },
-            AdversarialPayloadType::EventSize => AdversarialPayloadArgs {
+            AdversarialPayloadType::LargeEvents => AdversarialPayloadArgs {
                 fn_name: "emit_events".to_owned(),
                 args: [
                     protocol_config.max_num_event_emit().into(),
@@ -147,7 +145,7 @@ impl AdversarialTestPayload {
                 ]
                 .to_vec(),
             },
-            AdversarialPayloadType::DynamicFieldsCount => AdversarialPayloadArgs {
+            AdversarialPayloadType::DynamicFieldReads => AdversarialPayloadArgs {
                 fn_name: "read_n_dynamic_fields".to_owned(),
                 args: [
                     CallArg::Object(ObjectArg::SharedObject {
@@ -155,10 +153,32 @@ impl AdversarialTestPayload {
                         initial_shared_version: self.df_parent_obj_ref.1,
                         mutable: true,
                     }),
-                    NUM_DYNAMIC_FIELDS.into(),
+                    protocol_config
+                        .object_runtime_max_num_store_entries()
+                        .into(),
                 ]
                 .to_vec(),
             },
+            AdversarialPayloadType::LargeTransientRuntimeVectors => AdversarialPayloadArgs {
+                fn_name: "create_vectors_with_size".to_owned(),
+                args: [100u64.into(), 100_000u64.into()].to_vec(),
+            },
+            AdversarialPayloadType::LargePureFunctionArgs => {
+                let max_fn_params = protocol_config.max_function_parameters();
+                let max_pure_arg_size = protocol_config.max_pure_argument_size();
+                let mut args: Vec<CallArg> = vec![];
+                (0..max_fn_params).for_each(|_| {
+                    let mut v = vec![0u8; max_pure_arg_size as usize];
+                    while bcs::to_bytes(&v).unwrap().len() >= max_pure_arg_size as usize {
+                        v.pop();
+                    }
+                    args.push((&v).into());
+                });
+                AdversarialPayloadArgs {
+                    fn_name: "lots_of_params".to_owned(),
+                    args,
+                }
+            }
         }
     }
 }
@@ -264,15 +284,28 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let gas = &self.init_gas;
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("src/workloads/data/adversarial");
-        let gas_price = system_state_observer.state.borrow().reference_gas_price;
-        let transaction =
-            create_publish_move_package_transaction(gas.0, path, gas.1, &gas.2, Some(gas_price));
+        let SystemState {
+            reference_gas_price,
+            protocol_config,
+        } = system_state_observer.state.borrow().clone();
+        let protocol_config = protocol_config.unwrap();
+        let gas_budget = protocol_config.max_tx_gas();
+        let transaction = create_publish_move_package_transaction_with_budget(
+            gas.0,
+            path,
+            gas.1,
+            &gas.2,
+            Some(reference_gas_price),
+            gas_budget,
+        );
         let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
-
         let created = effects.created();
 
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
-        assert_eq!(created.len() as u64, 3 + NUM_DYNAMIC_FIELDS);
+        assert_eq!(
+            created.len() as u64,
+            3 + protocol_config.object_runtime_max_num_store_entries()
+        );
         let package_obj = created
             .iter()
             .find(|o| matches!(o.1, Owner::Immutable))

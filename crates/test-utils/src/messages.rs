@@ -294,6 +294,25 @@ pub fn create_publish_move_package_transaction(
     keypair: &AccountKeyPair,
     gas_price: Option<u64>,
 ) -> VerifiedTransaction {
+    create_publish_move_package_transaction_with_budget(
+        gas_object_ref,
+        path,
+        sender,
+        keypair,
+        gas_price,
+        MAX_GAS,
+    )
+}
+
+/// Make a transaction to publish a test move contracts package with gas budget specified.
+pub fn create_publish_move_package_transaction_with_budget(
+    gas_object_ref: ObjectRef,
+    path: PathBuf,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
+    gas_budget: u64,
+) -> VerifiedTransaction {
     let build_config = BuildConfig::new_for_testing();
     let compiled_package = sui_framework::build_move_package(&path, build_config).unwrap();
     let all_module_bytes =
@@ -305,7 +324,7 @@ pub fn create_publish_move_package_transaction(
         gas_object_ref,
         all_module_bytes,
         dependencies,
-        MAX_GAS,
+        gas_budget,
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)

@@ -32,6 +32,8 @@ export class LedgerSigner extends SignerWithProvider {
 
     async #initializeSuiLedgerClient() {
         if (!this.#suiLedgerClient) {
+            // We want to make sure that there's only one connection established per Ledger signer
+            // instance since some methods make multiple calls like getAddress and signData
             this.#suiLedgerClient = await this.#connectToLedger();
         }
         return this.#suiLedgerClient;

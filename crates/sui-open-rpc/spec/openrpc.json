@@ -231,12 +231,12 @@
                 "status": {
                   "status": "success"
                 },
-                "executedEpoch": 0,
+                "executedEpoch": "0",
                 "gasUsed": {
-                  "computationCost": 100,
-                  "storageCost": 100,
-                  "storageRebate": 10,
-                  "nonRefundableStorageFee": 0
+                  "computationCost": "100",
+                  "storageCost": "100",
+                  "storageRebate": "10",
+                  "nonRefundableStorageFee": "0"
                 },
                 "transactionDigest": "8UExPV121BEfWkbymSPDYhh23rVNh3MSWtC5juJ9JGMJ",
                 "mutated": [
@@ -1230,10 +1230,10 @@
           "name": "Governance Read API"
         }
       ],
-      "description": "Return one or more [DelegatedStake]",
+      "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
       "params": [
         {
-          "name": "staked_sui_id",
+          "name": "staked_sui_ids",
           "required": true,
           "schema": {
             "type": "array",
@@ -1421,12 +1421,12 @@
                 "status": {
                   "status": "success"
                 },
-                "executedEpoch": 0,
+                "executedEpoch": "0",
                 "gasUsed": {
-                  "computationCost": 100,
-                  "storageCost": 100,
-                  "storageRebate": 10,
-                  "nonRefundableStorageFee": 0
+                  "computationCost": "100",
+                  "storageCost": "100",
+                  "storageRebate": "10",
+                  "nonRefundableStorageFee": "0"
                 },
                 "transactionDigest": "6AyFnAuKAKCqm1cD94EyGzBqJCDDJ716ojjmsKF2rqoi",
                 "mutated": [
@@ -3377,10 +3377,18 @@
       "DryRunTransactionResponse": {
         "type": "object",
         "required": [
+          "balanceChanges",
           "effects",
-          "events"
+          "events",
+          "objectChanges"
         ],
         "properties": {
+          "balanceChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
           "effects": {
             "$ref": "#/components/schemas/TransactionEffects"
           },
@@ -3388,6 +3396,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Event"
+            }
+          },
+          "objectChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectChange"
             }
           }
         }
@@ -4002,24 +4016,16 @@
         ],
         "properties": {
           "computationCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "nonRefundableStorageFee": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "storageCost": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "storageRebate": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         }
       },
@@ -5536,6 +5542,20 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "Unstaked"
+                ]
+              }
+            }
           }
         ],
         "required": [
@@ -5551,14 +5571,10 @@
             "minimum": 0.0
           },
           "stakeActiveEpoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "stakeRequestEpoch": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           "stakedSuiId": {
             "description": "ID of the StakedSui receipt object.",
@@ -7236,9 +7252,11 @@
               },
               "executedEpoch": {
                 "description": "The epoch when this transaction was executed.",
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/BigInt"
+                  }
+                ]
               },
               "gasObject": {
                 "description": "The updated gas object reference. Have a dedicated field for convenient access. It's also included in mutated.",
@@ -7446,9 +7464,7 @@
                 "minimum": 0.0
               },
               "epoch": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
+                "$ref": "#/components/schemas/BigInt"
               },
               "epoch_start_timestamp_ms": {
                 "type": "integer",

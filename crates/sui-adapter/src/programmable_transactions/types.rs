@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
@@ -9,15 +9,17 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
+use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{convert_vm_error, ExecutionError, ExecutionErrorKind},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
+    TypeTag,
 };
 
 pub trait StorageView<E: std::fmt::Debug>:
@@ -87,7 +89,7 @@ pub enum Value {
 
 #[derive(Debug, Clone)]
 pub struct ObjectValue {
-    pub type_: MoveObjectType,
+    pub type_: Type,
     pub has_public_transfer: bool,
     // true if it has been used in a public, non-entry Move call
     // In other words, false if all usages have been with non-Move comamnds or
@@ -186,7 +188,10 @@ impl Value {
 }
 
 impl ObjectValue {
-    pub fn new(
+    pub fn new<E: fmt::Debug, S: StorageView<E>>(
+        vm: &MoveVM,
+        state_view: &S,
+        session: &Session<S>,
         type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
@@ -200,6 +205,10 @@ impl ObjectValue {
         } else {
             ObjectContents::Raw(contents.to_vec())
         };
+        let tag: StructTag = type_.into();
+        let type_ = session
+            .load_type(&TypeTag::Struct(Box::new(tag)))
+            .map_err(|e| convert_vm_error(e, vm, state_view))?;
         Ok(Self {
             type_,
             has_public_transfer,
@@ -208,16 +217,29 @@ impl ObjectValue {
         })
     }
 
-    pub fn from_object(object: &Object) -> Result<Self, ExecutionError> {
+    pub fn from_object<E: fmt::Debug, S: StorageView<E>>(
+        vm: &MoveVM,
+        state_view: &S,
+        session: &Session<S>,
+        object: &Object,
+    ) -> Result<Self, ExecutionError> {
         let Object { data, .. } = object;
         match data {
             Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(move_object),
+            Data::Move(move_object) => Self::from_move_object(vm, state_view, session, move_object),
         }
     }
 
-    pub fn from_move_object(object: &MoveObject) -> Result<Self, ExecutionError> {
+    pub fn from_move_object<E: fmt::Debug, S: StorageView<E>>(
+        vm: &MoveVM,
+        state_view: &S,
+        session: &Session<S>,
+        object: &MoveObject,
+    ) -> Result<Self, ExecutionError> {
         Self::new(
+            vm,
+            state_view,
+            session,
             object.type_().clone(),
             object.has_public_transfer(),
             false,
@@ -225,14 +247,15 @@ impl ObjectValue {
         )
     }
 
-    pub fn coin(type_: MoveObjectType, coin: Coin) -> Result<Self, ExecutionError> {
-        assert_invariant!(type_.is_coin(), "Cannot make a coin without a coin type");
-        Ok(Self {
+    /// # Safety
+    /// We must have the Type is the coin type, but we are unable to check it at this spot
+    pub unsafe fn coin(type_: Type, coin: Coin) -> Self {
+        Self {
             type_,
             has_public_transfer: true,
             used_in_non_entry_move_call: false,
             contents: ObjectContents::Coin(coin),
-        })
+        }
     }
 
     pub fn ensure_public_transfer_eligible(&self) -> Result<(), ExecutionError> {
@@ -247,10 +270,6 @@ impl ObjectValue {
             ObjectContents::Raw(bytes) => buf.extend(bytes),
             ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
         }
-    }
-
-    pub fn into_type(self) -> MoveObjectType {
-        self.type_
     }
 }
 

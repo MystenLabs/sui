@@ -309,6 +309,13 @@ impl From<u128> for CallArg {
     }
 }
 
+impl From<&Vec<u8>> for CallArg {
+    fn from(v: &Vec<u8>) -> Self {
+        // unwrap safe because every vec<u8> value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(v).unwrap())
+    }
+}
+
 impl From<ObjectRef> for CallArg {
     fn from(obj: ObjectRef) -> Self {
         CallArg::Object(ObjectArg::ImmOrOwnedObject(obj))

@@ -134,7 +134,7 @@ export function StakeCard({
     // For cool down epoch, show Available to withdraw add rewards to principal
     // Reward earning epoch is 2 epochs after stake request epoch
     const earningRewardsEpoch = stakeRequestEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
-    const isEarnedRewards = currentEpoch >= earningRewardsEpoch;
+    const isEarnedRewards = currentEpoch >= Number(earningRewardsEpoch);
     const delegationState = inactiveValidator
         ? StakeState.IN_ACTIVE
         : isEarnedRewards
@@ -173,7 +173,7 @@ export function StakeCard({
                 statusLabel={STATUS_COPY[delegationState]}
                 statusText={statusText[delegationState]}
                 earnColor={isEarning}
-                earningRewardEpoch={epochBeforeRewards}
+                earningRewardEpoch={Number(epochBeforeRewards)}
             >
                 <div className="flex justify-between items-start mb-1 ">
                     <ValidatorLogo

@@ -34,8 +34,7 @@ import {
   SuiObjectRef,
 } from './objects';
 
-// TODO: support u64
-export const EpochId = number();
+export const EpochId = string();
 
 export const SuiChangeEpoch = object({
   epoch: EpochId,
@@ -174,10 +173,10 @@ export const AuthorityQuorumSignInfo = object({
 export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 
 export const GasCostSummary = object({
-  computationCost: number(),
-  storageCost: number(),
-  storageRebate: number(),
-  nonRefundableStorageFee: number(),
+  computationCost: string(),
+  storageCost: string(),
+  storageRebate: string(),
+  nonRefundableStorageFee: string(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -249,12 +248,6 @@ export type TransactionEffects = Infer<typeof TransactionEffects>;
 export const TransactionEvents = array(SuiEvent);
 export type TransactionEvents = Infer<typeof TransactionEvents>;
 
-export const DryRunTransactionResponse = object({
-  effects: TransactionEffects,
-  events: TransactionEvents,
-});
-export type DryRunTransactionResponse = Infer<typeof DryRunTransactionResponse>;
-
 const ReturnValueType = tuple([array(number()), string()]);
 const MutableReferenceOutputType = tuple([
   SuiArgument,
@@ -291,7 +284,7 @@ export type TransactionFilter =
       };
     }
   | { InputObject: ObjectId }
-  | { MutatedObject: ObjectId }
+  | { ChangedObject: ObjectId }
   | { FromAddress: SuiAddress }
   | { ToAddress: SuiAddress };
 
@@ -425,6 +418,13 @@ export const PaginatedTransactionResponse = object({
 export type PaginatedTransactionResponse = Infer<
   typeof PaginatedTransactionResponse
 >;
+export const DryRunTransactionResponse = object({
+  effects: TransactionEffects,
+  events: TransactionEvents,
+  objectChanges: array(SuiObjectChange),
+  balanceChanges: array(BalanceChange),
+});
+export type DryRunTransactionResponse = Infer<typeof DryRunTransactionResponse>;
 
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */
@@ -535,21 +535,21 @@ export function getExecutionStatusGasSummary(
 
 export function getTotalGasUsed(
   data: SuiTransactionResponse | TransactionEffects,
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost +
-        gasSummary.storageCost -
-        gasSummary.storageRebate
+    ? BigInt(gasSummary.computationCost) +
+        BigInt(gasSummary.storageCost) -
+        BigInt(gasSummary.storageRebate)
     : undefined;
 }
 
 export function getTotalGasUsedUpperBound(
   data: SuiTransactionResponse | TransactionEffects,
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost + gasSummary.storageCost
+    ? BigInt(gasSummary.computationCost) + BigInt(gasSummary.storageCost)
     : undefined;
 }
 

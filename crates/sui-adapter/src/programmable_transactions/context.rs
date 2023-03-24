@@ -13,18 +13,19 @@ use move_binary_format::{
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
+use move_vm_types::loaded_data::runtime_types::Type;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     balance::Balance,
-    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
+    base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
-    storage::{ObjectChange, Storage, WriteKind},
+    storage::{ObjectChange, WriteKind},
 };
 
 use crate::{
@@ -75,7 +76,7 @@ struct AdditionalWrite {
     /// The new owner of the object
     recipient: Owner,
     /// the type of the object,
-    type_: MoveObjectType,
+    type_: Type,
     /// if the object has public transfer or not, i.e. if it has store
     has_public_transfer: bool,
     /// contents of the object
@@ -96,14 +97,33 @@ where
         gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
+        // we need a new session just for loading types, which is sad
+        // TODO remove this
+        let tmp_session = new_session(
+            vm,
+            state_view,
+            BTreeMap::new(),
+            !gas_status.is_unmetered(),
+            protocol_config,
+        );
         let mut object_owner_map = BTreeMap::new();
         let inputs = inputs
             .into_iter()
-            .map(|call_arg| load_call_arg(state_view, &mut object_owner_map, call_arg))
+            .map(|call_arg| {
+                load_call_arg(
+                    vm,
+                    state_view,
+                    &tmp_session,
+                    &mut object_owner_map,
+                    call_arg,
+                )
+            })
             .collect::<Result<_, ExecutionError>>()?;
         let gas = if let Some(gas_coin) = gas_coin_opt {
             let mut gas = load_object(
+                vm,
                 state_view,
+                &tmp_session,
                 &mut object_owner_map,
                 /* imm override */ false,
                 gas_coin,
@@ -134,6 +154,14 @@ where
                 },
             }
         };
+        // the session was just used for ability and layout metadata fetching, no changes should
+        // exist. Plus, Sui Move does not use these changes or events
+        let (change_set, move_events) = tmp_session
+            .finish()
+            .map_err(|e| sui_types::error::convert_vm_error(e, vm, state_view))?;
+        assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
+        assert_invariant!(move_events.is_empty(), "Events must be empty");
+        // make the real session
         let session = new_session(
             vm,
             state_view,
@@ -556,13 +584,21 @@ where
             remaining_events.is_empty(),
             "Events should be taken after every Move call"
         );
-        // todo remove this when system events are removed
         let mut object_changes = BTreeMap::new();
         for package in new_packages {
             let id = package.id();
             let change = ObjectChange::Write(package, WriteKind::Create);
             object_changes.insert(id, change);
         }
+        // we need a new session just for deserializing and fetching abilities. Which is sad
+        // TODO remove this
+        let tmp_session = new_session(
+            vm,
+            state_view,
+            BTreeMap::new(),
+            !gas_status.is_unmetered(),
+            protocol_config,
+        );
         for (id, additional_write) in additional_writes {
             let AdditionalWrite {
                 recipient,
@@ -586,6 +622,9 @@ where
             // safe given the invariant that the runtime correctly propagates has_public_transfer
             let move_object = unsafe {
                 create_written_object(
+                    vm,
+                    state_view,
+                    &tmp_session,
                     protocol_config,
                     &input_object_metadata,
                     &loaded_child_objects,
@@ -601,14 +640,6 @@ where
             object_changes.insert(id, change);
         }
 
-        // we need a new session just for deserializing and fetching abilities. Which is sad
-        let tmp_session = new_session(
-            vm,
-            state_view,
-            BTreeMap::new(),
-            !gas_status.is_unmetered(),
-            protocol_config,
-        );
         for (id, (write_kind, recipient, ty, move_type, value)) in writes {
             let abilities = tmp_session
                 .get_type_abilities(&ty)
@@ -621,11 +652,14 @@ where
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
                 create_written_object(
+                    vm,
+                    state_view,
+                    &tmp_session,
                     protocol_config,
                     &input_object_metadata,
                     &loaded_child_objects,
                     id,
-                    move_type,
+                    ty,
                     has_public_transfer,
                     bytes,
                     write_kind,
@@ -753,8 +787,10 @@ where
 }
 
 /// Load an input object from the state_view
-fn load_object<S: Storage>(
+fn load_object<E: fmt::Debug, S: StorageView<E>>(
+    vm: &MoveVM,
     state_view: &S,
+    session: &Session<S>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     override_as_immutable: bool,
     id: ObjectID,
@@ -786,37 +822,47 @@ fn load_object<S: Storage>(
     let prev = object_owner_map.insert(id, obj.owner);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), format!("Duplicate input object {}", id));
-    let obj_value = ObjectValue::from_object(obj)?;
+    let obj_value = ObjectValue::from_object(vm, state_view, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
 /// Load an a CallArg, either an object or a raw set of BCS bytes
-fn load_call_arg<S: Storage>(
+fn load_call_arg<E: fmt::Debug, S: StorageView<E>>(
+    vm: &MoveVM,
     state_view: &S,
+    session: &Session<S>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match call_arg {
         CallArg::Pure(bytes) => InputValue::new_raw(RawValueType::Any, bytes),
-        CallArg::Object(obj_arg) => load_object_arg(state_view, object_owner_map, obj_arg)?,
+        CallArg::Object(obj_arg) => {
+            load_object_arg(vm, state_view, session, object_owner_map, obj_arg)?
+        }
     })
 }
 
 /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
-fn load_object_arg<S: Storage>(
+fn load_object_arg<E: fmt::Debug, S: StorageView<E>>(
+    vm: &MoveVM,
     state_view: &S,
+    session: &Session<S>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
     match obj_arg {
         ObjectArg::ImmOrOwnedObject((id, _, _)) => load_object(
+            vm,
             state_view,
+            session,
             object_owner_map,
             /* imm override */ false,
             id,
         ),
         ObjectArg::SharedObject { id, mutable, .. } => load_object(
+            vm,
             state_view,
+            session,
             object_owner_map,
             /* imm override */ !mutable,
             id,
@@ -882,12 +928,15 @@ fn refund_max_gas_budget(
 ///
 /// This function assumes proper generation of has_public_transfer, either from the abilities of
 /// the StructTag, or from the runtime correctly propagating from the inputs
-unsafe fn create_written_object(
+unsafe fn create_written_object<E: fmt::Debug, S: StorageView<E>>(
+    vm: &MoveVM,
+    state_view: &S,
+    session: &Session<S>,
     protocol_config: &ProtocolConfig,
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
     id: ObjectID,
-    type_: MoveObjectType,
+    type_: Type,
     has_public_transfer: bool,
     contents: Vec<u8>,
     write_kind: WriteKind,
@@ -912,8 +961,16 @@ unsafe fn create_written_object(
         "Inconsistent state: write_kind: {write_kind:?}, old ver: {old_obj_ver:?}"
     );
 
+    let type_tag = session
+        .get_type_tag(&type_)
+        .map_err(|e| sui_types::error::convert_vm_error(e, vm, state_view))?;
+
+    let struct_tag = match type_tag {
+        TypeTag::Struct(inner) => *inner,
+        _ => invariant_violation!("Non struct type for object"),
+    };
     MoveObject::new_from_execution(
-        type_,
+        struct_tag.into(),
         has_public_transfer,
         old_obj_ver.unwrap_or_else(SequenceNumber::new),
         contents,

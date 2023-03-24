@@ -171,6 +171,36 @@ impl<P> ObjectProviderCache<P> {
             provider,
         }
     }
+
+    pub fn new_with_cache(
+        provider: P,
+        written_objects: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+    ) -> Self {
+        let mut object_cache = BTreeMap::new();
+        let mut last_version_cache = BTreeMap::new();
+
+        for (object_id, (object_ref, object, _)) in written_objects {
+            let key = (object_id, object_ref.1);
+            object_cache.insert(key, object.clone());
+
+            match last_version_cache.get_mut(&key) {
+                Some(existing_seq_number) => {
+                    if object_ref.1 > *existing_seq_number {
+                        *existing_seq_number = object_ref.1
+                    }
+                }
+                None => {
+                    last_version_cache.insert(key, object_ref.1);
+                }
+            }
+        }
+
+        Self {
+            object_cache: RwLock::new(object_cache),
+            last_version_cache: RwLock::new(last_version_cache),
+            provider,
+        }
+    }
 }
 
 #[async_trait]

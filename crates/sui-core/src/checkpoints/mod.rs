@@ -737,17 +737,22 @@ impl CheckpointBuilder {
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
+                let epoch_commitments = if self
+                    .epoch_store
+                    .protocol_config()
+                    .check_commit_root_state_digest_supported()
+                {
+                    vec![root_state_digest.into()]
+                } else {
+                    vec![]
+                };
+
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
                     next_epoch_protocol_version: ProtocolVersion::new(
                         system_state_obj.protocol_version(),
                     ),
-                    // MUSTFIX: This should become
-                    //
-                    //   epoch_commitments: vec![root_state_digest.into()]
-                    //
-                    // When the accumulator is deemed stable.
-                    epoch_commitments: vec![],
+                    epoch_commitments,
                 })
             } else {
                 self.accumulator.accumulate_checkpoint(
