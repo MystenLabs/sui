@@ -66,7 +66,7 @@ export function ValidatorStats({
                             </Stats>
                         </div>
                         <div className="flex flex-col gap-8 lg:flex-row">
-                            <Stats label="Commission" tooltip="Coming soon">
+                            <Stats label="Commission" tooltip="Fee charged by the validator for staking services">
                                 <Heading
                                     as="h3"
                                     variant="heading2/semibold"
