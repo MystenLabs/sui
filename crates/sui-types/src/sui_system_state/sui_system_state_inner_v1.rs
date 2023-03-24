@@ -396,7 +396,7 @@ impl ValidatorV1 {
             next_epoch_primary_address,
             next_epoch_worker_address,
             voting_power,
-            operation_cap_id,
+            operation_cap_id: operation_cap_id.bytes,
             gas_price,
             staking_pool_id,
             staking_pool_activation_epoch,
