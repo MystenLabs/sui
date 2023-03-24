@@ -61,6 +61,9 @@ module sui_system::validator {
     /// Commission rate set by the validator is higher than the threshold
     const ECommissionRateTooHigh: u64 = 8;
 
+    /// Validator Metadata is too long
+    const EValidatorMetadataExceedingLengthLimit: u64 = 9;
+
     /// Intended validator is not a candidate one.
     const ENotValidatorCandidate: u64 = 10;
 
@@ -70,7 +73,10 @@ module sui_system::validator {
     /// Capability code is not valid
     const EInvalidCap: u64 = 101;
 
+
     const MAX_COMMISSION_RATE: u64 = 10_000; // Max rate is 100%, which is 10K base points
+
+    const MAX_VALIDATOR_METADATA_LENGTH: u64 = 256;
 
     struct ValidatorMetadata has store {
         /// The Sui Address of the validator. This is the sender that created the Validator object,
@@ -221,12 +227,15 @@ module sui_system::validator {
         ctx: &mut TxContext
     ): Validator {
         assert!(
-            // MUSTFIX: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 128
-                && vector::length(&p2p_address) <= 128
-                && vector::length(&name) <= 128
-                && vector::length(&description) <= 150,
-            0
+            vector::length(&net_address) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&p2p_address) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&primary_address) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&worker_address) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&name) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&description) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&image_url) <= MAX_VALIDATOR_METADATA_LENGTH
+                && vector::length(&project_url) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
         );
         assert!(commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
 
@@ -625,73 +634,129 @@ module sui_system::validator {
     }
 
     /// Update name of the validator.
-    public(friend) fun update_name(self: &mut Validator, name: String) {
-        self.metadata.name = name;
+    public(friend) fun update_name(self: &mut Validator, name: vector<u8>) {
+        assert!(
+            vector::length(&name) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        self.metadata.name = string::from_ascii(ascii::string(name));
     }
 
     /// Update description of the validator.
-    public(friend) fun update_description(self: &mut Validator, description: String) {
-        self.metadata.description = description;
+    public(friend) fun update_description(self: &mut Validator, description: vector<u8>) {
+        assert!(
+            vector::length(&description) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        self.metadata.description = string::from_ascii(ascii::string(description));
     }
 
     /// Update image url of the validator.
-    public(friend) fun update_image_url(self: &mut Validator, image_url: Url) {
-        self.metadata.image_url = image_url;
+    public(friend) fun update_image_url(self: &mut Validator, image_url: vector<u8>) {
+        assert!(
+            vector::length(&image_url) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        self.metadata.image_url = url::new_unsafe_from_bytes(image_url);
     }
 
     /// Update project url of the validator.
-    public(friend) fun update_project_url(self: &mut Validator, project_url: Url) {
-        self.metadata.project_url = project_url;
+    public(friend) fun update_project_url(self: &mut Validator, project_url: vector<u8>) {
+        assert!(
+            vector::length(&project_url) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        self.metadata.project_url = url::new_unsafe_from_bytes(project_url);
     }
 
     /// Update network address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_network_address(self: &mut Validator, net_address: String) {
+    public(friend) fun update_next_epoch_network_address(self: &mut Validator, net_address: vector<u8>) {
+        assert!(
+            vector::length(&net_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let net_address = string::from_ascii(ascii::string(net_address));
         self.metadata.next_epoch_net_address = option::some(net_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update network address of this candidate validator
-    public(friend) fun update_candidate_network_address(self: &mut Validator, net_address: String) {
+    public(friend) fun update_candidate_network_address(self: &mut Validator, net_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
+        assert!(
+            vector::length(&net_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let net_address = string::from_ascii(ascii::string(net_address));
         self.metadata.net_address = net_address;
         validate_metadata(&self.metadata);
     }
 
     /// Update p2p address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_address: String) {
+    public(friend) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
+        assert!(
+            vector::length(&p2p_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let p2p_address = string::from_ascii(ascii::string(p2p_address));
         self.metadata.next_epoch_p2p_address = option::some(p2p_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update p2p address of this candidate validator
-    public(friend) fun update_candidate_p2p_address(self: &mut Validator, p2p_address: String) {
+    public(friend) fun update_candidate_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
+        assert!(
+            vector::length(&p2p_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let p2p_address = string::from_ascii(ascii::string(p2p_address));
         self.metadata.p2p_address = p2p_address;
         validate_metadata(&self.metadata);
     }
 
     /// Update primary address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_primary_address(self: &mut Validator, primary_address: String) {
+    public(friend) fun update_next_epoch_primary_address(self: &mut Validator, primary_address: vector<u8>) {
+        assert!(
+            vector::length(&primary_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let primary_address = string::from_ascii(ascii::string(primary_address));
         self.metadata.next_epoch_primary_address = option::some(primary_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update primary address of this candidate validator
-    public(friend) fun update_candidate_primary_address(self: &mut Validator, primary_address: String) {
+    public(friend) fun update_candidate_primary_address(self: &mut Validator, primary_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
+        assert!(
+            vector::length(&primary_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let primary_address = string::from_ascii(ascii::string(primary_address));
         self.metadata.primary_address = primary_address;
         validate_metadata(&self.metadata);
     }
 
     /// Update worker address of this validator, taking effects from next epoch
-    public(friend) fun update_next_epoch_worker_address(self: &mut Validator, worker_address: String) {
+    public(friend) fun update_next_epoch_worker_address(self: &mut Validator, worker_address: vector<u8>) {
+        assert!(
+            vector::length(&worker_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let worker_address = string::from_ascii(ascii::string(worker_address));
         self.metadata.next_epoch_worker_address = option::some(worker_address);
         validate_metadata(&self.metadata);
     }
 
     /// Update worker address of this candidate validator
-    public(friend) fun update_candidate_worker_address(self: &mut Validator, worker_address: String) {
+    public(friend) fun update_candidate_worker_address(self: &mut Validator, worker_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
+        assert!(
+            vector::length(&worker_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            EValidatorMetadataExceedingLengthLimit
+        );
+        let worker_address = string::from_ascii(ascii::string(worker_address));
         self.metadata.worker_address = worker_address;
         validate_metadata(&self.metadata);
     }
