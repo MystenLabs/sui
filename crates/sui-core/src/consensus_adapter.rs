@@ -960,7 +960,10 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(0, authorities.iter().cloned().collect());
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            authorities.iter().cloned().collect(),
+        );
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;

@@ -3133,7 +3133,7 @@ impl AuthorityState {
 
                 let total_votes = stake_aggregator.total_votes();
                 let quorum_threshold = committee.quorum_threshold();
-                let f = committee.total_votes - committee.quorum_threshold();
+                let f = committee.total_votes() - committee.quorum_threshold();
 
                 // multiple by buffer_stake_bps / 10000, rounded up.
                 let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;

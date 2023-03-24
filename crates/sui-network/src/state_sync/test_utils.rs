@@ -32,7 +32,7 @@ impl CommitteeFixture {
             .map(|keypair| (keypair.public().into(), (keypair, 1)))
             .collect::<HashMap<_, _>>();
 
-        let committee = Committee::new(
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
             epoch,
             validators
                 .iter()
