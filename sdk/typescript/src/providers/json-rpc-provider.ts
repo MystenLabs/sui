@@ -4,7 +4,6 @@
 import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   ExecuteTransactionRequestType,
-  GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   ObjectId,
   PaginatedTransactionResponse,
@@ -602,19 +601,6 @@ export class JsonRpcProvider {
       'sui_getTotalTransactionNumber',
       [],
       number(),
-      this.options.skipDataValidation,
-    );
-  }
-
-  /** @deprecated */
-  async getTransactionDigestsInRangeDeprecated(
-    start: GatewayTxSeqNumber,
-    end: GatewayTxSeqNumber,
-  ): Promise<GetTxnDigestsResponse> {
-    return await this.client.requestWithType(
-      'sui_getTransactionsInRangeDeprecated',
-      [start, end],
-      GetTxnDigestsResponse,
       this.options.skipDataValidation,
     );
   }

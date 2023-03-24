@@ -26,14 +26,17 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Committee, Parameters, WorkerCache, WorkerId, WorkerInfo};
+use config::{
+    Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId, WorkerInfo,
+};
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
-use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, PublicKey, PublicKeyBytes, Signature};
+use crypto::traits::EncodeDecodeBase64;
+use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
 use fastcrypto::{
     hash::Hash,
     signature_service::SignatureService,
-    traits::{EncodeDecodeBase64, KeyPair as _, ToFromBytes},
+    traits::{KeyPair as _, ToFromBytes},
 };
 use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::spawn_monitored_task;
@@ -96,7 +99,7 @@ impl Primary {
     // Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
-        name: PublicKey,
+        authority: Authority,
         signer: KeyPair,
         network_signer: NetworkKeyPair,
         committee: Committee,
@@ -125,7 +128,7 @@ impl Primary {
         info!(
             "Boot primary node with peer id {} and public key {}",
             PeerId(network_signer.public().0.to_bytes()),
-            name.encode_base64()
+            authority.protocol_key().encode_base64()
         );
 
         // Initialize the metrics
@@ -184,7 +187,7 @@ impl Primary {
         let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
         let synchronizer = Arc::new(Synchronizer::new(
-            name.clone(),
+            authority.id(),
             committee.clone(),
             worker_cache.clone(),
             parameters.gc_depth,
@@ -203,20 +206,18 @@ impl Primary {
 
         let our_workers = worker_cache
             .workers
-            .get(&name)
+            .get(authority.protocol_key())
             .expect("Our public key is not in the worker cache")
             .0
             .clone();
 
         // Spawn the network receiver listening to messages from the other primaries.
-        let address = committee
-            .primary(&name)
-            .expect("Our public key or worker id is not in the committee");
+        let address = authority.primary_address();
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
         let mut primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
-            name: name.clone(),
+            authority_id: authority.id(),
             committee: committee.clone(),
             worker_cache: worker_cache.clone(),
             synchronizer: synchronizer.clone(),
@@ -273,10 +274,10 @@ impl Primary {
 
         let addr = address.to_anemo_address().unwrap();
 
-        let epoch_string: String = committee.epoch.to_string();
+        let epoch_string: String = committee.epoch().to_string();
 
         let our_worker_peer_ids = worker_cache
-            .our_workers(&name)
+            .our_workers(authority.protocol_key())
             .unwrap()
             .into_iter()
             .map(|worker_info| PeerId(worker_info.name.0.to_bytes()));
@@ -392,12 +393,12 @@ impl Primary {
             panic!("Failed to send Network to Synchronizer!");
         }
 
-        info!("Primary {} listening on {}", name.encode_base64(), address);
+        info!("Primary {} listening on {}", authority.id(), address);
 
         let mut peer_types = HashMap::new();
 
         // Add my workers
-        for worker in worker_cache.our_workers(&name).unwrap() {
+        for worker in worker_cache.our_workers(authority.protocol_key()).unwrap() {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "our_worker".to_string());
@@ -408,7 +409,7 @@ impl Primary {
         }
 
         // Add others workers
-        for (_, worker) in worker_cache.others_workers(&name) {
+        for (_, worker) in worker_cache.others_workers(authority.protocol_key()) {
             let (peer_id, address) =
                 Self::add_peer_in_network(&network, worker.name, &worker.worker_address);
             peer_types.insert(peer_id, "other_worker".to_string());
@@ -420,7 +421,7 @@ impl Primary {
 
         // Add other primaries
         let primaries = committee
-            .others_primaries(&name)
+            .others_primaries_by_id(authority.id())
             .into_iter()
             .map(|(_, address, network_key)| (network_key, address));
 
@@ -441,7 +442,7 @@ impl Primary {
 
         info!(
             "Primary {} listening to network admin messages on 127.0.0.1:{}",
-            name.encode_base64(),
+            authority.id(),
             parameters
                 .network_admin_server
                 .primary_network_admin_server_port
@@ -462,7 +463,7 @@ impl Primary {
         }
 
         let core_handle = Certifier::spawn(
-            name.clone(),
+            authority.id(),
             committee.clone(),
             header_store.clone(),
             certificate_store.clone(),
@@ -477,7 +478,7 @@ impl Primary {
         // The `CertificateFetcher` waits to receive all the ancestors of a certificate before looping it back to the
         // `Synchronizer` for further processing.
         let certificate_fetcher_handle = CertificateFetcher::spawn(
-            name.clone(),
+            authority.id(),
             committee.clone(),
             network.clone(),
             certificate_store.clone(),
@@ -491,7 +492,7 @@ impl Primary {
         // When the `Synchronizer` collects enough parent certificates, the `Proposer` generates
         // a new header with new batch digests from our workers and sends it to the `Certifier`.
         let proposer_handle = Proposer::spawn(
-            name.clone(),
+            authority.id(),
             committee.clone(),
             proposer_store,
             parameters.header_num_of_batches_threshold,
@@ -547,7 +548,7 @@ impl Primary {
             // Responsible for finding missing blocks (certificates) and fetching
             // them from the primary peers by synchronizing also their batches.
             let block_synchronizer_handle = BlockSynchronizer::spawn(
-                name.clone(),
+                authority.id(),
                 committee.clone(),
                 worker_cache.clone(),
                 tx_shutdown.subscribe(),
@@ -562,7 +563,8 @@ impl Primary {
             // underlying batches and their transactions.
             // TODO: (Laura) pass shutdown signal here
             let block_waiter = BlockWaiter::new(
-                name.clone(),
+                authority.id(),
+                committee.clone(),
                 worker_cache.clone(),
                 network.clone(),
                 block_synchronizer_handler.clone(),
@@ -571,7 +573,8 @@ impl Primary {
             // Orchestrates the removal of blocks across the primary and worker nodes.
             // TODO: (Laura) pass shutdown signal here
             let block_remover = BlockRemover::new(
-                name.clone(),
+                authority.id(),
+                committee.clone(),
                 worker_cache,
                 certificate_store,
                 header_store,
@@ -583,7 +586,7 @@ impl Primary {
 
             // Spawn a grpc server to accept requests from external consensus layer.
             let consensus_api_handle = ConsensusAPIGrpc::spawn(
-                name.clone(),
+                authority.id(),
                 parameters.consensus_api_grpc.socket_addr,
                 block_waiter,
                 block_remover,
@@ -591,7 +594,7 @@ impl Primary {
                 parameters.consensus_api_grpc.remove_collections_timeout,
                 block_synchronizer_handler,
                 dag,
-                committee.clone(),
+                committee,
                 endpoint_metrics,
                 tx_shutdown.subscribe(),
             );
@@ -601,7 +604,7 @@ impl Primary {
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
-            name.clone(),
+            authority.id(),
             rx_committed_certificates,
             tx_shutdown.subscribe(),
             Some(tx_committed_own_headers),
@@ -612,10 +615,8 @@ impl Primary {
         // NOTE: This log entry is used to compute performance.
         info!(
             "Primary {} successfully booted on {}",
-            name.encode_base64(),
-            committee
-                .primary(&name)
-                .expect("Our public key or worker id is not in the committee")
+            authority.id(),
+            authority.primary_address()
         );
 
         handles
@@ -642,8 +643,8 @@ impl Primary {
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
 struct PrimaryReceiverHandler {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
     committee: Committee,
     worker_cache: WorkerCache,
     synchronizer: Arc<Synchronizer>,
@@ -663,7 +664,7 @@ struct PrimaryReceiverHandler {
 impl PrimaryReceiverHandler {
     fn find_next_round(
         &self,
-        origin: &PublicKeyBytes,
+        origin: AuthorityIdentifier,
         current_round: Round,
         skip_rounds: &BTreeSet<Round>,
     ) -> Result<Option<Round>, anemo::rpc::Status> {
@@ -707,7 +708,7 @@ impl PrimaryReceiverHandler {
                 "Unable to interpret remote peer ID {peer_id:?} as a NetworkPublicKey: {e:?}"
             ))
         })?;
-        let (peer_authority, _) = committee
+        let peer_authority = committee
             .authority_by_network_key(&peer_network_key)
             .ok_or_else(|| {
                 DagError::NetworkError(format!(
@@ -715,7 +716,7 @@ impl PrimaryReceiverHandler {
                 ))
             })?;
         ensure!(
-            header.author == *peer_authority,
+            header.author == peer_authority.id(),
             DagError::NetworkError(format!(
                 "Header author {:?} must match requesting peer {peer_authority:?}",
                 header.author
@@ -812,7 +813,7 @@ impl PrimaryReceiverHandler {
                 parent_authorities.insert(&parent.header.author),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
-            stake += committee.stake(&parent.origin());
+            stake += committee.stake_by_id(parent.origin());
         }
         ensure!(
             stake >= committee.quorum_threshold(),
@@ -877,7 +878,8 @@ impl PrimaryReceiverHandler {
             }
             if header.epoch == vote_info.epoch && header.round == vote_info.round {
                 // Make sure we don't vote twice for the same authority in the same epoch/round.
-                let temp_vote = Vote::new(header, &self.name, &self.signature_service).await;
+                let temp_vote =
+                    Vote::new(header, &self.authority_id, &self.signature_service).await;
                 if temp_vote.digest() != vote_info.vote_digest {
                     info!(
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
@@ -890,7 +892,7 @@ impl PrimaryReceiverHandler {
         }
 
         // Make a vote and send it to the header's creator.
-        let vote = Vote::new(header, &self.name, &self.signature_service).await;
+        let vote = Vote::new(header, &self.authority_id, &self.signature_service).await;
         debug!(
             "Created vote {vote:?} for {} at round {}",
             header, header.round
@@ -1027,9 +1029,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                     time_start.elapsed().as_millis(),
                 );
             }
-            let next_round = self.find_next_round(origin, lower_bound, rounds)?;
+            let next_round = self.find_next_round(*origin, lower_bound, rounds)?;
             if let Some(r) = next_round {
-                fetch_queue.push(Reverse((r, origin.clone())));
+                fetch_queue.push(Reverse((r, origin)));
             }
         }
         debug!(
@@ -1045,15 +1047,15 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             tokio::task::yield_now().await;
             match self
                 .certificate_store
-                .read_by_index(origin.clone(), round)
+                .read_by_index(*origin, round)
                 .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
             {
                 Some(cert) => {
                     response.certificates.push(cert);
                     let next_round =
-                        self.find_next_round(&origin, round, skip_rounds.get(&origin).unwrap())?;
+                        self.find_next_round(*origin, round, skip_rounds.get(origin).unwrap())?;
                     if let Some(r) = next_round {
-                        fetch_queue.push(Reverse((r, origin.clone())));
+                        fetch_queue.push(Reverse((r, origin)));
                     }
                 }
                 None => continue,

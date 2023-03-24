@@ -535,6 +535,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
     // Full backwards compatibility except that we allow friend function signatures to change.
     check_compatibility(
+        context,
         &current_package,
         &upgraded_package_modules,
         upgrade_ticket.policy,
@@ -564,7 +565,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     )])
 }
 
-fn check_compatibility<'a>(
+fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
+    context: &ExecutionContext<E, S>,
     existing_package: &MovePackage,
     upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
     policy: u8,
@@ -595,7 +597,7 @@ fn check_compatibility<'a>(
         ));
     }
 
-    let Ok(current_normalized) = existing_package.normalize() else {
+    let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version()) else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
@@ -722,8 +724,11 @@ fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     let modules = module_bytes
         .iter()
         .map(|b| {
-            CompiledModule::deserialize(b)
-                .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+            CompiledModule::deserialize_with_max_version(
+                b,
+                context.protocol_config.move_binary_format_version(),
+            )
+            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
         })
         .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;

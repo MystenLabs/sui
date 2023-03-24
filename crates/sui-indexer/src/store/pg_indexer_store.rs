@@ -17,10 +17,20 @@ use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use tracing::info;
 
-use sui_json_rpc_types::{CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent};
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent, SuiObjectDataFilter,
+};
+use sui_json_rpc_types::{
+    SuiTransaction, SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents,
+    SuiTransactionResponseOptions,
+};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::EpochId;
+use sui_types::digests::CheckpointDigest;
+use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::ObjectRead;
 
 use crate::errors::{Context, IndexerError};
@@ -40,7 +50,10 @@ use crate::schema::{
 use crate::store::diesel_marco::{read_only, transactional};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
+use crate::store::query::DBFilter;
 use crate::store::{IndexerStore, TemporaryEpochStore};
+use crate::types::SuiTransactionFullResponse;
+use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
@@ -80,6 +93,83 @@ impl PgIndexerStore {
             module_cache,
         }
     }
+
+    pub async fn get_sui_types_object(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<sui_types::object::Object, IndexerError> {
+        let pg_object = read_only!(&self.cp, |conn| {
+            objects_history::dsl::objects_history
+                .select((
+                    objects_history::epoch,
+                    objects_history::checkpoint,
+                    objects_history::object_id,
+                    objects_history::version,
+                    objects_history::object_digest,
+                    objects_history::owner_type,
+                    objects_history::owner_address,
+                    objects_history::initial_shared_version,
+                    objects_history::previous_transaction,
+                    objects_history::object_type,
+                    objects_history::object_status,
+                    objects_history::has_public_transfer,
+                    objects_history::storage_rebate,
+                    objects_history::bcs,
+                ))
+                .filter(objects_history::object_id.eq(object_id.to_string()))
+                .filter(objects_history::version.eq(version.value() as i64))
+                .first::<Object>(conn)
+        })
+        .context("Failed reading Object from PostgresDB");
+        match pg_object {
+            Ok(pg_object) => {
+                let object = sui_types::object::Object::try_from(pg_object)?;
+                Ok(object)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn find_sui_types_object_lt_or_eq_version(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Option<sui_types::object::Object>, IndexerError> {
+        let pg_object = read_only!(&self.cp, |conn| {
+            objects_history::dsl::objects_history
+                .select((
+                    objects_history::epoch,
+                    objects_history::checkpoint,
+                    objects_history::object_id,
+                    objects_history::version,
+                    objects_history::object_digest,
+                    objects_history::owner_type,
+                    objects_history::owner_address,
+                    objects_history::initial_shared_version,
+                    objects_history::previous_transaction,
+                    objects_history::object_type,
+                    objects_history::object_status,
+                    objects_history::has_public_transfer,
+                    objects_history::storage_rebate,
+                    objects_history::bcs,
+                ))
+                .filter(objects_history::object_id.eq(id.to_string()))
+                .filter(objects_history::version.le(version.value() as i64))
+                .order_by(objects_history::version.desc())
+                .first::<Object>(conn)
+                .optional()
+        })
+        .context("Failed reading Object before version from PostgresDB");
+        match pg_object {
+            Ok(Some(pg_object)) => {
+                let object = sui_types::object::Object::try_from(pg_object)?;
+                Ok(Some(object))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 #[async_trait]
@@ -108,7 +198,18 @@ impl IndexerStore for PgIndexerStore {
                 .limit(1)
                 .first(conn),
         })
-        .context("Failed reading previous checkpoint form PostgresDB")
+        .context("Failed reading previous checkpoint from PostgresDB")
+    }
+
+    fn get_checkpoint_sequence_number(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<CheckpointSequenceNumber, IndexerError> {
+        Ok(read_only!(&self.cp, |conn| checkpoints_dsl::checkpoints
+            .select(checkpoints::sequence_number)
+            .filter(checkpoints::checkpoint_digest.eq(digest.base58_encode()))
+            .first::<i64>(conn))
+        .context("Failed reading checkpoint seq number from PostgresDB")? as u64)
     }
 
     fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
@@ -213,13 +314,14 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
-    fn get_total_transaction_number(&self) -> Result<i64, IndexerError> {
-        read_only!(&self.cp, |conn| {
-            transactions_dsl::transactions
-                .select(count(transactions_dsl::id))
-                .first::<i64>(conn)
+    fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
+        let checkpoint: Checkpoint = read_only!(&self.cp, |conn| {
+            checkpoints_dsl::checkpoints
+                .order(checkpoints_dsl::total_transactions_from_genesis.desc())
+                .first::<Checkpoint>(conn)
         })
-        .context("Failed reading total transaction number")
+        .context("Failed reading total transaction number")?;
+        Ok(checkpoint.total_transactions_from_genesis)
     }
 
     fn get_transaction_by_digest(&self, txn_digest: &str) -> Result<Transaction, IndexerError> {
@@ -231,6 +333,76 @@ impl IndexerStore for PgIndexerStore {
         .context(&format!(
             "Failed reading transaction with digest {txn_digest}"
         ))
+    }
+
+    async fn compose_full_transaction_response(
+        &self,
+        tx: Transaction,
+        options: Option<SuiTransactionResponseOptions>,
+    ) -> Result<SuiTransactionFullResponse, IndexerError> {
+        let transaction: SuiTransaction =
+            serde_json::from_str(&tx.transaction_content).map_err(|err| {
+                IndexerError::InsertableParsingError(format!(
+                    "Failed converting transaction JSON {:?} to SuiTransaction with error: {:?}",
+                    tx.transaction_content, err
+                ))
+            })?;
+        let effects: SuiTransactionEffects = serde_json::from_str(&tx.transaction_effects_content).map_err(|err| {
+        IndexerError::InsertableParsingError(format!(
+            "Failed converting transaction effect JSON {:?} to SuiTransactionEffects with error: {:?}",
+            tx.transaction_effects_content, err
+        ))
+        })?;
+
+        let tx_digest: TransactionDigest = tx.transaction_digest.parse().map_err(|e| {
+            IndexerError::InsertableParsingError(format!(
+                "Failed to parse transaction digest {} : {:?}",
+                tx.transaction_digest, e
+            ))
+        })?;
+        let sender = SuiAddress::from_str(tx.sender.as_str())?;
+
+        let (mut object_changes, mut balance_changes) = (None, None);
+        if let Some(options) = options {
+            if options.show_balance_changes {
+                let object_cache = ObjectProviderCache::new(self.clone());
+                balance_changes =
+                    Some(get_balance_changes_from_effect(&object_cache, &effects).await?);
+            }
+
+            if options.show_object_changes {
+                let object_cache = ObjectProviderCache::new(self.clone());
+                object_changes = Some(
+                    get_object_changes(
+                        &object_cache,
+                        sender,
+                        &effects.modified_at_versions(),
+                        effects.all_changed_objects(),
+                        effects.all_deleted_objects(),
+                    )
+                    .await?,
+                );
+            }
+        }
+        let events = self.get_events(
+            EventFilter::Transaction(tx_digest),
+            None,
+            None,
+            /* descending_order */ false,
+        )?;
+
+        Ok(SuiTransactionFullResponse {
+            digest: tx_digest,
+            transaction,
+            raw_transaction: tx.raw_transaction,
+            effects,
+            confirmed_local_execution: tx.confirmed_local_execution,
+            timestamp_ms: tx.timestamp_ms as u64,
+            checkpoint: tx.checkpoint_sequence_number as u64,
+            events: SuiTransactionEvents { data: events.data },
+            object_changes,
+            balance_changes,
+        })
     }
 
     fn multi_get_transactions_by_digests(
@@ -282,9 +454,25 @@ impl IndexerStore for PgIndexerStore {
         let object = read_only!(&self.cp, |conn| {
             if let Some(version) = version {
                 objects_history::dsl::objects_history
+                    .select((
+                        objects_history::epoch,
+                        objects_history::checkpoint,
+                        objects_history::object_id,
+                        objects_history::version,
+                        objects_history::object_digest,
+                        objects_history::owner_type,
+                        objects_history::owner_address,
+                        objects_history::initial_shared_version,
+                        objects_history::previous_transaction,
+                        objects_history::object_type,
+                        objects_history::object_status,
+                        objects_history::has_public_transfer,
+                        objects_history::storage_rebate,
+                        objects_history::bcs,
+                    ))
                     .filter(objects_history::object_id.eq(object_id.to_string()))
                     .filter(objects_history::version.eq(version.value() as i64))
-                    .get_result(conn)
+                    .get_result::<Object>(conn)
                     .optional()
             } else {
                 objects_dsl::objects
@@ -299,6 +487,41 @@ impl IndexerStore for PgIndexerStore {
             None => Ok(ObjectRead::NotExists(object_id)),
             Some(o) => o.try_into_object_read(&self.module_cache),
         }
+    }
+
+    fn query_objects(
+        &self,
+        filter: SuiObjectDataFilter,
+        at_checkpoint: CheckpointSequenceNumber,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let objects = read_only!(&self.cp, |conn| {
+            let columns = vec![
+                "epoch",
+                "checkpoint",
+                "object_id",
+                "version",
+                "object_digest",
+                "owner_type",
+                "owner_address",
+                "initial_shared_version",
+                "previous_transaction",
+                "object_type",
+                "object_status",
+                "has_public_transfer",
+                "storage_rebate",
+                "bcs",
+            ];
+            diesel::sql_query(filter.to_sql(cursor, limit, columns))
+                .bind::<BigInt, _>(at_checkpoint as i64)
+                .get_results::<Object>(conn)
+        })?;
+
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(&self.module_cache))
+            .collect()
     }
 
     fn get_move_call_sequence_by_digest(
@@ -628,13 +851,31 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    fn get_total_address_number(&self) -> Result<u64, IndexerError> {
+    fn get_total_addresses(&self) -> Result<u64, IndexerError> {
         let total_addresses = read_only!(&self.cp, |conn| {
             addresses::table
                 .select(count(addresses::account_address))
                 .first::<i64>(conn)
         })?;
         Ok(total_addresses as u64)
+    }
+
+    fn get_total_objects(&self) -> Result<u64, IndexerError> {
+        let total_objects = read_only!(&self.cp, |conn| {
+            objects::table
+                .select(count(objects::object_id))
+                .first::<i64>(conn)
+        })?;
+        Ok(total_objects as u64)
+    }
+
+    fn get_total_packages(&self) -> Result<u64, IndexerError> {
+        let total_packages = read_only!(&self.cp, |conn| {
+            packages::table
+                .select(count(packages::package_id))
+                .first::<i64>(conn)
+        })?;
+        Ok(total_packages as u64)
     }
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
@@ -806,8 +1047,14 @@ WHERE e1.epoch = e2.epoch
     }
 
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
+        let last_epoch_cp_id = if data.last_epoch.is_none() {
+            0
+        } else {
+            self.get_current_epoch()?.first_checkpoint_id as i64
+        };
+
         self.partition_manager
-            .advance_epoch(data.new_epoch.epoch as u64)?;
+            .advance_epoch(&data.new_epoch, last_epoch_cp_id)?;
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         pg_pool_conn
             .build_transaction()
@@ -920,29 +1167,32 @@ WHERE e1.epoch = e2.epoch
 
     fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
-        let epoch_info :DBEpochInfo =   pg_pool_conn
+        let epoch_info: DBEpochInfo = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                epochs::dsl::epochs.order_by(epochs::epoch.desc())
+                epochs::dsl::epochs
+                    .order_by(epochs::epoch.desc())
                     .first::<DBEpochInfo>(conn)
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
-                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    "Failed reading latest epoch in PostgresDB with error {:?}",
                     e
                 ))
             })?;
 
-        let validators : Vec<DBValidatorSummary> =   pg_pool_conn
+        let validators: Vec<DBValidatorSummary> = pg_pool_conn
             .build_transaction()
             .read_only()
             .run(|conn| {
-                validators::dsl::validators.filter(validators::epoch.eq(epoch_info.epoch)).load(conn)
+                validators::dsl::validators
+                    .filter(validators::epoch.eq(epoch_info.epoch))
+                    .load(conn)
             })
             .map_err(|e| {
                 IndexerError::PostgresReadError(format!(
-                    "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
+                    "Failed reading latest validator summary in PostgresDB with error {:?}",
                     e
                 ))
             })?;
@@ -969,14 +1219,28 @@ impl PartitionManager {
         Ok(manager)
     }
 
-    fn advance_epoch(&self, next_epoch_id: EpochId) -> Result<(), IndexerError> {
+    fn advance_epoch(
+        &self,
+        new_epoch: &DBEpochInfo,
+        last_epoch_start_cp: i64,
+    ) -> Result<(), IndexerError> {
+        let next_epoch_id = new_epoch.epoch;
+        let last_epoch_id = new_epoch.epoch - 1;
+        let next_epoch_start_cp = new_epoch.first_checkpoint_id;
+
         let tables = self.get_table_partitions()?;
         let table_updated = transactional!(&self.cp, |conn| {
             let mut updated_table = vec![];
             for (table, last_partition) in &tables {
-                if last_partition < &next_epoch_id {
-                    let sql = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_id}) TO ({});", next_epoch_id+1);
-                    diesel::sql_query(sql).execute(conn)?;
+                if last_partition < &(next_epoch_id as u64) {
+                    let detach_partition = format!(
+                        "ALTER TABLE {table} DETACH PARTITION {table}_partition_{last_epoch_id};"
+                    );
+                    let attach_partition_with_new_range = format!("ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch_id} FOR VALUES FROM ('{last_epoch_start_cp}') TO ('{next_epoch_start_cp}');");
+                    let new_partition = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);");
+                    diesel::sql_query(detach_partition).execute(conn)?;
+                    diesel::sql_query(attach_partition_with_new_range).execute(conn)?;
+                    diesel::sql_query(new_partition).execute(conn)?;
                     updated_table.push(table);
                 }
             }
@@ -1006,5 +1270,26 @@ impl PartitionManager {
             })
             .collect::<Result<_, _>>()?,
         )
+    }
+}
+
+#[async_trait]
+impl ObjectProvider for PgIndexerStore {
+    type Error = IndexerError;
+    async fn get_object(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<sui_types::object::Object, Self::Error> {
+        self.get_sui_types_object(id, version).await
+    }
+
+    async fn find_object_lt_or_eq_version(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Option<sui_types::object::Object>, Self::Error> {
+        self.find_sui_types_object_lt_or_eq_version(id, version)
+            .await
     }
 }

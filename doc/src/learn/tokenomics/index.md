@@ -12,7 +12,7 @@ This page includes a high-level overview of Sui’s economic model.
 The Sui economy is characterized by three main sets of participants:
 
 * **Users** submit transactions to the Sui platform in order to create, mutate, and transfer digital assets or interact with more sophisticated applications enabled by smart contracts, interoperability, and composability.
-* **SUI token holders** bear the option of delegating their tokens to validators and participating in the proof-of-stake mechanism. SUI owners also hold the rights to participate in Sui’s governance.
+* **SUI token holders** have the option of staking their tokens to validators and participating in the proof-of-stake mechanism. SUI owners also hold the rights to participate in Sui’s governance.
 * **Validators** manage transaction processing and execution on the Sui platform.
 
 The Sui economy has five core components:
@@ -20,7 +20,7 @@ The Sui economy has five core components:
 * The [SUI token](../tokenomics/sui-token.md) is the Sui platform’s native asset. 
 * [Gas fees](../tokenomics/gas-pricing.md) are charged on all network operations and used to reward participants of the proof-of-stake mechanism and prevent spam and denial-of-service attacks.
 * [Sui’s storage fund](../tokenomics/storage-fund.md) is used to shift stake rewards across time and compensate future validators for storage costs of previously stored on-chain data.
-* The [proof-of-stake mechanism](../tokenomics/proof-of-stake.md) is used to select, incentivize, and reward honest behavior by the Sui platform’s operators – i.e. validators and the SUI delegators.
+* The [proof-of-stake mechanism](../tokenomics/proof-of-stake.md) is used to select, incentivize, and reward honest behavior by Sui Validators and the SUI owners that stake with them.
 * On-chain voting is used for governance and protocol upgrades.
 
 Throughout, we use the visual representation in the following figure to aid the discussion. 

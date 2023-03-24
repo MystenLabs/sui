@@ -56,9 +56,9 @@ mod test {
         let builder = types::HeaderBuilder::default();
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let primary = fixture.authorities().next().unwrap();
-        let name = primary.public_key();
+        let id = primary.id();
         let header = builder
-            .author(name)
+            .author(id)
             .round(round)
             .epoch(0)
             .parents([CertificateDigest::default()].iter().cloned().collect())

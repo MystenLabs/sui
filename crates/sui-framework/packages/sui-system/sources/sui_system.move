@@ -13,7 +13,8 @@ module sui_system::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-    use sui_system::sui_system_state_inner::{Self, SuiSystemStateInner};
+    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInner};
+    use sui_system::stake_subsidy::StakeSubsidy;
     use sui::vec_set::VecSet;
     use std::option;
     use sui::table::Table;
@@ -25,8 +26,6 @@ module sui_system::sui_system {
 
     friend sui_system::genesis;
 
-    #[test_only]
-    use sui::test_utils;
     #[test_only]
     friend sui_system::governance_test_utils;
 
@@ -42,37 +41,28 @@ module sui_system::sui_system {
     public(friend) fun create(
         id: UID,
         validators: vector<Validator>,
-        stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
-        system_state_version: u64,
-        governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
-        epoch_duration_ms: u64,
-        initial_stake_subsidy_distribution_amount: u64,
-        stake_subsidy_period_length: u64,
-        stake_subsidy_decrease_rate: u16,
+        parameters: SystemParameters,
+        stake_subsidy: StakeSubsidy,
         ctx: &mut TxContext,
     ) {
         let system_state = sui_system_state_inner::create(
             validators,
-            stake_subsidy_fund,
             storage_fund,
             protocol_version,
-            system_state_version,
-            governance_start_epoch,
             epoch_start_timestamp_ms,
-            epoch_duration_ms,
-            initial_stake_subsidy_distribution_amount,
-            stake_subsidy_period_length,
-            stake_subsidy_decrease_rate,
+            parameters,
+            stake_subsidy,
             ctx,
         );
+        let version = sui_system_state_inner::genesis_system_state_version();
         let self = SuiSystemState {
             id,
-            version: system_state_version,
+            version,
         };
-        dynamic_field::add(&mut self.id, system_state_version, system_state);
+        dynamic_field::add(&mut self.id, version, system_state);
         transfer::share_object(self);
     }
 
@@ -481,13 +471,11 @@ module sui_system::sui_system {
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
         epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
-        new_system_state_version: u64,
         ctx: &mut TxContext,
     ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
-        let old_protocol_version = sui_system_state_inner::protocol_version(self);
         let storage_rebate = sui_system_state_inner::advance_epoch(
             self,
             new_epoch,
@@ -501,112 +489,122 @@ module sui_system::sui_system {
             ctx,
         );
 
-        if (new_system_state_version != wrapper.version) {
-            // If we are upgrading the system state, we need to make sure that the protocol version
-            // is also upgraded.
-            assert!(old_protocol_version != next_protocol_version, 0);
-            let cur_state: SuiSystemStateInner = dynamic_field::remove(&mut wrapper.id, wrapper.version);
-            let new_state = sui_system_state_inner::upgrade_system_state(cur_state, new_system_state_version, ctx);
-            wrapper.version = new_system_state_version;
-            dynamic_field::add(&mut wrapper.id, wrapper.version, new_state);
-        };
         storage_rebate
     }
 
-    // TODO: Make this a private fun.
     /// An extremely simple version of advance_epoch.
     /// This is called in two situations:
     ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
     ///     system running and continue making epoch changes.
     ///   - When advancing to a new protocol version, we want to be able to change the protocol
     ///     version
-    public(friend) fun advance_epoch_safe_mode(
+    fun advance_epoch_safe_mode(
+        storage_reward: Balance<SUI>,
+        computation_reward: Balance<SUI>,
         wrapper: &mut SuiSystemState,
         new_epoch: u64,
         next_protocol_version: u64,
+        storage_rebate: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, 0);
-        sui_system_state_inner::advance_epoch_safe_mode(self, new_epoch, next_protocol_version, ctx)
+        sui_system_state_inner::advance_epoch_safe_mode(
+            self,
+            new_epoch,
+            next_protocol_version,
+            storage_reward,
+            computation_reward,
+            storage_rebate,
+            ctx
+        )
     }
 
-    /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
-    /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
-    public fun epoch(wrapper: &SuiSystemState): u64 {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::epoch(self)
-    }
-
-    /// Returns unix timestamp of the start of current epoch
-    public fun epoch_start_timestamp_ms(wrapper: &SuiSystemState): u64 {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::epoch_start_timestamp_ms(self)
-    }
-
-    /// Returns the total amount staked with `validator_addr`.
-    /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_stake_amount(wrapper: &SuiSystemState, validator_addr: address): u64 {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::validator_stake_amount(self, validator_addr)
-    }
-
-    /// Returns the staking pool id of a given validator.
-    /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_staking_pool_id(wrapper: &SuiSystemState, validator_addr: address): ID {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::validator_staking_pool_id(self, validator_addr)
-    }
-
-    /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
-    public fun validator_staking_pool_mappings(wrapper: &SuiSystemState): &Table<ID, address> {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::validator_staking_pool_mappings(self)
-    }
-
-    /// Returns all the validators who are currently reporting `addr`
-    public fun get_reporters_of(wrapper: &SuiSystemState, addr: address): VecSet<address> {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::get_reporters_of(self, addr)
-    }
-
-    fun load_system_state(self: &SuiSystemState): &SuiSystemStateInner {
-        let version = self.version;
-        let inner: &SuiSystemStateInner = dynamic_field::borrow(&self.id, version);
-        assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
-        inner
+    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInner {
+        load_inner_maybe_upgrade(self)
     }
 
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+        load_inner_maybe_upgrade(self)
+    }
+
+    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInner {
         let version = self.version;
+        // TODO: This is where we check the version and perform upgrade if necessary.
+
         let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, version);
         assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
         inner
     }
 
     #[test_only]
+    /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
+    /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
+    public fun epoch(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::epoch(self)
+    }
+
+    #[test_only]
+    /// Returns unix timestamp of the start of current epoch
+    public fun epoch_start_timestamp_ms(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::epoch_start_timestamp_ms(self)
+    }
+
+    #[test_only]
+    /// Returns the total amount staked with `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_stake_amount(self, validator_addr)
+    }
+
+    #[test_only]
+    /// Returns the staking pool id of a given validator.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_staking_pool_id(wrapper: &mut SuiSystemState, validator_addr: address): ID {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_staking_pool_id(self, validator_addr)
+    }
+
+    #[test_only]
+    /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
+    public fun validator_staking_pool_mappings(wrapper: &mut SuiSystemState): &Table<ID, address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_staking_pool_mappings(self)
+    }
+
+    #[test_only]
+    /// Returns all the validators who are currently reporting `addr`
+    public fun get_reporters_of(wrapper: &mut SuiSystemState, addr: address): VecSet<address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_reporters_of(self, addr)
+    }
+
+    #[test_only]
     /// Return the current validator set
-    public fun validators(wrapper: &SuiSystemState): &ValidatorSet {
+    public fun validators(wrapper: &mut SuiSystemState): &ValidatorSet {
         let self = load_system_state(wrapper);
         sui_system_state_inner::validators(self)
     }
 
     #[test_only]
     /// Return the currently active validator by address
-    public fun active_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+    public fun active_validator_by_address(self: &mut SuiSystemState, validator_address: address): &Validator {
         validator_set::get_active_validator_ref(validators(self), validator_address)
     }
 
     #[test_only]
     /// Return the currently pending validator by address
-    public fun pending_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+    public fun pending_validator_by_address(self: &mut SuiSystemState, validator_address: address): &Validator {
         validator_set::get_pending_validator_ref(validators(self), validator_address)
     }
 
     #[test_only]
     /// Return the currently candidate validator by address
-    public fun candidate_validator_by_address(self: &SuiSystemState, validator_address: address): &Validator {
+    public fun candidate_validator_by_address(self: &mut SuiSystemState, validator_address: address): &Validator {
         validator_set::get_candidate_validator_ref(validators(self), validator_address)
     }
 
@@ -624,6 +622,12 @@ module sui_system::sui_system {
     ) {
         let self = load_system_state_mut(wrapper);
         sui_system_state_inner::request_add_validator_for_testing(self, min_joining_stake_for_testing, ctx)
+    }
+
+    #[test_only]
+    public fun get_storage_fund_balance(wrapper: &mut SuiSystemState): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_storage_fund_balance(self)
     }
 
     // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
@@ -681,9 +685,8 @@ module sui_system::sui_system {
         storage_fund_reinvest_rate: u64,
         reward_slashing_rate: u64,
         epoch_start_timestamp_ms: u64,
-        new_system_state_version: u64,
         ctx: &mut TxContext,
-    ) {
+    ): Balance<SUI> {
         let storage_reward = balance::create_for_testing(storage_charge);
         let computation_reward = balance::create_for_testing(computation_charge);
         let storage_rebate = advance_epoch(
@@ -696,9 +699,32 @@ module sui_system::sui_system {
             storage_fund_reinvest_rate,
             reward_slashing_rate,
             epoch_start_timestamp_ms,
-            new_system_state_version,
             ctx,
         );
-        test_utils::destroy(storage_rebate);
+        storage_rebate
+    }
+
+    // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
+    #[test_only]
+    public(friend) fun advance_epoch_safe_mode_for_testing(
+        wrapper: &mut SuiSystemState,
+        new_epoch: u64,
+        next_protocol_version: u64,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        ctx: &mut TxContext,
+    ) {
+        let storage_reward = balance::create_for_testing(storage_charge);
+        let computation_reward = balance::create_for_testing(computation_charge);
+        advance_epoch_safe_mode(
+            storage_reward,
+            computation_reward,
+            wrapper,
+            new_epoch,
+            next_protocol_version,
+            storage_rebate,
+            ctx,
+        );
     }
 }

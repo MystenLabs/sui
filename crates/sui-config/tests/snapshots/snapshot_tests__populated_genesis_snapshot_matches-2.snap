@@ -1,15 +1,15 @@
 ---
 source: crates/sui-config/tests/snapshot_tests.rs
-expression: genesis.sui_system_object()
+expression: genesis.sui_system_object().into_genesis_version_for_tooling()
 ---
 epoch: 0
 protocol_version: 1
 system_state_version: 1
 validators:
-  total_stake: 25000000000000000
+  total_stake: 20000000000000000
   active_validators:
     - metadata:
-        sui_address: "0x73a6b3c33e2d63383de5c6786cbaca231ff789f4c853af6d54cb883d8780adc0"
+        sui_address: "0x60307f36c284875bf298d4d85a673046648b1ac4b47e712e42ab10d57dd77a26"
         protocol_pubkey_bytes:
           - 153
           - 242
@@ -108,120 +108,120 @@ validators:
           - 26
           - 16
         network_pubkey_bytes:
-          - 13
-          - 125
-          - 171
-          - 53
-          - 140
-          - 141
-          - 173
-          - 170
-          - 78
-          - 250
-          - 0
+          - 148
+          - 228
+          - 168
           - 73
-          - 167
-          - 91
-          - 7
-          - 67
-          - 101
-          - 85
-          - 177
-          - 10
-          - 54
-          - 130
-          - 25
-          - 187
-          - 104
-          - 15
-          - 112
-          - 87
-          - 19
-          - 73
-          - 215
-          - 117
-        worker_pubkey_bytes:
-          - 13
-          - 125
-          - 171
-          - 53
-          - 140
-          - 141
-          - 173
-          - 170
-          - 78
-          - 250
-          - 0
-          - 73
-          - 167
-          - 91
-          - 7
-          - 67
-          - 101
-          - 85
-          - 177
-          - 10
-          - 54
-          - 130
-          - 25
-          - 187
-          - 104
-          - 15
-          - 112
-          - 87
-          - 19
-          - 73
-          - 215
-          - 117
-        proof_of_possession_bytes:
-          - 176
-          - 81
-          - 164
-          - 232
-          - 143
-          - 71
-          - 217
-          - 26
-          - 206
+          - 49
+          - 68
           - 233
-          - 63
-          - 195
-          - 47
-          - 30
-          - 65
-          - 201
-          - 145
-          - 199
-          - 195
-          - 120
-          - 45
-          - 204
-          - 61
-          - 44
-          - 156
-          - 62
-          - 176
-          - 15
-          - 202
-          - 179
-          - 6
-          - 85
-          - 117
-          - 235
-          - 141
-          - 16
-          - 201
-          - 85
-          - 81
-          - 255
-          - 154
-          - 70
-          - 63
-          - 157
-          - 87
-          - 56
+          - 230
           - 150
+          - 32
+          - 140
+          - 190
+          - 208
+          - 2
+          - 89
+          - 230
+          - 221
+          - 181
+          - 111
+          - 151
+          - 155
+          - 145
+          - 195
+          - 41
+          - 103
+          - 86
+          - 9
+          - 133
+          - 190
+          - 97
+          - 144
+          - 155
+        worker_pubkey_bytes:
+          - 31
+          - 42
+          - 121
+          - 1
+          - 168
+          - 66
+          - 228
+          - 211
+          - 98
+          - 59
+          - 198
+          - 28
+          - 225
           - 193
+          - 113
+          - 125
+          - 46
+          - 118
+          - 142
+          - 15
+          - 215
+          - 45
+          - 248
+          - 52
+          - 26
+          - 245
+          - 102
+          - 21
+          - 185
+          - 22
+          - 240
+          - 56
+        proof_of_possession_bytes:
+          - 151
+          - 191
+          - 31
+          - 245
+          - 62
+          - 131
+          - 184
+          - 23
+          - 162
+          - 33
+          - 124
+          - 71
+          - 229
+          - 10
+          - 56
+          - 179
+          - 47
+          - 67
+          - 223
+          - 65
+          - 196
+          - 125
+          - 67
+          - 111
+          - 55
+          - 104
+          - 114
+          - 157
+          - 166
+          - 146
+          - 6
+          - 104
+          - 90
+          - 214
+          - 33
+          - 36
+          - 63
+          - 93
+          - 228
+          - 221
+          - 166
+          - 7
+          - 164
+          - 61
+          - 169
+          - 219
+          - 78
+          - 19
         name: "0"
         description: ""
         image_url: ""
@@ -240,84 +240,94 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-            id: "0x03838f7b4ae40ab0b2291040509974ee2c8264adce8c08748fcc663491d2cd6d"
+            id: "0x6536ea65f42ac01132c0e7640cd4606388b602a1e0c49724e077a4cd3796f058"
           size: 0
       voting_power: 10000
-      operation_cap_id: "0xe880b8b1085e5cf3fde5ba88684311ac8b8ea43f6a99feb0a52c206d0c720d62"
+      operation_cap_id: "0x3bf8bd448b159e517a8dcdf4af164024f6560494e171630e5b44358a9a9706a1"
       gas_price: 1
       staking_pool:
-        id: "0x21710d064e393974914a2b0dcc572d8d96c55bc3b4da9c3a80b0dc37c47516f8"
+        id: "0x015365c41502836163356579e04d437b8ba0ce7c6212c97cdb85261b9bc58517"
         activation_epoch: 0
         deactivation_epoch: ~
-        sui_balance: 25000000000000000
+        sui_balance: 20000000000000000
         rewards_pool:
           value: 0
-        pool_token_balance: 25000000000000000
+        pool_token_balance: 20000000000000000
         exchange_rates:
-          id: "0x91d84ed6dc0105a32ea1ea5806b2454fdaa784e8eea5aaa62ab29d4932870b0d"
+          id: "0xab6dbe939bc6916cc7d563c4a08d23376af492949bbc34b572036d1a52ae7a01"
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-            id: "0x75824803e2a4c17ee0b3712f88693ac9fbce096eca6f1fc2b70d8f8426ea2af6"
+            id: "0xb467ab60353e24a53900a683300c7578be7839be5b8344227babf7d64bafd211"
           size: 0
       commission_rate: 0
-      next_epoch_stake: 25000000000000000
+      next_epoch_stake: 20000000000000000
       next_epoch_gas_price: 1
       next_epoch_commission_rate: 0
       extra_fields:
         id:
-          id: "0x7365155b04cefa5b2941dfc20fb1c2ae86888a0679a64ff25bac3d20b01e4026"
+          id: "0xa72f3c9064a83267f86920dff30e6cd8bf75f1ddff84fe1f602badcb0417918c"
         size: 0
   pending_active_validators:
     contents:
-      id: "0x56053be2d34ea8e9f8763f90df844ede5d0a8f1d1dc65d81457b43416a1a8899"
+      id: "0x349174fd8e139d10f9f8d867ae6cbcb79bde101e63206cd998a376852bd8b6e0"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0x22b9215b1c6804e1796c90df7ac728a3f2ba53ed711e63e88d7516fc846c92f5"
+    id: "0x8a8c0705c9869a26c07f5f440df27fc7c047b3bffa8588a709c4894a7bc45db5"
     size: 1
   inactive_validators:
-    id: "0x68e07ec6a578e119f45c182fc5a4817138a3644420d0747cd04bd75de6248b0e"
+    id: "0xefb7ea0a9353c4518568a83285588e354139c1aa26b967622dd9c3dfb29128e8"
     size: 0
   validator_candidates:
-    id: "0x50f83cf7c9541d9a1268ed2f1be646b3c83e9c6ee6dbd28c254667fe87b2911d"
+    id: "0x45707e50a1ba334f16a71a9513e3bb75de0a85478fbcbcf4da6cfb22cf26f85a"
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-      id: "0xbffb7fb481053445f00c0d104f86ff6a02b96a5e3b22f2e4129093a17914320c"
+      id: "0x16457372993ed926c6ec8957446f935d6212dcd79479b3f2e2f9c68800bce458"
     size: 0
 storage_fund:
   value: 0
 parameters:
-  governance_start_epoch: 0
   epoch_duration_ms: 86400000
+  stake_subsidy_start_epoch: 0
+  max_validator_count: 150
+  min_validator_joining_stake: 30000000000000000
+  validator_low_stake_threshold: 20000000000000000
+  validator_very_low_stake_threshold: 15000000000000000
+  validator_low_stake_grace_period: 7
   extra_fields:
     id:
-      id: "0x1a349a6f387c0ff82d7ac3080c2e3db3c658cd1fda602e59e5593fe0043d1061"
+      id: "0x1709abe23d2803776e2d117ffb1f6b54c85171d8a07c278f3ba36daba3167c7f"
     size: 0
 reference_gas_price: 1
 validator_report_records:
   contents: []
 stake_subsidy:
   balance:
-    value: 9975000000000000000
+    value: 9980000000000000000
   distribution_counter: 0
   current_distribution_amount: 1000000000000000
   stake_subsidy_period_length: 30
   stake_subsidy_decrease_rate: 10000
   extra_fields:
     id:
-      id: "0xdf827f61fb4c1a584e14428b796468b0d2c04a132b6713f83db4c9ca691ac0fa"
+      id: "0x0002e1e85b0d12fb53b74bc6d88fa1a8ef1606877cb3fe50287930c28483ef8f"
     size: 0
 safe_mode: false
+safe_mode_storage_rewards:
+  value: 0
+safe_mode_computation_rewards:
+  value: 0
+safe_mode_storage_rebates: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-    id: "0xc8e8268db32f8fbaf610b8241a63ca23807b3d295a683a74406a868da62cdb7a"
+    id: "0x8951f41a036ad75e4a0df29ae575944c28551544a95e35ab185fe7f0fddc31e9"
   size: 0
 

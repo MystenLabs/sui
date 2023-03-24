@@ -26,7 +26,7 @@ describe('Test dev inspect', () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
     const tx = new Transaction();
-    const coin_0 = coins[0].details as SuiObjectData;
+    const coin_0 = coins[0].data as SuiObjectData;
     const obj = tx.moveCall({
       target: `${packageId}::serializer_tests::return_struct`,
       typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],

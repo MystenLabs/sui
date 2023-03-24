@@ -91,7 +91,7 @@ impl TransactionValidator for SuiTxValidator {
         Handle::current()
             .spawn_blocking(move || {
                 epoch_store
-                    .batch_verifier
+                    .signature_verifier
                     .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
                     .tap_err(|e| warn!("batch verification error: {}", e))
                     .wrap_err("Malformed batch (failed to verify)")

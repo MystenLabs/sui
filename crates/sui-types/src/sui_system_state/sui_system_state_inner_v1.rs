@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::balance::Balance;
-use crate::base_types::{EpochId, ObjectID, SuiAddress};
+use crate::base_types::{ObjectID, SuiAddress};
 use crate::collection_types::{Bag, Table, TableVec, VecMap, VecSet};
-use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata, ProtocolVersion};
+use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::verify_proof_of_possession;
 use crate::crypto::AuthorityPublicKeyBytes;
 use crate::id::ID;
@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 use super::epoch_start_sui_system_state::EpochStartValidatorInfoV1;
 use super::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
-use super::{SuiSystemStateTrait, INIT_SYSTEM_STATE_VERSION};
+use super::SuiSystemStateTrait;
 
 const E_METADATA_INVALID_POP: u64 = 0;
 const E_METADATA_INVALID_PUBKEY: u64 = 1;
@@ -32,8 +32,32 @@ const E_METADATA_INVALID_WORKER_ADDR: u64 = 7;
 /// Rust version of the Move sui::sui_system::SystemParameters type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SystemParametersV1 {
-    pub governance_start_epoch: u64,
+    /// The duration of an epoch, in milliseconds.
     pub epoch_duration_ms: u64,
+
+    /// The starting epoch in which stake subsidies start being paid out
+    pub stake_subsidy_start_epoch: u64,
+
+    /// Maximum number of active validators at any moment.
+    /// We do not allow the number of validators in any epoch to go above this.
+    pub max_validator_count: u64,
+
+    /// Lower-bound on the amount of stake required to become a validator.
+    pub min_validator_joining_stake: u64,
+
+    /// Validators with stake amount below `validator_low_stake_threshold` are considered to
+    /// have low stake and will be escorted out of the validator set after being below this
+    /// threshold for more than `validator_low_stake_grace_period` number of epochs.
+    pub validator_low_stake_threshold: u64,
+
+    /// Validators with stake below `validator_very_low_stake_threshold` will be removed
+    /// immediately at epoch change, no grace period.
+    pub validator_very_low_stake_threshold: u64,
+
+    /// A validator can have stake below `validator_low_stake_threshold`
+    /// for this many epochs before being kicked out.
+    pub validator_low_stake_grace_period: u64,
+
     pub extra_fields: Bag,
 }
 
@@ -115,6 +139,10 @@ impl ValidatorMetadataV1 {
         let worker_pubkey =
             narwhal_crypto::NetworkPublicKey::from_bytes(self.worker_pubkey_bytes.as_ref())
                 .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?;
+        if worker_pubkey == network_pubkey {
+            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        }
+
         let net_address = Multiaddr::try_from(self.net_address.clone())
             .map_err(|_| E_METADATA_INVALID_NET_ADDR)?;
 
@@ -185,6 +213,11 @@ impl ValidatorMetadataV1 {
                         .map_err(|_| E_METADATA_INVALID_WORKER_PUBKEY)?,
                 )),
             }?;
+        if next_epoch_network_pubkey.is_some()
+            && next_epoch_network_pubkey == next_epoch_worker_pubkey
+        {
+            return Err(E_METADATA_INVALID_WORKER_PUBKEY);
+        }
 
         let next_epoch_net_address = match self.next_epoch_net_address.clone() {
             None => Ok::<Option<Multiaddr>, u64>(None),
@@ -363,7 +396,7 @@ impl ValidatorV1 {
             next_epoch_primary_address,
             next_epoch_worker_address,
             voting_power,
-            operation_cap_id,
+            operation_cap_id: operation_cap_id.bytes,
             gas_price,
             staking_pool_id,
             staking_pool_activation_epoch,
@@ -428,18 +461,12 @@ pub struct SuiSystemStateInnerV1 {
     pub validator_report_records: VecMap<SuiAddress, VecSet<SuiAddress>>,
     pub stake_subsidy: StakeSubsidyV1,
     pub safe_mode: bool,
+    pub safe_mode_storage_rewards: Balance,
+    pub safe_mode_computation_rewards: Balance,
+    pub safe_mode_storage_rebates: u64,
     pub epoch_start_timestamp_ms: u64,
     pub extra_fields: Bag,
     // TODO: Use getters instead of all pub.
-}
-
-impl SuiSystemStateInnerV1 {
-    pub fn new_for_testing(epoch: EpochId) -> Self {
-        Self {
-            epoch,
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -588,8 +615,13 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             storage_fund,
             parameters:
                 SystemParametersV1 {
-                    governance_start_epoch,
+                    stake_subsidy_start_epoch,
                     epoch_duration_ms,
+                    max_validator_count,
+                    min_validator_joining_stake,
+                    validator_low_stake_threshold,
+                    validator_very_low_stake_threshold,
+                    validator_low_stake_grace_period,
                     extra_fields: _,
                 },
             reference_gas_price,
@@ -600,13 +632,16 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             stake_subsidy:
                 StakeSubsidyV1 {
                     balance: stake_subsidy_balance,
-                    distribution_counter: stake_subsidy_epoch_counter,
-                    current_distribution_amount: stake_subsidy_current_epoch_amount,
-                    stake_subsidy_period_length: _,
-                    stake_subsidy_decrease_rate: _,
+                    distribution_counter: stake_subsidy_distribution_counter,
+                    current_distribution_amount: stake_subsidy_current_distribution_amount,
+                    stake_subsidy_period_length,
+                    stake_subsidy_decrease_rate,
                     extra_fields: _,
                 },
             safe_mode,
+            safe_mode_storage_rewards,
+            safe_mode_computation_rewards,
+            safe_mode_storage_rebates,
             epoch_start_timestamp_ms,
             extra_fields: _,
         } = self;
@@ -617,12 +652,15 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             storage_fund: storage_fund.value(),
             reference_gas_price,
             safe_mode,
+            safe_mode_storage_rewards: safe_mode_storage_rewards.value(),
+            safe_mode_computation_rewards: safe_mode_computation_rewards.value(),
+            safe_mode_storage_rebates,
             epoch_start_timestamp_ms,
-            governance_start_epoch,
+            stake_subsidy_start_epoch,
             epoch_duration_ms,
-            stake_subsidy_epoch_counter,
+            stake_subsidy_distribution_counter,
             stake_subsidy_balance: stake_subsidy_balance.value(),
-            stake_subsidy_current_epoch_amount,
+            stake_subsidy_current_distribution_amount,
             total_stake,
             active_validators: active_validators
                 .into_iter()
@@ -645,48 +683,20 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
                 .into_iter()
                 .map(|e| (e.key, e.value.contents))
                 .collect(),
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
+            stake_subsidy_period_length,
+            stake_subsidy_decrease_rate,
         }
     }
 }
 
-// The default implementation for tests
-impl Default for SuiSystemStateInnerV1 {
-    fn default() -> Self {
-        let validator_set = ValidatorSetV1 {
-            total_stake: 2,
-            active_validators: vec![],
-            pending_active_validators: TableVec::default(),
-            pending_removals: vec![],
-            staking_pool_mappings: Table::default(),
-            inactive_validators: Table::default(),
-            validator_candidates: Table::default(),
-            at_risk_validators: VecMap { contents: vec![] },
-            extra_fields: Default::default(),
-        };
-        Self {
-            epoch: 0,
-            protocol_version: ProtocolVersion::MIN.as_u64(),
-            system_state_version: INIT_SYSTEM_STATE_VERSION,
-            validators: validator_set,
-            storage_fund: Balance::new(0),
-            parameters: SystemParametersV1 {
-                governance_start_epoch: 0,
-                epoch_duration_ms: 10000,
-                extra_fields: Default::default(),
-            },
-            reference_gas_price: 1,
-            validator_report_records: VecMap { contents: vec![] },
-            stake_subsidy: StakeSubsidyV1 {
-                balance: Balance::new(0),
-                distribution_counter: 0,
-                current_distribution_amount: 0,
-                stake_subsidy_period_length: 1,
-                stake_subsidy_decrease_rate: 0,
-                extra_fields: Default::default(),
-            },
-            safe_mode: false,
-            epoch_start_timestamp_ms: 0,
-            extra_fields: Default::default(),
-        }
-    }
+/// Rust version of the Move sui::validator_cap::UnverifiedValidatorOperationCap type
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct UnverifiedValidatorOperationCapV1 {
+    pub id: ObjectID,
+    pub authorizer_validator_address: SuiAddress,
 }

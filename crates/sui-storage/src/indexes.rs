@@ -920,6 +920,8 @@ impl IndexStore {
                         }
                     }
                     None => true,
+                    // TODO (jian): have a better way of ignoring unsupported filters on FN side.
+                    _ => true,
                 };
                 object_owner == &owner && to_include
             })

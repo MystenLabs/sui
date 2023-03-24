@@ -12,8 +12,7 @@ use tracing::info;
 
 use crate::metrics::ExecutorMetrics;
 use async_trait::async_trait;
-use config::{Committee, WorkerCache};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, WorkerCache};
 
 use prometheus::Registry;
 
@@ -52,7 +51,7 @@ pub struct Executor;
 impl Executor {
     /// Spawn a new client subscriber.
     pub fn spawn<State>(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         network: oneshot::Receiver<anemo::Network>,
         worker_cache: WorkerCache,
         committee: Committee,
@@ -72,7 +71,7 @@ impl Executor {
 
         // Spawn the subscriber.
         let subscriber_handle = spawn_subscriber(
-            name,
+            authority_id,
             network,
             worker_cache,
             committee,

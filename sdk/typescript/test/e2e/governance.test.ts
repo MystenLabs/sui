@@ -27,6 +27,7 @@ describe('Governance API', () => {
   });
 
   it('test getDelegatedStakes', async () => {
+    await addStake(signer);
     const stakes = await toolbox.provider.getStakes({
       owner: toolbox.address(),
     });

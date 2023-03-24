@@ -338,7 +338,7 @@ move-stackless-bytecode = { git = "https://github.com/move-language/move", rev =
 move-stdlib = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54", default-features = false }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54", features = ["tiered-gas"] }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
@@ -355,6 +355,7 @@ nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
+ntest = { version = "0.9", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
 num-bigint = { version = "0.4" }
@@ -994,7 +995,7 @@ move-stackless-bytecode = { git = "https://github.com/move-language/move", rev =
 move-stdlib = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54", default-features = false }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54", features = ["tiered-gas"] }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 multiaddr = { version = "0.17" }
 multibase = { version = "0.9" }
@@ -1013,6 +1014,9 @@ nom-a490c3000a992113 = { package = "nom", version = "6" }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5" }
 nonzero_ext = { version = "0.3" }
 normalize-line-endings = { version = "0.3", default-features = false }
+ntest = { version = "0.9", default-features = false }
+ntest_test_cases = { version = "0.9", default-features = false }
+ntest_timeout = { version = "0.9", default-features = false }
 nu-ansi-term = { version = "0.46", default-features = false }
 num = { version = "0.4" }
 num-bigint = { version = "0.4" }

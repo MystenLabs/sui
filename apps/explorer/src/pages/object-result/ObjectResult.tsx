@@ -5,7 +5,6 @@ import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import { useGetObject } from '../../hooks/useGetObject';
-import { extractName } from '../../utils/objectUtils';
 import { translate, type DataType } from './ObjectResultType';
 import PkgView from './views/PkgView';
 import { TokenView } from './views/TokenView';
@@ -38,20 +37,18 @@ export function ObjectResult() {
     }
 
     // TODO: Handle status better NotExists, Deleted, Other
-    if (data?.status !== 'Exists') {
+    if (data.error) {
         return <Fail objID={objID} />;
     }
 
     const resp = translate(data);
-    const name = extractName(resp.data?.contents);
     const isPackage = resp.objType === PACKAGE_TYPE_NAME;
 
     return (
-        <div className="mt-5 mb-10">
+        <div className="mb-10">
             <PageHeader
                 type={isPackage ? 'Package' : 'Object'}
                 title={resp.id}
-                subtitle={name}
             />
 
             <ErrorBoundary>

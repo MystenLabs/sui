@@ -71,6 +71,7 @@ module display_test::boars {
             utf8(b"\\{name\\}"),
         ]);
 
+        display::update_version(&mut display);
         transfer::public_transfer(display, sender(ctx));
         transfer::public_transfer(pub, sender(ctx));
 

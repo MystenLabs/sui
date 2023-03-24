@@ -12,7 +12,7 @@ async fn wait_for_quorum() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
-    let my_primary = fixture.authorities().next().unwrap().public_key();
+    let my_primary = fixture.authorities().next().unwrap();
     let myself = fixture.authorities().next().unwrap().worker(0);
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -21,7 +21,7 @@ async fn wait_for_quorum() {
     let network = test_network(myself.keypair(), &myself.info().worker_address);
     // Spawn a `QuorumWaiter` instance.
     let _quorum_waiter_handler = QuorumWaiter::spawn(
-        my_primary.clone(),
+        my_primary.authority().clone(),
         /* worker_id */ 0,
         committee.clone(),
         worker_cache.clone(),
@@ -69,7 +69,7 @@ async fn pipeline_for_quorum() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();
-    let my_primary = fixture.authorities().next().unwrap().public_key();
+    let my_primary = fixture.authorities().next().unwrap();
     let myself = fixture.authorities().next().unwrap().worker(0);
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -78,7 +78,7 @@ async fn pipeline_for_quorum() {
     let network = test_network(myself.keypair(), &myself.info().worker_address);
     // Spawn a `QuorumWaiter` instance.
     let _quorum_waiter_handler = QuorumWaiter::spawn(
-        my_primary.clone(),
+        my_primary.authority().clone(),
         /* worker_id */ 0,
         committee.clone(),
         worker_cache.clone(),

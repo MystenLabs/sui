@@ -20,7 +20,7 @@ use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::WriteKind;
 
-pub async fn get_balance_change_from_effect<P: ObjectProvider<Error = E>, E>(
+pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     effects: &TransactionEffects,
 ) -> Result<Vec<BalanceChange>, E> {
@@ -41,7 +41,7 @@ pub async fn get_balance_change_from_effect<P: ObjectProvider<Error = E>, E>(
         .map(|((id, version, _), _, _)| (*id, *version))
         .collect::<Vec<_>>();
 
-    get_balance_change(
+    get_balance_changes(
         object_provider,
         effects.modified_at_versions(),
         &all_mutated,
@@ -49,7 +49,7 @@ pub async fn get_balance_change_from_effect<P: ObjectProvider<Error = E>, E>(
     .await
 }
 
-pub async fn get_balance_change<P: ObjectProvider<Error = E>, E>(
+pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     modified_at_version: &[(ObjectID, SequenceNumber)],
     all_mutated: &[(ObjectID, SequenceNumber)],

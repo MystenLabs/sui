@@ -27,6 +27,20 @@ pub struct RequestBatchResponse {
     pub batch: Option<Batch>,
 }
 
+/// Used by primary to bulk request batches from workers local store.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RequestBatchesRequest {
+    pub batch_digests: Vec<BatchDigest>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RequestBatchesResponse {
+    pub batches: Vec<Batch>,
+    // If true, the primary should request the batches from the workers again.
+    // This may not be something that can be trusted from a remote worker.
+    pub is_size_limit_reached: bool,
+}
+
 pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
 pub type PrimaryResponse = Option<tokio::sync::oneshot::Sender<()>>;
 

@@ -31,7 +31,7 @@ pub trait ReadApi {
         query: Option<SuiObjectResponseQuery>,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<ObjectID>,
-        /// Max number of items returned per page, default to [MAX_GET_OWNED_OBJECT_SIZE] if not specified.
+        /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
         limit: Option<usize>,
         /// If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.
         at_checkpoint: Option<CheckpointId>,

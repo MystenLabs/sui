@@ -280,7 +280,7 @@ impl fmt::UpperHex for CheckpointContentsDigest {
     }
 }
 
-/// A digest of a cerificate, which commits to the signatures as well as the tx.
+/// A digest of a certificate, which commits to the signatures as well as the tx.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CertificateDigest(Digest);
 
@@ -297,6 +297,24 @@ impl CertificateDigest {
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("CertificateDigest").field(&self.0).finish()
+    }
+}
+
+/// A digest of a SenderSignedData, which commits to the signatures as well as the tx.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SenderSignedDataDigest(Digest);
+
+impl SenderSignedDataDigest {
+    pub const fn new(digest: [u8; 32]) -> Self {
+        Self(Digest::new(digest))
+    }
+}
+
+impl fmt::Debug for SenderSignedDataDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SenderSignedDataDigest")
+            .field(&self.0)
+            .finish()
     }
 }
 
@@ -559,6 +577,14 @@ impl ObjectDigest {
 
     pub fn is_alive(&self) -> bool {
         *self != Self::OBJECT_DIGEST_DELETED && *self != Self::OBJECT_DIGEST_WRAPPED
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        *self == Self::OBJECT_DIGEST_DELETED
+    }
+
+    pub fn is_wrapped(&self) -> bool {
+        *self == Self::OBJECT_DIGEST_WRAPPED
     }
 
     pub fn base58_encode(&self) -> String {

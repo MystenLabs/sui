@@ -170,6 +170,8 @@ class Committee:
 
             self.json['authorities'][name] = {
                 'stake': 1,
+                'protocol_key': name,
+                'protocol_key_bytes': name,
                 'primary_address': primary_addr,
                 'network_key': network_name
             }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::ObjectID;
-use crate::committee::{CommitteeWithNetworkMetadata, EpochId, ProtocolVersion};
+use crate::committee::CommitteeWithNetworkMetadata;
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
@@ -23,13 +23,23 @@ pub mod epoch_start_sui_system_state;
 pub mod sui_system_state_inner_v1;
 pub mod sui_system_state_summary;
 
+#[cfg(msim)]
+mod simtest_sui_system_state_inner;
+#[cfg(msim)]
+use self::simtest_sui_system_state_inner::{
+    SimTestSuiSystemStateInnerV1, SimTestSuiSystemStateInnerV2,
+};
+
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 
-pub const INIT_SYSTEM_STATE_VERSION: u64 = 1;
+#[cfg(msim)]
+pub const SUI_SYSTEM_STATE_SIM_TEST_V1: u64 = 18446744073709551605; // u64::MAX - 10
+#[cfg(msim)]
+pub const SUI_SYSTEM_STATE_SIM_TEST_V2: u64 = 18446744073709551606; // u64::MAX - 9
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 /// This repreents the object with 0x5 ID.
@@ -78,6 +88,10 @@ pub trait SuiSystemStateTrait {
 #[enum_dispatch(SuiSystemStateTrait)]
 pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
+    #[cfg(msim)]
+    SimTestV1(SimTestSuiSystemStateInnerV1),
+    #[cfg(msim)]
+    SimTestV2(SimTestSuiSystemStateInnerV2),
 }
 
 /// This is the fixed type used by genesis.
@@ -85,30 +99,20 @@ pub type SuiSystemStateInnerGenesis = SuiSystemStateInnerV1;
 pub type SuiValidatorGenesis = ValidatorV1;
 
 impl SuiSystemState {
-    pub fn new_genesis(inner: SuiSystemStateInnerGenesis) -> Self {
-        Self::V1(inner)
-    }
-
     /// Always return the version that we will be using for genesis.
     /// Genesis always uses this version regardless of the current version.
-    pub fn into_genesis_version(self) -> SuiSystemStateInnerGenesis {
+    /// Note that since it's possible for the actual genesis of the network to diverge from the
+    /// genesis of the latest Rust code, it's important that we only use this for tooling purposes.
+    pub fn into_genesis_version_for_tooling(self) -> SuiSystemStateInnerGenesis {
         match self {
             SuiSystemState::V1(inner) => inner,
+            #[cfg(msim)]
+            _ => unreachable!(),
         }
-    }
-
-    pub fn new_for_testing(epoch: EpochId) -> Self {
-        SuiSystemState::V1(SuiSystemStateInnerV1::new_for_testing(epoch))
     }
 
     pub fn version(&self) -> u64 {
         self.system_state_version()
-    }
-}
-
-impl Default for SuiSystemState {
-    fn default() -> Self {
-        SuiSystemState::V1(SuiSystemStateInnerV1::default())
     }
 }
 
@@ -132,17 +136,14 @@ where
     Ok(result)
 }
 
-// This version is used to support authority_tests::test_sui_system_state_nop_upgrade.
-pub const SUI_SYSTEM_STATE_TESTING_VERSION1: u64 = u64::MAX;
-
 pub fn get_sui_system_state<S>(object_store: &S) -> Result<SuiSystemState, SuiError>
 where
     S: ObjectStore,
 {
     let wrapper = get_sui_system_state_wrapper(object_store)?;
+    let id = wrapper.id.id.bytes;
     match wrapper.version {
         1 => {
-            let id = wrapper.id.id.bytes;
             let result: SuiSystemStateInnerV1 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
@@ -154,12 +155,31 @@ where
                 )?;
             Ok(SuiSystemState::V1(result))
         }
-        // The following case is for sim_test only to support authority_tests::test_sui_system_state_nop_upgrade.
         #[cfg(msim)]
-        SUI_SYSTEM_STATE_TESTING_VERSION1 => {
-            let result: SuiSystemStateInnerV1 =
-                get_dynamic_field_from_store(object_store, wrapper.id.id.bytes, &wrapper.version)?;
-            Ok(SuiSystemState::V1(result))
+        SUI_SYSTEM_STATE_SIM_TEST_V1 => {
+            let result: SimTestSuiSystemStateInnerV1 =
+                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
+                    |err| {
+                        SuiError::DynamicFieldReadError(format!(
+                            "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
+                            id, wrapper.version, err
+                        ))
+                    },
+                )?;
+            Ok(SuiSystemState::SimTestV1(result))
+        }
+        #[cfg(msim)]
+        SUI_SYSTEM_STATE_SIM_TEST_V2 => {
+            let result: SimTestSuiSystemStateInnerV2 =
+                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
+                    |err| {
+                        SuiError::DynamicFieldReadError(format!(
+                            "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
+                            id, wrapper.version, err
+                        ))
+                    },
+                )?;
+            Ok(SuiSystemState::SimTestV2(result))
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
             "Unsupported SuiSystemState version: {}",
@@ -207,10 +227,6 @@ where
             version
         ))),
     }
-}
-
-pub fn get_sui_system_state_version(_protocol_version: ProtocolVersion) -> u64 {
-    INIT_SYSTEM_STATE_VERSION
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default)]

@@ -10,6 +10,8 @@ use crate::api::{
     CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
     WriteApiClient,
 };
+use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
+use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_json::{call_args, type_args};
@@ -24,7 +26,7 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_types::balance::Supply;
 use sui_types::base_types::ObjectID;
-use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME, LOCKED_COIN_MODULE_NAME};
+use sui_types::coin::{TreasuryCap, COIN_MODULE_NAME};
 use sui_types::gas_coin::GAS;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
@@ -63,6 +65,22 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
         .multi_get_object_with_options(object_digests, None)
         .await?;
     assert_eq!(5, object_resp.len());
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new().build().await?;
+    let http_client = cluster.rpc_client();
+    let response = http_client
+        .get_object_with_options(
+            ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+            Some(SuiObjectDataOptions::new().with_display()),
+        )
+        .await;
+    assert!(response.is_ok());
+    let response: SuiObjectResponse = response?;
+    assert!(response.into_object().unwrap().display.is_none());
     Ok(())
 }
 
@@ -266,7 +284,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(
-            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
+            matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())
@@ -299,7 +317,7 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
             )
             .await?;
         assert!(
-            matches!(result, SuiObjectResponse::Exists(object) if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
+            matches!(result, SuiObjectResponse { data: Some(object), .. } if oref.object_id == object.object_id && &object.owner.unwrap().get_owner_address()? == address)
         );
     }
     Ok(())
@@ -355,8 +373,14 @@ async fn test_get_balance() -> Result<(), anyhow::Error> {
 
     let result: Balance = http_client.get_balance(*address, None).await?;
     assert_eq!("0x2::sui::SUI", result.coin_type);
-    assert_eq!(500000000000000, result.total_balance);
-    assert_eq!(5, result.coin_object_count);
+    assert_eq!(
+        (DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT as u64 * DEFAULT_GAS_AMOUNT) as u128,
+        result.total_balance
+    );
+    assert_eq!(
+        DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
+        result.coin_object_count
+    );
 
     Ok(())
 }
@@ -578,83 +602,6 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     let result: Supply = http_client.get_total_supply(coin_name.clone()).await?;
     assert_eq!(100000, result.value);
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_locked_sui() -> Result<(), anyhow::Error> {
-    let cluster = TestClusterBuilder::new().build().await?;
-
-    let http_client = cluster.rpc_client();
-    let address = cluster.accounts.first().unwrap();
-
-    let objects = http_client
-        .get_owned_objects(
-            *address,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
-            )),
-            None,
-            None,
-            None,
-        )
-        .await?
-        .data;
-    assert_eq!(5, objects.len());
-    // verify coins and balance before test
-    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
-    let balance: Vec<Balance> = http_client.get_all_balances(*address).await?;
-
-    assert_eq!(5, coins.data.len());
-    for coin in &coins.data {
-        assert!(coin.locked_until_epoch.is_none());
-    }
-
-    assert_eq!(1, balance.len());
-    assert!(balance[0].locked_balance.is_empty());
-
-    // lock one coin
-    let transaction_bytes: TransactionBytes = http_client
-        .move_call(
-            *address,
-            SUI_FRAMEWORK_ADDRESS.into(),
-            LOCKED_COIN_MODULE_NAME.to_string(),
-            "lock_coin".to_string(),
-            type_args!("0x2::sui::SUI")?,
-            call_args![coins.data[0].coin_object_id, address, 20]?,
-            None,
-            2000,
-            None,
-        )
-        .await?;
-    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
-
-    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-    http_client
-        .execute_transaction(
-            tx_bytes,
-            signatures,
-            Some(SuiTransactionResponseOptions::new()),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-        )
-        .await?;
-
-    let balances: Vec<Balance> = http_client.get_all_balances(*address).await?;
-
-    assert_eq!(1, balance.len());
-
-    let balance = balances.first().unwrap();
-
-    assert_eq!(5, balance.coin_object_count);
-    assert_eq!(1, balance.locked_balance.len());
-    assert!(balance.locked_balance.contains_key(&20));
 
     Ok(())
 }

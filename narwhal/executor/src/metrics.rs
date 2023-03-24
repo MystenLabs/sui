@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use prometheus::{
-    default_registry, register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    default_registry, register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 
 // buckets defined in seconds
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 40.0, 60.0, 80.0,
     100.0, 200.0,
+];
+
+const POSITIVE_INT_BUCKETS: &[f64] = &[
+    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
 ];
 
 #[derive(Clone, Debug)]
@@ -19,8 +24,6 @@ pub struct ExecutorMetrics {
     pub subscriber_local_fetch_latency: Histogram,
     /// Time it takes to download a payload from remote peer
     pub subscriber_remote_fetch_latency: Histogram,
-    /// Number of times certificate was found locally
-    pub subscriber_local_hit: IntCounter,
     /// Number of batches processed by subscriber
     pub subscriber_processed_batches: IntCounter,
     /// Round of last certificate seen by subscriber
@@ -38,6 +41,13 @@ pub struct ExecutorMetrics {
     /// Latency between the time when the batch has been
     /// created and when it has been fetched for execution
     pub batch_execution_latency: Histogram,
+    /// The number of batches per committed subdag to be fetched
+    pub committed_subdag_batch_count: Histogram,
+    /// Latency for time taken to fetch all batches for committed subdag
+    /// either from local or remote worker.
+    pub batch_fetch_for_committed_subdag_total_latency: Histogram,
+    /// Counter of remote/local batch fetch statuses.
+    pub subscriber_batch_fetch: IntCounterVec,
 }
 
 impl ExecutorMetrics {
@@ -68,11 +78,19 @@ impl ExecutorMetrics {
                 "The number of certificates processed by Subscriber during the recovery period to fetch their payloads",
                 registry
             ).unwrap(),
-            subscriber_local_hit: register_int_counter_with_registry!(
-                "subscriber_local_hit",
-                "Number of times certificate was found locally",
+            committed_subdag_batch_count: register_histogram_with_registry!(
+                "committed_subdag_batch_count",
+                "The number of batches per committed subdag to be fetched",
+                POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
+            batch_fetch_for_committed_subdag_total_latency: register_histogram_with_registry!(
+                "batch_fetch_for_committed_subdag_total_latency",
+                "Latency for time taken to fetch all batches for committed subdag either from local or remote worker",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
             subscriber_processed_batches: register_int_counter_with_registry!(
                 "subscriber_processed_batches",
                 "Number of batches processed by subscriber",
@@ -104,7 +122,13 @@ impl ExecutorMetrics {
                 "Latency between when the certificate has been created and when it reached the executor",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ).unwrap()
+            ).unwrap(),
+            subscriber_batch_fetch: register_int_counter_vec_with_registry!(
+                "subscriber_batch_fetch",
+                "Counter of remote/local batch fetch statuses",
+                &["source", "status"],
+                registry
+            ).unwrap(),
         }
     }
 }

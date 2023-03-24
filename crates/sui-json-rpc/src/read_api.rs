@@ -12,7 +12,10 @@ use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
-use move_binary_format::normalized::{Module as NormalizedModule, Type};
+use move_binary_format::{
+    file_format_common::VERSION_MAX,
+    normalized::{Module as NormalizedModule, Type},
+};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -23,8 +26,8 @@ use tracing::debug;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, MoveFunctionArgType,
-    ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, EventFilter,
+    MoveFunctionArgType, ObjectChange, ObjectValueKind, ObjectsPage, Page, SuiGetPastObjectRequest,
     SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct,
     SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
     SuiPastObjectResponse, SuiTransaction, SuiTransactionEvents, SuiTransactionResponse,
@@ -37,10 +40,9 @@ use sui_types::base_types::{
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::display::{DisplayCreatedEvent, DisplayObject};
+use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::error::UserInputError;
-use sui_types::event::Event;
+use sui_types::error::{SuiObjectResponseError, UserInputError};
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::{
     TransactionData, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
@@ -52,12 +54,11 @@ use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 
 use crate::api::{cap_page_limit, validate_limit, ReadApiServer};
 use crate::api::{
-    MAX_GET_OWNED_OBJECT_LIMIT, QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
+    QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, QUERY_MAX_RESULT_LIMIT_OBJECTS,
 };
 use crate::error::Error;
 use crate::{
-    get_balance_change_from_effect, get_object_change_from_effect, ObjectProviderCache,
-    SuiRpcModule,
+    get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
 };
 
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
@@ -131,7 +132,7 @@ impl ReadApiServer for ReadApi {
             ))
             .into());
         }
-        let limit = validate_limit(limit, MAX_GET_OWNED_OBJECT_LIMIT)?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
 
@@ -201,18 +202,26 @@ impl ReadApiServer for ReadApi {
         let options = options.unwrap_or_default();
 
         match object_read {
-            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::NotExists(id)),
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
             ObjectRead::Exists(object_ref, o, layout) => {
                 let display_fields = if options.show_display {
                     get_display_fields(self, &o, &layout).await?
                 } else {
                     None
                 };
-                Ok(SuiObjectResponse::Exists(
+                Ok(SuiObjectResponse::new_with_data(
                     (object_ref, o, layout, options, display_fields).try_into()?,
                 ))
             }
-            ObjectRead::Deleted(oref) => Ok(SuiObjectResponse::Deleted(oref.into())),
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
         }
     }
 
@@ -426,7 +435,7 @@ impl ReadApiServer for ReadApi {
         let object_cache = ObjectProviderCache::new(self.state.clone());
         if opts.show_balance_changes {
             if let Some(effects) = &temp_response.effects {
-                let balance_changes = get_balance_change_from_effect(&object_cache, effects)
+                let balance_changes = get_balance_changes_from_effect(&object_cache, effects)
                     .await
                     .map_err(Error::SuiError)?;
                 temp_response.balance_changes = Some(balance_changes);
@@ -438,9 +447,15 @@ impl ReadApiServer for ReadApi {
                 (&temp_response.effects, &temp_response.transaction)
             {
                 let sender = input.data().intent_message().value.sender();
-                let object_changes = get_object_change_from_effect(&object_cache, sender, effects)
-                    .await
-                    .map_err(Error::SuiError)?;
+                let object_changes = get_object_changes(
+                    &object_cache,
+                    sender,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_deleted(),
+                )
+                .await
+                .map_err(Error::SuiError)?;
                 temp_response.object_changes = Some(object_changes);
             }
         }
@@ -612,7 +627,7 @@ impl ReadApiServer for ReadApi {
         if opts.show_balance_changes {
             let mut futures = vec![];
             for resp in temp_response.values() {
-                futures.push(get_balance_change_from_effect(
+                futures.push(get_balance_changes_from_effect(
                     &object_cache,
                     resp.effects.as_ref().ok_or_else(|| {
                         anyhow!("unable to derive balance changes because effect is empty")
@@ -634,7 +649,11 @@ impl ReadApiServer for ReadApi {
         if opts.show_object_changes {
             let mut futures = vec![];
             for resp in temp_response.values() {
-                futures.push(get_object_change_from_effect(
+                let effects = resp.effects.as_ref().ok_or_else(|| {
+                    anyhow!("unable to derive object changes because effect is empty")
+                })?;
+
+                futures.push(get_object_changes(
                     &object_cache,
                     resp.transaction
                         .as_ref()
@@ -645,9 +664,9 @@ impl ReadApiServer for ReadApi {
                         .intent_message()
                         .value
                         .sender(),
-                    resp.effects.as_ref().ok_or_else(|| {
-                        anyhow!("unable to derive object changes because effect is empty")
-                    })?,
+                    effects.modified_at_versions(),
+                    effects.all_changed_objects(),
+                    effects.all_deleted(),
                 ));
             }
             let results = join_all(futures).await;
@@ -739,8 +758,15 @@ impl ReadApiServer for ReadApi {
 
         let normalized = match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
-                Data::Package(p) => normalize_modules(p.serialized_module_map().values())
-                    .map_err(|e| anyhow!("{e}")),
+                Data::Package(p) => {
+                    // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                    // binary format
+                    normalize_modules(
+                        p.serialized_module_map().values(),
+                        /* max_binary_format_version */ VERSION_MAX,
+                    )
+                    .map_err(|e| anyhow!("{e}"))
+                }
                 _ => Err(anyhow!("Object is not a package with ID {}", package)),
             },
             _ => Err(anyhow!("Package object does not exist with ID {}", package)),
@@ -896,7 +922,9 @@ async fn get_display_fields(
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> RpcResult<Option<BTreeMap<String, String>>> {
-    let (object_type, layout) = get_object_type_and_struct(original_object, original_layout)?;
+    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else{
+        return Ok(None)
+    };
     if let Some(display_object) = get_display_object_by_type(fullnode_api, &object_type).await? {
         return Ok(Some(get_rendered_fields(display_object.fields, &layout)?));
     }
@@ -906,73 +934,40 @@ async fn get_display_fields(
 async fn get_display_object_by_type(
     fullnode_api: &ReadApi,
     object_type: &StructTag,
-) -> RpcResult<Option<DisplayObject>> {
-    let display_object_id = get_display_object_id(fullnode_api, object_type).await?;
-    if display_object_id.is_none() {
-        return Ok(None);
-    }
-    // safe to unwrap because `is_none` is checked above
-    let display_object_id = display_object_id.unwrap();
-    if let ObjectRead::Exists(_, display_object, _) = fullnode_api
+    // TODO: add query version support
+) -> RpcResult<Option<DisplayVersionUpdatedEvent>> {
+    let mut events = fullnode_api
         .state
-        .get_object_read(&display_object_id)
-        .await
-        .map_err(|e| anyhow!("Failed to fetch display object {display_object_id}: {e}"))?
-    {
-        let move_object = display_object
-            .data
-            .try_as_move()
-            .ok_or_else(|| anyhow!("Failed to extract Move object from {display_object_id}"))?;
-        Ok(Some(
-            bcs::from_bytes::<DisplayObject>(move_object.contents()).map_err(|e| {
-                anyhow!("Failed to deserialize DisplayObject {display_object_id}: {e}")
-            })?,
-        ))
-    } else {
-        Err(anyhow!("Display object {display_object_id} does not exist"))?
-    }
-}
+        .query_events(
+            EventFilter::MoveEventType(DisplayVersionUpdatedEvent::type_(object_type)),
+            None,
+            1,
+            true,
+        )
+        .await?;
 
-async fn get_display_object_id(
-    fullnode_api: &ReadApi,
-    object_type: &StructTag,
-) -> Result<Option<ObjectID>, Error> {
-    let package_id = ObjectID::from(object_type.address);
-    let package_tx = fullnode_api
-        .state
-        .get_object_read(&package_id)
-        .await?
-        .into_object()?
-        .previous_transaction;
-    let effects = fullnode_api.state.get_executed_effects(package_tx).await?;
-    let Some(event_digest) = effects.events_digest() else {
-        return Ok(None);
-    };
-    let events = fullnode_api.state.get_transaction_events(event_digest)?;
-    let Some(display_created_event) = events.data.iter().find(|e|{
-        e.type_ == DisplayCreatedEvent::type_(object_type)
-    }) else{
-        return Ok(None);
-    };
-    let Event { contents, .. } = display_created_event;
-    let display_object_id = bcs::from_bytes::<DisplayCreatedEvent>(contents)
-        .map_err(|e| anyhow!("Failed to deserialize DisplayCreatedEvent: {e}"))?
-        .id
-        .bytes;
-    Ok(Some(display_object_id))
+    // If there's any recent version of Display, give it to the client.
+    // TODO: add support for version query.
+    if let Some(event) = events.pop() {
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])
+            .map_err(|e| anyhow!("Failed to deserialize 'VersionUpdatedEvent': {e}"))?;
+
+        Ok(Some(display))
+    } else {
+        Ok(None)
+    }
 }
 
 fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
-) -> RpcResult<(StructTag, MoveStruct)> {
-    let object_type = o
-        .type_()
-        .ok_or_else(|| anyhow!("Failed to extract object type"))?
-        .clone()
-        .into();
-    let move_struct = get_move_struct(o, layout)?;
-    Ok((object_type, move_struct))
+) -> RpcResult<Option<(StructTag, MoveStruct)>> {
+    if let Some(object_type) = o.type_() {
+        let move_struct = get_move_struct(o, layout)?;
+        Ok(Some((object_type.clone().into(), move_struct)))
+    } else {
+        Ok(None)
+    }
 }
 
 fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> RpcResult<MoveStruct> {
@@ -1011,7 +1006,13 @@ pub async fn get_move_modules_by_package(
     Ok(match object_read {
         ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
             Data::Package(p) => {
-                normalize_modules(p.serialized_module_map().values()).map_err(|e| anyhow!("{e}"))
+                // we are on the read path - it's OK to use VERSION_MAX of the supported Move
+                // binary format
+                normalize_modules(
+                    p.serialized_module_map().values(),
+                    /* max_binary_format_version */ VERSION_MAX,
+                )
+                .map_err(|e| anyhow!("{e}"))
             }
             _ => Err(anyhow!("Object is not a package with ID {}", package)),
         },

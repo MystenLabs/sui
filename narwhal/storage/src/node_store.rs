@@ -4,8 +4,7 @@ use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{CertificateStore, HeaderStore, ProposerStore};
-use config::WorkerId;
-use crypto::{PublicKey, PublicKeyBytes};
+use config::{AuthorityIdentifier, WorkerId};
 use std::sync::Arc;
 use std::time::Duration;
 use store::metrics::SamplingInterval;
@@ -81,14 +80,14 @@ impl NodeStorage {
             sub_dag_index_map,
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
-            Self::VOTES_CF;<PublicKey, VoteInfo>,
+            Self::VOTES_CF;<AuthorityIdentifier, VoteInfo>,
             Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
-            Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, PublicKeyBytes), CertificateDigest>,
-            Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(PublicKeyBytes, Round), CertificateDigest>,
+            Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
+            Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, Batch>,
-            Self::LAST_COMMITTED_CF;<PublicKeyBytes, Round>,
+            Self::LAST_COMMITTED_CF;<AuthorityIdentifier, Round>,
             Self::SUB_DAG_INDEX_CF;<SequenceNumber, CommittedSubDagShell>
         );
 

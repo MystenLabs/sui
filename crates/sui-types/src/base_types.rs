@@ -4,7 +4,6 @@
 
 use crate::coin::Coin;
 use crate::coin::CoinMetadata;
-use crate::coin::LockedCoin;
 use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
@@ -75,6 +74,16 @@ mod base_types_tests;
     JsonSchema,
 )]
 pub struct SequenceNumber(u64);
+
+impl SequenceNumber {
+    pub fn one_before(&self) -> Option<SequenceNumber> {
+        if self.0 == 0 {
+            None
+        } else {
+            Some(SequenceNumber(self.0 - 1))
+        }
+    }
+}
 
 pub type TxSequenceNumber = u64;
 
@@ -204,13 +213,6 @@ impl MoveObjectType {
         match self {
             MoveObjectType::StakedSui => true,
             MoveObjectType::GasCoin | MoveObjectType::Coin(_) | MoveObjectType::Other(_) => false,
-        }
-    }
-
-    pub fn is_locked_coin(&self) -> bool {
-        match self {
-            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => false,
-            MoveObjectType::Other(s) => LockedCoin::is_locked_coin(s),
         }
     }
 

@@ -197,7 +197,9 @@ async fn test_upgrade_package_happy_path() {
         .get_package(&new_package.0 .0)
         .unwrap()
         .unwrap();
-    let normalized_modules = package.normalize().unwrap();
+    let normalized_modules = package
+        .normalize(ProtocolConfig::get_for_max_version().move_binary_format_version())
+        .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .exposed_functions

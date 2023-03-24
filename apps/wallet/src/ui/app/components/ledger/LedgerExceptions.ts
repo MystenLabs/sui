@@ -14,10 +14,3 @@ export class LedgerNoTransportMechanismError extends Error {
         Object.setPrototypeOf(this, LedgerNoTransportMechanismError.prototype);
     }
 }
-
-export class LedgerDeviceNotFoundError extends Error {
-    constructor(message: string) {
-        super(message);
-        Object.setPrototypeOf(this, LedgerDeviceNotFoundError.prototype);
-    }
-}

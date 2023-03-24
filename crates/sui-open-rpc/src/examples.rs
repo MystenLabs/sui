@@ -208,7 +208,7 @@ impl RpcExampleProvider {
 
         let coin = GasCoin::new(object_id, 10000);
 
-        let result = SuiObjectResponse::Exists(SuiObjectData {
+        let result = SuiObjectResponse::new_with_data(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     coin.to_object(SequenceNumber::from_u64(1)),
@@ -481,10 +481,12 @@ impl RpcExampleProvider {
             effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: SuiExecutionStatus::Success,
                 executed_epoch: 0,
+                modified_at_versions: vec![],
                 gas_used: SuiGasCostSummary {
                     computation_cost: 100,
                     storage_cost: 100,
                     storage_rebate: 10,
+                    non_refundable_storage_fee: 0,
                 },
                 shared_objects: vec![],
                 transaction_digest: TransactionDigest::new(self.rng.gen()),

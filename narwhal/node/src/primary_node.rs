@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
-use config::{Committee, Parameters, WorkerCache};
+use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
@@ -215,6 +215,12 @@ impl PrimaryNodeInner {
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
+
+        // Figure out the id for this authority
+        let authority = committee
+            .authority_by_key(&name)
+            .unwrap_or_else(|| panic!("Our node with key {:?} should be in committee", name));
+
         let mut handles = Vec::new();
         let (tx_executor_network, rx_executor_network) = oneshot::channel();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
@@ -234,7 +240,7 @@ impl PrimaryNodeInner {
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
             let consensus_handles = Self::spawn_consensus(
-                name.clone(),
+                authority.id(),
                 rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),
@@ -256,7 +262,7 @@ impl PrimaryNodeInner {
 
         // Spawn the primary.
         let primary_handles = Primary::spawn(
-            name.clone(),
+            authority.clone(),
             keypair,
             network_keypair,
             committee.clone(),
@@ -284,7 +290,7 @@ impl PrimaryNodeInner {
 
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         rx_executor_network: oneshot::Receiver<anemo::Network>,
         worker_cache: WorkerCache,
         committee: Committee,
@@ -349,7 +355,7 @@ impl PrimaryNodeInner {
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
-            name,
+            authority_id,
             rx_executor_network,
             worker_cache,
             committee.clone(),

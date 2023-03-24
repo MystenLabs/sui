@@ -9,7 +9,7 @@ use serde_with::DisplayFromStr;
 use sui_types::object::Owner;
 
 #[serde_as]
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct BalanceChange {
     /// Owner of the balance change

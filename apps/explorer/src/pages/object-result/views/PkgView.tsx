@@ -5,7 +5,7 @@ import { getTransactionSender } from '@mysten/sui.js';
 
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
-import TxForID from '../../../components/transaction-card/TxForID';
+import TxForID from '../../../components/transactions/TxForID';
 import { useGetTransaction } from '../../../hooks/useGetTransaction';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';

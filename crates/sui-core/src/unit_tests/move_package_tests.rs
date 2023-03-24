@@ -3,11 +3,13 @@
 
 use move_binary_format::file_format::CompiledModule;
 
+use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier_impl};
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
-    error::ExecutionErrorKind,
+    error::{ExecutionErrorKind, SuiError},
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object, OBJECT_START_VERSION},
 };
@@ -511,4 +513,39 @@ pub fn build_test_modules(test_dir: &str) -> Vec<CompiledModule> {
         .get_modules()
         .cloned()
         .collect()
+}
+
+#[tokio::test]
+async fn test_metered_move_bytecode_verifier() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
+    let compiled_package =
+        sui_framework::build_move_package(&path, BuildConfig::new_for_testing()).unwrap();
+    let compiled_modules_bytes: Vec<_> = compiled_package.get_modules().cloned().collect();
+
+    let mut metered_verifier_config = default_verifier_config(
+        &ProtocolConfig::get_for_max_version(),
+        true, /* enable metering */
+    );
+
+    // Default case should pass
+    let r =
+        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+    assert!(r.is_ok());
+
+    // Use low limits. Should fail
+    metered_verifier_config.max_back_edges_per_function = Some(100);
+    metered_verifier_config.max_back_edges_per_module = Some(1_000);
+    metered_verifier_config.max_per_mod_meter_units = Some(10_000);
+    metered_verifier_config.max_per_fun_meter_units = Some(10_000);
+
+    let r =
+        run_metered_move_bytecode_verifier_impl(&compiled_modules_bytes, &metered_verifier_config);
+
+    assert!(
+        r.unwrap_err()
+            == SuiError::ModuleVerificationFailure {
+                error: "Verification timedout".to_string()
+            }
+    );
 }

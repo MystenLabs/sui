@@ -24,7 +24,7 @@ describe('Object Reading API', () => {
     expect(gasObjects.length).to.greaterThan(0);
     const objectInfos = await Promise.all(
       gasObjects.map((gasObject) => {
-        const details = gasObject.details as SuiObjectData;
+        const details = gasObject.data as SuiObjectData;
         return toolbox.provider.getObject({
           id: details.objectId,
           options: { showType: true },
@@ -42,7 +42,7 @@ describe('Object Reading API', () => {
     const gasObjects = await toolbox.getGasObjectsOwnedByAddress();
     expect(gasObjects.length).to.greaterThan(0);
     const gasObjectIds = gasObjects.map((gasObject) => {
-      const details = gasObject.details as SuiObjectData;
+      const details = gasObject.data as SuiObjectData;
       return details.objectId;
     });
     const objectInfos = await toolbox.provider.multiGetObjects({

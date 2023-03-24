@@ -914,9 +914,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e246206a63c9830e118d12c894f56a82033da1a2361f5544deeee3df85c99d9"
+checksum = "2fb79c228270dcf2426e74864cabc94babb5dbab01a4314e702d2f16540e1591"
 dependencies = [
  "async-trait",
  "axum-core",
@@ -5483,6 +5483,7 @@ dependencies = [
  "insta",
  "match_opt",
  "mysten-network",
+ "mysten-util-mem",
  "narwhal-crypto",
  "narwhal-test-utils",
  "rand 0.8.5",
@@ -5589,6 +5590,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "indexmap",
+ "itertools",
  "mockall",
  "mysten-metrics",
  "narwhal-config",
@@ -5777,6 +5779,7 @@ dependencies = [
  "narwhal-storage",
  "narwhal-types",
  "narwhal-worker",
+ "once_cell",
  "prometheus",
  "rand 0.8.5",
  "telemetry-subscribers",
@@ -5848,6 +5851,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "governor",
+ "itertools",
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
@@ -5865,6 +5869,7 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
+ "thiserror",
  "tokio",
  "tonic",
  "tower",
@@ -6020,6 +6025,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc51db7b362b205941f71232e56c625156eb9a929f8cf74a428fd5bc094a4afc"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "ntest"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da8ec6d2b73d45307e926f5af46809768581044384637af6b3f3fe7c3c88f512"
+dependencies = [
+ "ntest_test_cases",
+ "ntest_timeout",
+]
+
+[[package]]
+name = "ntest_test_cases"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be7d33be719c6f4d09e64e27c1ef4e73485dc4cc1f4d22201f89860a7fe22e22"
+dependencies = [
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "ntest_timeout"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "066b468120587a402f0b47d8f80035c921f6a46f8209efd0632a89a16f5188a4"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -8467,6 +8505,7 @@ dependencies = [
  "const-str",
  "expect-test",
  "fastcrypto",
+ "fs_extra",
  "futures",
  "git-version",
  "inquire",
@@ -8507,6 +8546,7 @@ dependencies = [
  "sui-swarm",
  "sui-tool",
  "sui-types",
+ "tap",
  "telemetry-subscribers",
  "tempfile",
  "test-utils",
@@ -8697,6 +8737,7 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
+ "narwhal-crypto",
  "narwhal-executor",
  "narwhal-node",
  "narwhal-test-utils",
@@ -8864,7 +8905,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-framework-test"
+name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
  "move-cli",
@@ -8894,6 +8935,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "mysten-metrics",
+ "ntest",
  "prometheus",
  "serde 1.0.152",
  "serde_json",
@@ -8977,6 +9019,7 @@ dependencies = [
  "sui-macros",
  "sui-open-rpc",
  "sui-open-rpc-macros",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
  "sui-transaction-builder",
@@ -9309,6 +9352,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-rpc-loadgen"
+version = "0.29.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "clap 3.2.23",
+ "dirs",
+ "eyre",
+ "futures",
+ "http",
+ "mysten-metrics",
+ "prometheus",
+ "rand 0.8.5",
+ "rocksdb",
+ "scopeguard",
+ "serde 1.0.152",
+ "shared-crypto",
+ "sui",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-node",
+ "sui-sdk",
+ "sui-types",
+ "tap",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tower",
+ "tower-http 0.3.5",
+ "tracing",
+ "tracing-subscriber 0.3.16",
+ "typed-store",
+ "typed-store-derive",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-sdk"
 version = "0.29.0"
 dependencies = [
@@ -9327,6 +9413,7 @@ dependencies = [
  "shared-crypto",
  "sui",
  "sui-adapter",
+ "sui-config",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
@@ -11544,6 +11631,9 @@ dependencies = [
  "nonzero_ext",
  "normalize-line-endings",
  "ntapi 0.4.0",
+ "ntest",
+ "ntest_test_cases",
+ "ntest_timeout",
  "nu-ansi-term",
  "num",
  "num-bigint",

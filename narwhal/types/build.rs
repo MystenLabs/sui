@@ -178,6 +178,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("request_batches")
+                .route_name("RequestBatches")
+                .request_type("crate::RequestBatchesRequest")
+                .response_type("crate::RequestBatchesResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     anemo_build::manual::Builder::new()

@@ -93,7 +93,7 @@ impl Configuration for NarwhalConfiguration {
         if epoch_number != self.committee.load().epoch() {
             return Err(Status::invalid_argument(format!(
                 "Passed in epoch {epoch_number} does not match current epoch {}",
-                self.committee.load().epoch
+                self.committee.load().epoch()
             )));
         }
         let validators = new_network_info_request.validators;

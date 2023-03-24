@@ -26,6 +26,7 @@ module sui_system::sui_system_state_inner {
     use sui::bag::Bag;
     use sui::bag;
 
+    friend sui_system::genesis;
     friend sui_system::sui_system;
 
     #[test_only]
@@ -36,21 +37,38 @@ module sui_system::sui_system_state_inner {
     const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
     const ANY_VALIDATOR: u8 = 3;
 
+    const SYSTEM_STATE_VERSION_V1: u64 = 1;
+
     // TODO: To suppress a false positive prover failure, which we should look into.
     spec module { pragma verify = false; }
 
     /// A list of system config parameters.
-    // TDOO: We will likely add more, a few potential ones:
-    // - the change in stake across epochs can be at most +/- x%
-    // - the change in the validator set across epochs can be at most x validators
-    //
     struct SystemParameters has store {
-        /// The starting epoch in which various on-chain governance features take effect:
-        /// - stake subsidies are paid out
-        governance_start_epoch: u64,
-
         /// The duration of an epoch, in milliseconds.
         epoch_duration_ms: u64,
+
+        /// The starting epoch in which stake subsidies start being paid out
+        stake_subsidy_start_epoch: u64,
+
+        /// Maximum number of active validators at any moment.
+        /// We do not allow the number of validators in any epoch to go above this.
+        max_validator_count: u64,
+
+        /// Lower-bound on the amount of stake required to become a validator.
+        min_validator_joining_stake: u64,
+
+        /// Validators with stake amount below `validator_low_stake_threshold` are considered to
+        /// have low stake and will be escorted out of the validator set after being below this
+        /// threshold for more than `validator_low_stake_grace_period` number of epochs.
+        validator_low_stake_threshold: u64,
+
+        /// Validators with stake below `validator_very_low_stake_threshold` will be removed
+        /// immediately at epoch change, no grace period.
+        validator_very_low_stake_threshold: u64,
+
+        /// A validator can have stake below `validator_low_stake_threshold`
+        /// for this many epochs before being kicked out.
+        validator_low_stake_grace_period: u64,
 
         /// Any extra fields that's not defined statically.
         extra_fields: Bag,
@@ -91,6 +109,11 @@ module sui_system::sui_system_state_inner {
         /// It can be reset once we are able to successfully execute advance_epoch.
         /// MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
         safe_mode: bool,
+        safe_mode_storage_rewards: Balance<SUI>,
+        safe_mode_computation_rewards: Balance<SUI>,
+        safe_mode_storage_rebates: u64,
+
+
         /// Unix timestamp of the current epoch start
         epoch_start_timestamp_ms: u64,
         /// Any extra fields that's not defined statically.
@@ -122,24 +145,9 @@ module sui_system::sui_system_state_inner {
     const EReportRecordNotFound: u64 = 4;
     const EBpsTooLarge: u64 = 5;
     const EStakedSuiFromWrongEpoch: u64 = 6;
+    const ESafeModeGasNotProcessed: u64 = 7;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
-
-    /// Maximum number of active validators at any moment.
-    /// We do not allow the number of validators in any epoch to go above this.
-    const MAX_VALIDATOR_COUNT: u64 = 150;
-
-    /// Lower-bound on the amount of stake required to become a validator.
-    const MIN_VALIDATOR_JOINING_STAKE: u64 = 30_000_000_000_000_000; // 30 million SUI
-
-    /// Validators with stake amount below `VALIDATOR_LOW_STAKE_THRESHOLD` are considered to
-    /// have low stake and will be escorted out of the validator set after being below this
-    /// threshold for more than `VALIDATOR_LOW_STAKE_GRACE_PERIOD` number of epochs.
-    /// And validators with stake below `VALIDATOR_VERY_LOW_STAKE_THRESHOLD` will be removed
-    /// immediately at epoch change, no grace period.
-    const VALIDATOR_LOW_STAKE_THRESHOLD: u64 = 25_000_000_000_000_000; // 25 million SUI
-    const VALIDATOR_VERY_LOW_STAKE_THRESHOLD: u64 = 20_000_000_000_000_000; // 20 million SUI
-    const VALIDATOR_LOW_STAKE_GRACE_PERIOD: u64 = 7; // A validator can have stake below VALIDATOR_LOW_STAKE_THRESHOLD for 7 epochs before being kicked out.
 
     // ==== functions that can only be called by genesis ====
 
@@ -147,45 +155,58 @@ module sui_system::sui_system_state_inner {
     /// This function will be called only once in genesis.
     public(friend) fun create(
         validators: vector<Validator>,
-        stake_subsidy_fund: Balance<SUI>,
         storage_fund: Balance<SUI>,
         protocol_version: u64,
-        system_state_version: u64,
-        governance_start_epoch: u64,
         epoch_start_timestamp_ms: u64,
-        epoch_duration_ms: u64,
-        initial_stake_subsidy_distribution_amount: u64,
-        stake_subsidy_period_length: u64,
-        stake_subsidy_decrease_rate: u16,
+        parameters: SystemParameters,
+        stake_subsidy: StakeSubsidy,
         ctx: &mut TxContext,
     ): SuiSystemStateInner {
         let validators = validator_set::new(validators, ctx);
         let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
+        // This type is fixed as it's created at genesis. It should not be updated during type upgrade.
         let system_state = SuiSystemStateInner {
             epoch: 0,
             protocol_version,
-            system_state_version,
+            system_state_version: genesis_system_state_version(),
             validators,
             storage_fund,
-            parameters: SystemParameters {
-                governance_start_epoch,
-                epoch_duration_ms,
-                extra_fields: bag::new(ctx),
-            },
+            parameters,
             reference_gas_price,
             validator_report_records: vec_map::empty(),
-            stake_subsidy: stake_subsidy::create(
-                stake_subsidy_fund,
-                initial_stake_subsidy_distribution_amount,
-                stake_subsidy_period_length,
-                stake_subsidy_decrease_rate,
-                ctx
-            ),
+            stake_subsidy,
             safe_mode: false,
+            safe_mode_storage_rewards: balance::zero(),
+            safe_mode_computation_rewards: balance::zero(),
+            safe_mode_storage_rebates: 0,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),
         };
         system_state
+    }
+
+    public(friend) fun create_system_parameters(
+        epoch_duration_ms: u64,
+        stake_subsidy_start_epoch: u64,
+
+        // Validator committee parameters
+        max_validator_count: u64,
+        min_validator_joining_stake: u64,
+        validator_low_stake_threshold: u64,
+        validator_very_low_stake_threshold: u64,
+        validator_low_stake_grace_period: u64,
+        ctx: &mut TxContext,
+    ): SystemParameters {
+        SystemParameters {
+            epoch_duration_ms,
+            stake_subsidy_start_epoch,
+            max_validator_count,
+            min_validator_joining_stake,
+            validator_low_stake_threshold,
+            validator_very_low_stake_threshold,
+            validator_low_stake_grace_period,
+            extra_fields: bag::new(ctx),
+        }
     }
 
     // ==== public(friend) functions ====
@@ -254,11 +275,11 @@ module sui_system::sui_system_state_inner {
         ctx: &mut TxContext,
     ) {
         assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < MAX_VALIDATOR_COUNT,
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
             ELimitExceeded,
         );
 
-        validator_set::request_add_validator(&mut self.validators, MIN_VALIDATOR_JOINING_STAKE, ctx);
+        validator_set::request_add_validator(&mut self.validators, self.parameters.min_validator_joining_stake, ctx);
     }
 
     /// A validator can call this function to request a removal in the next epoch.
@@ -493,6 +514,8 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         let network_address = string::from_ascii(ascii::string(network_address));
         validator::update_next_epoch_network_address(validator, network_address);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's network address.
@@ -516,6 +539,8 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         let p2p_address = string::from_ascii(ascii::string(p2p_address));
         validator::update_next_epoch_p2p_address(validator, p2p_address);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's p2p address.
@@ -585,6 +610,8 @@ module sui_system::sui_system_state_inner {
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of protocol key and proof of possession.
@@ -607,6 +634,8 @@ module sui_system::sui_system_state_inner {
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of worker key.
@@ -628,6 +657,8 @@ module sui_system::sui_system_state_inner {
     ) {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_pubkey(validator, network_pubkey);
+        let validator :&Validator = validator; // Force immutability for the following call
+        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of network key.
@@ -670,6 +701,14 @@ module sui_system::sui_system_state_inner {
             EBpsTooLarge,
         );
 
+        // Accumulate the gas summary during safe_mode before processing any rewards:
+        let safe_mode_storage_rewards = balance::withdraw_all(&mut self.safe_mode_storage_rewards);
+        balance::join(&mut storage_reward, safe_mode_storage_rewards);
+        let safe_mode_computation_rewards = balance::withdraw_all(&mut self.safe_mode_computation_rewards);
+        balance::join(&mut computation_reward, safe_mode_computation_rewards);
+        storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
+        self.safe_mode_storage_rebates = 0;
+
         let total_validators_stake = validator_set::total_stake(&self.validators);
         let storage_fund_balance = balance::value(&self.storage_fund);
         let total_stake = storage_fund_balance + total_validators_stake;
@@ -678,8 +717,8 @@ module sui_system::sui_system_state_inner {
         let computation_charge = balance::value(&computation_reward);
 
         // Include stake subsidy in the rewards given out to validators and stakers.
-        // Delay distributing any stake subsidies until after `governance_start_epoch`.
-        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.governance_start_epoch) {
+        // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
+        let stake_subsidy = if (tx_context::epoch(ctx) >= self.parameters.stake_subsidy_start_epoch) {
             stake_subsidy::advance_epoch(&mut self.stake_subsidy)
         } else {
             balance::zero()
@@ -716,10 +755,9 @@ module sui_system::sui_system_state_inner {
             &mut storage_fund_reward,
             &mut self.validator_report_records,
             reward_slashing_rate,
-            VALIDATOR_LOW_STAKE_THRESHOLD,
-            VALIDATOR_VERY_LOW_STAKE_THRESHOLD,
-            VALIDATOR_LOW_STAKE_GRACE_PERIOD,
-            self.parameters.governance_start_epoch,
+            self.parameters.validator_low_stake_threshold,
+            self.parameters.validator_very_low_stake_threshold,
+            self.parameters.validator_low_stake_grace_period,
             ctx,
         );
 
@@ -762,6 +800,10 @@ module sui_system::sui_system_state_inner {
             }
         );
         self.safe_mode = false;
+        // Double check that the gas from safe mode has been processed.
+        assert!(self.safe_mode_storage_rebates == 0
+            && balance::value(&self.safe_mode_storage_rewards) == 0
+            && balance::value(&self.safe_mode_computation_rewards) == 0, ESafeModeGasNotProcessed);
         storage_rebate
     }
 
@@ -775,6 +817,9 @@ module sui_system::sui_system_state_inner {
         self: &mut SuiSystemStateInner,
         new_epoch: u64,
         next_protocol_version: u64,
+        storage_reward: Balance<SUI>,
+        computation_reward: Balance<SUI>,
+        storage_rebate: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -782,7 +827,11 @@ module sui_system::sui_system_state_inner {
 
         self.epoch = new_epoch;
         self.protocol_version = next_protocol_version;
+
         self.safe_mode = true;
+        balance::join(&mut self.safe_mode_storage_rewards, storage_reward);
+        balance::join(&mut self.safe_mode_computation_rewards, computation_reward);
+        self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -797,6 +846,12 @@ module sui_system::sui_system_state_inner {
 
     public(friend) fun system_state_version(self: &SuiSystemStateInner): u64 {
         self.system_state_version
+    }
+
+    /// This function always return the genesis system state version, which is used to create the system state in genesis.
+    /// It should never change for a given network.
+    public(friend) fun genesis_system_state_version(): u64 {
+        SYSTEM_STATE_VERSION_V1
     }
 
     /// Returns unix timestamp of the start of current epoch
@@ -833,16 +888,8 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    public(friend) fun upgrade_system_state(
-        self: SuiSystemStateInner,
-        new_system_state_version: u64,
-        _ctx: &mut TxContext,
-    ): SuiSystemStateInner {
-        // Whenever we upgrade the system state version, we will have to first
-        // ship a framework upgrade that introduces a new system state type, and make this
-        // function generate such type from the old state.
-        self.system_state_version = new_system_state_version;
-        self
+    public(friend) fun get_storage_fund_balance(self: &SuiSystemStateInner): u64 {
+        balance::value(&self.storage_fund)
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
@@ -903,7 +950,7 @@ module sui_system::sui_system_state_inner {
         ctx: &mut TxContext,
     ) {
         assert!(
-            validator_set::next_epoch_validator_count(&self.validators) < MAX_VALIDATOR_COUNT,
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_count,
             ELimitExceeded,
         );
 

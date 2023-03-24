@@ -372,11 +372,7 @@ pub fn all_natives() -> NativeFunctionTable {
             "prepare_verifying_key_internal",
             make_native!(groth16::prepare_verifying_key_internal),
         ),
-        (
-            "hmac",
-            "native_hmac_sha3_256",
-            make_native!(hmac::hmac_sha3_256),
-        ),
+        ("hmac", "hmac_sha3_256", make_native!(hmac::hmac_sha3_256)),
         ("hash", "keccak256", make_native!(hash::keccak256)),
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),

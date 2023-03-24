@@ -22,7 +22,7 @@ use sui_sdk::SuiClient;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::SUI_SYSTEM_ADDRESS;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
@@ -388,7 +388,7 @@ where
                 .iter()
                 .find_map(|tx| {
                     tx.events.data.iter().find(|ev| {
-                        ev.type_.address == SUI_FRAMEWORK_ADDRESS
+                        ev.type_.address == SUI_SYSTEM_ADDRESS
                             && ev.type_.module.as_ident_str()
                                 == ident_str!("sui_system_state_inner")
                             && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
