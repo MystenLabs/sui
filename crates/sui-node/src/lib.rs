@@ -211,15 +211,13 @@ impl SuiNode {
             batch_verifier_metrics,
         );
 
-        if let Some(override_buffer_stake) =
-            epoch_store.get_override_protocol_upgrade_buffer_stake()
-        {
-            let default_buffer_stake = epoch_store
-                .protocol_config()
-                .buffer_stake_for_protocol_upgrade_bps();
-
+        let effective_buffer_stake = epoch_store.get_effective_buffer_stake_bps();
+        let default_buffer_stake = epoch_store
+            .protocol_config()
+            .buffer_stake_for_protocol_upgrade_bps();
+        if effective_buffer_stake != default_buffer_stake {
             warn!(
-                ?override_buffer_stake,
+                ?effective_buffer_stake,
                 ?default_buffer_stake,
                 "buffer_stake_for_protocol_upgrade_bps is currently overridden"
             );

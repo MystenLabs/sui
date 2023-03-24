@@ -26,7 +26,7 @@ use sui_types::messages::{
     VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
 };
@@ -68,6 +68,7 @@ use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
+use tap::TapOptional;
 use tokio::time::Instant;
 use typed_store::{retry_transaction_forever, Map};
 use typed_store_derive::DBMapUtils;
@@ -375,10 +376,11 @@ impl AuthorityPerEpochStore {
             .epoch_start_state()
             .protocol_version();
         let protocol_config = ProtocolConfig::get_for_version(protocol_version);
+
         let execution_component = ExecutionComponents::new(&protocol_config, store, cache_metrics);
         let signature_verifier =
             SignatureVerifier::new(committee.clone(), signature_verifier_metrics);
-        Arc::new(Self {
+        let s = Arc::new(Self {
             committee,
             protocol_config,
             tables,
@@ -398,7 +400,9 @@ impl AuthorityPerEpochStore {
             metrics,
             epoch_start_configuration,
             execution_component,
-        })
+        });
+        s.update_buffer_stake_metric();
+        s
     }
 
     pub fn get_parent_path(&self) -> PathBuf {
@@ -979,6 +983,7 @@ impl AuthorityPerEpochStore {
         self.tables
             .override_protocol_upgrade_buffer_stake
             .remove(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)?;
+        self.update_buffer_stake_metric();
         Ok(())
     }
 
@@ -992,14 +997,26 @@ impl AuthorityPerEpochStore {
             &OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX,
             &new_stake_bps,
         )?;
+        self.update_buffer_stake_metric();
         Ok(())
     }
 
-    pub fn get_override_protocol_upgrade_buffer_stake(&self) -> Option<u64> {
+    fn update_buffer_stake_metric(&self) {
+        self.metrics
+            .effective_buffer_stake
+            .set(self.get_effective_buffer_stake_bps() as i64);
+    }
+
+    pub fn get_effective_buffer_stake_bps(&self) -> u64 {
         self.tables
             .override_protocol_upgrade_buffer_stake
             .get(&OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX)
             .expect("force_protocol_upgrade read cannot fail")
+            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
+            .unwrap_or_else(|| {
+                self.protocol_config()
+                    .buffer_stake_for_protocol_upgrade_bps()
+            })
     }
 
     /// Record most recently advertised capabilities of all authorities
