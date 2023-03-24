@@ -9,7 +9,6 @@ import { useDeriveNextAccountMutation } from '../hooks/useDeriveNextAccountMutat
 import { Link } from '../shared/Link';
 import { SummaryCard } from './SummaryCard';
 import {
-    SELECTION_MODE as WALLET_SELECTION_MODE,
     WalletListSelectItem,
     type WalletListSelectItemProps,
 } from './WalletListSelectItem';
@@ -27,7 +26,7 @@ export function WalletListSelect({
     title,
     values,
     visibleValues,
-    mode = WALLET_SELECTION_MODE.SELECT,
+    mode = 'select',
     disabled = false,
     onChange,
 }: WalletListSelectProps) {
@@ -86,7 +85,7 @@ export function WalletListSelect({
                 </ul>
             }
             footer={
-                mode === WALLET_SELECTION_MODE.SELECT ? (
+                mode === 'select' ? (
                     <div className="flex flex-row flex-nowrap self-stretch justify-between">
                         <div>
                             {filteredAccounts.length > 1 ? (

@@ -8,11 +8,6 @@ import { useEffect, useRef } from 'react';
 
 import { Text } from '../shared/text';
 
-export enum SELECTION_MODE {
-    DISCONNECT = 'disconnect',
-    SELECT = 'select',
-}
-
 const styles = cva(
     'transition flex flex-row flex-nowrap items-center gap-3 py-2 cursor-pointer',
     {
@@ -36,8 +31,8 @@ const styles = cva(
                 disabled: false,
                 className: 'hover:text-steel-dark',
             },
-            { mode: 'select', selected: true, className: 'text-steel-dark' },
-            { mode: 'select', selected: false, className: 'text-steel' },
+            { mode: 'select', selected: true, className: 'text-steel-darker' },
+            { mode: 'select', selected: false, className: 'text-steel-dark' },
             {
                 mode: 'disconnect',
                 selected: true,
@@ -46,7 +41,7 @@ const styles = cva(
             {
                 mode: 'disconnect',
                 selected: false,
-                className: 'text-steel-dark',
+                className: 'text-steel-darker',
             },
         ],
     }
@@ -82,12 +77,12 @@ export function WalletListSelectItem({
         };
     }, [isNew]);
 
-    const isActiveModeDisconnect = mode === SELECTION_MODE.DISCONNECT;
-    const isActiveModeSelect = mode === SELECTION_MODE.SELECT;
+    const isDisconnect = mode === 'disconnect';
+    const isSelect = mode === 'select';
 
     return (
         <div ref={elementRef} className={styles({ selected, mode, disabled })}>
-            {isActiveModeSelect ? (
+            {isSelect ? (
                 <CheckFill16
                     className={cx(
                         selected ? 'text-success' : 'text-gray-50',
@@ -95,29 +90,20 @@ export function WalletListSelectItem({
                     )}
                 />
             ) : null}
-            {isActiveModeDisconnect && selected ? (
+            {isDisconnect && selected ? (
                 <XFill16 className="text-issue-dark text-base font-bold" />
             ) : null}
-            <Text
-                mono
-                variant="body"
-                weight="semibold"
-                color={
-                    selected && isActiveModeDisconnect
-                        ? 'issue-dark'
-                        : 'steel-darker'
-                }
-            >
+            <Text mono variant="body" weight="semibold">
                 {formatAddress(address)}
             </Text>
-            {isActiveModeDisconnect && !selected ? (
+            {isDisconnect && !selected ? (
                 <div className="flex flex-1 justify-end text-issue-dark">
                     <Text variant="subtitle" weight="normal">
                         Disconnect
                     </Text>
                 </div>
             ) : null}
-            {isActiveModeSelect && isNew ? (
+            {isSelect && isNew ? (
                 <div className="flex-1 flex justify-end">
                     <Text variant="subtitleSmall" color="steel">
                         NEW
