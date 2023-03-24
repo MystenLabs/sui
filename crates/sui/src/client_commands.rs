@@ -143,6 +143,10 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        /// Do not Sign transaction, output Base64-encoded Serialized Output
+        #[clap(long)]
+        serialize_output: bool,
     },
 
     /// Upgrade Move modules
@@ -480,41 +484,6 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
     },
 
-    /// Serialize a publish transaction object that can be signed. This is useful when user prefers to take the data to sign elsewhere.
-    #[clap(name = "serialize-publish")]
-    SerializePublish {
-        /// Path to directory containing a Move package
-        #[clap(
-            name = "package_path",
-            global = true,
-            parse(from_os_str),
-            default_value = "."
-        )]
-        package_path: PathBuf,
-
-        /// Package build options
-        #[clap(flatten)]
-        build_config: MoveBuildConfig,
-
-        /// ID of the gas object for gas payment, in 32 bytes Hex string
-        /// If not provided, a gas object with at least gas_budget value will be selected
-        #[clap(long)]
-        gas: Option<ObjectID>,
-
-        /// Gas budget for running module initializers
-        #[clap(long)]
-        gas_budget: u64,
-
-        /// Publish the package without checking whether compiling dependencies from source results
-        /// in bytecode matching the dependencies found on-chain.
-        #[clap(long)]
-        skip_dependency_verification: bool,
-
-        /// Also publish transitive dependencies that have not already been published.
-        #[clap(long)]
-        with_unpublished_dependencies: bool,
-    },
-
     /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
     ExecuteSignedTx {
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
@@ -620,6 +589,7 @@ impl SuiClientCommands {
                 gas_budget,
                 skip_dependency_verification,
                 with_unpublished_dependencies,
+                serialize_output,
             } => {
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
@@ -644,56 +614,25 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                let signature =
-                    context
-                        .config
-                        .keystore
-                        .sign_secure(&sender, &data, Intent::default())?;
-                let response = context
-                    .execute_transaction(
-                        Transaction::from_data(data, Intent::default(), vec![signature])
-                            .verify()?,
-                    )
-                    .await?;
+                if serialize_output == false {
+                    let signature =
+                        context
+                            .config
+                            .keystore
+                            .sign_secure(&sender, &data, Intent::default())?;
+                    let response = context
+                        .execute_transaction(
+                            Transaction::from_data(data, Intent::default(), vec![signature])
+                                .verify()?,
+                        )
+                        .await?;
 
-                SuiClientCommandResult::Publish(response)
-            }
-
-            SuiClientCommands::SerializePublish {
-                package_path,
-                gas,
-                build_config,
-                gas_budget,
-                skip_dependency_verification,
-                with_unpublished_dependencies,
-            } => {
-                let sender = context.try_get_object_owner(&gas).await?;
-                let sender = sender.unwrap_or(context.active_address()?);
-
-                let client = context.get_client().await?;
-                let (dependencies, compiled_modules, _, _) = compile_package(
-                    &client,
-                    build_config,
-                    package_path,
-                    with_unpublished_dependencies,
-                    skip_dependency_verification,
-                )
-                .await?;
-
-                let data = client
-                    .transaction_builder()
-                    .publish(
-                        sender,
-                        compiled_modules,
-                        dependencies.published.into_values().collect(),
-                        gas,
-                        gas_budget,
-                    )
-                    .await?;
-
-                SuiClientCommandResult::SerializePublish(Base64::encode(
-                    bcs::to_bytes(&data).unwrap(),
-                ))
+                    SuiClientCommandResult::Publish(response)
+                } else {
+                    SuiClientCommandResult::SerializePublish(Base64::encode(
+                        bcs::to_bytes(&data).unwrap(),
+                    ))
+                }
             }
 
             SuiClientCommands::Object { id, bcs } => {
