@@ -124,7 +124,8 @@ impl ProtocolCommands for SuiProtocol {
         Box::new(move |i| {
             let genesis = genesis_path.display();
             let keystore = keystore_path.display();
-            let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
+            // let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
+            let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
             let run = [
                 "cargo run --release --bin stress --",
                 "--num-client-threads 24 --num-server-threads 1",
@@ -202,13 +203,16 @@ impl SuiProtocol {
     }
 
     pub fn print_files(instances: &[Instance]) {
-        let genesis_config = Self::make_genesis_config(instances);
+        let ips: Vec<_> = instances.iter().map(|x| x.main_ip.to_string()).collect();
+        let genesis_config = GenesisConfig::new_for_benchmarks(&ips);
+        // let genesis_config = Self::make_genesis_config(instances);
         let yaml = serde_yaml::to_string(&genesis_config).unwrap();
         let path = PathBuf::from(Self::GENESIS_CONFIG_FILE);
         fs::write(path, yaml).unwrap();
 
         let mut keystore = FileBasedKeystore::default();
-        let gas_key = Self::gas_key();
+        // let gas_key = Self::gas_key();
+        let gas_key = GenesisConfig::benchmark_gas_key();
         keystore.add_key(gas_key).unwrap();
         keystore.set_path(&PathBuf::from(Self::GAS_KEYSTORE_FILE));
         keystore.save().unwrap();
@@ -235,7 +239,7 @@ impl SuiProtocol {
     }
 
     /// Generate a genesis configuration file suitable for benchmarks.
-    fn make_genesis_config(instances: &[Instance]) -> GenesisConfig {
+    pub fn make_genesis_config(instances: &[Instance]) -> GenesisConfig {
         let gas_key = Self::gas_key();
         let gas_address = SuiAddress::from(&gas_key.public());
         println!("GAS_ADDRESS: {gas_address:?}");

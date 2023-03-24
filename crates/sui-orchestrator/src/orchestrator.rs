@@ -358,8 +358,8 @@ impl Orchestrator {
             let mut genesis = working_dir.clone();
             genesis.push("sui_config");
             genesis.push("genesis.blob");
-            let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
-            // let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
+            // let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
+            let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
             let keystore = format!(
                 // "~/working_dir/sui_config/{}",
                 "~/{}",
