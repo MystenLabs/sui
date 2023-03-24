@@ -8,6 +8,11 @@ module sui_system::voting_power {
     use sui::math;
     use sui::math::divide_and_round_up;
 
+    friend sui_system::validator_set;
+
+    #[test_only]
+    friend sui_system::voting_power_tests;
+
     struct VotingPowerInfo has drop {
         validator_index: u64,
         voting_power: u64,
@@ -36,7 +41,7 @@ module sui_system::voting_power {
     /// Set the voting power of all validators.
     /// Each validator's voting power is initialized using their stake. We then attempt to cap their voting power
     /// at `MAX_VOTING_POWER`. If `MAX_VOTING_POWER` is not a feasible cap, we pick the lowest possible cap.
-    public fun set_voting_power(validators: &mut vector<Validator>) {
+    public(friend) fun set_voting_power(validators: &mut vector<Validator>) {
         // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
         // have 100%. So we bound the threshold_pct to be always enough to find a solution.
         let threshold = math::min(
@@ -151,25 +156,25 @@ module sui_system::voting_power {
         // Second check that if validator A's stake is larger than B's stake, A's voting power must be no less
         // than B's voting power; similarly, if A's stake is less than B's stake, A's voting power must be no larger
         // than B's voting power.
-        let i = 0;
-        while (i < len) {
-            let j = i + 1;
-            while (j < len) {
-                let validator_i = vector::borrow(v, i);
-                let validator_j = vector::borrow(v, j);
-                let stake_i = validator::total_stake(validator_i);
-                let stake_j = validator::total_stake(validator_j);
-                let power_i = validator::voting_power(validator_i);
-                let power_j = validator::voting_power(validator_j);
-                if (stake_i > stake_i) {
-                    assert!(power_i >= power_j, ERelativePowerMismatch);
+        let a = 0;
+        while (a < len) {
+            let b = a + 1;
+            while (b < len) {
+                let validator_a = vector::borrow(v, a);
+                let validator_b = vector::borrow(v, b);
+                let stake_a = validator::total_stake(validator_a);
+                let stake_b = validator::total_stake(validator_b);
+                let power_a = validator::voting_power(validator_a);
+                let power_b = validator::voting_power(validator_b);
+                if (stake_a > stake_b) {
+                    assert!(power_a >= power_b, ERelativePowerMismatch);
                 };
-                if (stake_i < stake_j) {
-                    assert!(power_i <= power_j, ERelativePowerMismatch);
+                if (stake_a < stake_b) {
+                    assert!(power_a <= power_b, ERelativePowerMismatch);
                 };
-                j = j + 1;
+                b = b + 1;
             };
-            i = i + 1;
+            a = a + 1;
         }
     }
 
