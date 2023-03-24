@@ -4,7 +4,7 @@
 #[test_only]
 /// A Policy that makes sure an item is placed into the `Kiosk` after `purchase`.
 /// `Kiosk` can be any.
-module sui::item_placed_policy {
+module sui::item_locked_policy {
     use sui::kiosk::{Self, Kiosk};
     use sui::transfer_policy::{
         Self as policy,
@@ -25,7 +25,8 @@ module sui::item_placed_policy {
 
     /// Prove that an item a
     public fun prove<T>(request: &mut TransferRequest<T>, kiosk: &Kiosk) {
-        assert!(kiosk::has_item(kiosk, policy::item(request)), ENotInKiosk);
+        let item = policy::item(request);
+        assert!(kiosk::has_item(kiosk, item) && kiosk::is_locked(kiosk, item), ENotInKiosk);
         policy::add_receipt(Rule {}, request)
     }
 }
