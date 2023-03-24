@@ -337,7 +337,7 @@ impl TransactionManager {
                 } else {
                     // TODO: we should start logging this at a higher level after some period of
                     // time has elapsed.
-                    trace!(missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
+                    debug!(missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
                 }
             }
         }
