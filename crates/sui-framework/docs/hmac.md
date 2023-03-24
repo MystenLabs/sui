@@ -6,7 +6,6 @@
 
 
 -  [Function `hmac_sha3_256`](#0x2_hmac_hmac_sha3_256)
--  [Module Specification](#@Module_Specification_0)
 
 
 <pre><code></code></pre>
@@ -38,12 +37,15 @@ Returns the 32 bytes digest of HMAC-SHA3-256(key, msg).
 
 </details>
 
-<a name="@Module_Specification_0"></a>
-
-## Module Specification
+<details>
+<summary>Specification</summary>
 
 
 
 <pre><code><b>pragma</b> opaque;
 <b>aborts_if</b> [abstract] <b>true</b>;
 </code></pre>
+
+
+
+</details>
