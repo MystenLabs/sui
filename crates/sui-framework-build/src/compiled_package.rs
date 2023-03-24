@@ -572,7 +572,13 @@ impl CompiledPackage {
             "The following modules in package dependencies set a non-zero self-address:".into(),
         );
         error_message.extend(errors);
-        error_message.push("If these packages really are unpublished, their self-addresses should be set to \"0x0\" in the [addresses] section of the manifest when publishing.".into(),);
+        error_message.push(
+            "If these packages really are unpublished, their self-addresses should be set \
+	     to \"0x0\" in the [addresses] section of the manifest when publishing. If they \
+	     are already published, ensure they specify the address in the `published-at` of \
+	     their Move.toml manifest."
+                .into(),
+        );
 
         Err(SuiError::ModulePublishFailure {
             error: error_message.join("\n"),
