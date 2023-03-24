@@ -389,19 +389,20 @@ impl AuthorityStore {
         let Some(prior_version) = version.one_before() else {
             return Ok(None);
         };
-        let Some(objref) = self.perpetual_tables
-            .parent_sync
-            .keys()
-            .skip_prior_to(&(*object_id, prior_version, ObjectDigest::MAX))?
-            .next() else {
-                return Ok(None);
-            };
+        let mut iterator = self
+            .perpetual_tables
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey(*object_id, prior_version))?;
 
-        Ok(if objref.0 == *object_id {
-            Some(objref)
-        } else {
-            None
-        })
+        if let Some((object_key, value)) = iterator.next() {
+            if object_key.0 == *object_id {
+                return Ok(Some(
+                    self.perpetual_tables.object_reference(&object_key, value)?,
+                ));
+            }
+        }
+        Ok(None)
     }
 
     pub fn multi_get_object_by_key(

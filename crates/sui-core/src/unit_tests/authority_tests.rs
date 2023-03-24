@@ -1535,18 +1535,14 @@ pub async fn send_and_confirm_transaction_(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    //
+    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
+    // for testing and regression detection
     let state_acc = StateAccumulator::new(authority.database.clone());
     let mut state = state_acc.accumulate_live_object_set();
-
     let result = authority.try_execute_for_test(&certificate).await?;
-
-    println!("TESTING -- accumulating live object set");
     let state_after = state_acc.accumulate_live_object_set();
-    println!("TESTING -- finished accumulating live object set");
-
-    println!("TESTING -- accumulating test tx effects");
     let effects_acc = state_acc.accumulate_effects(vec![result.inner().data().clone()]);
-    println!("TESTING -- finished accumulating test tx effects");
     state.union(&effects_acc);
 
     assert_eq!(state_after.digest(), state.digest());

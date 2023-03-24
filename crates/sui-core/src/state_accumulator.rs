@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use either::Either;
-use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -106,7 +104,6 @@ impl StateAccumulator {
                     fx.wrapped()
                         .iter()
                         .map(|oref| {
-                            println!("TESTING -- wrapped: {:?}", oref.1);
                             bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
                                 .unwrap()
                                 .to_vec()
@@ -167,14 +164,12 @@ impl StateAccumulator {
 
         // Process unwrapped and unwrapped_then_deleted effects, which need to be
         // removed as WrappedObject using the last sequence number it was tombstoned
-        // against. Unfortunately since this happened in a past transaction, and the
-        // child object may have been modified since (and hence its sequence number incremented),
-        // we must traverse the objects table until we find the tombstone in order to get the
-        // correct sequence number
+        // against. Since this happened in a past transaction, and the child object may
+        // have been modified since (and hence its sequence number incremented), we
+        // seek the version prior to the unwrapped version from the objects table directly
         let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
             .iter()
             .map(|(id, seq_num)| {
-                dbg!(id, seq_num);
                 let objref = self
                     .authority_store
                     .get_object_ref_prior_to_key(id, *seq_num)
