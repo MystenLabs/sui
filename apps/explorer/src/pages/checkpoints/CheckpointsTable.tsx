@@ -31,7 +31,7 @@ export function CheckpointsTable({
         rpc.getLatestCheckpointSequenceNumber()
     );
 
-    const pagination = usePaginationStack<number>();
+    const pagination = usePaginationStack<string>();
 
     const { data: checkpointsData } = useQuery(
         ['checkpoints', { limit, cursor: pagination.cursor }],
@@ -39,7 +39,7 @@ export function CheckpointsTable({
             rpc.getCheckpoints({
                 limit,
                 descendingOrder: true,
-                cursor: String(pagination.cursor),
+                cursor: pagination.cursor,
             }),
         {
             keepPreviousData: true,
