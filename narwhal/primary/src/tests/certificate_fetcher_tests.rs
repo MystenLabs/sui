@@ -28,7 +28,7 @@ use tokio::{
 };
 use types::{
     BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
@@ -235,7 +235,7 @@ async fn fetch_certificates_basic() {
     }
 
     // Avoid any sort of missing payload by pre-populating the batch
-    for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload.iter()) {
+    for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload().iter()) {
         payload_store.write(digest, worker_id).unwrap();
     }
 
@@ -358,7 +358,7 @@ async fn fetch_certificates_basic() {
     let mut certs = Vec::new();
     // Add cert missing parent info.
     let mut cert = certificates[num_written].clone();
-    cert.header.parents.clear();
+    cert.header.clear_parents();
     certs.push(cert);
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();

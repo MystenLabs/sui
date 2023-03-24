@@ -28,7 +28,7 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::Receiver,
     Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
-    Round,
+    HeaderAPI, Round,
 };
 
 #[cfg(test)]
@@ -133,14 +133,14 @@ impl CertificateFetcher {
             tokio::select! {
                 Some(certificate) = self.rx_certificate_fetcher.recv() => {
                     let header = &certificate.header;
-                    if header.epoch != self.committee.epoch() {
+                    if *header.epoch() != self.committee.epoch() {
                         continue;
                     }
                     // Unnecessary to validate the header and certificate further, since it has
                     // already been validated.
 
-                    if let Some(r) = self.targets.get(&header.author) {
-                        if header.round <= *r {
+                    if let Some(r) = self.targets.get(header.author()) {
+                        if *header.round() <= *r {
                             // Ignore fetch request when we already need to sync to a later
                             // certificate from the same authority. Although this certificate may
                             // not be the parent of the later certificate, this should be ok
@@ -157,9 +157,9 @@ impl CertificateFetcher {
                     // The header should have been verified as part of the certificate.
                     match self
                     .certificate_store
-                    .last_round_number(header.author) {
+                    .last_round_number(*header.author()) {
                         Ok(r) => {
-                            if header.round <= r.unwrap_or(0) {
+                            if *header.round() <= r.unwrap_or(0) {
                                 // Ignore fetch request. Possibly the certificate was processed
                                 // while the message is in the queue.
                                 continue;
@@ -168,13 +168,13 @@ impl CertificateFetcher {
                         }
                         Err(e) => {
                             // If this happens, it is most likely due to serialization error.
-                            error!("Failed to read latest round for {}: {}", header.author, e);
+                            error!("Failed to read latest round for {}: {}", *header.author(), e);
                             continue;
                         }
                     };
 
                     // Update the target rounds for the authority.
-                    self.targets.insert(header.author, header.round);
+                    self.targets.insert(*header.author(), *header.round());
 
                     // Kick start a fetch task if there is no other task running.
                     if self.fetch_certificates_task.is_empty() {

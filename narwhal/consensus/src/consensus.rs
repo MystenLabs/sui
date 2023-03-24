@@ -19,7 +19,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, CommittedSubDag, CommittedSubDagShell,
-    ConditionalBroadcastReceiver, ConsensusStore, ReputationScores, Round, Timestamp,
+    ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI, ReputationScores, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -219,7 +219,7 @@ impl ConsensusState {
         if let Some(round_table) = dag.get(&(round - 1)) {
             let store_parents: BTreeSet<&CertificateDigest> =
                 round_table.iter().map(|(_, (digest, _))| digest).collect();
-            for parent_digest in &certificate.header.parents {
+            for parent_digest in certificate.header.parents() {
                 if !store_parents.contains(parent_digest) {
                     panic!("Parent digest {parent_digest:?} not found in DAG for {certificate:?}!");
                 }

@@ -67,7 +67,7 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
     now, Certificate, CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, PayloadAvailabilityRequest,
+    GetCertificatesRequest, GetCertificatesResponse, HeaderAPI, PayloadAvailabilityRequest,
     PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimary,
     PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
     SendCertificateResponse, Vote, WorkerInfoResponse, WorkerOthersBatchMessage,
@@ -716,16 +716,17 @@ impl PrimaryReceiverHandler {
                 ))
             })?;
         ensure!(
-            header.author == peer_authority.id(),
+            *header.author() == peer_authority.id(),
             DagError::NetworkError(format!(
                 "Header author {:?} must match requesting peer {peer_authority:?}",
-                header.author
+                *header.author()
             ))
         );
 
         debug!(
             "Processing vote request for {:?} round:{:?}",
-            header, header.round
+            header,
+            *header.round()
         );
 
         // Clone the round updates channel so we can get update notifications specific to
@@ -771,8 +772,8 @@ impl PrimaryReceiverHandler {
                     }
                     let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
-                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
-                        DagError::TooOld(header.digest().into(), header.round, narwhal_round)
+                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= *header.round(),
+                        DagError::TooOld(header.digest().into(), *header.round(), narwhal_round)
                     )
                 },
             }
@@ -794,8 +795,8 @@ impl PrimaryReceiverHandler {
         // current Header.
         let narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round,
-            DagError::TooOld(header.digest().into(), header.round, narwhal_round)
+            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= *header.round(),
+            DagError::TooOld(header.digest().into(), *header.round(), narwhal_round)
         );
 
         // Check the parent certificates. Ensure the parents:
@@ -806,11 +807,11 @@ impl PrimaryReceiverHandler {
         let mut stake = 0;
         for parent in parents.iter() {
             ensure!(
-                parent.round() + 1 == header.round,
+                parent.round() + 1 == *header.round(),
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
-                parent_authorities.insert(&parent.header.author),
+                parent_authorities.insert(parent.header.author()),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
             stake += committee.stake_by_id(parent.origin());
@@ -829,18 +830,20 @@ impl PrimaryReceiverHandler {
         // small, just wait. Otherwise reject with an error.
         const TOLERANCE_MS: u64 = 1_000;
         let current_time = now();
-        if current_time < header.created_at {
-            if header.created_at - current_time < TOLERANCE_MS {
+        if current_time < *header.created_at() {
+            if *header.created_at() - current_time < TOLERANCE_MS {
                 // for a small difference we simply wait
-                tokio::time::sleep(Duration::from_millis(header.created_at - current_time)).await;
+                tokio::time::sleep(Duration::from_millis(*header.created_at() - current_time))
+                    .await;
             } else {
                 // For larger differences return an error, and log it
                 warn!(
                     "Rejected header {:?} due to timestamp {} newer than {current_time}",
-                    header, header.created_at
+                    header,
+                    *header.created_at()
                 );
                 return Err(DagError::InvalidTimestamp {
-                    created_time: header.created_at,
+                    created_time: *header.created_at(),
                     local_time: current_time,
                 });
             }
@@ -862,31 +865,36 @@ impl PrimaryReceiverHandler {
         // so we don't.
         let result = self
             .vote_digest_store
-            .read(&header.author)
+            .read(header.author())
             .map_err(DagError::StoreError)?;
 
         if let Some(vote_info) = result {
-            if header.epoch < vote_info.epoch
-                || (header.epoch == vote_info.epoch && header.round < vote_info.round)
+            if *header.epoch() < vote_info.epoch
+                || (*header.epoch() == vote_info.epoch && *header.round() < vote_info.round)
             {
                 // Already voted on a newer Header for this publicKey.
                 return Err(DagError::TooOld(
                     header.digest().into(),
-                    header.round,
+                    *header.round(),
                     narwhal_round,
                 ));
             }
-            if header.epoch == vote_info.epoch && header.round == vote_info.round {
+            if *header.epoch() == vote_info.epoch && *header.round() == vote_info.round {
                 // Make sure we don't vote twice for the same authority in the same epoch/round.
                 let temp_vote =
                     Vote::new(header, &self.authority_id, &self.signature_service).await;
                 if temp_vote.digest() != vote_info.vote_digest {
                     info!(
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
-                        header.author, header.epoch, header.round
+                        *header.author(),
+                        *header.epoch(),
+                        *header.round()
                     );
                     self.metrics.votes_dropped_equivocation_protection.inc();
-                    return Err(DagError::AlreadyVoted(vote_info.vote_digest, header.round));
+                    return Err(DagError::AlreadyVoted(
+                        vote_info.vote_digest,
+                        *header.round(),
+                    ));
                 }
             }
         }
@@ -895,7 +903,8 @@ impl PrimaryReceiverHandler {
         let vote = Vote::new(header, &self.authority_id, &self.signature_service).await;
         debug!(
             "Created vote {vote:?} for {} at round {}",
-            header, header.round
+            header,
+            *header.round()
         );
 
         // Update the vote digest store with the vote we just sent.
@@ -1103,9 +1112,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 let payload_available = match self.payload_store.read_all(
                     certificate
                         .header
-                        .payload
-                        .into_iter()
-                        .map(|(batch, (worker_id, _))| (batch, worker_id)),
+                        .payload()
+                        .iter()
+                        .map(|(batch, (worker_id, _))| (*batch, *worker_id)),
                 ) {
                     Ok(payload_result) => payload_result.into_iter().all(|x| x.is_some()),
                     Err(err) => {

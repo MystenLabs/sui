@@ -26,7 +26,7 @@ use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
-    CollectionRetrievalResult, Empty, GetCollectionsRequest, PreSubscribedBroadcastSender,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, PreSubscribedBroadcastSender,
     ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
@@ -59,11 +59,13 @@ async fn test_get_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), worker_id, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -269,11 +271,13 @@ async fn test_remove_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), worker_id, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -1170,11 +1174,13 @@ async fn fixture_certificate(
     let mut payload = IndexMap::new();
     payload.insert(batch_digest, (worker_id, 0));
 
-    let header = authority
-        .header_builder(committee)
-        .payload(payload)
-        .build()
-        .unwrap();
+    let header = Header::V1(
+        authority
+            .header_builder(committee)
+            .payload(payload)
+            .build()
+            .unwrap(),
+    );
 
     let certificate = fixture.certificate(&header);
 

@@ -36,7 +36,7 @@ use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
     FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
-    GetCertificatesResponse, Header, HeaderBuilder, PayloadAvailabilityRequest,
+    GetCertificatesResponse, Header, HeaderAPI, HeaderV1Builder, PayloadAvailabilityRequest,
     PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
     RequestBatchesResponse, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
@@ -524,7 +524,7 @@ fn this_cert_parents_with_slow_nodes(
         // one we want to create the certificate for.
         if let Some((_, inclusion_probability)) = slow_nodes
             .iter()
-            .find(|(id, _)| *id != *authority_id && *id == parent.header.author)
+            .find(|(id, _)| *id != *authority_id && *id == *parent.header.author())
         {
             let f: f64 = thread_rng().gen_range(0_f64..1_f64);
 
@@ -612,7 +612,8 @@ pub fn mock_certificate_with_epoch(
     epoch: Epoch,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    let header_builder = HeaderBuilder::default();
+    // TODO(arun): Is there a way to do this without referencing HeaderV1Builder/Header::V1() below?
+    let header_builder = HeaderV1Builder::default();
     let header = header_builder
         .author(origin)
         .round(round)
@@ -621,7 +622,7 @@ pub fn mock_certificate_with_epoch(
         .payload(fixture_payload(1))
         .build()
         .unwrap();
-    let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
+    let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
     (certificate.digest(), certificate)
 }
 
@@ -633,7 +634,7 @@ pub fn mock_signed_certificate(
     parents: BTreeSet<CertificateDigest>,
     committee: &Committee,
 ) -> (CertificateDigest, Certificate) {
-    let header_builder = HeaderBuilder::default()
+    let header_builder = HeaderV1Builder::default()
         .author(origin)
         .payload(fixture_payload(1))
         .round(round)
@@ -642,14 +643,15 @@ pub fn mock_signed_certificate(
 
     let header = header_builder.build().unwrap();
 
-    let cert = Certificate::new_unsigned(committee, header.clone(), Vec::new()).unwrap();
+    let cert =
+        Certificate::new_unsigned(committee, Header::V1(header.clone()), Vec::new()).unwrap();
 
     let mut votes = Vec::new();
     for (name, signer) in signers {
         let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
         votes.push((*name, sig))
     }
-    let cert = Certificate::new_unverified(committee, header, votes).unwrap();
+    let cert = Certificate::new_unverified(committee, Header::V1(header), votes).unwrap();
     (cert.digest(), cert)
 }
 
@@ -824,15 +826,16 @@ impl CommitteeFixture {
             .authorities
             .iter()
             .map(|a| {
-                let builder = types::HeaderBuilder::default();
-                builder
+                let builder = types::HeaderV1Builder::default();
+                let header = builder
                     .author(a.id())
                     .round(round)
                     .epoch(0)
                     .parents(parents.clone())
                     .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
                     .build()
-                    .unwrap()
+                    .unwrap();
+                Header::V1(header)
             })
             .collect();
 
@@ -844,7 +847,7 @@ impl CommitteeFixture {
             .flat_map(|a| {
                 // we should not re-sign using the key of the authority
                 // that produced the header
-                if a.id() == header.author {
+                if a.id() == *header.author() {
                     None
                 } else {
                     Some(a.vote(header))
@@ -931,22 +934,26 @@ impl AuthorityFixture {
     }
 
     pub fn header(&self, committee: &Committee) -> Header {
-        self.header_builder(committee)
+        let header = self
+            .header_builder(committee)
             .payload(Default::default())
             .build()
-            .unwrap()
+            .unwrap();
+        Header::V1(header)
     }
 
     pub fn header_with_round(&self, committee: &Committee, round: Round) -> Header {
-        self.header_builder(committee)
+        let header = self
+            .header_builder(committee)
             .payload(Default::default())
             .round(round)
             .build()
-            .unwrap()
+            .unwrap();
+        Header::V1(header)
     }
 
-    pub fn header_builder(&self, committee: &Committee) -> types::HeaderBuilder {
-        types::HeaderBuilder::default()
+    pub fn header_builder(&self, committee: &Committee) -> types::HeaderV1Builder {
+        types::HeaderV1Builder::default()
             .author(self.id())
             .round(1)
             .epoch(committee.epoch())

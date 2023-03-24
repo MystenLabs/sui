@@ -12,8 +12,8 @@ use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, HeaderBuilder, HeaderDigest, Metadata,
-    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
+    Batch, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, HeaderV1Builder,
+    Metadata, WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
 #[allow(clippy::mutable_key_type)]
@@ -65,7 +65,7 @@ fn get_registry() -> Result<Registry> {
     let authority = committee.authority_by_key(kp.public()).unwrap();
 
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
-    let header_builder = HeaderBuilder::default();
+    let header_builder = HeaderV1Builder::default();
     let header = header_builder
         .author(authority.id())
         .epoch(0)
@@ -81,11 +81,12 @@ fn get_registry() -> Result<Registry> {
         .unwrap();
 
     let worker_pk = network_keys[0].public().clone();
-    let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
+    let certificate =
+        Certificate::new_unsigned(&committee, Header::V1(header.clone()), vec![]).unwrap();
     let signature = keys[0].sign(certificate.digest().as_ref());
     let certificate = Certificate::new_unsigned(
         &committee,
-        header.clone(),
+        Header::V1(header.clone()),
         vec![(authority.id(), signature)],
     )
     .unwrap();

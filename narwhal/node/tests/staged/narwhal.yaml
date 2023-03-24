@@ -30,6 +30,17 @@ CertificateDigest:
       CONTENT: U8
       SIZE: 32
 Header:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: HeaderV1
+HeaderDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+HeaderV1:
   STRUCT:
     - author:
         TYPENAME: AuthorityIdentifier
@@ -46,11 +57,6 @@ Header:
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-HeaderDigest:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
 Metadata:
   STRUCT:
     - created_at: U64

@@ -18,7 +18,7 @@ use tracing::{debug, enabled, error, info};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, Round, TimestampMs,
+    BatchDigest, Certificate, Header, HeaderAPI, Round, TimestampMs,
 };
 use types::{now, ConditionalBroadcastReceiver};
 
@@ -169,7 +169,7 @@ impl Proposer {
             info!("Created {} -> {:?}", header, digest);
         }
 
-        let num_of_included_digests = header.payload.len();
+        let num_of_included_digests = header.payload().len();
 
         // Send the new header to the `Certifier` that will broadcast and certify it.
         self.tx_headers
@@ -189,7 +189,7 @@ impl Proposer {
 
         // Check if we already have stored a header for this round.
         if let Some(last_header) = self.proposer_store.get_last_proposed()? {
-            if last_header.round == this_round && last_header.epoch == this_epoch {
+            if *last_header.round() == this_round && *last_header.epoch() == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
                 debug!("Proposer re-using existing header for round {this_round}");
                 self.last_parents.clear(); // Clear parents that are now invalid for next round.
@@ -208,7 +208,7 @@ impl Proposer {
         let current_time = now();
         let parent_max_time = parents
             .iter()
-            .map(|c| c.header.created_at)
+            .map(|c| *c.header.created_at())
             .max()
             .unwrap_or(0);
         if current_time < parent_max_time {
@@ -263,7 +263,7 @@ impl Proposer {
         let mut total_inclusion_secs = 0.0;
         for digest in &header_digests {
             let batch_inclusion_secs =
-                Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64();
+                Duration::from_millis(*header.created_at() - digest.timestamp).as_secs_f64();
             total_inclusion_secs += batch_inclusion_secs;
 
             #[cfg(feature = "benchmark")]
@@ -286,7 +286,7 @@ impl Proposer {
         let (header_creation_secs, avg_inclusion_secs) =
             if let Some(digest) = header_digests.front() {
                 (
-                    Duration::from_millis(header.created_at - digest.timestamp).as_secs_f64(),
+                    Duration::from_millis(*header.created_at() - digest.timestamp).as_secs_f64(),
                     total_inclusion_secs / header_digests.len() as f64,
                 )
             } else {
@@ -374,7 +374,7 @@ impl Proposer {
         let mut no_votes = 0;
         for certificate in &self.last_parents {
             let stake = self.committee.stake_by_id(certificate.origin());
-            if certificate.header.parents.contains(&leader) {
+            if certificate.header.parents().contains(&leader) {
                 votes_for_leader += stake;
             } else {
                 no_votes += stake;

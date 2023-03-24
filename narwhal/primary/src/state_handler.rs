@@ -8,7 +8,7 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use types::{
     metered_channel::{Receiver, Sender},
-    Certificate, ConditionalBroadcastReceiver, Round,
+    Certificate, ConditionalBroadcastReceiver, HeaderAPI, Round,
 };
 
 /// Receives the highest round reached by consensus and update it for all tasks.
@@ -55,8 +55,8 @@ impl StateHandler {
         let own_rounds_committed: Vec<_> = certificates
             .iter()
             .filter_map(|cert| {
-                if cert.header.author == self.authority_id {
-                    Some(cert.header.round)
+                if *cert.header.author() == self.authority_id {
+                    Some(*cert.header.round())
                 } else {
                     None
                 }

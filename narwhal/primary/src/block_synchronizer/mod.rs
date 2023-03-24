@@ -32,7 +32,7 @@ use tokio::{sync::mpsc::Sender, task::JoinHandle, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
     metered_channel, BatchDigest, Certificate, CertificateDigest, ConditionalBroadcastReceiver,
-    GetCertificatesRequest, PayloadAvailabilityRequest, PrimaryToPrimaryClient,
+    GetCertificatesRequest, HeaderAPI, PayloadAvailabilityRequest, PrimaryToPrimaryClient,
     WorkerSynchronizeMessage,
 };
 
@@ -530,13 +530,13 @@ impl BlockSynchronizer {
         for certificate in certificates {
             let payload: Vec<(BatchDigest, WorkerId)> = certificate
                 .header
-                .payload
+                .payload()
                 .clone()
                 .into_iter()
                 .map(|(batch, (worker_id, _))| (batch, worker_id))
                 .collect();
 
-            let payload_available = if certificate.header.author == self.authority_id {
+            let payload_available = if *certificate.header.author() == self.authority_id {
                 trace!(
                     "Certificate with id {} is our own, no need to check in storage.",
                     certificate.digest()
@@ -673,7 +673,7 @@ impl BlockSynchronizer {
     ) -> State {
         let futures = certificate
             .header
-            .payload
+            .payload()
             .iter()
             .map(|(batch_digest, (worker_id, _))| {
                 payload_store.notify_contains(*batch_digest, *worker_id)

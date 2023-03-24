@@ -10,7 +10,8 @@ use fastcrypto::hash::Hash;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{debug, error_span};
 use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
+    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI, ReputationScores,
+    Round,
 };
 
 #[cfg(any(test))]
@@ -69,7 +70,7 @@ impl ConsensusProtocol for Tusk {
             .get(&(r - 1))
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(_, x)| x.header.parents.contains(leader_digest))
+            .filter(|(_, x)| x.header.parents().contains(leader_digest))
             .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 

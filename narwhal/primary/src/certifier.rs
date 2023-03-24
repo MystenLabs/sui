@@ -22,8 +22,8 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::Receiver,
-    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, PrimaryToPrimaryClient,
-    RequestVoteRequest, Vote,
+    Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderAPI,
+    PrimaryToPrimaryClient, RequestVoteRequest, Vote,
 };
 
 #[cfg(test)]
@@ -151,7 +151,7 @@ impl Certifier {
                         missing_parents
                             .into_iter()
                             // Only provide certs that are parents for the requested vote.
-                            .filter(|parent| header.parents.contains(parent)),
+                            .filter(|parent| header.parents().contains(parent)),
                     )?
                     .into_iter()
                     .flatten()
@@ -206,22 +206,22 @@ impl Certifier {
         // Verify the vote. Note that only the header digest is signed by the vote.
         ensure!(
             vote.header_digest == header.digest()
-                && vote.origin == header.author
+                && vote.origin == *header.author()
                 && vote.author == authority,
             DagError::UnexpectedVote(vote.header_digest)
         );
         // Possible equivocations.
         ensure!(
-            header.epoch == vote.epoch,
+            *header.epoch() == vote.epoch,
             DagError::InvalidEpoch {
-                expected: header.epoch,
+                expected: *header.epoch(),
                 received: vote.epoch
             }
         );
         ensure!(
-            header.round == vote.round,
+            *header.round() == vote.round,
             DagError::InvalidRound {
-                expected: header.round,
+                expected: *header.round(),
                 received: vote.round
             }
         );
@@ -256,21 +256,21 @@ impl Certifier {
         header: Header,
         mut cancel: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
-        if header.epoch != committee.epoch() {
+        if *header.epoch() != committee.epoch() {
             debug!(
                 "Certifier received mismatched header proposal for epoch {}, currently at epoch {}",
-                header.epoch,
+                *header.epoch(),
                 committee.epoch()
             );
             return Err(DagError::InvalidEpoch {
                 expected: committee.epoch(),
-                received: header.epoch,
+                received: *header.epoch(),
             });
         }
 
         // Process the header.
         header_store.write(&header)?;
-        metrics.proposed_header_round.set(header.round as i64);
+        metrics.proposed_header_round.set(*header.round() as i64);
 
         // Reset the votes aggregator and sign our own header.
         let mut votes_aggregator = VotesAggregator::new(metrics.clone());
@@ -314,7 +314,7 @@ impl Certifier {
                     }
                 },
                 _ = &mut cancel => {
-                    debug!("canceling Header proposal {header} for round {}", header.round);
+                    debug!("canceling Header proposal {header} for round {}", *header.round());
                     return Err(DagError::Canceled)
                 },
             }
@@ -326,7 +326,7 @@ impl Certifier {
                 let mut msg = format!(
                     "Failed to form certificate from header {header:?} with parent certificates:\n"
                 );
-                for parent_digest in header.parents.iter() {
+                for parent_digest in header.parents().iter() {
                     let parent_msg = match certificate_store.read(*parent_digest) {
                         Ok(Some(cert)) => format!("{cert:?}\n"),
                         Ok(None) => {

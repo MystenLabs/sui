@@ -14,6 +14,7 @@ use crypto::{
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
+use enum_dispatch::enum_dispatch;
 use fastcrypto::{
     hash::{Digest, Hash, HashFunction},
     signature_service::SignatureService,
@@ -154,9 +155,72 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
     }
 }
 
+#[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
+#[enum_dispatch(HeaderAPI)]
+pub enum Header {
+    V1(HeaderV1),
+}
+
+// TODO(arun): Is this default useful?
+impl Default for Header {
+    fn default() -> Self {
+        Self::V1(HeaderV1::default())
+    }
+}
+
+impl Header {
+    // TODO(arun): Should I be passing in a version number here and matching on that?
+    pub async fn new(
+        author: AuthorityIdentifier,
+        round: Round,
+        epoch: Epoch,
+        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+        parents: BTreeSet<CertificateDigest>,
+    ) -> Self {
+        Header::V1(HeaderV1::new(author, round, epoch, payload, parents).await)
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        match self {
+            Header::V1(data) => data.digest(),
+        }
+    }
+
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        match self {
+            Header::V1(data) => data.validate(committee, worker_cache),
+        }
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
+    type TypedDigest = HeaderDigest;
+
+    fn digest(&self) -> HeaderDigest {
+        match self {
+            Header::V1(data) => data.digest(),
+        }
+    }
+}
+
+#[enum_dispatch]
+pub trait HeaderAPI {
+    fn author(&self) -> &AuthorityIdentifier;
+    fn round(&self) -> &Round;
+    fn epoch(&self) -> &Epoch;
+    fn created_at(&self) -> &TimestampMs;
+    fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)>;
+    fn parents(&self) -> &BTreeSet<CertificateDigest>;
+
+    // Used for testing.
+    fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>);
+    fn update_round(&mut self, new_round: Round);
+    fn clear_parents(&mut self);
+}
+
 #[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
-pub struct Header {
+pub struct HeaderV1 {
     // Primary that created the header. Must be the same primary that broadcasted the header.
     // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
     pub author: AuthorityIdentifier,
@@ -170,9 +234,41 @@ pub struct Header {
     digest: OnceCell<HeaderDigest>,
 }
 
-impl HeaderBuilder {
-    pub fn build(self) -> Result<Header, fastcrypto::error::FastCryptoError> {
-        let h = Header {
+impl HeaderAPI for HeaderV1 {
+    fn author(&self) -> &AuthorityIdentifier {
+        &self.author
+    }
+    fn round(&self) -> &Round {
+        &self.round
+    }
+    fn epoch(&self) -> &Epoch {
+        &self.epoch
+    }
+    fn created_at(&self) -> &TimestampMs {
+        &self.created_at
+    }
+    fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+        &self.payload
+    }
+    fn parents(&self) -> &BTreeSet<CertificateDigest> {
+        &self.parents
+    }
+
+    // Used for testing.
+    fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>) {
+        self.payload = new_payload;
+    }
+    fn update_round(&mut self, new_round: Round) {
+        self.round = new_round;
+    }
+    fn clear_parents(&mut self) {
+        self.parents.clear();
+    }
+}
+
+impl HeaderV1Builder {
+    pub fn build(self) -> Result<HeaderV1, fastcrypto::error::FastCryptoError> {
+        let h = HeaderV1 {
             author: self.author.unwrap(),
             round: self.round.unwrap(),
             epoch: self.epoch.unwrap(),
@@ -204,7 +300,7 @@ impl HeaderBuilder {
     }
 }
 
-impl Header {
+impl HeaderV1 {
     pub async fn new(
         author: AuthorityIdentifier,
         round: Round,
@@ -281,6 +377,7 @@ impl Header {
     MallocSizeOf,
     Arbitrary,
 )]
+// TODO(arun): Should we create HeaderV1Digest?
 pub struct HeaderDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
@@ -305,7 +402,7 @@ impl fmt::Display for HeaderDigest {
     }
 }
 
-impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
+impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV1 {
     type TypedDigest = HeaderDigest;
 
     fn digest(&self) -> HeaderDigest {
@@ -317,30 +414,40 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
 
 impl fmt::Debug for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}: B{}({}, E{}, {}B)",
-            self.digest.get().cloned().unwrap_or_default(),
-            self.round,
-            self.author,
-            self.epoch,
-            self.payload
-                .keys()
-                .map(|x| Digest::from(*x).size())
-                .sum::<usize>(),
-        )
+        match self {
+            Self::V1(data) => {
+                write!(
+                    f,
+                    "{}: B{}({}, E{}, {}B)",
+                    data.digest.get().cloned().unwrap_or_default(),
+                    data.round,
+                    data.author,
+                    data.epoch,
+                    data.payload
+                        .keys()
+                        .map(|x| Digest::from(*x).size())
+                        .sum::<usize>(),
+                )
+            }
+        }
     }
 }
 
 impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "B{}({})", self.round, self.author)
+        match self {
+            Self::V1(data) => {
+                write!(f, "B{}({})", data.round, data.author)
+            }
+        }
     }
 }
 
 impl PartialEq for Header {
     fn eq(&self, other: &Self) -> bool {
-        self.digest() == other.digest()
+        match self {
+            Self::V1(data) => data.digest() == other.digest(),
+        }
     }
 }
 
@@ -367,9 +474,9 @@ impl Vote {
     ) -> Self {
         let vote = Self {
             header_digest: header.digest(),
-            round: header.round,
-            epoch: header.epoch,
-            origin: header.author,
+            round: *header.round(),
+            epoch: *header.epoch(),
+            origin: *header.author(),
             author: *author,
             signature: Signature::default(),
         };
@@ -385,9 +492,9 @@ impl Vote {
     {
         let vote = Self {
             header_digest: header.digest(),
-            round: header.round,
-            epoch: header.epoch,
-            origin: header.author,
+            round: *header.round(),
+            epoch: *header.epoch(),
+            origin: *header.author(),
             author: *author,
             signature: Signature::default(),
         };
@@ -480,11 +587,11 @@ impl Certificate {
         committee
             .authorities()
             .map(|authority| Self {
-                header: Header {
+                header: Header::V1(HeaderV1 {
                     author: authority.id(),
                     epoch: committee.epoch(),
-                    ..Header::default()
-                },
+                    ..Default::default()
+                }),
                 ..Self::default()
             })
             .collect()
@@ -507,10 +614,10 @@ impl Certificate {
     }
 
     pub fn new_test_empty(author: AuthorityIdentifier) -> Self {
-        let header = Header {
+        let header = Header::V1(HeaderV1 {
             author,
             ..Default::default()
-        };
+        });
         Self {
             header,
             ..Default::default()
@@ -646,15 +753,15 @@ impl Certificate {
     }
 
     pub fn round(&self) -> Round {
-        self.header.round
+        *self.header.round()
     }
 
     pub fn epoch(&self) -> Epoch {
-        self.header.epoch
+        *self.header.epoch()
     }
 
     pub fn origin(&self) -> AuthorityIdentifier {
-        self.header.author
+        *self.header.author()
     }
 }
 
@@ -750,14 +857,14 @@ impl PartialEq for Certificate {
 
 impl Affiliated for Certificate {
     fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
-        self.header.parents.iter().cloned().collect()
+        self.header.parents().iter().cloned().collect()
     }
 
     // This makes the genesis certificate and empty blocks compressible,
     // so that they will never be reported by a DAG walk
     // (`read_causal`, `node_read_causal`).
     fn compressible(&self) -> bool {
-        self.header.payload.is_empty()
+        self.header.payload().is_empty()
     }
 }
 
