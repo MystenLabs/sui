@@ -23,7 +23,7 @@ network-key-pair:
   path: /opt/sui/key-pairs/network.key
 ```
 
-3. Place `genesis.blob` in the same directory as `docker-compose.yaml`. (available post genesis ceremony)
+3. Place `genesis.blob` in the same directory as `docker compose.yaml`. (available post genesis ceremony)
 
 ## Connectivity
 
@@ -65,7 +65,7 @@ sudo du -sh /var/lib/docker/volumes/docker_suidb/_data
 - Delete the local Sui databases (volume)
 
 ```shell
-sudo docker-compose down -v
+sudo docker compose down -v
 ```
 
 ## Updates
