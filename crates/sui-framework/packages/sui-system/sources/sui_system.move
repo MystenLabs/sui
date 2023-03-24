@@ -3,10 +3,9 @@
 
 module sui_system::sui_system {
     use sui::balance::Balance;
-    #[test_only]
-    use sui::balance;
+
     use sui::coin::Coin;
-    use sui::object::{ID, UID};
+    use sui::object::UID;
     use sui_system::staking_pool::StakedSui;
     use sui::sui::SUI;
     use sui::transfer;
@@ -15,14 +14,15 @@ module sui_system::sui_system {
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
     use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInner};
     use sui_system::stake_subsidy::StakeSubsidy;
-    use sui::vec_set::VecSet;
     use std::option;
-    use sui::table::Table;
     use sui::dynamic_field;
-    #[test_only]
-    use sui_system::validator_set::ValidatorSet;
-    #[test_only]
-    use sui_system::validator_set;
+
+    #[test_only] use sui::balance;
+    #[test_only] use sui::object::ID;
+    #[test_only] use sui::table::Table;
+    #[test_only] use sui_system::validator_set::ValidatorSet;
+    #[test_only] use sui_system::validator_set;
+    #[test_only] use sui::vec_set::VecSet;
 
     friend sui_system::genesis;
 

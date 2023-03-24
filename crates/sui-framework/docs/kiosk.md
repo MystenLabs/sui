@@ -4,8 +4,7 @@
 # Module `0x2::kiosk`
 
 Kiosk is a primitive for building open, zero-fee trading platforms
-for assets with a high degree of customization over transfer
-policies.
+with a high degree of customization over transfer policies.
 
 The system has 3 main audiences:
 
@@ -40,6 +39,7 @@ be used to implement application-specific transfer rules.
 -  [Struct `Item`](#0x2_kiosk_Item)
 -  [Struct `Listing`](#0x2_kiosk_Listing)
 -  [Struct `KioskLock`](#0x2_kiosk_KioskLock)
+-  [Struct `NoTaking`](#0x2_kiosk_NoTaking)
 -  [Struct `ItemListed`](#0x2_kiosk_ItemListed)
 -  [Struct `PlacedWitness`](#0x2_kiosk_PlacedWitness)
 -  [Struct `ListedWitness`](#0x2_kiosk_ListedWitness)
@@ -69,6 +69,8 @@ be used to implement application-specific transfer rules.
 -  [Function `purchase_cap_kiosk`](#0x2_kiosk_purchase_cap_kiosk)
 -  [Function `purchase_cap_item`](#0x2_kiosk_purchase_cap_item)
 -  [Function `purchase_cap_min_price`](#0x2_kiosk_purchase_cap_min_price)
+-  [Function `set_policy_no_taking`](#0x2_kiosk_set_policy_no_taking)
+-  [Function `unset_policy_no_taking`](#0x2_kiosk_unset_policy_no_taking)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -305,6 +307,35 @@ creator of the item.
 
 
 <pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_KioskLock">KioskLock</a>&lt;T: store, key&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_kiosk_NoTaking"></a>
+
+## Struct `NoTaking`
+
+A custom key that can be attached to the <code>TransferPolicy</code> to disallow
+taking an item from the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
+
+
+<pre><code><b>struct</b> <a href="kiosk.md#0x2_kiosk_NoTaking">NoTaking</a> <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -708,9 +739,9 @@ Performs an authorization check to make sure only owner can do that.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_take">take</a>&lt;T: key + store&gt;(
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, policy: &TransferPolicy&lt;T&gt;, id: ID
 ): T {
-    <b>assert</b>!(<a href="transfer_policy.md#0x2_transfer_policy_allow_taking">transfer_policy::allow_taking</a>(policy), <a href="kiosk.md#0x2_kiosk_ETakingNotAllowed">ETakingNotAllowed</a>);
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+    <b>assert</b>!(!df::exists_(<a href="transfer_policy.md#0x2_transfer_policy_uid">transfer_policy::uid</a>(policy), <a href="kiosk.md#0x2_kiosk_NoTaking">NoTaking</a> {}), <a href="kiosk.md#0x2_kiosk_ETakingNotAllowed">ETakingNotAllowed</a>);
+    <b>assert</b>!(!df::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
     self.item_count = self.item_count - 1;
     df::remove_if_exists&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
@@ -743,7 +774,7 @@ Performs an authorization check to make sure only owner can sell.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, price: u64
 ): <a href="kiosk.md#0x2_kiosk_ListedWitness">ListedWitness</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
+    <b>assert</b>!(!df::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }), <a href="kiosk.md#0x2_kiosk_EListedExclusively">EListedExclusively</a>);
 
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }, price);
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="kiosk.md#0x2_kiosk_ItemListed">ItemListed</a>&lt;T&gt; { <a href="kiosk.md#0x2_kiosk">kiosk</a>: <a href="object.md#0x2_object_id">object::id</a>(self), id, price });
@@ -845,7 +876,7 @@ for any price equal or higher than the <code>min_price</code>.
     self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, id: ID, min_price: u64, ctx: &<b>mut</b> TxContext
 ): <a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt; {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
-    <b>assert</b>!(!df::exists_&lt;<a href="kiosk.md#0x2_kiosk_Listing">Listing</a>&gt;(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
+    <b>assert</b>!(!df::exists_(&self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> }), <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>);
 
     <b>let</b> uid = <a href="object.md#0x2_object_new">object::new</a>(ctx);
     df::add(&<b>mut</b> self.id, <a href="kiosk.md#0x2_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> }, min_price);
@@ -1269,6 +1300,54 @@ Get the <code>min_price</code> from the <code><a href="kiosk.md#0x2_kiosk_Purcha
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_purchase_cap_min_price">purchase_cap_min_price</a>&lt;T: key + store&gt;(self: &<a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;): u64 {
     self.min_price
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_set_policy_no_taking"></a>
+
+## Function `set_policy_no_taking`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_policy_no_taking">set_policy_no_taking</a>&lt;T: store, key&gt;(policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_policy_no_taking">set_policy_no_taking</a>&lt;T: key + store&gt;(policy: &<b>mut</b> TransferPolicy&lt;T&gt;, cap: &TransferPolicyCap&lt;T&gt;) {
+    df::add(<a href="transfer_policy.md#0x2_transfer_policy_uid_mut_as_owner">transfer_policy::uid_mut_as_owner</a>(policy, cap), <a href="kiosk.md#0x2_kiosk_NoTaking">NoTaking</a> {}, <b>true</b>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_unset_policy_no_taking"></a>
+
+## Function `unset_policy_no_taking`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_unset_policy_no_taking">unset_policy_no_taking</a>&lt;T: store, key&gt;(policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_unset_policy_no_taking">unset_policy_no_taking</a>&lt;T: key + store&gt;(policy: &<b>mut</b> TransferPolicy&lt;T&gt;, cap: &TransferPolicyCap&lt;T&gt;) {
+    <b>let</b> _: bool = df::remove(<a href="transfer_policy.md#0x2_transfer_policy_uid_mut_as_owner">transfer_policy::uid_mut_as_owner</a>(policy, cap), <a href="kiosk.md#0x2_kiosk_NoTaking">NoTaking</a> {});
 }
 </code></pre>
 

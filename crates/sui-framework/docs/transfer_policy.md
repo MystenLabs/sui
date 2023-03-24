@@ -3,9 +3,26 @@
 
 # Module `0x2::transfer_policy`
 
-Part of the collectibles bundle - a primitive allowing creators to enforce
-constraints on transfers as long as the transfers are performed in the ecosystem
-that enforces them.
+Defines the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> type and the logic to approve <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>s.
+
+- TransferPolicy - is a highly customizable primitive, which provides an
+interface for the type owner to set custom transfer rules for every
+deal performed in the <code>Kiosk</code> or a similar system that integrates with TP.
+
+- Once a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;</code> is created for and shared (or frozen), the
+type <code>T</code> becomes tradable in <code>Kiosk</code>s. On every purchase operation, a
+<code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> is created and needs to be confirmed by the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>
+hot potato or transaction will fail.
+
+- Type owner (creator) can set any Rules as long as the ecosystem supports
+them. All of the Rules need to be resolved within a single transaction (eg
+pay royalty and pay fixed commission). Once required actions are performed,
+the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confimed" via <code>confirm_request</code> call.
+
+- <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> aims to be the main interface for creators to control trades
+of their types and collect profits if a fee is required on sales. Custom
+policies can be removed at any moment, and the change will affect all instances
+of the type at once.
 
 
 -  [Struct `TransferRequest`](#0x2_transfer_policy_TransferRequest)
@@ -26,8 +43,8 @@ that enforces them.
 -  [Function `add_receipt`](#0x2_transfer_policy_add_receipt)
 -  [Function `has_rule`](#0x2_transfer_policy_has_rule)
 -  [Function `remove_rule`](#0x2_transfer_policy_remove_rule)
--  [Function `set_allow_taking`](#0x2_transfer_policy_set_allow_taking)
--  [Function `allow_taking`](#0x2_transfer_policy_allow_taking)
+-  [Function `uid`](#0x2_transfer_policy_uid)
+-  [Function `uid_mut_as_owner`](#0x2_transfer_policy_uid_mut_as_owner)
 -  [Function `paid`](#0x2_transfer_policy_paid)
 -  [Function `from`](#0x2_transfer_policy_from)
 -  [Function `metadata_mut`](#0x2_transfer_policy_metadata_mut)
@@ -105,8 +122,11 @@ from the item type (<code>T</code>) owner on purchase attempt.
 
 ## Resource `TransferPolicy`
 
-A unique capability that allows owner of the <code>T</code> to authorize
-transfers. Can only be created with the <code>Publisher</code> object.
+A unique capability that allows the owner of the <code>T</code> to authorize
+transfers. Can only be created with the <code>Publisher</code> object. Although
+there's no limitation to how many policies can be created, for most
+of the cases there's no need to create more than one since any of the
+policies can be used to confirm the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code>.
 
 
 <pre><code><b>struct</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt; <b>has</b> store, key
@@ -138,19 +158,10 @@ transfers. Can only be created with the <code>Publisher</code> object.
 <code>rules: <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;<a href="_TypeName">type_name::TypeName</a>&gt;</code>
 </dt>
 <dd>
- Set of types of attached rules.
-</dd>
-<dt>
-<code>allow_taking: bool</code>
-</dt>
-<dd>
- Whether to allow taking the <code>T</code> from the <code>Kiosk</code> or any other
- storage. Only works if supported in the storage and opens the door
- for locking mechanics. The best combination would be with the
- <code><a href="witness_policy.md#0x2_witness_policy">witness_policy</a></code> which makes sure that a certain action was
- performed (eg item was put back to the <code>Kiosk</code> after a sell).
+ Set of types of attached rules - used to verify <code>receipts</code> when
+ a <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> is received in <code>confirm_request</code> function.
 
- Defaults to <code><b>true</b></code>.
+ Additionally provides a way to look up currently attached Rules.
 </dd>
 </dl>
 
@@ -319,7 +330,9 @@ A Rule is not set.
 ## Function `new_request`
 
 Construct a new <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> hot potato which requires an
-approving action from the creator to be destroyed / resolved.
+approving action from the creator to be destroyed / resolved. Once
+created, it must be confirmed in the <code>confirm_request</code> call otherwise
+the transaction will fail.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new_request">new_request</a>&lt;T&gt;(paid: u64, from: <a href="object.md#0x2_object_ID">object::ID</a>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">transfer_policy::TransferRequest</a>&lt;T&gt;
@@ -335,7 +348,10 @@ approving action from the creator to be destroyed / resolved.
     paid: u64, from: ID, ctx: &<b>mut</b> TxContext
 ): <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt; {
     <a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a> {
-        paid, from, receipts: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), metadata: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx)
+        paid,
+        from,
+        receipts: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(),
+        metadata: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx)
     }
 }
 </code></pre>
@@ -373,7 +389,7 @@ kiosks.
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
 
     (
-        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>(), allow_taking: <b>true</b> },
+        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>() },
         <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), policy_id }
     )
 }
@@ -411,7 +427,7 @@ wrapped types.
     <a href="event.md#0x2_event_emit">event::emit</a>(<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
 
     (
-        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>(), allow_taking: <b>true</b> },
+        <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(), <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>() },
         <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), policy_id }
     )
 }
@@ -482,7 +498,7 @@ Can be performed by any party as long as they own it.
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
 
     <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a> { id: cap_id, policy_id: _ } = cap;
-    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: _, <a href="balance.md#0x2_balance">balance</a>, allow_taking: _ } = self;
+    <b>let</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a> { id, rules: _, <a href="balance.md#0x2_balance">balance</a> } = self;
 
     <a href="object.md#0x2_object_delete">object::delete</a>(id);
     <a href="object.md#0x2_object_delete">object::delete</a>(cap_id);
@@ -713,14 +729,14 @@ Remove the Rule from the <code><a href="transfer_policy.md#0x2_transfer_policy_T
 
 </details>
 
-<a name="0x2_transfer_policy_set_allow_taking"></a>
+<a name="0x2_transfer_policy_uid"></a>
 
-## Function `set_allow_taking`
+## Function `uid`
 
-Set the <code>allow_taking</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Allows reading custom attachements to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> if there are any.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_set_allow_taking">set_allow_taking</a>&lt;T&gt;(policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;, allow_taking: bool)
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid">uid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): &<a href="object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -729,28 +745,22 @@ Set the <code>allow_taking</code> field of the <code><a href="transfer_policy.md
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_set_allow_taking">set_allow_taking</a>&lt;T&gt;(
-    policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;,
-    cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
-    allow_taking: bool
-) {
-    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(policy) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
-    policy.allow_taking = allow_taking;
-}
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid">uid</a>&lt;T&gt;(self: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): &UID { &self.id }
 </code></pre>
 
 
 
 </details>
 
-<a name="0x2_transfer_policy_allow_taking"></a>
+<a name="0x2_transfer_policy_uid_mut_as_owner"></a>
 
-## Function `allow_taking`
+## Function `uid_mut_as_owner`
 
-Get the <code>allow_taking</code> field of the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
+Get a mutable reference to the <code>self.id</code> to enable custom attachements
+to the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_allow_taking">allow_taking</a>&lt;T&gt;(policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid_mut_as_owner">uid_mut_as_owner</a>&lt;T&gt;(self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">transfer_policy::TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">transfer_policy::TransferPolicyCap</a>&lt;T&gt;): &<b>mut</b> <a href="object.md#0x2_object_UID">object::UID</a>
 </code></pre>
 
 
@@ -759,7 +769,12 @@ Get the <code>allow_taking</code> field of the <code><a href="transfer_policy.md
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_allow_taking">allow_taking</a>&lt;T&gt;(policy: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;): bool { policy.allow_taking }
+<pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_uid_mut_as_owner">uid_mut_as_owner</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, cap: &<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;,
+): &<b>mut</b> UID {
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.policy_id, <a href="transfer_policy.md#0x2_transfer_policy_ENotOwner">ENotOwner</a>);
+    &<b>mut</b> self.id
+}
 </code></pre>
 
 

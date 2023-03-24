@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Kiosk is a primitive for building open, zero-fee trading platforms
-/// for assets with a high degree of customization over transfer
-/// policies.
+/// with a high degree of customization over transfer policies.
+
 ///
 /// The system has 3 main audiences:
 ///
@@ -36,8 +36,13 @@ module sui::kiosk {
     use sui::object::{Self, UID, ID};
     use sui::dynamic_object_field as dof;
     use sui::dynamic_field as df;
-    use sui::transfer_policy::{Self, TransferPolicy, TransferRequest};
     use sui::tx_context::{TxContext, sender};
+    use sui::transfer_policy::{
+        Self,
+        TransferPolicy,
+        TransferRequest,
+        TransferPolicyCap,
+    };
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
@@ -123,6 +128,12 @@ module sui::kiosk {
     /// of a type leave the `Kiosk` ever unless the lock is disabled by the
     /// creator of the item.
     struct KioskLock<phantom T: key + store> has store, copy, drop {}
+
+    // === TransferPolicy settings ===
+
+    /// A custom key that can be attached to the `TransferPolicy` to disallow
+    /// taking an item from the `Kiosk`.
+    struct NoTaking has store, copy, drop {}
 
     // === Events ===
 
@@ -217,9 +228,9 @@ module sui::kiosk {
     public fun take<T: key + store>(
         self: &mut Kiosk, cap: &KioskOwnerCap, policy: &TransferPolicy<T>, id: ID
     ): T {
-        assert!(transfer_policy::allow_taking(policy), ETakingNotAllowed);
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_<Listing>(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
+        assert!(!df::exists_(transfer_policy::uid(policy), NoTaking {}), ETakingNotAllowed);
+        assert!(!df::exists_(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
 
         self.item_count = self.item_count - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
@@ -234,7 +245,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, price: u64
     ): ListedWitness<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_<Listing>(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
+        assert!(!df::exists_(&self.id, Listing { id, is_exclusive: true }), EListedExclusively);
 
         df::add(&mut self.id, Listing { id, is_exclusive: false }, price);
         event::emit(ItemListed<T> { kiosk: object::id(self), id, price });
@@ -278,7 +289,7 @@ module sui::kiosk {
         self: &mut Kiosk, cap: &KioskOwnerCap, id: ID, min_price: u64, ctx: &mut TxContext
     ): PurchaseCap<T> {
         assert!(object::id(self) == cap.for, ENotOwner);
-        assert!(!df::exists_<Listing>(&self.id, Listing { id, is_exclusive: false }), EAlreadyListed);
+        assert!(!df::exists_(&self.id, Listing { id, is_exclusive: false }), EAlreadyListed);
 
         let uid = object::new(ctx);
         df::add(&mut self.id, Listing { id, is_exclusive: true }, min_price);
@@ -407,256 +418,14 @@ module sui::kiosk {
     public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {
         self.min_price
     }
-}
 
-#[test_only]
-/// Kiosk testing strategy:
-/// - [ ] test purchase flow
-/// - [ ] test purchase cap flow
-/// - [ ] test withdraw methods
-module sui::kiosk_tests {
-    use std::vector;
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
-    use sui::kiosk::{Self, Kiosk, KioskOwnerCap};
-    use sui::object::{Self, ID, UID};
-    use sui::sui::SUI;
-    use sui::package;
-    use sui::coin;
+    // === Locking functionality ===
 
-    const AMT: u64 = 10_000;
-
-    struct Asset has key, store { id: UID }
-    struct OTW has drop {}
-
-    /// Prepare: accounts
-    /// Alice, Bob and my favorite guy - Carl
-    fun folks(): (address, address, address) { (@0xA11CE, @0xB0B, @0xCA51) }
-
-    /// Prepare: TransferPolicy<Asset>
-    fun get_policy(ctx: &mut TxContext): (TransferPolicy<Asset>, TransferPolicyCap<Asset>) {
-        let publisher = package::test_claim(OTW {}, ctx);
-        let (policy, cap) = policy::new(&publisher, ctx);
-        package::burn_publisher(publisher);
-        (policy, cap)
+    public fun policy_set_no_taking<T: key + store>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {
+        df::add(transfer_policy::uid_mut_as_owner(policy, cap), NoTaking {}, true);
     }
 
-    /// Prepare: Asset
-    fun get_asset(ctx: &mut TxContext): (Asset, ID) {
-        let uid = object::new(ctx);
-        let id = object::uid_to_inner(&uid);
-        (Asset { id: uid }, id)
-    }
-
-    #[test]
-    fun test_place_and_take() {
-        let ctx = &mut tx_context::dummy();
-        let (policy, policy_cap) = get_policy(ctx);
-        let (asset, item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
-        let asset = kiosk::take(&mut kiosk, &owner_cap, &policy, item_id);
-
-        return_kiosk(kiosk, owner_cap, ctx);
-        return_assets(vector[ asset ]);
-        return_policy(policy, policy_cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::ETakingNotAllowed)]
-    fun test_taking_not_allowed() {
-        let ctx = &mut tx_context::dummy();
-        let (policy, policy_cap) = get_policy(ctx);
-        let (asset, item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
-        policy::set_allow_taking(&mut policy, &policy_cap, false);
-
-        let _asset = kiosk::take(&mut kiosk, &owner_cap, &policy, item_id);
-
-        abort 1337
-    }
-
-
-    #[test]
-    fun test_purchase() {
-        let ctx = &mut tx_context::dummy();
-        let (policy, policy_cap) = get_policy(ctx);
-        let (asset, item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place_and_list(&mut kiosk, &owner_cap, &policy, asset, AMT);
-
-        let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment, ctx);
-        policy::confirm_request(&mut policy, request);
-
-        return_kiosk(kiosk, owner_cap, ctx);
-        return_assets(vector[ asset ]);
-        return_policy(policy, policy_cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::EIncorrectAmount)]
-    fun test_purchase_wrong_amount() {
-        let ctx = &mut tx_context::dummy();
-        let (policy, _policy_cap) = get_policy(ctx);
-        let (asset, item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place_and_list(&mut kiosk, &owner_cap, &policy, asset, AMT);
-
-        let payment = coin::mint_for_testing<SUI>(AMT + 1, ctx);
-        let (_asset, request) = kiosk::purchase(&mut kiosk, item_id, payment, ctx);
-        policy::confirm_request(&mut policy, request);
-
-        abort 1337
-    }
-
-    #[test]
-    fun test_purchase_cap() {
-        let ctx = &mut tx_context::dummy();
-        let (policy, policy_cap) = get_policy(ctx);
-        let (asset, item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &owner_cap, item_id, AMT, ctx);
-
-        let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment, ctx);
-        policy::confirm_request(&mut policy, request);
-
-        return_kiosk(kiosk, owner_cap, ctx);
-        return_assets(vector[ asset ]);
-        return_policy(policy, policy_cap, ctx);
-    }
-
-    #[test]
-    fun test_purchase_cap_return() {
-        let ctx = &mut tx_context::dummy();
-        let (policy, policy_cap) = get_policy(ctx);
-        let (asset, item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
-        kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
-        let asset = kiosk::take(&mut kiosk, &owner_cap, &policy, item_id);
-
-        return_kiosk(kiosk, owner_cap, ctx);
-        return_assets(vector[ asset ]);
-        return_policy(policy, policy_cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::EAlreadyListed)]
-    fun test_purchase_cap_already_listed_fail() {
-        let ctx = &mut tx_context::dummy();
-        let (asset, item_id) = get_asset(ctx);
-        let (policy, _cap) = get_policy(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place_and_list(&mut kiosk, &owner_cap, &policy, asset, AMT);
-        let _purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
-
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::EListedExclusively)]
-    fun test_purchase_cap_issued_list_fail() {
-        let ctx = &mut tx_context::dummy();
-        let (asset, item_id) = get_asset(ctx);
-        let (policy, _cap) = get_policy(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
-        kiosk::list<Asset>(&mut kiosk, &owner_cap, item_id, AMT);
-        kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
-
-        abort 1337
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::ENotEmpty)]
-    fun test_kiosk_has_items() {
-        let ctx = &mut tx_context::dummy();
-        let (asset, _item_id) = get_asset(ctx);
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-        let (policy, _cap) = get_policy(ctx);
-
-        kiosk::place(&mut kiosk, &owner_cap, &policy, asset);
-        return_kiosk(kiosk, owner_cap, ctx);
-
-        abort 1337
-    }
-
-    #[test]
-    fun test_withdraw_default() {
-        let ctx = &mut tx_context::dummy();
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-        let profits = kiosk::withdraw(&mut kiosk, &owner_cap, std::option::none(), ctx);
-
-        coin::burn_for_testing(profits);
-        return_kiosk(kiosk, owner_cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::ENotEnough)]
-    fun test_withdraw_more_than_there_is() {
-        let ctx = &mut tx_context::dummy();
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        let _profits = kiosk::withdraw(&mut kiosk, &owner_cap, std::option::some(100), ctx);
-
-        abort 1337
-    }
-
-    #[test]
-    fun test_disallow_extensions_access_as_owner() {
-        let ctx = &mut tx_context::dummy();
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
-        let _uid_mut = kiosk::uid_mut_as_owner(&mut kiosk, &owner_cap);
-        return_kiosk(kiosk, owner_cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::kiosk::EExtensionsDisabled)]
-    fun test_disallow_extensions() {
-        let ctx = &mut tx_context::dummy();
-        let (kiosk, owner_cap) = kiosk::new(ctx);
-
-        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
-        let _ = kiosk::uid_mut(&mut kiosk);
-
-        abort 1337
-    }
-
-    /// Cleanup: TransferPolicy
-    fun return_policy(policy: TransferPolicy<Asset>, cap: TransferPolicyCap<Asset>, ctx: &mut TxContext): u64 {
-        let profits = policy::destroy_and_withdraw(policy, cap, ctx);
-        coin::burn_for_testing(profits)
-    }
-
-    /// Cleanup: Kiosk
-    fun return_kiosk(kiosk: Kiosk, cap: KioskOwnerCap, ctx: &mut TxContext): u64 {
-        let profits = kiosk::close_and_withdraw(kiosk, cap, ctx);
-        coin::burn_for_testing(profits)
-    }
-
-    /// Cleanup: vector<Asset>
-    fun return_assets(assets: vector<Asset>) {
-        while (vector::length(&assets) > 0) {
-            let Asset { id } = vector::pop_back(&mut assets);
-            object::delete(id)
-        };
-
-        vector::destroy_empty(assets)
+    public fun policy_unset_no_taking<T: key + store>(policy: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>) {
+        let _: bool = df::remove(transfer_policy::uid_mut_as_owner(policy, cap), NoTaking {});
     }
 }

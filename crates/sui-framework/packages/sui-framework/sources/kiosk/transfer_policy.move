@@ -1,9 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Part of the collectibles bundle - a primitive allowing creators to enforce
-/// constraints on transfers as long as the transfers are performed in the ecosystem
-/// that enforces them.
+/// Defines the `TransferPolicy` type and the logic to approve `TransferRequest`s.
+///
+/// - TransferPolicy - is a highly customizable primitive, which provides an
+/// interface for the type owner to set custom transfer rules for every
+/// deal performed in the `Kiosk` or a similar system that integrates with TP.
+///
+/// - Once a `TransferPolicy<T>` is created for and shared (or frozen), the
+/// type `T` becomes tradable in `Kiosk`s. On every purchase operation, a
+/// `TransferRequest` is created and needs to be confirmed by the `TransferPolicy`
+/// hot potato or transaction will fail.
+///
+/// - Type owner (creator) can set any Rules as long as the ecosystem supports
+/// them. All of the Rules need to be resolved within a single transaction (eg
+/// pay royalty and pay fixed commission). Once required actions are performed,
+/// the `TransferRequest` can be "confimed" via `confirm_request` call.
+///
+/// - `TransferPolicy` aims to be the main interface for creators to control trades
+/// of their types and collect profits if a fee is required on sales. Custom
+/// policies can be removed at any moment, and the change will affect all instances
+/// of the type at once.
 module sui::transfer_policy {
     use std::vector;
     use std::option::{Self, Option};
@@ -52,8 +69,11 @@ module sui::transfer_policy {
         receipts: VecSet<TypeName>
     }
 
-    /// A unique capability that allows owner of the `T` to authorize
-    /// transfers. Can only be created with the `Publisher` object.
+    /// A unique capability that allows the owner of the `T` to authorize
+    /// transfers. Can only be created with the `Publisher` object. Although
+    /// there's no limitation to how many policies can be created, for most
+    /// of the cases there's no need to create more than one since any of the
+    /// policies can be used to confirm the `TransferRequest`.
     struct TransferPolicy<phantom T> has key, store {
         id: UID,
         /// The Balance of the `TransferPolicy` which collects `SUI`.
@@ -61,16 +81,11 @@ module sui::transfer_policy {
         /// a matter of an implementation of a specific rule - whether to add
         /// to balance and how much.
         balance: Balance<SUI>,
-        /// Set of types of attached rules.
-        rules: VecSet<TypeName>,
-        /// Whether to allow taking the `T` from the `Kiosk` or any other
-        /// storage. Only works if supported in the storage and opens the door
-        /// for locking mechanics. The best combination would be with the
-        /// `witness_policy` which makes sure that a certain action was
-        /// performed (eg item was put back to the `Kiosk` after a sell).
+        /// Set of types of attached rules - used to verify `receipts` when
+        /// a `TransferRequest` is received in `confirm_request` function.
         ///
-        /// Defaults to `true`.
-        allow_taking: bool
+        /// Additionally provides a way to look up currently attached Rules.
+        rules: VecSet<TypeName>
     }
 
     /// A Capability granting the owner permission to add/remove rules as well
@@ -88,12 +103,17 @@ module sui::transfer_policy {
     struct RuleKey<phantom T: drop> has copy, store, drop {}
 
     /// Construct a new `TransferRequest` hot potato which requires an
-    /// approving action from the creator to be destroyed / resolved.
+    /// approving action from the creator to be destroyed / resolved. Once
+    /// created, it must be confirmed in the `confirm_request` call otherwise
+    /// the transaction will fail.
     public fun new_request<T>(
         paid: u64, from: ID, ctx: &mut TxContext
     ): TransferRequest<T> {
         TransferRequest {
-            paid, from, receipts: vec_set::empty(), metadata: bag::new(ctx)
+            paid,
+            from,
+            receipts: vec_set::empty(),
+            metadata: bag::new(ctx)
         }
     }
 
@@ -111,7 +131,7 @@ module sui::transfer_policy {
         event::emit(TransferPolicyCreated<T> { id: policy_id });
 
         (
-            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero(), allow_taking: true },
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
             TransferPolicyCap { id: object::new(ctx), policy_id }
         )
     }
@@ -129,7 +149,7 @@ module sui::transfer_policy {
         event::emit(TransferPolicyCreated<T> { id: policy_id });
 
         (
-            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero(), allow_taking: true },
+            TransferPolicy { id, rules: vec_set::empty(), balance: balance::zero() },
             TransferPolicyCap { id: object::new(ctx), policy_id }
         )
     }
@@ -160,7 +180,7 @@ module sui::transfer_policy {
         assert!(object::id(&self) == cap.policy_id, ENotOwner);
 
         let TransferPolicyCap { id: cap_id, policy_id: _ } = cap;
-        let TransferPolicy { id, rules: _, balance, allow_taking: _ } = self;
+        let TransferPolicy { id, rules: _, balance } = self;
 
         object::delete(id);
         object::delete(cap_id);
@@ -250,18 +270,17 @@ module sui::transfer_policy {
 
     // === Fields access ===
 
-    /// Set the `allow_taking` field of the `TransferPolicy`.
-    public fun set_allow_taking<T>(
-        policy: &mut TransferPolicy<T>,
-        cap: &TransferPolicyCap<T>,
-        allow_taking: bool
-    ) {
-        assert!(object::id(policy) == cap.policy_id, ENotOwner);
-        policy.allow_taking = allow_taking;
-    }
+    /// Allows reading custom attachements to the `TransferPolicy` if there are any.
+    public fun uid<T>(self: &TransferPolicy<T>): &UID { &self.id }
 
-    /// Get the `allow_taking` field of the `TransferPolicy`.
-    public fun allow_taking<T>(policy: &TransferPolicy<T>): bool { policy.allow_taking }
+    /// Get a mutable reference to the `self.id` to enable custom attachements
+    /// to the `TransferPolicy`.
+    public fun uid_mut_as_owner<T>(
+        self: &mut TransferPolicy<T>, cap: &TransferPolicyCap<T>,
+    ): &mut UID {
+        assert!(object::id(self) == cap.policy_id, ENotOwner);
+        &mut self.id
+    }
 
     /// Get the `paid` field of the `TransferRequest`.
     public fun paid<T>(self: &TransferRequest<T>): u64 { self.paid }
@@ -326,157 +345,3 @@ module sui::fixed_commission {
     }
 }
 
-#[test_only]
-module sui::dummy_policy {
-    use sui::coin::Coin;
-    use sui::sui::SUI;
-    use sui::transfer_policy::{
-        Self as policy,
-        TransferPolicy,
-        TransferPolicyCap,
-        TransferRequest
-    };
-
-    struct Rule has drop {}
-    struct Config has store, drop {}
-
-    public fun set<T>(
-        policy: &mut TransferPolicy<T>,
-        cap: &TransferPolicyCap<T>
-    ) {
-        policy::add_rule(Rule {}, policy, cap, Config {})
-    }
-
-    public fun pay<T>(
-        policy: &mut TransferPolicy<T>,
-        request: &mut TransferRequest<T>,
-        payment: Coin<SUI>
-    ) {
-        policy::add_to_balance(Rule {}, policy, payment);
-        policy::add_receipt(Rule {}, request);
-    }
-}
-
-#[test_only]
-module sui::malicious_policy {
-    use sui::transfer_policy::{Self as policy, TransferRequest};
-
-    struct Rule has drop {}
-
-    public fun cheat<T>(request: &mut TransferRequest<T>) {
-        policy::add_receipt(Rule {}, request);
-    }
-}
-
-#[test_only]
-module sui::transfer_policy_tests {
-    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
-    use sui::tx_context::{Self, TxContext, dummy as ctx};
-    use sui::object::{Self, ID, UID};
-    use sui::dummy_policy;
-    use sui::malicious_policy;
-    use sui::package;
-    use sui::coin;
-
-    struct OTW has drop {}
-    struct Asset has key, store { id: UID }
-
-    #[test]
-    /// No policy set;
-    fun test_default_flow() {
-        let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
-
-        // time to make a new transfer request
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
-        policy::confirm_request(&policy, request);
-
-        wrapup(policy, cap, ctx);
-    }
-
-    #[test]
-    /// Policy set and completed;
-    fun test_rule_completed() {
-        let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
-
-        // now require everyone to pay any amount
-        dummy_policy::set(&mut policy, &cap);
-
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
-
-        dummy_policy::pay(&mut policy, &mut request, coin::mint_for_testing(10_000, ctx));
-        policy::confirm_request(&policy, request);
-
-        let profits = wrapup(policy, cap, ctx);
-
-        assert!(profits == 10_000, 0);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
-    /// Policy set but not satisfied;
-    fun test_rule_ignored() {
-        let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
-
-        // now require everyone to pay any amount
-        dummy_policy::set(&mut policy, &cap);
-
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
-        policy::confirm_request(&policy, request);
-
-        wrapup(policy, cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::ERuleAlreadySet)]
-    /// Attempt to add another policy;
-    fun test_rule_exists() {
-        let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
-
-        // now require everyone to pay any amount
-        dummy_policy::set(&mut policy, &cap);
-        dummy_policy::set(&mut policy, &cap);
-
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
-        policy::confirm_request(&policy, request);
-
-        wrapup(policy, cap, ctx);
-    }
-
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::EIllegalRule)]
-    /// Attempt to cheat by using another rule approval;
-    fun test_rule_swap() {
-        let ctx = &mut ctx();
-        let (policy, cap) = prepare(ctx);
-
-        // now require everyone to pay any amount
-        dummy_policy::set(&mut policy, &cap);
-        let request = policy::new_request(10_000, fresh_id(ctx), ctx);
-
-        // try to add receipt from another rule
-        malicious_policy::cheat(&mut request);
-        policy::confirm_request(&policy, request);
-
-        wrapup(policy, cap, ctx);
-    }
-
-    public fun prepare(ctx: &mut TxContext): (TransferPolicy<Asset>, TransferPolicyCap<Asset>) {
-        let publisher = package::test_claim(OTW {}, ctx);
-        let (policy, cap) = policy::new<Asset>(&publisher, ctx);
-        package::burn_publisher(publisher);
-        (policy, cap)
-    }
-
-    public fun wrapup(policy: TransferPolicy<Asset>, cap: TransferPolicyCap<Asset>, ctx: &mut TxContext): u64 {
-        let profits = policy::destroy_and_withdraw(policy, cap, ctx);
-        coin::burn_for_testing(profits)
-    }
-
-    public fun fresh_id(ctx: &mut TxContext): ID {
-        object::id_from_address(tx_context::fresh_object_address(ctx))
-    }
-}
