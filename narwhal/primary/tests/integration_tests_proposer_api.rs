@@ -90,7 +90,7 @@ async fn test_rounds_errors() {
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
     let mut builder = CommitteeBuilder::new(Epoch::default());
 
-    for authority in committee.authorities() {
+    for authority in fixture.authorities().map(|a| a.authority()) {
         if authority.id() != authority_id {
             builder = builder.add_authority(
                 authority.protocol_key().clone(),

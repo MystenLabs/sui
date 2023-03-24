@@ -751,7 +751,7 @@ impl<R: rand::RngCore + rand::CryptoRng> Builder<R> {
 
         // now order the AuthorityFixtures by the authority id so when we iterate either via the
         // committee.authorities() or via the fixture.authorities() we'll get the same order.
-        authorities.sort_by(|a1, a2|a1.authority().id().cmp(&a2.authority().id()));
+        authorities.sort_by_key(|a1| a1.authority().id());
 
         CommitteeFixture {
             authorities,
