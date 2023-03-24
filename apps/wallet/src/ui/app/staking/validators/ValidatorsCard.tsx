@@ -20,7 +20,6 @@ import { Card, CardItem } from '_app/shared/card';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { useGetInactiveStakingPoolIds } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 
 export function ValidatorsCard() {
@@ -41,25 +40,23 @@ export function ValidatorsCard() {
         return getAllStakeSui(delegatedStake);
     }, [delegatedStake]);
 
-    const { data: inActiveStakingPoolID } = useGetInactiveStakingPoolIds(
-        system?.inactivePoolsId
-    );
-
     const delegations = useMemo(() => {
         return delegatedStake?.flatMap((delegation) => {
             return delegation.stakes.map((d) => ({
                 ...d,
                 // flag any inactive validator for the stakeSui object
-                inactiveValidator: inActiveStakingPoolID?.includes(
-                    delegation.stakingPool
+                // if the stakingPoolId is not found in the activeValidators list flag as inactive
+                inactiveValidator: !activeValidators?.find(
+                    ({ stakingPoolId }) =>
+                        stakingPoolId === delegation.stakingPool
                 ),
                 validatorAddress: delegation.validatorAddress,
             }));
         });
-    }, [delegatedStake, inActiveStakingPoolID]);
+    }, [activeValidators, delegatedStake]);
 
     // Check if there are any inactive validators
-    const inActiveStakes = delegations?.some(
+    const isInActiveValidator = delegations?.some(
         ({ inactiveValidator }) => inactiveValidator
     );
 
@@ -106,7 +103,7 @@ export function ValidatorsCard() {
             <BottomMenuLayout>
                 <Content>
                     <div className="mb-4">
-                        {inActiveStakes ? (
+                        {isInActiveValidator ? (
                             <Alert className="mb-3">
                                 Unstake SUI from the inactive validators and
                                 stake on an active validator to start earning
