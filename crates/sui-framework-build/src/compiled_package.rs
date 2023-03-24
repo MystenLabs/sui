@@ -529,6 +529,61 @@ impl CompiledPackage {
                 _ => None,
             })
     }
+
+    pub fn verify_unpublished_dependencies(
+        &self,
+        unpublished_deps: &BTreeSet<Symbol>,
+    ) -> SuiResult<()> {
+        if unpublished_deps.is_empty() {
+            return Ok(());
+        }
+
+        let errors = self
+            .package
+            .deps_compiled_units
+            .iter()
+            .filter_map(|(p, m)| {
+                if !unpublished_deps.contains(p) {
+                    return None;
+                }
+                match &m.unit {
+                    CompiledUnitEnum::Module(m) if m.module.address() != &AccountAddress::ZERO => {
+                        Some(format!(
+                            " - {}::{} in dependency {}",
+                            m.module.address(),
+                            m.name,
+                            p
+                        ))
+                    }
+                    CompiledUnitEnum::Module(_) => None,
+                    CompiledUnitEnum::Script(_) => {
+                        unimplemented!("Scripts are not supported in Sui Move")
+                    }
+                }
+            })
+            .collect::<Vec<String>>();
+
+        if errors.is_empty() {
+            return Ok(());
+        }
+
+        let mut error_message = vec![];
+        error_message.push(
+            "The following modules in package dependencies set a non-zero self-address:".into(),
+        );
+        error_message.extend(errors);
+        error_message.push(
+            "If these packages really are unpublished, their self-addresses should be set \
+	     to \"0x0\" in the [addresses] section of the manifest when publishing. If they \
+	     are already published, ensure they specify the address in the `published-at` of \
+	     their Move.toml manifest."
+                .into(),
+        );
+
+        Err(SuiError::ModulePublishFailure {
+            error: error_message.join("\n"),
+        })
+    }
 }
 
 impl Default for BuildConfig {

@@ -1222,6 +1222,9 @@ async fn compile_package(
             .into());
         }
     }
+    if with_unpublished_dependencies {
+        compiled_package.verify_unpublished_dependencies(&dependencies.unpublished)?;
+    }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
         BytecodeSourceVerifier::new(client.read_api(), false)
