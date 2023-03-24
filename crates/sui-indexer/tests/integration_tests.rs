@@ -29,7 +29,7 @@ pub mod pg_integration_test {
     use sui_json_rpc::api::ExtendedApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
+        BigInt, CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
         SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
         SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
         TransactionBytes,
@@ -258,7 +258,7 @@ pub mod pg_integration_test {
             .get_total_transaction_number()
             .await
             .unwrap();
-        assert!(rpc_tx_count >= 2);
+        assert!(<u64>::from(rpc_tx_count) >= 2);
         Ok(())
     }
 
@@ -847,7 +847,9 @@ pub mod pg_integration_test {
         let prev_epoch_last_checkpoint_id = current_epoch.first_checkpoint_id - 1;
 
         let checkpoint = store
-            .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
+            .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(
+                prev_epoch_last_checkpoint_id,
+            )))
             .unwrap();
         assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
         assert_eq!(
@@ -859,7 +861,7 @@ pub mod pg_integration_test {
         let decoded_checkpoint: sui_json_rpc_types::Checkpoint = checkpoint.try_into().unwrap();
         assert_eq!(decoded_checkpoint.epoch, current_epoch.epoch - 1);
         assert_eq!(
-            decoded_checkpoint.sequence_number,
+            <u64>::from(decoded_checkpoint.sequence_number),
             prev_epoch_last_checkpoint_id
         );
 
