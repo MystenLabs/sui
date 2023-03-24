@@ -51,7 +51,8 @@ macro_rules! exit_main {
         match $result {
             Ok(_) => (),
             Err(err) => {
-                println!("{}", err.to_string().bold().red());
+                let err = format!("{:?}", err);
+                println!("{}", err.bold().red());
                 std::process::exit(1);
             }
         }
