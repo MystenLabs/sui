@@ -226,40 +226,40 @@ impl Orchestrator {
         // Select instances to configure.
         let instances = self.select_instances(parameters)?;
 
-        // TODO: There should be no need to generate these files locally; we can generate them
-        // directly on the remote machines.
-        SuiProtocol::print_files(&instances);
+        // // TODO: There should be no need to generate these files locally; we can generate them
+        // // directly on the remote machines.
+        // SuiProtocol::print_files(&instances);
 
-        // Generate the configuration file, genesis, and gas keystore.
-        // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
-        for (i, instance) in instances.iter().enumerate() {
-            display::status(format!("{}/{}", i + 1, instances.len()));
+        // // Generate the configuration file, genesis, and gas keystore.
+        // // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
+        // for (i, instance) in instances.iter().enumerate() {
+        //     display::status(format!("{}/{}", i + 1, instances.len()));
 
-            // Connect to the instance.
-            let connection = self
-                .ssh_manager
-                .connect(instance.ssh_address())
-                .await?
-                .with_timeout(&Some(Duration::from_secs(180)));
+        //     // Connect to the instance.
+        //     let connection = self
+        //         .ssh_manager
+        //         .connect(instance.ssh_address())
+        //         .await?
+        //         .with_timeout(&Some(Duration::from_secs(180)));
 
-            // Upload all configuration files.
-            for source in SuiProtocol::configuration_files() {
-                let destination = source.file_name().expect("Config file is directory");
-                let mut file = File::open(&source).expect("Cannot open config file");
-                let mut buf = Vec::new();
-                file.read_to_end(&mut buf).expect("Cannot read config file");
-                connection.upload(destination, &buf)?;
-            }
+        //     // Upload all configuration files.
+        //     for source in SuiProtocol::configuration_files() {
+        //         let destination = source.file_name().expect("Config file is directory");
+        //         let mut file = File::open(&source).expect("Cannot open config file");
+        //         let mut buf = Vec::new();
+        //         file.read_to_end(&mut buf).expect("Cannot read config file");
+        //         connection.upload(destination, &buf)?;
+        //     }
 
-            // Generate the genesis files.
-            let command = [
-                "source $HOME/.cargo/env",
-                &self.protocol_commands.genesis_config_command(),
-            ]
-            .join(" && ");
-            let repo_name = self.settings.repository_name();
-            connection.execute_from_path(command, repo_name)?;
-        }
+        //     // Generate the genesis files.
+        //     let command = [
+        //         "source $HOME/.cargo/env",
+        //         &self.protocol_commands.genesis_config_command(),
+        //     ]
+        //     .join(" && ");
+        //     let repo_name = self.settings.repository_name();
+        //     connection.execute_from_path(command, repo_name)?;
+        // }
 
         // TMP
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
