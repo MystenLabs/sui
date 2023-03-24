@@ -41,7 +41,7 @@ CREATE INDEX epochs_start_index ON epochs (epoch_start_timestamp ASC);
 CREATE INDEX epochs_end_index ON epochs (epoch_end_timestamp ASC NULLS LAST);
 
 -- update epoch_network_metrics on every epoch
-CREATE OR REPLACE FUNCTION objects_modified_func() RETURNS TRIGGER AS
+CREATE OR REPLACE FUNCTION refresh_view_func() RETURNS TRIGGER AS
 $body$
 BEGIN
     IF (TG_OP = 'INSERT') THEN
@@ -53,23 +53,29 @@ BEGIN
     ELSIF (TG_OP = 'DELETE') THEN
         RETURN OLD;
     ELSE
-        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - Other action occurred: %, at %',TG_OP,NOW();
+        RAISE WARNING '[REFRESH_VIEW_FUN] - Other action occurred: %, at %',TG_OP,NOW();
         RETURN NULL;
     END IF;
 
 EXCEPTION
     WHEN data_exception THEN
-        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - UDF ERROR [DATA EXCEPTION] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
+        RAISE WARNING '[REFRESH_VIEW_FUN] - UDF ERROR [DATA EXCEPTION] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
         RETURN NULL;
     WHEN unique_violation THEN
-        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - UDF ERROR [UNIQUE] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
+        RAISE WARNING '[REFRESH_VIEW_FUN] - UDF ERROR [UNIQUE] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
         RETURN NULL;
     WHEN OTHERS THEN
-        RAISE WARNING '[OBJECTS_MODIFIED_FUNC] - UDF ERROR [OTHER] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
+        RAISE WARNING '[REFRESH_VIEW_FUN] - UDF ERROR [OTHER] - SQLSTATE: %, SQLERRM: %',SQLSTATE,SQLERRM;
         RETURN NULL;
 END;
 $body$
     LANGUAGE plpgsql;
+
+CREATE TRIGGER refresh_view
+    AFTER INSERT
+    ON epochs
+    FOR EACH ROW
+EXECUTE PROCEDURE refresh_view_func();
 
 CREATE MATERIALIZED VIEW epoch_move_call_metrics AS
 (SELECT 3::BIGINT AS day, move_package, move_module, move_function, COUNT(*) AS count
