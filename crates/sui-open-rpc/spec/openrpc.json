@@ -2198,7 +2198,7 @@
         },
         {
           "name": "module",
-          "description": "the Move module name, e.g. `devnet_nft`",
+          "description": "the Move module name, e.g. `pay`",
           "required": true,
           "schema": {
             "type": "string"
@@ -2206,7 +2206,7 @@
         },
         {
           "name": "function",
-          "description": "the move function name, e.g. `mint`",
+          "description": "the move function name, e.g. `split`",
           "required": true,
           "schema": {
             "type": "string"

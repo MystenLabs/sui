@@ -122,9 +122,9 @@ pub trait TransactionBuilder {
         signer: SuiAddress,
         /// the Move package ID, e.g. `0x2`
         package_object_id: ObjectID,
-        /// the Move module name, e.g. `devnet_nft`
+        /// the Move module name, e.g. `pay`
         module: String,
-        /// the move function name, e.g. `mint`
+        /// the move function name, e.g. `split`
         function: String,
         /// the type arguments of the Move function
         type_arguments: Vec<SuiTypeTag>,

@@ -15,11 +15,9 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
 
-use sui::client_commands::EXAMPLE_NFT_DESCRIPTION;
-use sui::client_commands::EXAMPLE_NFT_NAME;
-use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
+use sui_json_rpc_types::SuiTypeTag;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
@@ -30,6 +28,7 @@ use sui_json_rpc_types::{
     TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
+use sui_types::base_types::random_object_ref;
 use sui_types::base_types::{
     MoveObjectType, ObjectDigest, ObjectID, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
@@ -38,6 +37,7 @@ use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages::ObjectArg;
 use sui_types::messages::{
     CallArg, ExecuteTransactionRequestType, TransactionData, TransactionKind,
 };
@@ -97,17 +97,18 @@ impl RpcExampleProvider {
         let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let gas_id = ObjectID::new(self.rng.gen());
         let object_id = ObjectID::new(self.rng.gen());
+        let coin_ref = random_object_ref();
+        let random_amount: u64 = 10;
 
         let tx_params = vec![
             RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
                 package_object_id: SUI_FRAMEWORK_OBJECT_ID,
-                module: "devnet_nft".to_string(),
-                function: "mint".to_string(),
-                type_arguments: vec![],
+                module: "pay".to_string(),
+                function: "split".to_string(),
+                type_arguments: vec![SuiTypeTag::new("0x2::sui::SUI".to_string())],
                 arguments: vec![
-                    SuiJsonValue::new(json!(EXAMPLE_NFT_NAME)).unwrap(),
-                    SuiJsonValue::new(json!(EXAMPLE_NFT_DESCRIPTION)).unwrap(),
-                    SuiJsonValue::new(json!(EXAMPLE_NFT_URL)).unwrap(),
+                    SuiJsonValue::new(json!(coin_ref.0)).unwrap(),
+                    SuiJsonValue::new(json!(random_amount)).unwrap(),
                 ],
             }),
             RPCTransactionRequestParams::TransferObjectRequestParams(TransferObjectParams {
@@ -121,13 +122,12 @@ impl RpcExampleProvider {
             builder
                 .move_call(
                     SUI_FRAMEWORK_OBJECT_ID,
-                    Identifier::from_str("devnet_nft").unwrap(),
-                    Identifier::from_str("mint").unwrap(),
+                    Identifier::from_str("pay").unwrap(),
+                    Identifier::from_str("split").unwrap(),
                     vec![],
                     vec![
-                        CallArg::Pure(EXAMPLE_NFT_NAME.as_bytes().to_vec()),
-                        CallArg::Pure(EXAMPLE_NFT_DESCRIPTION.as_bytes().to_vec()),
-                        CallArg::Pure(EXAMPLE_NFT_URL.as_bytes().to_vec()),
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_ref)),
+                        CallArg::Pure(bcs::to_bytes(&random_amount).unwrap()),
                     ],
                 )
                 .unwrap();

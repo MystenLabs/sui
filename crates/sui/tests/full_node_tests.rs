@@ -33,7 +33,6 @@ use sui_types::messages::{
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::TransactionFilter;
-use sui_types::sui_framework_address_concat_string;
 use sui_types::utils::to_sender_signed_transaction_with_multi_signers;
 use sui_types::{base_types::ObjectID, messages::TransactionInfoRequest};
 use test_utils::authority::test_and_configure_authority_configs;
@@ -44,7 +43,7 @@ use test_utils::messages::{
 use test_utils::network::{start_fullnode_from_config, TestClusterBuilder};
 use test_utils::transaction::{
     create_devnet_nft, delete_devnet_nft, increment_counter,
-    publish_basics_package_and_make_counter, transfer_coin,
+    publish_basics_package_and_make_counter, publish_nfts_package, transfer_coin,
 };
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 use tokio::sync::Mutex;
@@ -563,25 +562,22 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     let ws_client = fullnode.ws_client;
 
     let context = &mut test_cluster.wallet;
+    let package_id = publish_nfts_package(context, /* sender */ None).await.0;
+
+    let struct_tag_str = format!("{package_id}::devnet_nft::MintNFTEvent");
+    let struct_tag = parse_struct_tag(&struct_tag_str).unwrap();
 
     let mut sub: Subscription<SuiEvent> = ws_client
         .subscribe(
             "sui_subscribeEvent",
-            rpc_params![EventFilter::MoveEventType(
-                parse_struct_tag(&sui_framework_address_concat_string(
-                    "::devnet_nft::MintNFTEvent"
-                ))
-                .unwrap()
-            )],
+            rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
             "sui_unsubscribeEvents",
         )
         .await
         .unwrap();
 
-    let (sender, object_id, digest) = create_devnet_nft(context).await?;
+    let (sender, object_id, digest) = create_devnet_nft(context, package_id).await?;
     wait_for_tx(digest, node.state().clone()).await;
-
-    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
 
     // Wait for streaming
     let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
@@ -591,7 +587,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
             bcs,
             ..
         }))) => {
-            assert_eq!(type_.to_string(), struct_tag_str,);
+            assert_eq!(&type_, &struct_tag);
             assert_eq!(
                 parsed_json,
                 json!({
@@ -604,9 +600,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         }
         other => panic!("Failed to get SuiEvent, but {:?}", other),
     };
-
-    let type_ = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
-    let type_tag = parse_struct_tag(&type_).unwrap();
+    let type_tag = parse_struct_tag(&struct_tag_str).unwrap();
     let expected_parsed_event = Event::move_event_to_move_struct(
         &type_tag,
         &bcs,
@@ -620,7 +614,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
             tx_digest: digest,
             event_seq: 0,
         },
-        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
+        package_id,
         transaction_module: ident_str!("devnet_nft").into(),
         sender,
         type_: type_tag,
@@ -665,6 +659,8 @@ async fn test_full_node_event_read_api_ok() {
     let node = &test_cluster.fullnode_handle.sui_node;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
+    let package_id = publish_nfts_package(context, /* sender */ None).await.0;
+
     let (transferred_object, _, _, digest, _, _) = transfer_coin(context).await.unwrap();
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -689,7 +685,7 @@ async fn test_full_node_event_read_api_ok() {
     // This is a poor substitute for the post processing taking some time
     sleep(Duration::from_millis(1000)).await;
 
-    let (_sender, _object_id, digest2) = create_devnet_nft(context).await.unwrap();
+    let (_sender, _object_id, digest2) = create_devnet_nft(context, package_id).await.unwrap();
     wait_for_tx(digest2, node.state().clone()).await;
 
     // Add a delay to ensure event processing is done after transaction commits.
@@ -945,9 +941,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await?;
     let node = test_cluster.fullnode_handle.sui_node.clone();
     let context = &mut test_cluster.wallet;
+    let package_id = publish_nfts_package(context, /* sender */ None).await.0;
 
     // Create the object
-    let (sender, object_id, _) = create_devnet_nft(context).await?;
+    let (sender, object_id, _) = create_devnet_nft(context, package_id).await?;
     sleep(Duration::from_secs(3)).await;
 
     let recipient = context.config.keystore.addresses().get(1).cloned().unwrap();
@@ -978,7 +975,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .expect("Failed to transfer coins to recipient");
 
     // Delete the object
-    let response = delete_devnet_nft(context, &recipient, object_ref_v2).await;
+    let response = delete_devnet_nft(context, &recipient, package_id, object_ref_v2).await;
     assert_eq!(
         *response.effects.unwrap().status(),
         SuiExecutionStatus::Success
