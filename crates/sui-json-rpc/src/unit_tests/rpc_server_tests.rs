@@ -742,10 +742,25 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
             staked_sui[0].stakes[2].staked_sui_id,
         ])
         .await?;
-    
-    assert!(matches!(&staked_sui_copy[0].stakes[0].status, StakeStatus::Active { estimated_reward: _ }));
-    assert!(matches!(&staked_sui_copy[0].stakes[1].status, StakeStatus::Active { estimated_reward: _ }));
-    assert!(matches!(&staked_sui_copy[0].stakes[2].status, StakeStatus::Active { estimated_reward: _ }));
+
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[0].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[1].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[2].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
 
     let transaction_bytes: TransactionBytes = http_client
         .request_withdraw_stake(
@@ -779,10 +794,23 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
             staked_sui[0].stakes[2].staked_sui_id,
         ])
         .await?;
-   
-    assert!(matches!(&staked_sui_copy[0].stakes[0].status, StakeStatus::Active { estimated_reward: _ }));
-    assert!(matches!(&staked_sui_copy[0].stakes[1].status, StakeStatus::Active { estimated_reward: _ }));
-    assert!(matches!(&staked_sui_copy[0].stakes[2].status, StakeStatus::Unstaked));
+
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[0].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[1].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[2].status,
+        StakeStatus::Unstaked
+    ));
     Ok(())
 }
 
