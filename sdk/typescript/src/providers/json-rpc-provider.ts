@@ -198,7 +198,7 @@ export class JsonRpcProvider {
     }
 
     return await this.client.requestWithType(
-      'sui_getCoins',
+      'suix_getCoins',
       [input.owner, input.coinType, input.cursor, input.limit],
       PaginatedCoins,
       this.options.skipDataValidation,
@@ -218,7 +218,7 @@ export class JsonRpcProvider {
     }
 
     return await this.client.requestWithType(
-      'sui_getAllCoins',
+      'suix_getAllCoins',
       [input.owner, input.cursor, input.limit],
       PaginatedCoins,
       this.options.skipDataValidation,
@@ -237,7 +237,7 @@ export class JsonRpcProvider {
       throw new Error('Invalid Sui address');
     }
     return await this.client.requestWithType(
-      'sui_getBalance',
+      'suix_getBalance',
       [input.owner, input.coinType],
       CoinBalance,
       this.options.skipDataValidation,
@@ -252,7 +252,7 @@ export class JsonRpcProvider {
       throw new Error('Invalid Sui address');
     }
     return await this.client.requestWithType(
-      'sui_getAllBalances',
+      'suix_getAllBalances',
       [input.owner],
       array(CoinBalance),
       this.options.skipDataValidation,
@@ -264,7 +264,7 @@ export class JsonRpcProvider {
    */
   async getCoinMetadata(input: { coinType: string }): Promise<CoinMetadata> {
     return await this.client.requestWithType(
-      'sui_getCoinMetadata',
+      'suix_getCoinMetadata',
       [input.coinType],
       CoinMetadataStruct,
       this.options.skipDataValidation,
@@ -276,7 +276,7 @@ export class JsonRpcProvider {
    */
   async getTotalSupply(input: { coinType: string }): Promise<CoinSupply> {
     return await this.client.requestWithType(
-      'sui_getTotalSupply',
+      'suix_getTotalSupply',
       [input.coinType],
       CoinSupply,
       this.options.skipDataValidation,
@@ -394,7 +394,7 @@ export class JsonRpcProvider {
     }
 
     return await this.client.requestWithType(
-      'sui_getOwnedObjects',
+      'suix_getOwnedObjects',
       [
         input.owner,
         {
@@ -460,7 +460,7 @@ export class JsonRpcProvider {
     input: SuiTransactionResponseQuery & PaginationArguments & OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
-      'sui_queryTransactions',
+      'suix_queryTransactions',
       [
         {
           filter: input.filter,
@@ -490,7 +490,7 @@ export class JsonRpcProvider {
     const results = await Promise.all(
       filters.map((filter) =>
         this.client.requestWithType(
-          'sui_queryTransactions',
+          'suix_queryTransactions',
           [{ filter }, null, null, descendingOrder],
           PaginatedTransactionResponse,
           this.options.skipDataValidation,
@@ -518,7 +518,7 @@ export class JsonRpcProvider {
     const results = await Promise.all(
       filters.map((filter) =>
         this.client.requestWithType(
-          'sui_queryTransactions',
+          'suix_queryTransactions',
           [{ filter }, null, null, descendingOrder],
           PaginatedTransactionResponse,
           this.options.skipDataValidation,
@@ -609,7 +609,7 @@ export class JsonRpcProvider {
    */
   async getReferenceGasPrice(): Promise<bigint> {
     const resp = await this.client.requestWithType(
-      'sui_getReferenceGasPrice',
+      'suix_getReferenceGasPrice',
       [],
       string(),
       this.options.skipDataValidation,
@@ -625,7 +625,7 @@ export class JsonRpcProvider {
       throw new Error('Invalid Sui address');
     }
     return await this.client.requestWithType(
-      'sui_getStakes',
+      'suix_getStakes',
       [input.owner],
       array(DelegatedStake),
       this.options.skipDataValidation,
@@ -644,7 +644,7 @@ export class JsonRpcProvider {
       }
     });
     return await this.client.requestWithType(
-      'sui_getStakesByIds',
+      'suix_getStakesByIds',
       [input.stakedSuiIds],
       array(DelegatedStake),
       this.options.skipDataValidation,
@@ -656,7 +656,7 @@ export class JsonRpcProvider {
    */
   async getLatestSuiSystemState(): Promise<SuiSystemStateSummary> {
     return await this.client.requestWithType(
-      'sui_getLatestSuiSystemState',
+      'suix_getLatestSuiSystemState',
       [],
       SuiSystemStateSummary,
       this.options.skipDataValidation,
@@ -674,7 +674,7 @@ export class JsonRpcProvider {
       OrderArguments,
   ): Promise<PaginatedEvents> {
     return await this.client.requestWithType(
-      'sui_queryEvents',
+      'suix_queryEvents',
       [
         input.query,
         input.cursor,
@@ -780,7 +780,7 @@ export class JsonRpcProvider {
       throw new Error('Invalid Sui Object id');
     }
     return await this.client.requestWithType(
-      'sui_getDynamicFields',
+      'suix_getDynamicFields',
       [input.parentId, input.cursor, input.limit],
       DynamicFieldPage,
       this.options.skipDataValidation,
@@ -797,7 +797,7 @@ export class JsonRpcProvider {
     name: string | DynamicFieldName;
   }): Promise<SuiObjectResponse> {
     return await this.client.requestWithType(
-      'sui_getDynamicFieldObject',
+      'suix_getDynamicFieldObject',
       [input.parentId, input.name],
       SuiObjectResponse,
       this.options.skipDataValidation,
@@ -863,7 +863,7 @@ export class JsonRpcProvider {
     epoch?: number;
   }): Promise<CommitteeInfo> {
     return await this.client.requestWithType(
-      'sui_getCommitteeInfo',
+      'suix_getCommitteeInfo',
       [input?.epoch],
       CommitteeInfo,
     );
