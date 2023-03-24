@@ -9378,6 +9378,7 @@ dependencies = [
  "rocksdb",
  "scopeguard",
  "serde 1.0.152",
+ "serde_json",
  "shared-crypto",
  "shellexpand",
  "sui",

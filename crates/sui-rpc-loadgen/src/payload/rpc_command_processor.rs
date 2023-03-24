@@ -5,10 +5,16 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::collections::HashSet;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
 use sui_json_rpc_types::{
-    BigInt, CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionResponseOptions,
+    BigInt, CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionData,
+    SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
@@ -34,10 +40,11 @@ const DEFAULT_GAS_BUDGET: u64 = 100_000;
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
     clients: Arc<RwLock<Vec<SuiClient>>>,
+    data_directory: String,
 }
 
 impl RpcCommandProcessor {
-    pub async fn new(urls: &[String]) -> Self {
+    pub async fn new(urls: &[String], data_directory: String) -> Self {
         let clients = join_all(urls.iter().map(|url| async {
             SuiClientBuilder::default()
                 .max_concurrent_requests(usize::MAX)
@@ -50,6 +57,7 @@ impl RpcCommandProcessor {
 
         Self {
             clients: Arc::new(RwLock::new(clients)),
+            data_directory,
         }
     }
 
@@ -194,7 +202,7 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
                             if op.verify_transactions {
-                                check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects).await;
+                                check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects, op.record_addresses, &self.data_directory).await;
                             }
                             Some(t)
                         },
@@ -208,6 +216,8 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                 .await;
 
             if cross_validate {
+                // or op.verify_transactions
+                // Validates that all checkpoints are the same
                 let valid_checkpoint = checkpoints.iter().enumerate().find_map(|(i, x)| {
                     if x.is_some() {
                         Some((i, x.clone().unwrap()))
@@ -232,7 +242,17 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                         error!("getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}", x, checkpoints[valid_checkpoint_idx])
                     }
                 }
+                // if op.verify_transactions {}
+                // verify that all transactions are the same, otherwise warn. Default to longer
             }
+
+            // TODO: write checkpoint to file if flag
+
+            // TODO: validate transactions, and then decide which transactions to write
+
+            // if op.verify_transactions {
+            // check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects).await;
+            // }
 
             if seq % 10000 == 0 {
                 info!("Finished processing checkpoint {seq}");
@@ -243,41 +263,87 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
     }
 }
 
+fn write_data_to_file<T: serde::Serialize>(data: &T, file_path: &str) -> Result<()> {
+    let mut path_buf = PathBuf::from(&file_path);
+    path_buf.pop();
+    if let Err(e) = fs::create_dir_all(&path_buf) {
+        warn!("Error creating directory: {}", e);
+    }
+
+    let serialized_data = serde_json::to_string(data)?;
+    let mut file = File::create(file_path)?;
+    file.write_all(serialized_data.as_bytes())?;
+    Ok(())
+}
+
 pub async fn check_transactions(
     clients: &Arc<RwLock<Vec<SuiClient>>>,
     digests: &[TransactionDigest],
     cross_validate: bool,
     verify_objects: bool,
+    record_addresses: bool,
+    file_path: &str,
 ) {
     let read = clients.read().await;
     let cloned_clients = read.clone();
 
-    let transactions = join_all(
-        cloned_clients
-            .iter()
-            .enumerate()
-            .map(|(i, client)| async move {
-                let start_time = Instant::now();
-                let transactions = client
-                    .read_api()
-                    .multi_get_transactions_with_options(
-                        digests.to_vec(),
-                        SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
-                    )
-                    .await;
-                let elapsed_time = start_time.elapsed();
-                debug!(
-                    "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-                    elapsed_time.as_secs_f64()
-                );
-                transactions
-            }),
-    )
+    let transactions_response = join_all(cloned_clients.iter().enumerate().map(
+        |(i, client)| async move {
+            let start_time = Instant::now();
+            let transactions = client
+                .read_api()
+                .multi_get_transactions_with_options(
+                    digests.to_vec(),
+                    SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
+                )
+                .await;
+            let elapsed_time = start_time.elapsed();
+            debug!(
+                "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+                elapsed_time.as_secs_f64()
+            );
+            transactions
+        },
+    ))
     .await;
 
+    if record_addresses {
+        // TODO: apply this logic to transactions_response directly, which should simplify the rest of the code and support validating more than 2
+        let transactions = transactions_response
+            .iter()
+            .filter_map(|result| match result {
+                Ok(transactions) => Some(transactions),
+                Err(err) => {
+                    warn!("Failed to fetch transactions: {:?}", err);
+                    None
+                }
+            })
+            .cloned()
+            .collect::<Vec<Vec<SuiTransactionResponse>>>();
+
+        let mut addresses: Vec<SuiAddress> = Vec::new();
+        for vec_transactions in transactions {
+            for transaction_item in vec_transactions {
+                if let Some(sui_transaction) = transaction_item.transaction {
+                    let sender = match sui_transaction.data {
+                        SuiTransactionData::V1(data_v1) => data_v1.sender,
+                    };
+                    addresses.push(sender);
+                }
+            }
+        }
+        debug!("Recording addresses {:?}", addresses.len());
+        let address_set: HashSet<SuiAddress> = HashSet::from_iter(addresses);
+        // TODO: should probably not write to the same file if multithreaded?
+        match write_data_to_file(&address_set, &format!("{file_path}/addresses.json")) {
+            Ok(_) => debug!("Successfully written addresses"),
+            Err(err) => error!("Failed to write addresses: {:?}", err),
+        }
+    };
+
     // TODO: support more than 2 transactions
-    if cross_validate && transactions.len() == 2 {
-        if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
+    if cross_validate && transactions_response.len() == 2 {
+        if let (Some(t1), Some(t2)) = (transactions_response.get(0), transactions_response.get(1)) {
             let first = match t1 {
                 Ok(vec) => vec.as_slice(),
                 Err(err) => {
@@ -369,6 +435,7 @@ async fn divide_checkpoint_tasks(
                 Some(end_checkpoint),
                 data.verify_transactions,
                 data.verify_objects,
+                data.record_addresses,
             )
         })
         .collect()

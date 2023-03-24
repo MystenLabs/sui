@@ -36,6 +36,9 @@ struct Opts {
     /// the path to log file directory
     #[clap(long, default_value = "~/.sui/sui_config/logs")]
     logs_directory: String,
+    // path to persist data to
+    #[clap(long, default_value = "~/.sui/sui_config/data")]
+    data_directory: String,
 }
 
 #[derive(Parser)]
@@ -70,6 +73,9 @@ pub enum ClapCommand {
         #[clap(long, default_value_t = true)]
         verify_objects: bool,
 
+        #[clap(long, default_value_t = false)]
+        record_addresses: bool,
+
         #[clap(flatten)]
         common: CommonOptions,
     },
@@ -99,17 +105,25 @@ fn get_sui_config_directory() -> PathBuf {
     }
 }
 
+fn expand_dir_path(dir_path: &str) -> String {
+    match shellexpand::full(dir_path) {
+        Ok(v) => v.to_string(),
+        Err(e) => panic!("Failed to expand directory '{:?}': {}", dir_path, e),
+    }
+}
+
 fn get_log_file_path(dir_path: String) -> String {
     let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let timestamp = current_time.as_secs();
     // use timestamp to signify which file is newer
     let log_filename = format!("sui-rpc-loadgen.{}.log", timestamp);
 
-    let dir_path = match shellexpand::full(&dir_path) {
-        Ok(v) => v,
-        Err(e) => panic!("Failed to expand directory '{:?}': {}", dir_path, e),
-    };
+    let dir_path = expand_dir_path(&dir_path);
     format!("{dir_path}/{log_filename}")
+}
+
+fn get_persisted_data_path(dir_path: String) -> String {
+    expand_dir_path(&dir_path)
 }
 
 #[tokio::main]
@@ -120,6 +134,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let opts = Opts::parse();
 
     let log_filename = get_log_file_path(opts.logs_directory);
+    let data_directory = get_persisted_data_path(opts.data_directory);
 
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
@@ -140,8 +155,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             end,
             verify_transactions,
             verify_objects,
+            record_addresses,
         } => (
-            Command::new_get_checkpoints(start, end, verify_transactions, verify_objects),
+            Command::new_get_checkpoints(
+                start,
+                end,
+                verify_transactions,
+                verify_objects,
+                record_addresses,
+            ),
             common,
             false,
         ),
@@ -153,7 +175,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_repeat_interval(Duration::from_millis(common.interval_in_ms))
         .with_repeat_n_times(common.repeat);
 
-    let processor = RpcCommandProcessor::new(&opts.urls).await;
+    let processor = RpcCommandProcessor::new(&opts.urls, data_directory).await;
 
     let load_test = LoadTest {
         processor,
