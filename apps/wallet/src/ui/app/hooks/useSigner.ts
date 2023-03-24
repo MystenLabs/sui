@@ -17,7 +17,7 @@ export function useSigner(address?: SuiAddress) {
         ? existingAccounts.find((account) => account.address === address)
         : activeAccount;
 
-    const { connectToLedger } = useSuiLedgerClient();
+    const { forceLedgerConnection } = useSuiLedgerClient();
     const { api, background } = thunkExtras;
 
     if (!signerAccount) {
@@ -26,7 +26,7 @@ export function useSigner(address?: SuiAddress) {
 
     if (signerAccount.type === AccountType.LEDGER) {
         return new LedgerSigner(
-            connectToLedger,
+            forceLedgerConnection,
             signerAccount.derivationPath,
             api.instance.fullNode
         );

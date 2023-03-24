@@ -21,12 +21,12 @@ export function ConnectLedgerModal({
     onError,
 }: ConnectLedgerModalProps) {
     const [isConnectingToLedger, setConnectingToLedger] = useState(false);
-    const { connectToLedger } = useSuiLedgerClient();
+    const { requestLedgerConnection } = useSuiLedgerClient();
 
     const onContinueClick = async () => {
         try {
             setConnectingToLedger(true);
-            await connectToLedger();
+            await requestLedgerConnection();
             onConfirm();
         } catch (error) {
             onError(error);

@@ -15,24 +15,27 @@ import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export class LedgerSigner extends SignerWithProvider {
     #suiLedgerClient: SuiLedgerClient | null;
-    readonly #connectToLedger: () => Promise<SuiLedgerClient>;
+    readonly #forceLedgerConnection: () => Promise<SuiLedgerClient | null>;
     readonly #derivationPath: string;
     readonly #signatureScheme: SignatureScheme = 'ED25519';
 
     constructor(
-        connectToLedger: () => Promise<SuiLedgerClient>,
+        forceLedgerConnection: () => Promise<SuiLedgerClient | null>,
         derivationPath: string,
         provider: JsonRpcProvider
     ) {
         super(provider);
-        this.#connectToLedger = connectToLedger;
+        this.#forceLedgerConnection = forceLedgerConnection;
         this.#suiLedgerClient = null;
         this.#derivationPath = derivationPath;
     }
 
     async #initializeSuiLedgerClient() {
         if (!this.#suiLedgerClient) {
-            this.#suiLedgerClient = await this.#connectToLedger();
+            this.#suiLedgerClient = await this.#forceLedgerConnection();
+            if (!this.#suiLedgerClient) {
+                throw new Error('ERRRR');
+            }
         }
         return this.#suiLedgerClient;
     }
@@ -70,7 +73,7 @@ export class LedgerSigner extends SignerWithProvider {
 
     connect(provider: JsonRpcProvider): SignerWithProvider {
         return new LedgerSigner(
-            this.#connectToLedger,
+            this.#forceLedgerConnection,
             this.#derivationPath,
             provider
         );
