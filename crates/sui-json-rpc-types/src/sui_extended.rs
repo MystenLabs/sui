@@ -46,3 +46,22 @@ pub struct EndOfEpochInfo {
     pub total_stake_rewards_distributed: u64,
     pub leftover_storage_fund_inflow: u64,
 }
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkMetrics {
+    /// Current TPS - Transaction per Second.
+    pub current_tps: f64,
+    /// Peak TPS in the past 30 days
+    pub tps_30_days: f64,
+    /// Current TPS - Sui Command per Second.
+    pub current_cps: f64,
+    /// Peak CPS in the past 30 days
+    pub cps_30_days: f64,
+    /// Total number of packages published in the network
+    pub total_packages: u64,
+    /// Total number of addresses seen in the network
+    pub total_addresses: u64,
+    /// Total number of live objects in the network
+    pub total_objects: u64,
+}

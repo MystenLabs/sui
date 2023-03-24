@@ -1,11 +1,17 @@
 CREATE TABLE epochs
 (
     epoch                           BIGINT PRIMARY KEY,
-    first_checkpoint_id             BIGINT NOT NULL,
+    first_checkpoint_id             BIGINT   NOT NULL,
     last_checkpoint_id              BIGINT,
-    epoch_start_timestamp           BIGINT NOT NULL,
+    epoch_start_timestamp           BIGINT   NOT NULL,
     epoch_end_timestamp             BIGINT,
-    epoch_total_transactions        BIGINT NOT NULL,
+    epoch_total_transactions        BIGINT   NOT NULL,
+
+    -- end of epoch data
+    next_epoch_version              BIGINT,
+    next_epoch_committee            bytea[]  NOT NULL,
+    next_epoch_committee_stake      BIGINT[] NOT NULL,
+    epoch_commitments               bytea[]  NOT NULL,
 
     protocol_version                BIGINT,
     reference_gas_price             BIGINT,

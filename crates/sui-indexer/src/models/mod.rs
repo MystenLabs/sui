@@ -11,3 +11,4 @@ pub mod packages;
 pub mod system_state;
 pub mod transaction_index;
 pub mod transactions;
+pub mod network_metrics;

@@ -269,11 +269,6 @@ impl<S: IndexerStore> ReadApi<S> {
             .get_latest_checkpoint_sequence_number()
             .map(|n| n as u64)
     }
-
-    fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        let checkpoint = self.state.get_checkpoint(id)?;
-        checkpoint.try_into()
-    }
 }
 
 #[async_trait]
@@ -515,7 +510,7 @@ where
         {
             return self.fullnode.get_checkpoint(id).await;
         }
-        Ok(self.get_checkpoint_internal(id)?)
+        Ok(self.state.get_checkpoint(id)?)
     }
 
     async fn get_checkpoints(

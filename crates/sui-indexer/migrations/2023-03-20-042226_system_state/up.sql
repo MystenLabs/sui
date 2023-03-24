@@ -78,3 +78,24 @@ CREATE TABLE at_risk_validators
     CONSTRAINT at_risk_validators_pk PRIMARY KEY (EPOCH, address)
 );
 
+CREATE VIEW network_metrics AS
+SELECT (SELECT COUNT(1)::float8 / 10
+        FROM transactions
+        WHERE timestamp_ms > (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT - 10000) AS current_tps,
+       (SELECT MAX(t1.count)::float8 / 10
+        FROM (SELECT SUM(total_transactions) count
+              FROM checkpoints
+              WHERE timestamp_ms / 10000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)) / 10)::BIGINT
+              GROUP BY (timestamp_ms / 10000)) t1)                                           AS tps_30_days,
+       (SELECT COALESCE(SUM(command_count)::float8 / 10, 0)
+        FROM transactions
+        WHERE timestamp_ms > (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT - 10000) AS current_cps,
+       (SELECT MAX(t1.count)::float8 / 10
+        FROM (SELECT SUM(total_commands) count
+              FROM checkpoints
+              WHERE timestamp_ms / 10000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)) / 10)::BIGINT
+              GROUP BY (timestamp_ms / 10000)) t1)                                           AS cps_30_days,
+       (SELECT COUNT(1) FROM addresses)                                                      AS total_addresses,
+       (SELECT COUNT(1) FROM objects)                                                        AS total_objects,
+       (SELECT COUNT(1) FROM packages)                                                       AS total_packages;
+
