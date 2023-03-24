@@ -241,10 +241,11 @@ fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
     value: &Value,
 ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+    // TODO: let's see if we are not inside of another session already...
+    let session = context.create_session();
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
-            let tag = context
-                .session
+            let tag = session
                 .get_type_tag(&obj.type_)
                 .map_err(|e| context.convert_vm_error(e))?;
             let mut bytes = vec![];
@@ -256,13 +257,13 @@ fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
             (TypeTag::Vector(Box::new(TypeTag::U8)), bytes.clone())
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            // TODO: set linkage context
-            let tag = context
-                .session
+            // TODO: don't need a specific linkage context?
+            let tag = session
                 .get_type_tag(ty)
                 .map_err(|e| context.convert_vm_error(e))?;
             (tag, bytes.clone())
         }
     };
+    context.finish_session(session)?;
     Ok((bytes, type_tag))
 }

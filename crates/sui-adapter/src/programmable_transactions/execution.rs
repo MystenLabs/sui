@@ -21,6 +21,7 @@ use move_core_types::{
 };
 use move_vm_runtime::{
     move_vm::MoveVM,
+    session::Session,
     session::{LoadedFunctionInstantiation, SerializedReturnValues},
 };
 use move_vm_types::loaded_data::runtime_types::{StructType, Type};
@@ -114,29 +115,25 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     let mut argument_updates = Mode::empty_arguments();
     let results = match command {
         Command::MakeMoveVec(tag_opt, args) if args.is_empty() => {
+            let session = context.create_session();
+
             let Some(tag) = tag_opt else {
                 invariant_violation!(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
-            if let TypeTag::Struct(s) = &tag {
-                context
-                    .storage_context
-                    .compute_context((s.address).into())?;
-            }
-            let elem_ty = context
-                .session
+            // does not need linkage context
+            let elem_ty = session
                 .load_type(&tag)
                 .map_err(|e| context.convert_vm_error(e))?;
-            if let TypeTag::Struct(_) = &tag {
-                context.storage_context.reset_context();
-            }
             let ty = Type::Vector(Box::new(elem_ty));
-            // TODO: set linkage context?
-            let abilities = context
-                .session
+            // does not need linkage context
+            let abilities = session
                 .get_type_abilities(&ty)
                 .map_err(|e| context.convert_vm_error(e))?;
+
+            context.finish_session(session)?;
+
             // BCS layout for any empty vector should be the same
             let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
             vec![Value::Raw(
@@ -149,13 +146,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             )]
         }
         Command::MakeMoveVec(tag_opt, args) => {
+            let session = context.create_session();
+
             let mut res = vec![];
             leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
             let mut arg_iter = args.into_iter().enumerate();
             let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                 Some(tag) => {
-                    let elem_ty = context
-                        .session
+                    let elem_ty = session
                         .load_type(&tag)
                         .map_err(|e| context.convert_vm_error(e))?;
                     (false, elem_ty)
@@ -172,17 +170,19 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty, true)?;
+                check_param_type::<_, _, Mode>(&session, idx, &value, &elem_ty)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                 value.write_bcs_bytes(&mut res);
             }
             let ty = Type::Vector(Box::new(elem_ty));
-            // TODO: set linkage context?
-            let abilities = context
-                .session
+            // does not need linkage context
+            let abilities = session
                 .get_type_abilities(&ty)
                 .map_err(|e| context.convert_vm_error(e))?;
+
+            context.finish_session(session)?;
+
             vec![Value::Raw(
                 RawValueType::Loaded {
                     ty,
@@ -207,6 +207,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             vec![]
         }
         Command::SplitCoins(coin_arg, amount_args) => {
+            let mut session = context.create_session();
+
             let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
             let ObjectContents::Coin(coin) = &mut obj.contents else {
                 let e = ExecutionErrorKind::command_argument_error(
@@ -221,7 +223,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 .map(|amount_arg| {
                     let amount: u64 =
                         context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
-                    let new_coin_id = context.fresh_id()?;
+                    let new_coin_id = context.fresh_id(&mut session)?;
                     let new_coin = coin.split(amount, UID::new(new_coin_id))?;
                     let coin_type = obj.type_.clone();
                     // safe because we are propagating the coin type, and relying on the internal
@@ -231,9 +233,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 })
                 .collect::<Result<_, ExecutionError>>()?;
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
+
+            context.finish_session(session)?;
+
             split_coins
         }
         Command::MergeCoins(target_arg, coin_args) => {
+            let mut session = context.create_session();
+
             let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
             let ObjectContents::Coin(target_coin) = &mut target.contents else {
                 let e = ExecutionErrorKind::command_argument_error(
@@ -263,9 +270,12 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                         This should be a coin"
                     );
                 };
-                context.delete_id(*id.object_id())?;
+                context.delete_id(&mut session, *id.object_id())?;
                 target_coin.add(balance)?;
             }
+
+            context.finish_session(session)?;
+
             context.restore_arg::<Mode>(
                 &mut argument_updates,
                 target_arg,
@@ -281,17 +291,22 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 type_arguments,
                 arguments,
             } = *move_call;
+            let mut session = context.create_session_with_linkage_context(package, None)?;
+
             let module_id = ModuleId::new(package.into(), module);
-            execute_move_call::<_, _, Mode>(
+            let result = execute_move_call::<_, _, Mode>(
                 context,
+                &mut session,
                 &mut argument_updates,
                 &module_id,
                 &function,
                 type_arguments,
                 arguments,
                 /* is_init */ false,
-                /* set_context */ true,
-            )?
+            )?;
+
+            context.finish_session(session)?;
+            result
         }
         Command::Publish(modules, dep_ids) => {
             execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules, dep_ids)?
@@ -315,19 +330,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 /// Execute a single Move call
 fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    session: &mut Session<StorageContext<E, S>>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: Vec<TypeTag>,
     arguments: Vec<Argument>,
     is_init: bool,
-    set_context: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
-    if set_context {
-        context
-            .storage_context
-            .compute_context((*module_id.address()).into())?;
-    }
     // check that the function is either an entry function or a valid public function
     let LoadedFunctionInfo {
         kind,
@@ -337,20 +347,23 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         last_instr,
     } = check_visibility_and_signature::<_, _, Mode>(
         context,
+        session,
         module_id,
         function,
         &type_arguments,
         is_init,
     )?;
     // build the arguments, storing meta data about by-mut-ref args
-    let (tx_context_kind, by_mut_ref, serialized_arguments) =
-        build_move_args::<_, _, Mode>(context, module_id, function, kind, &signature, &arguments)?;
+    let (tx_context_kind, by_mut_ref, serialized_arguments) = build_move_args::<_, _, Mode>(
+        context, session, module_id, function, kind, &signature, &arguments,
+    )?;
     // invoke the VM
     let SerializedReturnValues {
         mutable_reference_outputs,
         return_values,
     } = vm_move_call(
         context,
+        session,
         module_id,
         function,
         type_arguments,
@@ -369,26 +382,29 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-        let value = make_value(context, value_info, bytes, used_in_non_entry_move_call)?;
+        let value = make_value(
+            context,
+            session,
+            value_info,
+            bytes,
+            used_in_non_entry_move_call,
+        )?;
         context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
     }
 
-    context.take_user_events(module_id, index, last_instr)?;
+    context.take_user_events(session, module_id, index, last_instr)?;
     assert_invariant!(
         return_value_kinds.len() == return_values.len(),
         "lost return value"
     );
 
-    if set_context {
-        context.storage_context.reset_context();
-    }
     return_value_kinds
         .into_iter()
         .zip(return_values)
         .map(|(value_info, (bytes, _layout))| {
             // only non entry functions have return values
             make_value(
-                context, value_info, bytes, /* used_in_non_entry_move_call */ true,
+                context, session, value_info, bytes, /* used_in_non_entry_move_call */ true,
             )
         })
         .collect()
@@ -396,6 +412,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
 fn make_value<E: fmt::Debug, S: StorageView<E>>(
     context: &ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
@@ -407,7 +424,7 @@ fn make_value<E: fmt::Debug, S: StorageView<E>>(
         } => Value::Object(ObjectValue::new(
             context.vm,
             context.storage_context,
-            &context.session,
+            session,
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
@@ -464,10 +481,11 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
     immediate_dependencies.remove(&package_id);
     let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
-    context
-        .storage_context
-        .set_context(package_id, linkage_table)?;
-    let modules = publish_and_verify_modules(context, package_id, modules)?;
+
+    let mut session =
+        context.create_session_with_linkage_context(package_id, Some(linkage_table))?;
+
+    let modules = publish_and_verify_modules(context, &mut session, package_id, modules)?;
 
     let modules_to_init = modules
         .iter()
@@ -488,13 +506,13 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, _, Mode>(
             context,
+            &mut session,
             argument_updates,
             module_id,
             INIT_FN_NAME,
             vec![],
             vec![],
             /* is init */ true,
-            /* set_context */ false,
         )?;
         assert_invariant!(
             return_values.is_empty(),
@@ -502,23 +520,24 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         )
     }
 
-    context.storage_context.reset_context();
-
     let values = if Mode::packages_are_predefined() {
         // no upgrade cap for genesis modules
         vec![]
     } else {
-        let cap = &UpgradeCap::new(context.fresh_id()?, package_id);
+        let cap = &UpgradeCap::new(context.fresh_id(&mut session)?, package_id);
         vec![Value::Object(ObjectValue::new(
             context.vm,
             context.storage_context,
-            &context.session,
+            &session,
             UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
             /* used_in_non_entry_move_call */ false,
             &bcs::to_bytes(cap).unwrap(),
         )?)]
     };
+
+    context.finish_session(session)?;
+
     Ok(values)
 }
 
@@ -541,19 +560,17 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         "empty package is checked in transaction input checker"
     );
 
+    let session = context.create_session();
+
     let upgrade_ticket: UpgradeTicket = {
         let mut ticket_bytes = Vec::new();
         let ticket_val: Value =
             context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
-        context
-            .storage_context
-            .compute_context(UpgradeTicket::type_().address.into())?;
-        let ticket_type = context
-            .session
+        // does not need linkage context
+        let ticket_type = session
             .load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
             .map_err(|e| context.convert_vm_error(e))?;
-        context.storage_context.reset_context();
-        check_param_type::<_, _, Mode>(context, 0, &ticket_val, &ticket_type, true)?;
+        check_param_type::<_, _, Mode>(&session, 0, &ticket_val, &ticket_type)?;
         ticket_val.write_bcs_bytes(&mut ticket_bytes);
         bcs::from_bytes(&ticket_bytes).map_err(|_| {
             ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
@@ -562,6 +579,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             })
         })?
     };
+
+    context.finish_session(session)?;
 
     // Make sure the passed-in package ID matches the package ID in the `upgrade_ticket`.
     if current_package_id != upgrade_ticket.package.bytes {
@@ -611,11 +630,12 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
     immediate_dependencies.remove(&package_id);
     let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
-    context
-        .storage_context
-        .set_context(package_id, linkage_table)?;
 
-    let upgraded_package_modules = publish_and_verify_modules(context, package_id, modules)?;
+    let mut session =
+        context.create_session_with_linkage_context(package_id, Some(linkage_table))?;
+
+    let upgraded_package_modules =
+        publish_and_verify_modules(context, &mut session, package_id, modules)?;
 
     // Full backwards compatibility except that we allow friend function signatures to change.
     check_compatibility(
@@ -628,11 +648,11 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     let upgraded_object_id =
         context.upgrade_package(&current_package, upgraded_package_modules, &dependencies)?;
 
-    let upgrade_receipt_type = context
-        .session
+    let upgrade_receipt_type = session
         .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
         .map_err(|e| context.convert_vm_error(e))?;
-    context.storage_context.reset_context();
+
+    context.finish_session(session)?;
 
     Ok(vec![Value::Raw(
         RawValueType::Loaded {
@@ -760,6 +780,7 @@ fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
 
 fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
+    session: &mut Session<StorageContext<E, S>>,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: Vec<TypeTag>,
@@ -776,8 +797,7 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     // script visibility checked manually for entry points
 
     // no need to set linkage context as it was already set in the caller (execute_move_call)
-    let mut result = context
-        .session
+    let mut result = session
         .execute_function_bypass_visibility(
             module_id,
             function,
@@ -827,6 +847,7 @@ fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
 fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
     context: &mut ExecutionContext<E, S>,
+    session: &mut Session<StorageContext<E, S>>,
     package_id: ObjectID,
     modules: Vec<CompiledModule>,
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
@@ -840,8 +861,7 @@ fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
         })
         .collect();
 
-    context
-        .session
+    session
         .publish_module_bundle(
             new_module_bytes,
             AccountAddress::from(package_id),
@@ -902,15 +922,14 @@ struct LoadedFunctionInfo {
 /// - module init (only internal usage)
 fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: &[TypeTag],
     from_init: bool,
 ) -> Result<LoadedFunctionInfo, ExecutionError> {
     for (idx, ty) in type_arguments.iter().enumerate() {
-        // no need to set linkage context as it was already set in the caller (execute_move_call)
-        context
-            .session
+        session
             .load_type(ty)
             .map_err(|e| context.convert_type_argument_error(idx, e))?;
     }
@@ -918,11 +937,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
         // the session is weird and does not load the module on publishing. This is a temporary
         // work around, since loading the function through the session will cause the module
         // to be loaded through the sessions data store.
-
-        // no need to set linkage context as it was already set in the caller (execute_move_call)
-        let result = context
-            .session
-            .load_function(module_id, function, type_arguments);
+        let result = session.load_function(module_id, function, type_arguments);
         assert_invariant!(
             result.is_ok(),
             "The modules init should be able to be loaded"
@@ -972,9 +987,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
             ));
         }
     };
-    // no need to set linkage context as it was already set in the caller (execute_move_call)
-    let signature = context
-        .session
+    let signature = session
         .load_function(module_id, function, type_arguments)
         .map_err(|e| context.convert_vm_error(e))?;
     let signature = subst_signature(signature).map_err(|e| context.convert_vm_error(e))?;
@@ -987,7 +1000,9 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
             vec![]
         }
         FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
-            check_non_entry_signature::<_, _, Mode>(context, module_id, function, &signature)?
+            check_non_entry_signature::<_, _, Mode>(
+                context, session, module_id, function, &signature,
+            )?
         }
     };
     check_private_generics(context, module_id, function, &signature.type_arguments)?;
@@ -1030,6 +1045,7 @@ fn subst_signature(
 /// as object or non-object return values
 fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     _module_id: &ModuleId,
     _function: &IdentStr,
     signature: &LoadedFunctionInstantiation,
@@ -1053,20 +1069,14 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
                 }
                 t => t,
             };
-            // no need to set linkage context as it was already set in the caller
-            // (execute_move_call->check_visibility_and_signature)
-            let abilities = context
-                .session
+            let abilities = session
                 .get_type_abilities(return_type)
                 .map_err(|e| context.convert_vm_error(e))?;
             Ok(match return_type {
                 Type::MutableReference(_) | Type::Reference(_) => unreachable!(),
                 Type::TyParam(_) => invariant_violation!("TyParam should have been substituted"),
                 Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
-                    // no need to set linkage context as it was already set in the caller
-                    // (execute_move_call->check_visibility_and_signature)
-                    let type_tag = context
-                        .session
+                    let type_tag = session
                         .get_type_tag(return_type)
                         .map_err(|e| context.convert_vm_error(e))?;
                     let TypeTag::Struct(struct_tag) = type_tag else {
@@ -1137,6 +1147,7 @@ type ArgInfo = (
 /// each value
 fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context: &mut ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     module_id: &ModuleId,
     function: &IdentStr,
     function_kind: FunctionKind,
@@ -1146,7 +1157,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // check the arity
     let parameters = &signature.parameters;
     let tx_ctx_kind = match parameters.last() {
-        Some(t) => is_tx_context(context, t)?,
+        Some(t) => is_tx_context(session, t)?,
         None => TxContextKind::None,
     };
     // an init function can have one or two arguments, with the last one always being of type
@@ -1195,8 +1206,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     ..
                 }) = &value
                 {
-                    let type_tag = context
-                        .session
+                    let type_tag = session
                         .get_type_tag(type_)
                         .map_err(|e| context.convert_vm_error(e))?;
                     let TypeTag::Struct(struct_tag) = type_tag else {
@@ -1207,10 +1217,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                         has_public_transfer: *has_public_transfer,
                     }
                 } else {
-                    // no need to set linkage context as it was already set in the caller
-                    // (execute_move_call)
-                    let abilities = context
-                        .session
+                    let abilities = session
                         .get_type_abilities(inner)
                         .map_err(|e| context.convert_vm_error(e))?;
                     ValueKind::Raw((**inner).clone(), abilities)
@@ -1234,7 +1241,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 idx,
             ));
         }
-        check_param_type::<_, _, Mode>(context, idx, &value, non_ref_param_ty, false)?;
+        check_param_type::<_, _, Mode>(session, idx, &value, non_ref_param_ty)?;
         let bytes = {
             let mut v = vec![];
             value.write_bcs_bytes(&mut v);
@@ -1247,11 +1254,10 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
 /// checks that the value is compatible with the specified type
 fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     idx: usize,
     value: &Value,
     param_ty: &Type,
-    set_linkage: bool,
 ) -> Result<(), ExecutionError> {
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
@@ -1261,7 +1267,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         // generated from a Move function). Meaning we only allow "primitive" values
         // and might need to run validation in addition to the BCS layout
         Value::Raw(RawValueType::Any, bytes) => {
-            let Some(layout) = primitive_serialization_layout(context, param_ty)? else {
+            let Some(layout) = primitive_serialization_layout(session, param_ty)? else {
                 let msg = format!(
                     "Non-primitive argument at index {}. If it is an object, it must be \
                     populated by an object",
@@ -1311,7 +1317,7 @@ fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
 // a MutableReference, and Immutable otherwise.
 // Returns None for all other types
 pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     t: &Type,
 ) -> Result<TxContextKind, ExecutionError> {
     let (is_mut, inner) = match t {
@@ -1320,9 +1326,7 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
         _ => return Ok(TxContextKind::None),
     };
     let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
-    // no need to set linkage context as it was already set in the caller
-    // (execute_move_call->build_move_args)
-    let Some(s) = context.session.get_struct_type(*idx) else {
+    let Some(s) = session.get_struct_type(*idx) else {
         invariant_violation!("Loaded struct not found")
     };
     let (module_addr, module_name, struct_name) = get_struct_ident(&s);
@@ -1342,7 +1346,7 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
 
 /// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
 fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+    session: &Session<StorageContext<E, S>>,
     param_ty: &Type,
 ) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
@@ -1360,26 +1364,24 @@ fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
         Type::Address => Some(PrimitiveArgumentLayout::Address),
 
         Type::Vector(inner) => {
-            let info_opt = primitive_serialization_layout(context, inner)?;
+            let info_opt = primitive_serialization_layout(session, inner)?;
             info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
         Type::StructInstantiation(idx, targs) => {
-            // TODO: set linkage context
-            let Some(s) = context.session.get_struct_type(*idx) else {
+            let Some(s) = session.get_struct_type(*idx) else {
                 invariant_violation!("Loaded struct not found")
             };
             let resolved_struct = get_struct_ident(&s);
             // is option of a string
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
-                let info_opt = primitive_serialization_layout(context, &targs[0])?;
+                let info_opt = primitive_serialization_layout(session, &targs[0])?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
             } else {
                 None
             }
         }
         Type::Struct(idx) => {
-            // TODO: set linkage context
-            let Some(s) = context.session.get_struct_type(*idx) else {
+            let Some(s) = session.get_struct_type(*idx) else {
                 invariant_violation!("Loaded struct not found")
             };
             let resolved_struct = get_struct_ident(&s);
