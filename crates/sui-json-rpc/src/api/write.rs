@@ -5,7 +5,7 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse,
+    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse,
     SuiTransactionResponseOptions,
 };
 
@@ -49,7 +49,7 @@ pub trait WriteApi {
         /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
         tx_bytes: Base64,
         /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
-        gas_price: Option<u64>,
+        gas_price: Option<BigInt>,
         /// The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;
