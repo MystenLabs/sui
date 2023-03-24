@@ -5867,6 +5867,7 @@ dependencies = [
  "tap",
  "telemetry-subscribers",
  "tempfile",
+ "thiserror",
  "tokio",
  "tonic",
  "tower",
