@@ -22,7 +22,7 @@ To try this locally, refer to [sef](../sui-test-validator/README.md). Recommend 
 
 The following command initiates a single thread (num-threads == 1) to retrieve all checkpoints from the beginning (sequence 0) to the latest, executing the operation exactly once (repeat == 0):
 ```bash
-cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9124" --num-threads 1 get-checkpoints --start 0 --repeat 0 --interval_in_ms 0 --verify-transaction true
+cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.0.1:9124" --num-threads 1 get-checkpoints --start 0 --repeat 0 --interval_in_ms 0 --verify-transactions true
 ```
 This command is equivalent to the simplified version below:
 ```bash
@@ -30,7 +30,7 @@ cargo run --bin sui-rpc-loadgen -- --urls "http://127.0.0.1:9000" "http://127.0.
 ```
 Both commands achieve the same outcome: fetching all checkpoints using one thread, without repeating the operation.
 
-By default, this command also verify all the transactions in the checkpoint, specify `--verify-transaction false` to disable fetching transactions
+By default, this command also verify all the transactions in the checkpoint, specify `--verify-transactions false` to disable fetching transactions. Note that this is incompatible with `--verify-objects true` as we do need to fetch transactions to get objects for the checkpoint.
 
 **Note** you must put `--num-threads ` after the urls, otherwise the command will not be parsed correctly
 

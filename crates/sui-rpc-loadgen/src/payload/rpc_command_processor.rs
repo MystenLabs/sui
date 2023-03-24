@@ -7,7 +7,9 @@ use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use sui_json_rpc_types::{CheckpointId, SuiTransactionResponseOptions};
+use sui_json_rpc_types::{
+    CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionResponseOptions,
+};
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
@@ -15,7 +17,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -155,10 +157,9 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                             if t.sequence_number != seq {
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
-                            if op.verify_transaction {
-                                check_transactions(&self.clients, &t.transactions, cross_validate).await;
+                            if op.verify_transactions {
+                                check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects).await;
                             }
-
                             Some(t)
                         },
                         Err(err) => {
@@ -210,26 +211,32 @@ pub async fn check_transactions(
     clients: &Arc<RwLock<Vec<SuiClient>>>,
     digests: &[TransactionDigest],
     cross_validate: bool,
+    verify_objects: bool,
 ) {
     let read = clients.read().await;
-    let clients = read.clone();
+    let cloned_clients = read.clone();
 
-    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| async move {
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_transactions_with_options(
-                digests.to_vec(),
-                SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
+    let transactions = join_all(
+        cloned_clients
+            .iter()
+            .enumerate()
+            .map(|(i, client)| async move {
+                let start_time = Instant::now();
+                let transactions = client
+                    .read_api()
+                    .multi_get_transactions_with_options(
+                        digests.to_vec(),
+                        SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
+                    )
+                    .await;
+                let elapsed_time = start_time.elapsed();
+                debug!(
+                    "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+                    elapsed_time.as_secs_f64()
+                );
+                transactions
+            }),
+    )
     .await;
 
     // TODO: support more than 2 transactions
@@ -252,24 +259,128 @@ pub async fn check_transactions(
                 }
             };
 
-            if first.len() != second.len() {
-                error!(
-                    "Transaction response lengths do not match: {} vs {}",
-                    first.len(),
-                    second.len()
-                );
-                return; // Return early if the lengths don't match
-            }
+            cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
 
-            for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-                // Todo: allow more comparisons
-                if a != b {
-                    error!(
-                        "Transaction response mismatch with digest {:?}:\nfirst:\n{:?}\nsecond:\n{:?} ",
-                        digests[i], a, b
-                    );
+            if verify_objects {
+                // todo: this can be written better
+                for response in first {
+                    let object_changes: Vec<ObjectID> = response
+                        .object_changes
+                        .clone()
+                        .unwrap()
+                        .iter()
+                        .filter_map(get_object_id)
+                        .collect();
+                    check_objects(clients, object_changes.as_slice(), cross_validate).await;
+                }
+                for response in second {
+                    let object_changes: Vec<ObjectID> = response
+                        .object_changes
+                        .clone()
+                        .unwrap()
+                        .iter()
+                        .filter_map(get_object_id)
+                        .collect();
+                    check_objects(clients, object_changes.as_slice(), cross_validate).await;
                 }
             }
+        }
+    }
+}
+
+fn get_object_id(object_change: &ObjectChange) -> Option<ObjectID> {
+    match object_change {
+        ObjectChange::Transferred { object_id, .. } => Some(*object_id),
+        ObjectChange::Mutated { object_id, .. } => Some(*object_id),
+        ObjectChange::Created { object_id, .. } => Some(*object_id),
+        // TODO(gegaowp): needs separate checks for packages and modules publishing
+        // TODO(gegaowp): ?? needs separate checks for deleted and wrapped objects
+        _ => None,
+    }
+}
+
+// todo: this and check_transactions can be generic
+pub async fn check_objects(
+    clients: &Arc<RwLock<Vec<SuiClient>>>,
+    object_ids: &[ObjectID],
+    cross_validate: bool,
+) {
+    let read = clients.read().await;
+    let clients = read.clone();
+
+    let objects = join_all(clients.iter().enumerate().map(|(i, client)| async move {
+        let start_time = Instant::now();
+        let transactions = client
+            .read_api()
+            .multi_get_object_with_options(
+                object_ids.to_vec(),
+                SuiObjectDataOptions::full_content(), // todo(Will) support options for this
+            )
+            .await;
+        let elapsed_time = start_time.elapsed();
+        debug!(
+            "MultiGetObject Request latency {:.4} for rpc at url {i}",
+            elapsed_time.as_secs_f64()
+        );
+        transactions
+    }))
+    .await;
+
+    // TODO: support more than 2 transactions
+    if cross_validate && objects.len() == 2 {
+        if let (Some(t1), Some(t2)) = (objects.get(0), objects.get(1)) {
+            let first = match t1 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!(
+                        "Error unwrapping first vec of objects: {:?} for objectIDs {:?}",
+                        err, object_ids
+                    );
+                    return;
+                }
+            };
+            let second = match t2 {
+                Ok(vec) => vec.as_slice(),
+                Err(err) => {
+                    error!(
+                        "Error unwrapping second vec of objects: {:?} for objectIDs {:?}",
+                        err, object_ids
+                    );
+                    return;
+                }
+            };
+
+            cross_validate_entities(object_ids, first, second, "ObjectID", "Object");
+        }
+    }
+}
+
+fn cross_validate_entities<T, U>(
+    keys: &[T],
+    first: &[U],
+    second: &[U],
+    key_name: &str,
+    entity_name: &str,
+) where
+    T: std::fmt::Debug,
+    U: PartialEq + std::fmt::Debug,
+{
+    if first.len() != second.len() {
+        error!(
+            "Entity: {} lengths do not match: {} vs {}",
+            entity_name,
+            first.len(),
+            second.len()
+        );
+        return;
+    }
+
+    for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
+        if a != b {
+            error!(
+                "Entity: {} mismatch with index {}: {}: {:?}, first: {:?}, second: {:?}",
+                entity_name, i, key_name, keys[i], a, b
+            );
         }
     }
 }
