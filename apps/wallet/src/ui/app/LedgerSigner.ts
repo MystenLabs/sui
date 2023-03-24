@@ -14,22 +14,22 @@ import {
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export class LedgerSigner extends SignerWithProvider {
-    readonly #forceLedgerConnection: () => Promise<SuiLedgerClient>;
+    readonly #connectToLedger: () => Promise<SuiLedgerClient>;
     readonly #derivationPath: string;
     readonly #signatureScheme: SignatureScheme = 'ED25519';
 
     constructor(
-        forceLedgerConnection: () => Promise<SuiLedgerClient>,
+        connectToLedger: () => Promise<SuiLedgerClient>,
         derivationPath: string,
         provider: JsonRpcProvider
     ) {
         super(provider);
-        this.#forceLedgerConnection = forceLedgerConnection;
+        this.#connectToLedger = connectToLedger;
         this.#derivationPath = derivationPath;
     }
 
     async getAddress(): Promise<SuiAddress> {
-        const ledgerClient = await this.#forceLedgerConnection();
+        const ledgerClient = await this.#connectToLedger();
         const publicKeyResult = await ledgerClient.getPublicKey(
             this.#derivationPath
         );
@@ -38,7 +38,7 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async getPublicKey(): Promise<Ed25519PublicKey> {
-        const ledgerClient = await this.#forceLedgerConnection();
+        const ledgerClient = await this.#connectToLedger();
         const { publicKey } = await ledgerClient.getPublicKey(
             this.#derivationPath
         );
@@ -46,7 +46,7 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async signData(data: Uint8Array): Promise<SerializedSignature> {
-        const ledgerClient = await this.#forceLedgerConnection();
+        const ledgerClient = await this.#connectToLedger();
         const { signature } = await ledgerClient.signTransaction(
             this.#derivationPath,
             data
@@ -61,7 +61,7 @@ export class LedgerSigner extends SignerWithProvider {
 
     connect(provider: JsonRpcProvider): SignerWithProvider {
         return new LedgerSigner(
-            this.#forceLedgerConnection,
+            this.#connectToLedger,
             this.#derivationPath,
             provider
         );

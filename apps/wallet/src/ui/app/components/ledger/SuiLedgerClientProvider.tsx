@@ -25,8 +25,9 @@ type SuiLedgerClientProviderProps = {
 
 type SuiLedgerClientContextValue = {
     suiLedgerClient: SuiLedgerClient | undefined;
-    requestLedgerConnection: () => Promise<SuiLedgerClient>;
-    forceLedgerConnection: () => Promise<SuiLedgerClient | null>;
+    connectToLedger: (
+        requestPermissionsFirst?: boolean
+    ) => Promise<SuiLedgerClient>;
 };
 
 const SuiLedgerClientContext = createContext<
@@ -47,38 +48,31 @@ export function SuiLedgerClientProvider({
         return () => suiLedgerClient?.transport.off('disconnect', onDisconnect);
     }, [suiLedgerClient?.transport]);
 
-    const resetSuiLedgerClient = useCallback(async () => {
-        // If we've already connected to a Ledger device, we need
-        // to close the connection before we try to re-connect
-        if (suiLedgerClient) {
-            await suiLedgerClient?.transport.close();
-            setSuiLedgerClient(undefined);
-        }
-    }, [suiLedgerClient]);
+    const connectToLedger = useCallback(
+        async (requestPermissionsFirst = false) => {
+            // If we've already connected to a Ledger device, we need
+            // to close the connection before we try to re-connect
+            if (suiLedgerClient) {
+                await suiLedgerClient?.transport.close();
+                setSuiLedgerClient(undefined);
+            }
 
-    const requestLedgerConnection = useCallback(async () => {
-        await resetSuiLedgerClient();
-        const ledgerTransport = await initiateLedgerConnectionRequest();
-        const ledgerClient = new SuiLedgerClient(ledgerTransport);
-        setSuiLedgerClient(ledgerClient);
-        return ledgerClient;
-    }, [resetSuiLedgerClient]);
-
-    const forceLedgerConnection = useCallback(async () => {
-        resetSuiLedgerClient();
-        const ledgerTransport = await initiateLedgerConnection();
-        const ledgerClient = new SuiLedgerClient(ledgerTransport!);
-        setSuiLedgerClient(ledgerClient);
-        return ledgerClient;
-    }, [resetSuiLedgerClient]);
+            const ledgerTransport = requestPermissionsFirst
+                ? await requestLedgerConnection()
+                : await openLedgerConnection();
+            const ledgerClient = new SuiLedgerClient(ledgerTransport);
+            setSuiLedgerClient(ledgerClient);
+            return ledgerClient;
+        },
+        [suiLedgerClient]
+    );
 
     const contextValue: SuiLedgerClientContextValue = useMemo(() => {
         return {
             suiLedgerClient,
-            requestLedgerConnection,
-            forceLedgerConnection,
+            connectToLedger,
         };
-    }, [requestLedgerConnection, forceLedgerConnection, suiLedgerClient]);
+    }, [connectToLedger, suiLedgerClient]);
 
     return (
         <SuiLedgerClientContext.Provider value={contextValue}>
@@ -97,7 +91,7 @@ export function useSuiLedgerClient() {
     return suiLedgerClientContext;
 }
 
-async function initiateLedgerConnectionRequest() {
+async function requestLedgerConnection() {
     const ledgerTransportClass = await getLedgerTransportClass();
     try {
         return await ledgerTransportClass.request();
@@ -106,7 +100,7 @@ async function initiateLedgerConnectionRequest() {
     }
 }
 
-async function initiateLedgerConnection() {
+async function openLedgerConnection() {
     const ledgerTransportClass = await getLedgerTransportClass();
     let ledgerTransport: TransportWebHID | TransportWebUSB | null | undefined;
 
@@ -120,6 +114,7 @@ async function initiateLedgerConnection() {
             "The user doesn't have a Ledger device connected to their machine"
         );
     }
+    return ledgerTransport;
 }
 
 async function getLedgerTransportClass() {
