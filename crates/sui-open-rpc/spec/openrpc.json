@@ -6562,6 +6562,7 @@
           "referenceGasPrice",
           "safeMode",
           "safeModeComputationRewards",
+          "safeModeNonRefundableStorageFee",
           "safeModeStorageRebates",
           "safeModeStorageRewards",
           "stakeSubsidyBalance",
@@ -6572,7 +6573,8 @@
           "stakeSubsidyStartEpoch",
           "stakingPoolMappingsId",
           "stakingPoolMappingsSize",
-          "storageFund",
+          "storageFundNonRefundableBalance",
+          "storageFundTotalObjectStorageRebates",
           "systemStateVersion",
           "totalStake",
           "validatorCandidatesId",
@@ -6698,6 +6700,12 @@
             "format": "uint64",
             "minimum": 0.0
           },
+          "safeModeNonRefundableStorageFee": {
+            "description": "Amount of non-refundable storage fee accumulated during safe mode.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
           "safeModeStorageRebates": {
             "description": "Amount of storage rebates accumulated (and not yet burned) during safe mode.",
             "type": "integer",
@@ -6760,8 +6768,14 @@
             "format": "uint64",
             "minimum": 0.0
           },
-          "storageFund": {
-            "description": "The storage fund balance.",
+          "storageFundNonRefundableBalance": {
+            "description": "The non-refundable portion of the storage fund coming from storage reinvestment, non-refundable storage rebates and any leftover staking rewards.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "storageFundTotalObjectStorageRebates": {
+            "description": "The storage rebates of all the objects on-chain stored in the storage fund.",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0

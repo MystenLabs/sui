@@ -471,7 +471,7 @@ pub struct SuiSystemStateInnerV1 {
     pub safe_mode_storage_rewards: Balance,
     pub safe_mode_computation_rewards: Balance,
     pub safe_mode_storage_rebates: u64,
-    pub safe_mode_non_refundable_storage_rebates: u64,
+    pub safe_mode_non_refundable_storage_fee: u64,
     pub epoch_start_timestamp_ms: u64,
     pub extra_fields: Bag,
     // TODO: Use getters instead of all pub.
@@ -651,7 +651,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             safe_mode_storage_rewards,
             safe_mode_computation_rewards,
             safe_mode_storage_rebates,
-            safe_mode_non_refundable_storage_rebates,
+            safe_mode_non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             extra_fields: _,
         } = self;
@@ -668,7 +668,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
             safe_mode_storage_rewards: safe_mode_storage_rewards.value(),
             safe_mode_computation_rewards: safe_mode_computation_rewards.value(),
             safe_mode_storage_rebates,
-            safe_mode_non_refundable_storage_rebates,
+            safe_mode_non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             stake_subsidy_start_epoch,
             epoch_duration_ms,

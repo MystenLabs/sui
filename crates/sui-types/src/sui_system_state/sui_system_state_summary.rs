@@ -45,8 +45,8 @@ pub struct SuiSystemStateSummary {
     pub safe_mode_computation_rewards: u64,
     /// Amount of storage rebates accumulated (and not yet burned) during safe mode.
     pub safe_mode_storage_rebates: u64,
-    /// Amount of non-refundable storage rebates accumulated during safe mode.
-    pub safe_mode_non_refundable_storage_rebates: u64,
+    /// Amount of non-refundable storage fee accumulated during safe mode.
+    pub safe_mode_non_refundable_storage_fee: u64,
     /// Unix timestamp of the current epoch start
     pub epoch_start_timestamp_ms: u64,
 
@@ -236,7 +236,7 @@ impl Default for SuiSystemStateSummary {
             safe_mode_storage_rewards: 0,
             safe_mode_computation_rewards: 0,
             safe_mode_storage_rebates: 0,
-            safe_mode_non_refundable_storage_rebates: 0,
+            safe_mode_non_refundable_storage_fee: 0,
             epoch_start_timestamp_ms: 0,
             epoch_duration_ms: 0,
             stake_subsidy_start_epoch: 0,

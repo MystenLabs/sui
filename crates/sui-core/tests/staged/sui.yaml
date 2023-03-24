@@ -47,6 +47,7 @@ ChangeEpoch:
     - storage_charge: U64
     - computation_charge: U64
     - storage_rebate: U64
+    - non_refundable_storage_fee: U64
     - epoch_start_timestamp_ms: U64
     - system_packages:
         SEQ:

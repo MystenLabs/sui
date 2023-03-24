@@ -467,7 +467,7 @@ module sui_system::sui_system {
         new_epoch: u64,
         next_protocol_version: u64,
         storage_rebate: u64,
-        non_refundable_storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
@@ -484,7 +484,7 @@ module sui_system::sui_system {
             storage_reward,
             computation_reward,
             storage_rebate,
-            non_refundable_storage_rebate,
+            non_refundable_storage_fee,
             storage_fund_reinvest_rate,
             reward_slashing_rate,
             epoch_start_timestamp_ms,
@@ -507,7 +507,7 @@ module sui_system::sui_system {
         new_epoch: u64,
         next_protocol_version: u64,
         storage_rebate: u64,
-        non_refundable_storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
@@ -520,7 +520,7 @@ module sui_system::sui_system {
             storage_reward,
             computation_reward,
             storage_rebate,
-            non_refundable_storage_rebate,
+            non_refundable_storage_fee,
             ctx
         )
     }
@@ -629,9 +629,9 @@ module sui_system::sui_system {
     }
 
     #[test_only]
-    public fun get_storage_fund_balance(wrapper: &mut SuiSystemState): u64 {
+    public fun get_storage_fund_total_balance(wrapper: &mut SuiSystemState): u64 {
         let self = load_system_state(wrapper);
-        sui_system_state_inner::get_storage_fund_balance(self)
+        sui_system_state_inner::get_storage_fund_total_balance(self)
     }
 
     #[test_only]
@@ -692,7 +692,7 @@ module sui_system::sui_system {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
-        non_refundable_storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         storage_fund_reinvest_rate: u64,
         reward_slashing_rate: u64,
         epoch_start_timestamp_ms: u64,
@@ -707,7 +707,7 @@ module sui_system::sui_system {
             new_epoch,
             next_protocol_version,
             storage_rebate,
-            non_refundable_storage_rebate,
+            non_refundable_storage_fee,
             storage_fund_reinvest_rate,
             reward_slashing_rate,
             epoch_start_timestamp_ms,
@@ -725,7 +725,7 @@ module sui_system::sui_system {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
-        non_refundable_storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         ctx: &mut TxContext,
     ) {
         let storage_reward = balance::create_for_testing(storage_charge);
@@ -737,7 +737,7 @@ module sui_system::sui_system {
             new_epoch,
             next_protocol_version,
             storage_rebate,
-            non_refundable_storage_rebate,
+            non_refundable_storage_fee,
             ctx,
         );
     }

@@ -249,7 +249,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
                         },
                     extra_fields: _,
                 },
-            storage_fund,
+            storage_fund: _,
             parameters:
                 SimTestSystemParametersV1 {
                     epoch_duration_ms,
@@ -264,7 +264,6 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
             epoch,
             protocol_version,
             system_state_version,
-            storage_fund: storage_fund.value(),
             reference_gas_price,
             safe_mode,
             epoch_start_timestamp_ms,
@@ -394,7 +393,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV2 {
                         },
                     extra_fields: _,
                 },
-            storage_fund,
+            storage_fund: _,
             parameters:
                 SimTestSystemParametersV1 {
                     epoch_duration_ms,
@@ -409,7 +408,6 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV2 {
             epoch,
             protocol_version,
             system_state_version,
-            storage_fund: storage_fund.value(),
             reference_gas_price,
             safe_mode,
             epoch_start_timestamp_ms,

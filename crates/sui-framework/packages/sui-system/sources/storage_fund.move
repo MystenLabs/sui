@@ -36,7 +36,7 @@ module sui_system::storage_fund {
         storage_fund_reinvestment: Balance<SUI>,
         leftover_staking_rewards: Balance<SUI>,
         storage_rebate_amount: u64,
-        non_refundable_storage_rebate_amount: u64,
+        non_refundable_storage_fee_amount: u64,
     ) : Balance<SUI> {
         // Both the reinvestment and leftover rewards are not to be refunded so they go to the non-refundable balance.
         balance::join(&mut self.non_refundable_balance, storage_fund_reinvestment);
@@ -48,8 +48,8 @@ module sui_system::storage_fund {
         balance::join(&mut self.total_object_storage_rebates, storage_charges);
 
         // Split out the non-refundable portion of the storage rebate and put it into the non-refundable balance.
-        let non_refundable_storage_rebate = balance::split(&mut self.total_object_storage_rebates, non_refundable_storage_rebate_amount);
-        balance::join(&mut self.non_refundable_balance, non_refundable_storage_rebate);
+        let non_refundable_storage_fee = balance::split(&mut self.total_object_storage_rebates, non_refundable_storage_fee_amount);
+        balance::join(&mut self.non_refundable_balance, non_refundable_storage_fee);
 
         // `storage_rebates` include the already refunded rebates of deleted objects and old rebates of modified objects and
         // should be taken out of the `total_object_storage_rebates`.

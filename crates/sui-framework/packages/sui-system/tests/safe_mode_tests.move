@@ -37,7 +37,7 @@ module sui::safe_mode_tests {
             test_scenario::next_tx(scenario, @0x1);
             let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
             test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x1), 1);
-            test_utils::assert_eq(sui_system::get_storage_fund_balance(&mut system_state), 1000);
+            test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1000);
             test_scenario::return_shared(system_state);
         };
 
@@ -63,7 +63,7 @@ module sui::safe_mode_tests {
         test_utils::assert_eq(sui_system::validator_stake_amount(&mut system_state, @0x4), 15);
 
         // Storage fund is 1000 + 48 + 32 - 30 - 30 = 1020. 4 leftover due to integer division.
-        test_utils::assert_eq(sui_system::get_storage_fund_balance(&mut system_state), 1024);
+        test_utils::assert_eq(sui_system::get_storage_fund_total_balance(&mut system_state), 1024);
 
         // Storage charges are deposited and storage rebates are taken out of the object rebate
         // portion of the fund so its balance is 48 + 32 - 30 - 30 - 2 - 6 = 12.

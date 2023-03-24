@@ -95,7 +95,7 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> at 
 Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> at epoch change times to process the inflows and outflows of storage fund.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="storage_fund.md#0x3_storage_fund_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="storage_fund.md#0x3_storage_fund_StorageFund">storage_fund::StorageFund</a>, storage_charges: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund_reinvestment: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, leftover_staking_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate_amount: u64, non_refundable_storage_rebate_amount: u64): <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="storage_fund.md#0x3_storage_fund_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="storage_fund.md#0x3_storage_fund_StorageFund">storage_fund::StorageFund</a>, storage_charges: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_fund_reinvestment: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, leftover_staking_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate_amount: u64, non_refundable_storage_fee_amount: u64): <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -110,7 +110,7 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> at 
     storage_fund_reinvestment: Balance&lt;SUI&gt;,
     leftover_staking_rewards: Balance&lt;SUI&gt;,
     storage_rebate_amount: u64,
-    non_refundable_storage_rebate_amount: u64,
+    non_refundable_storage_fee_amount: u64,
 ) : Balance&lt;SUI&gt; {
     // Both the reinvestment and leftover rewards are not <b>to</b> be refunded so they go <b>to</b> the non-refundable <a href="">balance</a>.
     <a href="_join">balance::join</a>(&<b>mut</b> self.non_refundable_balance, storage_fund_reinvestment);
@@ -122,8 +122,8 @@ Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code> at 
     <a href="_join">balance::join</a>(&<b>mut</b> self.total_object_storage_rebates, storage_charges);
 
     // Split out the non-refundable portion of the storage rebate and put it into the non-refundable <a href="">balance</a>.
-    <b>let</b> non_refundable_storage_rebate = <a href="_split">balance::split</a>(&<b>mut</b> self.total_object_storage_rebates, non_refundable_storage_rebate_amount);
-    <a href="_join">balance::join</a>(&<b>mut</b> self.non_refundable_balance, non_refundable_storage_rebate);
+    <b>let</b> non_refundable_storage_fee = <a href="_split">balance::split</a>(&<b>mut</b> self.total_object_storage_rebates, non_refundable_storage_fee_amount);
+    <a href="_join">balance::join</a>(&<b>mut</b> self.non_refundable_balance, non_refundable_storage_fee);
 
     // `storage_rebates` <b>include</b> the already refunded rebates of deleted objects and <b>old</b> rebates of modified objects and
     // should be taken out of the `total_object_storage_rebates`.

@@ -113,7 +113,7 @@ module sui_system::sui_system_state_inner {
         safe_mode_storage_rewards: Balance<SUI>,
         safe_mode_computation_rewards: Balance<SUI>,
         safe_mode_storage_rebates: u64,
-        safe_mode_non_refundable_storage_rebates: u64,
+        safe_mode_non_refundable_storage_fee: u64,
 
 
         /// Unix timestamp of the current epoch start
@@ -181,7 +181,7 @@ module sui_system::sui_system_state_inner {
             safe_mode_storage_rewards: balance::zero(),
             safe_mode_computation_rewards: balance::zero(),
             safe_mode_storage_rebates: 0,
-            safe_mode_non_refundable_storage_rebates: 0,
+            safe_mode_non_refundable_storage_fee: 0,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),
         };
@@ -688,7 +688,7 @@ module sui_system::sui_system_state_inner {
         storage_reward: Balance<SUI>,
         computation_reward: Balance<SUI>,
         storage_rebate_amount: u64,
-        non_refundable_storage_rebate_amount: u64,
+        non_refundable_storage_fee_amount: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
@@ -712,8 +712,8 @@ module sui_system::sui_system_state_inner {
         balance::join(&mut computation_reward, safe_mode_computation_rewards);
         storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
         self.safe_mode_storage_rebates = 0;
-        non_refundable_storage_rebate_amount = non_refundable_storage_rebate_amount + self.safe_mode_non_refundable_storage_rebates;
-        self.safe_mode_non_refundable_storage_rebates = 0;
+        non_refundable_storage_fee_amount = non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
+        self.safe_mode_non_refundable_storage_fee = 0;
 
         let total_validators_stake = validator_set::total_stake(&self.validators);
         let storage_fund_balance = storage_fund::total_balance(&self.storage_fund);
@@ -789,7 +789,7 @@ module sui_system::sui_system_state_inner {
                 storage_fund_reinvestment,
                 leftover_staking_rewards,
                 storage_rebate_amount,
-                non_refundable_storage_rebate_amount,
+                non_refundable_storage_fee_amount,
             );
 
         event::emit(
@@ -832,7 +832,7 @@ module sui_system::sui_system_state_inner {
         storage_reward: Balance<SUI>,
         computation_reward: Balance<SUI>,
         storage_rebate: u64,
-        non_refundable_storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -845,7 +845,7 @@ module sui_system::sui_system_state_inner {
         balance::join(&mut self.safe_mode_storage_rewards, storage_reward);
         balance::join(&mut self.safe_mode_computation_rewards, computation_reward);
         self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
-        self.safe_mode_non_refundable_storage_rebates = self.safe_mode_non_refundable_storage_rebates + non_refundable_storage_rebate;
+        self.safe_mode_non_refundable_storage_fee = self.safe_mode_non_refundable_storage_fee + non_refundable_storage_fee;
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -902,7 +902,7 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    public(friend) fun get_storage_fund_balance(self: &SuiSystemStateInner): u64 {
+    public(friend) fun get_storage_fund_total_balance(self: &SuiSystemStateInner): u64 {
         storage_fund::total_balance(&self.storage_fund)
     }
 

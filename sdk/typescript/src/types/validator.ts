@@ -160,7 +160,7 @@ export const SuiSystemStateSummary = object({
   safeModeStorageRewards: number(),
   safeModeComputationRewards: number(),
   safeModeStorageRebates: number(),
-  safeModeNonRefundableStorageRebates: number(),
+  safeModeNonRefundableStorageFee: number(),
   epochStartTimestampMs: number(),
   epochDurationMs: number(),
   stakeSubsidyStartEpoch: number(),
