@@ -18,7 +18,7 @@ const HMAC_SHA3_256_BLOCK_SIZE: usize = 136;
 
 #[derive(Clone)]
 pub struct HmacHmacSha3256CostParams {
-    /// Base cost for invoking the `ecrecover` function with `hash=0` implying KECCAK256
+    /// Base cost for invoking the `hmac_sha3_256` function
     pub hmac_hmac_sha3_256_cost_base: InternalGas,
     ///  Cost per byte of `msg` and `key`
     pub hmac_hmac_sha3_256_input_cost_per_byte: InternalGas,
