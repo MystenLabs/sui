@@ -640,7 +640,7 @@ fn get_genesis_agg<A>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -664,7 +664,7 @@ where
     A: Clone,
 {
     let mut agg = get_genesis_agg(authorities.clone(), clients);
-    let committee = Committee::new(epoch, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(epoch, authorities);
     agg.committee_store
         .insert_new_committee(&committee)
         .unwrap();
@@ -836,7 +836,8 @@ async fn test_handle_transaction_response() {
     println!("Case 2 - Retryable Transaction (WrongEpoch Error)");
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -890,7 +891,8 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1170,7 +1172,8 @@ async fn test_handle_transaction_response() {
 
     println!("Case 7.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store, now SafeClient will pass
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1742,7 +1745,8 @@ async fn test_handle_conflicting_transaction_response() {
 
     println!("Case 5.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store to epoch 2, now SafeClient will pass
-    let committee_2 = Committee::new(2, authorities.clone());
+    let committee_2 =
+        Committee::new_for_testing_with_normalized_voting_power(2, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_2)
         .unwrap();
@@ -1777,9 +1781,11 @@ async fn test_byzantine_authority_sig_aggregation() {
     assert!(run_aggregator(1, 4).await.is_ok());
     assert!(run_aggregator(2, 4).await.is_err());
 
-    // For 6 validators, we need 2f+1 = 5 for quorum for signing a sender signed tx.
+    // For 6 validators, voting power normaliziation in test Committee construction
+    // will result in 2f+1 = 4 for quorum for signing a sender signed tx.
     assert!(run_aggregator(1, 6).await.is_ok());
-    assert!(run_aggregator(2, 6).await.is_err());
+    assert!(run_aggregator(2, 6).await.is_ok());
+    assert!(run_aggregator(3, 6).await.is_err());
 
     // For 4 validators, we need 2f+1 = 3 for quorum for signing transaction effects.
     assert!(process_with_cert(1, 4).await.is_ok());
@@ -1797,7 +1803,7 @@ async fn test_byzantine_authority_sig_aggregation() {
 #[should_panic]
 async fn test_fork_panic_process_cert_6_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(2, 6).await;
+    let _ = process_with_cert(3, 6).await;
 }
 
 #[tokio::test]

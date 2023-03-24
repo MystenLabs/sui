@@ -537,7 +537,8 @@ impl FullNodeProxy {
         let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, committee_map);
+        let committee =
+            Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
 
         Ok(Self {
             sui_client,

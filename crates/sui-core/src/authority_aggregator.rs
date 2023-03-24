@@ -1361,7 +1361,7 @@ where
     }
 
     fn get_retryable_stake(&self, state: &ProcessTransactionState) -> StakeUnit {
-        self.committee.total_votes
+        self.committee.total_votes()
             - state.conflicting_tx_digests_total_stake()
             - state.non_retryable_stake
             - state.effects_map.total_votes()

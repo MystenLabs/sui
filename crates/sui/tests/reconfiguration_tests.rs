@@ -306,9 +306,9 @@ async fn test_create_advance_epoch_tx_race() {
     };
 
     // Set up wait points.
-    let (change_epoch_delay_tx, _) = broadcast::channel(1);
+    let (change_epoch_delay_tx, _change_epoch_delay_rx) = broadcast::channel(1);
     let change_epoch_delay_tx = Arc::new(change_epoch_delay_tx);
-    let (reconfig_delay_tx, _) = broadcast::channel(1);
+    let (reconfig_delay_tx, _reconfig_delay_rx) = broadcast::channel(1);
     let reconfig_delay_tx = Arc::new(reconfig_delay_tx);
 
     // Test code runs in node 1 - node 2 is always a validator.

@@ -371,7 +371,6 @@ impl AuthorityPerEpochStore {
         metrics
             .current_voting_right
             .set(committee.weight(&name) as i64);
-        metrics.epoch_total_votes.set(committee.total_votes as i64);
         let protocol_version = epoch_start_configuration
             .epoch_start_state()
             .protocol_version();
