@@ -6,16 +6,16 @@ mod payload;
 
 use anyhow::Result;
 use clap::Parser;
+
 use std::error::Error;
-use std::time::Duration;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
 use tracing::info;
-use uuid::Uuid;
 
-use crate::load_test::LoadTest;
-use crate::payload::{Command, CommandData, Payload, RpcCommandProcessor};
+use crate::load_test::{LoadTest, LoadTestConfig};
+use crate::payload::{Command, RpcCommandProcessor, SignerInfo};
 
 #[derive(Parser)]
 #[clap(
@@ -33,6 +33,9 @@ struct Opts {
     pub cross_validate: bool,
     #[clap(long, multiple_values = true, default_value = "http://127.0.0.1:9000")]
     pub urls: Vec<String>,
+    /// the path to log file directory
+    #[clap(long, default_value = "~/.sui/sui_config/logs")]
+    logs_directory: String,
 }
 
 #[derive(Parser)]
@@ -78,17 +81,35 @@ pub enum ClapCommand {
     },
 }
 
-fn get_keypair() -> Result<(SuiAddress, String)> {
+fn get_keypair() -> Result<SignerInfo> {
     // TODO(chris) allow pass in custom path for keystore
     // Load keystore from ~/.sui/sui_config/sui.keystore
-    let keystore_path = match dirs::home_dir() {
-        Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),
-        None => panic!("Cannot obtain home directory path"),
-    };
+    let keystore_path = get_sui_config_directory().join("sui.keystore");
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let active_address = keystore.addresses().pop().unwrap();
     let keypair: &SuiKeyPair = keystore.get_key(&active_address)?;
-    Ok((active_address, keypair.encode_base64()))
+    println!("using address {active_address} for signing");
+    Ok(SignerInfo::new(keypair.encode_base64(), active_address))
+}
+
+fn get_sui_config_directory() -> PathBuf {
+    match dirs::home_dir() {
+        Some(v) => v.join(".sui").join("sui_config"),
+        None => panic!("Cannot obtain home directory path"),
+    }
+}
+
+fn get_log_file_path(dir_path: String) -> String {
+    let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let timestamp = current_time.as_secs();
+    // use timestamp to signify which file is newer
+    let log_filename = format!("sui-rpc-loadgen.{}.log", timestamp);
+
+    let dir_path = match shellexpand::full(&dir_path) {
+        Ok(v) => v,
+        Err(e) => panic!("Failed to expand directory '{:?}': {}", dir_path, e),
+    };
+    format!("{dir_path}/{log_filename}")
 }
 
 #[tokio::main]
@@ -96,10 +117,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tracing_level = "debug";
     let network_tracing_level = "info";
     let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
+    let opts = Opts::parse();
 
-    let uuid = Uuid::new_v4();
-    let log_filename = format!("sui-rpc-loadgen.{}.log", uuid);
-    println!("Logging to {}", log_filename);
+    let log_filename = get_log_file_path(opts.logs_directory);
+
     // Initialize logger
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
@@ -107,22 +128,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_log_file(&log_filename)
         .init();
 
-    let opts = Opts::parse();
+    println!("Logging to {}", &log_filename);
     info!("Running Load Gen with following urls {:?}", opts.urls);
 
-    // TODO(chris): remove hardcoded value since we only need keystore for write commands
-    let need_keystore = true;
-    let (signer_address, encoded_keypair) = if need_keystore {
-        let (address, keypair) = get_keypair()?;
-        info!("Using address {address} from keystore");
-        (Some(address), Some(keypair))
-    } else {
-        (None, None)
-    };
-
-    let (command, common) = match opts.command {
-        ClapCommand::DryRun { common } => (Command::new_dry_run(), common),
-        ClapCommand::PaySui { common } => (Command::new_pay_sui(), common),
+    let (command, common, need_keystore) = match opts.command {
+        ClapCommand::DryRun { common } => (Command::new_dry_run(), common, false),
+        ClapCommand::PaySui { common } => (Command::new_pay_sui(), common, true),
         ClapCommand::GetCheckpoints {
             common,
             start,
@@ -132,8 +143,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         } => (
             Command::new_get_checkpoints(start, end, verify_transactions, verify_objects),
             common,
+            false,
         ),
     };
+
+    let signer_info = need_keystore.then_some(get_keypair()?);
 
     let command = command
         .with_repeat_interval(Duration::from_millis(common.interval_in_ms))
@@ -141,41 +155,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let processor = RpcCommandProcessor::new(&opts.urls).await;
 
-    // todo: make flexible
-    let command_payloads = if let CommandData::GetCheckpoints(data) = command.data {
-        let start = data.start;
-        let end = data.end.unwrap_or(455246); // todo: adjustable upper limit
-        let num_chunks = opts.num_threads;
-        let chunk_size = (end - start) / num_chunks as u64;
-        (0..num_chunks)
-            .map(|i| {
-                let start_checkpoint = start + (i as u64) * chunk_size;
-                let end_checkpoint = start + ((i + 1) as u64) * chunk_size;
-                Command::new_get_checkpoints(
-                    start_checkpoint,
-                    Some(end_checkpoint),
-                    data.verify_transactions,
-                    data.verify_objects,
-                )
-            })
-            .collect()
-    } else {
-        vec![command.clone(); opts.num_threads]
-    };
-
-    let payloads: Vec<Payload> = command_payloads
-        .into_iter()
-        .map(|command| Payload {
-            commands: vec![command], // note commands is also a vector
-            encoded_keypair: encoded_keypair.clone(),
-            signer_address,
-            gas_payment: None,
-        })
-        .collect();
-
     let load_test = LoadTest {
         processor,
-        payloads,
+        config: LoadTestConfig {
+            command,
+            num_threads: opts.num_threads,
+            // TODO: pass in from config
+            divide_tasks: true,
+            signer_info,
+        },
     };
     load_test.run().await?;
 

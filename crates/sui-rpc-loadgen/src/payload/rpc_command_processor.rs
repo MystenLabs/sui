@@ -16,6 +16,8 @@ use tokio::time::sleep;
 use tracing::log::warn;
 use tracing::{debug, error, info};
 
+use crate::load_test::LoadTestConfig;
+use sui_json_rpc_types::SuiTransactionEffectsAPI;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
@@ -23,8 +25,11 @@ use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::payload::{
-    CommandData, DryRun, GetCheckpoints, PaySui, Payload, ProcessPayload, Processor,
+    Command, CommandData, DryRun, GetCheckpoints, PaySui, Payload, ProcessPayload, Processor,
+    SignerInfo,
 };
+
+const DEFAULT_GAS_BUDGET: u64 = 100_000;
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
@@ -51,12 +56,12 @@ impl RpcCommandProcessor {
     async fn process_command_data(
         &self,
         command: &CommandData,
-        keypair: &Option<SuiKeyPair>,
+        signer_info: &Option<SignerInfo>,
     ) -> Result<()> {
         match command {
-            CommandData::DryRun(ref v) => self.process(v, keypair).await,
-            CommandData::GetCheckpoints(ref v) => self.process(v, keypair).await,
-            CommandData::PaySui(ref v) => self.process(v, keypair).await,
+            CommandData::DryRun(ref v) => self.process(v, signer_info).await,
+            CommandData::GetCheckpoints(ref v) => self.process(v, signer_info).await,
+            CommandData::PaySui(ref v) => self.process(v, signer_info).await,
         }
     }
 
@@ -73,15 +78,11 @@ impl Processor for RpcCommandProcessor {
         for command in commands.iter() {
             let repeat_interval = command.repeat_interval;
             let repeat_n_times = command.repeat_n_times;
-            let keypair = &payload
-                .encoded_keypair
-                .as_ref()
-                .map(|k| SuiKeyPair::decode_base64(k).expect("Decoding keypair should not fail"));
-
             for _ in 0..=repeat_n_times {
                 let start_time = Instant::now();
 
-                self.process_command_data(&command.data, keypair).await?;
+                self.process_command_data(&command.data, &payload.signer_info)
+                    .await?;
 
                 let elapsed_time = start_time.elapsed();
                 if elapsed_time < repeat_interval {
@@ -92,11 +93,46 @@ impl Processor for RpcCommandProcessor {
         }
         Ok(())
     }
+
+    async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>> {
+        let clients = self.get_clients().await?;
+        let command_payloads = match &config.command.data {
+            CommandData::GetCheckpoints(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_checkpoint_tasks(&clients, data, config.num_threads).await
+                }
+            }
+            _ => vec![config.command.clone(); config.num_threads],
+        };
+
+        let mut signer_infos = vec![config.signer_info.clone(); config.num_threads];
+
+        if let Some(info) = &config.signer_info {
+            let coins = get_coin_ids(clients.first().unwrap(), info, config.num_threads).await;
+            signer_infos
+                .iter_mut()
+                .zip(coins.into_iter())
+                .for_each(|(info, coin)| {
+                    info.as_mut().unwrap().gas_payment = Some(coin);
+                });
+        };
+
+        Ok(command_payloads
+            .into_iter()
+            .enumerate()
+            .map(|(i, command)| Payload {
+                commands: vec![command], // note commands is also a vector
+                signer_info: signer_infos[i].clone(),
+            })
+            .collect())
+    }
 }
 
 #[async_trait]
 impl<'a> ProcessPayload<'a, &'a DryRun> for RpcCommandProcessor {
-    async fn process(&'a self, _op: &'a DryRun, _keypair: &Option<SuiKeyPair>) -> Result<()> {
+    async fn process(&'a self, _op: &'a DryRun, _signer_info: &Option<SignerInfo>) -> Result<()> {
         debug!("DryRun");
         Ok(())
     }
@@ -107,7 +143,7 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
     async fn process(
         &'a self,
         op: &'a GetCheckpoints,
-        _keypair: &Option<SuiKeyPair>,
+        _signer_info: &Option<SignerInfo>,
     ) -> Result<()> {
         let clients = self.get_clients().await?;
 
@@ -299,6 +335,112 @@ fn get_object_id(object_change: &ObjectChange) -> Option<ObjectID> {
     }
 }
 
+async fn divide_checkpoint_tasks(
+    clients: &[SuiClient],
+    data: &GetCheckpoints,
+    num_chunks: usize,
+) -> Vec<Command> {
+    let start = data.start;
+    let end = match data.end {
+        Some(end) => end,
+        None => {
+            let end_checkpoints = join_all(clients.iter().map(|client| async {
+                client
+                    .read_api()
+                    .get_latest_checkpoint_sequence_number()
+                    .await
+                    .expect("get_latest_checkpoint_sequence_number should not fail")
+            }))
+            .await;
+            *end_checkpoints
+                .iter()
+                .max()
+                .expect("get_latest_checkpoint_sequence_number should not return empty")
+        }
+    };
+
+    let chunk_size = (end - start) / num_chunks as u64;
+    (0..num_chunks)
+        .map(|i| {
+            let start_checkpoint = start + (i as u64) * chunk_size;
+            let end_checkpoint = end.min(start + ((i + 1) as u64) * chunk_size);
+            Command::new_get_checkpoints(
+                start_checkpoint,
+                Some(end_checkpoint),
+                data.verify_transactions,
+                data.verify_objects,
+            )
+        })
+        .collect()
+}
+
+async fn get_coin_ids(
+    client: &SuiClient,
+    signer_info: &SignerInfo,
+    num_coins: usize,
+) -> Vec<ObjectID> {
+    let sender = signer_info.signer_address;
+    let coin_page = client
+        .coin_read_api()
+        .get_coins(sender, None, None, None)
+        .await
+        .expect("Did you give gas coins to this address?");
+    let coin_object_id = coin_page
+        .data
+        .first()
+        .expect("Did you give gas coins to this address?")
+        .coin_object_id;
+
+    let split_coin_tx = client
+        .transaction_builder()
+        .split_coin_equal(
+            sender,
+            coin_object_id,
+            num_coins as u64,
+            None,
+            signer_info.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET),
+        )
+        .await
+        .expect("Failed to construct split coin transaction");
+    debug!("split_coin_tx {:?}", split_coin_tx);
+    let keypair = SuiKeyPair::decode_base64(&signer_info.encoded_keypair)
+        .expect("Decoding keypair should not fail");
+    let signature = Signature::new_secure(
+        &IntentMessage::new(Intent::default(), &split_coin_tx),
+        &keypair,
+    );
+    debug!("signature {:?}", signature);
+
+    let transaction_response = client
+        .quorum_driver()
+        .execute_transaction(
+            Transaction::from_data(split_coin_tx, Intent::default(), vec![signature])
+                .verify()
+                .expect("signature error"),
+            SuiTransactionResponseOptions::full_content(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .expect("Splitcoin transaction failed");
+    debug!("split coin transaction response {transaction_response:?}");
+    let mut results: Vec<ObjectID> = transaction_response
+        .effects
+        .unwrap_or_else(|| {
+            panic!(
+                "split coin transaction should have effects {}",
+                transaction_response.digest
+            )
+        })
+        .created()
+        .iter()
+        .map(|owned_object_ref| owned_object_ref.reference.object_id)
+        .collect();
+    results.push(coin_object_id);
+    debug!("Split {coin_object_id} into {results:?} for gas payment");
+    assert_eq!(results.len(), num_coins);
+    results
+}
+
 // todo: this and check_transactions can be generic
 pub async fn check_objects(
     clients: &Arc<RwLock<Vec<SuiClient>>>,
@@ -387,41 +529,37 @@ fn cross_validate_entities<T, U>(
 
 #[async_trait]
 impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
-    async fn process(&'a self, _op: &'a PaySui, keypair: &Option<SuiKeyPair>) -> Result<()> {
+    async fn process(&'a self, _op: &'a PaySui, signer_info: &Option<SignerInfo>) -> Result<()> {
         let clients = self.get_clients().await?;
-
-        // TODO(chris): allow customization and clean up this function
-        let sender: SuiAddress =
-            "0xbc33e6e4818f9f2ef77d020b35c24be738213e64d9e58839ee7b4222029610de"
-                .parse()
-                .unwrap();
+        let SignerInfo {
+            encoded_keypair,
+            signer_address,
+            gas_budget,
+            gas_payment,
+        } = signer_info.clone().unwrap();
         let recipient = SuiAddress::random_for_testing_only();
         let amount = 11;
-        let gas_budget = 10000;
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
 
-        let coin_page = clients
-            .first()
-            .unwrap()
-            .coin_read_api()
-            .get_coins(sender, None, None, None)
-            .await?;
-        let gas_object_id = coin_page
-            .data
-            .first()
-            .expect("Did you give gas coins to this address?")
-            .coin_object_id;
+        let keypair =
+            SuiKeyPair::decode_base64(&encoded_keypair).expect("Decoding keypair should not fail");
 
-        debug!("Pay Sui to {recipient} with {amount} MIST with {gas_object_id}");
-        let keypair = keypair.as_ref().unwrap();
+        debug!("Pay Sui to {recipient} with {amount} MIST with {gas_payment:?}");
         for client in clients.iter() {
             let transfer_tx = client
                 .transaction_builder()
-                .transfer_sui(sender, gas_object_id, gas_budget, recipient, Some(amount))
+                .transfer_sui(
+                    signer_address,
+                    gas_payment.unwrap(),
+                    gas_budget,
+                    recipient,
+                    Some(amount),
+                )
                 .await?;
             debug!("transfer_tx {:?}", transfer_tx);
             let signature = Signature::new_secure(
                 &IntentMessage::new(Intent::default(), &transfer_tx),
-                keypair,
+                &keypair,
             );
             debug!("signature {:?}", signature);
 
