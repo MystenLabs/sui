@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import Alert from '../../components/alert';
+import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
@@ -227,16 +228,13 @@ function StakingCard() {
                         from: 'stake',
                     }).toString()}`
                 );
-            } catch (e) {
-                const msg = (e as Error)?.message;
+            } catch (error) {
                 toast.error(
                     <div className="max-w-xs overflow-hidden flex flex-col">
                         <strong>{unstake ? 'Unstake' : 'Stake'} failed</strong>
-                        {msg ? (
-                            <small className="text-ellipsis overflow-hidden">
-                                {msg}
-                            </small>
-                        ) : null}
+                        <small className="text-ellipsis overflow-hidden">
+                            {getSignerOperationErrorMessage(error)}
+                        </small>
                     </div>
                 );
             }

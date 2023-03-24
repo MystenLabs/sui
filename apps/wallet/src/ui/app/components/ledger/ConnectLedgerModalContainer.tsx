@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useNextMenuUrl } from '../menu/hooks';
 import { ConnectLedgerModal } from './ConnectLedgerModal';
-import { getLedgerConnectionErrorMessage } from './LedgerExceptions';
+import { getLedgerConnectionErrorMessage } from './ledgerExceptions';
 
 export function ConnectLedgerModalContainer() {
     const navigate = useNavigate();
@@ -23,7 +23,10 @@ export function ConnectLedgerModalContainer() {
             }}
             onError={(error) => {
                 navigate(accountsUrl);
-                toast.error(getLedgerConnectionErrorMessage(error));
+                toast.error(
+                    getLedgerConnectionErrorMessage(error) ||
+                        'Something went wrong. Try again.'
+                );
             }}
             onConfirm={() => {
                 navigate(importLedgerAccountsUrl);

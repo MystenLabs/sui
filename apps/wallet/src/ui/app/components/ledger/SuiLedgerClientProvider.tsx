@@ -17,7 +17,7 @@ import {
     convertErrorToLedgerConnectionFailedError,
     LedgerDeviceNotFoundError,
     LedgerNoTransportMechanismError,
-} from './LedgerExceptions';
+} from './ledgerExceptions';
 
 type SuiLedgerClientProviderProps = {
     children: React.ReactNode;

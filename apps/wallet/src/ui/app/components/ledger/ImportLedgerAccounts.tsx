@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LockedDeviceError } from '@ledgerhq/errors';
 import {
     LockUnlocked16 as UnlockedLockIcon,
     Spinner16 as SpinnerIcon,
@@ -11,6 +10,7 @@ import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
@@ -18,7 +18,6 @@ import {
     LedgerAccountList,
     type SelectableLedgerAccount,
 } from './LedgerAccountList';
-import { getSuiApplicationErrorMessage } from './LedgerExceptions';
 import { useDeriveLedgerAccounts } from './useDeriveLedgerAccounts';
 import { useImportLedgerAccountsMutation } from './useImportLedgerAccountsMutation';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
@@ -52,7 +51,10 @@ export function ImportLedgerAccounts() {
             );
         },
         onError: (error) => {
-            toast.error(getSuiApplicationErrorMessage(error));
+            toast.error(
+                getSuiApplicationErrorMessage(error) ||
+                    'Something went wrong. Try again.'
+            );
             navigate(accountsUrl, { replace: true });
         },
     });
