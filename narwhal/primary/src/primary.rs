@@ -716,17 +716,17 @@ impl PrimaryReceiverHandler {
                 ))
             })?;
         ensure!(
-            *header.author() == peer_authority.id(),
+            header.author() == peer_authority.id(),
             DagError::NetworkError(format!(
                 "Header author {:?} must match requesting peer {peer_authority:?}",
-                *header.author()
+                header.author()
             ))
         );
 
         debug!(
             "Processing vote request for {:?} round:{:?}",
             header,
-            *header.round()
+            header.round()
         );
 
         // Clone the round updates channel so we can get update notifications specific to
@@ -772,8 +772,8 @@ impl PrimaryReceiverHandler {
                     }
                     let narwhal_round = *rx_narwhal_round_updates.borrow();
                     ensure!(
-                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= *header.round(),
-                        DagError::TooOld(header.digest().into(), *header.round(), narwhal_round)
+                        narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round(),
+                        DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
                     )
                 },
             }
@@ -795,8 +795,8 @@ impl PrimaryReceiverHandler {
         // current Header.
         let narwhal_round = *rx_narwhal_round_updates.borrow();
         ensure!(
-            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= *header.round(),
-            DagError::TooOld(header.digest().into(), *header.round(), narwhal_round)
+            narwhal_round.saturating_sub(HEADER_AGE_LIMIT) <= header.round(),
+            DagError::TooOld(header.digest().into(), header.round(), narwhal_round)
         );
 
         // Check the parent certificates. Ensure the parents:
@@ -807,7 +807,7 @@ impl PrimaryReceiverHandler {
         let mut stake = 0;
         for parent in parents.iter() {
             ensure!(
-                parent.round() + 1 == *header.round(),
+                parent.round() + 1 == header.round(),
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
@@ -865,35 +865,35 @@ impl PrimaryReceiverHandler {
         // so we don't.
         let result = self
             .vote_digest_store
-            .read(header.author())
+            .read(&header.author())
             .map_err(DagError::StoreError)?;
 
         if let Some(vote_info) = result {
-            if *header.epoch() < vote_info.epoch
-                || (*header.epoch() == vote_info.epoch && *header.round() < vote_info.round)
+            if header.epoch() < vote_info.epoch
+                || (header.epoch() == vote_info.epoch && header.round() < vote_info.round)
             {
                 // Already voted on a newer Header for this publicKey.
                 return Err(DagError::TooOld(
                     header.digest().into(),
-                    *header.round(),
+                    header.round(),
                     narwhal_round,
                 ));
             }
-            if *header.epoch() == vote_info.epoch && *header.round() == vote_info.round {
+            if header.epoch() == vote_info.epoch && header.round() == vote_info.round {
                 // Make sure we don't vote twice for the same authority in the same epoch/round.
                 let temp_vote =
                     Vote::new(header, &self.authority_id, &self.signature_service).await;
                 if temp_vote.digest() != vote_info.vote_digest {
                     info!(
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
-                        *header.author(),
-                        *header.epoch(),
-                        *header.round()
+                        header.author(),
+                        header.epoch(),
+                        header.round()
                     );
                     self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(
                         vote_info.vote_digest,
-                        *header.round(),
+                        header.round(),
                     ));
                 }
             }
@@ -904,7 +904,7 @@ impl PrimaryReceiverHandler {
         debug!(
             "Created vote {vote:?} for {} at round {}",
             header,
-            *header.round()
+            header.round()
         );
 
         // Update the vote digest store with the vote we just sent.

@@ -959,10 +959,10 @@ async fn test_fetch_certificates_handler() {
     // already in store. But this does not matter for testing here.
     let mut authorities = Vec::<AuthorityIdentifier>::new();
     for i in 0..total_authorities {
-        authorities.push(*certificates[i].header.author());
+        authorities.push(certificates[i].header.author());
         for j in 0..=i {
             let cert = certificates[i + j * total_authorities].clone();
-            assert_eq!(cert.header.author(), authorities.last().unwrap());
+            assert_eq!(&cert.header.author(), authorities.last().unwrap());
             certificate_store
                 .write(cert)
                 .expect("Writing certificate to store failed");

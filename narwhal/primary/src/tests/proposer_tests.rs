@@ -47,7 +47,7 @@ async fn propose_empty() {
 
     // Ensure the proposer makes a correct empty header.
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(*header.round(), 1);
+    assert_eq!(header.round(), 1);
     assert!(header.payload().is_empty());
     assert!(header.validate(&committee, &worker_cache).is_ok());
 }
@@ -115,7 +115,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(*header.round(), 1);
+    assert_eq!(header.round(), 1);
     assert_eq!(
         header.payload().get(&digest),
         Some(&(worker_id, created_at_ts))
@@ -157,7 +157,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     // THEN the header should contain max_num_of_batches
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(*header.round(), 2);
+    assert_eq!(header.round(), 2);
     assert_eq!(header.payload().len(), max_num_of_batches);
     assert!(rx_ack.await.is_ok());
 

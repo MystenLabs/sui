@@ -164,7 +164,7 @@ impl Proposer {
         self.proposer_store.write_last_proposed(&header)?;
 
         #[cfg(feature = "benchmark")]
-        for digest in header.payload.keys() {
+        for digest in header.payload().keys() {
             // NOTE: This log entry is used to compute performance.
             info!("Created {} -> {:?}", header, digest);
         }
@@ -189,7 +189,7 @@ impl Proposer {
 
         // Check if we already have stored a header for this round.
         if let Some(last_header) = self.proposer_store.get_last_proposed()? {
-            if *last_header.round() == this_round && *last_header.epoch() == this_epoch {
+            if last_header.round() == this_round && last_header.epoch() == this_epoch {
                 // We have already produced a header for the current round, idempotent re-send
                 debug!("Proposer re-using existing header for round {this_round}");
                 self.last_parents.clear(); // Clear parents that are now invalid for next round.

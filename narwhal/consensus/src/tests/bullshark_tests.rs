@@ -877,7 +877,7 @@ async fn garbage_collection_basic() {
                 !sub_dag
                     .certificates
                     .iter()
-                    .any(|c| *c.header.author() == slow_node),
+                    .any(|c| c.header.author() == slow_node),
                 "Slow authority shouldn't be amongst the committed ones"
             );
 

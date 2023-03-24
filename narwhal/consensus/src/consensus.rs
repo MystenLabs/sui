@@ -422,7 +422,7 @@ where
                             }
 
                             #[cfg(feature = "benchmark")]
-                            for digest in certificate.header.payload.keys() {
+                            for digest in certificate.header.payload().keys() {
                                 // NOTE: This log entry is used to compute performance.
                                 tracing::info!("Committed {} -> {:?}", certificate.header, digest);
                             }

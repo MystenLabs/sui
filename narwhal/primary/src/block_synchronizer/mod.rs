@@ -536,7 +536,7 @@ impl BlockSynchronizer {
                 .map(|(batch, (worker_id, _))| (batch, worker_id))
                 .collect();
 
-            let payload_available = if *certificate.header.author() == self.authority_id {
+            let payload_available = if certificate.header.author() == self.authority_id {
                 trace!(
                     "Certificate with id {} is our own, no need to check in storage.",
                     certificate.digest()

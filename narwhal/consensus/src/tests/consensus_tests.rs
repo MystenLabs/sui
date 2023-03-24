@@ -186,10 +186,10 @@ async fn test_consensus_recovery_with_bullshark() {
     // We omit round 7 so we can feed those later after "crash" to trigger a new leader
     // election round and commit.
     for certificate in certificates.iter() {
-        if *certificate.header.round() <= 3 {
+        if certificate.header.round() <= 3 {
             tx_waiter.send(certificate.clone()).await.unwrap();
         }
-        if *certificate.header.round() <= 6 {
+        if certificate.header.round() <= 6 {
             certificate_store.write(certificate.clone()).unwrap();
         }
     }
@@ -252,7 +252,7 @@ async fn test_consensus_recovery_with_bullshark() {
     // WHEN send the certificates of round >= 5 to trigger a leader election for round 4
     // and start committing.
     for certificate in certificates.iter() {
-        if *certificate.header.round() >= 5 {
+        if certificate.header.round() >= 5 {
             tx_waiter.send(certificate.clone()).await.unwrap();
         }
     }

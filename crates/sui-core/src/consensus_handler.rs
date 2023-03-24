@@ -156,7 +156,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .with_label_values(&[&consensus_output.sub_dag.leader.header.author().to_string()])
             .inc();
         for (cert, batches) in consensus_output.batches {
-            let author = *cert.header.author();
+            let author = cert.header.author();
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
@@ -210,7 +210,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
             let certificate_author = AuthorityName::from_bytes(
                 self.committee
-                    .authority_safe(output_cert.header.author())
+                    .authority_safe(&output_cert.header.author())
                     .protocol_key_bytes()
                     .0
                     .as_ref(),

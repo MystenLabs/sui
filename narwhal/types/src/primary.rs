@@ -161,7 +161,8 @@ pub enum Header {
     V1(HeaderV1),
 }
 
-// TODO(arun): Is this default useful?
+// TODO: Revisit if we should not impl Default for Header and just use
+// versioned header in Certificate
 impl Default for Header {
     fn default() -> Self {
         Self::V1(HeaderV1::default())
@@ -169,7 +170,7 @@ impl Default for Header {
 }
 
 impl Header {
-    // TODO(arun): Should I be passing in a version number here and matching on that?
+    // TODO: Add version number and match on that.
     pub async fn new(
         author: AuthorityIdentifier,
         round: Round,
@@ -205,9 +206,9 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
 
 #[enum_dispatch]
 pub trait HeaderAPI {
-    fn author(&self) -> &AuthorityIdentifier;
-    fn round(&self) -> &Round;
-    fn epoch(&self) -> &Epoch;
+    fn author(&self) -> AuthorityIdentifier;
+    fn round(&self) -> Round;
+    fn epoch(&self) -> Epoch;
     fn created_at(&self) -> &TimestampMs;
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)>;
     fn parents(&self) -> &BTreeSet<CertificateDigest>;
@@ -235,14 +236,14 @@ pub struct HeaderV1 {
 }
 
 impl HeaderAPI for HeaderV1 {
-    fn author(&self) -> &AuthorityIdentifier {
-        &self.author
+    fn author(&self) -> AuthorityIdentifier {
+        self.author
     }
-    fn round(&self) -> &Round {
-        &self.round
+    fn round(&self) -> Round {
+        self.round
     }
-    fn epoch(&self) -> &Epoch {
-        &self.epoch
+    fn epoch(&self) -> Epoch {
+        self.epoch
     }
     fn created_at(&self) -> &TimestampMs {
         &self.created_at
@@ -377,7 +378,6 @@ impl HeaderV1 {
     MallocSizeOf,
     Arbitrary,
 )]
-// TODO(arun): Should we create HeaderV1Digest?
 pub struct HeaderDigest([u8; crypto::DIGEST_LENGTH]);
 
 impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
@@ -474,9 +474,9 @@ impl Vote {
     ) -> Self {
         let vote = Self {
             header_digest: header.digest(),
-            round: *header.round(),
-            epoch: *header.epoch(),
-            origin: *header.author(),
+            round: header.round(),
+            epoch: header.epoch(),
+            origin: header.author(),
             author: *author,
             signature: Signature::default(),
         };
@@ -492,9 +492,9 @@ impl Vote {
     {
         let vote = Self {
             header_digest: header.digest(),
-            round: *header.round(),
-            epoch: *header.epoch(),
-            origin: *header.author(),
+            round: header.round(),
+            epoch: header.epoch(),
+            origin: header.author(),
             author: *author,
             signature: Signature::default(),
         };
@@ -753,15 +753,15 @@ impl Certificate {
     }
 
     pub fn round(&self) -> Round {
-        *self.header.round()
+        self.header.round()
     }
 
     pub fn epoch(&self) -> Epoch {
-        *self.header.epoch()
+        self.header.epoch()
     }
 
     pub fn origin(&self) -> AuthorityIdentifier {
-        *self.header.author()
+        self.header.author()
     }
 }
 

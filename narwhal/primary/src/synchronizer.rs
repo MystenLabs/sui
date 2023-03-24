@@ -519,7 +519,7 @@ impl Synchronizer {
         debug!(
             "Header {:?} at round {} with {} batches, took {} seconds to be materialized to a certificate {:?}",
             certificate.header.digest(),
-            *certificate.header.round(),
+            certificate.header.round(),
             certificate.header.payload().len(),
             header_to_certificate_duration,
             certificate.digest()
@@ -850,7 +850,7 @@ impl Synchronizer {
         max_age: Round,
         is_certified: bool,
     ) -> DagResult<()> {
-        if *header.author() == inner.authority_id {
+        if header.author() == inner.authority_id {
             debug!("skipping sync_batches for header {header}: no need to sync payload from own workers");
             return Ok(());
         }
@@ -860,10 +860,10 @@ impl Synchronizer {
         let mut rx_consensus_round_updates = inner.rx_consensus_round_updates.clone();
         let mut consensus_round = rx_consensus_round_updates.borrow().committed_round;
         ensure!(
-            *header.round() >= consensus_round.saturating_sub(max_age),
+            header.round() >= consensus_round.saturating_sub(max_age),
             DagError::TooOld(
                 header.digest().into(),
-                *header.round(),
+                header.round(),
                 consensus_round.saturating_sub(max_age)
             )
         );
@@ -915,7 +915,7 @@ impl Synchronizer {
                 let digests = digests.clone();
                 let message = WorkerSynchronizeMessage {
                     digests: digests.clone(),
-                    target: *header.author(),
+                    target: header.author(),
                     is_certified,
                 };
                 let peer = network.waiting_peer(anemo::PeerId(worker_name.0.to_bytes()));
@@ -959,10 +959,10 @@ impl Synchronizer {
                 Ok(()) = rx_consensus_round_updates.changed() => {
                     consensus_round = rx_consensus_round_updates.borrow().committed_round;
                     ensure!(
-                        *header.round() >= consensus_round.saturating_sub(max_age),
+                        header.round() >= consensus_round.saturating_sub(max_age),
                         DagError::TooOld(
                             header.digest().into(),
-                            *header.round(),
+                            header.round(),
                             consensus_round.saturating_sub(max_age),
                         )
                     );
@@ -980,7 +980,7 @@ impl Synchronizer {
         let mut missing = Vec::new();
         let mut parents = Vec::new();
         for digest in header.parents() {
-            let cert = if *header.round() == 1 {
+            let cert = if header.round() == 1 {
                 self.inner.genesis.get(digest).cloned()
             } else {
                 self.inner.certificate_store.read(*digest)?

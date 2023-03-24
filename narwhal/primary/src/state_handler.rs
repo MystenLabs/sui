@@ -55,8 +55,8 @@ impl StateHandler {
         let own_rounds_committed: Vec<_> = certificates
             .iter()
             .filter_map(|cert| {
-                if *cert.header.author() == self.authority_id {
-                    Some(*cert.header.round())
+                if cert.header.author() == self.authority_id {
+                    Some(cert.header.round())
                 } else {
                     None
                 }

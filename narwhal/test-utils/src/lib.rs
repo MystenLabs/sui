@@ -524,7 +524,7 @@ fn this_cert_parents_with_slow_nodes(
         // one we want to create the certificate for.
         if let Some((_, inclusion_probability)) = slow_nodes
             .iter()
-            .find(|(id, _)| *id != *authority_id && *id == *parent.header.author())
+            .find(|(id, _)| *id != *authority_id && *id == parent.header.author())
         {
             let f: f64 = thread_rng().gen_range(0_f64..1_f64);
 
@@ -612,7 +612,6 @@ pub fn mock_certificate_with_epoch(
     epoch: Epoch,
     parents: BTreeSet<CertificateDigest>,
 ) -> (CertificateDigest, Certificate) {
-    // TODO(arun): Is there a way to do this without referencing HeaderV1Builder/Header::V1() below?
     let header_builder = HeaderV1Builder::default();
     let header = header_builder
         .author(origin)
@@ -847,7 +846,7 @@ impl CommitteeFixture {
             .flat_map(|a| {
                 // we should not re-sign using the key of the authority
                 // that produced the header
-                if a.id() == *header.author() {
+                if a.id() == header.author() {
                     None
                 } else {
                     Some(a.vote(header))

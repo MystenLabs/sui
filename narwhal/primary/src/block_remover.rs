@@ -173,11 +173,7 @@ impl BlockRemover {
         if !certificates.is_empty() {
             let all_certs = certificates.clone();
             // Unwrap safe since list is not empty.
-            let highest_round = certificates
-                .iter()
-                .map(|c| *c.header.round())
-                .max()
-                .unwrap();
+            let highest_round = certificates.iter().map(|c| c.header.round()).max().unwrap();
 
             // We signal that these certificates must have been committed by the external consensus
             self.tx_committed_certificates
