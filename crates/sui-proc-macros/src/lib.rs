@@ -3,10 +3,14 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::{
+    fold::{fold_expr, Fold},
+    parse2, parse_macro_input, BinOp, Expr, UnOp,
+};
 
 #[proc_macro_attribute]
 pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenStream {
-    let mut input = syn::parse_macro_input!(item as syn::ItemFn);
+    let mut input = parse_macro_input!(item as syn::ItemFn);
 
     let body = &input.block;
     input.block = syn::parse2(quote! {
@@ -148,8 +152,8 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 /// This should be used for tests that can meaningfully run in either environment.
 #[proc_macro_attribute]
 pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    let input = parse_macro_input!(item as syn::ItemFn);
+    let args = parse_macro_input!(args as syn::AttributeArgs);
 
     let header = if cfg!(msim) {
         quote! {
@@ -180,8 +184,8 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
 /// `check_determinism`, which is not understood by tokio.
 #[proc_macro_attribute]
 pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    let input = parse_macro_input!(item as syn::ItemFn);
+    let args = parse_macro_input!(args as syn::AttributeArgs);
 
     let result = if cfg!(msim) {
         quote! {
@@ -221,4 +225,69 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     result.into()
+}
+
+#[proc_macro_attribute]
+pub fn use_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_item = parse_macro_input!(item as syn::Item);
+
+    match input_item {
+        syn::Item::Fn(input_fn) => {
+            let transformed_fn = CheckArithmetic.fold_item_fn(input_fn);
+            TokenStream::from(quote! { #transformed_fn })
+        }
+        syn::Item::Impl(input_impl) => {
+            let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
+            TokenStream::from(quote! { #transformed_impl })
+        }
+        _ => panic!(
+            "The use_checked_arithmetic attribute can only be applied to functions and impl blocks"
+        ),
+    }
+}
+
+struct CheckArithmetic;
+
+impl Fold for CheckArithmetic {
+    fn fold_expr(&mut self, expr: Expr) -> Expr {
+        let expr = fold_expr(self, expr);
+        let expr = match expr {
+            Expr::Binary(expr_binary) => {
+                let op = &expr_binary.op;
+                let lhs = &expr_binary.left;
+                let rhs = &expr_binary.right;
+                match op {
+                    BinOp::Add(_) => {
+                        quote!(#lhs.checked_add(#rhs).expect("Overflow or underflow in addition"))
+                    }
+                    BinOp::Sub(_) => {
+                        quote!(#lhs.checked_sub(#rhs).expect("Overflow or underflow in subtraction"))
+                    }
+                    BinOp::Mul(_) => {
+                        quote!(#lhs.checked_mul(#rhs).expect("Overflow or underflow in multiplication"))
+                    }
+                    BinOp::Div(_) => {
+                        quote!(#lhs.checked_div(#rhs).expect("Overflow or underflow in division"))
+                    }
+                    BinOp::Rem(_) => {
+                        quote!(#lhs.checked_rem(#rhs).expect("Overflow or underflow in remainder"))
+                    }
+                    _ => quote!(#expr_binary),
+                }
+            }
+            Expr::Unary(expr_unary) => {
+                let op = &expr_unary.op;
+                let operand = &expr_unary.expr;
+                match op {
+                    UnOp::Neg(_) => {
+                        quote!(#operand.checked_neg().expect("Overflow or underflow in negation"))
+                    }
+                    _ => quote!(#expr_unary),
+                }
+            }
+            _ => quote!(#expr),
+        };
+
+        parse2(expr).unwrap()
+    }
 }
