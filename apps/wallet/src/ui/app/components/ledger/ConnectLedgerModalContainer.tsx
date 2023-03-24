@@ -6,10 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useNextMenuUrl } from '../menu/hooks';
 import { ConnectLedgerModal } from './ConnectLedgerModal';
-import {
-    LedgerConnectionFailedError,
-    LedgerNoTransportMechanismError,
-} from './LedgerExceptions';
+import { getLedgerConnectionErrorMessage } from './LedgerExceptions';
 
 export function ConnectLedgerModalContainer() {
     const navigate = useNavigate();
@@ -26,20 +23,11 @@ export function ConnectLedgerModalContainer() {
             }}
             onError={(error) => {
                 navigate(accountsUrl);
-                toast.error(getLedgerErrorMessage(error));
+                toast.error(getLedgerConnectionErrorMessage(error));
             }}
             onConfirm={() => {
                 navigate(importLedgerAccountsUrl);
             }}
         />
     );
-}
-
-function getLedgerErrorMessage(error: unknown) {
-    if (error instanceof LedgerConnectionFailedError) {
-        return 'Ledger connection failed. Try again.';
-    } else if (error instanceof LedgerNoTransportMechanismError) {
-        return "Your machine doesn't support USB or HID.";
-    }
-    return 'Something went wrong. Try again.';
 }

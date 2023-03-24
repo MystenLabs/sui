@@ -26,7 +26,14 @@ export function useSigner(address?: SuiAddress) {
 
     if (signerAccount.type === AccountType.LEDGER) {
         return new LedgerSigner(
-            forceLedgerConnection,
+            async () => {
+                try {
+                    const suiLedgerClient = await forceLedgerConnection();
+                    if (!suiLedgerClient) {
+                        throw new Error('Ledger');
+                    }
+                } catch (error) {}
+            },
             signerAccount.derivationPath,
             api.instance.fullNode
         );

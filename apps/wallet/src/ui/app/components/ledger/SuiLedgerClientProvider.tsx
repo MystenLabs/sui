@@ -12,9 +12,10 @@ import {
     useMemo,
     useState,
 } from 'react';
+import toast from 'react-hot-toast';
 
 import {
-    LedgerConnectionFailedError,
+    convertErrorToLedgerConnectionFailedError,
     LedgerNoTransportMechanismError,
 } from './LedgerExceptions';
 
@@ -47,11 +48,9 @@ export function SuiLedgerClientProvider({
     }, [suiLedgerClient?.transport]);
 
     const requestLedgerConnection = useCallback(async () => {
-        if (suiLedgerClient?.transport) {
-            // If we've already connected to a Ledger device, we need
-            // to close the connection before we try to re-connect
-            await suiLedgerClient.transport.close();
-        }
+        // If we've already connected to a Ledger device, we need
+        // to close the connection before we try to re-connect
+        await suiLedgerClient?.transport.close();
 
         const ledgerTransport = await initiateLedgerConnectionRequest();
         const ledgerClient = new SuiLedgerClient(ledgerTransport);
@@ -60,20 +59,17 @@ export function SuiLedgerClientProvider({
     }, [suiLedgerClient]);
 
     const forceLedgerConnection = useCallback(async () => {
-        if (suiLedgerClient?.transport) {
-            // If we've already connected to a Ledger device, we need
-            // to close the connection before we try to re-connect
-            await suiLedgerClient.transport.close();
-        }
+        // If we've already connected to a Ledger device, we need
+        // to close the connection before we try to re-connect
+        await suiLedgerClient?.transport.close();
 
-        const ledgerTransport = await initiateForcefulLedgerConnection();
-        console.log('trn', ledgerTransport);
-        if (ledgerTransport) {
-            const ledgerClient = new SuiLedgerClient(ledgerTransport);
-            setSuiLedgerClient(ledgerClient);
-            return ledgerClient;
+        const ledgerTransport = await initiateLedgerConnection();
+        if (!ledgerTransport) {
+            return null;
         }
-        return null;
+        const ledgerClient = new SuiLedgerClient(ledgerTransport);
+        setSuiLedgerClient(ledgerClient);
+        return ledgerClient;
     }, [suiLedgerClient]);
 
     const contextValue: SuiLedgerClientContextValue = useMemo(() => {
@@ -103,31 +99,19 @@ export function useSuiLedgerClient() {
 
 async function initiateLedgerConnectionRequest() {
     const ledgerTransport = await getLedgerTransport();
-
     try {
         return await ledgerTransport.request();
     } catch (error) {
-        // Ledger doesn't return well-structured errors, so we'll raise a new error here
-        const errorMessage =
-            error instanceof Error ? error.message : String(error);
-        throw new LedgerConnectionFailedError(
-            `Unable to connect to the user's Ledger device: ${errorMessage}`
-        );
+        throw convertErrorToLedgerConnectionFailedError(error);
     }
 }
 
-async function initiateForcefulLedgerConnection() {
+async function initiateLedgerConnection() {
     const ledgerTransport = await getLedgerTransport();
-
     try {
         return await ledgerTransport.openConnected();
     } catch (error) {
-        // Ledger doesn't return well-structured errors, so we'll raise a new error here
-        const errorMessage =
-            error instanceof Error ? error.message : String(error);
-        throw new LedgerConnectionFailedError(
-            `Unable to connect to the user's Ledger device: ${errorMessage}`
-        );
+        throw convertErrorToLedgerConnectionFailedError(error);
     }
 }
 

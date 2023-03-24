@@ -14,34 +14,22 @@ import {
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export class LedgerSigner extends SignerWithProvider {
-    #suiLedgerClient: SuiLedgerClient | null;
-    readonly #forceLedgerConnection: () => Promise<SuiLedgerClient | null>;
+    readonly #forceLedgerConnection: () => Promise<SuiLedgerClient>;
     readonly #derivationPath: string;
     readonly #signatureScheme: SignatureScheme = 'ED25519';
 
     constructor(
-        forceLedgerConnection: () => Promise<SuiLedgerClient | null>,
+        forceLedgerConnection: () => Promise<SuiLedgerClient>,
         derivationPath: string,
         provider: JsonRpcProvider
     ) {
         super(provider);
         this.#forceLedgerConnection = forceLedgerConnection;
-        this.#suiLedgerClient = null;
         this.#derivationPath = derivationPath;
     }
 
-    async #initializeSuiLedgerClient() {
-        if (!this.#suiLedgerClient) {
-            this.#suiLedgerClient = await this.#forceLedgerConnection();
-            if (!this.#suiLedgerClient) {
-                throw new Error('ERRRR');
-            }
-        }
-        return this.#suiLedgerClient;
-    }
-
     async getAddress(): Promise<SuiAddress> {
-        const ledgerClient = await this.#initializeSuiLedgerClient();
+        const ledgerClient = await this.#forceLedgerConnection();
         const publicKeyResult = await ledgerClient.getPublicKey(
             this.#derivationPath
         );
@@ -50,7 +38,7 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async getPublicKey(): Promise<Ed25519PublicKey> {
-        const ledgerClient = await this.#initializeSuiLedgerClient();
+        const ledgerClient = await this.#forceLedgerConnection();
         const { publicKey } = await ledgerClient.getPublicKey(
             this.#derivationPath
         );
@@ -58,7 +46,7 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async signData(data: Uint8Array): Promise<SerializedSignature> {
-        const ledgerClient = await this.#initializeSuiLedgerClient();
+        const ledgerClient = await this.#forceLedgerConnection();
         const { signature } = await ledgerClient.signTransaction(
             this.#derivationPath,
             data
