@@ -240,31 +240,13 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-            id: "0x6536ea65f42ac01132c0e7640cd4606388b602a1e0c49724e077a4cd3796f058"
+            id: "0x9cbd838e9538455a4c596659f46dd5adfb5e82093f2a719dcaf52194d00b9be8"
           size: 0
       voting_power: 10000
-      operation_cap_id: "0x3bf8bd448b159e517a8dcdf4af164024f6560494e171630e5b44358a9a9706a1"
+      operation_cap_id: "0xe98b19810b461af5ceddb0dd1bbebd124b0a87d829919af1c1f4839ccb536ebd"
       gas_price: 1
       staking_pool:
-        id: "0x015365c41502836163356579e04d437b8ba0ce7c6212c97cdb85261b9bc58517"
-=======
-            id: "0xf600ab6f5fa18a856dcd4034e7121d55b710bad075de015e6779351ebefe9c09"
-=======
-            id: "0xea261e19652b2949f4eb8b93e23cc2be5817103440e4915dfced3327a92ade45"
->>>>>>> 89e6660d63 (more tests for kiosk)
-          size: 0
-      voting_power: 10000
-      operation_cap_id: "0xf9dadb45c043eceb0497517d4b746aa12b33d6db87ab55440163541d77760c16"
-      gas_price: 1
-      staking_pool:
-<<<<<<< HEAD
-        id: "0x06af21c73800261e5830f2883715e056275957f1663a511018d2fda44f1c9008"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-        id: "0x606410ec4fc2853f57258315185cd3c29c09ebd9354ea85bf120d3138d68ff1b"
->>>>>>> 89e6660d63 (more tests for kiosk)
+        id: "0x1ad044ca37d9b71449b110a2a4d511fbaa244b5ffcdbbe612dda5a56523b2d70"
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -272,30 +254,14 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
-<<<<<<< HEAD
-<<<<<<< HEAD
-          id: "0xab6dbe939bc6916cc7d563c4a08d23376af492949bbc34b572036d1a52ae7a01"
-=======
-          id: "0x277f0a73d208f36f6e1e1001e3bd1e51db8ca74db64ec00aa6d8c4c43d50c9a4"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-          id: "0xabee0c36fe3480973aa4434e3e4ccd137a2cc0c157f0780193a3a64eeb350e44"
->>>>>>> 89e6660d63 (more tests for kiosk)
+          id: "0x310c2bae8f93585046aacb2d57fc5a2426b64ceca15d77e2ee3d1bc142b7b518"
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-            id: "0xb467ab60353e24a53900a683300c7578be7839be5b8344227babf7d64bafd211"
-=======
-            id: "0x216f50e8103345e878340ab09cc1f81b282e5099076e80487baefdd53d871d34"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-            id: "0x9e45e945df797102acd43917bb25c80edcc41c91f011668b74cb8231b0eee519"
->>>>>>> 89e6660d63 (more tests for kiosk)
+            id: "0x80f0606a7dd636399f669905d0700aa6374cdecc965d8a4f402f84ceec7b9d10"
           size: 0
       commission_rate: 0
       next_epoch_stake: 20000000000000000
@@ -303,61 +269,27 @@ validators:
       next_epoch_commission_rate: 0
       extra_fields:
         id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-          id: "0xa72f3c9064a83267f86920dff30e6cd8bf75f1ddff84fe1f602badcb0417918c"
+          id: "0xd53d4b62ca4aa0422dd6fd78060798d80e0029d08e4cc87d5fe613bbf4684e15"
         size: 0
   pending_active_validators:
     contents:
-      id: "0x349174fd8e139d10f9f8d867ae6cbcb79bde101e63206cd998a376852bd8b6e0"
+      id: "0xdeb0d692324d1ab595dba7997e3060e0ea783c759a40211e0ced093364a81835"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0x8a8c0705c9869a26c07f5f440df27fc7c047b3bffa8588a709c4894a7bc45db5"
+    id: "0x516722027434588a1efed2358dbe1fbf762405835c637f06dba380ab826a4c60"
     size: 1
   inactive_validators:
-    id: "0xefb7ea0a9353c4518568a83285588e354139c1aa26b967622dd9c3dfb29128e8"
+    id: "0xf663006cafccf167532998a5c02136bfb482caf67d152b89ca949d182a432aa5"
     size: 0
   validator_candidates:
-    id: "0x45707e50a1ba334f16a71a9513e3bb75de0a85478fbcbcf4da6cfb22cf26f85a"
-=======
-          id: "0xee1ab223a8c1bd7f210ae0386795c8b3b35df3087684b9e60c7766a8cc995069"
-=======
-          id: "0x8d0770f43b821fabb997f0e46698e14ddb1a94c502fba989383670fc9bf1f62f"
->>>>>>> 89e6660d63 (more tests for kiosk)
-        size: 0
-  pending_active_validators:
-    contents:
-      id: "0x897400fe21018d8c8ed84720b1479eb854ab5083ff85d5fd8582bdd6c34fa055"
-      size: 0
-  pending_removals: []
-  staking_pool_mappings:
-    id: "0xd19e3aa059d0d978ad52b954c9355f14ff4504477b82733404a9b0c9b9b46b8c"
-    size: 1
-  inactive_validators:
-    id: "0xe7c9c7f27ffd08c5d5f5aeb2520a13c13f2bee97b9ad49492367669ddd686ab3"
-    size: 0
-  validator_candidates:
-<<<<<<< HEAD
-    id: "0xc568f28f4f02e783b1b18351f06d71d426b6ad3c07751c88749453dc667376eb"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-    id: "0x7cc1547cc588e7a7428f9715bb06ed15310994247a9b3d633301a60ab7e0eb33"
->>>>>>> 89e6660d63 (more tests for kiosk)
+    id: "0x4ba30499473aa33082e022230d556114e693cc0c3558bbb6149a16bc37a197f5"
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-      id: "0x16457372993ed926c6ec8957446f935d6212dcd79479b3f2e2f9c68800bce458"
-=======
-      id: "0x347ad3fd12014526c1f201fb68d16008488333fd9a22d281d0894089029e7a3b"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-      id: "0x23d63fc4d41de22eb65e24e94098a5fa9278df06ebd936459d04aaf3afc29cb1"
->>>>>>> 89e6660d63 (more tests for kiosk)
+      id: "0xc2b79dff20cf9526c9be204918650cc5e12742c0f83a5280bc09b9d374aebef2"
     size: 0
 storage_fund:
   value: 0
@@ -371,15 +303,7 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-      id: "0x1709abe23d2803776e2d117ffb1f6b54c85171d8a07c278f3ba36daba3167c7f"
-=======
-      id: "0x838d4c84859e547e48a35854d4b2e4b6d77f9a489a7da0f0ed6a5b4433072f3e"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-      id: "0xd122d4b9eb04d0037c4762f02433bc37c395a1418fabdb36b39de66af395fe6a"
->>>>>>> 89e6660d63 (more tests for kiosk)
+      id: "0x464eeb7b585308dcc82945396de3d8a0fc6ec8d8122d179caad9c4b6f89e9316"
     size: 0
 reference_gas_price: 1
 validator_report_records:
@@ -393,15 +317,7 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 10000
   extra_fields:
     id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-      id: "0x0002e1e85b0d12fb53b74bc6d88fa1a8ef1606877cb3fe50287930c28483ef8f"
-=======
-      id: "0x17c616dd652eb040b9a22d94ddd94f25870d48c1ad8df9d9f3df8314ceefd2c7"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-      id: "0x6954122e67369d6231d9538309aad228899255d534abfebfa4989e923e120fdd"
->>>>>>> 89e6660d63 (more tests for kiosk)
+      id: "0x79a1ca2ed23afb2a70b637ca5b10120db19a5e47ed909b03756bf4838a582473"
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -412,14 +328,6 @@ safe_mode_storage_rebates: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-<<<<<<< HEAD
-<<<<<<< HEAD
-    id: "0x8951f41a036ad75e4a0df29ae575944c28551544a95e35ab185fe7f0fddc31e9"
-=======
-    id: "0x8068c5c246e88ab61b735047a6f2866c8b2348ddc764425b7279a95cf2679fae"
->>>>>>> 672ef2dd39 (fix snapshots)
-=======
-    id: "0xdba113d19f9f7a7e5ec7fc2fab8816a4f3cb30ee667fb1406b0dad028e60387d"
->>>>>>> 89e6660d63 (more tests for kiosk)
+    id: "0x1ec17e4e5a89e432bd1db653278bb31c22af582b4ba09d2fdac2dc01a0be5f7f"
   size: 0
 
