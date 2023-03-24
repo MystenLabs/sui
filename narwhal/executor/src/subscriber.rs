@@ -22,7 +22,7 @@ use fastcrypto::hash::Hash;
 use mysten_metrics::spawn_logged_monitored_task;
 use tokio::time::Instant;
 use tokio::{sync::oneshot, task::JoinHandle};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 use tracing::{info, instrument};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag,
@@ -334,7 +334,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                     self.metrics
                         .batch_execution_latency
                         .observe(batch_fetch_duration);
-                    debug!(
+                    trace!(
                         "Batch {local_batch_digest:?} took {batch_fetch_duration} seconds to be fetched for execution since creation",
                     );
                     fetched_batches.insert(local_batch_digest, local_batch);
@@ -364,7 +364,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                         self.metrics
                             .batch_execution_latency
                             .observe(batch_fetch_duration);
-                        debug!(
+                        trace!(
                             "Batch {remote_batch_digest:?} took {batch_fetch_duration} seconds to be fetched for execution since creation"
                         );
 
