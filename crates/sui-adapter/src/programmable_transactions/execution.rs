@@ -1242,7 +1242,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 }
 
 fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
+    let module_id = &s.defining_id;
     let struct_name = &s.name;
     (
         module_id.address(),
