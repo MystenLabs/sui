@@ -188,7 +188,7 @@ impl Committee {
         NonZeroU64::new((total_votes + 2) / 3).unwrap()
     }
 
-    /// Loads the committee internal secondary indexes.
+    /// Updates the committee internal secondary indexes.
     pub fn load(&mut self) {
         self.authorities_by_id = (0_u16..)
             .zip(self.authorities.iter_mut())
