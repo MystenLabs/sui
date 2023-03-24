@@ -48,9 +48,10 @@ impl NodeStorage {
     pub(crate) const LAST_COMMITTED_CF: &'static str = "last_committed";
     pub(crate) const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
 
-    // 100 nodes * 120 rounds (assuming 1 round/sec this will hold data for about the last 2 minutes
+    // 100 nodes * 60 rounds (assuming 1 round/sec this will hold data for about the last 1 minute
     // which should be more than enough for advancing the protocol and also help other nodes)
-    pub(crate) const CERTIFICATE_STORE_CACHE_SIZE: usize = 100 * 120;
+    // TODO: take into account committee size instead of having fixed 100.
+    pub(crate) const CERTIFICATE_STORE_CACHE_SIZE: usize = 100 * 60;
 
     /// Open or reopen all the storage of the node.
     pub fn reopen<Path: AsRef<std::path::Path> + Send>(
