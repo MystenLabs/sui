@@ -89,7 +89,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
 
         Ok(RpcCheckpoint {
             epoch: checkpoint.epoch as u64,
-            sequence_number: checkpoint.sequence_number as u64,
+            sequence_number: (checkpoint.sequence_number as u64).into(),
             digest: parsed_digest,
             previous_digest: parsed_previous_digest,
             end_of_epoch_data: data,
@@ -152,7 +152,7 @@ impl Checkpoint {
         let mut checkpoint_transaction_count = rpc_checkpoint.network_total_transactions as i64;
         let mut current_epoch_transaction_count = rpc_checkpoint.network_total_transactions as i64;
 
-        if rpc_checkpoint.sequence_number != 0 {
+        if <u64>::from(rpc_checkpoint.sequence_number) != 0 {
             tps = (rpc_checkpoint.network_total_transactions as f32
                 - previous_checkpoint_commit.total_transactions_from_genesis as f32)
                 / ((rpc_checkpoint.timestamp_ms - previous_checkpoint_commit.timestamp_ms as u64)
@@ -177,7 +177,7 @@ impl Checkpoint {
             .collect();
 
         Ok(Checkpoint {
-            sequence_number: rpc_checkpoint.sequence_number as i64,
+            sequence_number: <u64>::from(rpc_checkpoint.sequence_number) as i64,
             checkpoint_digest: rpc_checkpoint.digest.base58_encode(),
             epoch: rpc_checkpoint.epoch as i64,
             transactions: checkpoint_transactions,

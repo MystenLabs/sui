@@ -96,7 +96,7 @@ export function Transactions({
             <div className="py-3">
                 <TableFooter
                     label="Transactions"
-                    count={countQuery.data}
+                    count={Number(countQuery.data)}
                     data={transactionQuery.data}
                     disablePagination={disablePagination}
                     pagination={pagination}

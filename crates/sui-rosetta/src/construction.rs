@@ -303,8 +303,8 @@ pub async fn metadata(
             coins: coins.clone(),
             objects: objects.clone(),
             total_coin_value,
-            gas_price: 1,
-            budget,
+            gas_price,
+            budget: budget * gas_price,
         })?;
 
     let dry_run = context.client.read_api().dry_run_transaction(data).await?;

@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 
 use sui_indexer::new_rpc_client;
 use sui_json_rpc_types::{
-    CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionResponseOptions,
+    BigInt, CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionResponseOptions,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -54,11 +54,11 @@ pub async fn check_checkpoint(
 ) -> Result<(), anyhow::Error> {
     let fn_checkpoint = fn_client
         .read_api()
-        .get_checkpoint(CheckpointId::SequenceNumber(checkpoint))
+        .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(checkpoint)))
         .await?;
     let indexer_checkpoint = indexer_client
         .read_api()
-        .get_checkpoint(CheckpointId::SequenceNumber(checkpoint))
+        .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(checkpoint)))
         .await?;
 
     if fn_checkpoint != indexer_checkpoint {

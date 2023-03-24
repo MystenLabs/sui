@@ -149,14 +149,6 @@ pub fn legacy_test_cost() -> InternalGas {
     InternalGas::new(0)
 }
 
-pub fn legacy_emit_cost() -> InternalGas {
-    InternalGas::new(52)
-}
-
-pub fn legacy_empty_cost() -> InternalGas {
-    InternalGas::new(84)
-}
-
 /// Wrapper of the build command that verifies the framework version. Should eventually be removed once we can
 /// do this in the obvious way (via version checks)
 pub fn build_move_package(path: &Path, config: BuildConfig) -> SuiResult<CompiledPackage> {

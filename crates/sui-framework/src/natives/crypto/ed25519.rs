@@ -25,7 +25,7 @@ pub struct Ed25519VerifyCostParams {
     pub ed25519_ed25519_verify_cost_base: InternalGas,
     /// Cost per byte of `msg`
     pub ed25519_ed25519_verify_msg_cost_per_byte: InternalGas,
-    /// Cost per block of `data`, where a block is 128 bytes
+    /// Cost per block of `msg`, where a block is 128 bytes
     pub ed25519_ed25519_verify_msg_cost_per_block: InternalGas,
 }
 /***************************************************************************************************

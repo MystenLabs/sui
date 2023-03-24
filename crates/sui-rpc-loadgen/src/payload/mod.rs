@@ -10,19 +10,35 @@ use std::time::Duration;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
+use crate::load_test::LoadTestConfig;
 pub use rpc_command_processor::RpcCommandProcessor;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::SuiKeyPair;
+
+#[derive(Default, Clone)]
+pub struct SignerInfo {
+    pub encoded_keypair: String,
+    // TODO(chris): we should be able to derive this from the keypair?
+    pub signer_address: SuiAddress,
+    /// Different thread should use different gas_payment to avoid equivocation
+    pub gas_payment: Option<ObjectID>,
+    pub gas_budget: Option<u64>,
+}
+
+impl SignerInfo {
+    pub fn new(encoded_keypair: String, signer_address: SuiAddress) -> Self {
+        Self {
+            encoded_keypair,
+            signer_address,
+            gas_payment: None,
+            gas_budget: None,
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct Payload {
     pub commands: Vec<Command>,
-    /// base64 encoded keypair
-    pub encoded_keypair: Option<String>,
-    // TODO(chris): we should be able to derive this from the keypair?
-    pub signer_address: Option<SuiAddress>,
-    /// Different thread should use different gas_payment to avoid equivocation
-    pub gas_payment: Option<ObjectID>,
+    pub signer_info: Option<SignerInfo>,
 }
 
 #[derive(Default, Clone)]
@@ -114,11 +130,13 @@ pub struct PaySui {}
 pub trait Processor {
     /// process commands in order
     async fn apply(&self, payload: &Payload) -> Result<()>;
+
+    /// prepare payload for each thread according to LoadTestConfig
+    async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>>;
 }
 
 /// all payload should implement this trait
 #[async_trait]
 pub trait ProcessPayload<'a, T> {
-    // TODO: replace SuiKeyPair with signerInfo
-    async fn process(&'a self, op: T, keypair: &Option<SuiKeyPair>) -> Result<()>;
+    async fn process(&'a self, op: T, signer_info: &Option<SignerInfo>) -> Result<()>;
 }

@@ -433,10 +433,72 @@ pub struct ProtocolConfig {
     validator_validate_metadata_data_cost_per_byte: Option<u64>,
 
     // Crypto natives
+    crypto_invalid_arguments_cost: Option<u64>,
+    // bls12381::bls12381_min_sig_verify
+    bls12381_bls12381_min_sig_verify_cost_base: Option<u64>,
+    bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Option<u64>,
+    bls12381_bls12381_min_sig_verify_msg_cost_per_block: Option<u64>,
+
+    // bls12381::bls12381_min_pk_verify
+    bls12381_bls12381_min_pk_verify_cost_base: Option<u64>,
+    bls12381_bls12381_min_pk_verify_msg_cost_per_byte: Option<u64>,
+    bls12381_bls12381_min_pk_verify_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_k1::ecrecover
+    ecdsa_k1_ecrecover_keccak256_cost_base: Option<u64>,
+    ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_k1_ecrecover_sha256_cost_base: Option<u64>,
+    ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_ecrecover_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_k1::decompress_pubkey
+    ecdsa_k1_decompress_pubkey_cost_base: Option<u64>,
+
+    // ecdsa_k1::secp256k1_verify
+    ecdsa_k1_secp256k1_verify_keccak256_cost_base: Option<u64>,
+    ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_k1_secp256k1_verify_sha256_cost_base: Option<u64>,
+    ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_r1::ecrecover
+    ecdsa_r1_ecrecover_keccak256_cost_base: Option<u64>,
+    ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_r1_ecrecover_sha256_cost_base: Option<u64>,
+    ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_ecrecover_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_r1::secp256k1_verify
+    ecdsa_r1_secp256r1_verify_keccak256_cost_base: Option<u64>,
+    ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_r1_secp256r1_verify_sha256_cost_base: Option<u64>,
+    ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecvrf::verify
+    ecvrf_ecvrf_verify_cost_base: Option<u64>,
+    ecvrf_ecvrf_verify_alpha_string_cost_per_byte: Option<u64>,
+    ecvrf_ecvrf_verify_alpha_string_cost_per_block: Option<u64>,
+
     // ed25519
     ed25519_ed25519_verify_cost_base: Option<u64>,
     ed25519_ed25519_verify_msg_cost_per_byte: Option<u64>,
     ed25519_ed25519_verify_msg_cost_per_block: Option<u64>,
+
+    // groth16::prepare_verifying_key
+    groth16_prepare_verifying_key_bls12381_cost_base: Option<u64>,
+    groth16_prepare_verifying_key_bn254_cost_base: Option<u64>,
+
+    // groth16::verify_groth16_proof_internal
+    groth16_verify_groth16_proof_internal_bls12381_cost_base: Option<u64>,
+    groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: Option<u64>,
+    groth16_verify_groth16_proof_internal_bn254_cost_base: Option<u64>,
+    groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: Option<u64>,
+    groth16_verify_groth16_proof_internal_public_input_cost_per_byte: Option<u64>,
 
     // hash::blake2b256
     hash_blake2b256_cost_base: Option<u64>,
@@ -446,6 +508,11 @@ pub struct ProtocolConfig {
     hash_keccak256_cost_base: Option<u64>,
     hash_keccak256_data_cost_per_byte: Option<u64>,
     hash_keccak256_data_cost_per_block: Option<u64>,
+
+    // hmac::hmac_sha3_256
+    hmac_hmac_sha3_256_cost_base: Option<u64>,
+    hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
+    hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -832,6 +899,152 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn crypto_invalid_arguments_cost(&self) -> u64 {
+        self.crypto_invalid_arguments_cost.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_sig_verify_cost_base(&self) -> u64 {
+        self.bls12381_bls12381_min_sig_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_sig_verify_msg_cost_per_byte(&self) -> u64 {
+        self.bls12381_bls12381_min_sig_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_sig_verify_msg_cost_per_block(&self) -> u64 {
+        self.bls12381_bls12381_min_sig_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn bls12381_bls12381_min_pk_verify_cost_base(&self) -> u64 {
+        self.bls12381_bls12381_min_pk_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_pk_verify_msg_cost_per_byte(&self) -> u64 {
+        self.bls12381_bls12381_min_pk_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_pk_verify_msg_cost_per_block(&self) -> u64 {
+        self.bls12381_bls12381_min_pk_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_k1_ecrecover_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_k1_decompress_pubkey_cost_base(&self) -> u64 {
+        self.ecdsa_k1_decompress_pubkey_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_k1_secp256k1_verify_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_r1_ecrecover_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_r1_secp256r1_verify_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecvrf_ecvrf_verify_cost_base(&self) -> u64 {
+        self.ecvrf_ecvrf_verify_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecvrf_ecvrf_verify_alpha_string_cost_per_byte(&self) -> u64 {
+        self.ecvrf_ecvrf_verify_alpha_string_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecvrf_ecvrf_verify_alpha_string_cost_per_block(&self) -> u64 {
+        self.ecvrf_ecvrf_verify_alpha_string_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
     pub fn ed25519_ed25519_verify_cost_base(&self) -> u64 {
         self.ed25519_ed25519_verify_cost_base
             .expect(CONSTANT_ERR_MSG)
@@ -844,6 +1057,37 @@ impl ProtocolConfig {
         self.ed25519_ed25519_verify_msg_cost_per_block
             .expect(CONSTANT_ERR_MSG)
     }
+
+    pub fn groth16_prepare_verifying_key_bls12381_cost_base(&self) -> u64 {
+        self.groth16_prepare_verifying_key_bls12381_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_prepare_verifying_key_bn254_cost_base(&self) -> u64 {
+        self.groth16_prepare_verifying_key_bn254_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn groth16_verify_groth16_proof_internal_bls12381_cost_base(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bls12381_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_bn254_cost_base(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bn254_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_bn254_cost_per_public_input(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bn254_cost_per_public_input
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_public_input_cost_per_byte(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_public_input_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
     pub fn hash_blake2b256_cost_base(&self) -> u64 {
         self.hash_blake2b256_cost_base.expect(CONSTANT_ERR_MSG)
     }
@@ -864,6 +1108,18 @@ impl ProtocolConfig {
     }
     pub fn hash_keccak256_data_cost_per_block(&self) -> u64 {
         self.hash_keccak256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn hmac_hmac_sha3_256_cost_base(&self) -> u64 {
+        self.hmac_hmac_sha3_256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hmac_hmac_sha3_256_input_cost_per_byte(&self) -> u64 {
+        self.hmac_hmac_sha3_256_input_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hmac_hmac_sha3_256_input_cost_per_block(&self) -> u64 {
+        self.hmac_hmac_sha3_256_input_cost_per_block
             .expect(CONSTANT_ERR_MSG)
     }
 
@@ -1114,10 +1370,73 @@ impl ProtocolConfig {
                 validator_validate_metadata_data_cost_per_byte: Some(0),
 
                 // Crypto
+                crypto_invalid_arguments_cost: Some(100),
+                // bls12381::bls12381_min_pk_verify
+                bls12381_bls12381_min_sig_verify_cost_base: Some(52),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Some(0),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_block: Some(0),
+
+                // bls12381::bls12381_min_pk_verify
+                bls12381_bls12381_min_pk_verify_cost_base: Some(52),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_byte: Some(0),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_block: Some(0),
+
+                // ecdsa_k1::ecrecover
+                ecdsa_k1_ecrecover_keccak256_cost_base: Some(52),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: Some(0),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_k1_ecrecover_sha256_cost_base: Some(52),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: Some(0),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_block: Some(0),
+
+                // ecdsa_k1::decompress_pubkey
+                ecdsa_k1_decompress_pubkey_cost_base: Some(52),
+
+                // ecdsa_k1::secp256k1_verify
+                ecdsa_k1_secp256k1_verify_keccak256_cost_base: Some(52),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: Some(0),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_k1_secp256k1_verify_sha256_cost_base: Some(52),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: Some(0),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: Some(0),
+
+                // ecdsa_r1::ecrecover
+                ecdsa_r1_ecrecover_keccak256_cost_base: Some(52),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: Some(0),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_r1_ecrecover_sha256_cost_base: Some(52),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: Some(0),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_block: Some(0),
+
+                // ecdsa_r1::secp256k1_verify
+                ecdsa_r1_secp256r1_verify_keccak256_cost_base: Some(52),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: Some(0),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_r1_secp256r1_verify_sha256_cost_base: Some(52),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Some(0),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Some(0),
+
+                // ecvrf::verify
+                ecvrf_ecvrf_verify_cost_base: Some(52),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_byte: Some(0),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_block: Some(0),
+
                 // ed25519
                 ed25519_ed25519_verify_cost_base: Some(52),
                 ed25519_ed25519_verify_msg_cost_per_byte: Some(0),
                 ed25519_ed25519_verify_msg_cost_per_block: Some(0),
+
+                // groth16::prepare_verifying_key
+                groth16_prepare_verifying_key_bls12381_cost_base: Some(52),
+                groth16_prepare_verifying_key_bn254_cost_base: Some(52),
+
+                // groth16::verify_groth16_proof_internal
+                groth16_verify_groth16_proof_internal_bls12381_cost_base: Some(52),
+                groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: Some(0),
+                groth16_verify_groth16_proof_internal_bn254_cost_base: Some(52),
+                groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: Some(0),
+                groth16_verify_groth16_proof_internal_public_input_cost_per_byte: Some(0),
+
                 // hash::blake2b256
                 hash_blake2b256_cost_base: Some(52),
                 hash_blake2b256_data_cost_per_byte: Some(0),
@@ -1126,6 +1445,11 @@ impl ProtocolConfig {
                 hash_keccak256_cost_base: Some(52),
                 hash_keccak256_data_cost_per_byte: Some(0),
                 hash_keccak256_data_cost_per_block: Some(0),
+
+                // hmac::hmac_sha3_256
+                hmac_hmac_sha3_256_cost_base: Some(52),
+                hmac_hmac_sha3_256_input_cost_per_byte: Some(0),
+                hmac_hmac_sha3_256_input_cost_per_block: Some(0),
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,

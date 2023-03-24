@@ -28,8 +28,8 @@ use sui_config::{
 use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionEffects, SuiTransactionEffectsAPI,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiTransactionEffects, SuiTransactionEffectsAPI,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
@@ -2001,5 +2001,81 @@ async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
         sleep(Duration::from_millis(100)).await;
     }
     out.join().unwrap().success();
+    Ok(())
+}
+
+#[sim_test]
+async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Result<(), anyhow::Error>
+{
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_responses = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new(
+                Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
+                Some(
+                    SuiObjectDataOptions::new()
+                        .with_type()
+                        .with_owner()
+                        .with_previous_transaction(),
+                ),
+            )),
+            None,
+            None,
+            None,
+        )
+        .await?;
+
+    // assert that all the objects_returned are owned by the address
+    for resp in &object_responses.data {
+        let obj_owner = resp.object().unwrap().owner.unwrap();
+        assert_eq!(
+            obj_owner.get_owner_address().unwrap().to_string(),
+            address.to_string()
+        )
+    }
+    // assert that has next page is false
+    assert!(!object_responses.has_next_page);
+
+    // Pagination check
+    let mut has_next = true;
+    let mut cursor = None;
+    let mut response_data: Vec<SuiObjectResponse> = Vec::new();
+    while has_next {
+        let object_responses = client
+            .read_api()
+            .get_owned_objects(
+                address,
+                Some(SuiObjectResponseQuery::new(
+                    Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
+                    Some(
+                        SuiObjectDataOptions::new()
+                            .with_type()
+                            .with_owner()
+                            .with_previous_transaction(),
+                    ),
+                )),
+                cursor,
+                Some(1),
+                None,
+            )
+            .await?;
+
+        response_data.push(object_responses.data.first().unwrap().clone());
+
+        if object_responses.has_next_page {
+            cursor = object_responses.next_cursor;
+        } else {
+            has_next = false;
+        }
+    }
+
+    assert_eq!(&response_data, &object_responses.data);
+
     Ok(())
 }

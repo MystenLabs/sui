@@ -29,7 +29,7 @@ pub mod pg_integration_test {
     use sui_json_rpc::api::ExtendedApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
     use sui_json_rpc_types::{
-        CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
+        BigInt, CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
         SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
         SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
         TransactionBytes,
@@ -258,7 +258,7 @@ pub mod pg_integration_test {
             .get_total_transaction_number()
             .await
             .unwrap();
-        assert!(rpc_tx_count >= 2);
+        assert!(<u64>::from(rpc_tx_count) >= 2);
         Ok(())
     }
 
@@ -847,7 +847,9 @@ pub mod pg_integration_test {
         let prev_epoch_last_checkpoint_id = current_epoch.first_checkpoint_id - 1;
 
         let checkpoint = store
-            .get_checkpoint(CheckpointId::SequenceNumber(prev_epoch_last_checkpoint_id))
+            .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(
+                prev_epoch_last_checkpoint_id,
+            )))
             .unwrap();
         assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
         assert_eq!(
@@ -859,7 +861,7 @@ pub mod pg_integration_test {
         let decoded_checkpoint: sui_json_rpc_types::Checkpoint = checkpoint.try_into().unwrap();
         assert_eq!(decoded_checkpoint.epoch, current_epoch.epoch - 1);
         assert_eq!(
-            decoded_checkpoint.sequence_number,
+            <u64>::from(decoded_checkpoint.sequence_number),
             prev_epoch_last_checkpoint_id
         );
 
@@ -1050,6 +1052,65 @@ pub mod pg_integration_test {
             .enumerate()
         {
             assert_eq!(received, expected, "Mismatch found at index {}", i);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_checkpoint() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _) =
+            start_test_cluster(Some(20000)).await;
+        // Allow indexer to sync
+        wait_until_next_checkpoint(&store).await;
+        let current_epoch = store.get_current_epoch().unwrap();
+        let cp = store.get_latest_checkpoint_sequence_number().unwrap();
+        let first_checkpoint = indexer_rpc_client
+            .get_checkpoint(CheckpointId::SequenceNumber(cp.try_into().unwrap()))
+            .await
+            .unwrap();
+
+        assert_eq!(first_checkpoint.epoch, current_epoch.epoch);
+        assert_eq!(first_checkpoint.sequence_number, 0);
+        assert_eq!(first_checkpoint.network_total_transactions, 1);
+        assert_eq!(first_checkpoint.previous_digest, None);
+        assert_eq!(first_checkpoint.transactions.len(), 1);
+
+        let (tx_response, _, _, _) =
+            execute_simple_transfer(&mut test_cluster, &indexer_rpc_client)
+                .await
+                .unwrap();
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        // We do this as checkpoint field is only returned in the read api
+        let tx_response = indexer_rpc_client
+            .get_transaction_with_options(
+                tx_response.digest,
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        let next_cp = tx_response.checkpoint.unwrap();
+        let next_checkpoint = indexer_rpc_client
+            .get_checkpoint(CheckpointId::SequenceNumber(next_cp))
+            .await?;
+        let current_epoch = store.get_current_epoch().unwrap();
+
+        assert_eq!(next_checkpoint.epoch, current_epoch.epoch);
+        assert!(next_checkpoint.sequence_number > first_checkpoint.sequence_number);
+        assert!(
+            next_checkpoint.network_total_transactions
+                > first_checkpoint.network_total_transactions
+        );
+        assert!(next_checkpoint.transactions.contains(&tx_response.digest));
+
+        let mut curr_checkpoint = next_checkpoint;
+        for i in (first_checkpoint.sequence_number..curr_checkpoint.sequence_number).rev() {
+            let prev_checkpoint = indexer_rpc_client
+                .get_checkpoint(CheckpointId::SequenceNumber(i))
+                .await?;
+            assert_eq!(
+                curr_checkpoint.previous_digest,
+                Some(prev_checkpoint.digest)
+            );
+            curr_checkpoint = prev_checkpoint;
         }
         Ok(())
     }

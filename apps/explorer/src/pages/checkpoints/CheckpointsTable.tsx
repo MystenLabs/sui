@@ -31,7 +31,7 @@ export function CheckpointsTable({
         rpc.getLatestCheckpointSequenceNumber()
     );
 
-    const pagination = usePaginationStack<number>();
+    const pagination = usePaginationStack<string>();
 
     const { data: checkpointsData } = useQuery(
         ['checkpoints', { limit, cursor: pagination.cursor }],
@@ -133,7 +133,7 @@ export function CheckpointsTable({
                 <TableFooter
                     label="Checkpoints"
                     data={checkpointsData}
-                    count={countQuery.data}
+                    count={Number(countQuery.data)}
                     limit={limit}
                     onLimitChange={setLimit}
                     pagination={pagination}

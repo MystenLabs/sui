@@ -4,7 +4,7 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
-use sui_json_rpc_types::{DelegatedStake, SuiCommittee};
+use sui_json_rpc_types::{BigInt, DelegatedStake, SuiCommittee};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
 
@@ -40,5 +40,5 @@ pub trait GovernanceReadApi {
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]
-    async fn get_reference_gas_price(&self) -> RpcResult<u64>;
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt>;
 }

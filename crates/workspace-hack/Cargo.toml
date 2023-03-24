@@ -498,6 +498,7 @@ sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9" }
 sha3-93f6ce9d446188ac = { package = "sha3", version = "0.10" }
 sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1" }
+shellexpand = { version = "3" }
 signature-dff4ba8e3ae991db = { package = "signature", version = "1", features = ["digest-preview", "hazmat-preview", "rand-preview"] }
 signature-f595c2ba2a3f28df = { package = "signature", version = "2", default-features = false, features = ["digest", "rand_core", "std"] }
 similar = { version = "2", features = ["inline"] }
@@ -1195,6 +1196,7 @@ sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9" }
 sha3-93f6ce9d446188ac = { package = "sha3", version = "0.10" }
 sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1" }
+shellexpand = { version = "3" }
 shlex = { version = "1" }
 signature-dff4ba8e3ae991db = { package = "signature", version = "1", features = ["digest-preview", "hazmat-preview", "rand-preview"] }
 signature-f595c2ba2a3f28df = { package = "signature", version = "2", default-features = false, features = ["digest", "rand_core", "std"] }

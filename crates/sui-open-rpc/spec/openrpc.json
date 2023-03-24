@@ -43,9 +43,7 @@
           "name": "gas_price",
           "description": "Gas is not charged, but gas usage is still calculated. Default to use reference gas price",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         },
         {
@@ -429,14 +427,14 @@
           "params": [
             {
               "name": "id",
-              "value": 1000
+              "value": "1000"
             }
           ],
           "result": {
             "name": "Result",
             "value": {
               "epoch": 5000,
-              "sequenceNumber": 1000,
+              "sequenceNumber": "1000",
               "digest": "GMkZ4a6i2fffTRY1K8PpKt275xuk9SmYykpLhAgMLekq",
               "networkTotalTransactions": 792385,
               "previousDigest": "5toSLTmiTe8VRSUbHxuW9w5JXVxjjE1MyajzG5tb52UQ",
@@ -469,9 +467,7 @@
           "name": "cursor",
           "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           }
         },
         {
@@ -496,7 +492,7 @@
         "name": "CheckpointPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_Checkpoint_and_uint64"
+          "$ref": "#/components/schemas/Page_for_Checkpoint_and_BigInt"
         }
       }
     },
@@ -754,12 +750,10 @@
       "description": "Return the sequence number of the latest checkpoint that has been executed",
       "params": [],
       "result": {
-        "name": "CheckpointSequenceNumber",
+        "name": "SuiCheckpointSequenceNumber",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/BigInt"
         }
       }
     },
@@ -1194,12 +1188,10 @@
       "description": "Return the reference gas price for the network",
       "params": [],
       "result": {
-        "name": "u64",
+        "name": "BigInt",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/BigInt"
         }
       }
     },
@@ -1298,12 +1290,10 @@
       "description": "Return the total number of transactions known to the server.",
       "params": [],
       "result": {
-        "name": "u64",
+        "name": "BigInt",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/BigInt"
         }
       },
       "examples": [
@@ -3083,9 +3073,11 @@
           },
           "sequenceNumber": {
             "description": "Checkpoint sequence number",
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt"
+              }
+            ]
           },
           "timestampMs": {
             "description": "Timestamp of the checkpoint - number of milliseconds from the Unix epoch Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent checkpoints can have same timestamp if they originate from the same underlining consensus commit",
@@ -3129,9 +3121,7 @@
       "CheckpointId": {
         "anyOf": [
           {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+            "$ref": "#/components/schemas/BigInt"
           },
           {
             "$ref": "#/components/schemas/CheckpointDigest"
@@ -5108,7 +5098,7 @@
           }
         ]
       },
-      "Page_for_Checkpoint_and_uint64": {
+      "Page_for_Checkpoint_and_BigInt": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -5126,12 +5116,14 @@
             "type": "boolean"
           },
           "nextCursor": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

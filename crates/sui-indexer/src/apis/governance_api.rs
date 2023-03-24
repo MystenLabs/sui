@@ -7,8 +7,8 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{GovernanceReadApiClient, GovernanceReadApiServer};
 use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::SuiCommittee;
+use sui_json_rpc_types::{BigInt, DelegatedStake};
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, ObjectID, SuiAddress};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
@@ -45,7 +45,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         self.fullnode.get_latest_sui_system_state().await
     }
 
-    async fn get_reference_gas_price(&self) -> RpcResult<u64> {
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
         self.fullnode.get_reference_gas_price().await
     }
 }

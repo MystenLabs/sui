@@ -228,7 +228,7 @@ impl CheckpointBlockProvider {
     }
 
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
-        let index = checkpoint.sequence_number;
+        let index = checkpoint.sequence_number.into();
         let hash = checkpoint.digest;
         let mut transactions = vec![];
         for digest in checkpoint.transactions.iter() {
@@ -289,7 +289,7 @@ impl CheckpointBlockProvider {
             .get_checkpoint(seq_number.into())
             .await?;
         Ok(BlockIdentifier {
-            index: checkpoint.sequence_number,
+            index: checkpoint.sequence_number.into(),
             hash: checkpoint.digest,
         })
     }
@@ -311,6 +311,8 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     OperationType::SuiBalanceChange
                     | OperationType::Gas
                     | OperationType::PaySui
+                    | OperationType::StakeReward
+                    | OperationType::StakePrinciple
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
                             *changes.entry(addr.address).or_default() += amount.value

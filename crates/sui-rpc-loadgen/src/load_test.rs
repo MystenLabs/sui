@@ -6,8 +6,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Sender;
 
 use tokio::sync::mpsc;
+use tracing::error;
 
-use crate::payload::{Payload, Processor};
+use crate::payload::{Command, Payload, Processor, SignerInfo};
 
 struct WorkerThread<R: Processor + Send + Sync + Clone> {
     processor: R,
@@ -17,24 +18,35 @@ struct WorkerThread<R: Processor + Send + Sync + Clone> {
 impl<R: Processor + Send + Sync + Clone> WorkerThread<R> {
     async fn run(&self) -> usize {
         let mut successful_commands = 0;
-        if self.processor.apply(&self.payload).await.is_ok() {
-            successful_commands += 1;
+        match self.processor.apply(&self.payload).await {
+            Ok(()) => successful_commands += 1,
+            Err(e) => error!("Thread returns error: {e}"),
         }
         successful_commands
     }
 }
 
+pub struct LoadTestConfig {
+    // TODO: support multiple commands
+    pub command: Command,
+    pub num_threads: usize,
+    /// should divide tasks across multiple threads
+    pub divide_tasks: bool,
+    pub signer_info: Option<SignerInfo>,
+}
+
 pub(crate) struct LoadTest<R: Processor + Send + Sync + Clone> {
     pub processor: R,
-    // one payload for each thread
-    pub payloads: Vec<Payload>,
+    pub config: LoadTestConfig,
 }
 
 impl<R: Processor + Send + Sync + Clone + 'static> LoadTest<R> {
     pub(crate) async fn run(&self) -> Result<(), Box<dyn Error>> {
         let start_time = Instant::now();
-        let (tx, mut rx) = mpsc::channel(self.payloads.len());
-        self.run_workers(tx).await;
+        let payloads = self.processor.prepare(&self.config).await?;
+        let (tx, mut rx) = mpsc::channel(payloads.len());
+
+        self.run_workers(tx, payloads).await;
 
         // Collect the results from the worker threads
         let mut num_successful_commands = 0;
@@ -54,9 +66,9 @@ impl<R: Processor + Send + Sync + Clone + 'static> LoadTest<R> {
         Ok(())
     }
 
-    async fn run_workers(&self, tx: Sender<usize>) {
-        println!("Running with {} threads...", self.payloads.len());
-        for payload in self.payloads.iter() {
+    async fn run_workers(&self, tx: Sender<usize>, payloads: Vec<Payload>) {
+        println!("Running with {} threads...", payloads.len());
+        for payload in payloads.iter() {
             let tx = tx.clone();
             let worker_thread = WorkerThread {
                 processor: self.processor.clone(),
