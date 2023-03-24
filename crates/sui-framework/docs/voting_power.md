@@ -142,7 +142,7 @@ Each validator's voting power is initialized using their stake. We then attempt 
 at <code><a href="voting_power.md#0x3_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a></code>. If <code><a href="voting_power.md#0x3_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a></code> is not a feasible cap, we pick the lowest possible cap.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting_power.md#0x3_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="voting_power.md#0x3_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;)
 </code></pre>
 
 
@@ -151,7 +151,7 @@ at <code><a href="voting_power.md#0x3_voting_power_MAX_VOTING_POWER">MAX_VOTING_
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting_power.md#0x3_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="voting_power.md#0x3_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;) {
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct <b>to</b> be always enough <b>to</b> find a solution.
     <b>let</b> threshold = <a href="_min">math::min</a>(
@@ -386,25 +386,25 @@ Check a few invariants that must hold after setting the voting power.
     // Second check that <b>if</b> <a href="validator.md#0x3_validator">validator</a> A's stake is larger than B's stake, A's voting power must be no less
     // than B's voting power; similarly, <b>if</b> A's stake is less than B's stake, A's voting power must be no larger
     // than B's voting power.
-    <b>let</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        <b>let</b> j = i + 1;
-        <b>while</b> (j &lt; len) {
-            <b>let</b> validator_i = <a href="_borrow">vector::borrow</a>(v, i);
-            <b>let</b> validator_j = <a href="_borrow">vector::borrow</a>(v, j);
-            <b>let</b> stake_i = <a href="validator.md#0x3_validator_total_stake">validator::total_stake</a>(validator_i);
-            <b>let</b> stake_j = <a href="validator.md#0x3_validator_total_stake">validator::total_stake</a>(validator_j);
-            <b>let</b> power_i = <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(validator_i);
-            <b>let</b> power_j = <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(validator_j);
-            <b>if</b> (stake_i &gt; stake_i) {
-                <b>assert</b>!(power_i &gt;= power_j, <a href="voting_power.md#0x3_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>);
+    <b>let</b> a = 0;
+    <b>while</b> (a &lt; len) {
+        <b>let</b> b = a + 1;
+        <b>while</b> (b &lt; len) {
+            <b>let</b> validator_a = <a href="_borrow">vector::borrow</a>(v, a);
+            <b>let</b> validator_b = <a href="_borrow">vector::borrow</a>(v, b);
+            <b>let</b> stake_a = <a href="validator.md#0x3_validator_total_stake">validator::total_stake</a>(validator_a);
+            <b>let</b> stake_b = <a href="validator.md#0x3_validator_total_stake">validator::total_stake</a>(validator_b);
+            <b>let</b> power_a = <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(validator_a);
+            <b>let</b> power_b = <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(validator_b);
+            <b>if</b> (stake_a &gt; stake_b) {
+                <b>assert</b>!(power_a &gt;= power_b, <a href="voting_power.md#0x3_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>);
             };
-            <b>if</b> (stake_i &lt; stake_j) {
-                <b>assert</b>!(power_i &lt;= power_j, <a href="voting_power.md#0x3_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>);
+            <b>if</b> (stake_a &lt; stake_b) {
+                <b>assert</b>!(power_a &lt;= power_b, <a href="voting_power.md#0x3_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>);
             };
-            j = j + 1;
+            b = b + 1;
         };
-        i = i + 1;
+        a = a + 1;
     }
 }
 </code></pre>
