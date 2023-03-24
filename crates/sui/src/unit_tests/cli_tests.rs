@@ -484,6 +484,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -690,6 +691,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -825,6 +827,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -868,6 +871,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -921,6 +925,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -961,6 +966,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -1014,6 +1020,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await?;

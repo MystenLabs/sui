@@ -614,25 +614,25 @@ impl SuiClientCommands {
                         gas_budget,
                     )
                     .await?;
-                if serialize_output == false {
-                    let signature =
-                        context
-                            .config
-                            .keystore
-                            .sign_secure(&sender, &data, Intent::default())?;
-                    let response = context
-                        .execute_transaction(
-                            Transaction::from_data(data, Intent::default(), vec![signature])
-                                .verify()?,
-                        )
-                        .await?;
-
-                    SuiClientCommandResult::Publish(response)
-                } else {
-                    SuiClientCommandResult::SerializePublish(Base64::encode(
+                if serialize_output {
+                    return Ok(SuiClientCommandResult::SerializePublish(Base64::encode(
                         bcs::to_bytes(&data).unwrap(),
-                    ))
+                    )));
                 }
+
+                let signature =
+                    context
+                        .config
+                        .keystore
+                        .sign_secure(&sender, &data, Intent::default())?;
+                let response = context
+                    .execute_transaction(
+                        Transaction::from_data(data, Intent::default(), vec![signature])
+                            .verify()?,
+                    )
+                    .await?;
+
+                SuiClientCommandResult::Publish(response)
             }
 
             SuiClientCommands::Object { id, bcs } => {
