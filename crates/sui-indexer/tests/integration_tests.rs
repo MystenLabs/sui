@@ -1063,14 +1063,14 @@ pub mod pg_integration_test {
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
         let current_epoch = store.get_current_epoch().unwrap();
-        let cp = store.get_latest_checkpoint_sequence_number().unwrap();
+        let cp = store.get_latest_checkpoint_sequence_number().unwrap() as u64;
         let first_checkpoint = indexer_rpc_client
             .get_checkpoint(CheckpointId::SequenceNumber(cp.try_into().unwrap()))
             .await
             .unwrap();
 
         assert_eq!(first_checkpoint.epoch, current_epoch.epoch);
-        assert_eq!(first_checkpoint.sequence_number, 0);
+        assert_eq!(u64::from(first_checkpoint.sequence_number), 0);
         assert_eq!(first_checkpoint.network_total_transactions, 1);
         assert_eq!(first_checkpoint.previous_digest, None);
         assert_eq!(first_checkpoint.transactions.len(), 1);
@@ -1089,12 +1089,15 @@ pub mod pg_integration_test {
             .await?;
         let next_cp = tx_response.checkpoint.unwrap();
         let next_checkpoint = indexer_rpc_client
-            .get_checkpoint(CheckpointId::SequenceNumber(next_cp))
+            .get_checkpoint(CheckpointId::SequenceNumber(next_cp.try_into().unwrap()))
             .await?;
         let current_epoch = store.get_current_epoch().unwrap();
 
         assert_eq!(next_checkpoint.epoch, current_epoch.epoch);
-        assert!(next_checkpoint.sequence_number > first_checkpoint.sequence_number);
+        assert!(
+            u64::from(next_checkpoint.sequence_number)
+                > u64::from(first_checkpoint.sequence_number)
+        );
         assert!(
             next_checkpoint.network_total_transactions
                 > first_checkpoint.network_total_transactions
@@ -1102,9 +1105,12 @@ pub mod pg_integration_test {
         assert!(next_checkpoint.transactions.contains(&tx_response.digest));
 
         let mut curr_checkpoint = next_checkpoint;
-        for i in (first_checkpoint.sequence_number..curr_checkpoint.sequence_number).rev() {
+        for i in (u64::from(first_checkpoint.sequence_number)
+            ..u64::from(curr_checkpoint.sequence_number))
+            .rev()
+        {
             let prev_checkpoint = indexer_rpc_client
-                .get_checkpoint(CheckpointId::SequenceNumber(i))
+                .get_checkpoint(CheckpointId::SequenceNumber(i.try_into().unwrap()))
                 .await?;
             assert_eq!(
                 curr_checkpoint.previous_digest,
