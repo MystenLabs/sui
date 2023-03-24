@@ -80,7 +80,7 @@ Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud s
 
 ### Connect to a custom RPC endpoint
 
-If you previously used `sui genesis` with the force option (`-f` or `--force`), your client.yaml file already includes two RPC endpoints: localnet `http://0.0.0.0:9000` and devnet `https://fullnode.devnet.sui.io:443`). You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
+If you previously used `sui genesis` with the force option (`-f` or `--force`), your client.yaml file already includes two RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
 
 If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing `client.yaml` to change the configured RPC endpoint.
 
@@ -111,7 +111,7 @@ If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_c
 
 ## Validating
 
-Note that in the following sections, the object ID's, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
+Note that in the following sections, the object IDs, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
 
 ## Request test tokens
 
