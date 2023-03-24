@@ -1289,7 +1289,7 @@ impl ProtocolConfig {
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
                 storage_gas_price: Some(1),
-                max_transactions_per_checkpoint: Some(1000),
+                max_transactions_per_checkpoint: Some(10_000),
                 max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
 
                 // For now, perform upgrades with a bare quorum of validators.
