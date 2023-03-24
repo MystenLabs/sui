@@ -35,7 +35,7 @@ enum AdversarialPayloadType {
     LargeEvents,
     DynamicFieldReads,
     LargeTransientRuntimeVectors,
-    LargeFunctionParams,
+    LargePureFunctionArgs,
     // TODO:
     // - MaxReads (by creating a bunch of shared objects in the module init for adversarial, then taking them all as input)
     // - MaxEffects (by creating a bunch of small objects) and mutating lots of objects
@@ -163,7 +163,7 @@ impl AdversarialTestPayload {
                 fn_name: "create_vectors_with_size".to_owned(),
                 args: [100u64.into(), 100_000u64.into()].to_vec(),
             },
-            AdversarialPayloadType::LargeFunctionParams => {
+            AdversarialPayloadType::LargePureFunctionArgs => {
                 let max_fn_params = protocol_config.max_function_parameters();
                 let max_pure_arg_size = protocol_config.max_pure_argument_size();
                 let mut args: Vec<CallArg> = vec![];
