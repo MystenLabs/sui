@@ -8,8 +8,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    CheckpointId, ObjectChange, SuiObjectDataOptions, SuiObjectResponse,
-    SuiTransactionResponseOptions,
+    CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionResponseOptions,
 };
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
@@ -18,7 +17,7 @@ use tracing::log::warn;
 use tracing::{debug, error, info};
 
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -291,15 +290,9 @@ pub async fn check_transactions(
 
 fn get_object_id(object_change: &ObjectChange) -> Option<ObjectID> {
     match object_change {
-        ObjectChange::Transferred {
-            object_id, ..
-        } => Some(*object_id),
-        ObjectChange::Mutated {
-            object_id, ..
-        } => Some(*object_id),
-        ObjectChange::Created {
-            object_id, ..
-        } => Some(*object_id),
+        ObjectChange::Transferred { object_id, .. } => Some(*object_id),
+        ObjectChange::Mutated { object_id, .. } => Some(*object_id),
+        ObjectChange::Created { object_id, .. } => Some(*object_id),
         // TODO(gegaowp): needs separate checks for packages and modules publishing
         // TODO(gegaowp): ?? needs separate checks for deleted and wrapped objects
         _ => None,
