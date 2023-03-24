@@ -72,7 +72,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const transactionSender = getTransactionSender(txn);
     const isSender = activeAddress === transactionSender;
     const isSponsoredTransaction = transactionSender !== owner;
-    const gasTotal = getTotalGasUsed(txn);
+    const gasTotal = Number(getTotalGasUsed(txn));
 
     const showGasSummary = isSuccessful && isSender && gasTotal;
     const showSponsorInfo = !isSuccessful && isSender && isSponsoredTransaction;

@@ -157,9 +157,9 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
         let gas_object_digest = gas_object_ref.digest.base58_encode();
 
         let gas_summary = effects.gas_cost_summary();
-        let computation_cost = gas_summary.computation_cost;
-        let storage_cost = gas_summary.storage_cost;
-        let storage_rebate = gas_summary.storage_rebate;
+        let computation_cost = <u64>::from(gas_summary.computation_cost);
+        let storage_cost = <u64>::from(gas_summary.storage_cost);
+        let storage_rebate = <u64>::from(gas_summary.storage_rebate);
 
         Ok(Transaction {
             id: None,

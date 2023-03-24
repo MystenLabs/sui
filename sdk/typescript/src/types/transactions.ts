@@ -34,8 +34,7 @@ import {
   SuiObjectRef,
 } from './objects';
 
-// TODO: support u64
-export const EpochId = number();
+export const EpochId = string();
 
 export const SuiChangeEpoch = object({
   epoch: EpochId,
@@ -174,10 +173,10 @@ export const AuthorityQuorumSignInfo = object({
 export type AuthorityQuorumSignInfo = Infer<typeof AuthorityQuorumSignInfo>;
 
 export const GasCostSummary = object({
-  computationCost: number(),
-  storageCost: number(),
-  storageRebate: number(),
-  nonRefundableStorageFee: number(),
+  computationCost: string(),
+  storageCost: string(),
+  storageRebate: string(),
+  nonRefundableStorageFee: string(),
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
@@ -535,21 +534,21 @@ export function getExecutionStatusGasSummary(
 
 export function getTotalGasUsed(
   data: SuiTransactionResponse | TransactionEffects,
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost +
-        gasSummary.storageCost -
-        gasSummary.storageRebate
+    ? BigInt(gasSummary.computationCost) +
+        BigInt(gasSummary.storageCost) -
+        BigInt(gasSummary.storageRebate)
     : undefined;
 }
 
 export function getTotalGasUsedUpperBound(
   data: SuiTransactionResponse | TransactionEffects,
-): number | undefined {
+): bigint | undefined {
   const gasSummary = getExecutionStatusGasSummary(data);
   return gasSummary
-    ? gasSummary.computationCost + gasSummary.storageCost
+    ? BigInt(gasSummary.computationCost) + BigInt(gasSummary.storageCost)
     : undefined;
 }
 

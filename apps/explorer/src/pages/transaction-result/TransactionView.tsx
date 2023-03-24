@@ -356,21 +356,25 @@ export function TransactionView({
                                         </DescriptionItem>
                                         <DescriptionItem title="Computation Fee">
                                             <GasAmount
-                                                amount={
+                                                amount={Number(
                                                     gasUsed?.computationCost
-                                                }
+                                                )}
                                             />
                                         </DescriptionItem>
 
                                         <DescriptionItem title="Storage Fee">
                                             <GasAmount
-                                                amount={gasUsed?.storageCost}
+                                                amount={Number(
+                                                    gasUsed?.storageCost
+                                                )}
                                             />
                                         </DescriptionItem>
 
                                         <DescriptionItem title="Storage Rebate">
                                             <GasAmount
-                                                amount={gasUsed?.storageRebate}
+                                                amount={Number(
+                                                    gasUsed?.storageRebate
+                                                )}
                                             />
                                         </DescriptionItem>
 

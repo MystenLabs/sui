@@ -17,9 +17,7 @@ use enum_dispatch::enum_dispatch;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sui_json::{primitive_type, SuiJsonValue};
-use sui_types::base_types::{
-    EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::digests::{ObjectDigest, TransactionEventsDigest};
 use sui_types::error::{ExecutionError, SuiError};
 use sui_types::gas::GasCostSummary;
@@ -67,6 +65,10 @@ impl Display for BigInt {
         write!(f, "{}", self.0)
     }
 }
+
+// similar to EpochId of sui-types but BigInt
+pub type SuiEpochId = BigInt;
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "TransactionResponseQuery", default)]
 pub struct SuiTransactionResponseQuery {
@@ -302,7 +304,7 @@ impl SuiTransactionKind {
     fn try_from(tx: TransactionKind, module_cache: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match tx {
             TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
-                epoch: e.epoch,
+                epoch: e.epoch.into(),
                 storage_charge: e.storage_charge,
                 computation_charge: e.computation_charge,
                 storage_rebate: e.storage_rebate,
@@ -334,7 +336,7 @@ impl SuiTransactionKind {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiChangeEpoch {
-    pub epoch: EpochId,
+    pub epoch: SuiEpochId,
     pub storage_charge: u64,
     pub computation_charge: u64,
     pub storage_rebate: u64,
@@ -366,7 +368,7 @@ pub trait SuiTransactionEffectsAPI {
     fn gas_object(&self) -> &OwnedObjectRef;
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
-    fn executed_epoch(&self) -> EpochId;
+    fn executed_epoch(&self) -> SuiEpochId;
     fn transaction_digest(&self) -> &TransactionDigest;
     fn gas_cost_summary(&self) -> &SuiGasCostSummary;
 
@@ -394,7 +396,7 @@ pub struct SuiTransactionEffectsV1 {
     /// The status of the execution
     pub status: SuiExecutionStatus,
     /// The epoch when this transaction was executed.
-    pub executed_epoch: EpochId,
+    pub executed_epoch: SuiEpochId,
     pub gas_used: SuiGasCostSummary,
     /// The version that every modified (mutated or deleted) object had before it was modified by
     /// this transaction.
@@ -475,7 +477,7 @@ impl SuiTransactionEffectsAPI for SuiTransactionEffectsV1 {
         &self.dependencies
     }
 
-    fn executed_epoch(&self) -> EpochId {
+    fn executed_epoch(&self) -> SuiEpochId {
         self.executed_epoch
     }
 
@@ -546,7 +548,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionEffects {
         match message_version {
             1 => Ok(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
                 status: effect.status().clone().into(),
-                executed_epoch: effect.executed_epoch(),
+                executed_epoch: effect.executed_epoch().into(),
                 modified_at_versions: effect
                     .modified_at_versions()
                     .iter()
@@ -807,19 +809,19 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "GasCostSummary", rename_all = "camelCase")]
 pub struct SuiGasCostSummary {
-    pub computation_cost: u64,
-    pub storage_cost: u64,
-    pub storage_rebate: u64,
-    pub non_refundable_storage_fee: u64,
+    pub computation_cost: BigInt,
+    pub storage_cost: BigInt,
+    pub storage_rebate: BigInt,
+    pub non_refundable_storage_fee: BigInt,
 }
 
 impl From<GasCostSummary> for SuiGasCostSummary {
     fn from(s: GasCostSummary) -> Self {
         Self {
-            computation_cost: s.computation_cost,
-            storage_cost: s.storage_cost,
-            storage_rebate: s.storage_rebate,
-            non_refundable_storage_fee: s.non_refundable_storage_fee,
+            computation_cost: s.computation_cost.into(),
+            storage_cost: s.storage_cost.into(),
+            storage_rebate: s.storage_rebate.into(),
+            non_refundable_storage_fee: s.non_refundable_storage_fee.into(),
         }
     }
 }
@@ -827,10 +829,10 @@ impl From<GasCostSummary> for SuiGasCostSummary {
 impl From<SuiGasCostSummary> for GasCostSummary {
     fn from(s: SuiGasCostSummary) -> Self {
         Self {
-            computation_cost: s.computation_cost,
-            storage_cost: s.storage_cost,
-            storage_rebate: s.storage_rebate,
-            non_refundable_storage_fee: s.non_refundable_storage_fee,
+            computation_cost: s.computation_cost.into(),
+            storage_cost: s.storage_cost.into(),
+            storage_rebate: s.storage_rebate.into(),
+            non_refundable_storage_fee: s.non_refundable_storage_fee.into(),
         }
     }
 }
