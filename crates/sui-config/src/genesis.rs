@@ -644,6 +644,10 @@ impl Builder {
         self
     }
 
+    pub fn validators(&self) -> &BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo> {
+        &self.validators
+    }
+
     pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
         let UnsignedGenesis { checkpoint, .. } = self.build_unsigned_genesis_checkpoint();
 
@@ -1056,21 +1060,6 @@ impl Builder {
             objects.insert(object.id(), object);
         }
 
-        // Load Signatures
-        let mut signatures = BTreeMap::new();
-        for entry in path.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
-            let entry = entry?;
-            if entry.file_name().starts_with('.') {
-                continue;
-            }
-
-            let path = entry.path();
-            let signature_bytes = fs::read(path)?;
-            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)
-                .with_context(|| format!("unable to load validator signatrue for {path}"))?;
-            signatures.insert(sigs.authority, sigs);
-        }
-
         // Load validator infos
         let mut committee = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
@@ -1085,6 +1074,21 @@ impl Builder {
                 serde_yaml::from_slice(&validator_info_bytes)
                     .with_context(|| format!("unable to load validator info for {path}"))?;
             committee.insert(validator_info.info.protocol_key(), validator_info);
+        }
+
+        // Load Signatures
+        let mut signatures = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let signature_bytes = fs::read(path)?;
+            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)
+                .with_context(|| format!("unable to load validator signatrue for {path}"))?;
+            signatures.insert(sigs.authority, sigs);
         }
 
         let mut builder = Self {

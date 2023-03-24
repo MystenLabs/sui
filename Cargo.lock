@@ -8512,6 +8512,7 @@ dependencies = [
  "clap 3.2.23",
  "colored",
  "const-str",
+ "csv",
  "expect-test",
  "fastcrypto",
  "fs_extra",

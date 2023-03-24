@@ -78,6 +78,8 @@ pub enum CeremonyCommand {
         project_url: String,
     },
 
+    ListValidators,
+
     AddGasObject {
         #[clap(long)]
         address: SuiAddress,
@@ -163,6 +165,31 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 pop,
             );
             builder.save(dir)?;
+        }
+
+        CeremonyCommand::ListValidators => {
+            let builder = Builder::load(&dir)?;
+
+            let mut writer = csv::Writer::from_writer(std::io::stdout());
+
+            writer.write_record(["validator-name", "account-address"])?;
+
+            let mut validators = builder
+                .validators()
+                .values()
+                .map(|v| {
+                    (
+                        v.info.name().to_lowercase(),
+                        v.info.account_address.to_string(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            validators.sort_by_key(|v| v.0.clone());
+
+            for (name, address) in validators {
+                writer.write_record([&name, &address])?;
+            }
         }
 
         CeremonyCommand::AddGasObject {
