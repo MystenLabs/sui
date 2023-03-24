@@ -5,24 +5,10 @@ import { useParams } from 'react-router-dom';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
-import TxForID from '../../components/transactions/TxForID';
+import { TransactionsForAddress } from '../../components/transactions/TransactionsForAddress';
 
 import { Heading } from '~/ui/Heading';
 import { PageHeader } from '~/ui/PageHeader';
-
-type DataType = {
-    id: string;
-    objects: ResponseType;
-    loadState?: 'loaded' | 'pending' | 'fail';
-};
-
-type ResponseType = {
-    objectId: string;
-}[];
-
-function instanceOfDataType(object: any): object is DataType {
-    return object !== undefined && ['id', 'objects'].every((x) => x in object);
-}
 
 function AddressResult() {
     const { id: addressID } = useParams();
@@ -50,7 +36,10 @@ function AddressResult() {
                 </div>
                 <ErrorBoundary>
                     <div className="mt-2">
-                        <TxForID id={addressID!} category="address" />
+                        <TransactionsForAddress
+                            address={addressID!}
+                            type="address"
+                        />
                     </div>
                 </ErrorBoundary>
             </div>
@@ -59,4 +48,3 @@ function AddressResult() {
 }
 
 export default AddressResult;
-export { instanceOfDataType };

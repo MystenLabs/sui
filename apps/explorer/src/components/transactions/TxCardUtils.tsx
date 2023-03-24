@@ -7,7 +7,6 @@ import {
     getExecutionStatusType,
     getTotalGasUsed,
     getTransactionSender,
-    type GetTxnDigestsResponse,
     type JsonRpcProvider,
     SUI_TYPE_ARG,
     type SuiTransactionResponse,
@@ -149,7 +148,7 @@ const dedupe = (arr: string[]) => Array.from(new Set(arr));
 
 export const getDataOnTxDigests = (
     rpc: JsonRpcProvider,
-    transactions: GetTxnDigestsResponse
+    transactions: string[]
 ) =>
     rpc
         .multiGetTransactions({

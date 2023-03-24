@@ -5,7 +5,7 @@ import { getTransactionSender } from '@mysten/sui.js';
 
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
-import TxForID from '../../../components/transactions/TxForID';
+import { TransactionsForAddress } from '../../../components/transactions/TransactionsForAddress';
 import { useGetTransaction } from '../../../hooks/useGetTransaction';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
@@ -108,7 +108,10 @@ function PkgView({ data }: { data: DataType }) {
                 <div className={styles.txsection}>
                     <h2 className={styles.header}>Transactions</h2>
                     <ErrorBoundary>
-                        <TxForID id={viewedData.id} category="object" />
+                        <TransactionsForAddress
+                            address={viewedData.id}
+                            type="object"
+                        />
                     </ErrorBoundary>
                 </div>
             </div>
