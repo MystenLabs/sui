@@ -227,6 +227,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
                         narwhal_primary_address: metadata.primary_address.clone(),
                         narwhal_worker_address: metadata.worker_address.clone(),
                         voting_power: validator.voting_power,
+                        hostname: "".to_string(),
                     }
                 })
                 .collect(),
@@ -367,6 +368,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV2 {
                         narwhal_primary_address: metadata.primary_address.clone(),
                         narwhal_worker_address: metadata.worker_address.clone(),
                         voting_power: validator.voting_power,
+                        hostname: "".to_string(),
                     }
                 })
                 .collect(),
