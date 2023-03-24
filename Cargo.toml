@@ -109,7 +109,8 @@ opt-level = 1
 
 tokio = "1.24.1"
 
-# Move dependencies
+################################################################
+# Move dependencies, should be kept the same as the list in crates/sui-move/Cargo.toml
 move-binary-format = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
@@ -130,6 +131,7 @@ move-prover = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c
 move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
 move-symbol-pool = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+################################################################
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c", package = "fastcrypto-zkp" }

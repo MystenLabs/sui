@@ -29,16 +29,30 @@ colored = "2.0.0"
 
 telemetry-subscribers.workspace = true
 
-move-binary-format.workspace = true
-move-disassembler.workspace = true
-move-ir-types.workspace = true
-move-prover.workspace = true
-move-prover-boogie-backend.workspace = true
-move-unit-test.workspace = true
-move-vm-runtime.workspace = true
-move-vm-test-utils.workspace = true
-move-cli.workspace = true
-move-package.workspace = true
+################################################################
+# Intentionally keeping the same list of Move dependencies as the workspace level Cargo.toml,
+# so bumping versions on these dependencies are covered by the Move prover CI.
+move-binary-format = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-cli = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54", features = ["address32"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-package = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-prover = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+move-symbol-pool = { git = "https://github.com/move-language/move", rev = "3ebc7eef2c41d5360cc5c0ea08ee9a4002cdba54" }
+################################################################
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl = "^0.5"

@@ -32,7 +32,6 @@ runs:
           - '*.md'
           - '.github/workflows/docs.yml'
         isMove:
-          - 'crates/sui-framework/sources/**'
+          - 'crates/sui-framework/**'
           - 'crates/sui/src/sui_move/**'
-          - 'Cargo.toml'
-          - 'Cargo.lock'
+          - 'crates/sui-move/Cargo.toml'
