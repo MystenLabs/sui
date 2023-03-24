@@ -18,6 +18,7 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
@@ -59,7 +60,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     <small className="text-ellipsis overflow-hidden">
-                        {(error as Error).message || 'Something went wrong'}
+                        {getSignerOperationErrorMessage(error)}
                     </small>
                 </div>
             );

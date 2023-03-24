@@ -14,6 +14,8 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
+
 import type { SuiTransactionResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
@@ -81,8 +83,8 @@ export const respondToTransactionRequest = createAsyncThunk<
                         `Unexpected type: ${(txRequest.tx as any).type}`
                     );
                 }
-            } catch (e) {
-                txResultError = (e as Error).message;
+            } catch (error) {
+                txResultError = getSignerOperationErrorMessage(error);
             }
         }
         background.sendTransactionRequestResponse(
