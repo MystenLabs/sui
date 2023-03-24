@@ -149,7 +149,7 @@ pub struct ProtocolConfig {
     // sdk/typescript/src/builder/TransactionData.ts
     max_tx_size_bytes: Option<u64>,
 
-    /// Maximum number of input objects.
+    /// Maximum number of input objects to a transaction. Enforced by the transaction input checker
     max_input_objects: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
@@ -267,6 +267,7 @@ pub struct ProtocolConfig {
     max_meter_ticks_per_module: Option<u64>,
 
     // === Object runtime internal operation limits ====
+    // These affect dynamic fields
     /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
     object_runtime_max_num_cached_objects: Option<u64>,
 
@@ -1314,36 +1315,36 @@ impl ProtocolConfig {
 
                 // `dynamic_field` module
                 // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
-                dynamic_field_hash_type_and_key_cost_base: Some(52),
-                dynamic_field_hash_type_and_key_type_cost_per_byte: Some(0),
-                dynamic_field_hash_type_and_key_value_cost_per_byte: Some(0),
-                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Some(0),
+                dynamic_field_hash_type_and_key_cost_base: Some(100),
+                dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
+                dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Some(2),
                 // Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
-                dynamic_field_add_child_object_cost_base: Some(52),
-                dynamic_field_add_child_object_type_cost_per_byte: Some(0),
-                dynamic_field_add_child_object_value_cost_per_byte: Some(0),
-                dynamic_field_add_child_object_struct_tag_cost_per_byte: Some(0),
+                dynamic_field_add_child_object_cost_base: Some(100),
+                dynamic_field_add_child_object_type_cost_per_byte: Some(10),
+                dynamic_field_add_child_object_value_cost_per_byte: Some(10),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: Some(10),
                 // Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
-                dynamic_field_borrow_child_object_cost_base: Some(52),
-                dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(0),
-                dynamic_field_borrow_child_object_type_cost_per_byte: Some(0),
+                dynamic_field_borrow_child_object_cost_base: Some(100),
+                dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(10),
+                dynamic_field_borrow_child_object_type_cost_per_byte: Some(10),
                  // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
-                dynamic_field_remove_child_object_cost_base: Some(52),
-                dynamic_field_remove_child_object_child_cost_per_byte: Some(0),
-                dynamic_field_remove_child_object_type_cost_per_byte: Some(0),
+                dynamic_field_remove_child_object_cost_base: Some(100),
+                dynamic_field_remove_child_object_child_cost_per_byte: Some(2),
+                dynamic_field_remove_child_object_type_cost_per_byte: Some(2),
                 // Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
-                dynamic_field_has_child_object_cost_base: Some(52),
+                dynamic_field_has_child_object_cost_base: Some(100),
                 // Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
-                dynamic_field_has_child_object_with_ty_cost_base: Some(52),
-                dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(0),
-                dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(0),
+                dynamic_field_has_child_object_with_ty_cost_base: Some(100),
+                dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(2),
+                dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(2),
 
                 // `event` module
                 // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
                 event_emit_cost_base: Some(52),
-                event_emit_value_size_derivation_cost_per_byte: Some(0),
-                event_emit_tag_size_derivation_cost_per_byte: Some(0),
-                event_emit_output_cost_per_byte:Some(0),
+                event_emit_value_size_derivation_cost_per_byte: Some(2),
+                event_emit_tag_size_derivation_cost_per_byte: Some(5),
+                event_emit_output_cost_per_byte:Some(10),
 
                 //  `object` module
                 // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1368,70 +1369,70 @@ impl ProtocolConfig {
                 // `types` module
                 // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
                 types_is_one_time_witness_cost_base: Some(52),
-                types_is_one_time_witness_type_tag_cost_per_byte: Some(0),
-                types_is_one_time_witness_type_cost_per_byte: Some(0),
+                types_is_one_time_witness_type_tag_cost_per_byte: Some(2),
+                types_is_one_time_witness_type_cost_per_byte: Some(2),
 
                 // `validator` module
                 // Cost params for the Move native function `validate_metadata_bcs(metadata: vector<u8>)`
                 validator_validate_metadata_cost_base: Some(52),
-                validator_validate_metadata_data_cost_per_byte: Some(0),
+                validator_validate_metadata_data_cost_per_byte: Some(2),
 
                 // Crypto
                 crypto_invalid_arguments_cost: Some(100),
                 // bls12381::bls12381_min_pk_verify
                 bls12381_bls12381_min_sig_verify_cost_base: Some(52),
-                bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Some(0),
-                bls12381_bls12381_min_sig_verify_msg_cost_per_block: Some(0),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Some(2),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_block: Some(2),
 
                 // bls12381::bls12381_min_pk_verify
                 bls12381_bls12381_min_pk_verify_cost_base: Some(52),
-                bls12381_bls12381_min_pk_verify_msg_cost_per_byte: Some(0),
-                bls12381_bls12381_min_pk_verify_msg_cost_per_block: Some(0),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_byte: Some(2),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_block: Some(2),
 
                 // ecdsa_k1::ecrecover
                 ecdsa_k1_ecrecover_keccak256_cost_base: Some(52),
-                ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: Some(0),
-                ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: Some(2),
                 ecdsa_k1_ecrecover_sha256_cost_base: Some(52),
-                ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: Some(0),
-                ecdsa_k1_ecrecover_sha256_msg_cost_per_block: Some(0),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_block: Some(2),
 
                 // ecdsa_k1::decompress_pubkey
                 ecdsa_k1_decompress_pubkey_cost_base: Some(52),
 
                 // ecdsa_k1::secp256k1_verify
                 ecdsa_k1_secp256k1_verify_keccak256_cost_base: Some(52),
-                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: Some(0),
-                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: Some(2),
                 ecdsa_k1_secp256k1_verify_sha256_cost_base: Some(52),
-                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: Some(0),
-                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: Some(0),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: Some(2),
 
                 // ecdsa_r1::ecrecover
                 ecdsa_r1_ecrecover_keccak256_cost_base: Some(52),
-                ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: Some(0),
-                ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: Some(2),
                 ecdsa_r1_ecrecover_sha256_cost_base: Some(52),
-                ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: Some(0),
-                ecdsa_r1_ecrecover_sha256_msg_cost_per_block: Some(0),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_block: Some(2),
 
                 // ecdsa_r1::secp256k1_verify
                 ecdsa_r1_secp256r1_verify_keccak256_cost_base: Some(52),
-                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: Some(0),
-                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: Some(0),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: Some(2),
                 ecdsa_r1_secp256r1_verify_sha256_cost_base: Some(52),
-                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Some(0),
-                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Some(0),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Some(2),
 
                 // ecvrf::verify
                 ecvrf_ecvrf_verify_cost_base: Some(52),
-                ecvrf_ecvrf_verify_alpha_string_cost_per_byte: Some(0),
-                ecvrf_ecvrf_verify_alpha_string_cost_per_block: Some(0),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_byte: Some(2),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_block: Some(2),
 
                 // ed25519
                 ed25519_ed25519_verify_cost_base: Some(52),
-                ed25519_ed25519_verify_msg_cost_per_byte: Some(0),
-                ed25519_ed25519_verify_msg_cost_per_block: Some(0),
+                ed25519_ed25519_verify_msg_cost_per_byte: Some(2),
+                ed25519_ed25519_verify_msg_cost_per_block: Some(2),
 
                 // groth16::prepare_verifying_key
                 groth16_prepare_verifying_key_bls12381_cost_base: Some(52),
@@ -1439,24 +1440,24 @@ impl ProtocolConfig {
 
                 // groth16::verify_groth16_proof_internal
                 groth16_verify_groth16_proof_internal_bls12381_cost_base: Some(52),
-                groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: Some(0),
+                groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: Some(2),
                 groth16_verify_groth16_proof_internal_bn254_cost_base: Some(52),
-                groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: Some(0),
-                groth16_verify_groth16_proof_internal_public_input_cost_per_byte: Some(0),
+                groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: Some(2),
+                groth16_verify_groth16_proof_internal_public_input_cost_per_byte: Some(2),
 
                 // hash::blake2b256
                 hash_blake2b256_cost_base: Some(52),
-                hash_blake2b256_data_cost_per_byte: Some(0),
-                hash_blake2b256_data_cost_per_block: Some(0),
+                hash_blake2b256_data_cost_per_byte: Some(2),
+                hash_blake2b256_data_cost_per_block: Some(2),
                 // hash::keccak256
                 hash_keccak256_cost_base: Some(52),
-                hash_keccak256_data_cost_per_byte: Some(0),
-                hash_keccak256_data_cost_per_block: Some(0),
+                hash_keccak256_data_cost_per_byte: Some(2),
+                hash_keccak256_data_cost_per_block: Some(2),
 
                 // hmac::hmac_sha3_256
                 hmac_hmac_sha3_256_cost_base: Some(52),
-                hmac_hmac_sha3_256_input_cost_per_byte: Some(0),
-                hmac_hmac_sha3_256_input_cost_per_block: Some(0),
+                hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
+                hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
