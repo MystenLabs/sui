@@ -569,16 +569,25 @@ impl ConsensusAdapter {
             Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
         let transaction_key = transaction.key();
-        let _monitor = CancelOnDrop(spawn_monitored_task!(async {
-            let mut i = 0u64;
-            loop {
-                i += 1;
-                const WARN_DELAY_S: u64 = 30;
-                tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
-                let total_wait = i * WARN_DELAY_S;
-                warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
-            }
-        }));
+        // Log warnings for capability or end of publish transactions that fail to get sequenced
+        let _monitor = if matches!(
+            transaction.kind,
+            ConsensusTransactionKind::EndOfPublish(_)
+                | ConsensusTransactionKind::CapabilityNotification(_)
+        ) {
+            Some(CancelOnDrop(spawn_monitored_task!(async {
+                let mut i = 0u64;
+                loop {
+                    i += 1;
+                    const WARN_DELAY_S: u64 = 30;
+                    tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
+                    let total_wait = i * WARN_DELAY_S;
+                    warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
+                }
+            })))
+        } else {
+            None
+        };
         if let Some(processed_waiter) = processed_waiter {
             debug!("Submitting {transaction_key:?} to consensus");
 
