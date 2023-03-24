@@ -108,13 +108,14 @@ module sui_system::sui_system_state_inner {
         /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
         /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
         /// It can be reset once we are able to successfully execute advance_epoch.
-        /// MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
+        /// The rest of the fields starting with `safe_mode_` are accmulated during safe mode
+        /// when advance_epoch_safe_mode is executed. They will eventually be processed once we
+        /// are out of safe mode.
         safe_mode: bool,
         safe_mode_storage_rewards: Balance<SUI>,
         safe_mode_computation_rewards: Balance<SUI>,
         safe_mode_storage_rebates: u64,
         safe_mode_non_refundable_storage_fee: u64,
-
 
         /// Unix timestamp of the current epoch start
         epoch_start_timestamp_ms: u64,
