@@ -19,14 +19,14 @@ PK_2="AOJbaGb622hGZlwJZ5SAh2rnr1WnR1TkhzIOMnya0QFm"
 PK_3="AI+TXXrZDfq8vG24cNyayJHaizYN4KxYHxpwiJhYdqxK"
 set -x
 
-serialized_tx="$($sui client serialize-transfer-sui --to $send_to  --sui-coin-object-id $object_id --gas-budget 1000 | sed 's/.*\://' | xargs)"
+serialized_tx="$($sui client serialize-transfer-sui --to $send_to  --sui-coin-object-id $object_id --gas-budget 10000 | sed 's/.*\://' | xargs)"
 
 sigs_1="$($sui keytool sign --address $addr_1 --data $serialized_tx | grep Serialized | cut -d'"' -f 2)"
 
 sigs_2="$($sui keytool sign --address $addr_2 --data $serialized_tx | grep Serialized | cut -d'"' -f 2)"
 
 
-SERIALIZED_MUSIG="$($sui keytool multi-sig-combine-partial-sig --pks $PK_1 $PK_2 $PK_3 --weights 1 1 1 --threshold 3 --sigs $sigs_1 $sigs_2 | grep serialized | cut -d'"' -f 2)"
+SERIALIZED_MUSIG="$($sui keytool multi-sig-combine-partial-sig --pks $PK_1 $PK_2 $PK_3 --weights 1 1 1 --threshold 2 --sigs $sigs_1 $sigs_2 | grep serialized | cut -d'"' -f 2)"
 
 
 $sui client execute-signed-tx --tx-bytes $serialized_tx --signatures $SERIALIZED_MUSIG
