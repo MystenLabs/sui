@@ -24,6 +24,7 @@ use test_utils::authority::{spawn_fullnode, spawn_test_authorities};
 use tokio::runtime::Builder;
 use tokio::sync::{oneshot, Barrier};
 use tracing::info;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 
 pub enum Env {
     // Mode where benchmark in run on a validator cluster that gets spun up locally
@@ -95,6 +96,12 @@ impl Env {
                 .context("Missing consensus config")?
                 .narwhal_config;
             parameters.batch_size = 12800;
+            node_config.db_checkpoint_config.perform_db_checkpoints_at_epoch_end = true;
+            node_config.db_checkpoint_config.object_store_config = Some(ObjectStoreConfig {
+                object_store: Some(ObjectStoreType::File),
+                directory: Some(PathBuf::from("/Users/sadhansood/checkpoints")),
+                ..Default::default()
+            });
             node_config.metrics_address = format!("127.0.0.1:{}", metric_port)
                 .parse()
                 .context("Failed to parse metric address")?;

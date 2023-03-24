@@ -12,7 +12,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache};
+use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, UniversalCompactOptions, DBCompactionStyle};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -1021,9 +1021,9 @@ impl DBBatch {
                 .rocksdb_batch_commit_bytes
                 .with_label_values(&[&db_name])
                 .observe(batch_size as f64);
-            // self.db_metrics
-            //     .write_perf_ctx_metrics
-            //     .report_metrics(&db_name);
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&db_name);
         }
         Ok(())
     }
@@ -1484,9 +1484,9 @@ where
                 .rocksdb_get_bytes
                 .with_label_values(&[&self.cf])
                 .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
-            // self.db_metrics
-            //     .read_perf_ctx_metrics
-            //     .report_metrics(&self.cf);
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         match res {
             Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
@@ -1517,9 +1517,9 @@ where
                 .rocksdb_get_bytes
                 .with_label_values(&[&self.cf])
                 .observe(res.as_ref().map_or(0.0, |v| v.len() as f64));
-            // self.db_metrics
-            //     .read_perf_ctx_metrics
-            //     .report_metrics(&self.cf);
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         match res {
             Some(data) => Ok(Some(data.to_vec())),
@@ -1548,9 +1548,9 @@ where
                 .rocksdb_put_bytes
                 .with_label_values(&[&self.cf])
                 .observe((key_buf.len() + value_buf.len()) as f64);
-            // self.db_metrics
-            //     .write_perf_ctx_metrics
-            //     .report_metrics(&self.cf);
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         self.rocksdb
             .put_cf(&self.cf(), &key_buf, &value_buf, &self.opts.writeopts())?;
@@ -1579,9 +1579,9 @@ where
                 .rocksdb_deletes
                 .with_label_values(&[&self.cf])
                 .inc();
-            // self.db_metrics
-            //     .write_perf_ctx_metrics
-            //     .report_metrics(&self.cf);
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&self.cf);
         }
         Ok(())
     }
@@ -1809,7 +1809,9 @@ pub fn base_db_options() -> DBOptions {
     // of shards, ie 2^10. Increase in case of lock contentions.
     opt.set_table_cache_num_shard_bits(10);
 
-    opt.set_compression_type(rocksdb::DBCompressionType::None);
+    opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
+    opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
+    opt.set_bottommost_zstd_max_train_bytes(0, true);
 
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
@@ -1831,7 +1833,7 @@ pub fn base_db_options() -> DBOptions {
     );
     // According to docs, we almost certainly want to set this to number of cores to not be bottlenecked
     // by rocksdb
-    opt.increase_parallelism(1);
+    opt.increase_parallelism(4);
     //opt.set_disable_auto_compactions(true);
     DBOptions {
         options: opt,
@@ -1931,8 +1933,13 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     // resolves the issue.
     //
     // This is a no-op in non-simulator builds.
-    nondeterministic!({
-        let options = prepare_db_options(&path, db_options, opt_cfs);
+    let result = nondeterministic!({
+        let mut options = prepare_db_options(&path, db_options, opt_cfs);
+        let mut universal = UniversalCompactOptions::default();
+        //options.set_compaction_style(DBCompactionStyle::Universal);
+        //options.set_universal_compaction_options(&universal);
+        //options.set_max_background_jobs(2);
+        //options.set_ratelimiter(100 * 1024 * 1024, 100_000, 10);
         let rocksdb = {
             rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
                 &options,
@@ -1949,7 +1956,8 @@ pub fn open_cf_opts<P: AsRef<Path>>(
                 db_path: PathBuf::from(path),
             },
         )))
-    })
+    });
+    result
 }
 
 /// Opens a database with options, and a number of column families with individual options that are created if they do not exist.
@@ -1963,7 +1971,14 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     let path = path.as_ref();
     // See comment above for explanation of why nondeterministic is necessary here.
     nondeterministic!({
-        let options = prepare_db_options(&path, db_options, opt_cfs);
+        let mut options = prepare_db_options(&path, db_options, opt_cfs);
+        let mut universal = UniversalCompactOptions::default();
+        //universal.set_min_merge_width(4);
+        //universal.set_size_ratio(20);
+        //options.set_compaction_style(DBCompactionStyle::Universal);
+        //options.set_universal_compaction_options(&universal);
+        //options.set_max_background_jobs(2);
+        //options.set_ratelimiter(100 * 1024 * 1024, 100_000, 10);
         let rocksdb = rocksdb::OptimisticTransactionDB::<MultiThreaded>::open_cf_descriptors(
             &options,
             path,

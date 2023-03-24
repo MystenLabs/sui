@@ -261,9 +261,9 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         request: anemo::Request<WorkerDeleteBatchesMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         for digest in request.into_body().digests {
-            self.store.remove(&digest).map_err(|e| {
-                anemo::rpc::Status::internal(format!("failed to remove from batch store: {e:?}"))
-            })?;
+            // self.store.remove(&digest).map_err(|e| {
+            //     anemo::rpc::Status::internal(format!("failed to remove from batch store: {e:?}"))
+            // })?;
         }
         Ok(anemo::Response::new(()))
     }
