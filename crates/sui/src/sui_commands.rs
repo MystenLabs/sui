@@ -388,6 +388,8 @@ async fn genesis(
                 keystore.add_key(gas_key)?;
                 keystore.save()?;
 
+                return Ok(());
+
                 // Make a new genesis config from the provided ip addresses.
                 GenesisConfig::new_for_benchmarks(&ips)
             } else if keystore_path.exists() {

@@ -221,7 +221,7 @@ impl SuiProtocol {
     pub fn configuration_files() -> Vec<PathBuf> {
         vec![
             Self::GENESIS_CONFIG_FILE.into(),
-            Self::GAS_KEYSTORE_FILE.into(),
+            //Self::GAS_KEYSTORE_FILE.into(),
         ]
     }
 

@@ -261,14 +261,14 @@ impl Orchestrator {
             connection.execute_from_path(command, repo_name)?;
         }
 
-        // // Generate the genesis configuration file and the keystore allowing access to gas objects.
-        // let command = self.protocol_commands.genesis_command(instances.iter());
-        // let repo_name = self.settings.repository_name();
-        // let ssh_command =
-        //     SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
-        // self.ssh_manager
-        //     .execute(instances.iter(), &ssh_command)
-        //     .await?;
+        // Generate the genesis configuration file and the keystore allowing access to gas objects.
+        let command = self.protocol_commands.genesis_command(instances.iter());
+        let repo_name = self.settings.repository_name();
+        let ssh_command =
+            SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
+        self.ssh_manager
+            .execute(instances.iter(), &ssh_command)
+            .await?;
 
         display::done();
         Ok(())
