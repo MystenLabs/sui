@@ -82,14 +82,14 @@ CREATE VIEW network_metrics AS
 SELECT (SELECT COUNT(1)::float8 / 10
         FROM transactions
         WHERE timestamp_ms > (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT - 10000) AS current_tps,
-       (SELECT tps_30_days FROM epoch_network_metrics)                                       AS tps_30_days,
+       (SELECT COALESCE(tps_30_days, 0) FROM epoch_network_metrics)                          AS tps_30_days,
        (SELECT COALESCE(SUM(command_count)::float8 / 10, 0)
         FROM transactions
         WHERE timestamp_ms > (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT - 10000) AS current_cps,
-       (SELECT cps_30_days FROM epoch_network_metrics)                                       AS cps_30_days,
-       (SELECT reltuples FROM pg_class WHERE relname = 'addresses')                          AS total_addresses,
-       (SELECT reltuples FROM pg_class WHERE relname = 'objects')                            AS total_objects,
-       (SELECT reltuples FROM pg_class WHERE relname = 'packages')                           AS total_packages,
+       (SELECT COALESCE(cps_30_days, 0) FROM epoch_network_metrics)                          AS cps_30_days,
+       (SELECT COUNT(1) FROM addresses)                                                      AS total_addresses,
+       (SELECT COUNT(1) FROM objects)                                                        AS total_objects,
+       (SELECT COUNT(1) FROM packages)                                                       AS total_packages,
        (SELECT MAX(epoch) FROM epochs)                                                       AS current_epoch,
        (SELECT MAX(sequence_number) FROM checkpoints)                                        AS current_checkpoint;
 
