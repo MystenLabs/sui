@@ -66,9 +66,11 @@ mod sim_only_tests {
     use sui_json_rpc::api::WriteApiClient;
     use sui_macros::*;
     use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::ObjectID;
+    use sui_types::id::ID;
     use sui_types::sui_system_state::{
-        SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_V1,
-        SUI_SYSTEM_STATE_SIM_TEST_V2,
+        get_validator_from_table, SuiSystemState, SuiSystemStateTrait,
+        SUI_SYSTEM_STATE_SIM_TEST_V1, SUI_SYSTEM_STATE_SIM_TEST_V2, SUI_SYSTEM_STATE_SIM_TEST_V3,
     };
     use sui_types::{
         base_types::SequenceNumber,
@@ -562,7 +564,7 @@ mod sim_only_tests {
     }
 
     #[sim_test]
-    async fn sui_system_state_upgrade_test() {
+    async fn sui_system_state_shallow_upgrade_test() {
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -572,7 +574,7 @@ mod sim_only_tests {
             .build()
             .await
             .unwrap();
-        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/upgrade"));
+        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/shallow_upgrade"));
         // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
         // but the system state object hasn't been upgraded yet.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
@@ -591,6 +593,60 @@ mod sim_only_tests {
             SUI_SYSTEM_STATE_SIM_TEST_V2
         );
         assert!(matches!(system_state, SuiSystemState::SimTestV2(_)));
+    }
+
+    #[sim_test]
+    async fn sui_system_state_deep_upgrade_test() {
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .with_objects([sui_system_package_object("mock_sui_systems/base")])
+            .build()
+            .await
+            .unwrap();
+        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/deep_upgrade"));
+        // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
+        // but the system state object hasn't been upgraded yet.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.protocol_version(), FINISH);
+        assert_eq!(
+            system_state.system_state_version(),
+            SUI_SYSTEM_STATE_SIM_TEST_V1
+        );
+        if let SuiSystemState::SimTestV1(inner) = system_state {
+            // Make sure we have 1 inactive validator for latter testing.
+            assert_eq!(inner.validators.inactive_validators.size, 1);
+            get_validator_from_table(
+                test_cluster.fullnode_handle.sui_node.state().db().as_ref(),
+                inner.validators.inactive_validators.id,
+                &ID::new(ObjectID::ZERO),
+            )
+            .unwrap();
+        } else {
+            panic!("Expecting SimTestV1 type");
+        }
+
+        // The system state object will be upgraded next time we execute advance_epoch transaction
+        // at epoch boundary.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        assert_eq!(
+            system_state.system_state_version(),
+            SUI_SYSTEM_STATE_SIM_TEST_V3
+        );
+        if let SuiSystemState::SimTestV3(inner) = system_state {
+            // Make sure we have 1 inactive validator for latter testing.
+            assert_eq!(inner.validators.inactive_validators.size, 1);
+            get_validator_from_table(
+                test_cluster.fullnode_handle.sui_node.state().db().as_ref(),
+                inner.validators.inactive_validators.id,
+                &ID::new(ObjectID::ZERO),
+            )
+            .unwrap();
+        } else {
+            panic!("Expecting SimTestV3 type");
+        }
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {

@@ -5,11 +5,14 @@ module sui_system::validator_wrapper {
     use sui::versioned::Versioned;
     use sui::versioned;
     use sui::tx_context::TxContext;
-    use sui_system::validator::Validator;
+    use sui_system::validator::{Validator, ValidatorV3};
+    use sui_system::validator;
 
+    friend sui_system::sui_system;
     friend sui_system::sui_system_state_inner;
 
     const VALIDATOR_VERSION_V1: u64 = 18446744073709551605;  // u64::MAX - 10
+    const VALIDATOR_VERSION_V3: u64 = 18446744073709551607;  // u64::MAX - 8
 
     const EInvalidVersion: u64 = 0;
 
@@ -26,13 +29,13 @@ module sui_system::validator_wrapper {
 
     /// This function should always return the latest supported version.
     /// If the inner version is old, we upgrade it lazily in-place.
-    public(friend) fun load_validator_maybe_upgrade(self: &mut ValidatorWrapper): &mut Validator {
+    public(friend) fun load_validator_maybe_upgrade(self: &mut ValidatorWrapper): &mut ValidatorV3 {
         upgrade_to_latest(self);
-        versioned::load_value_mut<Validator>(&mut self.inner)
+        versioned::load_value_mut(&mut self.inner)
     }
 
     /// Destroy the wrapper and retrieve the inner validator object.
-    public(friend) fun destroy(self: ValidatorWrapper): Validator {
+    public(friend) fun destroy(self: ValidatorWrapper): ValidatorV3 {
         upgrade_to_latest(&mut self);
         let ValidatorWrapper { inner } = self;
         versioned::destroy(inner)
@@ -40,8 +43,12 @@ module sui_system::validator_wrapper {
 
     fun upgrade_to_latest(self: &mut ValidatorWrapper) {
         let version = version(self);
-        // TODO: When new versions are added, we need to explicitly upgrade here.
-        assert!(version == VALIDATOR_VERSION_V1, EInvalidVersion);
+        if (version == VALIDATOR_VERSION_V1) {
+            let (v1, cap) = versioned::remove_value_for_upgrade(&mut self.inner);
+            let v3 = validator::v1_to_v3(v1);
+            versioned::upgrade(&mut self.inner, VALIDATOR_VERSION_V3, v3, cap);
+        };
+        assert!(version(self) == VALIDATOR_VERSION_V3, EInvalidVersion);
     }
 
     fun version(self: &ValidatorWrapper): u64 {

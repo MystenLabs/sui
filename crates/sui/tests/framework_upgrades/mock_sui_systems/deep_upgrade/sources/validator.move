@@ -33,6 +33,14 @@ module sui_system::validator {
         extra_fields: Bag,
     }
 
+    struct ValidatorV3 has store {
+        new_dummy_field: u64,
+        metadata: ValidatorMetadata,
+        voting_power: u64,
+        stake: Balance<SUI>,
+        extra_fields: Bag,
+    }
+
     public(friend) fun new(
         sui_address: address,
         protocol_pubkey_bytes: vector<u8>,
@@ -65,26 +73,19 @@ module sui_system::validator {
         }
     }
 
-    public(friend) fun new_dummy_inactive_validator(
-        ctx: &mut TxContext
-    ): Validator {
-        let metadata = ValidatorMetadata {
-            sui_address: @0x0,
-            protocol_pubkey_bytes: vector[],
-            network_pubkey_bytes: vector[],
-            worker_pubkey_bytes: vector[],
-            net_address: string::utf8(vector[]),
-            p2p_address: string::utf8(vector[]),
-            primary_address: string::utf8(vector[]),
-            worker_address: string::utf8(vector[]),
-            extra_fields: bag::new(ctx),
-        };
-
-        Validator {
+    public(friend) fun v1_to_v3(v1: Validator): ValidatorV3 {
+        let Validator {
             metadata,
-            voting_power: 0,
-            stake: balance::zero(),
-            extra_fields: bag::new(ctx),
+            voting_power,
+            stake,
+            extra_fields,
+        } = v1;
+        ValidatorV3 {
+            new_dummy_field: 100,
+            metadata,
+            voting_power,
+            stake,
+            extra_fields,
         }
     }
 }
