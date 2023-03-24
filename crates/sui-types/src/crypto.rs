@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
-use derive_more::From;
+use derive_more::{AsMut, AsRef, From};
 use eyre::eyre;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
@@ -795,7 +795,9 @@ impl SuiPublicKey for BLS12381PublicKey {
 //
 
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Ed25519SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -820,18 +822,6 @@ impl SuiPublicKey for Ed25519PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::ED25519;
 }
 
-impl AsRef<[u8]> for Ed25519SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Ed25519SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
-}
-
 impl ToFromBytes for Ed25519SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         if bytes.len() != Self::LENGTH {
@@ -853,7 +843,9 @@ impl Signer<Signature> for Ed25519KeyPair {
 // Secp256k1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Secp256k1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -869,18 +861,6 @@ impl SuiSignatureInner for Secp256k1SuiSignature {
 
 impl SuiPublicKey for Secp256k1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256k1;
-}
-
-impl AsRef<[u8]> for Secp256k1SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Secp256k1SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
 }
 
 impl ToFromBytes for Secp256k1SuiSignature {
@@ -904,7 +884,9 @@ impl Signer<Signature> for Secp256k1KeyPair {
 // Secp256r1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Secp256r1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -920,18 +902,6 @@ impl SuiSignatureInner for Secp256r1SuiSignature {
 
 impl SuiPublicKey for Secp256r1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256r1;
-}
-
-impl AsRef<[u8]> for Secp256r1SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Secp256r1SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
 }
 
 impl ToFromBytes for Secp256r1SuiSignature {
