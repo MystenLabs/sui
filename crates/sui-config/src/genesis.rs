@@ -60,6 +60,8 @@ use sui_types::{
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 
+const MAX_VALIDATOR_METADATA_LENGTH: usize = 256;
+
 #[derive(Clone, Debug)]
 pub struct Genesis {
     checkpoint: CertifiedCheckpointSummary,
@@ -342,28 +344,51 @@ impl GenesisValidatorInfo {
         if !self.info.name.is_ascii() {
             bail!("name must be ascii");
         }
-        if self.info.name.len() > 128 {
-            bail!("name must be <= 128 bytes long");
+        if self.info.name.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("name must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
         }
 
         if !self.info.description.is_ascii() {
             bail!("description must be ascii");
         }
-        if self.info.description.len() > 150 {
-            bail!("description must be <= 150 bytes long");
+        if self.info.description.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("description must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
+        if self.info.image_url.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("image url must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
+        if self.info.project_url.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("project url must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
         }
 
         if !self.info.network_address.to_string().is_ascii() {
             bail!("network address must be ascii");
         }
+        if self.info.network_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("network address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
         if !self.info.p2p_address.to_string().is_ascii() {
             bail!("p2p address must be ascii");
         }
+        if self.info.p2p_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("p2p address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
         if !self.info.narwhal_primary_address.to_string().is_ascii() {
             bail!("primary address must be ascii");
         }
+        if self.info.narwhal_primary_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("primary address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
         if !self.info.narwhal_worker_address.to_string().is_ascii() {
             bail!("worker address must be ascii");
+        }
+        if self.info.narwhal_worker_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("worker address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
         }
 
         if let Err(e) = self.info.p2p_address.to_anemo_address() {
