@@ -13,6 +13,7 @@ module sui_system::sui_system_state_inner {
     use sui_system::validator_set::{Self, ValidatorSet};
     use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
     use sui_system::stake_subsidy::{Self, StakeSubsidy};
+    use sui_system::storage_fund::{Self, StorageFund};
     use sui::vec_map::{Self, VecMap};
     use sui::vec_set::{Self, VecSet};
     use std::option;
@@ -87,7 +88,7 @@ module sui_system::sui_system_state_inner {
         /// Contains all information about the validators.
         validators: ValidatorSet,
         /// The storage fund.
-        storage_fund: Balance<SUI>,
+        storage_fund: StorageFund,
         /// A list of system config parameters.
         parameters: SystemParameters,
         /// The reference gas price for the current epoch.
@@ -112,6 +113,7 @@ module sui_system::sui_system_state_inner {
         safe_mode_storage_rewards: Balance<SUI>,
         safe_mode_computation_rewards: Balance<SUI>,
         safe_mode_storage_rebates: u64,
+        safe_mode_non_refundable_storage_fee: u64,
 
 
         /// Unix timestamp of the current epoch start
@@ -155,7 +157,7 @@ module sui_system::sui_system_state_inner {
     /// This function will be called only once in genesis.
     public(friend) fun create(
         validators: vector<Validator>,
-        storage_fund: Balance<SUI>,
+        initial_storage_fund: Balance<SUI>,
         protocol_version: u64,
         epoch_start_timestamp_ms: u64,
         parameters: SystemParameters,
@@ -170,7 +172,7 @@ module sui_system::sui_system_state_inner {
             protocol_version,
             system_state_version: genesis_system_state_version(),
             validators,
-            storage_fund,
+            storage_fund: storage_fund::new(initial_storage_fund),
             parameters,
             reference_gas_price,
             validator_report_records: vec_map::empty(),
@@ -179,6 +181,7 @@ module sui_system::sui_system_state_inner {
             safe_mode_storage_rewards: balance::zero(),
             safe_mode_computation_rewards: balance::zero(),
             safe_mode_storage_rebates: 0,
+            safe_mode_non_refundable_storage_fee: 0,
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),
         };
@@ -685,6 +688,7 @@ module sui_system::sui_system_state_inner {
         storage_reward: Balance<SUI>,
         computation_reward: Balance<SUI>,
         storage_rebate_amount: u64,
+        non_refundable_storage_fee_amount: u64,
         storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
@@ -708,9 +712,11 @@ module sui_system::sui_system_state_inner {
         balance::join(&mut computation_reward, safe_mode_computation_rewards);
         storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
         self.safe_mode_storage_rebates = 0;
+        non_refundable_storage_fee_amount = non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
+        self.safe_mode_non_refundable_storage_fee = 0;
 
         let total_validators_stake = validator_set::total_stake(&self.validators);
-        let storage_fund_balance = balance::value(&self.storage_fund);
+        let storage_fund_balance = storage_fund::total_balance(&self.storage_fund);
         let total_stake = storage_fund_balance + total_validators_stake;
 
         let storage_charge = balance::value(&storage_reward);
@@ -730,8 +736,6 @@ module sui_system::sui_system_state_inner {
         let total_stake_u128 = (total_stake as u128);
         let computation_charge_u128 = (computation_charge as u128);
 
-        balance::join(&mut self.storage_fund, storage_reward);
-
         let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
         let storage_fund_reward = balance::split(&mut computation_reward, (storage_fund_reward_amount as u64));
         let storage_fund_reinvestment_amount =
@@ -740,7 +744,6 @@ module sui_system::sui_system_state_inner {
             &mut storage_fund_reward,
             (storage_fund_reinvestment_amount as u64),
         );
-        balance::join(&mut self.storage_fund, storage_fund_reinvestment);
 
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
@@ -761,6 +764,8 @@ module sui_system::sui_system_state_inner {
             ctx,
         );
 
+        let new_total_stake = validator_set::total_stake(&self.validators);
+
         let computation_reward_amount_after_distribution = balance::value(&computation_reward);
         let storage_fund_reward_amount_after_distribution = balance::value(&storage_fund_reward);
         let computation_reward_distributed = computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
@@ -773,15 +778,19 @@ module sui_system::sui_system_state_inner {
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `storage_fund_reward` and `computation_reward`.
         // All of these go to the storage fund.
-        let leftover_storage_fund_inflow = balance::value(&storage_fund_reward) + balance::value(&computation_reward);
-        balance::join(&mut self.storage_fund, storage_fund_reward);
-        balance::join(&mut self.storage_fund, computation_reward);
+        let leftover_staking_rewards = storage_fund_reward;
+        balance::join(&mut leftover_staking_rewards, computation_reward);
+        let leftover_storage_fund_inflow = balance::value(&leftover_staking_rewards);
 
-        // Destroy the storage rebate.
-        assert!(balance::value(&self.storage_fund) >= storage_rebate_amount, 0);
-        let storage_rebate = balance::split(&mut self.storage_fund, storage_rebate_amount);
-
-        let new_total_stake = validator_set::total_stake(&self.validators);
+        let refunded_storage_rebate =
+            storage_fund::advance_epoch(
+                &mut self.storage_fund,
+                storage_reward,
+                storage_fund_reinvestment,
+                leftover_staking_rewards,
+                storage_rebate_amount,
+                non_refundable_storage_fee_amount,
+            );
 
         event::emit(
             SystemEpochInfoEvent {
@@ -792,7 +801,7 @@ module sui_system::sui_system_state_inner {
                 storage_charge,
                 storage_fund_reinvestment: (storage_fund_reinvestment_amount as u64),
                 storage_rebate: storage_rebate_amount,
-                storage_fund_balance: balance::value(&self.storage_fund),
+                storage_fund_balance: storage_fund::total_balance(&self.storage_fund),
                 stake_subsidy_amount,
                 total_gas_fees: computation_charge,
                 total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
@@ -804,7 +813,10 @@ module sui_system::sui_system_state_inner {
         assert!(self.safe_mode_storage_rebates == 0
             && balance::value(&self.safe_mode_storage_rewards) == 0
             && balance::value(&self.safe_mode_computation_rewards) == 0, ESafeModeGasNotProcessed);
-        storage_rebate
+
+        // Return the storage rebate split from storage fund that's already refunded to the transaction senders.
+        // This will be burnt at the last step of epoch change programmable transaction.
+        refunded_storage_rebate
     }
 
     /// An extremely simple version of advance_epoch.
@@ -820,6 +832,7 @@ module sui_system::sui_system_state_inner {
         storage_reward: Balance<SUI>,
         computation_reward: Balance<SUI>,
         storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
@@ -832,6 +845,7 @@ module sui_system::sui_system_state_inner {
         balance::join(&mut self.safe_mode_storage_rewards, storage_reward);
         balance::join(&mut self.safe_mode_computation_rewards, computation_reward);
         self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
+        self.safe_mode_non_refundable_storage_fee = self.safe_mode_non_refundable_storage_fee + non_refundable_storage_fee;
     }
 
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
@@ -888,8 +902,12 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    public(friend) fun get_storage_fund_balance(self: &SuiSystemStateInner): u64 {
-        balance::value(&self.storage_fund)
+    public(friend) fun get_storage_fund_total_balance(self: &SuiSystemStateInner): u64 {
+        storage_fund::total_balance(&self.storage_fund)
+    }
+
+    public(friend) fun get_storage_fund_object_rebates(self: &SuiSystemStateInner): u64 {
+        storage_fund::total_object_storage_rebates(&self.storage_fund)
     }
 
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.

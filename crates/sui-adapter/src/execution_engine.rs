@@ -53,6 +53,7 @@ pub struct AdvanceEpochParams {
     pub storage_charge: u64,
     pub computation_charge: u64,
     pub storage_rebate: u64,
+    pub non_refundable_storage_fee: u64,
     pub storage_fund_reinvest_rate: u64,
     pub reward_slashing_rate: u64,
     pub epoch_start_timestamp_ms: u64,
@@ -357,6 +358,7 @@ pub fn construct_advance_epoch_pt(
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
+        CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_fund_reinvest_rate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.reward_slashing_rate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap()),
@@ -415,6 +417,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
+        CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
     ]
     .into_iter()
     .map(|a| builder.input(a))
@@ -457,6 +460,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         storage_charge: change_epoch.storage_charge,
         computation_charge: change_epoch.computation_charge,
         storage_rebate: change_epoch.storage_rebate,
+        non_refundable_storage_fee: change_epoch.non_refundable_storage_fee,
         storage_fund_reinvest_rate: protocol_config.storage_fund_reinvest_rate(),
         reward_slashing_rate: protocol_config.reward_slashing_rate(),
         epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,

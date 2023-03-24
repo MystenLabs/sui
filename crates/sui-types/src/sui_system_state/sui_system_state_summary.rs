@@ -28,8 +28,11 @@ pub struct SuiSystemStateSummary {
     pub protocol_version: u64,
     /// The current version of the system state data structure type.
     pub system_state_version: u64,
-    /// The storage fund balance.
-    pub storage_fund: u64,
+    /// The storage rebates of all the objects on-chain stored in the storage fund.
+    pub storage_fund_total_object_storage_rebates: u64,
+    /// The non-refundable portion of the storage fund coming from storage reinvestment, non-refundable
+    /// storage rebates and any leftover staking rewards.
+    pub storage_fund_non_refundable_balance: u64,
     /// The reference gas price for the current epoch.
     pub reference_gas_price: u64,
     /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
@@ -42,6 +45,8 @@ pub struct SuiSystemStateSummary {
     pub safe_mode_computation_rewards: u64,
     /// Amount of storage rebates accumulated (and not yet burned) during safe mode.
     pub safe_mode_storage_rebates: u64,
+    /// Amount of non-refundable storage fee accumulated during safe mode.
+    pub safe_mode_non_refundable_storage_fee: u64,
     /// Unix timestamp of the current epoch start
     pub epoch_start_timestamp_ms: u64,
 
@@ -224,12 +229,14 @@ impl Default for SuiSystemStateSummary {
             epoch: 0,
             protocol_version: 1,
             system_state_version: 1,
-            storage_fund: 0,
+            storage_fund_total_object_storage_rebates: 0,
+            storage_fund_non_refundable_balance: 0,
             reference_gas_price: 1,
             safe_mode: false,
             safe_mode_storage_rewards: 0,
             safe_mode_computation_rewards: 0,
             safe_mode_storage_rebates: 0,
+            safe_mode_non_refundable_storage_fee: 0,
             epoch_start_timestamp_ms: 0,
             epoch_duration_ms: 0,
             stake_subsidy_start_epoch: 0,

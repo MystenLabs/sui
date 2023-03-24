@@ -875,7 +875,14 @@ impl Builder {
 
         assert_eq!(system_state.epoch, 0);
         assert_eq!(system_state.protocol_version, protocol_version);
-        assert_eq!(system_state.storage_fund.value(), 0);
+        assert_eq!(system_state.storage_fund.non_refundable_balance.value(), 0);
+        assert_eq!(
+            system_state
+                .storage_fund
+                .total_object_storage_rebates
+                .value(),
+            0
+        );
 
         assert_eq!(system_state.parameters.epoch_duration_ms, epoch_duration_ms);
         assert_eq!(

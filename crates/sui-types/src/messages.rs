@@ -147,8 +147,10 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
-    /// The total amount of storage rebate refunded during the epoch.
+    /// The amount of storage rebate refunded to the txn senders.
     pub storage_rebate: u64,
+    /// The non-refundable storage fee.
+    pub non_refundable_storage_fee: u64,
     /// Unix timestamp when epoch started
     pub epoch_start_timestamp_ms: u64,
     /// System packages (specifically framework and move stdlib) that are written before the new
@@ -1916,6 +1918,7 @@ impl VerifiedTransaction {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         epoch_start_timestamp_ms: u64,
         system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
     ) -> Self {
@@ -1925,6 +1928,7 @@ impl VerifiedTransaction {
             storage_charge,
             computation_charge,
             storage_rebate,
+            non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             system_packages,
         }

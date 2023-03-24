@@ -52,6 +52,7 @@ module sui_system::sui_system {
         new_epoch: u64,
         next_protocol_version: u64,
         storage_rebate: u64,
+        _non_refundable_storage_fee: u64,
         _storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                          // into storage fund, in basis point.
         _reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
@@ -80,6 +81,7 @@ module sui_system::sui_system {
         new_epoch: u64,
         next_protocol_version: u64,
         storage_rebate: u64,
+        _non_refundable_storage_fee: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
