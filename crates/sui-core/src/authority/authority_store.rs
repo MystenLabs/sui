@@ -319,7 +319,7 @@ impl AuthorityStore {
             digests.iter().map(|d| (*d, (epoch, sequence))),
         )?;
         batch.write()?;
-        debug!("Transactions {digests:?} finalized at checkpoint {sequence} epoch {epoch}");
+        trace!("Transactions {digests:?} finalized at checkpoint {sequence} epoch {epoch}");
         Ok(())
     }
 
@@ -902,7 +902,7 @@ impl AuthorityStore {
         // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
         let _mutexes = self.acquire_locks(owned_input_objects).await;
 
-        debug!(?owned_input_objects, "acquire_locks");
+        trace!(?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
 
         let locks = self
@@ -941,8 +941,8 @@ impl AuthorityStore {
                 // If the lock is set in a previous epoch, it's ok to override it.
                 if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
                     // TODO: add metrics here
-                    debug!(prev_tx_digest =? previous_tx_digest,
-                          cur_tx_digest =? tx_digest,
+                    info!(prev_tx_digest = ?previous_tx_digest,
+                          cur_tx_digest = ?tx_digest,
                           "Cannot acquire lock: conflicting transaction!");
                     return Err(SuiError::ObjectLockConflict {
                         obj_ref: *obj_ref,
@@ -953,7 +953,7 @@ impl AuthorityStore {
                     // Exactly the same epoch and same transaction, nothing to lock here.
                     continue;
                 } else {
-                    debug!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
+                    info!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
                     // Fall through and override the old lock.
                 }
             }
@@ -1073,7 +1073,7 @@ impl AuthorityStore {
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult<DBBatch> {
-        debug!(?objects, "initialize_locks");
+        trace!(?objects, "initialize_locks");
 
         let locks = self
             .perpetual_tables
@@ -1108,7 +1108,7 @@ impl AuthorityStore {
 
     /// Removes locks for a given list of ObjectRefs.
     fn delete_locks(&self, write_batch: DBBatch, objects: &[ObjectRef]) -> SuiResult<DBBatch> {
-        debug!(?objects, "delete_locks");
+        trace!(?objects, "delete_locks");
         Ok(write_batch.delete_batch(
             &self.perpetual_tables.owned_object_transaction_locks,
             objects.iter(),
@@ -1163,6 +1163,8 @@ impl AuthorityStore {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
             return Ok(())
         };
+
+        info!(?tx_digest, ?effects, "reverting transaction");
 
         // We should never be reverting shared object transactions.
         assert!(effects.shared_objects().is_empty());
