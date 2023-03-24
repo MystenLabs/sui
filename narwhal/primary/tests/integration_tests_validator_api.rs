@@ -48,7 +48,7 @@ async fn test_get_collections() {
     let worker_keypair = author.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let mut header_digests = Vec::new();
     // Blocks/Collections
@@ -243,7 +243,7 @@ async fn test_remove_collections() {
     let worker_keypair = author.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
     let mut header_digests = Vec::new();
     // Blocks/Collections
     let mut collection_digests = Vec::new();
@@ -470,8 +470,8 @@ async fn test_read_causal_signed_certificates() {
     let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
@@ -698,8 +698,8 @@ async fn test_read_causal_unsigned_certificates() {
     let network_keypair_2 = authority_2.network_keypair().copy();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
@@ -936,8 +936,8 @@ async fn test_get_collections_with_missing_certificates() {
     };
 
     // AND create separate data stores for the 2 primaries
-    let store_primary_1 = NodeStorage::reopen(temp_dir());
-    let store_primary_2 = NodeStorage::reopen(temp_dir());
+    let store_primary_1 = NodeStorage::reopen(temp_dir(), None);
+    let store_primary_2 = NodeStorage::reopen(temp_dir(), None);
 
     // The certificate_1 will be stored in primary 1
     let (certificate_1, batch_1) = fixture_certificate(

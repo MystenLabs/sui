@@ -74,7 +74,7 @@ async fn test_rounds_errors() {
     };
 
     // AND create separate data stores
-    let store_primary = NodeStorage::reopen(temp_dir());
+    let store_primary = NodeStorage::reopen(temp_dir(), None);
 
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) =
@@ -183,7 +183,7 @@ async fn test_rounds_return_successful_response() {
     };
 
     // AND create separate data stores
-    let store_primary = NodeStorage::reopen(temp_dir());
+    let store_primary = NodeStorage::reopen(temp_dir(), None);
 
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) =
@@ -284,8 +284,8 @@ async fn test_node_read_causal_signed_certificates() {
     let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 

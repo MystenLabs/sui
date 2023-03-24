@@ -3,8 +3,12 @@
 use crate::payload_store::PayloadStore;
 use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
-use crate::{CertificateStore, HeaderStore, ProposerStore};
+use crate::{
+    CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, HeaderStore,
+    ProposerStore,
+};
 use config::{AuthorityIdentifier, WorkerId};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 use store::metrics::SamplingInterval;
@@ -25,7 +29,7 @@ pub struct NodeStorage {
     pub proposer_store: ProposerStore,
     pub vote_digest_store: VoteDigestStore,
     pub header_store: HeaderStore,
-    pub certificate_store: CertificateStore,
+    pub certificate_store: CertificateStore<CertificateStoreCache>,
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
@@ -44,8 +48,16 @@ impl NodeStorage {
     pub(crate) const LAST_COMMITTED_CF: &'static str = "last_committed";
     pub(crate) const SUB_DAG_INDEX_CF: &'static str = "sub_dag";
 
+    // 100 nodes * 60 rounds (assuming 1 round/sec this will hold data for about the last 1 minute
+    // which should be more than enough for advancing the protocol and also help other nodes)
+    // TODO: take into account committee size instead of having fixed 100.
+    pub(crate) const CERTIFICATE_STORE_CACHE_SIZE: usize = 100 * 60;
+
     /// Open or reopen all the storage of the node.
-    pub fn reopen<Path: AsRef<std::path::Path> + Send>(store_path: Path) -> Self {
+    pub fn reopen<Path: AsRef<std::path::Path> + Send>(
+        store_path: Path,
+        certificate_store_cache_metrics: Option<CertificateStoreCacheMetrics>,
+    ) -> Self {
         let mut metrics_conf = MetricConf::with_db_name("consensus_epoch");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
         let rocksdb = open_cf(
@@ -94,10 +106,16 @@ impl NodeStorage {
         let proposer_store = ProposerStore::new(last_proposed_map);
         let vote_digest_store = VoteDigestStore::new(votes_map);
         let header_store = HeaderStore::new(header_map);
-        let certificate_store = CertificateStore::new(
+
+        let certificate_store_cache = CertificateStoreCache::new(
+            NonZeroUsize::new(Self::CERTIFICATE_STORE_CACHE_SIZE).unwrap(),
+            certificate_store_cache_metrics,
+        );
+        let certificate_store = CertificateStore::<CertificateStoreCache>::new(
             certificate_map,
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
+            certificate_store_cache,
         );
         let payload_store = PayloadStore::new(payload_map);
         let batch_store = batch_map;

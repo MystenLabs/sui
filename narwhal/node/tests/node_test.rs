@@ -35,7 +35,7 @@ async fn simple_primary_worker_node_start_stop() {
     let key_pair = authority.keypair();
     let network_key_pair = authority.network_keypair();
 
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let (tx_confirmation, _rx_confirmation) = channel(10);
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
@@ -114,7 +114,7 @@ async fn primary_node_restart() {
     let key_pair = authority.keypair();
     let network_key_pair = authority.network_keypair();
 
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let (tx_confirmation, _rx_confirmation) = channel(10);
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));

@@ -1,7 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use fastcrypto::hash::Hash;
+use lru::LruCache;
+use parking_lot::Mutex;
+use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use std::collections::HashMap;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
+use tap::Tap;
 
 use crate::NotifySubscribers;
 use config::AuthorityIdentifier;
@@ -11,6 +18,181 @@ use store::{
 };
 use types::{Certificate, CertificateDigest, Round, StoreResult};
 
+#[derive(Clone)]
+pub struct CertificateStoreCacheMetrics {
+    hit: IntCounter,
+    miss: IntCounter,
+}
+
+impl CertificateStoreCacheMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            hit: register_int_counter_with_registry!(
+                "certificate_store_cache_hit",
+                "The number of hits in the cache",
+                registry
+            )
+            .unwrap(),
+            miss: register_int_counter_with_registry!(
+                "certificate_store_cache_miss",
+                "The number of miss in the cache",
+                registry
+            )
+            .unwrap(),
+        }
+    }
+}
+
+/// A cache trait to be used as temporary in-memory store when accessing the underlying
+/// certificate_store. Using the cache allows to skip rocksdb access giving us benefits
+/// both on less disk access (when value not in db's cache) and also avoiding any additional
+/// deserialization costs.
+pub trait Cache {
+    fn write(&self, certificate: Certificate);
+    fn write_all(&self, certificate: Vec<Certificate>);
+    fn read(&self, digest: &CertificateDigest) -> Option<Certificate>;
+
+    /// Returns the certificates by performing a look up in the cache. The method is expected to
+    /// always return a result for every provided digest (when found will be Some, None otherwise)
+    /// and in the same order.
+    fn read_all(
+        &self,
+        digests: Vec<CertificateDigest>,
+    ) -> Vec<(CertificateDigest, Option<Certificate>)>;
+    fn contains(&self, digest: &CertificateDigest) -> bool;
+    fn remove(&self, digest: &CertificateDigest);
+    fn remove_all(&self, digests: Vec<CertificateDigest>);
+}
+
+/// An LRU cache for the certificate store.
+#[derive(Clone)]
+pub struct CertificateStoreCache {
+    cache: Arc<Mutex<LruCache<CertificateDigest, Certificate>>>,
+    metrics: Option<CertificateStoreCacheMetrics>,
+}
+
+impl CertificateStoreCache {
+    pub fn new(size: NonZeroUsize, metrics: Option<CertificateStoreCacheMetrics>) -> Self {
+        Self {
+            cache: Arc::new(Mutex::new(LruCache::new(size))),
+            metrics,
+        }
+    }
+
+    fn report_result(&self, is_hit: bool) {
+        if let Some(metrics) = self.metrics.as_ref() {
+            if is_hit {
+                metrics.hit.inc()
+            } else {
+                metrics.miss.inc()
+            }
+        }
+    }
+}
+
+impl Cache for CertificateStoreCache {
+    fn write(&self, certificate: Certificate) {
+        let mut guard = self.cache.lock();
+        guard.put(certificate.digest(), certificate);
+    }
+
+    fn write_all(&self, certificate: Vec<Certificate>) {
+        let mut guard = self.cache.lock();
+        for cert in certificate {
+            guard.put(cert.digest(), cert);
+        }
+    }
+
+    /// Fetches the certificate for the provided digest. This method will update the LRU record
+    /// and mark it as "last accessed".
+    fn read(&self, digest: &CertificateDigest) -> Option<Certificate> {
+        let mut guard = self.cache.lock();
+        guard
+            .get(digest)
+            .cloned()
+            .tap(|v| self.report_result(v.is_some()))
+    }
+
+    /// Fetches the certificates for the provided digests. This method will update the LRU records
+    /// and mark them as "last accessed".
+    fn read_all(
+        &self,
+        digests: Vec<CertificateDigest>,
+    ) -> Vec<(CertificateDigest, Option<Certificate>)> {
+        let mut guard = self.cache.lock();
+        digests
+            .into_iter()
+            .map(move |id| {
+                (
+                    id,
+                    guard
+                        .get(&id)
+                        .cloned()
+                        .tap(|v| self.report_result(v.is_some())),
+                )
+            })
+            .collect()
+    }
+
+    /// Checks whether the value exists in the LRU cache. The method does not update the LRU record, thus
+    /// it will not count as a "last access" for the provided digest.
+    fn contains(&self, digest: &CertificateDigest) -> bool {
+        let guard = self.cache.lock();
+        guard
+            .contains(digest)
+            .tap(|result| self.report_result(*result))
+    }
+
+    fn remove(&self, digest: &CertificateDigest) {
+        let mut guard = self.cache.lock();
+        let _ = guard.pop(digest);
+    }
+
+    fn remove_all(&self, digests: Vec<CertificateDigest>) {
+        let mut guard = self.cache.lock();
+        for digest in digests {
+            let _ = guard.pop(&digest);
+        }
+    }
+}
+
+/// An implementation that basically disables the caching functionality when used for CertificateStore.
+#[derive(Clone)]
+struct NoCache {}
+
+impl Cache for NoCache {
+    fn write(&self, _certificate: Certificate) {
+        // no-op
+    }
+
+    fn write_all(&self, _certificate: Vec<Certificate>) {
+        // no-op
+    }
+
+    fn read(&self, _digest: &CertificateDigest) -> Option<Certificate> {
+        None
+    }
+
+    fn read_all(
+        &self,
+        digests: Vec<CertificateDigest>,
+    ) -> Vec<(CertificateDigest, Option<Certificate>)> {
+        digests.into_iter().map(|digest| (digest, None)).collect()
+    }
+
+    fn contains(&self, _digest: &CertificateDigest) -> bool {
+        false
+    }
+
+    fn remove(&self, _digest: &CertificateDigest) {
+        // no-op
+    }
+
+    fn remove_all(&self, _digests: Vec<CertificateDigest>) {
+        // no-op
+    }
+}
+
 /// The main storage when we have to deal with certificates. It maintains
 /// two storages, one main which saves the certificates by their ids, and a
 /// secondary one which acts as an index to allow us fast retrieval based
@@ -19,7 +201,7 @@ use types::{Certificate, CertificateDigest, Round, StoreResult};
 /// `notify_read` someone can wait to hear until a certificate by a specific
 /// id has been written in storage.
 #[derive(Clone)]
-pub struct CertificateStore {
+pub struct CertificateStore<T: Cache = CertificateStoreCache> {
     /// Holds the certificates by their digest id
     certificates_by_id: DBMap<CertificateDigest, Certificate>,
     /// A secondary index that keeps the certificate digest ids
@@ -34,19 +216,23 @@ pub struct CertificateStore {
     certificate_id_by_origin: DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
     /// The pub/sub to notify for a write that happened for a certificate digest id
     notify_subscribers: NotifySubscribers<CertificateDigest, Certificate>,
+    /// An LRU cache to keep recent certificates
+    cache: Arc<T>,
 }
 
-impl CertificateStore {
+impl<T: Cache> CertificateStore<T> {
     pub fn new(
         certificates_by_id: DBMap<CertificateDigest, Certificate>,
         certificate_id_by_round: DBMap<(Round, AuthorityIdentifier), CertificateDigest>,
         certificate_id_by_origin: DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
-    ) -> CertificateStore {
+        certificate_store_cache: T,
+    ) -> CertificateStore<T> {
         Self {
             certificates_by_id,
             certificate_id_by_round,
             certificate_id_by_origin,
             notify_subscribers: NotifySubscribers::new(),
+            cache: Arc::new(certificate_store_cache),
         }
     }
 
@@ -84,6 +270,9 @@ impl CertificateStore {
         if result.is_ok() {
             self.notify_subscribers.notify(&id, &certificate);
         }
+
+        // insert in cache
+        self.cache.write(certificate);
 
         result
     }
@@ -131,11 +320,18 @@ impl CertificateStore {
         let result = batch.write();
 
         if result.is_ok() {
-            for (_id, certificate) in certificates {
+            for (_id, certificate) in &certificates {
                 self.notify_subscribers
-                    .notify(&certificate.digest(), &certificate);
+                    .notify(&certificate.digest(), certificate);
             }
         }
+
+        self.cache.write_all(
+            certificates
+                .into_iter()
+                .map(|(_, certificate)| certificate)
+                .collect(),
+        );
 
         result
     }
@@ -148,6 +344,10 @@ impl CertificateStore {
                 "Injected error in certificate store read"
             )))
         });
+
+        if let Some(certificate) = self.cache.read(&id) {
+            return Ok(Some(certificate));
+        }
 
         self.certificates_by_id.get(&id)
     }
@@ -166,7 +366,7 @@ impl CertificateStore {
         });
 
         match self.certificate_id_by_origin.get(&(origin, round))? {
-            Some(d) => self.certificates_by_id.get(&d),
+            Some(d) => self.read(d),
             None => Ok(None),
         }
     }
@@ -179,6 +379,10 @@ impl CertificateStore {
                 "Injected error in certificate store contains_digest"
             )))
         });
+
+        if self.cache.contains(id) {
+            return Ok(true);
+        }
 
         self.certificates_by_id.contains_key(id)
     }
@@ -195,7 +399,31 @@ impl CertificateStore {
             )))
         });
 
-        self.certificates_by_id.multi_get(ids)
+        let mut found = HashMap::new();
+        let mut missing = Vec::new();
+
+        // first find whatever we can from our local cache
+        let ids: Vec<CertificateDigest> = ids.into_iter().collect();
+        for (id, certificate) in self.cache.read_all(ids.clone()) {
+            if let Some(certificate) = certificate {
+                found.insert(id, certificate.clone());
+            } else {
+                missing.push(id);
+            }
+        }
+
+        // then fallback for all the misses on the storage
+        let from_store = self.certificates_by_id.multi_get(&missing)?;
+        from_store
+            .iter()
+            .zip(missing)
+            .for_each(|(certificate, id)| {
+                if let Some(certificate) = certificate {
+                    found.insert(id, certificate.clone());
+                }
+            });
+
+        Ok(ids.into_iter().map(|id| found.get(&id).cloned()).collect())
     }
 
     /// Waits to get notified until the requested certificate becomes available
@@ -241,7 +469,13 @@ impl CertificateStore {
         batch = batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
 
         // execute the batch (atomically) and return the result
-        batch.write()
+        let result = batch.write();
+
+        if result.is_ok() {
+            self.cache.remove(&id);
+        }
+
+        result
     }
 
     /// Deletes multiple certificates in an atomic way.
@@ -264,10 +498,16 @@ impl CertificateStore {
         batch = batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
 
         // delete the certificates by its ids
-        batch = batch.delete_batch(&self.certificates_by_id, ids)?;
+        batch = batch.delete_batch(&self.certificates_by_id, ids.clone())?;
 
         // execute the batch (atomically) and return the result
-        batch.write()
+        let result = batch.write();
+
+        if result.is_ok() {
+            self.cache.remove_all(ids);
+        }
+
+        result
     }
 
     /// Retrieves all the certificates with round >= the provided round.
@@ -375,7 +615,7 @@ impl CertificateStore {
             .next()
         {
             if name == origin {
-                return self.certificates_by_id.get(&digest);
+                return self.read(digest);
             }
         }
         Ok(None)
@@ -447,10 +687,12 @@ impl CertificateStore {
 
 #[cfg(test)]
 mod test {
-    use crate::certificate_store::CertificateStore;
+    use crate::certificate_store::{CertificateStore, NoCache};
+    use crate::{Cache, CertificateStoreCache};
     use config::AuthorityIdentifier;
     use fastcrypto::hash::Hash;
     use futures::future::join_all;
+    use std::num::NonZeroUsize;
     use std::{
         collections::{BTreeSet, HashSet},
         time::Instant,
@@ -464,6 +706,38 @@ mod test {
     use types::{Certificate, CertificateDigest, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
+        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) =
+            create_db_maps(path);
+
+        let store_cache = CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None);
+
+        CertificateStore::new(
+            certificate_map,
+            certificate_id_by_round_map,
+            certificate_id_by_origin_map,
+            store_cache,
+        )
+    }
+
+    fn new_store_no_cache(path: std::path::PathBuf) -> CertificateStore<NoCache> {
+        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) =
+            create_db_maps(path);
+
+        CertificateStore::new(
+            certificate_map,
+            certificate_id_by_round_map,
+            certificate_id_by_origin_map,
+            NoCache {},
+        )
+    }
+
+    fn create_db_maps(
+        path: std::path::PathBuf,
+    ) -> (
+        DBMap<CertificateDigest, Certificate>,
+        DBMap<(Round, AuthorityIdentifier), CertificateDigest>,
+        DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
+    ) {
         const CERTIFICATES_CF: &str = "certificates";
         const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
         const CERTIFICATE_ID_BY_ORIGIN_CF: &str = "certificate_id_by_origin";
@@ -480,16 +754,10 @@ mod test {
         )
         .expect("Cannot open database");
 
-        let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) = reopen!(&rocksdb,
+        reopen!(&rocksdb,
             CERTIFICATES_CF;<CertificateDigest, Certificate>,
             CERTIFICATE_ID_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
             CERTIFICATE_ID_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>
-        );
-
-        CertificateStore::new(
-            certificate_map,
-            certificate_id_by_round_map,
-            certificate_id_by_origin_map,
         )
     }
 
@@ -524,9 +792,12 @@ mod test {
 
     #[tokio::test]
     async fn test_write_and_read() {
-        // GIVEN
-        let store = new_store(temp_dir());
+        test_write_and_read_by_store_type(new_store(temp_dir())).await;
+        test_write_and_read_by_store_type(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_write_and_read_by_store_type<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
 
@@ -544,9 +815,12 @@ mod test {
 
     #[tokio::test]
     async fn test_write_all_and_read_all() {
-        // GIVEN
-        let store = new_store(temp_dir());
+        test_write_all_and_read_all_by_store_type(new_store(temp_dir())).await;
+        test_write_all_and_read_all_by_store_type(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_write_all_and_read_all_by_store_type<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
         let ids = certs
@@ -556,6 +830,12 @@ mod test {
 
         // store them in both main and secondary index
         store.write_all(certs.clone()).unwrap();
+
+        // AND if running with cache, just remove a few items to ensure that they'll be fetched
+        // from storage
+        store.cache.remove(&ids[0]);
+        store.cache.remove(&ids[3]);
+        store.cache.remove(&ids[9]);
 
         // WHEN
         let result = store.read_all(ids).unwrap();
@@ -812,10 +1092,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_delete() {
-        // GIVEN
-        let store = new_store(temp_dir());
+    async fn test_delete_by_store_type() {
+        test_delete(new_store(temp_dir())).await;
+        test_delete(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_delete<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
 
@@ -834,10 +1117,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_delete_all() {
-        // GIVEN
-        let store = new_store(temp_dir());
+    async fn test_delete_all_by_store_type() {
+        test_delete_all(new_store(temp_dir())).await;
+        test_delete_all(new_store_no_cache(temp_dir())).await;
+    }
 
+    async fn test_delete_all<T: Cache>(store: CertificateStore<T>) {
+        // GIVEN
         // create certificates for 10 rounds
         let certs = certificates(10);
 
@@ -852,5 +1138,42 @@ mod test {
         // THEN
         assert!(store.read(to_delete[0]).unwrap().is_none());
         assert!(store.read(to_delete[1]).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_cache() {
+        // cache should hold up to 5 elements
+        let cache = CertificateStoreCache::new(NonZeroUsize::new(5).unwrap(), None);
+
+        let certificates = certificates(5);
+
+        // write 20 certificates
+        for cert in &certificates {
+            cache.write(cert.clone());
+        }
+
+        for (i, cert) in certificates.iter().enumerate() {
+            // first 15 certificates should not exist
+            if i < 15 {
+                assert!(cache.read(&cert.digest()).is_none());
+            } else {
+                assert!(cache.read(&cert.digest()).is_some());
+            }
+        }
+
+        // now the same should happen when we use a write_all & read_all
+        let cache = CertificateStoreCache::new(NonZeroUsize::new(5).unwrap(), None);
+
+        cache.write_all(certificates.clone());
+
+        let result = cache.read_all(certificates.iter().map(|c| c.digest()).collect());
+        for (i, (_, cert)) in result.iter().enumerate() {
+            // first 15 certificates should not exist
+            if i < 15 {
+                assert!(cert.is_none());
+            } else {
+                assert!(cert.is_some());
+            }
+        }
     }
 }
