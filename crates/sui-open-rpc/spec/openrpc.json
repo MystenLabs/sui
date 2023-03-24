@@ -1241,7 +1241,7 @@
       "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
       "params": [
         {
-          "name": "staked_sui_id",
+          "name": "staked_sui_ids",
           "required": true,
           "schema": {
             "type": "array",
