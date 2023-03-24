@@ -62,13 +62,11 @@ impl<S: IndexerStore> ExtendedApi<S> {
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
-        let next_cursor_result =
-            data.last()
-                .cloned()
-                .map_or(Ok(cursor), |obj| match obj.into_object() {
-                    Ok(obj_data) => Ok(Some(obj_data.object_id)),
-                    Err(e) => Err(IndexerError::UserInputError(e)),
-                });
+        let next_cursor_result = data
+            .last()
+            .cloned()
+            .map(|obj| obj.into_object().map(|o| o.object_id))
+            .transpose();
 
         let next_cursor = next_cursor_result?;
 

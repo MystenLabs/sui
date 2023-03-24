@@ -6,7 +6,7 @@ use jsonrpsee::types::error::CallError;
 use thiserror::Error;
 
 use sui_types::base_types::ObjectIDParseError;
-use sui_types::error::{SuiError, UserInputError};
+use sui_types::error::{SuiError, SuiObjectResponseError, UserInputError};
 
 #[derive(Debug, Error)]
 pub enum IndexerError {
@@ -72,6 +72,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     UserInputError(#[from] UserInputError),
+
+    #[error(transparent)]
+    ObjectResponseError(#[from] SuiObjectResponseError),
 
     #[error("`{0}`: `{1}`")]
     ErrorWithContext(String, Box<IndexerError>),
