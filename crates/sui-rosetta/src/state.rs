@@ -311,6 +311,8 @@ fn extract_balance_changes_from_ops(ops: Operations) -> HashMap<SuiAddress, i128
                     OperationType::SuiBalanceChange
                     | OperationType::Gas
                     | OperationType::PaySui
+                    | OperationType::StakeReward
+                    | OperationType::StakePrinciple
                     | OperationType::Stake => {
                         if let (Some(addr), Some(amount)) = (op.account, op.amount) {
                             *changes.entry(addr.address).or_default() += amount.value
