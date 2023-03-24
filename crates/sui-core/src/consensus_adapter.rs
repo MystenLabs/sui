@@ -456,9 +456,7 @@ impl ConsensusAdapter {
                         == ConnectionStatus::Connected
             })
             .filter(|authority| {
-                // If we are a low scoring authority, we do not filter out ourselves from the list,
-                // nor do we filter out other low scoring authorities. If we are a high scoring
-                // authority, we will co-submit with any low scoring authorities in front of us.
+                // Remove any low-scoring authority in front of us
                 !self.authority_is_low_scoring(authority)
             })
             .collect();

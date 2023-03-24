@@ -133,7 +133,7 @@ impl Display for AuthorityIdentifier {
 impl Committee {
     /// Any committee should be created via the CommitteeBuilder - this is intentionally be marked as
     /// private method.
-    pub fn new(authorities: BTreeMap<PublicKey, Authority>, epoch: Epoch) -> Self {
+    fn new(authorities: BTreeMap<PublicKey, Authority>, epoch: Epoch) -> Self {
         let mut committee = Self {
             authorities,
             epoch,
