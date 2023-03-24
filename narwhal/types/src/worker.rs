@@ -41,8 +41,8 @@ pub struct RequestBatchesResponse {
     pub is_size_limit_reached: bool,
 }
 
+// TODO: support propagating errors from the worker to the primary.
 pub type TxResponse = tokio::sync::oneshot::Sender<BatchDigest>;
-pub type PrimaryResponse = Option<tokio::sync::oneshot::Sender<()>>;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]

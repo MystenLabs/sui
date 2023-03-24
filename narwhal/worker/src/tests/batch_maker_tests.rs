@@ -9,7 +9,12 @@ use store::rocks;
 use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
 use test_utils::{temp_dir, transaction};
+use types::MockWorkerToPrimary;
 use types::PreSubscribedBroadcastSender;
+
+fn create_network_client() -> NetworkClient {
+    NetworkClient::new_with_empty_id()
+}
 
 fn create_batches_store() -> DBMap<BatchDigest, Batch> {
     rocks::DBMap::<BatchDigest, Batch>::open(
@@ -24,12 +29,19 @@ fn create_batches_store() -> DBMap<BatchDigest, Batch> {
 
 #[tokio::test]
 async fn make_batch() {
+    let client = create_network_client();
     let store = create_batches_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
-    let (tx_our_batch, mut rx_our_batch) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
+
+    // Mock the primary client to always succeed.
+    let mut mock_server = MockWorkerToPrimary::new();
+    mock_server
+        .expect_report_our_batch()
+        .returning(|_| Ok(anemo::Response::new(())));
+    client.set_worker_to_primary_local_handler(Arc::new(mock_server));
 
     // Spawn a `BatchMaker` instance.
     let id = 0;
@@ -42,8 +54,8 @@ async fn make_batch() {
         rx_batch_maker,
         tx_quorum_waiter,
         Arc::new(node_metrics),
+        client,
         store.clone(),
-        tx_our_batch,
     );
 
     // Send enough transactions to seal a batch.
@@ -62,10 +74,7 @@ async fn make_batch() {
     // Eventually deliver message
     assert!(resp.send(()).is_ok());
 
-    // Now we send to primary
-    let (_message, respond) = rx_our_batch.recv().await.unwrap();
-    assert!(respond.unwrap().send(()).is_ok());
-
+    // Batch maker should finish creating the batch.
     assert!(r0.await.is_ok());
     assert!(r1.await.is_ok());
 
@@ -75,12 +84,19 @@ async fn make_batch() {
 
 #[tokio::test]
 async fn batch_timeout() {
+    let client = create_network_client();
     let store = create_batches_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
     let node_metrics = WorkerMetrics::new(&Registry::new());
-    let (tx_our_batch, mut rx_our_batch) = test_utils::test_channel!(1);
+
+    // Mock the primary client to always succeed.
+    let mut mock_server = MockWorkerToPrimary::new();
+    mock_server
+        .expect_report_our_batch()
+        .returning(|_| Ok(anemo::Response::new(())));
+    client.set_worker_to_primary_local_handler(Arc::new(mock_server));
 
     // Spawn a `BatchMaker` instance.
     let id = 0;
@@ -93,8 +109,8 @@ async fn batch_timeout() {
         rx_batch_maker,
         tx_quorum_waiter,
         Arc::new(node_metrics),
+        client,
         store.clone(),
-        tx_our_batch,
     );
 
     // Do not send enough transactions to seal a batch.
@@ -110,10 +126,7 @@ async fn batch_timeout() {
     // Eventually deliver message
     assert!(resp.send(()).is_ok());
 
-    // Now we send to primary
-    let (_message, respond) = rx_our_batch.recv().await.unwrap();
-    assert!(respond.unwrap().send(()).is_ok());
-
+    // Batch maker should finish creating the batch.
     assert!(r0.await.is_ok());
 
     // Ensure the batch is stored

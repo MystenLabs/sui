@@ -139,7 +139,7 @@ class LogParser:
         batch_to_header_latencies = {d: float(t) for d, t in tmp}
 
         tmp = findall(
-            r'.* Header ([^ ]+) was created in (\d+\.\d+) seconds', log)
+            r'.* Header ([^ ]+) was created in (\d+\.\d+) seconds.*', log)
         header_creation_latencies = {d: float(t) for d, t in tmp}
 
         tmp = findall(
@@ -264,7 +264,7 @@ class LogParser:
         batch_creation_latency = mean(
             self.batch_creation_latencies.values()) * 1000
         header_creation_latency = mean(
-            self.header_creation_latencies .values()) * 1000
+            self.header_creation_latencies.values()) * 1000
         batch_to_header_latency = mean(
             self.batch_to_header_latencies.values()) * 1000
         header_to_cert_latency = mean(

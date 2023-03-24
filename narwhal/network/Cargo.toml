@@ -12,12 +12,14 @@ async-trait = "0.1.61"
 backoff = { version = "0.4.0", features = ["tokio"] }
 bytes = "1.3.0"
 futures = "0.3.24"
+parking_lot = "0.12.1"
 prometheus = "0.13.3"
 rand = { version = "0.8.5", features = ["small_rng"] }
 tokio = { workspace = true, features = ["rt", "net", "sync", "macros", "time"] }
 tracing = "0.1.36"
 types = { path = "../types", package = "narwhal-types" }
 crypto = { path = "../crypto", package = "narwhal-crypto" }
+mysten-common = { path = "../../crates/mysten-common" }
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
