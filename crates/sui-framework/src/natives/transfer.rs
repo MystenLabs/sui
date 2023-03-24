@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
-use crate::{legacy_emit_cost, natives::NativesCostTable};
+use crate::natives::NativesCostTable;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
@@ -133,7 +133,7 @@ pub fn share_object(
         ty,
         obj,
     )?;
-    let cost = legacy_emit_cost();
+    let cost = context.gas_used();
     Ok(match transfer_result {
         // New means the ID was created in this transaction
         // SameOwner means the object was previously shared and was re-shared; since
