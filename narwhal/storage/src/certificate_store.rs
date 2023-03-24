@@ -814,6 +814,12 @@ mod test {
         // store them in both main and secondary index
         store.write_all(certs.clone()).unwrap();
 
+        // AND if running with cache, just remove a few items to ensure that they'll be fetched
+        // from storage
+        store.cache.remove(&ids[0]);
+        store.cache.remove(&ids[3]);
+        store.cache.remove(&ids[9]);
+
         // WHEN
         let result = store.read_all(ids).unwrap();
 
