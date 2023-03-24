@@ -9,7 +9,7 @@ use sui_types::{
     base_types::ObjectID,
     error::SuiResult,
     error::{ExecutionError, ExecutionErrorKind},
-    move_package::UpgradeInfo,
+    move_package::{TypeOrigin, UpgradeInfo},
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver},
 };
@@ -22,9 +22,32 @@ use move_core_types::{
 
 pub struct LinkageInfo {
     pub pkg_id: ObjectID,
-    /// Move package may not always be available where linkage info is needed (e.g., when
-    /// publishing)
     linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+    type_origin_map: BTreeMap<(String, String), ObjectID>,
+}
+
+impl LinkageInfo {
+    pub fn new(
+        pkg_id: ObjectID,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+        type_origin_table: Vec<TypeOrigin>,
+    ) -> Self {
+        let type_origin_map = type_origin_table
+            .iter()
+            .map(
+                |TypeOrigin {
+                     module_name,
+                     struct_name,
+                     package,
+                 }| { ((module_name.clone(), struct_name.clone()), *package) },
+            )
+            .collect();
+        Self {
+            pkg_id,
+            linkage_table,
+            type_origin_map,
+        }
+    }
 }
 
 pub struct StorageContext<'a, E, S> {
@@ -50,18 +73,11 @@ impl<
         }
     }
 
-    pub fn set_context(
-        &self,
-        pkg_id: ObjectID,
-        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
-    ) -> Result<(), ExecutionError> {
+    pub fn set_context(&self, linkage_info: LinkageInfo) -> Result<(), ExecutionError> {
         if self.linkage_info.borrow().is_some() {
             return Err(ExecutionErrorKind::VMInvariantViolation.into());
         }
-        self.linkage_info.replace(Some(LinkageInfo {
-            pkg_id,
-            linkage_table,
-        }));
+        self.linkage_info.replace(Some(linkage_info));
         Ok(())
     }
 
@@ -70,7 +86,11 @@ impl<
             return Err(ExecutionErrorKind::VMInvariantViolation.into());
         }
         let running_pkg = &self.storage_view.get_packages(&[pkg_id]).unwrap().unwrap()[0];
-        self.set_context(running_pkg.id(), running_pkg.linkage_table().clone())
+        self.set_context(LinkageInfo {
+            pkg_id: running_pkg.id(),
+            linkage_table: running_pkg.linkage_table().clone(),
+            type_origin_map: running_pkg.type_origin_map(),
+        })
     }
 
     pub fn reset_context(&self) {
@@ -107,10 +127,13 @@ impl<'a, E: fmt::Debug, S: StorageView<E>> ResourceResolver for StorageContext<'
 impl<'a, E: fmt::Debug, S: StorageView<E>> LinkageResolver for StorageContext<'a, E, S> {
     type Error = E;
 
+    /// The link context identifies the mapping from runtime `ModuleId`s to the `ModuleId`s in
+    /// storage that they are loaded from as returned by `relocate`.
     fn link_context(&self) -> AccountAddress {
         self.linkage_info.borrow().as_ref().unwrap().pkg_id.into()
     }
 
+    /// Translate the runtime `module_id` to the on-chain `ModuleId` that it should be loaded from.
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
         let old_id: ObjectID = (*module_id.address()).into();
         let linkage_info_opt = self.linkage_info.borrow();
@@ -131,4 +154,12 @@ impl<'a, E: fmt::Debug, S: StorageView<E>> LinkageResolver for StorageContext<'a
             ))
         }
     }
+
+    //    /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
+    //    /// defined that type.
+    //    fn defining_module(
+    //        &self,
+    //        module_id: &ModuleId,
+    //        _struct: &IdentStr,
+    //    ) -> Result<ModuleId, Self::Error>;
 }

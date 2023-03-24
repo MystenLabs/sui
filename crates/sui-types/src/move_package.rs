@@ -614,7 +614,7 @@ pub fn build_linkage_table<'p>(
     Ok(linkage_table)
 }
 
-fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin> {
+pub fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin> {
     modules
         .iter()
         .flat_map(|m| {
@@ -633,7 +633,7 @@ fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin
         .collect()
 }
 
-fn build_upgraded_type_origin_table(
+pub fn build_upgraded_type_origin_table(
     predecessor: &MovePackage,
     modules: &[CompiledModule],
     storage_id: ObjectID,

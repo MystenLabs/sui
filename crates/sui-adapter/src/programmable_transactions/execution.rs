@@ -42,8 +42,9 @@ use sui_types::{
         ProgrammableTransaction,
     },
     move_package::{
-        build_linkage_table, is_valid_package_upgrade_policy, normalize_deserialized_modules,
-        MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
+        build_initial_type_origin_table, build_linkage_table, build_upgraded_type_origin_table,
+        is_valid_package_upgrade_policy, normalize_deserialized_modules, MovePackage, UpgradeCap,
+        UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -60,7 +61,11 @@ use crate::{
     execution_mode::ExecutionMode,
 };
 
-use super::{context::*, storage_context::StorageContext, types::*};
+use super::{
+    context::*,
+    storage_context::{LinkageInfo, StorageContext},
+    types::*,
+};
 
 pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
@@ -470,6 +475,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         generate_package_id(&mut modules, context.tx_context)?
     };
 
+    // TODO: avoid building the tables twice
     let mut immediate_dependencies = BTreeSet::new();
     for module in &modules {
         immediate_dependencies.extend(
@@ -481,9 +487,15 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
     immediate_dependencies.remove(&package_id);
     let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
-
-    let mut session =
-        context.create_session_with_linkage_context(package_id, Some(linkage_table))?;
+    let type_origin_table = build_initial_type_origin_table(&modules);
+    let mut session = context.create_session_with_linkage_context(
+        package_id,
+        Some(LinkageInfo::new(
+            package_id,
+            linkage_table,
+            type_origin_table,
+        )),
+    )?;
 
     let modules = publish_and_verify_modules(context, &mut session, package_id, modules)?;
 
@@ -619,6 +631,9 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // substitute in the original package id for the `self` address in all of these modules.
     substitute_package_id(&mut modules, package_id)?;
 
+    let new_package_object_id = context.tx_context.fresh_id();
+
+    // TODO: avoid building the tables twice
     let mut immediate_dependencies = BTreeSet::new();
     for module in &modules {
         immediate_dependencies.extend(
@@ -630,9 +645,17 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     }
     immediate_dependencies.remove(&package_id);
     let linkage_table = build_linkage_table(immediate_dependencies, &dependencies)?;
+    let type_origin_table =
+        build_upgraded_type_origin_table(&current_package, &modules, new_package_object_id)?;
 
-    let mut session =
-        context.create_session_with_linkage_context(package_id, Some(linkage_table))?;
+    let mut session = context.create_session_with_linkage_context(
+        package_id,
+        Some(LinkageInfo::new(
+            package_id,
+            linkage_table,
+            type_origin_table,
+        )),
+    )?;
 
     let upgraded_package_modules =
         publish_and_verify_modules(context, &mut session, package_id, modules)?;
@@ -645,8 +668,12 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         upgrade_ticket.policy,
     )?;
 
-    let upgraded_object_id =
-        context.upgrade_package(&current_package, upgraded_package_modules, &dependencies)?;
+    let upgraded_object_id = context.upgrade_package(
+        &current_package,
+        upgraded_package_modules,
+        &dependencies,
+        new_package_object_id,
+    )?;
 
     let upgrade_receipt_type = session
         .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))

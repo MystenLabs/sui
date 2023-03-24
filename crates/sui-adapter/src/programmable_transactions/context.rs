@@ -28,7 +28,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
-    move_package::{MovePackage, UpgradeInfo},
+    move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
     storage::{ObjectChange, WriteKind},
 };
@@ -36,7 +36,7 @@ use sui_types::{
 use crate::{
     adapter::{missing_unwrapped_msg, new_session, new_session_with_extensions},
     execution_mode::ExecutionMode,
-    programmable_transactions::storage_context::StorageContext,
+    programmable_transactions::storage_context::{LinkageInfo, StorageContext},
 };
 
 use super::types::*;
@@ -442,8 +442,8 @@ where
         previous_package: &MovePackage,
         new_modules: Vec<move_binary_format::CompiledModule>,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
+        new_package_object_id: ObjectID,
     ) -> Result<ObjectID, ExecutionError> {
-        let new_package_object_id = self.tx_context.fresh_id();
         let object = Object::new_upgraded_package(
             previous_package,
             new_package_object_id,
@@ -798,10 +798,10 @@ where
     pub fn create_session_with_linkage_context(
         &mut self,
         pkg_id: ObjectID,
-        linkage_table: Option<BTreeMap<ObjectID, UpgradeInfo>>,
+        linkage_info: Option<LinkageInfo>,
     ) -> Result<Session<'state, 'vm, StorageContext<'state, E, S>>, ExecutionError> {
-        if let Some(table) = linkage_table {
-            self.storage_context.set_context(pkg_id, table)?;
+        if let Some(info) = linkage_info {
+            self.storage_context.set_context(info)?;
         } else {
             self.storage_context.compute_context(pkg_id)?;
         }
