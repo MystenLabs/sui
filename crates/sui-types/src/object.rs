@@ -329,11 +329,11 @@ impl MoveObject {
     pub fn get_total_sui(&self, resolver: &impl GetModule) -> Result<u64, SuiError> {
         let layout = self.get_layout(ObjectFormatOptions::with_types(), resolver)?;
         let move_struct = self.to_move_struct(&layout)?;
-        Ok(Self::get_total_sui_(&move_struct, 0))
+        Ok(Self::get_total_sui_in_struct(&move_struct, 0))
     }
 
     /// Get all SUI in `s`, either directly or in its (transitive) fields. Intended for testing purposes
-    fn get_total_sui_(s: &MoveStruct, acc: u64) -> u64 {
+    fn get_total_sui_in_struct(s: &MoveStruct, acc: u64) -> u64 {
         match s {
             MoveStruct::WithTypes { type_, fields } => {
                 if GasCoin::is_gas_balance(type_) {
@@ -342,13 +342,22 @@ impl MoveObject {
                         _ => unreachable!(), // a Balance<SUI> object should have exactly one field, of type int
                     }
                 } else {
-                    fields.iter().fold(acc, |acc, (_, v)| match v {
-                        MoveValue::Struct(s) => Self::get_total_sui_(s, acc),
-                        _ => acc,
-                    })
+                    fields
+                        .iter()
+                        .fold(acc, |acc, (_, v)| Self::get_total_sui_in_value(v, acc))
                 }
             }
             _ => unreachable!(),
+        }
+    }
+
+    fn get_total_sui_in_value(v: &MoveValue, acc: u64) -> u64 {
+        match v {
+            MoveValue::Struct(s) => Self::get_total_sui_in_struct(s, acc),
+            MoveValue::Vector(vec) => vec
+                .iter()
+                .fold(acc, |acc, v| Self::get_total_sui_in_value(v, acc)),
+            _ => acc,
         }
     }
 }
