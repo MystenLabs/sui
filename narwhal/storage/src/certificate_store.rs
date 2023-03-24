@@ -1122,4 +1122,41 @@ mod test {
         assert!(store.read(to_delete[0]).unwrap().is_none());
         assert!(store.read(to_delete[1]).unwrap().is_none());
     }
+
+    #[test]
+    fn test_cache() {
+        // cache should hold up to 5 elements
+        let cache = CertificateStoreCache::new(NonZeroUsize::new(5).unwrap(), None);
+
+        let certificates = certificates(5);
+
+        // write 20 certificates
+        for cert in &certificates {
+            cache.write(cert.clone());
+        }
+
+        for (i, cert) in certificates.iter().enumerate() {
+            // first 15 certificates should not exist
+            if i < 15 {
+                assert!(cache.read(&cert.digest()).is_none());
+            } else {
+                assert!(cache.read(&cert.digest()).is_some());
+            }
+        }
+
+        // now the same should happen when we use a write_all & read_all
+        let cache = CertificateStoreCache::new(NonZeroUsize::new(5).unwrap(), None);
+
+        cache.write_all(certificates.clone());
+
+        let result = cache.read_all(certificates.iter().map(|c| c.digest()).collect());
+        for (i, (_, cert)) in result.iter().enumerate() {
+            // first 15 certificates should not exist
+            if i < 15 {
+                assert!(cert.is_none());
+            } else {
+                assert!(cert.is_some());
+            }
+        }
+    }
 }
