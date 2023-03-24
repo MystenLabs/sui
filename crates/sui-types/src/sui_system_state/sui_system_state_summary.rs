@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::BTreeMap;
 
-use crate::id::ID;
-
 /// This is the JSON-RPC type for the SUI system state object.
 /// It flattens all fields to make them top-level fields such that it as minimum
 /// dependencies to the internal data structures of the SUI system state type.
@@ -183,7 +181,7 @@ pub struct SuiValidatorSummary {
     pub next_epoch_worker_address: Option<String>,
 
     pub voting_power: u64,
-    pub operation_cap_id: ID,
+    pub operation_cap_id: ObjectID,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub next_epoch_stake: u64,
@@ -213,4 +211,92 @@ pub struct SuiValidatorSummary {
     pub exchange_rates_id: ObjectID,
     /// Number of exchange rates in the table.
     pub exchange_rates_size: u64,
+}
+
+impl Default for SuiSystemStateSummary {
+    fn default() -> Self {
+        Self {
+            epoch: 0,
+            protocol_version: 1,
+            system_state_version: 1,
+            storage_fund: 0,
+            reference_gas_price: 1,
+            safe_mode: false,
+            safe_mode_storage_rewards: 0,
+            safe_mode_computation_rewards: 0,
+            safe_mode_storage_rebates: 0,
+            epoch_start_timestamp_ms: 0,
+            epoch_duration_ms: 0,
+            stake_subsidy_start_epoch: 0,
+            max_validator_count: 0,
+            min_validator_joining_stake: 0,
+            validator_low_stake_threshold: 0,
+            validator_very_low_stake_threshold: 0,
+            validator_low_stake_grace_period: 0,
+            stake_subsidy_balance: 0,
+            stake_subsidy_distribution_counter: 0,
+            stake_subsidy_current_distribution_amount: 0,
+            stake_subsidy_period_length: 0,
+            stake_subsidy_decrease_rate: 0,
+            total_stake: 0,
+            active_validators: vec![],
+            pending_active_validators_id: ObjectID::ZERO,
+            pending_active_validators_size: 0,
+            pending_removals: vec![],
+            staking_pool_mappings_id: ObjectID::ZERO,
+            staking_pool_mappings_size: 0,
+            inactive_pools_id: ObjectID::ZERO,
+            inactive_pools_size: 0,
+            validator_candidates_id: ObjectID::ZERO,
+            validator_candidates_size: 0,
+            at_risk_validators: vec![],
+            validator_report_records: vec![],
+        }
+    }
+}
+
+impl Default for SuiValidatorSummary {
+    fn default() -> Self {
+        Self {
+            sui_address: SuiAddress::default(),
+            protocol_pubkey_bytes: vec![],
+            network_pubkey_bytes: vec![],
+            worker_pubkey_bytes: vec![],
+            proof_of_possession_bytes: vec![],
+            name: String::new(),
+            description: String::new(),
+            image_url: String::new(),
+            project_url: String::new(),
+            net_address: String::new(),
+            p2p_address: String::new(),
+            primary_address: String::new(),
+            worker_address: String::new(),
+            next_epoch_protocol_pubkey_bytes: None,
+            next_epoch_proof_of_possession: None,
+            next_epoch_network_pubkey_bytes: None,
+            next_epoch_worker_pubkey_bytes: None,
+            next_epoch_net_address: None,
+            next_epoch_p2p_address: None,
+            next_epoch_primary_address: None,
+            next_epoch_worker_address: None,
+            voting_power: 0,
+            operation_cap_id: ObjectID::ZERO,
+            gas_price: 0,
+            commission_rate: 0,
+            next_epoch_stake: 0,
+            next_epoch_gas_price: 0,
+            next_epoch_commission_rate: 0,
+            staking_pool_id: ObjectID::ZERO,
+            staking_pool_activation_epoch: None,
+            staking_pool_deactivation_epoch: None,
+            staking_pool_sui_balance: 0,
+            rewards_pool: 0,
+            pool_token_balance: 0,
+            pending_stake: 0,
+            pending_total_sui_withdraw: 0,
+            pending_pool_token_withdraw: 0,
+            exchange_rates_id: ObjectID::ZERO,
+            exchange_rates_size: 0,
+        }
+    }
 }

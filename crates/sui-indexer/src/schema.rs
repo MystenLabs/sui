@@ -147,7 +147,7 @@ diesel::table! {
     use super::sql_types::ObjectStatus;
     use super::sql_types::BcsBytes;
 
-    objects_history (epoch, object_id, version) {
+    objects_history (checkpoint, object_id, version) {
         epoch -> Int8,
         checkpoint -> Int8,
         object_id -> Varchar,
@@ -155,6 +155,8 @@ diesel::table! {
         object_digest -> Varchar,
         owner_type -> OwnerType,
         owner_address -> Nullable<Varchar>,
+        old_owner_type -> Nullable<OwnerType>,
+        old_owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         previous_transaction -> Varchar,
         object_type -> Varchar,
@@ -162,42 +164,6 @@ diesel::table! {
         has_public_transfer -> Bool,
         storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::OwnerType;
-    use super::sql_types::ObjectStatus;
-
-    owner (object_id) {
-        epoch -> Int8,
-        checkpoint -> Int8,
-        object_id -> Varchar,
-        version -> Int8,
-        object_digest -> Varchar,
-        owner_type -> OwnerType,
-        owner_address -> Nullable<Varchar>,
-        object_status -> ObjectStatus,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::OwnerType;
-    use super::sql_types::ObjectStatus;
-
-    owner_history (epoch, object_id, version) {
-        epoch -> Int8,
-        checkpoint -> Int8,
-        object_id -> Varchar,
-        version -> Int8,
-        object_digest -> Varchar,
-        owner_type -> Nullable<OwnerType>,
-        owner_address -> Nullable<Varchar>,
-        old_owner_type -> Nullable<OwnerType>,
-        old_owner_address -> Nullable<Varchar>,
-        object_status -> ObjectStatus,
     }
 }
 
@@ -337,8 +303,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     move_calls,
     objects,
     objects_history,
-    owner,
-    owner_history,
     packages,
     recipients,
     system_states,

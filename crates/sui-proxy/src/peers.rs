@@ -164,11 +164,8 @@ mod tests {
     use super::*;
     use crate::admin::{generate_self_cert, CertKeyPair};
     use serde::Serialize;
-    use sui_types::{
-        base_types::SuiAddress,
-        id::ID,
-        sui_system_state::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
-        SUI_SYSTEM_STATE_OBJECT_ID,
+    use sui_types::sui_system_state::sui_system_state_summary::{
+        SuiSystemStateSummary, SuiValidatorSummary,
     };
 
     /// creates a test that binds our proxy use case to the structure in sui_getLatestSuiSystemState
@@ -183,81 +180,14 @@ mod tests {
         // all fields here just satisfy the field types, with exception to active_validators, we use
         // some of those.
         let depends_on = SuiSystemStateSummary {
-            epoch: 1,
-            protocol_version: 2,
-            system_state_version: 3,
-            storage_fund: 4,
-            reference_gas_price: 5,
-            safe_mode: false,
-            safe_mode_storage_rewards: 0,
-            safe_mode_computation_rewards: 0,
-            safe_mode_storage_rebates: 0,
-            epoch_start_timestamp_ms: 123456,
-            stake_subsidy_start_epoch: 123456,
-            epoch_duration_ms: 123456789,
-            stake_subsidy_distribution_counter: 1,
-            stake_subsidy_balance: 1,
-            stake_subsidy_current_distribution_amount: 1,
-            total_stake: 1,
             active_validators: vec![SuiValidatorSummary {
-                sui_address: SuiAddress::random_for_testing_only(),
-                protocol_pubkey_bytes: vec![],
                 network_pubkey_bytes: Vec::from(client_pub_key.as_bytes()),
-                worker_pubkey_bytes: vec![],
-                proof_of_possession_bytes: vec![],
-                name: "fooman-validator".into(),
-                description: "empty".into(),
-                image_url: "empty".into(),
-                project_url: "empty".into(),
-                net_address: "empty".into(),
                 p2p_address: format!("{p2p_address}"),
                 primary_address: "empty".into(),
                 worker_address: "empty".into(),
-                next_epoch_protocol_pubkey_bytes: None,
-                next_epoch_proof_of_possession: None,
-                next_epoch_network_pubkey_bytes: None,
-                next_epoch_worker_pubkey_bytes: None,
-                next_epoch_net_address: None,
-                next_epoch_p2p_address: None,
-                next_epoch_primary_address: None,
-                next_epoch_worker_address: None,
-                voting_power: 1,
-                operation_cap_id: ID::new(SUI_SYSTEM_STATE_OBJECT_ID),
-                gas_price: 1,
-                commission_rate: 1,
-                next_epoch_stake: 1,
-                next_epoch_gas_price: 1,
-                next_epoch_commission_rate: 1,
-                staking_pool_id: SUI_SYSTEM_STATE_OBJECT_ID,
-                staking_pool_activation_epoch: None,
-                staking_pool_deactivation_epoch: None,
-                staking_pool_sui_balance: 1,
-                rewards_pool: 1,
-                pool_token_balance: 1,
-                pending_stake: 1,
-                pending_total_sui_withdraw: 1,
-                pending_pool_token_withdraw: 1,
-                exchange_rates_id: SUI_SYSTEM_STATE_OBJECT_ID,
-                exchange_rates_size: 1,
+                ..Default::default()
             }],
-            pending_active_validators_id: SUI_SYSTEM_STATE_OBJECT_ID,
-            pending_active_validators_size: 1,
-            pending_removals: vec![],
-            staking_pool_mappings_id: SUI_SYSTEM_STATE_OBJECT_ID,
-            staking_pool_mappings_size: 1,
-            inactive_pools_id: SUI_SYSTEM_STATE_OBJECT_ID,
-            inactive_pools_size: 1,
-            validator_candidates_id: SUI_SYSTEM_STATE_OBJECT_ID,
-            validator_candidates_size: 1,
-            at_risk_validators: vec![],
-            validator_report_records: vec![],
-            max_validator_count: 150,
-            min_validator_joining_stake: 1,
-            validator_low_stake_threshold: 1,
-            validator_very_low_stake_threshold: 0,
-            validator_low_stake_grace_period: 7,
-            stake_subsidy_period_length: 30,
-            stake_subsidy_decrease_rate: 10000,
+            ..Default::default()
         };
 
         #[derive(Debug, Serialize, Deserialize)]

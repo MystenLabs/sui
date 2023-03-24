@@ -50,13 +50,13 @@
 -  [Function `epoch`](#0x3_sui_system_state_inner_epoch)
 -  [Function `protocol_version`](#0x3_sui_system_state_inner_protocol_version)
 -  [Function `system_state_version`](#0x3_sui_system_state_inner_system_state_version)
+-  [Function `genesis_system_state_version`](#0x3_sui_system_state_inner_genesis_system_state_version)
 -  [Function `epoch_start_timestamp_ms`](#0x3_sui_system_state_inner_epoch_start_timestamp_ms)
 -  [Function `validator_stake_amount`](#0x3_sui_system_state_inner_validator_stake_amount)
 -  [Function `validator_staking_pool_id`](#0x3_sui_system_state_inner_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x3_sui_system_state_inner_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
 -  [Function `get_storage_fund_balance`](#0x3_sui_system_state_inner_get_storage_fund_balance)
--  [Function `upgrade_system_state`](#0x3_sui_system_state_inner_upgrade_system_state)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
 -  [Module Specification](#@Module_Specification_1)
 
@@ -530,10 +530,11 @@ This function will be called only once in genesis.
 ): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
     <b>let</b> validators = <a href="validator_set.md#0x3_validator_set_new">validator_set::new</a>(validators, ctx);
     <b>let</b> reference_gas_price = <a href="validator_set.md#0x3_validator_set_derive_reference_gas_price">validator_set::derive_reference_gas_price</a>(&validators);
+    // This type is fixed <b>as</b> it's created at <a href="genesis.md#0x3_genesis">genesis</a>. It should not be updated during type upgrade.
     <b>let</b> system_state = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
         epoch: 0,
         protocol_version,
-        system_state_version: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>,
+        system_state_version: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_genesis_system_state_version">genesis_system_state_version</a>(),
         validators,
         storage_fund,
         parameters,
@@ -2013,6 +2014,32 @@ since epochs are ever-increasing and epoch changes are intended to happen every 
 
 </details>
 
+<a name="0x3_sui_system_state_inner_genesis_system_state_version"></a>
+
+## Function `genesis_system_state_version`
+
+This function always return the genesis system state version, which is used to create the system state in genesis.
+It should never change for a given network.
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_genesis_system_state_version">genesis_system_state_version</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_genesis_system_state_version">genesis_system_state_version</a>(): u64 {
+    <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x3_sui_system_state_inner_epoch_start_timestamp_ms"></a>
 
 ## Function `epoch_start_timestamp_ms`
@@ -2164,38 +2191,6 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): u64 {
     <a href="_value">balance::value</a>(&self.storage_fund)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x3_sui_system_state_inner_upgrade_system_state"></a>
-
-## Function `upgrade_system_state`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_upgrade_system_state">upgrade_system_state</a>(self: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_system_state_version: u64, _ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_upgrade_system_state">upgrade_system_state</a>(
-    self: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>,
-    new_system_state_version: u64,
-    _ctx: &<b>mut</b> TxContext,
-): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a> {
-    // Whenever we upgrade the system state version, we will have <b>to</b> first
-    // ship a framework upgrade that introduces a new system state type, and make this
-    // function generate such type from the <b>old</b> state.
-    self.system_state_version = new_system_state_version;
-    self
 }
 </code></pre>
 
