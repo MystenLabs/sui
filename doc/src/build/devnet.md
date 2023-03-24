@@ -9,7 +9,7 @@ The Sui networks consist of:
  * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](../build/json-rpc.md).
  * A public network [Sui Explorer](https://explorer.sui.io) for browsing transaction history.
 
-You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you're working with. These coins have no financial value. With each Sui release, the network resets and removes all assets (coins and NFTs).
+You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you're working with. If connected to Localnet, use cURL to request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet). The coins on these networks have no financial value. With each Sui release, the network resets and removes all assets (coins and NFTs).
 
 See announcements about Sui Devnet in the [#devnet-updates](https://discord.com/channels/916379725201563759/1004638487078772736) Discord channel.
 
@@ -27,7 +27,7 @@ Sui provides the following tools to interact with Sui networks:
 
 ## Environment set up
 
-First, [Install Sui](../build/install.md#install-sui-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through Discord for the network you are using: [Devnet](https://discordapp.com/channels/916379725201563759/971488439931392130) or [Testnet](https://discord.com/channels/916379725201563759/1037811694564560966).
+First, [Install Sui](../build/install.md#install-sui-binaries). After you install Sui, [request SUI test tokens](#request-gas-tokens) through Discord for the network you are using: [Devnet](https://discordapp.com/channels/916379725201563759/971488439931392130) or [Testnet](https://discord.com/channels/916379725201563759/1037811694564560966). If connected to Localnet, use cURL to request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet).
 
 To check whether Sui is already installed, run the following command:
 
@@ -65,6 +65,13 @@ Sui Full node server URL (Defaults to Sui Devnet if not specified) :
 
 Press **Enter** to connect to Sui Devnet. To use a custom RPC server or Sui Testnet, enter the URL to the correct RPC endpoint and then press **Enter**.
 
+If you enter a URL, the process prompts for an alias for the environment:
+
+```
+Environment alias for [<URL-ENTERED>] :
+```
+Type an alias name and press **Enter**.
+
 ```
 Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
 ```
@@ -82,7 +89,7 @@ Secret Recovery Phrase : [cap wheat many line human lazy few solid bored proud s
 
 If you previously used `sui genesis` with the force option (`-f` or `--force`), your client.yaml file already includes two RPC endpoints: `localnet` at `http://0.0.0.0:9000` and `devnet` at `https://fullnode.devnet.sui.io:443`. You can view the defined environments with the `sui client envs` command, and switch between them with the `sui client switch` command.
 
-If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing `client.yaml` to change the configured RPC endpoint.
+If you previously installed a Sui client that connected to a Sui network, or created a local network, you can modify your existing client.yaml file to change the configured RPC endpoint. The `sui client` commands that relate to environments read from and write to the client.yaml file.
 
 To check currently available environment aliases, run the following command: 
 
@@ -111,15 +118,14 @@ If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_c
 
 ## Validating
 
-Note that in the following sections, the object IDs, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
+In the following sections, the object IDs, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
 
 ## Request test tokens
 
  1. Join [Discord](https://discord.gg/sui). 
    If you try to join the Sui Discord channel using a newly created Discord account you may need to wait a few days for validation. 
  1. Get your Sui client address: `sui client active-address`
- 1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet]() Discord channel. Send the following message to the relevant channel with your client address:
-  !faucet `<YOUR-CLIENT-ADDRESS>`
+ 1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet]() Discord channel. Send the following message to the relevant channel with your client address: `!faucet <YOUR-CLIENT-ADDRESS>`. If you have a local network, programmatically request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet).
 
 ## Mint an example NFT
 
