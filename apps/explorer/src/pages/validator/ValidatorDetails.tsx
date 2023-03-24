@@ -31,9 +31,11 @@ function ValidatorDetails() {
 
     const validatorRewards = useMemo(() => {
         if (!validatorEvents || !id) return 0;
-        return (
-            getValidatorMoveEvent(validatorEvents.data, id)?.stake_rewards || 0
-        );
+        const rewards = getValidatorMoveEvent(
+            validatorEvents.data,
+            id
+        )?.pool_staking_reward;
+        return +rewards || 0;
     }, [id, validatorEvents]);
 
     if (isLoading || validatorsEventsLoading) {
