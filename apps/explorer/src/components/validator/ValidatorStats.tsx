@@ -14,7 +14,7 @@ import { Stats } from '~/ui/Stats';
 type StatsCardProps = {
     validatorData: SuiValidatorSummary;
     epoch: number | string;
-    epochRewards: string;
+    epochRewards: number;
 };
 
 export function ValidatorStats({
@@ -68,8 +68,7 @@ export function ValidatorStats({
                         <div className="flex flex-col gap-8 lg:flex-row">
                             <Stats
                                 label="Commission"
-                                tooltip="Coming soon"
-                                unavailable={commission <= 0}
+                                tooltip="Fee charged by the validator for staking services"
                             >
                                 <Heading
                                     as="h3"
