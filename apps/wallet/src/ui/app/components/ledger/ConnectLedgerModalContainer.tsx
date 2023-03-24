@@ -4,9 +4,9 @@
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
 import { useNextMenuUrl } from '../menu/hooks';
 import { ConnectLedgerModal } from './ConnectLedgerModal';
-import { getLedgerConnectionErrorMessage } from './ledgerExceptions';
 
 export function ConnectLedgerModalContainer() {
     const navigate = useNavigate();
@@ -25,7 +25,7 @@ export function ConnectLedgerModalContainer() {
                 navigate(accountsUrl);
                 toast.error(
                     getLedgerConnectionErrorMessage(error) ||
-                        'Something went wrong. Try again.'
+                        'Something went wrong.'
                 );
             }}
             onConfirm={() => {

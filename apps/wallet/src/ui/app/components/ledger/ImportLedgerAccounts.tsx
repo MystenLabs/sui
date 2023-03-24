@@ -52,8 +52,7 @@ export function ImportLedgerAccounts() {
         },
         onError: (error) => {
             toast.error(
-                getSuiApplicationErrorMessage(error) ||
-                    'Something went wrong. Try again.'
+                getSuiApplicationErrorMessage(error) || 'Something went wrong.'
             );
             navigate(accountsUrl, { replace: true });
         },
