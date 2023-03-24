@@ -24,4 +24,8 @@ pub enum TransactionFilter {
     FromAddress(SuiAddress),
     /// Query by recipient address.
     ToAddress(SuiAddress),
+    /// Query by sender and recipient address.
+    FromAndToAddress { from: SuiAddress, to: SuiAddress },
+    /// Query by transaction kind
+    TransactionKind(String),
 }

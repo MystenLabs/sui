@@ -60,15 +60,15 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
                 })
             })
             .transpose()?;
-        let parsed_txn_digests: Vec<TransactionDigest> = checkpoint
+        let parsed_tx_digests: Vec<TransactionDigest> = checkpoint
             .transactions
             .into_iter()
-            .filter_map(|txn| {
-                txn.map(|txn| {
-                    txn.parse().map_err(|e| {
+            .filter_map(|tx| {
+                tx.map(|tx| {
+                    tx.parse().map_err(|e| {
                         IndexerError::SerdeError(format!(
                             "Failed to decode transaction digest: {:?} with err: {:?}",
-                            txn, e
+                            tx, e
                         ))
                     })
                 })
@@ -101,7 +101,7 @@ impl TryFrom<Checkpoint> for RpcCheckpoint {
             },
             network_total_transactions: checkpoint.total_transactions_from_genesis as u64,
             timestamp_ms: checkpoint.timestamp_ms as u64,
-            transactions: parsed_txn_digests,
+            transactions: parsed_tx_digests,
             checkpoint_commitments: vec![],
         })
     }
