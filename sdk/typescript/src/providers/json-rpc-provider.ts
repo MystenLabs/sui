@@ -483,10 +483,7 @@ export class JsonRpcProvider {
     objectID: ObjectId,
     descendingOrder: boolean = true,
   ): Promise<GetTxnDigestsResponse> {
-    const filters = [
-      { filter: { InputObject: objectID } },
-      { filter: { MutatedObject: objectID } },
-    ];
+    const filters = [{ InputObject: objectID }, { ChangedObject: objectID }];
     if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
       throw new Error('Invalid Sui Object id');
     }

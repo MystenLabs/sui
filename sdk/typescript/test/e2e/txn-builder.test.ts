@@ -65,16 +65,13 @@ describe('Transaction Builders', () => {
   });
 
   it('MoveCall', async () => {
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
+    const coin_0 = coins[0].data as SuiObjectData;
     const tx = new Transaction();
     tx.moveCall({
-      target: '0x2::devnet_nft::mint',
-      arguments: [
-        tx.pure('Example NFT'),
-        tx.pure('An NFT created by the wallet Command Line Tool'),
-        tx.pure(
-          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-        ),
-      ],
+      target: '0x2::pay::split',
+      typeArguments: ['0x2::sui::SUI'],
+      arguments: [tx.object(coin_0.objectId), tx.pure(DEFAULT_GAS_BUDGET * 2)],
     });
     await validateTransaction(toolbox.signer, tx);
   });
