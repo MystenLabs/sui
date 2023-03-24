@@ -1083,10 +1083,10 @@ impl AuthorityState {
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
-        // Get object changes from effect.
+        // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
 
-        // Get balance changes from effect
+        // Returning empty vector here because we recalculate changes in the rpc layer.
         let balance_changes = Vec::new();
 
         Ok((
