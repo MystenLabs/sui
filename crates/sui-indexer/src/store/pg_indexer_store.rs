@@ -1161,7 +1161,7 @@ WHERE e1.epoch = e2.epoch
         limit: usize,
         descending_order: Option<bool>,
     ) -> Result<Vec<EpochInfo>, IndexerError> {
-        let is_descending = descending_order.unwrap_or(false);
+        let is_descending = descending_order.unwrap_or_default();
         let id = cursor
             .map(|id| id as i64)
             .unwrap_or(if is_descending { i64::MAX } else { -1 });
