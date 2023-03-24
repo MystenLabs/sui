@@ -11,6 +11,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 use sui_json_rpc_types::{
     BigInt, CheckpointId, ObjectChange, SuiObjectDataOptions, SuiTransactionData,
@@ -269,9 +270,10 @@ fn write_data_to_file<T: serde::Serialize>(data: &T, file_path: &str) -> Result<
     if let Err(e) = fs::create_dir_all(&path_buf) {
         warn!("Error creating directory: {}", e);
     }
-
     let serialized_data = serde_json::to_string(data)?;
-    let mut file = File::create(file_path)?;
+    // TODO: gotta be something better than writing to a new file every time
+    let file_name = format!("{}.{}.json", file_path, Uuid::new_v4());
+    let mut file = File::create(file_name)?;
     file.write_all(serialized_data.as_bytes())?;
     Ok(())
 }
@@ -335,7 +337,7 @@ pub async fn check_transactions(
         debug!("Recording addresses {:?}", addresses.len());
         let address_set: HashSet<SuiAddress> = HashSet::from_iter(addresses);
         // TODO: should probably not write to the same file if multithreaded?
-        match write_data_to_file(&address_set, &format!("{file_path}/addresses.json")) {
+        match write_data_to_file(&address_set, &format!("{file_path}/addresses")) {
             Ok(_) => debug!("Successfully written addresses"),
             Err(err) => error!("Failed to write addresses: {:?}", err),
         }
