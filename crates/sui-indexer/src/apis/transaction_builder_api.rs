@@ -156,7 +156,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
+        tx_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
             .move_call(
@@ -168,7 +168,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 rpc_arguments,
                 gas,
                 gas_budget,
-                txn_builder_mode,
+                tx_builder_mode,
             )
             .await
     }
@@ -179,10 +179,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
+        tx_builder_mode: Option<SuiTransactionBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
-            .batch_transaction(signer, params, gas, gas_budget, txn_builder_mode)
+            .batch_transaction(signer, params, gas, gas_budget, tx_builder_mode)
             .await
     }
 

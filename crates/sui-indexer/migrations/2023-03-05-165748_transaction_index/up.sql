@@ -22,6 +22,7 @@ CREATE TABLE recipients (
     transaction_digest          base58digest    NOT NULL,
     checkpoint_sequence_number  BIGINT          NOT NULL,
     epoch                       BIGINT          NOT NULL,
+    sender                      address         NOT NULL,
     recipient                   address         NOT NULL
 );
 

@@ -54,26 +54,26 @@ pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
     tx_resps: Vec<SuiTransactionFullResponse>,
 ) -> Result<usize, IndexerError> {
-    let new_txns: Vec<Transaction> = tx_resps
+    let new_txs: Vec<Transaction> = tx_resps
         .into_iter()
         .map(|tx| tx.try_into())
         .collect::<Result<Vec<_>, _>>()?;
 
-    let txn_commit_result: Result<usize, Error> = pg_pool_conn
+    let tx_commit_result: Result<usize, Error> = pg_pool_conn
         .build_transaction()
         .read_write()
         .run::<_, Error, _>(|conn| {
-        diesel::insert_into(transactions::table)
-            .values(&new_txns)
-            .on_conflict(transaction_digest)
-            .do_nothing()
-            .execute(conn)
-    });
+            diesel::insert_into(transactions::table)
+                .values(&new_txs)
+                .on_conflict(transaction_digest)
+                .do_nothing()
+                .execute(conn)
+        });
 
-    txn_commit_result.map_err(|e| {
+    tx_commit_result.map_err(|e| {
         IndexerError::PostgresWriteError(format!(
             "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
-            new_txns, e
+            new_txs, e
         ))
     })
 }
@@ -88,7 +88,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
                 tx_resp.transaction, err
             ))
         })?;
-        let txn_effect_json = serde_json::to_string(&tx_resp.effects).map_err(|err| {
+        let tx_effect_json = serde_json::to_string(&tx_resp.effects).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction effects {:?} to JSON with error: {:?}",
                 tx_resp.effects.clone(),
@@ -98,13 +98,13 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
 
         let effects = tx_resp.effects;
         let transaction_data = tx_resp.transaction.data;
-        // canonical txn digest string is Base58 encoded
+        // canonical tx digest string is Base58 encoded
         let tx_digest = effects.transaction_digest().base58_encode();
         let gas_budget = transaction_data.gas_data().budget;
         let gas_price = transaction_data.gas_data().price;
         let sender = transaction_data.sender().to_string();
         let checkpoint_seq_number = tx_resp.checkpoint as i64;
-        let tx_kind = transaction_data.transaction().to_string();
+        let tx_kind = transaction_data.transaction().name().to_string();
         let command_count = transaction_data.transaction().command_count() as i64;
 
         let recipients: Vec<String> = effects
@@ -192,7 +192,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             non_refundable_storage_fee: non_refundable_storage_fee as i64,
             raw_transaction: tx_resp.raw_transaction,
             transaction_content: tx_json,
-            transaction_effects_content: txn_effect_json,
+            transaction_effects_content: tx_effect_json,
             confirmed_local_execution: tx_resp.confirmed_local_execution,
         })
     }

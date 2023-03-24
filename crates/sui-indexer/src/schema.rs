@@ -185,6 +185,7 @@ diesel::table! {
         transaction_digest -> Varchar,
         checkpoint_sequence_number -> Int8,
         epoch -> Int8,
+        sender -> Varchar,
         recipient -> Varchar,
     }
 }

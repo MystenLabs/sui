@@ -334,26 +334,27 @@ impl IndexStore {
         } else {
             None
         };
-        Ok(match filter {
+        match filter {
             Some(TransactionFilter::MoveFunction {
                 package,
                 module,
                 function,
-            }) => self.get_transactions_by_move_function(
+            }) => Ok(self.get_transactions_by_move_function(
                 package, module, function, cursor, limit, reverse,
-            )?,
+            )?),
             Some(TransactionFilter::InputObject(object_id)) => {
-                self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?
+                Ok(self.get_transactions_by_input_object(object_id, cursor, limit, reverse)?)
             }
             Some(TransactionFilter::ChangedObject(object_id)) => {
-                self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?
+                Ok(self.get_transactions_by_mutated_object(object_id, cursor, limit, reverse)?)
             }
             Some(TransactionFilter::FromAddress(address)) => {
-                self.get_transactions_from_addr(address, cursor, limit, reverse)?
+                Ok(self.get_transactions_from_addr(address, cursor, limit, reverse)?)
             }
             Some(TransactionFilter::ToAddress(address)) => {
-                self.get_transactions_to_addr(address, cursor, limit, reverse)?
+                Ok(self.get_transactions_to_addr(address, cursor, limit, reverse)?)
             }
+            Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
             None => {
                 let iter = self.tables.transaction_order.iter();
 
@@ -364,9 +365,9 @@ impl IndexStore {
                         .skip(usize::from(cursor.is_some()))
                         .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
-                        iter.take(limit).collect()
+                        Ok(iter.take(limit).collect())
                     } else {
-                        iter.collect()
+                        Ok(iter.collect())
                     }
                 } else {
                     let iter = iter
@@ -374,13 +375,13 @@ impl IndexStore {
                         .skip(usize::from(cursor.is_some()))
                         .map(|(_, digest)| digest);
                     if let Some(limit) = limit {
-                        iter.take(limit).collect()
+                        Ok(iter.take(limit).collect())
                     } else {
-                        iter.collect()
+                        Ok(iter.collect())
                     }
                 }
             }
-        })
+        }
     }
 
     pub fn get_transactions_in_range_deprecated(

@@ -7455,6 +7455,44 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "description": "Query by sender and recipient address.",
+            "type": "object",
+            "required": [
+              "FromAndToAddress"
+            ],
+            "properties": {
+              "FromAndToAddress": {
+                "type": "object",
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "properties": {
+                  "from": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/SuiAddress"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Query by transaction kind",
+            "type": "object",
+            "required": [
+              "TransactionKind"
+            ],
+            "properties": {
+              "TransactionKind": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
