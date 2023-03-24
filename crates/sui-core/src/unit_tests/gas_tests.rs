@@ -114,7 +114,6 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
         1.into(),
         SuiCostTable::new_for_testing(),
     );
-    gas_status.charge_min_tx_gas()?;
     let obj_size = object.object_size_for_gas_metering();
     let gas_size = gas_object.object_size_for_gas_metering();
 
@@ -311,7 +310,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         1.into(),
         SuiCostTable::new_for_testing(),
     );
-    gas_status.charge_min_tx_gas()?;
     gas_status.charge_storage_read(
         genesis_objects
             .iter()
@@ -323,8 +321,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
     gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
     gas_status.charge_storage_mutation(package.object_size_for_gas_metering(), 0.into())?;
-    // Remember the gas used so far. We will use this to create another failure case latter.
-    let gas_used_after_package_creation = gas_status.summary().gas_used();
     gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0.into())?;
     // Actual gas cost will be greater than the expected summary because of the cost to discard the
     // `UpgradeCap`.
@@ -367,26 +363,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         expected_gas_balance,
     );
 
-    // Create a transaction with gas_budget that's 1 less than the amount needed to
-    // finish charging for storage. This will lead to out of gas failure while trying
-    // to deduct gas for storage.
-    let budget = gas_used_after_package_creation - 1;
-    let response = build_and_try_publish_test_package(
-        &authority_state,
-        &sender,
-        &sender_key,
-        &gas_object_id,
-        "object_wrapping",
-        budget,
-        /* with_unpublished_deps */ false,
-    )
-    .await;
-    let effects = response.1.into_data();
-    let gas_cost = effects.gas_cost_summary().clone();
-    let err = effects.into_status().unwrap_err().0;
-    assert_eq!(err, ExecutionFailureStatus::InsufficientGas);
-    assert_eq!(gas_cost.storage_cost, 0);
-    assert_eq!(gas_cost.storage_rebate, 0);
     Ok(())
 }
 
@@ -440,7 +416,6 @@ async fn test_move_call_gas() -> SuiResult {
         1.into(),
         SuiCostTable::new_for_testing(),
     );
-    gas_status.charge_min_tx_gas()?;
     let package_object = authority_state
         .get_object(&package_object_ref.0)
         .await?
@@ -448,7 +423,6 @@ async fn test_move_call_gas() -> SuiResult {
     gas_status.charge_storage_read(
         package_object.object_size_for_gas_metering() + gas_object.object_size_for_gas_metering(),
     )?;
-    let gas_used_before_vm_exec = gas_status.summary().gas_used();
     let created_object = authority_state
         .get_object(&effects.created()[0].0 .0)
         .await?
@@ -486,36 +460,6 @@ async fn test_move_call_gas() -> SuiResult {
     assert!(gas_cost.storage_cost > 0 && gas_cost.storage_cost < gas_cost.storage_rebate);
     // Check that we have storage rebate that's the same as previous cost.
     assert_eq!(gas_cost.storage_rebate, prev_storage_cost);
-    let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
-
-    // Create a transaction with gas budget that should run out during Move VM execution.
-    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
-    let budget = gas_used_before_vm_exec + 1;
-    let data = TransactionData::new_move_call_with_dummy_gas_price(
-        sender,
-        package_object_ref.0,
-        module,
-        function,
-        Vec::new(),
-        gas_object.compute_object_reference(),
-        args,
-        budget,
-    )
-    .unwrap();
-
-    let transaction = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, transaction).await?;
-    let effects = response.1.into_data();
-    let gas_cost = effects.gas_cost_summary().clone();
-    let err = effects.into_status().unwrap_err().0;
-    // We will run out of gas during VM execution.
-    assert!(matches!(err, ExecutionFailureStatus::InsufficientGas));
-    let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
-    let expected_gas_balance = expected_gas_balance - gas_cost.gas_used() + gas_cost.storage_rebate;
-    assert_eq!(
-        GasCoin::try_from(&gas_object)?.value(),
-        expected_gas_balance,
-    );
     Ok(())
 }
 

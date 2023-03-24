@@ -316,6 +316,11 @@ pub struct ProtocolConfig {
     // entire object, just consulting an ID -> tx digest map
     obj_access_cost_verify_per_byte: Option<u64>,
 
+    /// === Gas version. gas model ===
+
+    /// Gas model version, what code we are using to charge gas
+    gas_model_version: Option<u64>,
+
     /// === Storage gas costs ===
 
     /// Per-byte cost of storing an object in the Sui global object store. Some of this cost may be refundable if the object is later freed
@@ -728,6 +733,9 @@ impl ProtocolConfig {
     pub fn obj_metadata_cost_non_refundable(&self) -> u64 {
         self.obj_metadata_cost_non_refundable
             .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn gas_model_version(&self) -> u64 {
+        self.gas_model_version.expect(CONSTANT_ERR_MSG)
     }
     pub fn storage_rebate_rate(&self) -> u64 {
         self.storage_rebate_rate.expect(CONSTANT_ERR_MSG)
@@ -1293,6 +1301,7 @@ impl ProtocolConfig {
                 obj_access_cost_verify_per_byte: Some(200),
                 obj_data_cost_refundable: Some(100),
                 obj_metadata_cost_non_refundable: Some(50),
+                gas_model_version: Some(1),
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
