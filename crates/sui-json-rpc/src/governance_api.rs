@@ -61,19 +61,26 @@ impl GovernanceReadApi {
             return Ok(vec![]);
         }
 
-        let mut stakes_exist: Vec<StakedSui> = vec![];
-        let mut stakes_deleted: Vec<StakedSui> = vec![];
+        let mut stakes: Vec<(StakedSui, bool)> = vec![];
 
         for stake in stakes_read.into_iter() {
             match stake {
-                ObjectRead::Exists(_, o, _) => stakes_exist.push(StakedSui::try_from(&o)?),
-                ObjectRead::Deleted(oref) => stakes_deleted.push(StakedSui::try_from(
-                    &self
+                ObjectRead::Exists(_, o, _) => stakes.push((StakedSui::try_from(&o)?, true)),
+                ObjectRead::Deleted(oref) => {
+                    match self
                         .state
                         .database
-                        .find_object_lt_or_eq_version(oref.0, oref.1)
-                        .unwrap(),
-                )?),
+                        .find_object_lt_or_eq_version(oref.0, oref.1.one_before().unwrap())
+                    {
+                        Some(o) => stakes.push((StakedSui::try_from(&o)?, false)),
+                        None => {
+                            return Err(Error::UserInputError(UserInputError::ObjectNotFound {
+                                object_id: oref.0,
+                                version: None,
+                            }))
+                        }
+                    }
+                }
                 ObjectRead::NotExists(id) => {
                     return Err(Error::UserInputError(UserInputError::ObjectNotFound {
                         object_id: id,
@@ -82,9 +89,8 @@ impl GovernanceReadApi {
                 }
             }
         }
-        let mut stakes = self.get_delegated_stakes(stakes_exist, false).await?;
-        stakes.extend(self.get_delegated_stakes(stakes_deleted, true).await?);
-        Ok(stakes)
+
+        self.get_delegated_stakes(stakes).await
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<DelegatedStake>, Error> {
@@ -93,18 +99,18 @@ impl GovernanceReadApi {
             return Ok(vec![]);
         }
 
-        self.get_delegated_stakes(stakes, false).await
+        self.get_delegated_stakes(stakes.iter().map(|s| (s.clone(), true)).collect())
+            .await
     }
 
     async fn get_delegated_stakes(
         &self,
-        stakes: Vec<StakedSui>,
-        deleted: bool,
+        stakes: Vec<(StakedSui, bool)>,
     ) -> Result<Vec<DelegatedStake>, Error> {
         let pools = stakes
             .into_iter()
             .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, s| {
-                pools.entry(s.pool_id()).or_default().push(s);
+                pools.entry(s.0.pool_id()).or_default().push(s);
                 pools
             });
 
@@ -127,18 +133,18 @@ impl GovernanceReadApi {
 
             let mut delegations = vec![];
             for stake in stakes {
-                let status = if deleted {
+                let status = if !stake.1 {
                     StakeStatus::Unstaked
-                } else if system_state.epoch >= stake.activation_epoch() {
+                } else if system_state.epoch >= stake.0.activation_epoch() {
                     let estimated_reward = if let (Some(rate_table), Some(current_rate)) =
                         (&rate_table, &current_rate)
                     {
                         let stake_rate = self
-                            .get_exchange_rate(*rate_table, stake.activation_epoch())
+                            .get_exchange_rate(*rate_table, stake.0.activation_epoch())
                             .await
                             .unwrap_or_default();
                         let estimated_reward = ((stake_rate.rate() / current_rate.rate()) - 1.0)
-                            * stake.principal() as f64;
+                            * stake.0.principal() as f64;
                         max(0, estimated_reward.round() as u64)
                     } else {
                         0
@@ -148,11 +154,11 @@ impl GovernanceReadApi {
                     StakeStatus::Pending
                 };
                 delegations.push(Stake {
-                    staked_sui_id: stake.id(),
+                    staked_sui_id: stake.0.id(),
                     // TODO: this might change when we implement warm up period.
-                    stake_request_epoch: stake.activation_epoch() - 1,
-                    stake_active_epoch: stake.activation_epoch(),
-                    principal: stake.principal(),
+                    stake_request_epoch: stake.0.activation_epoch() - 1,
+                    stake_active_epoch: stake.0.activation_epoch(),
+                    principal: stake.0.principal(),
                     status,
                 })
             }
