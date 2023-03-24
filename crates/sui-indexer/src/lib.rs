@@ -72,7 +72,7 @@ pub struct IndexerConfig {
     pub client_metric_port: u16,
     #[clap(long, default_value = "0.0.0.0", global = true)]
     pub rpc_server_url: String,
-    #[clap(long, default_value = "9000", global = true)]
+    #[clap(long, default_value = "3030", global = true)]
     pub rpc_server_port: u16,
     #[clap(long, multiple_occurrences = false, multiple_values = true)]
     pub migrated_methods: Vec<String>,
@@ -109,7 +109,7 @@ impl Default for IndexerConfig {
             client_metric_host: "0.0.0.0".to_string(),
             client_metric_port: 9184,
             rpc_server_url: "0.0.0.0".to_string(),
-            rpc_server_port: 9000,
+            rpc_server_port: 3030,
             migrated_methods: vec![],
             reset_db: false,
         }

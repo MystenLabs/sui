@@ -84,7 +84,7 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         &self,
         cursor: Option<EpochId>,
         limit: Option<usize>,
-        descending_order: Option<bool>
+        descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
         let mut epochs = self.state.get_epochs(cursor, limit + 1, descending_order)?;

@@ -1159,16 +1159,22 @@ WHERE e1.epoch = e2.epoch
         &self,
         cursor: Option<EpochId>,
         limit: usize,
-        descending_order: Option<bool>
+        descending_order: Option<bool>,
     ) -> Result<Vec<EpochInfo>, IndexerError> {
         let is_descending = descending_order.unwrap_or(false);
-        let id = cursor.map(|id| id as i64).unwrap_or(if is_descending { i64::MAX } else { -1 });
+        let id = cursor
+            .map(|id| id as i64)
+            .unwrap_or(if is_descending { i64::MAX } else { -1 });
         let mut pg_pool_conn = get_pg_pool_connection(&self.cp)?;
         let mut query = epochs_dsl::epochs.into_boxed();
         if is_descending {
-            query = query.filter(epochs::epoch.lt(id)).order_by(epochs::epoch.desc());
+            query = query
+                .filter(epochs::epoch.lt(id))
+                .order_by(epochs::epoch.desc());
         } else {
-            query = query.filter(epochs::epoch.gt(id)).order_by(epochs::epoch.asc());
+            query = query
+                .filter(epochs::epoch.gt(id))
+                .order_by(epochs::epoch.asc());
         }
 
         let epoch_info :Vec<DBEpochInfo> = pg_pool_conn
