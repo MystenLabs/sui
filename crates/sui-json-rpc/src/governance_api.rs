@@ -49,10 +49,10 @@ impl GovernanceReadApi {
 
     async fn get_stakes_by_ids(
         &self,
-        staked_sui_id: Vec<ObjectID>,
+        staked_sui_ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, Error> {
         let stakes_read = futures::future::try_join_all(
-            staked_sui_id
+            staked_sui_ids
                 .iter()
                 .map(|id| self.state.get_object_read(id)),
         )
@@ -109,8 +109,8 @@ impl GovernanceReadApi {
     ) -> Result<Vec<DelegatedStake>, Error> {
         let pools = stakes
             .into_iter()
-            .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, s| {
-                pools.entry(s.0.pool_id()).or_default().push(s);
+            .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, (stake, exists)| {
+                pools.entry(stake.pool_id()).or_default().push((stake, exists));
                 pools
             });
 
@@ -132,19 +132,19 @@ impl GovernanceReadApi {
             };
 
             let mut delegations = vec![];
-            for stake in stakes {
-                let status = if !stake.1 {
+            for (stake, exists) in stakes {
+                let status = if !exists {
                     StakeStatus::Unstaked
-                } else if system_state.epoch >= stake.0.activation_epoch() {
+                } else if system_state.epoch >= stake.activation_epoch() {
                     let estimated_reward = if let (Some(rate_table), Some(current_rate)) =
                         (&rate_table, &current_rate)
                     {
                         let stake_rate = self
-                            .get_exchange_rate(*rate_table, stake.0.activation_epoch())
+                            .get_exchange_rate(*rate_table, stake.activation_epoch())
                             .await
                             .unwrap_or_default();
                         let estimated_reward = ((stake_rate.rate() / current_rate.rate()) - 1.0)
-                            * stake.0.principal() as f64;
+                            * stake.principal() as f64;
                         max(0, estimated_reward.round() as u64)
                     } else {
                         0
@@ -154,11 +154,11 @@ impl GovernanceReadApi {
                     StakeStatus::Pending
                 };
                 delegations.push(Stake {
-                    staked_sui_id: stake.0.id(),
+                    staked_sui_id: stake.id(),
                     // TODO: this might change when we implement warm up period.
-                    stake_request_epoch: stake.0.activation_epoch() - 1,
-                    stake_active_epoch: stake.0.activation_epoch(),
-                    principal: stake.0.principal(),
+                    stake_request_epoch: stake.activation_epoch() - 1,
+                    stake_active_epoch: stake.activation_epoch(),
+                    principal: stake.principal(),
                     status,
                 })
             }
@@ -225,9 +225,9 @@ impl GovernanceReadApi {
 impl GovernanceReadApiServer for GovernanceReadApi {
     async fn get_stakes_by_ids(
         &self,
-        staked_sui_id: Vec<ObjectID>,
+        staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        Ok(self.get_stakes_by_ids(staked_sui_id).await?)
+        Ok(self.get_stakes_by_ids(staked_sui_ids).await?)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
