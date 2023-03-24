@@ -56,6 +56,7 @@ export function ImportLedgerAccounts() {
             } else {
                 toast.error('Make sure the Sui app is open on your device.');
             }
+            console.log('ERROR', error);
             navigate(accountsUrl, { replace: true });
         },
     });

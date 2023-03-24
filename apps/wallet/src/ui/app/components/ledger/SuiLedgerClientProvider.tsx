@@ -39,23 +39,25 @@ export function SuiLedgerClientProvider({
 }: SuiLedgerClientProviderProps) {
     const [suiLedgerClient, setSuiLedgerClient] = useState<SuiLedgerClient>();
 
-    useEffect(() => {
-        const onDisconnect = () => {
-            setSuiLedgerClient(undefined);
-        };
+    const resetSuiLedgerClient = useCallback(async () => {
+        await suiLedgerClient?.transport.close();
+        setSuiLedgerClient(undefined);
+    }, [suiLedgerClient]);
 
-        suiLedgerClient?.transport.on('disconnect', onDisconnect);
-        return () => suiLedgerClient?.transport.off('disconnect', onDisconnect);
-    }, [suiLedgerClient?.transport]);
+    useEffect(() => {
+        // NOTE: The disconnect event is fired when someone physically disconnects
+        // their Ledger device in addition to when user's exit out of an application
+        suiLedgerClient?.transport.on('disconnect', resetSuiLedgerClient);
+        return () => {
+            suiLedgerClient?.transport.off('disconnect', resetSuiLedgerClient);
+        };
+    }, [resetSuiLedgerClient, suiLedgerClient?.transport]);
 
     const connectToLedger = useCallback(
         async (requestPermissionsFirst = false) => {
             // If we've already connected to a Ledger device, we need
             // to close the connection before we try to re-connect
-            if (suiLedgerClient) {
-                await suiLedgerClient?.transport.close();
-                setSuiLedgerClient(undefined);
-            }
+            await resetSuiLedgerClient();
 
             const ledgerTransport = requestPermissionsFirst
                 ? await requestLedgerConnection()
@@ -64,7 +66,7 @@ export function SuiLedgerClientProvider({
             setSuiLedgerClient(ledgerClient);
             return ledgerClient;
         },
-        [suiLedgerClient]
+        [resetSuiLedgerClient]
     );
 
     const contextValue: SuiLedgerClientContextValue = useMemo(() => {

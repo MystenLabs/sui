@@ -14,6 +14,7 @@ import {
 import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export class LedgerSigner extends SignerWithProvider {
+    #suiLedgerClient: SuiLedgerClient | null;
     readonly #connectToLedger: () => Promise<SuiLedgerClient>;
     readonly #derivationPath: string;
     readonly #signatureScheme: SignatureScheme = 'ED25519';
@@ -25,11 +26,21 @@ export class LedgerSigner extends SignerWithProvider {
     ) {
         super(provider);
         this.#connectToLedger = connectToLedger;
+        this.#suiLedgerClient = null;
         this.#derivationPath = derivationPath;
     }
 
+    async #initializeSuiLedgerClient() {
+        if (!this.#suiLedgerClient) {
+            // We want to make sure that there's only one connection established per Ledger signer
+            // instance since some methods make multiple calls like getAddress and signData
+            this.#suiLedgerClient = await this.#connectToLedger();
+        }
+        return this.#suiLedgerClient;
+    }
+
     async getAddress(): Promise<SuiAddress> {
-        const ledgerClient = await this.#connectToLedger();
+        const ledgerClient = await this.#initializeSuiLedgerClient();
         const publicKeyResult = await ledgerClient.getPublicKey(
             this.#derivationPath
         );
@@ -38,7 +49,7 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async getPublicKey(): Promise<Ed25519PublicKey> {
-        const ledgerClient = await this.#connectToLedger();
+        const ledgerClient = await this.#initializeSuiLedgerClient();
         const { publicKey } = await ledgerClient.getPublicKey(
             this.#derivationPath
         );
@@ -46,7 +57,7 @@ export class LedgerSigner extends SignerWithProvider {
     }
 
     async signData(data: Uint8Array): Promise<SerializedSignature> {
-        const ledgerClient = await this.#connectToLedger();
+        const ledgerClient = await this.#initializeSuiLedgerClient();
         const { signature } = await ledgerClient.signTransaction(
             this.#derivationPath,
             data

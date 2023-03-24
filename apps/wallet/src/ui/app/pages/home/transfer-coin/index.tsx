@@ -86,6 +86,7 @@ function TransferCoinPage() {
             return navigate(receiptUrl);
         },
         onError: (error) => {
+            console.log('ERR', error);
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     <small className="text-ellipsis overflow-hidden">
