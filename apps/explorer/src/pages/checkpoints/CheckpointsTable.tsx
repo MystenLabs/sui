@@ -39,7 +39,7 @@ export function CheckpointsTable({
             rpc.getCheckpoints({
                 limit,
                 descendingOrder: true,
-                cursor: pagination.cursor,
+                cursor: String(pagination.cursor),
             }),
         {
             keepPreviousData: true,
@@ -133,7 +133,7 @@ export function CheckpointsTable({
                 <TableFooter
                     label="Checkpoints"
                     data={checkpointsData}
-                    count={countQuery.data}
+                    count={Number(countQuery.data)}
                     limit={limit}
                     onLimitChange={setLimit}
                     pagination={pagination}

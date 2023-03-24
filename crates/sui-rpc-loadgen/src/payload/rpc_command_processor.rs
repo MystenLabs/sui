@@ -151,10 +151,10 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
 
                     match client
                         .read_api()
-                        .get_checkpoint(CheckpointId::SequenceNumber(seq))
+                        .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(seq)))
                         .await {
                         Ok(t) => {
-                            if t.sequence_number != seq {
+                            if t.sequence_number != <BigInt>::from(seq) {
                                 error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
                             }
                             if op.verify_transactions {
