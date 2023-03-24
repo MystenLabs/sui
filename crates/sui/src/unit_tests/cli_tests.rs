@@ -2011,7 +2011,6 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
         if object_responses.has_next_page {
             cursor = object_responses.next_cursor;
-            println!("{:?}", cursor)
         } else {
             has_next = false;
         }

@@ -144,11 +144,11 @@ impl ReadApiServer for ReadApi {
 
         // objects here are of size (limit + 1), where the last one is the cursor for the next page
         let has_next_page = objects.len() > limit;
+        objects.truncate(limit);
         let next_cursor = objects
             .last()
             .cloned()
             .map_or(cursor, |o_info| Some(o_info.object_id));
-        objects.truncate(limit);
 
         let data = match options.is_not_in_object_info() {
             true => {
