@@ -273,6 +273,7 @@ by calling remove_value_for_upgrade.
     <b>assert</b>!(versioned_id == <a href="object.md#0x2_object_id">object::id</a>(self), <a href="versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
     <b>assert</b>!(old_version &lt; new_version, <a href="versioned.md#0x2_versioned_EInvalidUpgrade">EInvalidUpgrade</a>);
     <a href="dynamic_field.md#0x2_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> self.id, new_version, new_value);
+    self.version = new_version;
 }
 </code></pre>
 
