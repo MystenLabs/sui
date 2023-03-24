@@ -194,6 +194,7 @@ async fn test_publish_duplicate_modules() {
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_object_wrapping_unwrapping() {
+    telemetry_subscribers::init_for_testing();
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
@@ -783,11 +784,11 @@ async fn test_create_then_delete_parent_child_wrap_separate() {
     )
     .await
     .unwrap();
+
     assert!(effects.status().is_ok());
     let child = effects.created()[0].0;
 
     // Add the child to the parent.
-    println!("add_child_wrapped");
     let effects = call_move(
         &authority,
         &gas,

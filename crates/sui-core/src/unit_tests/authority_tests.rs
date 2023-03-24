@@ -10,6 +10,7 @@ use std::task::{Context, Poll};
 use std::{convert::TryInto, env};
 
 use bcs;
+use fastcrypto::hash::MultisetHash;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::{
@@ -62,6 +63,7 @@ use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::consensus_handler::SequencedConsensusTransaction;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::state_accumulator::StateAccumulator;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
@@ -1533,7 +1535,18 @@ pub async fn send_and_confirm_transaction_(
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    //
+    // We also check the incremental effects of the transaction on the live object set against StateAccumulator
+    // for testing and regression detection
+    let state_acc = StateAccumulator::new(authority.database.clone());
+    let mut state = state_acc.accumulate_live_object_set();
     let result = authority.try_execute_for_test(&certificate).await?;
+    let state_after = state_acc.accumulate_live_object_set();
+    let effects_acc = state_acc.accumulate_effects(vec![result.inner().data().clone()]);
+    state.union(&effects_acc);
+
+    assert_eq!(state_after.digest(), state.digest());
+
     if let Some(fullnode) = fullnode {
         fullnode.try_execute_for_test(&certificate).await?;
     }

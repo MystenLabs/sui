@@ -583,6 +583,10 @@ impl ObjectDigest {
         *self == Self::OBJECT_DIGEST_DELETED
     }
 
+    pub fn is_wrapped(&self) -> bool {
+        *self == Self::OBJECT_DIGEST_WRAPPED
+    }
+
     pub fn base58_encode(&self) -> String {
         Base58::encode(self.0)
     }

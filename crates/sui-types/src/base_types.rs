@@ -75,6 +75,16 @@ mod base_types_tests;
 )]
 pub struct SequenceNumber(u64);
 
+impl SequenceNumber {
+    pub fn one_before(&self) -> Option<SequenceNumber> {
+        if self.0 == 0 {
+            None
+        } else {
+            Some(SequenceNumber(self.0 - 1))
+        }
+    }
+}
+
 pub type TxSequenceNumber = u64;
 
 impl fmt::Display for SequenceNumber {
