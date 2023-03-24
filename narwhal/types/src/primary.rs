@@ -94,10 +94,6 @@ impl Batch {
             metadata: Metadata::default(),
         }
     }
-
-    pub fn size(&self) -> usize {
-        self.transactions.iter().map(|t| t.len()).sum()
-    }
 }
 
 #[derive(
