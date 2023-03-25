@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useRpcClient } from '../api/RpcClientContext';
-import { type EventId } from '@mysten/sui.js';
+import { type EventId, VALIDATORS_EVENTS_QUERY } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
-
-export const VALIDATORS_EVENTS_QUERY =
-    '0x3::validator_set::ValidatorEpochInfoEvent';
 
 type GetValidatorsEvent = {
     cursor?: EventId | null;
