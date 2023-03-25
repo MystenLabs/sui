@@ -16,6 +16,7 @@ use sui_types::{
 
 use move_core_types::{
     account_address::AccountAddress,
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
@@ -146,11 +147,53 @@ impl<'a, E: fmt::Debug, S: StorageView<E>> LinkageResolver for StorageContext<'a
         }
     }
 
-    //    /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
-    //    /// defined that type.
-    //    fn defining_module(
-    //        &self,
-    //        module_id: &ModuleId,
-    //        _struct: &IdentStr,
-    //    ) -> Result<ModuleId, Self::Error>;
+    /// Translate the runtime fully-qualified struct name to the on-chain `ModuleId` that originally
+    /// defined that type.
+    fn defining_module(
+        &self,
+        module_id: &ModuleId,
+        _struct: &IdentStr,
+    ) -> Result<ModuleId, Self::Error> {
+        let m_name = module_id.name().to_string();
+        let s_name = _struct.to_string();
+        let linkage_info_opt = self.linkage_info.borrow();
+        let linkage_info = linkage_info_opt.as_ref().unwrap();
+        let mod_id: ObjectID = (*module_id.address()).into();
+        let defining_pkg_id = if linkage_info.pkg_id == mod_id {
+            // special case needed in case the type origin table is not yet available in storage but
+            // may have to already serve queries (e.g. during object publishing)
+            // TODO: is the above really true or we don't need type origin table in the linkage context?
+            *linkage_info.type_origin_map.get(&(m_name, s_name)).unwrap()
+        } else {
+            // TODO: load a package just to answer the query is expensive, but is it also safe to
+            // call from the linker?
+            let defining_org_pkg_id = linkage_info.linkage_table.get(&mod_id).unwrap().upgraded_id;
+            let defining_org_pkg = &self
+                .storage_view
+                .get_packages(&[defining_org_pkg_id])
+                .unwrap()
+                .unwrap()[0];
+            *defining_org_pkg
+                .type_origin_table()
+                .iter()
+                .find_map(
+                    |TypeOrigin {
+                         module_name,
+                         struct_name,
+                         package,
+                     }| {
+                        if module_name == &m_name && struct_name == &s_name {
+                            Some(package)
+                        } else {
+                            None
+                        }
+                    },
+                )
+                .unwrap()
+        };
+        Ok(ModuleId::new(
+            (defining_pkg_id).into(),
+            module_id.name().into(),
+        ))
+    }
 }
