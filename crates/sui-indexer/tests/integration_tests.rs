@@ -36,7 +36,6 @@ pub mod pg_integration_test {
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
-    use sui_types::digests::TransactionDigest;
     use sui_types::error::SuiObjectResponseError;
     use sui_types::gas_coin::GasCoin;
     use sui_types::messages::ExecuteTransactionRequestType;
@@ -180,11 +179,9 @@ pub mod pg_integration_test {
 
         let checkpoint = store.get_checkpoint(0.into()).unwrap();
 
-        for tx in checkpoint.transactions {
-            let tx = tx.unwrap();
-            let transaction = store.get_transaction_by_digest(&tx);
+        for tx_digest in checkpoint.transactions {
+            let transaction = store.get_transaction_by_digest(&tx_digest.base58_encode());
             assert!(transaction.is_ok());
-            let tx_digest = TransactionDigest::from_str(&tx).unwrap();
             let _fullnode_rpc_tx = test_cluster
                 .rpc_client()
                 .get_transaction_with_options(tx_digest, Some(SuiTransactionResponseOptions::new()))
@@ -206,38 +203,31 @@ pub mod pg_integration_test {
     #[tokio::test]
     #[timeout(60000)]
     async fn test_total_addresses() -> Result<(), anyhow::Error> {
-        let (_test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let total_address_count = store.get_total_addresses().unwrap();
-        let rpc_total_address_count = indexer_rpc_client.get_total_addresses().await?;
-        assert_eq!(rpc_total_address_count, total_address_count);
+        let total_address_count = store.get_network_metrics().unwrap().total_addresses;
+        assert_eq!(10, total_address_count);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_total_objects() -> Result<(), anyhow::Error> {
-        let (_test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let total_object_count = store.get_total_objects().unwrap();
-        let rpc_total_object_count = indexer_rpc_client.get_total_objects().await?;
-        // number of objects in genesis varies
-        assert!(total_object_count > 0);
-        assert_eq!(total_object_count, rpc_total_object_count);
+        let total_object_count = store.get_network_metrics().unwrap().total_objects;
+        assert_eq!(48, total_object_count);
         Ok(())
     }
 
     #[tokio::test]
     async fn test_total_packages() -> Result<(), anyhow::Error> {
-        let (_test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
         // Allow indexer to sync genesis
         wait_until_next_checkpoint(&store).await;
-        let total_package_count = store.get_total_packages().unwrap();
-        let rpc_total_package_count = indexer_rpc_client.get_total_packages().await?;
-        // number of packages in genesis varies
-        assert!(total_package_count > 0);
-        assert_eq!(total_package_count, rpc_total_package_count);
+        let total_package_count = store.get_network_metrics().unwrap().total_packages;
+        assert_eq!(3, total_package_count);
         Ok(())
     }
 
@@ -865,6 +855,7 @@ pub mod pg_integration_test {
     }
 
     #[tokio::test]
+    #[timeout(60000)]
     async fn test_get_last_checkpoint_of_epoch() {
         let (test_cluster, _, store, handle) = start_test_cluster(Some(20000)).await;
         // Allow indexer to sync geneis epoch
@@ -880,17 +871,27 @@ pub mod pg_integration_test {
             .unwrap();
         assert_eq!(checkpoint.epoch as u64, current_epoch.epoch - 1);
         assert_eq!(
-            checkpoint.sequence_number as u64,
+            <u64>::from(checkpoint.sequence_number),
             prev_epoch_last_checkpoint_id
         );
         assert!(checkpoint.end_of_epoch_data.is_some());
 
-        let decoded_checkpoint: sui_json_rpc_types::Checkpoint = checkpoint.try_into().unwrap();
-        assert_eq!(decoded_checkpoint.epoch, current_epoch.epoch - 1);
+        assert_eq!(checkpoint.epoch, current_epoch.epoch - 1);
         assert_eq!(
-            <u64>::from(decoded_checkpoint.sequence_number),
+            <u64>::from(checkpoint.sequence_number),
             prev_epoch_last_checkpoint_id
         );
+
+        // cross check with FN
+        let fn_cp = test_cluster
+            .rpc_client()
+            .get_checkpoint(CheckpointId::SequenceNumber(
+                prev_epoch_last_checkpoint_id.into(),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(fn_cp, checkpoint);
 
         drop(handle);
         drop(test_cluster);

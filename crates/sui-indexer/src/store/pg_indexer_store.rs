@@ -7,36 +7,44 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use diesel::dsl::{count, max};
+use diesel::dsl::max;
 use diesel::query_builder::AsQuery;
 use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl};
+use fastcrypto::hash::Digest;
+use fastcrypto::traits::ToFromBytes;
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::identifier::Identifier;
 use tracing::info;
 
 use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent, SuiObjectDataFilter,
+    CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics, MoveFunctionName,
+    NetworkMetrics, SuiEvent, SuiObjectDataFilter,
 };
 use sui_json_rpc_types::{
     SuiTransaction, SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents,
     SuiTransactionResponseOptions,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
-use sui_types::committee::EpochId;
+use sui_types::committee::{EpochId, ProtocolVersion};
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::{
+    CheckpointCommitment, CheckpointSequenceNumber, ECMHLiveObjectSetDigest, EndOfEpochData,
+};
 use sui_types::object::ObjectRead;
 
 use crate::errors::{Context, IndexerError};
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
+use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
 use crate::models::objects::Object;
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
@@ -187,16 +195,77 @@ impl IndexerStore for PgIndexerStore {
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
-    fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError> {
-        read_only!(&self.cp, |conn| match id {
-            CheckpointId::SequenceNumber(seq) => checkpoints_dsl::checkpoints
-                .filter(checkpoints::sequence_number.eq(<u64>::from(seq) as i64))
-                .limit(1)
-                .first(conn),
-            CheckpointId::Digest(digest) => checkpoints_dsl::checkpoints
-                .filter(checkpoints::checkpoint_digest.eq(digest.base58_encode()))
-                .limit(1)
-                .first(conn),
+    fn get_checkpoint(
+        &self,
+        id: CheckpointId,
+    ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
+        read_only!(&self.cp, |conn| {
+            let cp: Checkpoint = match id {
+                CheckpointId::SequenceNumber(seq) => checkpoints_dsl::checkpoints
+                    .filter(checkpoints::sequence_number.eq(<u64>::from(seq) as i64))
+                    .limit(1)
+                    .first(conn),
+                CheckpointId::Digest(digest) => checkpoints_dsl::checkpoints
+                    .filter(checkpoints::checkpoint_digest.eq(digest.base58_encode()))
+                    .limit(1)
+                    .first(conn),
+            }?;
+            let end_of_epoch_data = if cp.end_of_epoch {
+                let (
+                    next_version,
+                    next_epoch_committee,
+                    next_epoch_committee_stake,
+                    epoch_commitments,
+                ) = epochs::dsl::epochs
+                    .select((
+                        epochs::next_epoch_version,
+                        epochs::next_epoch_committee,
+                        epochs::next_epoch_committee_stake,
+                        epochs::epoch_commitments,
+                    ))
+                    .filter(epochs::epoch.eq(cp.epoch))
+                    .first::<(
+                        Option<i64>,
+                        Vec<Option<Vec<u8>>>,
+                        Vec<Option<i64>>,
+                        Vec<Option<Vec<u8>>>,
+                    )>(conn)?;
+
+                let next_epoch_committee = next_epoch_committee
+                    .iter()
+                    .flatten()
+                    .zip(next_epoch_committee_stake.iter().flatten())
+                    .map(|(name, vote)| {
+                        AuthorityPublicKeyBytes::from_bytes(name.as_slice())
+                            .map(|b| (b, (*vote) as u64))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let epoch_commitments = epoch_commitments
+                    .iter()
+                    .flatten()
+                    .flat_map(|v| {
+                        if let Ok(v) = v.clone().try_into() {
+                            return Some(CheckpointCommitment::ECMHLiveObjectSetDigest(
+                                ECMHLiveObjectSetDigest::from(Digest::new(v)),
+                            ));
+                        }
+                        None
+                    })
+                    .collect::<Vec<_>>();
+
+                next_version.map(|next_epoch_protocol_version| EndOfEpochData {
+                    next_epoch_committee,
+                    next_epoch_protocol_version: ProtocolVersion::from(
+                        next_epoch_protocol_version as u64,
+                    ),
+                    epoch_commitments,
+                })
+            } else {
+                None
+            };
+
+            cp.into_rpc(end_of_epoch_data)
         })
         .context("Failed reading previous checkpoint from PostgresDB")
     }
@@ -317,11 +386,11 @@ impl IndexerStore for PgIndexerStore {
     fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
         let checkpoint: Checkpoint = read_only!(&self.cp, |conn| {
             checkpoints_dsl::checkpoints
-                .order(checkpoints_dsl::total_transactions_from_genesis.desc())
+                .order(checkpoints_dsl::network_total_transactions.desc())
                 .first::<Checkpoint>(conn)
         })
         .context("Failed reading total transaction number")?;
-        Ok(checkpoint.total_transactions_from_genesis)
+        Ok(checkpoint.network_total_transactions)
     }
 
     fn get_transaction_by_digest(&self, tx_digest: &str) -> Result<Transaction, IndexerError> {
@@ -892,31 +961,45 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    fn get_total_addresses(&self) -> Result<u64, IndexerError> {
-        let total_addresses = read_only!(&self.cp, |conn| {
-            addresses::table
-                .select(count(addresses::account_address))
-                .first::<i64>(conn)
+    fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
+        let metrics = read_only!(&self.cp, |conn| {
+            diesel::sql_query("SELECT * FROM network_metrics;").get_result::<DBNetworkMetrics>(conn)
         })?;
-        Ok(total_addresses as u64)
+        Ok(metrics.into())
     }
 
-    fn get_total_objects(&self) -> Result<u64, IndexerError> {
-        let total_objects = read_only!(&self.cp, |conn| {
-            objects::table
-                .select(count(objects::object_id))
-                .first::<i64>(conn)
+    fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
+        let metrics = read_only!(&self.cp, |conn| {
+            diesel::sql_query("SELECT * FROM network_metrics;")
+                .get_results::<DBMoveCallMetrics>(conn)
         })?;
-        Ok(total_objects as u64)
-    }
 
-    fn get_total_packages(&self) -> Result<u64, IndexerError> {
-        let total_packages = read_only!(&self.cp, |conn| {
-            packages::table
-                .select(count(packages::package_id))
-                .first::<i64>(conn)
-        })?;
-        Ok(total_packages as u64)
+        let mut d3 = vec![];
+        let mut d7 = vec![];
+        let mut d30 = vec![];
+        for m in metrics {
+            let package = ObjectID::from_str(&m.move_package);
+            let module = Identifier::from_str(m.move_module.as_str());
+            let function = Identifier::from_str(m.move_function.as_str());
+            if let (Ok(package), Ok(module), Ok(function)) = (package, module, function) {
+                let fun = MoveFunctionName {
+                    package,
+                    module,
+                    function,
+                };
+                match m.count {
+                    3 => d3.push((fun, m.count as usize)),
+                    7 => d7.push((fun, m.count as usize)),
+                    30 => d30.push((fun, m.count as usize)),
+                    _ => {}
+                }
+            }
+        }
+        Ok(MoveCallMetrics {
+            rank_3_days: d3,
+            rank_7_days: d7,
+            rank_30_days: d30,
+        })
     }
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
@@ -1111,6 +1194,11 @@ WHERE e1.epoch = e2.epoch
                             epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
                             epochs::epoch_end_timestamp.eq(excluded(epochs::epoch_end_timestamp)),
                             epochs::protocol_version.eq(excluded(epochs::protocol_version)),
+                            epochs::next_epoch_version.eq(excluded(epochs::next_epoch_version)),
+                            epochs::next_epoch_committee.eq(excluded(epochs::next_epoch_committee)),
+                            epochs::next_epoch_committee_stake
+                                .eq(excluded(epochs::next_epoch_committee_stake)),
+                            epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
                             epochs::reference_gas_price.eq(excluded(epochs::reference_gas_price)),
                             epochs::total_stake.eq(excluded(epochs::total_stake)),
                             epochs::storage_fund_reinvestment

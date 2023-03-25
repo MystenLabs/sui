@@ -1969,59 +1969,36 @@
       }
     },
     {
-      "name": "suix_getTotalAddresses",
+      "name": "suix_getMoveCallMetrics",
       "tags": [
         {
           "name": "Extended API"
         }
       ],
-      "description": "Return total address count",
+      "description": "Return Network metrics",
       "params": [],
       "result": {
-        "name": "u64",
+        "name": "MoveCallMetrics",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/MoveCallMetrics"
         }
       }
     },
     {
-      "name": "suix_getTotalObjects",
+      "name": "suix_getNetworkMetrics",
       "tags": [
         {
           "name": "Extended API"
         }
       ],
-      "description": "Return total object count",
+      "description": "Return Network metrics",
       "params": [],
       "result": {
-        "name": "u64",
+        "name": "NetworkMetrics",
         "required": true,
         "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        }
-      }
-    },
-    {
-      "name": "suix_getTotalPackages",
-      "tags": [
-        {
-          "name": "Extended API"
-        }
-      ],
-      "description": "Return total package count",
-      "params": [],
-      "result": {
-        "name": "u64",
-        "required": true,
-        "schema": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "$ref": "#/components/schemas/NetworkMetrics"
         }
       }
     },
@@ -4173,6 +4150,70 @@
           }
         ]
       },
+      "MoveCallMetrics": {
+        "type": "object",
+        "required": [
+          "rank30Days",
+          "rank3Days",
+          "rank7Days"
+        ],
+        "properties": {
+          "rank30Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "rank3Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          },
+          "rank7Days": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "$ref": "#/components/schemas/MoveFunctionName"
+                },
+                {
+                  "type": "integer",
+                  "format": "uint",
+                  "minimum": 0.0
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
+      },
       "MoveCallParams": {
         "type": "object",
         "required": [
@@ -4227,6 +4268,25 @@
             "additionalProperties": false
           }
         ]
+      },
+      "MoveFunctionName": {
+        "type": "object",
+        "required": [
+          "function",
+          "module",
+          "package"
+        ],
+        "properties": {
+          "function": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
       },
       "MovePackage": {
         "type": "object",
@@ -4388,6 +4448,72 @@
             "type": "integer",
             "format": "uint16",
             "minimum": 0.0
+          }
+        }
+      },
+      "NetworkMetrics": {
+        "type": "object",
+        "required": [
+          "cps30Days",
+          "currentCheckpoint",
+          "currentCps",
+          "currentEpoch",
+          "currentTps",
+          "totalAddresses",
+          "totalObjects",
+          "totalPackages",
+          "tps30Days"
+        ],
+        "properties": {
+          "cps30Days": {
+            "description": "Peak CPS in the past 30 days",
+            "type": "number",
+            "format": "double"
+          },
+          "currentCheckpoint": {
+            "description": "Current checkpoint number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "currentCps": {
+            "description": "Current TPS - Sui Command per Second.",
+            "type": "number",
+            "format": "double"
+          },
+          "currentEpoch": {
+            "description": "Current epoch number",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "currentTps": {
+            "description": "Current TPS - Transaction per Second.",
+            "type": "number",
+            "format": "double"
+          },
+          "totalAddresses": {
+            "description": "Total number of addresses seen in the network",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalObjects": {
+            "description": "Total number of live objects in the network",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "totalPackages": {
+            "description": "Total number of packages published in the network",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "tps30Days": {
+            "description": "Peak TPS in the past 30 days",
+            "type": "number",
+            "format": "double"
           }
         }
       },

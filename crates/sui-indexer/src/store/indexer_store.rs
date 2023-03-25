@@ -4,8 +4,8 @@
 use async_trait::async_trait;
 
 use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiObjectData,
-    SuiObjectDataFilter, SuiTransactionResponseOptions,
+    Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
+    NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionResponseOptions,
 };
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::CheckpointDigest;
@@ -32,7 +32,7 @@ pub trait IndexerStore {
     type ModuleCache;
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
-    fn get_checkpoint(&self, id: CheckpointId) -> Result<Checkpoint, IndexerError>;
+    fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
     fn get_checkpoint_sequence_number(
         &self,
         digest: CheckpointDigest,
@@ -165,9 +165,8 @@ pub trait IndexerStore {
         limit: usize,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_total_addresses(&self) -> Result<u64, IndexerError>;
-    fn get_total_objects(&self) -> Result<u64, IndexerError>;
-    fn get_total_packages(&self) -> Result<u64, IndexerError>;
+    fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
+    fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
@@ -177,6 +176,7 @@ pub trait IndexerStore {
         cursor: Option<EpochId>,
         limit: usize,
     ) -> Result<Vec<EpochInfo>, IndexerError>;
+
     fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
 
     fn module_cache(&self) -> &Self::ModuleCache;

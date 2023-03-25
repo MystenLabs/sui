@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 
-use sui_types::base_types::EpochId;
+use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 
@@ -45,4 +48,48 @@ pub struct EndOfEpochInfo {
     pub total_gas_fees: u64,
     pub total_stake_rewards_distributed: u64,
     pub leftover_storage_fund_inflow: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkMetrics {
+    /// Current TPS - Transaction per Second.
+    pub current_tps: f64,
+    /// Peak TPS in the past 30 days
+    pub tps_30_days: f64,
+    /// Current TPS - Sui Command per Second.
+    pub current_cps: f64,
+    /// Peak CPS in the past 30 days
+    pub cps_30_days: f64,
+    /// Total number of packages published in the network
+    pub total_packages: u64,
+    /// Total number of addresses seen in the network
+    pub total_addresses: u64,
+    /// Total number of live objects in the network
+    pub total_objects: u64,
+    /// Current epoch number
+    pub current_epoch: u64,
+    /// Current checkpoint number
+    pub current_checkpoint: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveCallMetrics {
+    pub rank_3_days: Vec<(MoveFunctionName, usize)>,
+    pub rank_7_days: Vec<(MoveFunctionName, usize)>,
+    pub rank_30_days: Vec<(MoveFunctionName, usize)>,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveFunctionName {
+    pub package: ObjectID,
+    #[schemars(with = "String")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub module: Identifier,
+    #[schemars(with = "String")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub function: Identifier,
 }
