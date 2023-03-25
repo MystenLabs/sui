@@ -31,7 +31,8 @@ pub mod pg_integration_test {
     use sui_json_rpc_types::{
         BigInt, CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
         SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
-        SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
+        SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
+        TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
@@ -39,11 +40,10 @@ pub mod pg_integration_test {
     use sui_types::gas_coin::GasCoin;
     use sui_types::messages::ExecuteTransactionRequestType;
     use sui_types::object::ObjectFormatOptions;
+    use sui_types::query::TransactionFilter;
     use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use test_utils::transaction::{
-        create_devnet_nft, delete_devnet_nft, publish_nfts_package, transfer_coin,
-    };
+    use test_utils::transaction::{create_devnet_nft, delete_devnet_nft, publish_nfts_package};
 
     const WAIT_UNTIL_TIME_LIMIT: u64 = 60;
 
@@ -120,6 +120,7 @@ pub mod pg_integration_test {
         Ok(tx_response)
     }
 
+    // TODO: we should use SuiClient for tests like this
     async fn execute_simple_transfer(
         test_cluster: &mut TestCluster,
         indexer_rpc_client: &HttpClient,
@@ -137,8 +138,8 @@ pub mod pg_integration_test {
         let gas_objects: Vec<ObjectID> = indexer_rpc_client
             .get_owned_objects(
                 *sender,
-                Some(SuiObjectResponseQuery::new_with_options(
-                    SuiObjectDataOptions::new().with_type(),
+                Some(SuiObjectResponseQuery::new_with_filter(
+                    SuiObjectDataFilter::gas_coin(),
                 )),
                 None,
                 None,
@@ -251,90 +252,123 @@ pub mod pg_integration_test {
         Ok(())
     }
 
-    // TODO(chris): re-enable this test after not using devnet_nft
-    // #[tokio::test]
-    // #[timeout(60000)]
-    // async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
-    //     let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
-    //     // Allow indexer to sync genesis
-    //     wait_until_next_checkpoint(&store).await;
-    //     let (tx_response, sender, recipient, gas_objects) =
-    //         execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
-    //     wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+    #[tokio::test]
+    #[timeout(60000)]
+    async fn test_simple_transaction_e2e() -> Result<(), anyhow::Error> {
+        let (mut test_cluster, indexer_rpc_client, store, _handle) = start_test_cluster(None).await;
+        // Allow indexer to sync genesis
+        wait_until_next_checkpoint(&store).await;
+        let (package_id, publish_digest) =
+            publish_nfts_package(&mut test_cluster.wallet, /* sender */ None).await;
+        wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
 
-    //     let (tx_response_2, _, _, _) =
-    //         execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
-    //     wait_until_transaction_synced(&store, tx_response_2.digest.base58_encode().as_str()).await;
+        let (tx_response, sender, recipient, gas_objects) =
+            execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
 
-    //     let tx_read_response = indexer_rpc_client
-    //         .get_transaction(
-    //             tx_response.digest,
-    //             Some(SuiTransactionResponseOptions::full_content()),
-    //         )
-    //         .await?;
-    //     assert_eq!(tx_response.digest, tx_read_response.digest);
-    //     assert_eq!(tx_response.transaction, tx_read_response.transaction);
-    //     assert_eq!(tx_response.effects, tx_read_response.effects);
-    //     assert_eq!(tx_response.events, tx_read_response.events);
-    //     assert_eq!(tx_response.object_changes, tx_read_response.object_changes);
-    //     assert_eq!(
-    //         tx_response.balance_changes,
-    //         tx_read_response.balance_changes
-    //     );
+        wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        let (_, _, nft_digest) = create_devnet_nft(&mut test_cluster.wallet, package_id)
+            .await
+            .unwrap();
+        wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
 
-    //     // query tx with sender address
-    //     let from_query =
-    //         SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(sender));
-    //     let tx_from_query_response = indexer_rpc_client
-    //         .query_transactions(from_query, None, None, None)
-    //         .await?;
-    //     assert!(!tx_from_query_response.has_next_page);
-    //     assert_eq!(tx_from_query_response.data.len(), 2);
+        let tx_read_response = indexer_rpc_client
+            .get_transaction(
+                tx_response.digest,
+                Some(SuiTransactionResponseOptions::full_content()),
+            )
+            .await?;
+        assert_eq!(tx_response.digest, tx_read_response.digest);
+        assert_eq!(tx_response.transaction, tx_read_response.transaction);
+        assert_eq!(tx_response.effects, tx_read_response.effects);
+        assert_eq!(tx_response.events, tx_read_response.events);
+        assert_eq!(tx_response.object_changes, tx_read_response.object_changes);
+        assert_eq!(
+            tx_response.balance_changes,
+            tx_read_response.balance_changes
+        );
 
-    //     // query tx with recipient address
-    //     let to_query =
-    //         SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(recipient));
-    //     let tx_to_query_response = indexer_rpc_client
-    //         .query_transactions(to_query, None, None, None)
-    //         .await?;
-    //     // the address has received 3 transactions, one is genesis
-    //     assert!(!tx_to_query_response.has_next_page);
-    //     assert_eq!(tx_to_query_response.data.len(), 3);
+        // query tx with sender address
+        let from_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(sender));
+        let tx_from_query_response = indexer_rpc_client
+            .query_transactions(from_query, None, None, None)
+            .await?;
+        assert!(!tx_from_query_response.has_next_page);
+        assert_eq!(tx_from_query_response.data.len(), 3);
 
-    //     // query tx with mutated object id
-    //     let mutation_query = SuiTransactionResponseQuery::new_with_filter(
-    //         TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
-    //     );
-    //     let tx_mutation_query_response = indexer_rpc_client
-    //         .query_transactions(mutation_query, None, None, None)
-    //         .await?;
-    //     // the coin is first created by genesis tx, then transferred by the above tx
-    //     assert!(!tx_mutation_query_response.has_next_page);
-    //     assert_eq!(tx_mutation_query_response.data.len(), 2);
-    //     assert_eq!(
-    //         tx_response.digest,
-    //         tx_mutation_query_response.data.last().unwrap().digest,
-    //     );
+        let tx_kind_query = SuiTransactionResponseQuery::new_with_filter(
+            TransactionFilter::TransactionKind("ProgrammableTransaction".to_string()),
+        );
+        let tx_kind_query_response = indexer_rpc_client
+            .query_transactions(tx_kind_query, None, None, None)
+            .await?;
+        assert!(!tx_kind_query_response.has_next_page);
+        assert_eq!(tx_kind_query_response.data.len(), 3);
 
-    //     // query tx with input object id
-    //     let input_query = SuiTransactionResponseQuery::new_with_filter(
-    //         TransactionFilter::InputObject(*gas_objects.first().unwrap()),
-    //     );
-    //     let tx_input_query_response = indexer_rpc_client
-    //         .query_transactions(input_query, None, None, None)
-    //         .await?;
-    //     assert_eq!(tx_input_query_response.data.len(), 1);
-    //     assert_eq!(
-    //         tx_input_query_response.data.first().unwrap().digest,
-    //         tx_response.digest
-    //     );
-    //     assert_eq!(
-    //         Some(tx_input_query_response.data.last().unwrap().digest),
-    //         tx_input_query_response.next_cursor,
-    //     );
-    //     // TODO: implement move call query
-    //     Ok(())
-    // }
+        // query tx with recipient address
+        let to_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(recipient));
+        let tx_to_query_response = indexer_rpc_client
+            .query_transactions(to_query, None, None, None)
+            .await?;
+        // the address has received 2 transactions, one is genesis
+        assert!(!tx_to_query_response.has_next_page);
+        assert_eq!(tx_to_query_response.data.len(), 2);
+
+        // query tx with both sender and recipient addresses
+        let from_to_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAndToAddress {
+                from: sender,
+                to: recipient,
+            });
+        let tx_from_to_query_response = indexer_rpc_client
+            .query_transactions(from_to_query, None, None, None)
+            .await?;
+        assert!(!tx_from_to_query_response.has_next_page);
+        assert_eq!(tx_from_to_query_response.data.len(), 1);
+        assert_eq!(
+            tx_response.digest,
+            tx_from_to_query_response.data.first().unwrap().digest
+        );
+
+        // query tx with mutated object id
+        let mutation_query = SuiTransactionResponseQuery::new_with_filter(
+            TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
+        );
+        let tx_mutation_query_response = indexer_rpc_client
+            .query_transactions(mutation_query, None, None, None)
+            .await?;
+        // the coin is first created by genesis tx, then transferred by the above tx
+        assert!(!tx_mutation_query_response.has_next_page);
+        assert_eq!(tx_mutation_query_response.data.len(), 3);
+
+        // query tx with input object id
+        let input_query = SuiTransactionResponseQuery::new_with_filter(
+            TransactionFilter::InputObject(*gas_objects.first().unwrap()),
+        );
+        let tx_input_query_response = indexer_rpc_client
+            .query_transactions(input_query, None, None, None)
+            .await?;
+        assert_eq!(tx_input_query_response.data.len(), 2);
+
+        // query tx with move call
+        let move_call_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::MoveFunction {
+                package: package_id,
+                module: Some("devnet_nft".to_string()),
+                function: None,
+            });
+        let tx_move_call_query_response = indexer_rpc_client
+            .query_transactions(move_call_query, None, None, None)
+            .await?;
+        assert_eq!(tx_move_call_query_response.data.len(), 1);
+        assert_eq!(
+            tx_move_call_query_response.data.first().unwrap().digest,
+            nft_digest
+        );
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_multi_get_transactions_order() -> Result<(), anyhow::Error> {
@@ -387,11 +421,8 @@ pub mod pg_integration_test {
 
         let (_, _, digest_one) = create_devnet_nft(context, package_id).await.unwrap();
         wait_until_transaction_synced(&store, digest_one.base58_encode().as_str()).await;
-        let (_, _, digest_two) = create_devnet_nft(context, package_id).await.unwrap();
+        let (sender, _, digest_two) = create_devnet_nft(context, package_id).await.unwrap();
         wait_until_transaction_synced(&store, digest_two.base58_encode().as_str()).await;
-        let (transferred_object, sender, receiver, digest_three, _, _) =
-            transfer_coin(context).await.unwrap();
-        wait_until_transaction_synced(&store, digest_three.base58_encode().as_str()).await;
 
         // Test various ways of querying events
         let filter_on_sender = EventFilter::Sender(sender);
@@ -437,30 +468,6 @@ pub mod pg_integration_test {
         assert_eq!(query_response.data.len(), 2);
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
-
-        // Verify that the transfer coin event occurred successfully, without emitting an event
-        let object_correctly_transferred = indexer_rpc_client
-            .get_owned_objects(
-                receiver,
-                Some(SuiObjectResponseQuery::new_with_options(
-                    SuiObjectDataOptions::full_content(),
-                )),
-                None,
-                None,
-                None,
-            )
-            .await?
-            .data
-            .into_iter()
-            .filter_map(|object_resp| {
-                if let Some(data) = object_resp.data {
-                    Some(data.object_id)
-                } else {
-                    None
-                }
-            })
-            .any(|obj| obj == transferred_object);
-        assert!(object_correctly_transferred);
 
         Ok(())
     }
