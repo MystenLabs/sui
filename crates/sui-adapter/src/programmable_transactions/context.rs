@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    fmt,
-    marker::PhantomData,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use move_binary_format::{
     errors::{Location, VMError},
@@ -36,7 +32,7 @@ use crate::{
 use super::types::*;
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E>> {
+pub struct ExecutionContext<'vm, 'state, 'a, 'b, S: StorageView> {
     /// The protocol config
     pub protocol_config: &'a ProtocolConfig,
     /// The MoveVM
@@ -68,7 +64,6 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, E: fmt::Debug, S: StorageView<E
     /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
     /// This gets cleared out when new results are pushed, i.e. the end of a command
     borrowed: HashMap<Argument, /* mut */ bool>,
-    _e: PhantomData<E>,
 }
 
 /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -83,11 +78,7 @@ struct AdditionalWrite {
     bytes: Vec<u8>,
 }
 
-impl<'vm, 'state, 'a, 'b, E, S> ExecutionContext<'vm, 'state, 'a, 'b, E, S>
-where
-    E: fmt::Debug,
-    S: StorageView<E>,
-{
+impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, S> {
     pub fn new(
         protocol_config: &'a ProtocolConfig,
         vm: &'vm MoveVM,
@@ -183,7 +174,6 @@ where
             new_packages: vec![],
             user_events: vec![],
             borrowed: HashMap::new(),
-            _e: PhantomData,
         })
     }
 
@@ -787,7 +777,7 @@ where
 }
 
 /// Load an input object from the state_view
-fn load_object<E: fmt::Debug, S: StorageView<E>>(
+fn load_object<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
     session: &Session<S>,
@@ -827,7 +817,7 @@ fn load_object<E: fmt::Debug, S: StorageView<E>>(
 }
 
 /// Load an a CallArg, either an object or a raw set of BCS bytes
-fn load_call_arg<E: fmt::Debug, S: StorageView<E>>(
+fn load_call_arg<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
     session: &Session<S>,
@@ -843,7 +833,7 @@ fn load_call_arg<E: fmt::Debug, S: StorageView<E>>(
 }
 
 /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
-fn load_object_arg<E: fmt::Debug, S: StorageView<E>>(
+fn load_object_arg<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
     session: &Session<S>,
@@ -928,7 +918,7 @@ fn refund_max_gas_budget(
 ///
 /// This function assumes proper generation of has_public_transfer, either from the abilities of
 /// the StructTag, or from the runtime correctly propagating from the inputs
-unsafe fn create_written_object<E: fmt::Debug, S: StorageView<E>>(
+unsafe fn create_written_object<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
     session: &Session<S>,
