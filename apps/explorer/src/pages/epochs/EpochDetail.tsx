@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
+import { useGetValidatorsEvents } from '@mysten/core';
 import { Navigate } from 'react-router-dom';
 
 import { validatorsTableData } from '../validators/Validators';
@@ -10,7 +11,6 @@ import { EpochStats } from './stats/EpochStats';
 
 import { SuiAmount } from '~/components/transactions/TxCardUtils';
 import { useGetSystemObject } from '~/hooks/useGetObject';
-import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { EpochProgress } from '~/pages/epochs/stats/EpochProgress';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
