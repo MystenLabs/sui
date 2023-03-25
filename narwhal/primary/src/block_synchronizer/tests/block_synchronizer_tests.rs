@@ -19,7 +19,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 use types::{
-    GetCertificatesResponse, MockPrimaryToPrimary, PayloadAvailabilityResponse,
+    GetCertificatesResponse, Header, HeaderAPI, MockPrimaryToPrimary, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
 };
 
@@ -57,12 +57,14 @@ async fn test_successful_headers_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -202,12 +204,14 @@ async fn test_successful_payload_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -377,11 +381,13 @@ async fn test_timeout_while_waiting_for_certificates() {
     let digests: Vec<CertificateDigest> = (0..10)
         .into_iter()
         .map(|_| {
-            let header = author
-                .header_builder(&committee)
-                .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-                .build()
-                .unwrap();
+            let header = Header::V1(
+                author
+                    .header_builder(&committee)
+                    .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
+                    .build()
+                    .unwrap(),
+            );
 
             fixture.certificate(&header).digest()
         })
@@ -519,11 +525,13 @@ async fn test_reply_with_certificates_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -621,11 +629,13 @@ async fn test_reply_with_payload_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -635,7 +645,7 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in &certificate.header.payload {
+            for (digest, (worker_id, _)) in certificate.header.payload() {
                 payload_store.write(digest, worker_id).unwrap();
             }
         }
@@ -727,11 +737,13 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     for _ in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = primary
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            primary
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 

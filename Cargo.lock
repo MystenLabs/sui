@@ -5807,6 +5807,7 @@ dependencies = [
  "bytes",
  "criterion",
  "derive_builder",
+ "enum_dispatch",
  "fastcrypto",
  "futures",
  "indexmap",

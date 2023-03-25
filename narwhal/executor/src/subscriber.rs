@@ -26,7 +26,7 @@ use tracing::{debug, error, warn};
 use tracing::{info, instrument};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag,
-    ConditionalBroadcastReceiver, ConsensusOutput, RequestBatchesResponse, Timestamp,
+    ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, RequestBatchesResponse, Timestamp,
 };
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
@@ -237,7 +237,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         > = HashMap::new();
 
         for cert in &sub_dag.certificates {
-            for (digest, (worker_id, _)) in cert.header.payload.iter() {
+            for (digest, (worker_id, _)) in cert.header.payload().iter() {
                 let workers = self.network.workers_for_certificate(cert, worker_id);
                 batch_digests_and_workers
                     .entry(*worker_id)
@@ -270,7 +270,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         // Map all fetched batches to their respective certificates and submit as
         // consensus output
         for cert in &sub_dag.certificates {
-            let mut output_batches = Vec::with_capacity(cert.header.payload.len());
+            let mut output_batches = Vec::with_capacity(cert.header.payload().len());
             let output_cert = cert.clone();
 
             self.metrics
@@ -281,7 +281,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 .subscriber_certificate_latency
                 .observe(cert.metadata.created_at.elapsed().as_secs_f64());
 
-            for (digest, (_, _)) in cert.header.payload.iter() {
+            for (digest, (_, _)) in cert.header.payload().iter() {
                 self.metrics.subscriber_processed_batches.inc();
                 let batch = fetched_batches
                     .get(digest)
@@ -949,7 +949,8 @@ mod tests {
             certificate: &Certificate,
             worker_id: &WorkerId,
         ) -> Vec<NetworkPublicKey> {
-            let digest = certificate.header.payload.keys().next().unwrap();
+            let payload = certificate.header.payload().to_owned();
+            let digest = payload.keys().next().unwrap();
             self.data
                 .get(worker_id)
                 .unwrap()

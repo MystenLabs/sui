@@ -20,7 +20,7 @@ use std::{
 };
 use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
 use tokio::sync::{oneshot, watch};
-use types::{error::DagError, Certificate, PreSubscribedBroadcastSender, Round};
+use types::{error::DagError, Certificate, Header, HeaderAPI, PreSubscribedBroadcastSender, Round};
 
 #[tokio::test]
 async fn accept_certificates() {
@@ -823,28 +823,32 @@ async fn sync_batches_drops_old() {
 
     let mut certificates = HashMap::new();
     for _ in 0..3 {
-        let header = author
-            .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&fixture.committee())
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in &certificate.header.payload {
+        for (digest, (worker_id, _)) in certificate.header.payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .round(2)
-        .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .round(2)
+            .parents(certificates.keys().cloned().collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .build()
+            .unwrap(),
+    );
 
     tokio::task::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
