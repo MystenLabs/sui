@@ -219,7 +219,7 @@ function ValidatorPageResult() {
         const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
         return roundFloat(averageAPY / apys.length, APY_DECIMALS);
     }, [rollingAverageApys]);
-    
+
     const lastEpochRewardOnAllValidators = useMemo(() => {
         if (!validatorEvents) return 0;
         let totalRewards = 0;
