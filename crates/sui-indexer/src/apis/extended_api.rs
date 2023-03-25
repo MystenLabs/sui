@@ -80,7 +80,7 @@ impl<S: IndexerStore> ExtendedApi<S> {
 
 #[async_trait]
 impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<S> {
-    async fn get_epoch(
+    async fn get_epochs(
         &self,
         cursor: Option<EpochId>,
         limit: Option<usize>,

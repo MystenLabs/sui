@@ -16,7 +16,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 pub trait ExtendedApi {
     /// Return a list of epoch info
     #[method(name = "getEpochs")]
-    async fn get_epoch(
+    async fn get_epochs(
         &self,
         /// optional paging cursor
         cursor: Option<EpochId>,

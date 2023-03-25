@@ -1002,6 +1002,12 @@ pub enum SuiObjectDataFilter {
     Version(u64),
 }
 
+impl SuiObjectDataFilter {
+    pub fn gas_coin() -> Self {
+        Self::StructType(GasCoin::type_())
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]
 pub struct SuiObjectResponseQuery {

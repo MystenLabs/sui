@@ -19,7 +19,7 @@ use tracing::{info, warn};
 use url::Url;
 
 use apis::{
-    CoinReadApi, EventReadApi, ExtendedApi, GovernanceReadApi, ReadApi, TransactionBuilderApi,
+    CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, ReadApi, TransactionBuilderApi,
     WriteApi,
 };
 use errors::IndexerError;
@@ -29,6 +29,8 @@ use store::IndexerStore;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+
+use crate::apis::MoveUtilsApi;
 
 pub mod apis;
 pub mod errors;
@@ -223,13 +225,15 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(CoinReadApi::new(http_client.clone()))?;
     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
-    builder.register_module(EventReadApi::new(
+    builder.register_module(IndexerApi::new(
         state.clone(),
         http_client.clone(),
         event_handler,
+        config.migrated_methods.clone(),
     ))?;
-    builder.register_module(WriteApi::new(http_client))?;
-    builder.register_module(ExtendedApi::new(state))?;
+    builder.register_module(WriteApi::new(http_client.clone()))?;
+    builder.register_module(ExtendedApi::new(state.clone()))?;
+    builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(
         // unwrap() here is safe b/c the address is a static config.
         IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),

@@ -66,8 +66,9 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_json_rpc::event_api::EventReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_json_rpc::indexer_api::IndexerApi;
+use sui_json_rpc::move_utils::MoveUtils;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
@@ -1149,7 +1150,8 @@ pub async fn build_server(
         ))?;
     }
 
-    server.register_module(EventReadApi::new(state.clone()))?;
+    server.register_module(IndexerApi::new(state.clone(), ReadApi::new(state.clone())))?;
+    server.register_module(MoveUtils::new(state.clone()))?;
 
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
 

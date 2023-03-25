@@ -16,7 +16,7 @@ use sui_types::query::TransactionFilter;
 use sui_types::utils::to_sender_signed_transaction;
 use test_utils::network::TestClusterBuilder;
 
-use crate::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};
+use crate::api::{IndexerApiClient, ReadApiClient, TransactionBuilderClient, WriteApiClient};
 
 #[sim_test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
@@ -74,7 +74,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
     // test get_transaction_batch
     let batch_responses: Vec<SuiTransactionResponse> = http_client
-        .multi_get_transactions_with_options(tx, Some(SuiTransactionResponseOptions::new()))
+        .multi_get_transactions(tx, Some(SuiTransactionResponseOptions::new()))
         .await?;
 
     assert_eq!(5, batch_responses.len());
@@ -94,7 +94,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     // test get_transaction
     for tx_digest in tx {
         let response: SuiTransactionResponse = http_client
-            .get_transaction_with_options(
+            .get_transaction(
                 tx_digest,
                 Some(SuiTransactionResponseOptions::new().with_raw_input()),
             )

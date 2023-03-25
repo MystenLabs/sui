@@ -293,110 +293,6 @@
       "deprecated": true
     },
     {
-      "name": "sui_getAllBalances",
-      "tags": [
-        {
-          "name": "Coin Query API"
-        }
-      ],
-      "description": "Return the total coin balance for all coin type, owned by the address owner.",
-      "params": [
-        {
-          "name": "owner",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<Balance>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/Balance"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getAllCoins",
-      "tags": [
-        {
-          "name": "Coin Query API"
-        }
-      ],
-      "description": "Return all Coin objects owned by an address.",
-      "params": [
-        {
-          "name": "owner",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "optional paging cursor",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "maximum number of items per page",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "CoinPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
-        }
-      }
-    },
-    {
-      "name": "sui_getBalance",
-      "tags": [
-        {
-          "name": "Coin Query API"
-        }
-      ],
-      "description": "Return the total coin balance for one coin type, owned by the address owner.",
-      "params": [
-        {
-          "name": "owner",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "coin_type",
-          "description": "optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "result": {
-        "name": "Balance",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Balance"
-        }
-      }
-    },
-    {
       "name": "sui_getCheckpoint",
       "tags": [
         {
@@ -497,188 +393,10 @@
       }
     },
     {
-      "name": "sui_getCoinMetadata",
-      "tags": [
-        {
-          "name": "Coin Query API"
-        }
-      ],
-      "description": "Return metadata(e.g., symbol, decimals) for a coin",
-      "params": [
-        {
-          "name": "coin_type",
-          "description": "type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiCoinMetadata",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiCoinMetadata"
-        }
-      }
-    },
-    {
-      "name": "sui_getCoins",
-      "tags": [
-        {
-          "name": "Coin Query API"
-        }
-      ],
-      "description": "Return all Coin<`coin_type`> objects owned by an address.",
-      "params": [
-        {
-          "name": "owner",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "coin_type",
-          "description": "optional type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "optional paging cursor",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "maximum number of items per page",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "CoinPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
-        }
-      }
-    },
-    {
-      "name": "sui_getCommitteeInfo",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return the committee information for the asked `epoch`.",
-      "params": [
-        {
-          "name": "epoch",
-          "description": "The epoch of interest. If None, default to the latest epoch",
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiCommittee",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/CommitteeInfo"
-        }
-      }
-    },
-    {
-      "name": "sui_getDynamicFieldObject",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the dynamic field object information for a specified object",
-      "params": [
-        {
-          "name": "parent_object_id",
-          "description": "The ID of the queried parent object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "name",
-          "description": "The Name of the dynamic field",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/DynamicFieldName"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiObjectResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiObjectResponse"
-        }
-      }
-    },
-    {
-      "name": "sui_getDynamicFields",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the list of dynamic field objects owned by an object.",
-      "params": [
-        {
-          "name": "parent_object_id",
-          "description": "The ID of the parent object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "DynamicFieldPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_DynamicFieldInfo_and_ObjectID"
-        }
-      }
-    },
-    {
       "name": "sui_getEvents",
       "tags": [
         {
-          "name": "Event Read API"
+          "name": "Read API"
         }
       ],
       "description": "Return transaction events.",
@@ -758,27 +476,10 @@
       }
     },
     {
-      "name": "sui_getLatestSuiSystemState",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return the latest SUI system state object on-chain.",
-      "params": [],
-      "result": {
-        "name": "SuiSystemStateSummary",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/SuiSystemStateSummary"
-        }
-      }
-    },
-    {
       "name": "sui_getMoveFunctionArgTypes",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Move Utils"
         }
       ],
       "description": "Return the argument types of a Move function, based on normalized Type.",
@@ -820,7 +521,7 @@
       "name": "sui_getNormalizedMoveFunction",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Move Utils"
         }
       ],
       "description": "Return a structured representation of Move function",
@@ -859,7 +560,7 @@
       "name": "sui_getNormalizedMoveModule",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Move Utils"
         }
       ],
       "description": "Return a structured representation of Move module",
@@ -891,7 +592,7 @@
       "name": "sui_getNormalizedMoveModulesByPackage",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Move Utils"
         }
       ],
       "description": "Return structured representations of all modules in the given package",
@@ -919,7 +620,7 @@
       "name": "sui_getNormalizedMoveStruct",
       "tags": [
         {
-          "name": "Read API"
+          "name": "Move Utils"
         }
       ],
       "description": "Return a structured representation of Move struct",
@@ -1036,249 +737,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "sui_getOwnedObjects",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return the list of objects owned by an address.",
-      "params": [
-        {
-          "name": "address",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "query",
-          "description": "the objects query criteria.",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectResponseQuery"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "at_checkpoint",
-          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointId"
-          }
-        }
-      ],
-      "result": {
-        "name": "ObjectsPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
-        }
-      },
-      "examples": [
-        {
-          "name": "Get objects owned by an address",
-          "params": [
-            {
-              "name": "address",
-              "value": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
-            },
-            {
-              "name": "query",
-              "value": {
-                "filter": {
-                  "StructType": "0x2::coin::Coin<0x2::sui::SUI>"
-                },
-                "options": {
-                  "showType": true,
-                  "showOwner": true,
-                  "showPreviousTransaction": true,
-                  "showDisplay": false,
-                  "showContent": false,
-                  "showBcs": false,
-                  "showStorageRebate": false
-                }
-              }
-            },
-            {
-              "name": "cursor",
-              "value": "0x9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0196a880b95c3"
-            },
-            {
-              "name": "limit",
-              "value": 100
-            },
-            {
-              "name": "at_checkpoint",
-              "value": null
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": [
-              {
-                "objectId": "0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062",
-                "version": 0,
-                "digest": "p3mh2EkKPG2jckE87LnVpRF5uE3R7WWfaFZELQhqYMk",
-                "type": "0x2::coin::Coin<0x2::sui::SUI>",
-                "owner": {
-                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
-                },
-                "previousTransaction": "Bv28BS3v5AuiQHY9SHfwo8PNM48mzR6LLBkbxsaoQFLd"
-              },
-              {
-                "objectId": "0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427",
-                "version": 0,
-                "digest": "3LEKanp51C6hgnso1mkCBJZXTrxBtairWGstiozCYRoi",
-                "type": "0x2::coin::Coin<0x2::sui::SUI>",
-                "owner": {
-                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
-                },
-                "previousTransaction": "FNgSG6ujbQ57wZaY4d8Jf6xAGJdqQvhRrSD9jTUHfVg6"
-              },
-              {
-                "objectId": "0x1bc44cdfce3574e7f7f0b2de2323a06ebc356bad614726b313d811012d4be723",
-                "version": 0,
-                "digest": "8u3E7cQUSuo96NwJ9mYS4hMGCs48CEjreQPGrKGsVTMV",
-                "type": "0x2::coin::Coin<0x2::sui::SUI>",
-                "owner": {
-                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
-                },
-                "previousTransaction": "6otjiis1Y5t2FFGcQjhof1wA2JSo4zhLEdQkH6GSXHHT"
-              },
-              {
-                "objectId": "0x5d1123f2b8a0ac606b940a66e42efd782af5203112331adc2ed6f402dca396bf",
-                "version": 0,
-                "digest": "GYEZNzUU2HeTTUTFr8bmPQ4mCY9gpPiTHdim9GgAxxwb",
-                "type": "0x2::coin::Coin<0x2::sui::SUI>",
-                "owner": {
-                  "AddressOwner": "0x4e049913233eb918c11638af89d575beb99003d30a245ac74a02e26e45cb80ee"
-                },
-                "previousTransaction": "53FQJhUHQqRektpSXPdyn55rjqh3K142iR8jtdPiRZ54"
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_getReferenceGasPrice",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return the reference gas price for the network",
-      "params": [],
-      "result": {
-        "name": "BigInt",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/BigInt"
-        }
-      }
-    },
-    {
-      "name": "sui_getStakes",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return all [DelegatedStake].",
-      "params": [
-        {
-          "name": "owner",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<DelegatedStake>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/DelegatedStake"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getStakesByIds",
-      "tags": [
-        {
-          "name": "Governance Read API"
-        }
-      ],
-      "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
-      "params": [
-        {
-          "name": "staked_sui_ids",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ObjectID"
-            }
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<DelegatedStake>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/DelegatedStake"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getTotalSupply",
-      "tags": [
-        {
-          "name": "Coin Query API"
-        }
-      ],
-      "description": "Return total supply for a coin",
-      "params": [
-        {
-          "name": "coin_type",
-          "description": "type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "result": {
-        "name": "Supply",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Supply"
-        }
-      }
     },
     {
       "name": "sui_getTotalTransactionNumber",
@@ -1602,185 +1060,6 @@
       }
     },
     {
-      "name": "sui_queryEvents",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events for a specified query criteria.",
-      "params": [
-        {
-          "name": "query",
-          "description": "the event query criteria.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/EventFilter"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "optional paging cursor",
-          "schema": {
-            "$ref": "#/components/schemas/EventID"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.",
-          "schema": {
-            "type": "boolean"
-          }
-        }
-      ],
-      "result": {
-        "name": "EventPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_Event_and_EventID"
-        }
-      }
-    },
-    {
-      "name": "sui_queryTransactions",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Return list of transactions for a specified query criteria.",
-      "params": [
-        {
-          "name": "query",
-          "description": "the transaction query criteria.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionResponseQuery"
-          }
-        },
-        {
-          "name": "cursor",
-          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        },
-        {
-          "name": "limit",
-          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
-          "schema": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "descending_order",
-          "description": "query result ordering, default to false (ascending order), oldest record first.",
-          "schema": {
-            "type": "boolean"
-          }
-        }
-      ],
-      "result": {
-        "name": "TransactionsPage",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"
-        }
-      },
-      "examples": [
-        {
-          "name": "Return the transaction digest for specified query criteria",
-          "params": [
-            {
-              "name": "query",
-              "value": {
-                "filter": {
-                  "InputObject": "0x93633829fcba6d6e0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8"
-                },
-                "options": null
-              }
-            },
-            {
-              "name": "cursor",
-              "value": "HxidAfFfyr4kXSiWeVq1J6Tk526YUVDoSUY5PSnS4tEJ"
-            },
-            {
-              "name": "limit",
-              "value": 100
-            },
-            {
-              "name": "descending_order",
-              "value": false
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": {
-              "data": [
-                {
-                  "digest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
-                },
-                {
-                  "digest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
-                },
-                {
-                  "digest": "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk"
-                },
-                {
-                  "digest": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
-                }
-              ],
-              "nextCursor": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F",
-              "hasNextPage": false
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "sui_subscribeEvent",
-      "tags": [
-        {
-          "name": "Event Read API"
-        },
-        {
-          "name": "Websocket"
-        },
-        {
-          "name": "PubSub"
-        }
-      ],
-      "description": "Subscribe to a stream of Sui event",
-      "params": [
-        {
-          "name": "filter",
-          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/EventFilter"
-          }
-        }
-      ],
-      "result": {
-        "name": "SuiEvent",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/Event"
-        }
-      }
-    },
-    {
       "name": "sui_tryGetPastObject",
       "tags": [
         {
@@ -1916,6 +1195,212 @@
       }
     },
     {
+      "name": "suix_getAllBalances",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return the total coin balance for all coin type, owned by the address owner.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<Balance>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Balance"
+          }
+        }
+      }
+    },
+    {
+      "name": "suix_getAllCoins",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return all Coin objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CoinPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
+        }
+      }
+    },
+    {
+      "name": "suix_getBalance",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return the total coin balance for one coin type, owned by the address owner.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_type",
+          "description": "optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "Balance",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Balance"
+        }
+      }
+    },
+    {
+      "name": "suix_getCoinMetadata",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return metadata(e.g., symbol, decimals) for a coin",
+      "params": [
+        {
+          "name": "coin_type",
+          "description": "type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiCoinMetadata",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiCoinMetadata"
+        }
+      }
+    },
+    {
+      "name": "suix_getCoins",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return all Coin<`coin_type`> objects owned by an address.",
+      "params": [
+        {
+          "name": "owner",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "coin_type",
+          "description": "optional type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "CoinPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Coin_and_ObjectID"
+        }
+      }
+    },
+    {
+      "name": "suix_getCommitteeInfo",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the committee information for the asked `epoch`.",
+      "params": [
+        {
+          "name": "epoch",
+          "description": "The epoch of interest. If None, default to the latest epoch",
+          "schema": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiCommittee",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/CommitteeInfo"
+        }
+      }
+    },
+    {
       "name": "suix_getCurrentEpoch",
       "tags": [
         {
@@ -1929,6 +1414,82 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/EpochInfo"
+        }
+      }
+    },
+    {
+      "name": "suix_getDynamicFieldObject",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the dynamic field object information for a specified object",
+      "params": [
+        {
+          "name": "parent_object_id",
+          "description": "The ID of the queried parent object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "name",
+          "description": "The Name of the dynamic field",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/DynamicFieldName"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiObjectResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiObjectResponse"
+        }
+      }
+    },
+    {
+      "name": "suix_getDynamicFields",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of dynamic field objects owned by an object.",
+      "params": [
+        {
+          "name": "parent_object_id",
+          "description": "The ID of the parent object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      ],
+      "result": {
+        "name": "DynamicFieldPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_DynamicFieldInfo_and_ObjectID"
         }
       }
     },
@@ -1976,6 +1537,23 @@
       }
     },
     {
+      "name": "suix_getLatestSuiSystemState",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the latest SUI system state object on-chain.",
+      "params": [],
+      "result": {
+        "name": "SuiSystemStateSummary",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiSystemStateSummary"
+        }
+      }
+    },
+    {
       "name": "suix_getMoveCallMetrics",
       "tags": [
         {
@@ -2006,6 +1584,213 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/NetworkMetrics"
+        }
+      }
+    },
+    {
+      "name": "suix_getOwnedObjects",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return the list of objects owned by an address.",
+      "params": [
+        {
+          "name": "address",
+          "description": "the owner's Sui address",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        },
+        {
+          "name": "query",
+          "description": "the objects query criteria.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "at_checkpoint",
+          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
+          "schema": {
+            "$ref": "#/components/schemas/CheckpointId"
+          }
+        }
+      ],
+      "result": {
+        "name": "ObjectsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
+        }
+      }
+    },
+    {
+      "name": "suix_getReferenceGasPrice",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return the reference gas price for the network",
+      "params": [],
+      "result": {
+        "name": "BigInt",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/BigInt"
+        }
+      }
+    },
+    {
+      "name": "suix_getStakes",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return all [DelegatedStake].",
+      "params": [
+        {
+          "name": "owner",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SuiAddress"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
+        }
+      }
+    },
+    {
+      "name": "suix_getStakesByIds",
+      "tags": [
+        {
+          "name": "Governance Read API"
+        }
+      ],
+      "description": "Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.",
+      "params": [
+        {
+          "name": "staked_sui_ids",
+          "required": true,
+          "schema": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectID"
+            }
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<DelegatedStake>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DelegatedStake"
+          }
+        }
+      }
+    },
+    {
+      "name": "suix_getTotalSupply",
+      "tags": [
+        {
+          "name": "Coin Query API"
+        }
+      ],
+      "description": "Return total supply for a coin",
+      "params": [
+        {
+          "name": "coin_type",
+          "description": "type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "Supply",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Supply"
+        }
+      }
+    },
+    {
+      "name": "suix_queryEvents",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return list of events for a specified query criteria.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the event query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "optional paging cursor",
+          "schema": {
+            "$ref": "#/components/schemas/EventID"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "maximum number of items per page, default to [QUERY_MAX_RESULT_LIMIT] if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "EventPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_Event_and_EventID"
         }
       }
     },
@@ -2055,6 +1840,87 @@
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
+        }
+      }
+    },
+    {
+      "name": "suix_queryTransactions",
+      "tags": [
+        {
+          "name": "Extended API"
+        }
+      ],
+      "description": "Return list of transactions for a specified query criteria.",
+      "params": [
+        {
+          "name": "query",
+          "description": "the transaction query criteria.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/TransactionResponseQuery"
+          }
+        },
+        {
+          "name": "cursor",
+          "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
+          "schema": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          }
+        },
+        {
+          "name": "limit",
+          "description": "Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.",
+          "schema": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        {
+          "name": "descending_order",
+          "description": "query result ordering, default to false (ascending order), oldest record first.",
+          "schema": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "TransactionsPage",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"
+        }
+      }
+    },
+    {
+      "name": "suix_subscribeEvent",
+      "tags": [
+        {
+          "name": "Extended API"
+        },
+        {
+          "name": "Websocket"
+        },
+        {
+          "name": "PubSub"
+        }
+      ],
+      "description": "Subscribe to a stream of Sui event",
+      "params": [
+        {
+          "name": "filter",
+          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/EventFilter"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiEvent",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Event"
         }
       }
     },
