@@ -5,7 +5,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     fold::{fold_expr, Fold},
-    parse2, parse_macro_input, BinOp, Expr, UnOp,
+    parse2, parse_macro_input, BinOp, Expr, ExprMacro, UnOp,
 };
 
 #[proc_macro_attribute]
@@ -252,6 +252,54 @@ impl Fold for CheckArithmetic {
     fn fold_expr(&mut self, expr: Expr) -> Expr {
         let expr = fold_expr(self, expr);
         let expr = match expr {
+            Expr::Macro(expr_macro) => {
+                let ExprMacro { attrs, mac } = expr_macro;
+                let orig_len = attrs.len();
+
+                let attrs = attrs
+                    .into_iter()
+                    .filter(|attr| !attr.path.is_ident("allow_macro"))
+                    .collect::<Vec<_>>();
+
+                let allow_present = attrs.len() != orig_len;
+
+                if !allow_present {
+                    unimplemented!(
+                        "#[use_checked_arithmetic] cannot descend into macros. \
+                        If you are sure the macro does not have any unsafe arithmetic, \
+                        you can add #[allow_macro] to the macro invocation."
+                    );
+                }
+
+                let expr_macro = ExprMacro { attrs, mac };
+
+                quote!(#expr_macro)
+            }
+
+            Expr::AssignOp(expr_assign_op) => {
+                // Handle assignment operators with arithmetic here
+                let op = &expr_assign_op.op;
+                let lhs = &expr_assign_op.left;
+                let rhs = &expr_assign_op.right;
+                match op {
+                    BinOp::AddEq(_) => {
+                        quote!(#lhs = #lhs.checked_add(#rhs).expect("Overflow or underflow in addition assignment"))
+                    }
+                    BinOp::SubEq(_) => {
+                        quote!(#lhs = #lhs.checked_sub(#rhs).expect("Overflow or underflow in subtraction assignment"))
+                    }
+                    BinOp::MulEq(_) => {
+                        quote!(#lhs = #lhs.checked_mul(#rhs).expect("Overflow or underflow in multiplication assignment"))
+                    }
+                    BinOp::DivEq(_) => {
+                        quote!(#lhs = #lhs.checked_div(#rhs).expect("Overflow or underflow in division assignment"))
+                    }
+                    BinOp::RemEq(_) => {
+                        quote!(#lhs = #lhs.checked_rem(#rhs).expect("Overflow or underflow in remainder assignment"))
+                    }
+                    _ => quote!(#expr_assign_op),
+                }
+            }
             Expr::Binary(expr_binary) => {
                 let op = &expr_binary.op;
                 let lhs = &expr_binary.left;

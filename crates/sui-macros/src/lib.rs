@@ -3,6 +3,7 @@
 
 use futures::future::BoxFuture;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -206,5 +207,44 @@ mod test {
     fn test_checked_arithmetic_impl() {
         let t = Test { a: 1, b: i32::MAX };
         t.add();
+    }
+
+    #[test]
+    fn test_non_overflow() {
+        #[use_checked_arithmetic]
+        fn f() {
+            fn check_eq<T: Eq + Debug>(a: T, b: T) {
+                #[allow_macro]
+                assert_eq!(a, b);
+            }
+
+            check_eq(1i32 + 2i32, 3i32);
+            check_eq(3i32 - 1i32, 2i32);
+            check_eq(4i32 * 3i32, 12i32);
+            check_eq(12i32 / 3i32, 4i32);
+            check_eq(12i32 % 5i32, 2i32);
+
+            let mut a = 1i32;
+            a += 2i32;
+            check_eq(a, 3i32);
+
+            let mut a = 3i32;
+            a -= 1i32;
+            check_eq(a, 2i32);
+
+            let mut a = 4i32;
+            a *= 3i32;
+            check_eq(a, 12i32);
+
+            let mut a = 12i32;
+            a /= 3i32;
+            check_eq(a, 4i32);
+
+            let mut a = 12i32;
+            a %= 5i32;
+            check_eq(a, 2i32);
+        }
+
+        f();
     }
 }
