@@ -18,8 +18,8 @@ use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTypeTag,
+    CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataFilter,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
@@ -80,28 +80,23 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
-            let objs = self
+            // TODO: use get coins here
+            let gas_objs = self
                 .0
                 .get_owned_objects(
                     signer,
-                    Some(SuiObjectResponseQuery::new_with_options(
-                        SuiObjectDataOptions::full_content(),
-                    )),
+                    Some(SuiObjectResponseQuery {
+                        filter: Some(SuiObjectDataFilter::gas_coin()),
+                        options: Some(SuiObjectDataOptions::new().with_bcs()),
+                    }),
                     None,
                     None,
                     None,
                 )
                 .await?;
-            let gas_objs = objs.data.into_iter().filter(|obj| {
-                let obj_data = obj.clone().into_object();
-                match obj_data {
-                    Result::Ok(o) => o.type_.unwrap().to_string() == GasCoin::type_().to_string(),
-                    _ => false,
-                }
-            });
             let required_gas_amount = (budget as u128) * (gas_price as u128);
 
-            for obj in gas_objs {
+            for obj in gas_objs.data {
                 let response = self
                     .0
                     .get_object_with_options(
