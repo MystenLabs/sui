@@ -81,7 +81,8 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
             },
             {} as ApyByValidator
         );
-
+        // return object with validator address as key and APY as value
+        // { '0x123': 0.1234, '0x456': 0.4567 }
         return apyByValidator;
     }, [validatorEpochEvents.data]);
 
