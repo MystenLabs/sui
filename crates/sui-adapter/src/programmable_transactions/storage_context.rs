@@ -159,10 +159,13 @@ impl<'a, E: fmt::Debug, S: StorageView<E>> LinkageResolver for StorageContext<'a
         let linkage_info_opt = self.linkage_info.borrow();
         let linkage_info = linkage_info_opt.as_ref().unwrap();
         let mod_id: ObjectID = (*module_id.address()).into();
-        let defining_pkg_id = if linkage_info.pkg_id == mod_id {
-            // special case needed in case the type origin table is not yet available in storage but
-            // may have to already serve queries (e.g. during object publishing)
+        let defining_pkg_id = if mod_id == linkage_info.pkg_id || mod_id == ObjectID::ZERO {
+            // mod_id == linkage_info.pkg_id is a special case needed in case the type origin table
+            // is not yet available in storage but may have to already serve queries (e.g. during
+            // object publishing)
             // TODO: is the above really true or we don't need type origin table in the linkage context?
+            // TODO: it seems like we are also getting mod_id == 0x0 - is looking up linkage
+            // context's origin table OK in this case?
             *linkage_info.type_origin_map.get(&(m_name, s_name)).unwrap()
         } else {
             // TODO: load a package just to answer the query is expensive, but is it also safe to
@@ -191,6 +194,7 @@ impl<'a, E: fmt::Debug, S: StorageView<E>> LinkageResolver for StorageContext<'a
                 )
                 .unwrap()
         };
+
         Ok(ModuleId::new(
             (defining_pkg_id).into(),
             module_id.name().into(),
