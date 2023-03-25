@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
-import { useGetValidatorsEvents } from '@mysten/core';
+import { useGetValidatorsEvents, useGetRollingAverageApys } from '@mysten/core';
 import { Navigate } from 'react-router-dom';
 
 import { validatorsTableData } from '../validators/Validators';
@@ -26,6 +26,8 @@ function EpochDetail() {
         getMockEpochData();
 
     const { data, isError, isLoading } = useGetSystemObject();
+    const { data: rollingAverageApys } =
+    useGetRollingAverageApys(data?.activeValidators.length || null);
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
@@ -43,7 +45,7 @@ function EpochDetail() {
     if (isLoading || validatorsEventsLoading) return <LoadingSpinner />;
     if (!data || !validatorEvents) return null;
 
-    const validatorsTable = validatorsTableData(data, validatorEvents.data);
+    const validatorsTable = validatorsTableData(data, validatorEvents.data, rollingAverageApys);
 
     return (
         <div className="flex flex-col space-y-16">
