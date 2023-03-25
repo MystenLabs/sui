@@ -5,6 +5,7 @@
 mod test {
 
     use rand::{thread_rng, Rng};
+    use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
