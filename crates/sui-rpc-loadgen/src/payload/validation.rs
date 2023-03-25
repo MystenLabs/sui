@@ -44,64 +44,97 @@ pub(crate) fn cross_validate_entities<T, U>(
     }
 }
 
+pub(crate) fn cross_validate_entities_v2<U>(entities: &Vec<Vec<U>>, entity_name: &str)
+where
+    U: PartialEq + std::fmt::Debug,
+{
+    if entities.len() < 2 {
+        error!("Unable to cross validate as {} less than 2", entity_name);
+        return;
+    }
+
+    let length = entities[0].len();
+    if entities.iter().any(|v| v.len() != length) {
+        error!("Entity: {} lengths do not match", entity_name);
+        return;
+    }
+
+    // Iterate through all indices (from 0 to length - 1) of the inner vectors.
+    for i in 0..length {
+        // Create an iterator that produces references to elements at position i in each inner vector of entities.
+        let mut iter = entities.iter().map(|v| &v[i]);
+
+        // Compare first against rest of the iter (other inner vectors)
+        if let Some(first) = iter.next() {
+            for (j, other) in iter.enumerate() {
+                if first != other {
+                    // Example error: Entity: ExampleEntity mismatch at index 2: expected: 3, received ExampleEntity[1]: 4
+                    error!(
+                        "Entity: {} mismatch at index {}: expected: {:?}, received {}: {:?}",
+                        entity_name,
+                        i,
+                        first,
+                        format!("{}[{}]", entity_name, j + 1),
+                        other
+                    );
+                }
+            }
+        }
+    }
+}
+
 pub(crate) async fn check_transactions(
     clients: &[SuiClient],
     digests: &[TransactionDigest],
     cross_validate: bool,
     verify_objects: bool,
 ) {
-    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| async move {
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_transactions_with_options(
-                digests.to_vec(),
-                SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
-    .await;
-
-    // TODO: support more than 2 transactions
-    if cross_validate && transactions.len() == 2 {
-        if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
-            let first = match t1 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!("Error unwrapping first vec of transactions: {:?}", err);
-                    error!("Logging digests, {:?}", digests);
-                    return;
-                }
-            };
-            let second = match t2 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!("Error unwrapping second vec of transactions: {:?}", err);
-                    error!("Logging digests, {:?}", digests);
-                    return;
-                }
-            };
-
-            cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
-
-            if verify_objects {
-                let object_ids = first
-                    .iter()
-                    .chain(second.iter())
-                    .flat_map(get_all_object_ids)
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect::<Vec<_>>();
-
-                check_objects(clients, &object_ids, cross_validate).await;
+    let transactions: Vec<Vec<SuiTransactionResponse>> =
+        join_all(clients.iter().enumerate().map(|(i, client)| async move {
+            let start_time = Instant::now();
+            let transactions = client
+                .read_api()
+                .multi_get_transactions_with_options(
+                    digests.to_vec(),
+                    SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
+                )
+                .await;
+            let elapsed_time = start_time.elapsed();
+            debug!(
+                "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+                elapsed_time.as_secs_f64()
+            );
+            transactions
+        }))
+        .await
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, result)| match result {
+            Ok(transactions) => Some(transactions),
+            Err(err) => {
+                warn!(
+                    "Failed to fetch transactions for vec {i}: {:?}. Logging digests, {:?}",
+                    err, digests
+                );
+                None
             }
-        }
+        })
+        .collect();
+
+    if cross_validate {
+        cross_validate_entities_v2(&transactions, "Transactions");
+    }
+
+    if verify_objects {
+        let object_ids = transactions
+            .iter()
+            .flatten()
+            .flat_map(get_all_object_ids)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        check_objects(clients, &object_ids, cross_validate).await;
     }
 }
 
