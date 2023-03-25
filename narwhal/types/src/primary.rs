@@ -572,9 +572,111 @@ impl PartialEq for Vote {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, MallocSizeOf)]
+#[enum_dispatch(CertificateAPI)]
+pub enum Certificate {
+    V1(CertificateV1),
+}
+
+// TODO: Revisit if we should not impl Default for Certificate
+impl Default for Certificate {
+    fn default() -> Self {
+        Self::V1(CertificateV1::default())
+    }
+}
+
+impl Certificate {
+    // TODO: Add version number and match on that
+    pub fn genesis(committee: &Committee) -> Vec<Self> {
+        CertificateV1::genesis(committee)
+            .into_iter()
+            .map(Self::V1)
+            .collect()
+    }
+
+    pub fn new_unverified(
+        committee: &Committee,
+        header: Header,
+        votes: Vec<(AuthorityIdentifier, Signature)>,
+    ) -> DagResult<Certificate> {
+        CertificateV1::new_unverified(committee, header, votes)
+    }
+
+    pub fn new_unsigned(
+        committee: &Committee,
+        header: Header,
+        votes: Vec<(AuthorityIdentifier, Signature)>,
+    ) -> DagResult<Certificate> {
+        CertificateV1::new_unsigned(committee, header, votes)
+    }
+
+    pub fn new_test_empty(author: AuthorityIdentifier) -> Self {
+        CertificateV1::new_test_empty(author)
+    }
+
+    /// This function requires that certificate was verified against given committee
+    pub fn signed_authorities(&self, committee: &Committee) -> Vec<PublicKey> {
+        match self {
+            Certificate::V1(certificate) => certificate.signed_authorities(committee),
+        }
+    }
+
+    pub fn signed_by(&self, committee: &Committee) -> (Stake, Vec<PublicKey>) {
+        match self {
+            Certificate::V1(certificate) => certificate.signed_by(committee),
+        }
+    }
+
+    pub fn verify(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        match self {
+            Certificate::V1(certificate) => certificate.verify(committee, worker_cache),
+        }
+    }
+
+    pub fn round(&self) -> Round {
+        match self {
+            Certificate::V1(certificate) => certificate.round(),
+        }
+    }
+
+    pub fn epoch(&self) -> Epoch {
+        match self {
+            Certificate::V1(certificate) => certificate.epoch(),
+        }
+    }
+
+    pub fn origin(&self) -> AuthorityIdentifier {
+        match self {
+            Certificate::V1(certificate) => certificate.origin(),
+        }
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
+    type TypedDigest = CertificateDigest;
+
+    fn digest(&self) -> CertificateDigest {
+        match self {
+            Certificate::V1(data) => data.digest(),
+        }
+    }
+}
+
+#[enum_dispatch]
+pub trait CertificateAPI {
+    fn header(&self) -> &Header;
+    fn aggregated_signature(&self) -> &AggregateSignatureBytes;
+    fn signed_authorities(&self) -> &roaring::RoaringBitmap;
+    fn metadata(&self) -> &Metadata;
+
+    // Used for testing.
+    fn update_header(&mut self, header: Header);
+    fn header_mut(&mut self) -> &mut Header;
+}
+
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
-pub struct Certificate {
+pub struct CertificateV1 {
     pub header: Header,
     pub aggregated_signature: AggregateSignatureBytes,
     #[serde_as(as = "NarwhalBitmap")]
@@ -582,7 +684,34 @@ pub struct Certificate {
     pub metadata: Metadata,
 }
 
-impl Certificate {
+impl CertificateAPI for CertificateV1 {
+    fn header(&self) -> &Header {
+        &self.header
+    }
+
+    fn aggregated_signature(&self) -> &AggregateSignatureBytes {
+        &self.aggregated_signature
+    }
+
+    fn signed_authorities(&self) -> &roaring::RoaringBitmap {
+        &self.signed_authorities
+    }
+
+    fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+
+    // Used for testing.
+    fn update_header(&mut self, header: Header) {
+        self.header = header;
+    }
+
+    fn header_mut(&mut self) -> &mut Header {
+        &mut self.header
+    }
+}
+
+impl CertificateV1 {
     pub fn genesis(committee: &Committee) -> Vec<Self> {
         committee
             .authorities()
@@ -613,15 +742,15 @@ impl Certificate {
         Self::new_unsafe(committee, header, votes, false)
     }
 
-    pub fn new_test_empty(author: AuthorityIdentifier) -> Self {
+    pub fn new_test_empty(author: AuthorityIdentifier) -> Certificate {
         let header = Header::V1(HeaderV1 {
             author,
             ..Default::default()
         });
-        Self {
+        Certificate::V1(CertificateV1 {
             header,
             ..Default::default()
-        }
+        })
     }
 
     fn new_unsafe(
@@ -678,12 +807,12 @@ impl Certificate {
             .map_err(|_| DagError::InvalidSignature)?
         };
 
-        Ok(Certificate {
+        Ok(Certificate::V1(CertificateV1 {
             header,
             aggregated_signature: AggregateSignatureBytes::from(&aggregated_signature),
             signed_authorities,
             metadata: Metadata::default(),
-        })
+        }))
     }
 
     /// This function requires that certificate was verified against given committee
@@ -823,7 +952,7 @@ impl fmt::Display for CertificateDigest {
     }
 }
 
-impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
+impl Hash<{ crypto::DIGEST_LENGTH }> for CertificateV1 {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
@@ -833,21 +962,34 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
 
 impl fmt::Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}: C{}({}, {}, E{})",
-            self.digest(),
-            self.round(),
-            self.origin(),
-            self.header.digest(),
-            self.epoch()
-        )
+        match self {
+            Certificate::V1(data) => write!(
+                f,
+                "{}: C{}({}, {}, E{})",
+                data.digest(),
+                data.round(),
+                data.origin(),
+                data.header.digest(),
+                data.epoch()
+            ),
+        }
     }
 }
 
 impl PartialEq for Certificate {
+    // TODO(arun): How to make sure this is correctly updated when a new variant is added?
+    #[allow(unreachable_patterns)]
     fn eq(&self, other: &Self) -> bool {
-        let mut ret = self.header.digest() == other.header.digest();
+        match (self, other) {
+            (Certificate::V1(data), Certificate::V1(other_data)) => data.eq(other_data),
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq for CertificateV1 {
+    fn eq(&self, other: &Self) -> bool {
+        let mut ret = self.header().digest() == other.header().digest();
         ret &= self.round() == other.round();
         ret &= self.epoch() == other.epoch();
         ret &= self.origin() == other.origin();
@@ -857,14 +999,18 @@ impl PartialEq for Certificate {
 
 impl Affiliated for Certificate {
     fn parents(&self) -> Vec<<Self as Hash<{ crypto::DIGEST_LENGTH }>>::TypedDigest> {
-        self.header.parents().iter().cloned().collect()
+        match self {
+            Certificate::V1(data) => data.header().parents().iter().cloned().collect(),
+        }
     }
 
     // This makes the genesis certificate and empty blocks compressible,
     // so that they will never be reported by a DAG walk
     // (`read_causal`, `node_read_causal`).
     fn compressible(&self) -> bool {
-        self.header.payload().is_empty()
+        match self {
+            Certificate::V1(data) => data.header().payload().is_empty(),
+        }
     }
 }
 

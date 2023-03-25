@@ -19,7 +19,7 @@ use test_utils::CommitteeFixture;
 use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
 use tracing::info;
-use types::{HeaderAPI, PreSubscribedBroadcastSender};
+use types::{CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender};
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit
 // the leader of round 2.
@@ -877,7 +877,7 @@ async fn garbage_collection_basic() {
                 !sub_dag
                     .certificates
                     .iter()
-                    .any(|c| c.header.author() == slow_node),
+                    .any(|c| c.header().author() == slow_node),
                 "Slow authority shouldn't be amongst the committed ones"
             );
 

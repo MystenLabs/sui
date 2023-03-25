@@ -18,7 +18,7 @@ use tracing::{debug, enabled, error, info, trace};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    BatchDigest, Certificate, Header, HeaderAPI, Round, TimestampMs,
+    BatchDigest, Certificate, CertificateAPI, Header, HeaderAPI, Round, TimestampMs,
 };
 use types::{now, ConditionalBroadcastReceiver};
 
@@ -208,7 +208,7 @@ impl Proposer {
         let current_time = now();
         let parent_max_time = parents
             .iter()
-            .map(|c| *c.header.created_at())
+            .map(|c| *c.header().created_at())
             .max()
             .unwrap_or(0);
         if current_time < parent_max_time {
@@ -376,7 +376,7 @@ impl Proposer {
         let mut no_votes = 0;
         for certificate in &self.last_parents {
             let stake = self.committee.stake_by_id(certificate.origin());
-            if certificate.header.parents().contains(&leader) {
+            if certificate.header().parents().contains(&leader) {
                 votes_for_leader += stake;
             } else {
                 no_votes += stake;

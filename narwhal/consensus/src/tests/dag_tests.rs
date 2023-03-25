@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use test_utils::{make_optimal_certificates, CommitteeFixture};
-use types::{Certificate, HeaderAPI, PreSubscribedBroadcastSender};
+use types::{Certificate, CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender};
 
 #[tokio::test]
 async fn inner_dag_insert_one() {
@@ -154,7 +154,7 @@ async fn test_dag_compresses_empty_blocks() {
         make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &ids);
     // make those empty
     for cert in certificates.iter_mut() {
-        cert.header.update_payload(IndexMap::new());
+        cert.header_mut().update_payload(IndexMap::new());
     }
 
     // Feed the certificates to the Dag
@@ -222,7 +222,7 @@ async fn test_dag_rounds_after_compression() {
         make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &ids);
     // make those empty
     for cert in certificates.iter_mut() {
-        cert.header.update_payload(IndexMap::new());
+        cert.header_mut().update_payload(IndexMap::new());
     }
 
     // Feed the certificates to the Dag

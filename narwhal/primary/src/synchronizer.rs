@@ -36,7 +36,7 @@ use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
     metered_channel::Sender,
-    Certificate, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
+    Certificate, CertificateAPI, CertificateDigest, Header, HeaderAPI, PrimaryToPrimaryClient,
     PrimaryToWorkerClient, Round, SendCertificateRequest, SendCertificateResponse,
     WorkerSynchronizeMessage,
 };
@@ -146,7 +146,7 @@ impl Inner {
 
         // TODO: remove this validation later to reduce rocksdb access.
         if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
-            for digest in certificate.header.parents() {
+            for digest in certificate.header().parents() {
                 if !self.certificate_store.contains(digest).unwrap() {
                     panic!("Parent {digest:?} not found for {certificate:?}!");
                 }
@@ -214,7 +214,7 @@ impl Inner {
     ) -> DagResult<Vec<CertificateDigest>> {
         let mut result = Vec::new();
         if certificate.round() == 1 {
-            for digest in certificate.header.parents() {
+            for digest in certificate.header().parents() {
                 if !self.genesis.contains_key(digest) {
                     return Err(DagError::InvalidGenesisParent(*digest));
                 }
@@ -222,7 +222,7 @@ impl Inner {
             return Ok(result);
         }
 
-        for digest in certificate.header.parents() {
+        for digest in certificate.header().parents() {
             if !self.has_processed_certificate(*digest).await? {
                 result.push(*digest);
             }
@@ -502,7 +502,7 @@ impl Synchronizer {
         // Update metrics.
         let round = certificate.round();
         let header_to_certificate_duration = Duration::from_millis(
-            certificate.metadata.created_at - *certificate.header.created_at(),
+            certificate.metadata().created_at - *certificate.header().created_at(),
         )
         .as_secs_f64();
         self.inner
@@ -518,9 +518,9 @@ impl Synchronizer {
         // NOTE: This log entry is used to compute performance.
         debug!(
             "Header {:?} at round {} with {} batches, took {} seconds to be materialized to a certificate {:?}",
-            certificate.header.digest(),
-            certificate.header.round(),
-            certificate.header.payload().len(),
+            certificate.header().digest(),
+            certificate.header().round(),
+            certificate.header().payload().len(),
             header_to_certificate_duration,
             certificate.digest()
         );
@@ -627,7 +627,7 @@ impl Synchronizer {
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let inner = self.inner.clone();
-        let header = certificate.header.clone();
+        let header = certificate.header().clone();
         let sync_network = network.clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
         self.inner.batch_tasks.lock().spawn(async move {
