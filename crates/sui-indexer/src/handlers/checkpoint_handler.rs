@@ -94,9 +94,9 @@ where
         next_cursor_sequence_number += 1;
 
         loop {
+            // Download checkpoint data
             self.metrics.total_checkpoint_requested.inc();
-            let request_guard = self.metrics.full_node_read_request_latency.start_timer();
-
+            let request_guard = self.metrics.fullnode_download_latency.start_timer();
             let checkpoint = self
                 .download_checkpoint_data(next_cursor_sequence_number as u64)
                 .await.map_err(|e| {
@@ -110,34 +110,43 @@ where
             self.metrics.total_checkpoint_received.inc();
 
             // Index checkpoint data
-            // TODO: Metrics
+            let index_guard = self.metrics.checkpoint_index_latency.start_timer();
             let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
+            index_guard.stop_and_record();
 
-            if let Some(indexed_epoch) = indexed_epoch {
-                self.state.persist_epoch(&indexed_epoch)?;
-            }
-
-            // Write to DB
-            let db_guard = self.metrics.db_write_request_latency.start_timer();
+            // Write checkpoint to DB
             let tx_count = indexed_checkpoint.transactions.len();
             let object_count = indexed_checkpoint.objects_changes.len();
 
+            let checkpoint_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
             self.state.persist_checkpoint(&indexed_checkpoint)?;
+            checkpoint_db_guard.stop_and_record();
+
+            self.metrics.total_checkpoint_committed.inc();
+            self.metrics
+                .total_transaction_committed
+                .inc_by(tx_count as u64);
             info!(
-                "Checkpoint {} committed with {tx_count} transactions and {object_count} objects.",
+                "Checkpoint {} committed with {tx_count} transactions and {object_count} object changes.",
                 next_cursor_sequence_number
             );
-            self.metrics.total_checkpoint_processed.inc();
-            db_guard.stop_and_record();
+
+            // Write epoch to DB if needed
+            if let Some(indexed_epoch) = indexed_epoch {
+                let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                self.state.persist_epoch(&indexed_epoch)?;
+                epoch_db_guard.stop_and_record();
+                self.metrics.total_epoch_committed.inc();
+            }
 
             // Process websocket subscription
-            let db_guard = self.metrics.db_write_request_latency.start_timer();
+            let ws_guard = self.metrics.subscription_process_latency.start_timer();
             for tx in &checkpoint.transactions {
                 self.event_handler
                     .process_events(&tx.effects, &tx.events)
                     .await?;
             }
-            db_guard.stop_and_record();
+            ws_guard.stop_and_record();
 
             next_cursor_sequence_number += 1;
         }
