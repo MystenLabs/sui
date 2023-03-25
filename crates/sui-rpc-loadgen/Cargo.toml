@@ -27,6 +27,8 @@ scopeguard = "1.1"
 tap = "1.0"
 tracing-subscriber = { version = "0.3.15" }
 dirs = "4.0.0"
+dashmap = "5.4.0"
+itertools = "0.10.4"
 
 eyre = "0.6.8"
 rocksdb = "0.20.1"
@@ -40,6 +42,7 @@ sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
+sui-json-rpc = { path = "../sui-json-rpc"}
 mysten-metrics = { path = "../../crates/mysten-metrics" }
 telemetry-subscribers.workspace = true
 typed-store.workspace = true
