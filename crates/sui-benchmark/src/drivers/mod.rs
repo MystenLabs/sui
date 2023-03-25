@@ -134,8 +134,8 @@ impl BenchmarkStats {
                 "latency (min)",
                 "latency (p50)",
                 "latency (p99)",
-                "gas used (total)",
-                "gas used/hr (approx.)",
+                "gas used (MIST total)",
+                "gas used/hr (MIST approx.)",
             ]);
         let mut row = Row::new();
         row.add_cell(Cell::new(self.duration.as_secs()));

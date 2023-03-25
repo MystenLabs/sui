@@ -28,10 +28,8 @@ use super::{
     WorkloadBuilderInfo, WorkloadParams,
 };
 
-/// Number of max size objects to create in the max object payload
-const NUM_OBJECTS: u64 = 2048;
 /// Number of vectors to create in LargeTransientRuntimeVectors workload
-const NUM_VECTORS: u64 = 100;
+const NUM_VECTORS: u64 = 1_000;
 
 #[derive(Debug, EnumCountMacro, EnumIter, Clone)]
 pub enum AdversarialPayloadType {
@@ -103,8 +101,7 @@ impl FromStr for AdversarialPayloadCfg {
         if toks.len() != 2
             || toks[0].parse::<u32>().is_err()
             || toks[1].parse::<f32>().is_err()
-            || toks[1].parse::<f32>().unwrap() < 0.0
-            || toks[1].parse::<f32>().unwrap() > 1.0
+            || (0.0..1.0).contains(&toks[1].parse::<f32>().unwrap())
         {
             return Err(anyhow!("adversarial payload config format incorrect"));
         };
@@ -194,9 +191,9 @@ impl AdversarialTestPayload {
             AdversarialPayloadType::LargeObjects => AdversarialPayloadArgs {
                 fn_name: "create_shared_objects".to_owned(),
                 args: [
-                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                    (NUM_OBJECTS / 10).into(),
-                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
+                    // Use the maximum number of new ids which can be created
+                    protocol_config.max_num_new_move_object_ids().into(),
+                    // Raise this. Using a smaller value here as full value locks up local machine
                     self.get_pct_of(protocol_config.max_move_object_size())
                         .into(),
                 ]
