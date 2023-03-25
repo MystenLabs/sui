@@ -149,6 +149,8 @@ enum NextOp {
         latency: Duration,
         /// Number of commands in the executed transction
         num_commands: u16,
+        /// Gas used in the executed transction
+        gas_used: u64,
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
     },
@@ -192,6 +194,7 @@ impl BenchDriver {
     pub fn update_progress(
         start_time: Instant,
         interval: Interval,
+        gas_used: u64,
         progress_bar: Arc<ProgressBar>,
     ) {
         match interval {
@@ -210,6 +213,7 @@ impl BenchDriver {
                 }
             }
         }
+        progress_bar.set_message(format!("Gas Used: {gas_used}"));
     }
     pub async fn make_workers(
         &self,
@@ -295,7 +299,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             Interval::Count(count) => ProgressBar::new(count)
                 .with_prefix("Running benchmark(count):")
                 .with_style(
-                    ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap(),
+                    ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}")
+                        .unwrap(),
                 ),
             Interval::Time(Duration::MAX) => ProgressBar::hidden(),
             Interval::Time(duration) => ProgressBar::new(duration.as_secs())
@@ -322,6 +327,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 let mut num_no_gas = 0;
                 let mut num_in_flight: u64 = 0;
                 let mut num_submitted = 0;
+                let mut total_gas_used = 0;
                 let mut latency_histogram =
                     hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
                 let mut request_interval =
@@ -344,13 +350,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     num_no_gas,
                                     num_in_flight,
                                     num_submitted,
-                                    bench_stats: BenchmarkStats {
-                                        duration: stat_start_time.elapsed(),
-                                        num_error_txes,
-                                        num_success_txes,
-                                        num_success_cmds,
-                                        latency_ms: HistogramWrapper {histogram: latency_histogram.clone()},
-                                    },
+                                    bench_stats: BenchmarkStats {duration:stat_start_time.elapsed(),num_error_txes,num_success_txes,num_success_cmds,latency_ms:HistogramWrapper{histogram:latency_histogram.clone()}, total_gas_used },
                                 })
                                 .is_err()
                             {
@@ -401,7 +401,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                                 }
                                                 let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
                                                 b.1.make_new_payload(&effects);
-                                                NextOp::Response { latency, num_commands, payload: b.1 }
+                                                NextOp::Response {latency,num_commands,payload:b.1, gas_used: effects.gas_used() }
                                             }
                                             Err(err) => {
                                                 error!("{}", err);
@@ -451,7 +451,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                             if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
                                             payload.make_new_payload(&effects);
                                             let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
-                                            NextOp::Response { latency, num_commands, payload }
+                                            NextOp::Response {latency,num_commands,payload, gas_used: effects.gas_used() }
                                         }
                                         Err(err) => {
                                             error!("Retry due to error: {}", err);
@@ -467,18 +467,19 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             match op {
                                 NextOp::Retry(b) => {
                                     retry_queue.push_back(b);
-                                    BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
+                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, progress_cloned.clone());
                                     if progress_cloned.is_finished() {
                                         break;
                                     }
                                 }
-                                NextOp::Response { latency, num_commands, payload } => {
+                                NextOp::Response { latency, num_commands, payload, gas_used } => {
                                     num_success_txes += 1;
                                     num_success_cmds += num_commands as u64;
                                     num_in_flight -= 1;
+                                    total_gas_used += gas_used;
                                     free_pool.push(payload);
                                     latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
-                                    BenchDriver::update_progress(*start_time, run_duration, progress_cloned.clone());
+                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, progress_cloned.clone());
                                     if progress_cloned.is_finished() {
                                         break;
                                     }
@@ -499,6 +500,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             num_error_txes,
                             num_success_txes,
                             num_success_cmds,
+                            total_gas_used,
                             latency_ms: HistogramWrapper {
                                 histogram: latency_histogram,
                             },
@@ -518,6 +520,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 num_error_txes: 0,
                 num_success_txes: 0,
                 num_success_cmds: 0,
+                total_gas_used: 0,
                 latency_ms: HistogramWrapper {
                     histogram: hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap(),
                 },
