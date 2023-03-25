@@ -102,7 +102,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub async fn get_sui_types_object(
+    pub fn get_sui_types_object(
         &self,
         object_id: &ObjectID,
         version: &SequenceNumber,
@@ -139,7 +139,7 @@ impl PgIndexerStore {
         }
     }
 
-    pub async fn find_sui_types_object_lt_or_eq_version(
+    pub fn find_sui_types_object_lt_or_eq_version(
         &self,
         id: &ObjectID,
         version: &SequenceNumber,
@@ -1399,7 +1399,7 @@ impl ObjectProvider for PgIndexerStore {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<sui_types::object::Object, Self::Error> {
-        self.get_sui_types_object(id, version).await
+        self.get_sui_types_object(id, version)
     }
 
     async fn find_object_lt_or_eq_version(
@@ -1408,6 +1408,5 @@ impl ObjectProvider for PgIndexerStore {
         version: &SequenceNumber,
     ) -> Result<Option<sui_types::object::Object>, Self::Error> {
         self.find_sui_types_object_lt_or_eq_version(id, version)
-            .await
     }
 }
