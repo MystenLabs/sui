@@ -92,7 +92,7 @@ await provider.requestSuiFromFaucet(
 );
 ```
 
-For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network with a local validator, a fullnode, and a faucet server.
+For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network with a local validator, a fullnode, and a faucet server. Refer to [this guide](https://docs.sui.io/build/sui-local-network) for more information.
 
 ```typescript
 import { JsonRpcProvider, localnetConnection } from '@mysten/sui.js';
@@ -121,7 +121,135 @@ await provider.requestSuiFromFaucet(
 );
 ```
 
-## Examples
+## Writing APIs
+
+For a primer for building transactions, refer to [this guide](https://docs.sui.io/build/prog-trans-ts-sdk).
+
+### Transfer Object
+
+```typescript
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
+// Generate a new Ed25519 Keypair
+const keypair = new Ed25519Keypair();
+const provider = new JsonRpcProvider();
+const signer = new RawSigner(keypair, provider);
+const tx = new Transaction();
+tx.transferObjects(
+  [tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0')],
+  tx.pure('0xd84058cb73bdeabe123b56632713dcd65e1a6c92'),
+);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
+console.log({ result });
+```
+
+### Transfer Sui
+
+To transfer `1000` SUI to another address:
+
+```typescript
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const provider = new JsonRpcProvider();
+const signer = new RawSigner(keypair, provider);
+const tx = new Transaction();
+const coin = tx.splitCoin(tx.gas, tx.pure(1000));
+tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
+console.log({ result });
+```
+
+### Merge coins
+
+```typescript
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const provider = new JsonRpcProvider();
+const signer = new RawSigner(keypair, provider);
+const tx = new Transaction();
+tx.mergeCoin(tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0'), [
+  tx.object('0xcc460051569bfb888dedaf5182e76f473ee351af'),
+]);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
+console.log({ result });
+```
+
+### Move Call
+
+```typescript
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+} from '@mysten/sui.js';
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const provider = new JsonRpcProvider();
+const signer = new RawSigner(keypair, provider);
+const packageObjectId = '0x...';
+const tx = new Transaction();
+tx.moveCall({
+  target: `${packageObjectId}::nft::mint`,
+  arguments: [tx.pure('Example NFT')],
+});
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
+console.log({ result });
+```
+
+### Publish Modules
+
+To publish a package:
+
+```typescript
+import {
+  Ed25519Keypair,
+  JsonRpcProvider,
+  RawSigner,
+  Transaction,
+  normalizeSuiObjectId,
+} from '@mysten/sui.js';
+const { execSync } = require('child_process');
+// Generate a new Keypair
+const keypair = new Ed25519Keypair();
+const provider = new JsonRpcProvider();
+const signer = new RawSigner(keypair, provider);
+const compiledModulesAndDependencies = JSON.parse(
+  execSync(
+    `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
+    { encoding: 'utf-8' },
+  ),
+);
+const tx = new Transaction();
+tx.publish(
+  compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
+  compiledModulesAndDeps.dependencies.map((addr: string) =>
+    normalizeSuiObjectId(addr),
+  ),
+);
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
+console.log({ result });
+```
+
+## Reading APIs
+
+### Get Owned Objects
 
 Fetch objects owned by the address `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
@@ -132,6 +260,8 @@ const objects = await provider.getOwnedObjects({
   owner: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
 });
 ```
+
+### Get Object
 
 Fetch object details for the object with id `0xcff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
@@ -154,6 +284,8 @@ const txns = await provider.multiGetObjects({
 });
 ```
 
+### Get Transaction
+
 Fetch transaction details from transaction digests:
 
 ```typescript
@@ -175,25 +307,7 @@ const txns = await provider.multiGetTransactions({
 });
 ```
 
-Fetch transaction events from a transaction digest:
-
-```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider();
-const txEvents = await provider.getEventsByTransaction(
-  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-);
-```
-
-Fetch events by sender address:
-
-```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
-const provider = new JsonRpcProvider();
-const senderEvents = await provider.getEventsBySender(
-  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3',
-);
-```
+### Get Coins
 
 Fetch coins of type `0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC` owned by an address:
 
@@ -229,105 +343,31 @@ const coinBalance = await provider.getBalance({
 });
 ```
 
-For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
+### Events API
 
-To transfer a `0x2::coin::Coin<SUI>`:
-
-```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Transaction,
-} from '@mysten/sui.js';
-// Generate a new Ed25519 Keypair
-const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider();
-const signer = new RawSigner(keypair, provider);
-const tx = new Transaction();
-tx.transferObjects(
-  [tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0')],
-  tx.pure('0xd84058cb73bdeabe123b56632713dcd65e1a6c92'),
-);
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
-console.log({ result });
-```
-
-To split the gas coin into another coin:
+Querying events created by transactions sent by account
+`0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Transaction,
-} from '@mysten/sui.js';
-// Generate a new Keypair
-const keypair = new Ed25519Keypair();
+import { JsonRpcProvider } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
-const signer = new RawSigner(keypair, provider);
-const tx = new Transaction();
-const coin = tx.splitCoin(tx.gas, tx.pure(1000));
-tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
-console.log({ result });
-```
-
-To merge two coins:
-
-```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Transaction,
-} from '@mysten/sui.js';
-// Generate a new Keypair
-const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider();
-const signer = new RawSigner(keypair, provider);
-const tx = new Transaction();
-tx.mergeCoin(tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0'), [
-  tx.object('0xcc460051569bfb888dedaf5182e76f473ee351af'),
-]);
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
-console.log({ result });
-```
-
-To make a move call:
-
-```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Transaction,
-} from '@mysten/sui.js';
-// Generate a new Keypair
-const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider();
-const signer = new RawSigner(keypair, provider);
-const packageObjectId = '0x...';
-const tx = new Transaction();
-tx.moveCall({
-  target: `${packageObjectId}::nft::mint`,
-  arguments: [tx.pure('Example NFT')],
+const events = provider.queryEvents({
+  query: { Sender: toolbox.address() },
+  limit: 2,
 });
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
-console.log({ result });
 ```
 
 Subscribe to all events created by transactions sent by account `0xbff6ccc8707aa517b4f1b95750a2a8c666012df3`
 
 ```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
+import { JsonRpcProvider, SuiEvent } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 
 // calls RPC method 'sui_subscribeEvent' with params:
-// [ { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
+// [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
 const subscriptionId = await provider.subscribeEvent({
-  filter: { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
-  onMessage(event: SuiEventEnvelope) {
+  filter: { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
+  onMessage(event: SuiEvent) {
     // handle subscription notification message here. This function is called once per subscription message.
   },
 });
@@ -342,64 +382,17 @@ const subFoundAndRemoved = await provider.unsubscribeEvent({
 Subscribe to all events created by a package's `nft` module
 
 ```typescript
-import { JsonRpcProvider } from '@mysten/sui.js';
+import { JsonRpcProvider, SuiEvent } from '@mysten/sui.js';
 const provider = new JsonRpcProvider();
 
-const packageObjectId = '0x...';
+const package = '0x...';
 const devnetNftFilter = {
-  All: [
-    { EventType: 'MoveEvent' },
-    { Package: packageObjectId },
-    { Module: 'nft' },
-  ],
+    { MoveModule: { package, module: 'nft'} },
 };
 const devNftSub = await provider.subscribeEvent({
   filter: devnetNftFilter,
-  onMessage(event: SuiEventEnvelope) {
+  onMessage(event: SuiEvent) {
     // handle subscription notification message here
   },
 });
-```
-
-To publish a package:
-
-```typescript
-import {
-  Ed25519Keypair,
-  JsonRpcProvider,
-  RawSigner,
-  Transaction,
-  normalizeSuiObjectId,
-} from '@mysten/sui.js';
-const { execSync } = require('child_process');
-// Generate a new Keypair
-const keypair = new Ed25519Keypair();
-const provider = new JsonRpcProvider();
-const signer = new RawSigner(keypair, provider);
-const compiledModulesAndDependencies = JSON.parse(
-  execSync(
-    `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-    { encoding: 'utf-8' },
-  ),
-);
-const tx = new Transaction();
-tx.publish(
-  compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
-  compiledModulesAndDeps.dependencies.map((addr: string) =>
-    normalizeSuiObjectId(addr),
-  ),
-);
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
-console.log({ result });
-```
-
-Alternatively, a Secp256k1 can be initiated:
-
-```typescript
-import { Secp256k1Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
-// Generate a new Secp256k1 Keypair
-const keypair = new Secp256k1Keypair();
-
-const provider = new JsonRpcProvider();
-const signer = new RawSigner(keypair, provider);
 ```
