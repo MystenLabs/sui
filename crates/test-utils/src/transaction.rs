@@ -11,7 +11,9 @@ use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_core::authority_client::AuthorityAPI;
-pub use sui_core::test_utils::{compile_basics_package, wait_for_all_txes, wait_for_tx};
+pub use sui_core::test_utils::{
+    compile_basics_package, compile_nfts_package, wait_for_all_txes, wait_for_tx,
+};
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
     SuiTransactionResponse, SuiTransactionResponseOptions,
@@ -39,7 +41,7 @@ use crate::messages::{
     make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
 
-const GAS_BUDGET: u64 = 5000;
+const GAS_BUDGET: u64 = 10000;
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
@@ -76,6 +78,25 @@ pub async fn publish_counter_package(gas_object: Object, net_addresses: &[Multia
     publish_package(gas_object, path, net_addresses).await
 }
 
+/// Helper function to publish example package.
+/// # Arguments
+///
+/// * `sender` - If not provided, the active address from the wallet context will be used.
+pub async fn publish_nfts_package(
+    context: &mut WalletContext,
+    sender: Option<SuiAddress>,
+) -> (ObjectID, TransactionDigest) {
+    let package = compile_nfts_package();
+    let sender = sender.unwrap_or_else(|| context.active_address().unwrap());
+    let result = publish_package_with_wallet(
+        context,
+        sender,
+        package.get_package_bytes(/* with_unpublished_deps */ false),
+        package.get_dependency_original_package_ids(),
+    )
+    .await;
+    (result.0 .0, result.1)
+}
 /// Helper function to publish basic package.
 pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
     let package = compile_basics_package();
@@ -86,6 +107,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
         package.get_dependency_original_package_ids(),
     )
     .await
+    .0
 }
 
 /// Returns the published package's ObjectRef.
@@ -94,7 +116,7 @@ pub async fn publish_package_with_wallet(
     sender: SuiAddress,
     all_module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
-) -> ObjectRef {
+) -> (ObjectRef, TransactionDigest) {
     let client = context.get_client().await.unwrap();
     let transaction = {
         let data = client
@@ -124,14 +146,17 @@ pub async fn publish_package_with_wallet(
         .unwrap();
 
     assert!(resp.confirmed_local_execution.unwrap());
-    resp.effects
-        .unwrap()
-        .created()
-        .iter()
-        .find(|obj_ref| obj_ref.owner == Owner::Immutable)
-        .unwrap()
-        .reference
-        .to_object_ref()
+    (
+        resp.effects
+            .unwrap()
+            .created()
+            .iter()
+            .find(|obj_ref| obj_ref.owner == Owner::Immutable)
+            .unwrap()
+            .reference
+            .to_object_ref(),
+        resp.digest,
+    )
 }
 
 /// A helper function to submit a move transaction
@@ -238,37 +263,51 @@ pub async fn increment_counter(
     .await
 }
 
+/// Pre-requisite: `publish_nfts_package` must be called before this function.
 pub async fn create_devnet_nft(
     context: &mut WalletContext,
+    nfts_package: ObjectID,
 ) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
     let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
     let gas_object = gas_objects.get(0).unwrap().id();
 
-    let res = SuiClientCommands::CreateExampleNFT {
-        name: Some("example_nft_name".into()),
-        description: Some("example_nft_desc".into()),
-        url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
+    let args_json = json!([
+        "example_nft_name",
+        "example_nft_desc",
+        "https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg",
+    ]);
+    let mut args = vec![];
+    for a in args_json.as_array().unwrap() {
+        args.push(SuiJsonValue::new(a.clone()).unwrap());
+    }
+
+    let res = SuiClientCommands::Call {
+        package: nfts_package,
+        module: "devnet_nft".into(),
+        function: "mint".into(),
+        type_args: vec![],
+        args,
         gas: Some(*gas_object),
-        gas_budget: Some(GAS_BUDGET),
+        gas_budget: GAS_BUDGET,
     }
     .execute(context)
     .await?;
 
-    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(ref response) = res {
-        if let Some(obj) = &response.data {
-            (
-                obj.object_id,
-                obj.previous_transaction
-                    .expect("previous_transaction should not be None"),
-            )
-        } else {
-            panic!(
-                "CreateExampleNFT command did not return data, got {:?}",
-                res
-            );
-        }
+    let (object_id, digest) = if let SuiClientCommandResult::Call(ref response) = res {
+        (
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .created()
+                .first()
+                .unwrap()
+                .reference
+                .object_id,
+            response.digest,
+        )
     } else {
-        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT, got {:?}", res);
+        panic!("Failed to create NFT, got {:?}", res);
     };
 
     Ok((sender, object_id, digest))
@@ -404,6 +443,7 @@ pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id
 pub async fn delete_devnet_nft(
     context: &mut WalletContext,
     sender: &SuiAddress,
+    nfts_package: ObjectID,
     nft_to_delete: ObjectRef,
 ) -> SuiTransactionResponse {
     let gas = get_gas_object_with_wallet_context(context, sender)
@@ -411,7 +451,7 @@ pub async fn delete_devnet_nft(
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
     let data = TransactionData::new_move_call_with_dummy_gas_price(
         *sender,
-        SUI_FRAMEWORK_OBJECT_ID,
+        nfts_package,
         "devnet_nft".parse().unwrap(),
         "burn".parse().unwrap(),
         Vec::new(),

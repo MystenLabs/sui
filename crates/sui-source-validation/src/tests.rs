@@ -568,7 +568,9 @@ async fn publish_package(
     let package = compile_package(package);
     let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ false);
     let package_deps = package.get_dependency_original_package_ids();
-    publish_package_with_wallet(context, sender, package_bytes, package_deps).await
+    publish_package_with_wallet(context, sender, package_bytes, package_deps)
+        .await
+        .0
 }
 
 /// Compile and publish package at absolute path `package` to chain, along with its unpublished
@@ -581,7 +583,9 @@ async fn publish_package_and_deps(
     let package = compile_package(package);
     let package_bytes = package.get_package_bytes(/* with_unpublished_deps */ true);
     let package_deps = package.get_dependency_original_package_ids();
-    publish_package_with_wallet(context, sender, package_bytes, package_deps).await
+    publish_package_with_wallet(context, sender, package_bytes, package_deps)
+        .await
+        .0
 }
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's

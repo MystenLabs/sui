@@ -29,7 +29,7 @@ use sui_types::{
     messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 use test_case::{
-    call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
+    coin_merge_split_test::CoinMergeSplitTest,
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
@@ -285,7 +285,6 @@ impl ClusterTest {
         let tests = vec![
             TestCase::new(NativeTransferTest {}),
             TestCase::new(CoinMergeSplitTest {}),
-            TestCase::new(CallContractTest {}),
             TestCase::new(SharedCounterTest {}),
             TestCase::new(FullNodeExecuteTransactionTest {}),
             TestCase::new(FullNodeBuildPublishTransactionTest {}),
