@@ -5,12 +5,12 @@
 mod test {
 
     use rand::{thread_rng, Rng};
-    use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
+    use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
