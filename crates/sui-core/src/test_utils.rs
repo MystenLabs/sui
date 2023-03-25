@@ -15,7 +15,6 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
-use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
@@ -25,7 +24,6 @@ use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::messages::{
     SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
 };
-use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -160,11 +158,9 @@ async fn init_genesis(
         .into_iter()
         .cloned()
         .collect();
-    let pkg = Object::new_package(
+    let pkg = Object::new_package_for_testing(
         modules,
-        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
-        ProtocolConfig::get_for_max_version().max_move_package_size(),
         &sui_framework::make_system_packages(),
     )
     .unwrap();

@@ -201,34 +201,8 @@ impl MovePackage {
         digest.finalize().digest
     }
 
-    /// Create an initial version of the package along with this version's type origin and linkage
-    /// tables.
-    pub fn new_initial<'p>(
-        version: SequenceNumber,
-        modules: Vec<CompiledModule>,
-        max_move_package_size: u64,
-        transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
-    ) -> Result<Self, ExecutionError> {
-        let module = modules
-            .first()
-            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
-        let self_id = ObjectID::from(*module.address());
-        let type_origin_table = build_initial_type_origin_table(&modules);
-
-        let (immediate_dependencies, module_map) =
-            Self::immediate_dependencies_and_module_map(&self_id, modules);
-        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
-        Self::new_initial_with_tables(
-            self_id,
-            version,
-            module_map,
-            max_move_package_size,
-            type_origin_table,
-            linkage_table,
-        )
-    }
-
-    pub fn new_initial_with_tables<'p>(
+    /// Create an initial version of the package.
+    pub fn new_initial(
         pkg_id: ObjectID,
         version: SequenceNumber,
         module_map: BTreeMap<String, Vec<u8>>,
@@ -246,9 +220,57 @@ impl MovePackage {
         )
     }
 
-    /// Create an upgraded version of the package along with this version's type origin and linkage
-    /// tables.
-    pub fn new_upgraded<'p>(
+    /// Create an upgraded version of the package.
+    pub fn new_upgraded(
+        &self,
+        storage_id: ObjectID,
+        module_map: BTreeMap<String, Vec<u8>>,
+        max_move_package_size: u64,
+        type_origin_table: Vec<TypeOrigin>,
+        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
+    ) -> Result<Self, ExecutionError> {
+        let mut new_version = self.version();
+        new_version.increment();
+        Self::new(
+            storage_id,
+            new_version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            linkage_table,
+        )
+    }
+
+    /// Convenience function to create an initial version of the package along with this version's
+    /// type origin and linkage tables.
+    pub fn new_initial_for_testing<'p>(
+        version: SequenceNumber,
+        modules: Vec<CompiledModule>,
+        max_move_package_size: u64,
+        transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
+    ) -> Result<Self, ExecutionError> {
+        let module = modules
+            .first()
+            .expect("Tried to build a Move package from an empty iterator of Compiled modules");
+        let self_id = ObjectID::from(*module.address());
+        let type_origin_table = build_initial_type_origin_table(&modules);
+
+        let (immediate_dependencies, module_map) =
+            Self::immediate_dependencies_and_module_map(&self_id, modules);
+        let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
+        Self::new_initial(
+            self_id,
+            version,
+            module_map,
+            max_move_package_size,
+            type_origin_table,
+            linkage_table,
+        )
+    }
+
+    /// Convenience function to create an upgraded version of the package along with this version's
+    /// type origin and linkage tables.
+    pub fn new_upgraded_for_testing<'p>(
         &self,
         storage_id: ObjectID,
         modules: Vec<CompiledModule>,
@@ -264,28 +286,8 @@ impl MovePackage {
             Self::immediate_dependencies_and_module_map(&self_id, modules);
         let linkage_table = build_linkage_table(immediate_dependencies, transitive_dependencies)?;
 
-        self.new_upgraded_with_tables(
+        self.new_upgraded(
             storage_id,
-            module_map,
-            max_move_package_size,
-            type_origin_table,
-            linkage_table,
-        )
-    }
-
-    pub fn new_upgraded_with_tables(
-        &self,
-        storage_id: ObjectID,
-        module_map: BTreeMap<String, Vec<u8>>,
-        max_move_package_size: u64,
-        type_origin_table: Vec<TypeOrigin>,
-        linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
-    ) -> Result<Self, ExecutionError> {
-        let mut new_version = self.version();
-        new_version.increment();
-        Self::new(
-            storage_id,
-            new_version,
             module_map,
             max_move_package_size,
             type_origin_table,

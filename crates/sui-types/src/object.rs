@@ -566,26 +566,7 @@ impl Object {
         }
     }
 
-    // Note: this will panic if `modules` is empty
-    pub fn new_package<'p>(
-        modules: Vec<CompiledModule>,
-        version: SequenceNumber,
-        previous_transaction: TransactionDigest,
-        max_move_package_size: u64,
-        dependencies: impl IntoIterator<Item = &'p MovePackage>,
-    ) -> Result<Self, ExecutionError> {
-        Ok(Self::new_package_from_data(
-            Data::Package(MovePackage::new_initial(
-                version,
-                modules,
-                max_move_package_size,
-                dependencies,
-            )?),
-            previous_transaction,
-        ))
-    }
-
-    pub fn new_package_with_tables(
+    pub fn new_package(
         package_id: ObjectID,
         version: SequenceNumber,
         module_map: BTreeMap<String, Vec<u8>>,
@@ -595,7 +576,7 @@ impl Object {
         previous_transaction: TransactionDigest,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
-            Data::Package(MovePackage::new_initial_with_tables(
+            Data::Package(MovePackage::new_initial(
                 package_id,
                 version,
                 module_map,
@@ -607,7 +588,7 @@ impl Object {
         ))
     }
 
-    pub fn new_upgraded_package_with_tables<'a>(
+    pub fn new_upgraded_package(
         previous_package: &MovePackage,
         new_package_id: ObjectID,
         module_map: BTreeMap<String, Vec<u8>>,
@@ -617,7 +598,7 @@ impl Object {
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
-            Data::Package(previous_package.new_upgraded_with_tables(
+            Data::Package(previous_package.new_upgraded(
                 new_package_id,
                 module_map,
                 max_move_package_size,
@@ -633,13 +614,15 @@ impl Object {
         previous_transaction: TransactionDigest,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
-        Self::new_package(
-            modules,
-            OBJECT_START_VERSION,
+        Ok(Self::new_package_from_data(
+            Data::Package(MovePackage::new_initial_for_testing(
+                OBJECT_START_VERSION,
+                modules,
+                ProtocolConfig::get_for_max_version().max_move_package_size(),
+                dependencies,
+            )?),
             previous_transaction,
-            ProtocolConfig::get_for_max_version().max_move_package_size(),
-            dependencies,
-        )
+        ))
     }
 
     pub fn is_immutable(&self) -> bool {

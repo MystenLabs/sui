@@ -425,7 +425,7 @@ where
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
     ) -> Result<(), ExecutionError> {
         // wrap the modules in an object, write it to the store
-        let object = Object::new_package_with_tables(
+        let object = Object::new_package(
             pkg_id,
             OBJECT_START_VERSION,
             module_map,
@@ -447,7 +447,7 @@ where
         linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
         new_package_object_id: ObjectID,
     ) -> Result<ObjectID, ExecutionError> {
-        let object = Object::new_upgraded_package_with_tables(
+        let object = Object::new_upgraded_package(
             previous_package,
             new_package_object_id,
             module_map,
