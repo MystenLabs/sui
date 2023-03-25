@@ -608,6 +608,7 @@ where
         }
         // we need a new session just for deserializing and fetching abilities. Which is sad
         // TODO remove this
+        storage_context.compute_context(SUI_FRAMEWORK_OBJECT_ID)?;
         let tmp_session = new_session(
             vm,
             storage_context,
@@ -706,6 +707,7 @@ where
         // exist. Plus, Sui Move does not use these changes or events
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
         assert_invariant!(move_events.is_empty(), "Events must be empty");
+        storage_context.reset_context();
 
         Ok(ExecutionResults {
             object_changes,
