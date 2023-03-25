@@ -12,12 +12,8 @@ use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use linked_hash_map::LinkedHashMap;
-use move_binary_format::{
-    file_format_common::VERSION_MAX,
-    normalized::{Module as NormalizedModule, Type},
-};
+use move_binary_format::{file_format_common::VERSION_MAX, normalized::Module as NormalizedModule};
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
@@ -26,23 +22,17 @@ use tracing::debug;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, DynamicFieldPage, EventFilter,
-    MoveFunctionArgType, ObjectChange, ObjectValueKind, ObjectsPage, Page,
-    SuiCheckpointSequenceNumber, SuiGetPastObjectRequest, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
-    SuiTransaction, SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
-    SuiTransactionResponseQuery, TransactionsPage,
+    BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, EventFilter, ObjectChange,
+    SuiCheckpointSequenceNumber, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue,
+    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransaction,
+    SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{
-    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
-};
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest, TxSequenceNumber};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
-use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::error::{SuiObjectResponseError, UserInputError};
 use sui_types::messages::TransactionDataAPI;
 use sui_types::messages::{
@@ -53,10 +43,8 @@ use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimesta
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
 
-use crate::api::{cap_page_limit, validate_limit, ReadApiServer};
-use crate::api::{
-    QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS, QUERY_MAX_RESULT_LIMIT_OBJECTS,
-};
+use crate::api::{validate_limit, ReadApiServer};
+use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
 use crate::error::Error;
 use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
@@ -66,6 +54,7 @@ const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
 // Fullnodes.
+#[derive(Clone)]
 pub struct ReadApi {
     pub state: Arc<AuthorityState>,
 }
@@ -120,80 +109,7 @@ impl ReadApi {
 
 #[async_trait]
 impl ReadApiServer for ReadApi {
-    async fn get_owned_objects(
-        &self,
-        address: SuiAddress,
-        query: Option<SuiObjectResponseQuery>,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
-    ) -> RpcResult<ObjectsPage> {
-        if at_checkpoint.is_some() {
-            return Err(anyhow!(UserInputError::Unsupported(
-                "at_checkpoint param currently not supported".to_string()
-            ))
-            .into());
-        }
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
-        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
-        let options = options.unwrap_or_default();
-
-        let mut objects = self
-            .state
-            .get_owner_objects(address, cursor, limit + 1, filter)
-            .map_err(|e| anyhow!("{e}"))?;
-
-        // objects here are of size (limit + 1), where the last one is the cursor for the next page
-        let has_next_page = objects.len() > limit;
-        objects.truncate(limit);
-        let next_cursor = objects
-            .last()
-            .cloned()
-            .map_or(cursor, |o_info| Some(o_info.object_id));
-
-        let data = match options.is_not_in_object_info() {
-            true => {
-                let object_ids = objects.iter().map(|obj| obj.object_id).collect();
-                self.multi_get_object_with_options(object_ids, Some(options.clone()))
-                    .await?
-            }
-            false => objects
-                .into_iter()
-                .map(|o_info| SuiObjectResponse::try_from((o_info, options.clone())))
-                .collect::<Result<Vec<SuiObjectResponse>, _>>()?,
-        };
-
-        Ok(Page {
-            data,
-            next_cursor,
-            has_next_page,
-        })
-    }
-
-    async fn get_dynamic_fields(
-        &self,
-        parent_object_id: ObjectID,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-    ) -> RpcResult<DynamicFieldPage> {
-        let limit = cap_page_limit(limit);
-        let mut data = self
-            .state
-            .get_dynamic_fields(parent_object_id, cursor, limit + 1)
-            .map_err(|e| anyhow!("{e}"))?;
-        let has_next_page = data.len() > limit;
-        data.truncate(limit);
-        let next_cursor = data.last().cloned().map_or(cursor, |c| Some(c.object_id));
-        Ok(DynamicFieldPage {
-            data,
-            next_cursor,
-            has_next_page,
-        })
-    }
-
-    async fn get_object_with_options(
+    async fn get_object(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
@@ -228,7 +144,7 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn multi_get_object_with_options(
+    async fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
@@ -236,7 +152,7 @@ impl ReadApiServer for ReadApi {
         if object_ids.len() <= QUERY_MAX_RESULT_LIMIT {
             let mut futures = vec![];
             for object_id in object_ids {
-                futures.push(self.get_object_with_options(object_id, options.clone()))
+                futures.push(self.get_object(object_id, options.clone()))
             }
             let results = join_all(futures).await;
             let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
@@ -341,23 +257,6 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn get_dynamic_field_object(
-        &self,
-        parent_object_id: ObjectID,
-        name: DynamicFieldName,
-    ) -> RpcResult<SuiObjectResponse> {
-        let id = self
-            .state
-            .get_dynamic_field_object_id(parent_object_id, &name)
-            .map_err(|e| anyhow!("{e}"))?
-            .ok_or_else(|| {
-                anyhow!("Cannot find dynamic field [{name:?}] for object [{parent_object_id}].")
-            })?;
-        // TODO(chris): add options to `get_dynamic_field_object` API as well
-        self.get_object_with_options(id, Some(SuiObjectDataOptions::full_content()))
-            .await
-    }
-
     async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
         Ok(self.state.get_total_transaction_number()?.into())
     }
@@ -375,7 +274,7 @@ impl ReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_transaction_with_options(
+    async fn get_transaction(
         &self,
         digest: TransactionDigest,
         opts: Option<SuiTransactionResponseOptions>,
@@ -470,7 +369,7 @@ impl ReadApiServer for ReadApi {
         ))
     }
 
-    async fn multi_get_transactions_with_options(
+    async fn multi_get_transactions(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionResponseOptions>,
@@ -697,157 +596,31 @@ impl ReadApiServer for ReadApi {
             .collect::<Vec<_>>())
     }
 
-    async fn get_normalized_move_modules_by_package(
-        &self,
-        package: ObjectID,
-    ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
-        let modules = get_move_modules_by_package(self, package).await?;
-        Ok(modules
-            .into_iter()
-            .map(|(name, module)| (name, module.into()))
-            .collect::<BTreeMap<String, SuiMoveNormalizedModule>>())
-    }
-
-    async fn get_normalized_move_module(
-        &self,
-        package: ObjectID,
-        module_name: String,
-    ) -> RpcResult<SuiMoveNormalizedModule> {
-        let module = get_move_module(self, package, module_name).await?;
-        Ok(module.into())
-    }
-
-    async fn get_normalized_move_struct(
-        &self,
-        package: ObjectID,
-        module_name: String,
-        struct_name: String,
-    ) -> RpcResult<SuiMoveNormalizedStruct> {
-        let module = get_move_module(self, package, module_name).await?;
-        let structs = module.structs;
-        let identifier = Identifier::new(struct_name.as_str()).map_err(|e| anyhow!("{e}"))?;
-        Ok(match structs.get(&identifier) {
-            Some(struct_) => Ok(struct_.clone().into()),
-            None => Err(anyhow!(
-                "No struct was found with struct name {}",
-                struct_name
-            )),
-        }?)
-    }
-
-    async fn get_normalized_move_function(
-        &self,
-        package: ObjectID,
-        module_name: String,
-        function_name: String,
-    ) -> RpcResult<SuiMoveNormalizedFunction> {
-        let module = get_move_module(self, package, module_name).await?;
-        let functions = module.exposed_functions;
-        let identifier = Identifier::new(function_name.as_str()).map_err(|e| anyhow!("{e}"))?;
-        Ok(match functions.get(&identifier) {
-            Some(function) => Ok(function.clone().into()),
-            None => Err(anyhow!(
-                "No function was found with function name {}",
-                function_name
-            )),
-        }?)
-    }
-
-    async fn get_move_function_arg_types(
-        &self,
-        package: ObjectID,
-        module: String,
-        function: String,
-    ) -> RpcResult<Vec<MoveFunctionArgType>> {
-        let object_read = self
-            .state
-            .get_object_read(&package)
-            .await
-            .map_err(|e| anyhow!("{e}"))?;
-
-        let normalized = match object_read {
-            ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
-                Data::Package(p) => {
-                    // we are on the read path - it's OK to use VERSION_MAX of the supported Move
-                    // binary format
-                    normalize_modules(
-                        p.serialized_module_map().values(),
-                        /* max_binary_format_version */ VERSION_MAX,
-                    )
-                    .map_err(|e| anyhow!("{e}"))
-                }
-                _ => Err(anyhow!("Object is not a package with ID {}", package)),
-            },
-            _ => Err(anyhow!("Package object does not exist with ID {}", package)),
-        }?;
-
-        let identifier = Identifier::new(function.as_str()).map_err(|e| anyhow!("{e}"))?;
-        let parameters = normalized.get(&module).and_then(|m| {
-            m.exposed_functions
-                .get(&identifier)
-                .map(|f| f.parameters.clone())
-        });
-
-        Ok(match parameters {
-            Some(parameters) => Ok(parameters
-                .iter()
-                .map(|p| match p {
-                    Type::Struct {
-                        address: _,
-                        module: _,
-                        name: _,
-                        type_arguments: _,
-                    } => MoveFunctionArgType::Object(ObjectValueKind::ByValue),
-                    Type::Reference(_) => {
-                        MoveFunctionArgType::Object(ObjectValueKind::ByImmutableReference)
-                    }
-                    Type::MutableReference(_) => {
-                        MoveFunctionArgType::Object(ObjectValueKind::ByMutableReference)
-                    }
-                    _ => MoveFunctionArgType::Pure,
-                })
-                .collect::<Vec<MoveFunctionArgType>>()),
-            None => Err(anyhow!("No parameters found for function {}", function)),
-        }?)
-    }
-
-    async fn query_transactions(
-        &self,
-        query: SuiTransactionResponseQuery,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<TransactionDigest>,
-        limit: Option<usize>,
-        descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage> {
-        let limit = cap_page_limit(limit);
-        let descending = descending_order.unwrap_or_default();
-        let opts = query.options.unwrap_or_default();
-
-        // Retrieve 1 extra item for next cursor
-        let mut digests =
+    async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
+        let store = self.state.load_epoch_store_one_call_per_task();
+        let effect = self.state.get_executed_effects(transaction_digest).await?;
+        let events = if let Some(event_digest) = effect.events_digest() {
             self.state
-                .get_transactions(query.filter, cursor, Some(limit + 1), descending)?;
-
-        // extract next cursor
-        let has_next_page = digests.len() > limit;
-        digests.truncate(limit);
-        let next_cursor = digests.last().cloned().map_or(cursor, Some);
-
-        let data: Vec<SuiTransactionResponse> = if opts.only_digest() {
-            digests
+                .get_transaction_events(event_digest)
+                .map_err(Error::SuiError)?
+                .data
                 .into_iter()
-                .map(SuiTransactionResponse::new)
-                .collect()
+                .enumerate()
+                .map(|(seq, e)| {
+                    SuiEvent::try_from(
+                        e,
+                        *effect.transaction_digest(),
+                        seq as u64,
+                        None,
+                        store.module_cache(),
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(Error::SuiError)?
         } else {
-            self.multi_get_transactions_with_options(digests, Some(opts))
-                .await?
+            vec![]
         };
-
-        Ok(Page {
-            data,
-            next_cursor,
-            has_next_page,
-        })
+        Ok(events)
     }
 
     async fn get_latest_checkpoint_sequence_number(
@@ -996,11 +769,11 @@ fn get_move_struct(o: &Object, layout: &Option<MoveStructLayout>) -> RpcResult<M
 }
 
 pub async fn get_move_module(
-    fullnode_api: &ReadApi,
+    state: &AuthorityState,
     package: ObjectID,
     module_name: String,
 ) -> RpcResult<NormalizedModule> {
-    let normalized = get_move_modules_by_package(fullnode_api, package).await?;
+    let normalized = get_move_modules_by_package(state, package).await?;
     Ok(match normalized.get(&module_name) {
         Some(module) => Ok(module.clone()),
         None => Err(anyhow!("No module found with module name {}", module_name)),
@@ -1008,11 +781,10 @@ pub async fn get_move_module(
 }
 
 pub async fn get_move_modules_by_package(
-    fullnode_api: &ReadApi,
+    state: &AuthorityState,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
-    let object_read = fullnode_api
-        .state
+    let object_read = state
         .get_object_read(&package)
         .await
         .map_err(|e| anyhow!("{e}"))?;

@@ -569,9 +569,9 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     let mut sub: Subscription<SuiEvent> = ws_client
         .subscribe(
-            "sui_subscribeEvent",
+            "suix_subscribeEvent",
             rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
-            "sui_unsubscribeEvents",
+            "suix_unsubscribeEvents",
         )
         .await
         .unwrap();
