@@ -228,7 +228,7 @@ impl Worker {
             quic_config.stream_receive_window = Some(100 << 20);
             quic_config.receive_window = Some(200 << 20);
             quic_config.send_window = Some(200 << 20);
-            quic_config.crypto_buffer_size = Some(1 << 20);
+            quic_config.crypto_buffer_size = Some(10 << 20);
             // Enable keep alives every 5s
             quic_config.keep_alive_interval_ms = Some(5_000);
             let mut config = anemo::Config::default();
