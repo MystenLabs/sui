@@ -264,6 +264,9 @@ mod test {
         let delegation_weight = 1;
         let batch_payment_weight = 1;
 
+        // Run random payloads at 100% load
+        let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // tests run for ever
         let adversarial_weight = 0;
@@ -279,6 +282,7 @@ mod test {
             batch_payment_weight,
             adversarial_weight,
             batch_payment_size,
+            adversarial_cfg,
             shared_counter_hotness_factor,
             target_qps,
             in_flight_ratio,
