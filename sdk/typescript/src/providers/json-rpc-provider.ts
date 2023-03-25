@@ -62,7 +62,7 @@ import { Transaction } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
 
-export const TARGETED_RPC_VERSION = '0.27.0';
+export const TARGETED_RPC_VERSION = '0.29.0';
 
 export interface PaginationArguments {
   /** Optional paging cursor */
