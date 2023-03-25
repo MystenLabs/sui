@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY } from '@mysten/core';
+import { useGetRollingAverageApys } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
@@ -27,17 +27,14 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     const stakedAmount = event.parsedJson?.amount;
     const stakedEpoch = event.parsedJson?.epoch || 0;
 
-    const validatorData = useMemo(() => {
-        if (!system || !validatorAddress) return null;
-        return system.activeValidators.find(
-            ({ suiAddress }) => suiAddress === validatorAddress
-        );
-    }, [system, validatorAddress]);
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        system?.activeValidators?.length || null
+    );
 
     const apy = useMemo(() => {
-        if (!validatorData || !system) return 0;
-        return calculateAPY(validatorData, +system.epoch);
-    }, [validatorData, system]);
+        if (!rollingAverageApys) return 0;
+        return rollingAverageApys[validatorAddress] || 0;
+    }, [rollingAverageApys, validatorAddress]);
 
     // Reward will be available after 2 epochs
     // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING
