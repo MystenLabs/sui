@@ -2183,7 +2183,7 @@ impl AuthorityState {
         let object_ids = self
             .get_owner_objects_iterator(owner, None, None, None)?
             .filter(|o| match &o.type_ {
-                ObjectType::Struct(s) => type_.matches_type_fuzzy_generics(s),
+                ObjectType::Struct(s) => &type_ == s,
                 ObjectType::Package => false,
             })
             .map(|info| info.object_id);
