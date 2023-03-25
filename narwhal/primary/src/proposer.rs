@@ -14,7 +14,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
 };
-use tracing::{debug, enabled, error, info};
+use tracing::{debug, enabled, error, info, trace};
 use types::{
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
@@ -251,12 +251,14 @@ impl Proposer {
             .inc();
         self.metrics.header_parents.observe(parents.len() as f64);
 
-        if enabled!(tracing::Level::DEBUG) {
+        if enabled!(tracing::Level::TRACE) {
             let mut msg = format!("Created header {header:?} with parent certificates:\n");
             for parent in parents.iter() {
                 msg.push_str(&format!("{parent:?}\n"));
             }
-            debug!(msg);
+            trace!(msg);
+        } else {
+            debug!("Created header {header:?}");
         }
 
         // Update metrics related to latency
