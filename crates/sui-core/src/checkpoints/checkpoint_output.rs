@@ -15,7 +15,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
     SignedCheckpointSummary, VerifiedCheckpoint,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use super::CheckpointMetrics;
 
