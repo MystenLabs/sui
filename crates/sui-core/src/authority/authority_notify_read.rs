@@ -12,7 +12,7 @@ use std::time::Instant;
 use sui_types::base_types::TransactionDigest;
 use sui_types::error::SuiResult;
 use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
-use tracing::debug;
+use tracing::trace;
 
 #[async_trait]
 pub trait EffectsNotifyRead: Send + Sync + 'static {
@@ -66,7 +66,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         }
         if needs_wait {
             // Only log the duration if we ended up waiting.
-            debug!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
+            trace!(duration=?timer.elapsed(), ?last_finished, "Finished notify_read_effects");
         }
         // Map from digests to ensures returned order is the same as order of digests
         Ok(digests

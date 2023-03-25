@@ -15,7 +15,7 @@ use sui_types::{
 };
 use sui_types::{base_types::TransactionDigest, error::SuiResult};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore, authority_store::InputKey,
@@ -329,13 +329,15 @@ impl TransactionManager {
                 assert!(pending_cert.missing.remove(&input_key));
                 // When a certificate has no missing input, it is ready to execute.
                 if pending_cert.missing.is_empty() {
-                    debug!(tx_digest = ?digest, "certificate ready");
+                    trace!(tx_digest = ?digest, "certificate ready");
                     let pending_cert = inner.pending_certificates.remove(&digest).unwrap();
                     assert!(inner.executing_certificates.insert(digest));
                     ready_digests.push(digest);
                     self.certificate_ready(pending_cert.certificate);
                 } else {
-                    debug!(tx_digest = ?digest, missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
+                    // TODO: we should start logging this at a higher level after some period of
+                    // time has elapsed.
+                    debug!(missing = ?pending_cert.missing, "Certificate waiting on missing inputs");
                 }
             }
         }

@@ -599,10 +599,7 @@ impl AuthorityState {
         );
 
         let tx_digest = *transaction.digest();
-        debug!(
-            "handle_transaction with transaction data: {:?}",
-            &transaction.data().intent_message().value
-        );
+        debug!("handle_transaction");
 
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
@@ -770,7 +767,7 @@ impl AuthorityState {
 
         self.process_certificate(tx_guard, certificate, epoch_store)
             .await
-            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+            .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -840,7 +837,7 @@ impl AuthorityState {
         // possible that reconfiguration has happened and they no longer match.
         if *execution_guard != epoch_store.epoch() {
             tx_guard.release();
-            debug!("The epoch of the execution_guard doesn't match the epoch store");
+            info!("The epoch of the execution_guard doesn't match the epoch store");
             return Err(SuiError::WrongEpoch {
                 expected_epoch: epoch_store.epoch(),
                 actual_epoch: *execution_guard,
@@ -856,7 +853,7 @@ impl AuthorityState {
             .await
         {
             Err(e) => {
-                debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
+                info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
                 return Err(e);
             }
@@ -2792,7 +2789,7 @@ impl AuthorityState {
             )
             .await
             .tap_ok(|_| {
-                debug!(?tx_digest, "commit_certificate finished");
+                debug!("commit_certificate finished");
             })?;
 
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
@@ -3311,7 +3308,7 @@ impl AuthorityState {
                 err
             })?;
 
-        debug!(
+        info!(
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
@@ -3341,7 +3338,7 @@ impl AuthorityState {
             // lock is dropped here
         }
         let pending_certificates = epoch_store.pending_consensus_certificates();
-        debug!(
+        info!(
             "Reverting {} locally executed transactions that was not included in the epoch",
             pending_certificates.len()
         );
@@ -3350,13 +3347,13 @@ impl AuthorityState {
                 .database
                 .is_transaction_executed_in_checkpoint(&digest)?
             {
-                debug!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
+                info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
                 continue;
             }
-            debug!("Reverting {:?} at the end of epoch", digest);
+            info!("Reverting {:?} at the end of epoch", digest);
             self.database.revert_state_update(&digest).await?;
         }
-        debug!("All uncommitted local transactions reverted");
+        info!("All uncommitted local transactions reverted");
         Ok(())
     }
 

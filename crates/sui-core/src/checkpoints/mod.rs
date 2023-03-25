@@ -50,7 +50,7 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -652,11 +652,8 @@ impl CheckpointBuilder {
         }
 
         debug!(
-            "Waiting for checkpoint user signatures for certificates {:?} to appear in consensus",
-            all_effects_and_transaction_sizes
-                .iter()
-                .map(|(effects, _)| effects)
-                .collect::<Vec<_>>()
+            "Waiting for checkpoint user signatures for {:?} certificates to appear in consensus",
+            all_effects_and_transaction_sizes.len()
         );
         let signatures = {
             let _guard = monitored_scope("CheckpointBuilder::wait_user_signatures");
@@ -1232,6 +1229,11 @@ impl CheckpointServiceNotify for CheckpointService {
             return Ok(());
         }
         debug!(
+            "Pending checkpoint at height {} has {} roots",
+            checkpoint.height(),
+            checkpoint.roots.len(),
+        );
+        trace!(
             "Transaction roots for pending checkpoint at height {}: {:?}",
             checkpoint.height(),
             checkpoint.roots
