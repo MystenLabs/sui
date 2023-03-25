@@ -92,6 +92,17 @@ impl<S: IndexerStore> IndexerApi<S> {
                     is_descending,
                 )
             }
+            Some(TransactionFilter::Checkpoint(checkpoint_id)) => {
+                let indexer_seq_number = self
+                    .state
+                    .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
+                self.state.get_transaction_digest_page_by_checkpoint(
+                    checkpoint_id as i64,
+                    indexer_seq_number,
+                    limit + 1,
+                    is_descending,
+                )
+            }
             Some(TransactionFilter::MoveFunction {
                 package,
                 module,

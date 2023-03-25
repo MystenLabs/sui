@@ -7376,6 +7376,21 @@
       "TransactionFilter": {
         "oneOf": [
           {
+            "description": "Query by checkpoint.",
+            "type": "object",
+            "required": [
+              "Checkpoint"
+            ],
+            "properties": {
+              "Checkpoint": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
             "description": "Query by move function.",
             "type": "object",
             "required": [
