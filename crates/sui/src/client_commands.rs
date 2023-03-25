@@ -878,7 +878,6 @@ impl SuiClientCommands {
                         )),
                         None,
                         None,
-                        None,
                     )
                     .await?;
                 SuiClientCommandResult::Objects(address_object.data)
@@ -1270,7 +1269,6 @@ impl WalletContext {
                 Some(SuiObjectResponseQuery::new_with_options(
                     SuiObjectDataOptions::full_content(),
                 )),
-                None,
                 None,
                 None,
             )

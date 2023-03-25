@@ -11,11 +11,11 @@ use sui_json_rpc::api::{
 };
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    BigInt, CheckpointId, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage, Page,
+    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage, Page,
     SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
@@ -32,26 +32,29 @@ impl<S: IndexerStore> ExtendedApi<S> {
     fn query_objects_internal(
         &self,
         query: SuiObjectResponseQuery,
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
     ) -> Result<ObjectsPage, IndexerError> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
 
-        let at_checkpoint = match at_checkpoint {
-            Some(CheckpointId::SequenceNumber(seq)) => seq,
-            Some(CheckpointId::Digest(digest)) => {
-                <BigInt>::from(self.state.get_checkpoint_sequence_number(digest)?)
-            }
-            None => <BigInt>::from(self.state.get_latest_checkpoint_sequence_number()? as u64),
+        let at_checkpoint = if let Some(CheckpointedObjectID {
+            at_checkpoint: Some(cp),
+            ..
+        }) = cursor
+        {
+            cp
+        } else {
+            self.state.get_latest_checkpoint_sequence_number()? as u64
         };
+
+        let object_cursor = cursor.as_ref().map(|c| c.object_id);
 
         let SuiObjectResponseQuery { filter, options } = query;
         let filter = filter.unwrap_or_else(|| SuiObjectDataFilter::MatchAll(vec![]));
 
         let objects_from_db =
             self.state
-                .query_objects(filter, <u64>::from(at_checkpoint), cursor, limit + 1)?;
+                .query_objects(filter, at_checkpoint, object_cursor, limit + 1)?;
 
         let mut data = objects_from_db
             .into_iter()
@@ -62,13 +65,15 @@ impl<S: IndexerStore> ExtendedApi<S> {
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
-        let next_cursor_result = data
+        let next_cursor = data
             .last()
-            .cloned()
-            .map(|obj| obj.into_object().map(|o| o.object_id))
-            .transpose();
-
-        let next_cursor = next_cursor_result?;
+            .map(|obj| {
+                obj.object().map(|o| CheckpointedObjectID {
+                    object_id: o.object_id,
+                    at_checkpoint: Some(at_checkpoint),
+                })
+            })
+            .transpose()?;
 
         Ok(Page {
             data,
@@ -108,11 +113,10 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
     async fn query_objects(
         &self,
         query: SuiObjectResponseQuery,
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
-        Ok(self.query_objects_internal(query, cursor, limit, at_checkpoint)?)
+        Ok(self.query_objects_internal(query, cursor, limit)?)
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {

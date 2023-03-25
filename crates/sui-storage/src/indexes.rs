@@ -861,9 +861,9 @@ impl IndexStore {
             Some(cursor) => cursor,
             None => ObjectID::ZERO,
         };
-
         Ok(self
-            .get_owner_objects_iterator(owner, cursor, limit, filter)?
+            .get_owner_objects_iterator(owner, cursor, filter)?
+            .take(limit)
             .collect())
     }
 
@@ -873,13 +873,9 @@ impl IndexStore {
         &self,
         owner: SuiAddress,
         starting_object_id: ObjectID,
-        count: usize,
         filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        // We use +1 to grab the next cursor
-        let count = min(count, MAX_GET_OWNED_OBJECT_SIZE + 1);
-        debug!(?owner, ?count, ?starting_object_id, "get_owner_objects");
-        let iter = self
+        Ok(self
             .tables
             .owner_index
             .iter()
@@ -928,8 +924,7 @@ impl IndexStore {
                 (object_owner == &owner) && to_include
             })
             .take_while(move |((address_owner, _), _)| address_owner == &owner)
-            .map(|(_, object_info)| object_info);
-        Ok(iter.take(count))
+            .map(|(_, object_info)| object_info))
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {

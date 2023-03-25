@@ -48,7 +48,6 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
     assert_eq!(5, objects.data.len());
@@ -96,7 +95,6 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -160,7 +158,6 @@ async fn test_publish() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
     let gas = objects.data.first().unwrap().object().unwrap();
@@ -213,7 +210,6 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -276,7 +272,6 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -307,7 +302,6 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
             Some(SuiObjectResponseQuery::new_with_options(
                 SuiObjectDataOptions::new().with_content().with_owner(),
             )),
-            None,
             None,
             None,
         )
@@ -409,7 +403,6 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -491,7 +484,6 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -628,7 +620,6 @@ async fn test_staking() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
