@@ -789,14 +789,14 @@ pub mod pg_integration_test {
         wait_until_next_checkpoint(&store).await;
 
         let current_epoch = store.get_current_epoch().unwrap();
-        let epoch_page = store.get_epochs(None, 100).unwrap();
+        let epoch_page = store.get_epochs(None, 100, None).unwrap();
         assert_eq!(0, current_epoch.epoch);
         assert!(current_epoch.end_of_epoch_info.is_none());
         assert_eq!(1, epoch_page.len());
         wait_until_next_epoch(&store).await;
 
         let current_epoch = store.get_current_epoch().unwrap();
-        let epoch_page = store.get_epochs(None, 100).unwrap();
+        let epoch_page = store.get_epochs(None, 100, None).unwrap();
 
         assert_eq!(1, current_epoch.epoch);
         assert!(current_epoch.end_of_epoch_info.is_none());

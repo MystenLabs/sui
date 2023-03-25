@@ -175,6 +175,7 @@ pub trait IndexerStore {
         &self,
         cursor: Option<EpochId>,
         limit: usize,
+        descending_order: Option<bool>,
     ) -> Result<Vec<EpochInfo>, IndexerError>;
 
     fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
