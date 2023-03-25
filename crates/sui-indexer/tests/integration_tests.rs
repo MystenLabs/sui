@@ -31,8 +31,7 @@ pub mod pg_integration_test {
     use sui_json_rpc_types::{
         BigInt, CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
         SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
-        SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-        TransactionBytes,
+        SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
@@ -40,7 +39,6 @@ pub mod pg_integration_test {
     use sui_types::gas_coin::GasCoin;
     use sui_types::messages::ExecuteTransactionRequestType;
     use sui_types::object::ObjectFormatOptions;
-    use sui_types::query::TransactionFilter;
     use sui_types::utils::to_sender_signed_transaction;
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use test_utils::transaction::{
