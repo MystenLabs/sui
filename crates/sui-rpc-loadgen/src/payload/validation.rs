@@ -149,7 +149,7 @@ pub(crate) async fn check_objects(
                 object_ids
             };
             let start_time = Instant::now();
-            let transactions = client
+            let objects = client
                 .read_api()
                 .multi_get_object_with_options(
                     object_ids.to_vec(),
@@ -161,7 +161,7 @@ pub(crate) async fn check_objects(
                 "MultiGetObject Request latency {:.4} for rpc at url {i}",
                 elapsed_time.as_secs_f64()
             );
-            transactions
+            objects
         }))
         .await
         .into_iter()
