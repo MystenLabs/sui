@@ -498,7 +498,8 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             gas_status,
             None,
             advance_epoch_safe_mode_pt,
-        )?;
+        )
+        .expect("Advance epoch with safe mode must succeed");
     }
 
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
