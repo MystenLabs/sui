@@ -14,8 +14,8 @@ use test_utils::{
     fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
 };
 use types::{
-    Batch, BatchMessage, Certificate, CertificateDigest, MockWorkerToWorker, RequestBatchResponse,
-    WorkerToWorkerServer,
+    Batch, BatchMessage, Certificate, CertificateDigest, Header, HeaderAPI, MockWorkerToWorker,
+    RequestBatchResponse, WorkerToWorkerServer,
 };
 
 #[tokio::test]
@@ -29,11 +29,13 @@ async fn test_successfully_retrieve_block() {
     let id = primary.id();
 
     // AND store certificate
-    let header = author
-        .header_builder(&committee)
-        .payload(fixture_payload(2))
-        .build()
-        .unwrap();
+    let header = Header::V1(
+        author
+            .header_builder(&committee)
+            .payload(fixture_payload(2))
+            .build()
+            .unwrap(),
+    );
     let certificate = fixture.certificate(&header);
     let digest = certificate.digest();
 
@@ -48,11 +50,12 @@ async fn test_successfully_retrieve_block() {
     let mut mock_server = MockWorkerToWorker::new();
 
     // Mock the batch responses.
-    let expected_block_count = header.payload.len();
-    for (batch_digest, _) in header.payload {
+    let expected_block_count = header.payload().len();
+    for (batch_digest, _) in header.payload() {
+        let batch_digest_clone = *batch_digest;
         mock_server
             .expect_request_batch()
-            .withf(move |request| request.body().batch == batch_digest)
+            .withf(move |request| request.body().batch == batch_digest_clone)
             .returning(|_| {
                 Ok(anemo::Response::new(RequestBatchResponse {
                     batch: Some(Batch::new(vec![vec![10u8, 5u8, 2u8], vec![8u8, 2u8, 3u8]])),
@@ -186,7 +189,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // sort the batches to make sure that the response is the expected one.
         batches.sort_by(|a, b| a.digest.cmp(&b.digest));
 
-        let header = builder.build().unwrap();
+        let header = Header::V1(builder.build().unwrap());
 
         let certificate = fixture.certificate(&header);
         certificates.push(certificate.clone());

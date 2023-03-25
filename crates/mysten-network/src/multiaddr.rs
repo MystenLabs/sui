@@ -42,6 +42,14 @@ impl Multiaddr {
         self.0.replace(at, by).map(Self)
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into an anemo
     /// address
     pub fn to_anemo_address(&self) -> Result<anemo::types::Address, &'static str> {

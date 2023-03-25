@@ -807,7 +807,7 @@ impl AuthorityPerEpochStore {
         Ok(next_versions)
     }
 
-    pub async fn set_assigned_shared_object_versions(
+    async fn set_assigned_shared_object_versions(
         &self,
         certificate: &VerifiedExecutableTransaction,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
@@ -1200,7 +1200,7 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    pub fn finish_assign_shared_object_versions(
+    fn finish_assign_shared_object_versions(
         &self,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,

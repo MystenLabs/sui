@@ -79,6 +79,17 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "query-transactions")]
+    QueryTransactions {
+        #[clap(short, long)]
+        from_address: Option<String>,
+
+        #[clap(short, long)]
+        to_address: Option<String>,
+
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
 }
 
 fn get_keypair() -> Result<SignerInfo> {
@@ -142,6 +153,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             verify_objects,
         } => (
             Command::new_get_checkpoints(start, end, verify_transactions, verify_objects),
+            common,
+            false,
+        ),
+        ClapCommand::QueryTransactions {
+            common,
+            from_address,
+            to_address,
+        } => (
+            Command::new_query_transactions(from_address, to_address),
             common,
             false,
         ),

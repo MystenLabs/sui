@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::traits::ToFromBytes;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use prometheus::Registry;
 use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
+use models::transactions::Transaction;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
@@ -19,13 +21,14 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointSequenceNumber};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::SUI_SYSTEM_ADDRESS;
 
 use crate::errors::IndexerError;
 use crate::metrics::IndexerCheckpointHandlerMetrics;
+use crate::models;
 use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::{DBEpochInfo, SystemEpochInfoEvent};
 use crate::models::objects::{DeletedObject, Object, ObjectStatus};
@@ -263,18 +266,11 @@ where
             changed_objects,
         } = data;
 
-        let previous_cp = if <u64>::from(checkpoint.sequence_number) == 0 {
-            Checkpoint::default()
-        } else {
-            self.state
-                .get_checkpoint((<u64>::from(checkpoint.sequence_number) - 1).into())?
-        };
-
         // Index transaction
         let db_transactions = transactions
             .iter()
             .map(|tx| tx.clone().try_into())
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<Transaction>, _>>()?;
 
         // Index events
         let events = transactions
@@ -386,7 +382,7 @@ where
                 system_state: system_state.into(),
                 validators,
             })
-        } else if checkpoint.end_of_epoch_data.is_some() {
+        } else if let Some(end_of_epoch_data) = &checkpoint.end_of_epoch_data {
             // Find system state object
             let system_state = get_sui_system_state(data)?;
             let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
@@ -410,6 +406,26 @@ where
                 .map(|v| (system_state.epoch, v.clone()).into())
                 .collect();
 
+            let epoch_commitments = end_of_epoch_data
+                .epoch_commitments
+                .iter()
+                .map(|c| match c {
+                    CheckpointCommitment::ECMHLiveObjectSetDigest(d) => {
+                        Some(d.digest.digest.to_vec())
+                    }
+                })
+                .collect();
+
+            let (next_epoch_committee, next_epoch_committee_stake) =
+                end_of_epoch_data.next_epoch_committee.iter().fold(
+                    (vec![], vec![]),
+                    |(mut names, mut stakes), (name, stake)| {
+                        names.push(Some(name.as_bytes().to_vec()));
+                        stakes.push(Some(*stake as i64));
+                        (names, stakes)
+                    },
+                );
+
             Some(TemporaryEpochStore {
                 last_epoch: Some(DBEpochInfo {
                     epoch: system_state.epoch as i64 - 1,
@@ -418,6 +434,11 @@ where
                     epoch_start_timestamp: 0,
                     epoch_end_timestamp: Some(checkpoint.timestamp_ms as i64),
                     epoch_total_transactions: 0,
+                    next_epoch_version: Some(
+                        end_of_epoch_data.next_epoch_protocol_version.as_u64() as i64,
+                    ),
+                    next_epoch_committee,
+                    next_epoch_committee_stake,
                     stake_subsidy_amount: Some(event.stake_subsidy_amount),
                     reference_gas_price: Some(event.reference_gas_price),
                     storage_fund_balance: Some(event.storage_fund_balance),
@@ -429,6 +450,7 @@ where
                     protocol_version: Some(event.protocol_version),
                     storage_rebate: Some(event.storage_rebate),
                     leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
+                    epoch_commitments,
                 }),
                 new_epoch: DBEpochInfo {
                     epoch: system_state.epoch as i64,
@@ -443,9 +465,11 @@ where
             None
         };
 
+        let total_command = db_transactions.iter().map(|t| t.command_count).sum();
+
         Ok((
             TemporaryCheckpointStore {
-                checkpoint: Checkpoint::from(checkpoint, &previous_cp)?,
+                checkpoint: Checkpoint::from(checkpoint, total_command)?,
                 transactions: db_transactions,
                 events,
                 objects_changes,

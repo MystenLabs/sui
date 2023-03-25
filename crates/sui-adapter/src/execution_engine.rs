@@ -14,7 +14,7 @@ use sui_types::balance::{
 use sui_types::base_types::ObjectID;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use tracing::{debug, info, instrument, warn};
+use tracing::{info, instrument, trace, warn};
 
 use crate::programmable_transactions;
 use sui_protocol_config::{
@@ -102,7 +102,7 @@ pub fn execute_transaction_to_effects<
             (ExecutionStatus::new_failure(status, command), Err(error))
         }
     };
-    debug!(
+    trace!(
         computation_gas_cost = gas_cost_summary.computation_cost,
         storage_gas_cost = gas_cost_summary.storage_cost,
         storage_gas_rebate = gas_cost_summary.storage_rebate,
@@ -138,8 +138,6 @@ fn charge_gas_for_object_read<S>(
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     // Charge gas for reading all objects from the DB.
-    // TODO: Some of the objects may be duplicate (for batch tx). We could save gas by
-    // fetching only unique objects.
     let total_size = temporary_store
         .objects()
         .iter()
@@ -172,8 +170,15 @@ fn execute_transaction<
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
     let is_system = transaction_kind.is_system_tx();
-    // We must charge object read gas inside here during transaction execution, because if this fails
-    // we must still ensure an effect is committed and all objects versions incremented.
+    // At this point no charge has been applied yet
+    debug_assert!(
+        u64::from(gas_status.gas_used()) == 0
+            && gas_status.storage_rebate() == 0
+            && gas_status.storage_gas_units() == 0,
+        "No gas charges must be applied yet"
+    );
+    // We must charge object read here during transaction execution, because if this fails
+    // we must still ensure an effect is committed and all objects versions incremented
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
     let mut result = result.and_then(|()| {
         let mut execution_result = execution_loop::<Mode, _>(
@@ -374,7 +379,7 @@ pub fn construct_advance_epoch_pt(
 
     arguments.append(&mut call_arg_arguments.unwrap());
 
-    debug!(
+    info!(
         "Call arguments to advance_epoch transaction: {:?}",
         arguments
     );
@@ -430,7 +435,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     arguments.append(&mut call_arg_arguments.unwrap());
 
-    debug!(
+    info!(
         "Call arguments to advance_epoch transaction: {:?}",
         arguments
     );
@@ -493,7 +498,8 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             gas_status,
             None,
             advance_epoch_safe_mode_pt,
-        )?;
+        )
+        .expect("Advance epoch with safe mode must succeed");
     }
 
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {

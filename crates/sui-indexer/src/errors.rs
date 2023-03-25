@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto::error::FastCryptoError;
 use jsonrpsee::core::Error as RpcError;
 use jsonrpsee::types::error::CallError;
 use thiserror::Error;
@@ -75,6 +76,9 @@ pub enum IndexerError {
 
     #[error(transparent)]
     ObjectResponseError(#[from] SuiObjectResponseError),
+
+    #[error(transparent)]
+    FastCryptoError(#[from] FastCryptoError),
 
     #[error("`{0}`: `{1}`")]
     ErrorWithContext(String, Box<IndexerError>),

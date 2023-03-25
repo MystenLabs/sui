@@ -12,7 +12,7 @@ use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, error_span, info, Instrument};
+use tracing::{error, error_span, info, trace, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -71,7 +71,7 @@ pub async fn execution_process(
         let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();
-        debug!(?digest, "Pending certificate execution activated.");
+        trace!(?digest, "Pending certificate execution activated.");
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close

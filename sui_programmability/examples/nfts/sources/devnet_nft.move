@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// A minimalist example to demonstrate how to create an NFT like object
-/// on Sui. The user should be able to use the wallet command line tool
-/// (https://docs.sui.io/build/wallet) to mint an NFT. For example,
-/// `wallet example-nft --name <Name> --description <Description> --url <URL>`
-/// MUSTFIX: Remove this module from framework.
-module sui::devnet_nft {
+/// on Sui.
+module nfts::devnet_nft {
     use sui::url::{Self, Url};
     use std::string;
     use sui::object::{Self, ID, UID};
@@ -88,8 +85,8 @@ module sui::devnet_nft {
 }
 
 #[test_only]
-module sui::devnet_nftTests {
-    use sui::devnet_nft::{Self, DevNetNFT};
+module nfts::devnet_nftTests {
+    use nfts::devnet_nft::{Self, DevNetNFT};
     use sui::test_scenario as ts;
     use sui::transfer;
     use std::string;

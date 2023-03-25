@@ -5,7 +5,6 @@ use std::io::Read;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
-use anyhow::anyhow;
 use expect_test::expect;
 use serde_json::json;
 use sui_types::object::Owner;
@@ -33,13 +32,13 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
-use sui_types::base_types::{ObjectType, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::error::SuiObjectResponseError;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::TestClusterBuilder;
 
@@ -265,50 +264,6 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         "10000",
     ])
     .await
-}
-
-#[sim_test]
-async fn test_create_example_nft_command() {
-    use std::str::FromStr;
-    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let result = SuiClientCommands::CreateExampleNFT {
-        name: None,
-        description: None,
-        url: None,
-        gas: None,
-        gas_budget: None,
-    }
-    .execute(context)
-    .await
-    .unwrap();
-
-    match result {
-        SuiClientCommandResult::CreateExampleNFT(response) => {
-            if let Some(obj) = response.data {
-                assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
-                assert_eq!(
-                    obj.type_.clone().unwrap(),
-                    ObjectType::from_str(&sui_framework_address_concat_string(
-                        "::devnet_nft::DevNetNFT"
-                    ))
-                    .unwrap()
-                );
-                Ok(obj)
-            } else {
-                match response.error {
-                    Some(error) => Err(anyhow!("Error: {}", error)),
-                    None => Err(anyhow!("No data or error found in the response")),
-                }
-            }
-        }
-        _ => Err(anyhow!(
-            "WalletCommands::CreateExampleNFT returns wrong type"
-        )),
-    }
-    .unwrap();
 }
 
 #[sim_test]

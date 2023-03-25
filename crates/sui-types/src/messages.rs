@@ -48,7 +48,7 @@ use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use thiserror::Error;
-use tracing::debug;
+use tracing::trace;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
@@ -3088,7 +3088,7 @@ impl InputObjects {
             })
             .collect();
 
-        debug!(
+        trace!(
             num_mutable_objects = owned_objects.len(),
             "Checked locks and found mutable objects"
         );

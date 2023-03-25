@@ -19,6 +19,10 @@ pub struct DBEpochInfo {
     pub epoch_start_timestamp: i64,
     pub epoch_end_timestamp: Option<i64>,
     pub epoch_total_transactions: i64,
+    pub next_epoch_version: Option<i64>,
+    pub next_epoch_committee: Vec<Option<Vec<u8>>>,
+    pub next_epoch_committee_stake: Vec<Option<i64>>,
+    pub epoch_commitments: Vec<Option<Vec<u8>>>,
 
     /// existing fields from `SystemEpochInfo`
     pub protocol_version: Option<i64>,

@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, ReadApiClient,
+    TransactionBuilderClient, WriteApiClient,
+};
 use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
 use std::time::Duration;
-
-use crate::api::{
-    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
-    WriteApiClient,
-};
 use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
 use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::SUI_KEYSTORE_FILENAME;
@@ -61,9 +60,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
         .map(|o| o.object().unwrap().object_id)
         .collect();
 
-    let object_resp = http_client
-        .multi_get_object_with_options(object_digests, None)
-        .await?;
+    let object_resp = http_client.multi_get_objects(object_digests, None).await?;
     assert_eq!(5, object_resp.len());
     Ok(())
 }
@@ -73,7 +70,7 @@ async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::E
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let response = http_client
-        .get_object_with_options(
+        .get_object(
             ObjectID::from(SUI_FRAMEWORK_ADDRESS),
             Some(SuiObjectDataOptions::new().with_display()),
         )
@@ -287,7 +284,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     for obj in objects {
         let oref = obj.into_object().unwrap();
         let result = http_client
-            .get_object_with_options(
+            .get_object(
                 oref.object_id,
                 Some(SuiObjectDataOptions::new().with_owner()),
             )
@@ -320,7 +317,7 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
     for obj in objects {
         let oref = obj.into_object().unwrap();
         let result = http_client
-            .get_object_with_options(
+            .get_object(
                 oref.object_id,
                 Some(SuiObjectDataOptions::new().with_content().with_owner()),
             )

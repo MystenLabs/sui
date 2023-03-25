@@ -1389,6 +1389,12 @@ impl From<InputObjectKind> for SuiInputObjectKind {
 #[serde(rename = "TypeTag", rename_all = "camelCase")]
 pub struct SuiTypeTag(String);
 
+impl SuiTypeTag {
+    pub fn new(tag: String) -> Self {
+        Self(tag)
+    }
+}
+
 impl TryInto<TypeTag> for SuiTypeTag {
     type Error = anyhow::Error;
     fn try_into(self) -> Result<TypeTag, Self::Error> {

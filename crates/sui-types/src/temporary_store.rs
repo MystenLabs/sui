@@ -701,10 +701,12 @@ impl<S: ObjectStore> TemporaryStore<S> {
         execution_result: &mut Result<T, ExecutionError>,
         gas: &[ObjectRef],
     ) {
-        // at this point, we have done some charging for computation, but have not yet set the storage rebate or storage gas units
+        // at this point, we have done *all* charging for computation,
+        // but have not yet set the storage rebate or storage gas units
         assert!(gas_status.storage_rebate() == 0);
         assert!(gas_status.storage_gas_units() == 0);
 
+        // bucketize computation cost
         if let Err(err) = gas_status.bucketize_computation() {
             if execution_result.is_ok() {
                 *execution_result = Err(err);
