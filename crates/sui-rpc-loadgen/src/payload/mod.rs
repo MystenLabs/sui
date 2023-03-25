@@ -6,6 +6,7 @@ mod rpc_command_processor;
 use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
+use std::str::FromStr;
 use std::time::Duration;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -85,6 +86,20 @@ impl Command {
         }
     }
 
+    pub fn new_query_transactions(
+        from_address: Option<String>,
+        to_address: Option<String>,
+    ) -> Self {
+        let query_transactions = QueryTransactions {
+            from_address: from_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+            to_address: to_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+        };
+        Self {
+            data: CommandData::QueryTransactions(query_transactions),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -102,6 +117,7 @@ pub enum CommandData {
     DryRun(DryRun),
     GetCheckpoints(GetCheckpoints),
     PaySui(PaySui),
+    QueryTransactions(QueryTransactions),
 }
 
 impl Default for CommandData {
@@ -125,6 +141,12 @@ pub struct GetCheckpoints {
 
 #[derive(Clone)]
 pub struct PaySui {}
+
+#[derive(Clone, Default)]
+pub struct QueryTransactions {
+    pub from_address: Option<SuiAddress>,
+    pub to_address: Option<SuiAddress>,
+}
 
 #[async_trait]
 pub trait Processor {
