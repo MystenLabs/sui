@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod get_checkpoints;
+mod pay_sui;
+mod query_transactions;
 mod rpc_command_processor;
+mod validation;
 
 use anyhow::Result;
 use async_trait::async_trait;
