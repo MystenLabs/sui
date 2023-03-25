@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::time::Instant;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions,
 };
 use sui_sdk::SuiClient;
@@ -14,37 +14,7 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use tracing::log::warn;
 use tracing::{debug, error};
 
-pub(crate) fn cross_validate_entities<T, U>(
-    keys: &[T],
-    first: &[U],
-    second: &[U],
-    key_name: &str,
-    entity_name: &str,
-) where
-    T: std::fmt::Debug,
-    U: PartialEq + std::fmt::Debug,
-{
-    if first.len() != second.len() {
-        error!(
-            "Entity: {} lengths do not match: {} vs {}",
-            entity_name,
-            first.len(),
-            second.len()
-        );
-        return;
-    }
-
-    for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-        if a != b {
-            error!(
-                "Entity: {} mismatch with index {}: {}: {:?}, first: {:?}, second: {:?}",
-                entity_name, i, key_name, keys[i], a, b
-            );
-        }
-    }
-}
-
-pub(crate) fn cross_validate_entities_v2<U>(entities: &Vec<Vec<U>>, entity_name: &str)
+pub(crate) fn cross_validate_entities<U>(entities: &Vec<Vec<U>>, entity_name: &str)
 where
     U: PartialEq + std::fmt::Debug,
 {
@@ -54,8 +24,11 @@ where
     }
 
     let length = entities[0].len();
-    if entities.iter().any(|v| v.len() != length) {
-        error!("Entity: {} lengths do not match", entity_name);
+    if let Some((vec_index, v)) = entities.iter().enumerate().find(|(_, v)| v.len() != length) {
+        error!(
+            "Entity: {} lengths do not match at index {}: first vec has length {} vs vec {} has length {}",
+            entity_name, vec_index, length, vec_index, v.len()
+        );
         return;
     }
 
@@ -122,7 +95,7 @@ pub(crate) async fn check_transactions(
         .collect();
 
     if cross_validate {
-        cross_validate_entities_v2(&transactions, "Transactions");
+        cross_validate_entities(&transactions, "Transactions");
     }
 
     if verify_objects {
@@ -162,60 +135,50 @@ pub(crate) async fn check_objects(
     object_ids: &[ObjectID],
     cross_validate: bool,
 ) {
-    let objects = join_all(clients.iter().enumerate().map(|(i, client)| async move {
-        // TODO: support chunking so that we don't exceed query limit
-        let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
-            warn!(
-                "The input size for multi_get_object_with_options has exceed the query limit\
+    let objects: Vec<Vec<SuiObjectResponse>> =
+        join_all(clients.iter().enumerate().map(|(i, client)| async move {
+            // TODO: support chunking so that we don't exceed query limit
+            let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
+                warn!(
+                    "The input size for multi_get_object_with_options has exceed the query limit\
              {QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
-                object_ids.len()
+                    object_ids.len()
+                );
+                &object_ids[0..QUERY_MAX_RESULT_LIMIT]
+            } else {
+                object_ids
+            };
+            let start_time = Instant::now();
+            let transactions = client
+                .read_api()
+                .multi_get_object_with_options(
+                    object_ids.to_vec(),
+                    SuiObjectDataOptions::full_content(), // todo(Will) support options for this
+                )
+                .await;
+            let elapsed_time = start_time.elapsed();
+            debug!(
+                "MultiGetObject Request latency {:.4} for rpc at url {i}",
+                elapsed_time.as_secs_f64()
             );
-            &object_ids[0..QUERY_MAX_RESULT_LIMIT]
-        } else {
-            object_ids
-        };
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_object_with_options(
-                object_ids.to_vec(),
-                SuiObjectDataOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetObject Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
-    .await;
+            transactions
+        }))
+        .await
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, result)| match result {
+            Ok(obj_vec) => Some(obj_vec),
+            Err(err) => {
+                error!(
+                    "Failed to fetch objects for vec {i}: {:?}. Logging objectIDs, {:?}",
+                    err, object_ids
+                );
+                None
+            }
+        })
+        .collect();
 
-    // TODO: support more than 2 transactions
-    if cross_validate && objects.len() == 2 {
-        if let (Some(t1), Some(t2)) = (objects.get(0), objects.get(1)) {
-            let first = match t1 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!(
-                        "Error unwrapping first vec of objects: {:?} for objectIDs {:?}",
-                        err, object_ids
-                    );
-                    return;
-                }
-            };
-            let second = match t2 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!(
-                        "Error unwrapping second vec of objects: {:?} for objectIDs {:?}",
-                        err, object_ids
-                    );
-                    return;
-                }
-            };
-
-            cross_validate_entities(object_ids, first, second, "ObjectID", "Object");
-        }
+    if cross_validate {
+        cross_validate_entities(&objects, "Objects");
     }
 }
