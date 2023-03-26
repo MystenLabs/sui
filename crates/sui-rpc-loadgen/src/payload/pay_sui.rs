@@ -21,16 +21,16 @@ impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
         let clients = self.get_clients().await?;
         let SignerInfo {
             encoded_keypair,
-            signer_address,
             gas_budget,
             gas_payment,
         } = signer_info.clone().unwrap();
         let recipient = SuiAddress::random_for_testing_only();
-        let amount = 11;
+        let amount = 1;
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
 
         let keypair =
             SuiKeyPair::decode_base64(&encoded_keypair).expect("Decoding keypair should not fail");
+        let signer_address = SuiAddress::from(&keypair.public());
 
         debug!("Pay Sui to {recipient} with {amount} MIST with {gas_payment:?}");
         for client in clients.iter() {
@@ -49,7 +49,6 @@ impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
                 &IntentMessage::new(Intent::default(), &transfer_tx),
                 &keypair,
             );
-            debug!("signature {:?}", signature);
 
             let transaction_response = client
                 .quorum_driver()
