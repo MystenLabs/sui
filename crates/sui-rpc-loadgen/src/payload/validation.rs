@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::time::Instant;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions,
 };
 use sui_sdk::SuiClient;
@@ -14,32 +14,44 @@ use sui_types::base_types::{ObjectID, TransactionDigest};
 use tracing::log::warn;
 use tracing::{debug, error};
 
-pub(crate) fn cross_validate_entities<T, U>(
-    keys: &[T],
-    first: &[U],
-    second: &[U],
-    key_name: &str,
-    entity_name: &str,
-) where
-    T: std::fmt::Debug,
+pub(crate) fn cross_validate_entities<U>(entities: &Vec<Vec<U>>, entity_name: &str)
+where
     U: PartialEq + std::fmt::Debug,
 {
-    if first.len() != second.len() {
+    if entities.len() < 2 {
+        error!("Unable to cross validate as {} less than 2", entity_name);
+        return;
+    }
+
+    let length = entities[0].len();
+    if let Some((vec_index, v)) = entities.iter().enumerate().find(|(_, v)| v.len() != length) {
         error!(
-            "Entity: {} lengths do not match: {} vs {}",
-            entity_name,
-            first.len(),
-            second.len()
+            "Entity: {} lengths do not match at index {}: first vec has length {} vs vec {} has length {}",
+            entity_name, vec_index, length, vec_index, v.len()
         );
         return;
     }
 
-    for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-        if a != b {
-            error!(
-                "Entity: {} mismatch with index {}: {}: {:?}, first: {:?}, second: {:?}",
-                entity_name, i, key_name, keys[i], a, b
-            );
+    // Iterate through all indices (from 0 to length - 1) of the inner vectors.
+    for i in 0..length {
+        // Create an iterator that produces references to elements at position i in each inner vector of entities.
+        let mut iter = entities.iter().map(|v| &v[i]);
+
+        // Compare first against rest of the iter (other inner vectors)
+        if let Some(first) = iter.next() {
+            for (j, other) in iter.enumerate() {
+                if first != other {
+                    // Example error: Entity: ExampleEntity mismatch at index 2: expected: 3, received ExampleEntity[1]: 4
+                    error!(
+                        "Entity: {} mismatch at index {}: expected: {:?}, received {}: {:?}",
+                        entity_name,
+                        i,
+                        first,
+                        format!("{}[{}]", entity_name, j + 1),
+                        other
+                    );
+                }
+            }
         }
     }
 }
@@ -50,58 +62,52 @@ pub(crate) async fn check_transactions(
     cross_validate: bool,
     verify_objects: bool,
 ) {
-    let transactions = join_all(clients.iter().enumerate().map(|(i, client)| async move {
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_transactions_with_options(
-                digests.to_vec(),
-                SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
-    .await;
-
-    // TODO: support more than 2 transactions
-    if cross_validate && transactions.len() == 2 {
-        if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
-            let first = match t1 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!("Error unwrapping first vec of transactions: {:?}", err);
-                    error!("Logging digests, {:?}", digests);
-                    return;
-                }
-            };
-            let second = match t2 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!("Error unwrapping second vec of transactions: {:?}", err);
-                    error!("Logging digests, {:?}", digests);
-                    return;
-                }
-            };
-
-            cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
-
-            if verify_objects {
-                let object_ids = first
-                    .iter()
-                    .chain(second.iter())
-                    .flat_map(get_all_object_ids)
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect::<Vec<_>>();
-
-                check_objects(clients, &object_ids, cross_validate).await;
+    let transactions: Vec<Vec<SuiTransactionResponse>> =
+        join_all(clients.iter().enumerate().map(|(i, client)| async move {
+            let start_time = Instant::now();
+            let transactions = client
+                .read_api()
+                .multi_get_transactions_with_options(
+                    digests.to_vec(),
+                    SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
+                )
+                .await;
+            let elapsed_time = start_time.elapsed();
+            debug!(
+                "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
+                elapsed_time.as_secs_f64()
+            );
+            transactions
+        }))
+        .await
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, result)| match result {
+            Ok(transactions) => Some(transactions),
+            Err(err) => {
+                warn!(
+                    "Failed to fetch transactions for vec {i}: {:?}. Logging digests, {:?}",
+                    err, digests
+                );
+                None
             }
-        }
+        })
+        .collect();
+
+    if cross_validate {
+        cross_validate_entities(&transactions, "Transactions");
+    }
+
+    if verify_objects {
+        let object_ids = transactions
+            .iter()
+            .flatten()
+            .flat_map(get_all_object_ids)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        check_objects(clients, &object_ids, cross_validate).await;
     }
 }
 
@@ -129,60 +135,50 @@ pub(crate) async fn check_objects(
     object_ids: &[ObjectID],
     cross_validate: bool,
 ) {
-    let objects = join_all(clients.iter().enumerate().map(|(i, client)| async move {
-        // TODO: support chunking so that we don't exceed query limit
-        let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
-            warn!(
-                "The input size for multi_get_object_with_options has exceed the query limit\
+    let objects: Vec<Vec<SuiObjectResponse>> =
+        join_all(clients.iter().enumerate().map(|(i, client)| async move {
+            // TODO: support chunking so that we don't exceed query limit
+            let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
+                warn!(
+                    "The input size for multi_get_object_with_options has exceed the query limit\
              {QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
-                object_ids.len()
+                    object_ids.len()
+                );
+                &object_ids[0..QUERY_MAX_RESULT_LIMIT]
+            } else {
+                object_ids
+            };
+            let start_time = Instant::now();
+            let objects = client
+                .read_api()
+                .multi_get_object_with_options(
+                    object_ids.to_vec(),
+                    SuiObjectDataOptions::full_content(), // todo(Will) support options for this
+                )
+                .await;
+            let elapsed_time = start_time.elapsed();
+            debug!(
+                "MultiGetObject Request latency {:.4} for rpc at url {i}",
+                elapsed_time.as_secs_f64()
             );
-            &object_ids[0..QUERY_MAX_RESULT_LIMIT]
-        } else {
-            object_ids
-        };
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_object_with_options(
-                object_ids.to_vec(),
-                SuiObjectDataOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetObject Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
-    .await;
+            objects
+        }))
+        .await
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, result)| match result {
+            Ok(obj_vec) => Some(obj_vec),
+            Err(err) => {
+                error!(
+                    "Failed to fetch objects for vec {i}: {:?}. Logging objectIDs, {:?}",
+                    err, object_ids
+                );
+                None
+            }
+        })
+        .collect();
 
-    // TODO: support more than 2 transactions
-    if cross_validate && objects.len() == 2 {
-        if let (Some(t1), Some(t2)) = (objects.get(0), objects.get(1)) {
-            let first = match t1 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!(
-                        "Error unwrapping first vec of objects: {:?} for objectIDs {:?}",
-                        err, object_ids
-                    );
-                    return;
-                }
-            };
-            let second = match t2 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!(
-                        "Error unwrapping second vec of objects: {:?} for objectIDs {:?}",
-                        err, object_ids
-                    );
-                    return;
-                }
-            };
-
-            cross_validate_entities(object_ids, first, second, "ObjectID", "Object");
-        }
+    if cross_validate {
+        cross_validate_entities(&objects, "Objects");
     }
 }
