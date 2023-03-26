@@ -10,16 +10,20 @@ pub mod pg_integration_test {
     use diesel::RunQueryDsl;
     use futures::future::join_all;
     use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+    use ntest::timeout;
+
+    use tokio::task::JoinHandle;
+
     use move_core_types::ident_str;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
     use move_core_types::parser::parse_struct_tag;
-    use ntest::timeout;
-    use tokio::task::JoinHandle;
-
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
-    use sui_indexer::models::objects::{Object, ObjectStatus};
+    use sui_indexer::models::objects::{
+        compose_object_bulk_insert_query, compose_object_bulk_insert_update_query, NamedBcsBytes,
+        Object, ObjectStatus,
+    };
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
@@ -36,6 +40,7 @@ pub mod pg_integration_test {
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
+    use sui_types::digests::{ObjectDigest, TransactionDigest};
     use sui_types::error::SuiObjectResponseError;
     use sui_types::gas_coin::GasCoin;
     use sui_types::messages::ExecuteTransactionRequestType;
@@ -962,6 +967,67 @@ pub mod pg_integration_test {
                 Ok(())
             });
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    #[timeout(60000)]
+    async fn pg_unnest_bulk_insert_update_test() {
+        start_test_cluster(None).await;
+        let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
+        let pg_port = env::var("POSTGRES_PORT").unwrap_or_else(|_| "32770".into());
+        let pw = env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "postgrespw".into());
+        let db_url = format!("postgres://postgres:{pw}@{pg_host}:{pg_port}");
+        let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
+        let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
+
+        let mut bulk_data = (1..=10000)
+            .into_iter()
+            .map(|_| Object {
+                epoch: 0,
+                checkpoint: 0,
+                object_id: ObjectID::random().to_string(),
+                version: 0,
+                object_digest: ObjectDigest::random().to_string(),
+                owner_type: OwnerType::AddressOwner,
+                owner_address: Some(SuiAddress::random_for_testing_only().to_string()),
+                initial_shared_version: None,
+                previous_transaction: TransactionDigest::random().to_string(),
+                object_type: "0x2::coin::Coin<0x2::sui::SUI>".to_string(),
+                object_status: ObjectStatus::Created,
+                has_public_transfer: false,
+                storage_rebate: 0,
+                bcs: vec![NamedBcsBytes("object".to_string(), vec![1u8, 2u8, 3u8])],
+            })
+            .collect::<Vec<_>>();
+
+        let insert_query = compose_object_bulk_insert_query(&bulk_data);
+        let result: Result<usize, IndexerError> = pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| diesel::sql_query(insert_query).execute(conn))
+            .map_err(IndexerError::PostgresError);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 10000);
+
+        bulk_data = bulk_data
+            .into_iter()
+            .map(|mut object| {
+                object.object_status = ObjectStatus::Mutated;
+                object
+            })
+            .collect::<Vec<_>>();
+        let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
+        let insert_update_query = compose_object_bulk_insert_update_query(&bulk_data);
+        eprintln!("insert_update_query: {}", insert_update_query);
+        let result: Result<usize, IndexerError> = pg_pool_conn
+            .build_transaction()
+            .serializable()
+            .read_write()
+            .run(|conn| diesel::sql_query(insert_update_query).execute(conn))
+            .map_err(IndexerError::PostgresError);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 10000);
     }
 
     #[tokio::test]
