@@ -12,7 +12,7 @@ use sui_types::{
         Argument, CommandArgumentError, ExecutionFailureStatus, ObjectArg, PackageUpgradeError,
         ProgrammableTransaction, TransactionEffects,
     },
-    move_package::{UPGRADE_POLICY_COMPATIBLE, UPGRADE_POLICY_DEP_ONLY},
+    move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::BackingPackageStore,
@@ -169,7 +169,7 @@ async fn test_upgrade_package_happy_path() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -227,7 +227,7 @@ async fn test_upgrade_incompatible() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -258,7 +258,7 @@ async fn test_upgrade_package_incorrect_digest() {
         builder
             .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
             .unwrap();
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(bad_digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -294,7 +294,7 @@ async fn test_upgrade_package_compatibility_too_permissive() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         move_call! {
             builder,
@@ -318,7 +318,7 @@ async fn test_upgrade_package_compatibility_too_permissive() {
 }
 
 #[tokio::test]
-async fn test_upgrade_package_unsupported_compatibility() {
+async fn test_upgrade_package_compatible_in_dep_only_mode() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -331,7 +331,7 @@ async fn test_upgrade_package_unsupported_compatibility() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_DEP_ONLY).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::DEP_ONLY).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -343,10 +343,45 @@ async fn test_upgrade_package_unsupported_compatibility() {
 
     let TransactionEffects::V1(effects) = runner.run(pt).await;
 
-    // An error currently because we only support compatible upgrades
     assert_eq!(
         effects.status.unwrap_err().0,
-        ExecutionFailureStatus::FeatureNotYetSupported
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_upgrade_package_compatible_in_additive_mode() {
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = runner.package.0;
+        let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
+
+        // We take as input the upgrade runner.upgrade_cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UpgradePolicy::ADDITIVE).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = runner.run(pt).await;
+
+    assert_eq!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
     );
 }
 
@@ -382,6 +417,145 @@ async fn test_upgrade_package_invalid_compatibility() {
             upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy: 255 }
         }
     ));
+}
+
+#[tokio::test]
+async fn test_upgrade_package_additive_mode() {
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = runner.package.0;
+        let (digest, modules) = build_upgrade_test_modules("additive_upgrade");
+
+        // We take as input the upgrade runner.upgrade_cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UpgradePolicy::ADDITIVE).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        let upgrade_receipt = builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
+        move_call! {
+            builder,
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+        };
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = runner.run(pt).await;
+
+    assert!(effects.status.is_ok());
+}
+
+#[tokio::test]
+async fn test_upgrade_package_invalid_additive_mode() {
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = runner.package.0;
+        let (digest, modules) = build_upgrade_test_modules("additive_upgrade_invalid");
+
+        // We take as input the upgrade runner.upgrade_cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UpgradePolicy::ADDITIVE).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = runner.run(pt).await;
+
+    assert_eq!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_upgrade_package_additive_dep_only_mode() {
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = runner.package.0;
+        let (digest, modules) = build_upgrade_test_modules("additive_upgrade");
+
+        // We take as input the upgrade runner.upgrade_cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UpgradePolicy::DEP_ONLY).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        builder.upgrade(current_package_id, upgrade_ticket, vec![], modules);
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = runner.run(pt).await;
+
+    assert_eq!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade
+        },
+    );
+}
+
+#[tokio::test]
+async fn test_upgrade_package_dep_only_mode() {
+    let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let current_package_id = runner.package.0;
+        let (digest, modules) = build_upgrade_test_modules("dep_only_upgrade");
+
+        // We take as input the upgrade runner.upgrade_cap
+        builder
+            .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+            .unwrap();
+
+        // Create the upgrade ticket
+        let upgrade_arg = builder.pure(UpgradePolicy::DEP_ONLY).unwrap();
+        let digest_arg = builder.pure(digest).unwrap();
+        let upgrade_ticket = move_call! {
+            builder,
+            (SuiFramework::ID)::package::authorize_upgrade(Argument::Input(0), upgrade_arg, digest_arg)
+        };
+        let upgrade_receipt = builder.upgrade(
+            current_package_id,
+            upgrade_ticket,
+            vec![SuiFramework::ID, MoveStdlib::ID],
+            modules,
+        );
+        move_call! {
+            builder,
+            (SuiFramework::ID)::package::commit_upgrade(Argument::Input(0), upgrade_receipt)
+        };
+        builder.finish()
+    };
+
+    let TransactionEffects::V1(effects) = runner.run(pt).await;
+
+    assert!(effects.status.is_ok());
 }
 
 #[tokio::test]
@@ -421,7 +595,7 @@ async fn test_upgrade_ticket_doesnt_match() {
             .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
             .unwrap();
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -473,7 +647,7 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -514,7 +688,7 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -561,7 +735,7 @@ async fn test_interleaved_upgrades() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -601,7 +775,7 @@ async fn test_interleaved_upgrades() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
@@ -645,7 +819,7 @@ async fn test_publish_override_happy_path() {
             .unwrap();
 
         // Create the upgrade ticket
-        let upgrade_arg = builder.pure(UPGRADE_POLICY_COMPATIBLE).unwrap();
+        let upgrade_arg = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
         let digest_arg = builder.pure(digest).unwrap();
         let upgrade_ticket = move_call! {
             builder,
