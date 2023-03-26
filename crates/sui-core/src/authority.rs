@@ -26,7 +26,6 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
@@ -45,13 +44,14 @@ use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
     SuiObjectDataFilter, SuiTransactionEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
+use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -2159,14 +2159,11 @@ impl AuthorityState {
         owner: SuiAddress,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-        limit: Option<usize>,
         filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
         let cursor_u = cursor.unwrap_or(ObjectID::ZERO);
-        let count = limit.unwrap_or(MAX_GET_OWNED_OBJECT_SIZE);
-
         if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects_iterator(owner, cursor_u, count, filter)
+            indexes.get_owner_objects_iterator(owner, cursor_u, filter)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
@@ -2181,7 +2178,7 @@ impl AuthorityState {
         T: DeserializeOwned,
     {
         let object_ids = self
-            .get_owner_objects_iterator(owner, None, None, None)?
+            .get_owner_objects_iterator(owner, None, None)?
             .filter(|o| match &o.type_ {
                 ObjectType::Struct(s) => &type_ == s,
                 ObjectType::Package => false,

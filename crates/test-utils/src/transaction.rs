@@ -373,7 +373,6 @@ pub async fn transfer_coin(
             )),
             None,
             None,
-            None,
         )
         .await?;
     let object_to_send = object_refs

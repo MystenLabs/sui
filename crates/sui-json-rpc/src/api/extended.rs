@@ -5,11 +5,11 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage,
+    CheckpointedObjectID, EpochInfo, EpochPage, MoveCallMetrics, NetworkMetrics, ObjectsPage,
     SuiObjectResponseQuery,
 };
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
 
 #[open_rpc(namespace = "suix", tag = "Extended API")]
 #[rpc(server, client, namespace = "suix")]
@@ -37,11 +37,9 @@ pub trait ExtendedApi {
         /// the objects query criteria.
         query: SuiObjectResponseQuery,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
         limit: Option<usize>,
-        /// If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.
-        at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage>;
 
     /// Return Network metrics

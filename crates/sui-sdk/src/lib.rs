@@ -11,23 +11,26 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-
-use crate::error::{Error, SuiRpcResult};
 use serde_json::Value;
+
+use move_core_types::language_storage::StructTag;
 use sui_adapter::execution_mode::Normal;
 pub use sui_json as json;
-
-use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
 use sui_json_rpc::{
     CLIENT_SDK_TYPE_HEADER, CLIENT_SDK_VERSION_HEADER, CLIENT_TARGET_API_VERSION_HEADER,
 };
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
-    CheckpointId, ObjectsPage, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    ObjectsPage, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery,
 };
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
+
+use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriver, ReadApi};
+use crate::error::{Error, SuiRpcResult};
+
 pub mod apis;
 pub mod error;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
@@ -252,14 +255,39 @@ impl DataReader for ReadApi {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-        checkpoint: Option<CheckpointId>,
-    ) -> Result<ObjectsPage, anyhow::Error> {
-        Ok(self
-            .get_owned_objects(address, query, cursor, limit, checkpoint)
-            .await?)
+        object_type: StructTag,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
+        let mut result = vec![];
+        let query = Some(SuiObjectResponseQuery {
+            filter: Some(SuiObjectDataFilter::StructType(object_type)),
+            options: Some(
+                SuiObjectDataOptions::new()
+                    .with_previous_transaction()
+                    .with_type()
+                    .with_owner(),
+            ),
+        });
+
+        let mut has_next = true;
+        let mut cursor = None;
+
+        while has_next {
+            let ObjectsPage {
+                data,
+                next_cursor,
+                has_next_page,
+            } = self
+                .get_owned_objects(address, query.clone(), cursor, None)
+                .await?;
+            result.extend(
+                data.iter()
+                    .map(|r| r.clone().try_into())
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+            cursor = next_cursor;
+            has_next = has_next_page;
+        }
+        Ok(result)
     }
 
     async fn get_object_with_options(

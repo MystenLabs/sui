@@ -59,7 +59,6 @@ pub mod pg_integration_test {
                 )),
                 None,
                 None,
-                None,
             )
             .await?
             .data
@@ -141,7 +140,6 @@ pub mod pg_integration_test {
                 Some(SuiObjectResponseQuery::new_with_filter(
                     SuiObjectDataFilter::gas_coin(),
                 )),
-                None,
                 None,
                 None,
             )
@@ -261,6 +259,7 @@ pub mod pg_integration_test {
         let (package_id, publish_digest) =
             publish_nfts_package(&mut test_cluster.wallet, /* sender */ None).await;
         wait_until_transaction_synced(&store, publish_digest.base58_encode().as_str()).await;
+        wait_until_next_checkpoint(&store).await;
 
         let (tx_response, sender, recipient, gas_objects) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
@@ -270,6 +269,7 @@ pub mod pg_integration_test {
             .await
             .unwrap();
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
+        wait_until_next_checkpoint(&store).await;
 
         let tx_read_response = indexer_rpc_client
             .get_transaction(
@@ -286,6 +286,7 @@ pub mod pg_integration_test {
             tx_response.balance_changes,
             tx_read_response.balance_changes
         );
+        wait_until_next_checkpoint(&store).await;
 
         // query tx with sender address
         let from_query =
@@ -568,7 +569,7 @@ pub mod pg_integration_test {
         )
         .await?;
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
-
+        wait_until_next_checkpoint(&store).await;
         let response = indexer_rpc_client
             .get_object(source_object_id, Some(show_all_content.clone()))
             .await?;
@@ -695,6 +696,8 @@ pub mod pg_integration_test {
         )
         .await?;
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
+        wait_until_next_checkpoint(&store).await;
+
         let resp = indexer_rpc_client
             .get_object(post_transfer_full_obj_data.object_id, None)
             .await
@@ -860,14 +863,13 @@ pub mod pg_integration_test {
         let fullnode_client = test_cluster.rpc_client();
 
         let object_from_fullnode = fullnode_client
-            .get_owned_objects(address, None, None, None, None)
+            .get_owned_objects(address, None, None, None)
             .await
             .unwrap();
 
         let object_from_indexer = indexer_rpc_client
             .query_objects(
                 SuiObjectResponseQuery::new_with_filter(SuiObjectDataFilter::AddressOwner(address)),
-                None,
                 None,
                 None,
             )
@@ -889,7 +891,6 @@ pub mod pg_integration_test {
                 SuiObjectResponseQuery::new_with_filter(SuiObjectDataFilter::StructType(
                     parse_struct_tag("0x2::coin::Coin<0x2::sui::SUI>").unwrap(),
                 )),
-                None,
                 None,
                 None,
             )
