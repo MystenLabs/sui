@@ -139,19 +139,8 @@ pub fn new_session<
     vm.new_session_with_extensions(state_view, extensions)
 }
 
-/// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
-/// Mutate each module's self ID (which must be 0) to the appropriate fresh ID and update its module handle tables
-/// to reflect the new ID's of its dependencies.
-/// Returns the newly created package ID.
-pub fn generate_package_id(
-    modules: &mut [CompiledModule],
-    ctx: &mut TxContext,
-) -> Result<ObjectID, ExecutionError> {
-    let package_id = ctx.fresh_id();
-    substitute_package_id(modules, package_id)?;
-    Ok(package_id)
-}
-
+/// Given a list of `modules` and an `object_id`, mutate each module's self ID (which must be
+/// 0x0) to be `object_id`.
 pub fn substitute_package_id(
     modules: &mut [CompiledModule],
     object_id: ObjectID,
