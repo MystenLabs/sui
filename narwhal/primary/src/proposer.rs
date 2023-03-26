@@ -608,17 +608,6 @@ impl Proposer {
                             self.round = round;
                             let _ = self.tx_narwhal_round_updates.send(self.round);
                             self.last_parents = parents;
-
-                            // we re-calculate the timeout to give the opportunity to the node
-                            // to propose earlier if it's a leader for the round
-                            // Reschedule the timer.
-                            let timer_start = Instant::now();
-                            max_delay_timer
-                                .as_mut()
-                                .reset(timer_start + self.max_delay());
-                            min_delay_timer
-                                .as_mut()
-                                .reset(timer_start + self.min_delay());
                         },
                         Ordering::Less => {
                             // Ignore parents from older rounds.
