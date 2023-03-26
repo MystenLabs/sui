@@ -577,14 +577,12 @@ impl Object {
     // Note: this will panic if `modules` is empty
     pub fn new_package<'p>(
         modules: &[CompiledModule],
-        version: SequenceNumber,
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
-                version,
                 modules,
                 max_move_package_size,
                 dependencies,
@@ -619,7 +617,6 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         Self::new_package(
             modules,
-            OBJECT_START_VERSION,
             previous_transaction,
             ProtocolConfig::get_for_max_version().max_move_package_size(),
             dependencies,

@@ -25,7 +25,6 @@ use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::messages::{
     SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
 };
-use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
@@ -158,7 +157,6 @@ async fn init_genesis(
     let modules: Vec<_> = compile_basics_package().get_modules().cloned().collect();
     let pkg = Object::new_package(
         &modules,
-        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
         &sui_framework::make_system_packages(),

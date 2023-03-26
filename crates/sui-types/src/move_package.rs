@@ -6,6 +6,7 @@ use crate::{
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
+    object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
 use fastcrypto::hash::HashFunction;
@@ -204,7 +205,6 @@ impl MovePackage {
     /// Create an initial version of the package along with this version's type origin and linkage
     /// tables.
     pub fn new_initial<'p>(
-        version: SequenceNumber,
         modules: &[CompiledModule],
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
@@ -218,7 +218,7 @@ impl MovePackage {
         Self::from_module_iter_with_type_origin_table(
             storage_id,
             runtime_id,
-            version,
+            OBJECT_START_VERSION,
             modules,
             max_move_package_size,
             type_origin_table,

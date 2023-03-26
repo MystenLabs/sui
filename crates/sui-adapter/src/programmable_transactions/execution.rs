@@ -435,7 +435,7 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
     let dependencies = fetch_packages(context, &dep_ids)?;
 
     // new_package also initializes type origin table in the package object
-    let package_id = context.new_package(&modules, &dependencies, None)?;
+    let package_id = context.new_package(&modules, &dependencies)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, Mode>(
             context,

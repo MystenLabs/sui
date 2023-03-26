@@ -21,7 +21,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     move_package::MovePackage,
-    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
+    object::{MoveObject, Object, Owner},
     storage::{ObjectChange, WriteKind},
 };
 
@@ -395,12 +395,10 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         &mut self,
         modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
-        version: Option<SequenceNumber>,
     ) -> Result<ObjectID, ExecutionError> {
         // wrap the modules in an object, write it to the store
         let object = Object::new_package(
             modules,
-            version.unwrap_or(OBJECT_START_VERSION),
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
             dependencies,
