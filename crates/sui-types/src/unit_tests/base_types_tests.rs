@@ -16,7 +16,6 @@ use crate::crypto::{
     Signature, SuiAuthoritySignature, SuiSignature,
 };
 use crate::id::{ID, UID};
-use crate::OBJECT_START_VERSION;
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_protocol_config::ProtocolConfig;
@@ -359,8 +358,7 @@ fn test_move_object_size_for_gas_metering() {
 fn test_move_package_size_for_gas_metering() {
     let module = file_format::empty_module();
     let package = Object::new_package(
-        vec![module],
-        OBJECT_START_VERSION,
+        &[module],
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
         &[], // empty dependencies for empty package (no modules)

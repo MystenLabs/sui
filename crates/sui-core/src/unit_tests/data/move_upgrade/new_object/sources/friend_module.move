@@ -1,22 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module base_addr::base {
+module base_addr::friend_module {
 
     struct A<T> {
-        f1: bool,
-        f2: T
+        field1: u64,
+        field2: T
     }
 
-    friend base_addr::friend_module;
+    public fun friend_call(): u64 { base_addr::base::friend_fun(1) }
 
     public fun return_0(): u64 { 0 }
 
     public fun plus_1(x: u64): u64 { x + 1 }
 
-    public(friend) fun friend_fun(x: u64): u64 { x }
-
     fun non_public_fun(y: bool): u64 { if (y) 0 else 1 }
-
-    entry fun entry_fun() { }
 }
