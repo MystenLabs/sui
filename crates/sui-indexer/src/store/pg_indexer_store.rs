@@ -45,7 +45,7 @@ use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
-use crate::models::objects::Object;
+use crate::models::objects::{compose_object_bulk_insert_update_query, Object};
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
 use crate::schema::{
@@ -1037,64 +1037,41 @@ impl IndexerStore for PgIndexerStore {
             }
 
             // Commit indexed objects
-            for changes in objects_changes {
-                for mutated_object_change_chunk in
-                    changes.mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE)
-                {
-                    diesel::insert_into(objects::table)
-                        .values(mutated_object_change_chunk)
-                        .on_conflict(objects::object_id)
-                        .do_update()
-                        .set((
-                            objects::epoch.eq(excluded(objects::epoch)),
-                            objects::checkpoint.eq(excluded(objects::checkpoint)),
-                            objects::version.eq(excluded(objects::version)),
-                            objects::object_digest.eq(excluded(objects::object_digest)),
-                            objects::owner_type.eq(excluded(objects::owner_type)),
-                            objects::owner_address.eq(excluded(objects::owner_address)),
-                            objects::initial_shared_version
-                                .eq(excluded(objects::initial_shared_version)),
-                            objects::previous_transaction
-                                .eq(excluded(objects::previous_transaction)),
-                            objects::object_type.eq(excluded(objects::object_type)),
-                            objects::object_status.eq(excluded(objects::object_status)),
-                            objects::has_public_transfer.eq(excluded(objects::has_public_transfer)),
-                            objects::storage_rebate.eq(excluded(objects::storage_rebate)),
-                            objects::bcs.eq(excluded(objects::bcs)),
-                        ))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context(&format!(
-                            "Failed writing updated objects to PostgresDB with chunk: {:?}",
-                            mutated_object_change_chunk
-                        ))?;
-                }
-
-                let deleted_objects: Vec<Object> = changes
-                    .deleted_objects
-                    .iter()
-                    .map(|deleted_object| deleted_object.clone().into())
-                    .collect();
-                for deleted_object_change_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
-                    diesel::insert_into(objects::table)
-                        .values(deleted_object_change_chunk)
-                        .on_conflict(objects::object_id)
-                        .do_update()
-                        .set((
-                            objects::epoch.eq(excluded(objects::epoch)),
-                            objects::checkpoint.eq(excluded(objects::checkpoint)),
-                            objects::version.eq(excluded(objects::version)),
-                            objects::previous_transaction
-                                .eq(excluded(objects::previous_transaction)),
-                            objects::object_status.eq(excluded(objects::object_status)),
-                        ))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context(&format!(
-                            "Failed writing deleted objects to PostgresDB with chunk: {:?}",
-                            deleted_object_change_chunk
-                        ))?;
-                }
+            let all_mutated_objects: Vec<Object> = objects_changes
+                .iter()
+                .flat_map(|changes| changes.mutated_objects.iter().cloned())
+                .collect();
+            // bulk insert/update via UNNEST trick
+            let insert_update_query = compose_object_bulk_insert_update_query(&all_mutated_objects);
+            diesel::sql_query(insert_update_query).execute(conn)?;
+            // TODO(gegao): monitor the deletion batch size to see
+            // if bulk update via unnest is necessary.
+            let all_deleted_changes = objects_changes
+                .iter()
+                .flat_map(|changes| changes.deleted_objects.iter().cloned())
+                .collect::<Vec<_>>();
+            let all_deleted_objects: Vec<Object> = all_deleted_changes
+                .iter()
+                .map(|deleted_object| deleted_object.clone().into())
+                .collect();
+            for deleted_object_change_chunk in all_deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+                diesel::insert_into(objects::table)
+                    .values(deleted_object_change_chunk)
+                    .on_conflict(objects::object_id)
+                    .do_update()
+                    .set((
+                        objects::epoch.eq(excluded(objects::epoch)),
+                        objects::checkpoint.eq(excluded(objects::checkpoint)),
+                        objects::version.eq(excluded(objects::version)),
+                        objects::previous_transaction.eq(excluded(objects::previous_transaction)),
+                        objects::object_status.eq(excluded(objects::object_status)),
+                    ))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context(&format!(
+                        "Failed writing deleted objects to PostgresDB with chunk: {:?}",
+                        deleted_object_change_chunk
+                    ))?;
             }
 
             // Commit indexed addresses

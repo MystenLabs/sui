@@ -4,6 +4,7 @@
 use crate::models::objects::ObjectStatus;
 use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;
+use serde::{Deserialize, Serialize};
 
 #[derive(Queryable, Debug, Clone)]
 #[diesel(table_name = owner)]
@@ -18,8 +19,9 @@ pub struct ObjectOwner {
     pub object_status: ObjectStatus,
 }
 
-#[derive(DbEnum, Debug, Clone)]
+#[derive(DbEnum, Debug, Clone, Deserialize, Serialize)]
 #[ExistingTypePath = "crate::schema::sql_types::OwnerType"]
+#[serde(rename_all = "snake_case")]
 pub enum OwnerType {
     AddressOwner,
     ObjectOwner,

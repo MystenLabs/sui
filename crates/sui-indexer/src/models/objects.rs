@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::IndexerError;
-use crate::models::owners::OwnerType;
-use crate::schema::objects;
-use crate::schema::sql_types::BcsBytes;
+use std::{collections::BTreeMap, str::FromStr};
+
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
@@ -12,14 +10,22 @@ use diesel::serialize::{Output, ToSql, WriteTuple};
 use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
 use diesel::SqlType;
 use diesel_derive_enum::DbEnum;
+use fastcrypto::encoding::{Base64, Encoding};
+use serde::{Deserialize, Serialize};
+use serde_json;
+
 use move_bytecode_utils::module_cache::GetModule;
-use std::{collections::BTreeMap, str::FromStr};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
+
+use crate::errors::IndexerError;
+use crate::models::owners::OwnerType;
+use crate::schema::objects;
+use crate::schema::sql_types::BcsBytes;
 
 const OBJECT: &str = "object";
 
@@ -100,8 +106,9 @@ impl From<DeletedObject> for Object {
     }
 }
 
-#[derive(DbEnum, Debug, Clone, Copy)]
+#[derive(DbEnum, Debug, Clone, Copy, Deserialize, Serialize)]
 #[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
+#[serde(rename_all = "snake_case")]
 pub enum ObjectStatus {
     Created,
     Mutated,
@@ -310,4 +317,126 @@ pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<String>, Option<
         ),
         Owner::Immutable => (OwnerType::Immutable, None, None),
     }
+}
+
+pub fn compose_object_bulk_insert_update_query(objects: &[Object]) -> String {
+    let insert_query = compose_object_bulk_insert_query(objects)
+        .as_str()
+        .trim_matches(';')
+        .to_string();
+    let insert_update_query = format!(
+        "{} ON CONFLICT (object_id) 
+        DO UPDATE SET 
+            epoch = EXCLUDED.epoch,
+            checkpoint = EXCLUDED.checkpoint,
+            version = EXCLUDED.version,
+            object_digest = EXCLUDED.object_digest,
+            owner_type = EXCLUDED.owner_type,
+            owner_address = EXCLUDED.owner_address,
+            initial_shared_version = EXCLUDED.initial_shared_version,
+            previous_transaction = EXCLUDED.previous_transaction,
+            object_type = EXCLUDED.object_type,
+            object_status = EXCLUDED.object_status,
+            has_public_transfer = EXCLUDED.has_public_transfer,
+            storage_rebate = EXCLUDED.storage_rebate,
+            bcs = EXCLUDED.bcs;",
+        insert_query
+    );
+    insert_update_query
+}
+
+pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
+    // Construct an array of rows to insert into the `objects` table
+    let rows = objects
+        .iter()
+        .map(|obj| {
+            let bcs_rows = obj
+                .bcs
+                .iter()
+                .map(|bcs| (bcs.0.clone(), bcs.1.clone()))
+                .collect::<Vec<_>>();
+            let owner_type_str = serde_json::to_string(&obj.owner_type)
+                .unwrap()
+                .trim_matches('"')
+                .to_string();
+            let object_status_str = serde_json::to_string(&obj.object_status)
+                .unwrap()
+                .trim_matches('"')
+                .to_string();
+            (
+                obj.epoch,
+                obj.checkpoint,
+                obj.object_id.to_string(),
+                obj.version,
+                obj.object_digest.clone(),
+                owner_type_str,
+                obj.owner_address.clone(),
+                obj.initial_shared_version,
+                obj.previous_transaction.clone(),
+                obj.object_type.clone(),
+                object_status_str,
+                obj.has_public_transfer,
+                obj.storage_rebate,
+                bcs_rows,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let rows_query = rows
+        .iter()
+        .map(|row| {
+            let (epoch, checkpoint, object_id, version, object_digest, owner_type, owner_address, initial_shared_version, previous_transaction, object_type, object_status, has_public_transfer, storage_rebate, bcs_rows) = row;
+
+            let bcs_rows_query = bcs_rows
+                .iter()
+                .map(|bcs_row| {
+                    let (bcs_key, bcs_value) = bcs_row;
+                    let bytea_str = format!("decode('{}', 'base64')", Base64::encode(bcs_value));
+                    format!(
+                        "ROW('{}', {})",
+                        bcs_key,
+                        bytea_str
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "ROW({}::BIGINT, {}::BIGINT, '{}'::address, {}::BIGINT, '{}'::base58digest, '{}'::owner_type, 
+                     '{}'::address, {}::BIGINT, '{}'::base58digest, '{}'::VARCHAR, '{}'::object_status,
+                     {}::BOOLEAN, {}::BIGINT, ARRAY[{}]::bcs_bytes[])",
+                epoch,
+                checkpoint,
+                object_id,
+                version,
+                object_digest,
+                &owner_type,
+                owner_address
+                    .as_ref()
+                    .map(|addr| addr.to_string())
+                    .unwrap_or_else(|| "".to_string()),
+                initial_shared_version
+                    .as_ref()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "NULL".to_string()),
+                previous_transaction,
+                object_type,
+                &object_status,
+                has_public_transfer,
+                storage_rebate,
+                bcs_rows_query,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // Construct a prepared statement with placeholders for each row element
+    let bulk_insert_query = format!(
+        "INSERT INTO objects
+            (epoch, checkpoint, object_id, version, object_digest, owner_type, owner_address, initial_shared_version, previous_transaction, object_type, object_status, has_public_transfer, storage_rebate, bcs)
+        SELECT (unnest_arr).*
+        FROM unnest(ARRAY[{}]::record[]) 
+        AS unnest_arr(epoch BIGINT, checkpoint BIGINT, object_id address, version BIGINT, object_digest base58digest, owner_type owner_type, owner_address address, initial_shared_version BIGINT, previous_transaction base58digest, object_type VARCHAR, object_status object_status, has_public_transfer BOOLEAN, storage_rebate BIGINT, bcs bcs_bytes[]);",
+        rows_query
+    );
+    bulk_insert_query
 }
