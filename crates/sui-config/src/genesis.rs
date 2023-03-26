@@ -1442,7 +1442,7 @@ fn create_genesis_transaction(
 
 fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
-    modules: &[(Vec<CompiledModule>, Vec<ObjectID>)],
+    modules: &[(&[CompiledModule], Vec<ObjectID>)],
     input_objects: &[Object],
     validators: &[GenesisValidatorMetadata],
     parameters: &GenesisChainParameters,
@@ -1461,7 +1461,7 @@ fn create_genesis_objects(
             &mut store,
             &move_vm,
             genesis_ctx,
-            modules.to_owned(),
+            modules,
             dependencies.to_owned(),
             &protocol_config,
         )
@@ -1489,7 +1489,7 @@ fn process_package(
     store: &mut InMemoryStorage,
     vm: &MoveVM,
     ctx: &mut TxContext,
-    modules: Vec<CompiledModule>,
+    modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
 ) -> Result<()> {
@@ -1533,7 +1533,7 @@ fn process_package(
     );
     let mut gas_status = SuiGasStatus::new_unmetered();
     let module_bytes = modules
-        .into_iter()
+        .iter()
         .map(|m| {
             let mut buf = vec![];
             m.serialize(&mut buf).unwrap();

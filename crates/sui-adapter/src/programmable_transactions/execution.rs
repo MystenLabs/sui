@@ -435,7 +435,7 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
     let dependencies = fetch_packages(context, &dep_ids)?;
 
     // new_package also initializes type origin table in the package object
-    let package_id = context.new_package(modules, &dependencies, None)?;
+    let package_id = context.new_package(&modules, &dependencies, None)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, Mode>(
             context,
@@ -556,7 +556,7 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
 
     let upgraded_object_id = context.upgrade_package(
         &current_package,
-        upgraded_package_modules,
+        &upgraded_package_modules,
         &dependency_packages,
     )?;
 
@@ -738,9 +738,9 @@ fn deserialize_modules<S: StorageView, Mode: ExecutionMode>(
                 b,
                 context.protocol_config.move_binary_format_version(),
             )
-            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+            .map_err(|e| e.finish(Location::Undefined))
         })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
+        .collect::<VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;
 
     assert_invariant!(

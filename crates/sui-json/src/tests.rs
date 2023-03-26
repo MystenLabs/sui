@@ -414,7 +414,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     let example_package = Object::new_package_for_testing(
-        compiled_modules,
+        &compiled_modules,
         TransactionDigest::genesis(),
         &make_system_packages(),
     )
@@ -540,7 +540,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     let example_package = Object::new_package_for_testing(
-        compiled_modules,
+        &compiled_modules,
         TransactionDigest::genesis(),
         &make_system_packages(),
     )
@@ -643,7 +643,7 @@ fn test_basic_args_linter_top_level() {
         .unwrap()
         .into_modules();
     let example_package = Object::new_package_for_testing(
-        compiled_modules,
+        &compiled_modules,
         TransactionDigest::genesis(),
         &make_system_packages(),
     )

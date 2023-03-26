@@ -155,13 +155,9 @@ async fn init_genesis(
     ObjectID,
 ) {
     // add object_basics package object to genesis
-    let modules = compile_basics_package()
-        .get_modules()
-        .into_iter()
-        .cloned()
-        .collect();
+    let modules: Vec<_> = compile_basics_package().get_modules().cloned().collect();
     let pkg = Object::new_package(
-        modules,
+        &modules,
         OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),

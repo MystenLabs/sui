@@ -616,7 +616,7 @@ mod sim_only_tests {
     /// Like `sui_framework`, but package the modules in an `Object`.
     fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
-            sui_system_modules(fixture),
+            &sui_system_modules(fixture),
             OBJECT_START_VERSION,
             TransactionDigest::genesis(),
             u64::MAX,

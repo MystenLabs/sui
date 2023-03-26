@@ -43,7 +43,7 @@ async fn test_package_override() {
     };
 
     let modified_ref = {
-        let mut framework_modules = SuiSystem::as_modules();
+        let mut framework_modules = SuiSystem::as_modules().to_owned();
 
         // Create an empty module that is pretending to be part of the sui framework.
         let mut test_module = move_binary_format::file_format::empty_module();
@@ -55,7 +55,7 @@ async fn test_package_override() {
         framework_modules.push(test_module);
 
         let package_override = Object::new_package_for_testing(
-            framework_modules,
+            &framework_modules,
             TransactionDigest::genesis(),
             &[MoveStdlib::as_package(), SuiFramework::as_package()],
         )

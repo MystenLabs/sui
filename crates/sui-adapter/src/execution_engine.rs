@@ -515,7 +515,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             .collect();
 
         let mut new_package =
-            Object::new_system_package(modules, version, dependencies, tx_ctx.digest());
+            Object::new_system_package(&modules, version, dependencies, tx_ctx.digest());
 
         info!(
             "upgraded system package {:?}",

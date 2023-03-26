@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use move_binary_format::{
     errors::{Location, VMError},
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+    CompiledModule,
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -392,7 +393,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     /// Create a new package
     pub fn new_package<'p>(
         &mut self,
-        modules: Vec<move_binary_format::CompiledModule>,
+        modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectID, ExecutionError> {
@@ -413,7 +414,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     pub fn upgrade_package<'p>(
         &mut self,
         previous_package: &MovePackage,
-        new_modules: Vec<move_binary_format::CompiledModule>,
+        new_modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<ObjectID, ExecutionError> {
         let new_package_object_id = self.tx_context.fresh_id();
