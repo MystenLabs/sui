@@ -392,41 +392,41 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
 
     /// Create a new package
     pub fn new_package<'p>(
-        &mut self,
+        &self,
         modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
-    ) -> Result<ObjectID, ExecutionError> {
-        // wrap the modules in an object, write it to the store
-        let object = Object::new_package(
+    ) -> Result<Object, ExecutionError> {
+        Object::new_package(
             modules,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
             dependencies,
-        )?;
-        let object_id = object.id();
-        self.new_packages.push(object);
-        Ok(object_id)
+        )
     }
 
     /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
     pub fn upgrade_package<'p>(
-        &mut self,
+        &self,
+        storage_id: ObjectID,
         previous_package: &MovePackage,
         new_modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
-    ) -> Result<ObjectID, ExecutionError> {
-        let new_package_object_id = self.tx_context.fresh_id();
-        let object = Object::new_upgraded_package(
+    ) -> Result<Object, ExecutionError> {
+        Object::new_upgraded_package(
             previous_package,
-            new_package_object_id,
+            storage_id,
             new_modules,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
             dependencies,
-        )?;
-        let object_id = object.id();
-        self.new_packages.push(object);
-        Ok(object_id)
+        )
+    }
+
+    /// Add a newly created package to write as an effect of the transaction
+    pub fn write_package(&mut self, package: Object) -> Result<(), ExecutionError> {
+        assert_invariant!(package.is_package(), "Must be a package");
+        self.new_packages.push(package);
+        Ok(())
     }
 
     /// Finish a command: clearing the borrows and adding the results to the result vector

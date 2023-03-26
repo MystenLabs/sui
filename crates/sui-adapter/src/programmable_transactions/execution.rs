@@ -429,6 +429,12 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         id
     };
 
+    // For newly published packages, runtime ID matches storage ID.
+    let storage_id = runtime_id;
+
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package = context.new_package(&modules, &dependencies)?;
+
     publish_and_verify_modules(context, runtime_id, &modules)?;
 
     let modules_to_init = modules
@@ -445,10 +451,6 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let dependencies = fetch_packages(context, &dep_ids)?;
-
-    // new_package also initializes type origin table in the package object
-    let package_id = context.new_package(&modules, &dependencies)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, Mode>(
             context,
@@ -465,11 +467,12 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         )
     }
 
+    context.write_package(package)?;
     let values = if Mode::packages_are_predefined() {
         // no upgrade cap for genesis modules
         vec![]
     } else {
-        let cap = &UpgradeCap::new(context.fresh_id()?, package_id);
+        let cap = &UpgradeCap::new(context.fresh_id()?, storage_id);
         vec![Value::Object(ObjectValue::new(
             context.vm,
             context.state_view,
@@ -550,31 +553,30 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
 
     let mut modules = deserialize_modules::<_, Mode>(context, &module_bytes)?;
     let runtime_id = current_package.original_package_id();
-
     substitute_package_id(&mut modules, runtime_id)?;
+
+    // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
+    let storage_id = context.tx_context.fresh_id();
+
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package = context.upgrade_package(storage_id, &current_package, &modules, &dependencies)?;
+
     publish_and_verify_modules(context, runtime_id, &modules)?;
-
-    // Full backwards compatibility except that we allow friend function signatures to change.
     check_compatibility(context, &current_package, &modules, upgrade_ticket.policy)?;
-
-    // Read the package dependencies.
-    let dependency_packages = fetch_packages(context, &dep_ids)?;
-
-    let upgraded_object_id =
-        context.upgrade_package(&current_package, &modules, &dependency_packages)?;
 
     let upgrade_receipt_type = context
         .session
         .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
         .map_err(|e| context.convert_vm_error(e))?;
 
+    context.write_package(package)?;
     Ok(vec![Value::Raw(
         RawValueType::Loaded {
             ty: upgrade_receipt_type,
             abilities: AbilitySet::EMPTY,
             used_in_non_entry_move_call: false,
         },
-        bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, upgraded_object_id)).unwrap(),
+        bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
     )])
 }
 
