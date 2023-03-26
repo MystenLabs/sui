@@ -15,8 +15,9 @@ use sui_json_rpc::api::{validate_limit, IndexerApiClient, QUERY_MAX_RESULT_LIMIT
 use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    CheckpointId, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionResponse, SuiTransactionResponseQuery, TransactionsPage,
+    CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
+    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionResponse,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -220,13 +221,55 @@ where
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
-        self.fullnode
-            .get_owned_objects(address, query, cursor, limit, at_checkpoint)
-            .await
+        let address = SuiObjectDataFilter::AddressOwner(address);
+        let (filter, options) = match query {
+            Some(SuiObjectResponseQuery {
+                filter: Some(filter),
+                options,
+            }) => (address.and(filter), options),
+            Some(SuiObjectResponseQuery { filter: _, options }) => (address, options),
+            None => (address, None),
+        };
+
+        let at_checkpoint = if let Some(CheckpointedObjectID {
+            at_checkpoint: Some(at_checkpoint),
+            ..
+        }) = cursor
+        {
+            at_checkpoint
+        } else {
+            self.state.get_latest_checkpoint_sequence_number()? as u64
+        };
+        let object_cursor = cursor.as_ref().map(|c| c.object_id);
+
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT)?;
+        let options = options.unwrap_or_default();
+        let mut objects =
+            self.state
+                .query_objects(filter, at_checkpoint, object_cursor, limit + 1)?;
+
+        let has_next_page = objects.len() > limit;
+        objects.truncate(limit);
+        let next_cursor = objects.get(limit).and_then(|o| {
+            o.object().ok().map(|o| CheckpointedObjectID {
+                object_id: o.id(),
+                at_checkpoint: Some(at_checkpoint),
+            })
+        });
+
+        let objects = objects
+            .into_iter()
+            .map(|o| (o, options.clone()).try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Page {
+            data: objects,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn query_transactions(

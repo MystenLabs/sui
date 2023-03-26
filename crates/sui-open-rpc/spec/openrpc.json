@@ -1615,7 +1615,7 @@
           "name": "cursor",
           "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
-            "$ref": "#/components/schemas/ObjectID"
+            "$ref": "#/components/schemas/CheckpointedObjectID"
           }
         },
         {
@@ -1626,20 +1626,13 @@
             "format": "uint",
             "minimum": 0.0
           }
-        },
-        {
-          "name": "at_checkpoint",
-          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointId"
-          }
         }
       ],
       "result": {
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
         }
       }
     },
@@ -1815,7 +1808,7 @@
           "name": "cursor",
           "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
-            "$ref": "#/components/schemas/ObjectID"
+            "$ref": "#/components/schemas/CheckpointedObjectID"
           }
         },
         {
@@ -1826,20 +1819,13 @@
             "format": "uint",
             "minimum": 0.0
           }
-        },
-        {
-          "name": "at_checkpoint",
-          "description": "If not specified, objects may be created or deleted across pagination requests. This parameter is only supported when the sui-indexer instance is running.",
-          "schema": {
-            "$ref": "#/components/schemas/CheckpointId"
-          }
         }
       ],
       "result": {
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
         }
       }
     },
@@ -2977,6 +2963,25 @@
             "$ref": "#/components/schemas/CheckpointDigest"
           }
         ]
+      },
+      "CheckpointedObjectID": {
+        "type": "object",
+        "required": [
+          "objectId"
+        ],
+        "properties": {
+          "atCheckpoint": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "objectId": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
       },
       "Coin": {
         "type": "object",
@@ -5246,7 +5251,7 @@
           }
         }
       },
-      "Page_for_SuiObjectResponse_and_ObjectID": {
+      "Page_for_SuiObjectResponse_and_CheckpointedObjectID": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -5266,7 +5271,7 @@
           "nextCursor": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ObjectID"
+                "$ref": "#/components/schemas/CheckpointedObjectID"
               },
               {
                 "type": "null"

@@ -35,7 +35,6 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -124,7 +123,6 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -182,7 +180,6 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
                         .with_owner()
                         .with_previous_transaction(),
                 )),
-                None,
                 None,
                 None,
             )

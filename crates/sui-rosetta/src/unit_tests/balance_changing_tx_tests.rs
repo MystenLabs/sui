@@ -672,7 +672,6 @@ async fn get_random_sui(
             )),
             /* cursor */ None,
             /* limit */ None,
-            /* at_checkpoint */ None,
         )
         .await
         .unwrap()
@@ -712,7 +711,6 @@ async fn get_balance(client: &SuiClient, address: SuiAddress) -> u64 {
             )),
             /* cursor */ None,
             /* limit */ None,
-            /* at_checkpoint */ None,
         )
         .await
         .unwrap()

@@ -1,32 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::{validate_limit, TransactionBuilderServer};
-use crate::SuiRpcModule;
-use async_trait::async_trait;
-use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use fastcrypto::encoding::Base64;
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::RpcModule;
+use move_core_types::language_storage::StructTag;
+
+use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_core::authority::AuthorityState;
+use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BigInt, CheckpointId, ObjectsPage, Page, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
+    TransactionBytes,
 };
+use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
+use sui_types::base_types::ObjectInfo;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     messages::TransactionData,
 };
 
-use fastcrypto::encoding::Base64;
-use jsonrpsee::RpcModule;
-use sui_adapter::execution_mode::{DevInspect, Normal};
-
-use crate::api::QUERY_MAX_RESULT_LIMIT_OBJECTS;
-use crate::error::Error;
-use anyhow::anyhow;
-use sui_json::SuiJsonValue;
-use sui_json_rpc_types::RPCTransactionRequestParams;
+use crate::api::TransactionBuilderServer;
+use crate::SuiRpcModule;
 
 pub struct TransactionBuilderApi {
     builder: TransactionBuilder<Normal>,
@@ -56,42 +56,17 @@ impl DataReader for AuthorityStateDataReader {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
-    ) -> Result<ObjectsPage, anyhow::Error> {
-        if at_checkpoint.is_some() {
-            return Err(anyhow!("at_checkpoint param currently not supported"));
-        }
-
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
-        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
-
-        let options = options.unwrap_or_default();
-
-        let mut objects = self
+        object_type: StructTag,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
+        Ok(self
             .0
-            .get_owner_objects(address, cursor, limit + 1, filter)?;
-
-        // objects here are of size (limit + 1), where the last one is the cursor for the next page
-        let has_next_page = objects.len() > limit;
-        objects.truncate(limit);
-        let next_cursor = objects
-            .last()
-            .cloned()
-            .map_or(cursor, |o_info| Some(o_info.object_id));
-
-        let data = objects.into_iter().try_fold(vec![], |mut acc, o_info| {
-            let o_resp = SuiObjectResponse::try_from((o_info, options.clone()))?;
-            acc.push(o_resp);
-            Ok::<Vec<SuiObjectResponse>, Error>(acc)
-        })?;
-        Ok(Page {
-            data,
-            next_cursor,
-            has_next_page,
-        })
+            // DataReader is used internally, don't need a limit
+            .get_owner_objects_iterator(
+                address,
+                None,
+                Some(SuiObjectDataFilter::StructType(object_type)),
+            )?
+            .collect())
     }
 
     async fn get_object_with_options(

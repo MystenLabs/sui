@@ -3,26 +3,26 @@
 
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
+use std::result::Result;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
-
-use anyhow::{anyhow, bail, ensure, Ok};
 use move_binary_format::{file_format::SignatureToken, file_format_common::VERSION_MAX};
 use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::TypeTag;
-use std::result::Result;
+use move_core_types::language_storage::{StructTag, TypeTag};
+
 use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    CheckpointId, ObjectsPage, RPCTransactionRequestParams, SuiData, SuiObjectDataFilter,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTypeTag,
+    RPCTransactionRequestParams, SuiData, SuiObjectDataOptions, SuiObjectResponse, SuiRawData,
+    SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
@@ -43,11 +43,8 @@ pub trait DataReader {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        options: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-        checkpoint: Option<CheckpointId>,
-    ) -> Result<ObjectsPage, anyhow::Error>;
+        object_type: StructTag,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error>;
 
     async fn get_object_with_options(
         &self,
@@ -80,29 +77,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
-            // TODO: use get coins here
-            let gas_objs = self
-                .0
-                .get_owned_objects(
-                    signer,
-                    Some(SuiObjectResponseQuery {
-                        filter: Some(SuiObjectDataFilter::gas_coin()),
-                        options: Some(SuiObjectDataOptions::new().with_bcs()),
-                    }),
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
+            let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
             let required_gas_amount = (budget as u128) * (gas_price as u128);
 
-            for obj in gas_objs.data {
+            for obj in gas_objs {
                 let response = self
                     .0
-                    .get_object_with_options(
-                        obj.clone().into_object()?.object_id,
-                        SuiObjectDataOptions::new().with_bcs(),
-                    )
+                    .get_object_with_options(obj.object_id, SuiObjectDataOptions::new().with_bcs())
                     .await?;
                 let obj = response.object()?;
                 let gas: GasCoin = bcs::from_bytes(
