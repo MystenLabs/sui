@@ -12,7 +12,9 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache};
+use rocksdb::{
+    checkpoint::Checkpoint, BlockBasedOptions, Cache, UniversalCompactOptions,
+};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -1849,8 +1851,8 @@ pub fn default_db_options() -> DBOptions {
     let mut block_options = BlockBasedOptions::default();
     // Configure a 64MiB block cache.
     block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
-    // Set a bloomfilter with 1% false positive rate.
-    block_options.set_bloom_filter(10.0, false);
+    // Set a bloomfilter with < 1% false positive rate.
+    block_options.set_bloom_filter(12.0, false);
 
     // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
     block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
@@ -1858,6 +1860,16 @@ pub fn default_db_options() -> DBOptions {
     opt.options.set_block_based_table_factory(&block_options);
     // Set memtable bloomfilter.
     opt.options.set_memtable_prefix_bloom_ratio(0.02);
+
+    // Compaction policy.
+    let mut universal_compact_options = UniversalCompactOptions::default();
+    universal_compact_options.set_size_ratio(20);
+    opt.options
+        .set_universal_compaction_options(&universal_compact_options);
+    opt.options.set_num_levels(20);
+    opt.options.set_level_zero_file_num_compaction_trigger(10);
+    opt.options.set_level_zero_slowdown_writes_trigger(40);
+    opt.options.set_level_zero_stop_writes_trigger(60);
 
     opt
 }
