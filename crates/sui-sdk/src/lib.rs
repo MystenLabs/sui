@@ -263,7 +263,8 @@ impl DataReader for ReadApi {
             options: Some(
                 SuiObjectDataOptions::new()
                     .with_previous_transaction()
-                    .with_type(),
+                    .with_type()
+                    .with_owner(),
             ),
         });
 

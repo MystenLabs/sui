@@ -1051,6 +1051,44 @@ impl SuiObjectDataFilter {
     pub fn or(self, other: Self) -> Self {
         Self::MatchAny(vec![self, other])
     }
+
+    pub fn matches(&self, object: &ObjectInfo) -> bool {
+        match self {
+            SuiObjectDataFilter::MatchAll(filters) => !filters.iter().any(|f| !f.matches(object)),
+            SuiObjectDataFilter::MatchAny(filters) => filters.iter().any(|f| f.matches(object)),
+            SuiObjectDataFilter::StructType(s) => {
+                let obj_tag: StructTag = match &object.type_ {
+                    ObjectType::Package => return false,
+                    ObjectType::Struct(s) => s.clone().into(),
+                };
+                // If people do not provide type_params, we will match all type_params
+                // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
+                if !s.type_params.is_empty() && s.type_params != obj_tag.type_params {
+                    false
+                } else {
+                    obj_tag.address == s.address
+                        && obj_tag.module == s.module
+                        && obj_tag.name == s.name
+                }
+            }
+            SuiObjectDataFilter::MoveModule { package, module } => {
+                matches!(&object.type_, ObjectType::Struct(s) if &ObjectID::from(s.address()) == package
+                        && s.module() == module.as_ident_str())
+            }
+            SuiObjectDataFilter::Package(p) => {
+                matches!(&object.type_, ObjectType::Struct(s) if &ObjectID::from(s.address()) == p)
+            }
+            SuiObjectDataFilter::AddressOwner(a) => {
+                matches!(object.owner, Owner::AddressOwner(addr) if &addr == a)
+            }
+            SuiObjectDataFilter::ObjectOwner(o) => {
+                matches!(object.owner, Owner::ObjectOwner(addr) if addr == SuiAddress::from(*o))
+            }
+            SuiObjectDataFilter::ObjectId(id) => &object.object_id == id,
+            SuiObjectDataFilter::ObjectIds(ids) => ids.contains(&object.object_id),
+            SuiObjectDataFilter::Version(v) => object.version.value() == *v,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]

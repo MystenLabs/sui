@@ -230,10 +230,7 @@ where
                 filter: Some(filter),
                 options,
             }) => (address.and(filter), options),
-            Some(SuiObjectResponseQuery {
-                filter: None,
-                options,
-            }) => (address, options),
+            Some(SuiObjectResponseQuery { filter: _, options }) => (address, options),
             None => (address, None),
         };
 
