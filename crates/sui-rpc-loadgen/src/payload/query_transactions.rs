@@ -78,19 +78,10 @@ impl<'a> ProcessPayload<'a, &'a QueryTransactions> for RpcCommandProcessor {
             .await;
 
             // compare results
-            let digests = results[0]
-                .data
-                .iter()
-                .map(|transaction| transaction.digest)
-                .collect::<Vec<TransactionDigest>>();
+            let transactions: Vec<Vec<SuiTransactionResponse>> =
+                results.iter().map(|page| page.data.clone()).collect();
 
-            cross_validate_entities(
-                &digests,
-                &results[0].data,
-                &results[1].data,
-                "TransactionDigest",
-                "Transaction",
-            );
+            cross_validate_entities(&transactions, "Transactions");
         }
 
         Ok(())
