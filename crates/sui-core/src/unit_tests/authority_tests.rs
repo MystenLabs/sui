@@ -4081,11 +4081,10 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
         .build(path)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest, &make_system_packages()).unwrap();
+    let pkg = Object::new_package_for_testing(&modules, digest, &make_system_packages()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
@@ -4113,11 +4112,10 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .build(path)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest, &make_system_packages()).unwrap();
+    let pkg = Object::new_package_for_testing(&modules, digest, &make_system_packages()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
     fullnode.insert_genesis_object(pkg).await;

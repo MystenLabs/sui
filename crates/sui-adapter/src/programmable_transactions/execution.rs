@@ -53,10 +53,7 @@ use sui_verifier::{
     INIT_FN_NAME,
 };
 
-use crate::{
-    adapter::{generate_package_id, substitute_package_id},
-    execution_mode::ExecutionMode,
-};
+use crate::{adapter::substitute_package_id, execution_mode::ExecutionMode};
 
 use super::{context::*, types::*};
 
@@ -418,7 +415,29 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
     context
         .gas_status
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
-    let modules = publish_and_verify_new_modules::<_, Mode>(context, &module_bytes)?;
+
+    let mut modules = deserialize_modules::<_, Mode>(context, &module_bytes)?;
+
+    // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
+    // runtime does not to know about new packages created, since Move objects and Move packages
+    // cannot interact
+    let runtime_id = if Mode::packages_are_predefined() {
+        // do not calculate or substitute id for predefined packages
+        (*modules[0].self_id().address()).into()
+    } else {
+        let id = context.tx_context.fresh_id();
+        substitute_package_id(&mut modules, id)?;
+        id
+    };
+
+    // For newly published packages, runtime ID matches storage ID.
+    let storage_id = runtime_id;
+
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package = context.new_package(&modules, &dependencies)?;
+
+    publish_and_verify_modules(context, runtime_id, &modules)?;
+
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
@@ -433,10 +452,6 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    let dependencies = fetch_packages(context, &dep_ids)?;
-
-    // new_package also initializes type origin table in the package object
-    let package_id = context.new_package(modules, &dependencies, None)?;
     for module_id in &modules_to_init {
         let return_values = execute_move_call::<_, Mode>(
             context,
@@ -453,11 +468,12 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         )
     }
 
+    context.write_package(package)?;
     let values = if Mode::packages_are_predefined() {
         // no upgrade cap for genesis modules
         vec![]
     } else {
-        let cap = &UpgradeCap::new(context.fresh_id()?, package_id);
+        let cap = &UpgradeCap::new(context.fresh_id()?, storage_id);
         vec![Value::Object(ObjectValue::new(
             context.vm,
             context.state_view,
@@ -536,43 +552,32 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
     // Check that this package ID points to a package and get the package we're upgrading.
     let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
 
-    // Run the move + sui verifier on the modules and publish them into the cache.
-    // NB: this will substitute in the original package id for the `self` address in all of these modules.
-    let upgraded_package_modules = publish_and_verify_upgraded_modules::<_, Mode>(
-        context,
-        &module_bytes,
-        current_package.original_package_id(),
-    )?;
+    let mut modules = deserialize_modules::<_, Mode>(context, &module_bytes)?;
+    let runtime_id = current_package.original_package_id();
+    substitute_package_id(&mut modules, runtime_id)?;
 
-    // Full backwards compatibility except that we allow friend function signatures to change.
-    check_compatibility(
-        context,
-        &current_package,
-        &upgraded_package_modules,
-        upgrade_ticket.policy,
-    )?;
+    // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
+    let storage_id = context.tx_context.fresh_id();
 
-    // Read the package dependencies.
-    let dependency_packages = fetch_packages(context, &dep_ids)?;
+    let dependencies = fetch_packages(context, &dep_ids)?;
+    let package = context.upgrade_package(storage_id, &current_package, &modules, &dependencies)?;
 
-    let upgraded_object_id = context.upgrade_package(
-        &current_package,
-        upgraded_package_modules,
-        &dependency_packages,
-    )?;
+    publish_and_verify_modules(context, runtime_id, &modules)?;
+    check_compatibility(context, &current_package, &modules, upgrade_ticket.policy)?;
 
     let upgrade_receipt_type = context
         .session
         .load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
         .map_err(|e| context.convert_vm_error(e))?;
 
+    context.write_package(package)?;
     Ok(vec![Value::Raw(
         RawValueType::Loaded {
             ty: upgrade_receipt_type,
             abilities: AbilitySet::EMPTY,
             used_in_non_entry_move_call: false,
         },
-        bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, upgraded_object_id)).unwrap(),
+        bcs::to_bytes(&UpgradeReceipt::new(upgrade_ticket, storage_id)).unwrap(),
     )])
 }
 
@@ -721,54 +726,24 @@ fn deserialize_modules<S: StorageView, Mode: ExecutionMode>(
                 b,
                 context.protocol_config.move_binary_format_version(),
             )
-            .map_err(|e| e.finish(move_binary_format::errors::Location::Undefined))
+            .map_err(|e| e.finish(Location::Undefined))
         })
-        .collect::<move_binary_format::errors::VMResult<Vec<CompiledModule>>>()
+        .collect::<VMResult<Vec<CompiledModule>>>()
         .map_err(|e| context.convert_vm_error(e))?;
 
     assert_invariant!(
         !modules.is_empty(),
         "input checker ensures package is not empty"
     );
+
     Ok(modules)
-}
-
-/// - Deserializes the modules
-/// - Publishes them into the VM, which invokes the Move verifier
-/// - Run the Sui Verifier
-fn publish_and_verify_new_modules<S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<S>,
-    module_bytes: &[Vec<u8>],
-) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = deserialize_modules::<_, Mode>(context, module_bytes)?;
-
-    // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
-    // runtime does not to know about new packages created, since Move objects and Move packages
-    // cannot interact
-    let package_id = if Mode::packages_are_predefined() {
-        // do not calculate package id for genesis modules
-        (*modules[0].self_id().address()).into()
-    } else {
-        generate_package_id(&mut modules, context.tx_context)?
-    };
-    publish_and_verify_modules(context, package_id, modules)
-}
-
-fn publish_and_verify_upgraded_modules<S: StorageView, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<S>,
-    module_bytes: &[Vec<u8>],
-    package_id: ObjectID,
-) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = deserialize_modules::<_, Mode>(context, module_bytes)?;
-    substitute_package_id(&mut modules, package_id)?;
-    publish_and_verify_modules(context, package_id, modules)
 }
 
 fn publish_and_verify_modules<S: StorageView>(
     context: &mut ExecutionContext<S>,
     package_id: ObjectID,
-    modules: Vec<CompiledModule>,
-) -> Result<Vec<CompiledModule>, ExecutionError> {
+    modules: &[CompiledModule],
+) -> Result<(), ExecutionError> {
     // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes: Vec<_> = modules
         .iter()
@@ -790,13 +765,13 @@ fn publish_and_verify_modules<S: StorageView>(
         .map_err(|e| context.convert_vm_error(e))?;
 
     // run the Sui verifier
-    for module in &modules {
+    for module in modules {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
         sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
     }
 
-    Ok(modules)
+    Ok(())
 }
 
 /***************************************************************************************************

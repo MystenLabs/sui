@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use move_binary_format::{
     errors::{Location, VMError},
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+    CompiledModule,
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
@@ -20,7 +21,7 @@ use sui_types::{
     gas::SuiGasStatus,
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     move_package::MovePackage,
-    object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
+    object::{MoveObject, Object, Owner},
     storage::{ObjectChange, WriteKind},
 };
 
@@ -393,43 +394,41 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
 
     /// Create a new package
     pub fn new_package<'p>(
-        &mut self,
-        modules: Vec<move_binary_format::CompiledModule>,
+        &self,
+        modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
-        version: Option<SequenceNumber>,
-    ) -> Result<ObjectID, ExecutionError> {
-        // wrap the modules in an object, write it to the store
-        let object = Object::new_package(
+    ) -> Result<Object, ExecutionError> {
+        Object::new_package(
             modules,
-            version.unwrap_or(OBJECT_START_VERSION),
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
             dependencies,
-        )?;
-        let object_id = object.id();
-        self.new_packages.push(object);
-        Ok(object_id)
+        )
     }
 
     /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
     pub fn upgrade_package<'p>(
-        &mut self,
+        &self,
+        storage_id: ObjectID,
         previous_package: &MovePackage,
-        new_modules: Vec<move_binary_format::CompiledModule>,
+        new_modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
-    ) -> Result<ObjectID, ExecutionError> {
-        let new_package_object_id = self.tx_context.fresh_id();
-        let object = Object::new_upgraded_package(
+    ) -> Result<Object, ExecutionError> {
+        Object::new_upgraded_package(
             previous_package,
-            new_package_object_id,
+            storage_id,
             new_modules,
             self.tx_context.digest(),
             self.protocol_config.max_move_package_size(),
             dependencies,
-        )?;
-        let object_id = object.id();
-        self.new_packages.push(object);
-        Ok(object_id)
+        )
+    }
+
+    /// Add a newly created package to write as an effect of the transaction
+    pub fn write_package(&mut self, package: Object) -> Result<(), ExecutionError> {
+        assert_invariant!(package.is_package(), "Must be a package");
+        self.new_packages.push(package);
+        Ok(())
     }
 
     /// Finish a command: clearing the borrows and adding the results to the result vector

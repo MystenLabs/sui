@@ -324,14 +324,13 @@ async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
-    let modules = sui_framework::build_move_package(&path, build_config)
+    let modules: Vec<_> = sui_framework::build_move_package(&path, build_config)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let pkg = Object::new_package_for_testing(
-        modules,
+        &modules,
         TransactionDigest::genesis(),
         &make_system_packages(),
     )

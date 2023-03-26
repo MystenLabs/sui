@@ -6,6 +6,7 @@ use crate::{
     crypto::DefaultHash,
     error::{ExecutionError, ExecutionErrorKind, SuiError, SuiResult},
     id::{ID, UID},
+    object::OBJECT_START_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
 use derive_more::Display;
@@ -254,21 +255,20 @@ impl MovePackage {
     /// Create an initial version of the package along with this version's type origin and linkage
     /// tables.
     pub fn new_initial<'p>(
-        version: SequenceNumber,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
-        let self_id = ObjectID::from(*module.address());
-        let storage_id = self_id;
-        let type_origin_table = build_initial_type_origin_table(&modules);
+        let runtime_id = ObjectID::from(*module.address());
+        let storage_id = runtime_id;
+        let type_origin_table = build_initial_type_origin_table(modules);
         Self::from_module_iter_with_type_origin_table(
             storage_id,
-            self_id,
-            version,
+            runtime_id,
+            OBJECT_START_VERSION,
             modules,
             max_move_package_size,
             type_origin_table,
@@ -281,20 +281,20 @@ impl MovePackage {
     pub fn new_upgraded<'p>(
         &self,
         storage_id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         max_move_package_size: u64,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
             .first()
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
-        let self_id = ObjectID::from(*module.address());
-        let type_origin_table = build_upgraded_type_origin_table(self, &modules, storage_id)?;
+        let runtime_id = ObjectID::from(*module.address());
+        let type_origin_table = build_upgraded_type_origin_table(self, modules, storage_id)?;
         let mut new_version = self.version();
         new_version.increment();
         Self::from_module_iter_with_type_origin_table(
             storage_id,
-            self_id,
+            runtime_id,
             new_version,
             modules,
             max_move_package_size,
@@ -305,7 +305,7 @@ impl MovePackage {
 
     pub fn new_system(
         version: SequenceNumber,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         dependencies: impl IntoIterator<Item = ObjectID>,
     ) -> Self {
         let module = modules
@@ -313,7 +313,7 @@ impl MovePackage {
             .expect("Tried to build a Move package from an empty iterator of Compiled modules");
 
         let storage_id = ObjectID::from(*module.address());
-        let type_origin_table = build_initial_type_origin_table(&modules);
+        let type_origin_table = build_initial_type_origin_table(modules);
 
         let linkage_table = BTreeMap::from_iter(dependencies.into_iter().map(|dep| {
             let info = UpgradeInfo {
@@ -324,8 +324,8 @@ impl MovePackage {
                 //
                 // However, in the case of system packages, although they can be upgraded, unlike
                 // other packages, only one version can be in use on the network at any given time,
-                // so it is not possible for the a package to require a different system package
-                // version compared to its dependencies.
+                // so it is not possible for a package to require a different system package version
+                // compared to its dependencies.
                 //
                 // This reason, coupled with the fact that system packages can only depend on each
                 // other, mean that their own linkage tables always report a version of zero.
@@ -334,7 +334,7 @@ impl MovePackage {
             (dep, info)
         }));
 
-        let module_map = BTreeMap::from_iter(modules.into_iter().map(|module| {
+        let module_map = BTreeMap::from_iter(modules.iter().map(|module| {
             let name = module.name().to_string();
             let mut bytes = Vec::new();
             module.serialize(&mut bytes).unwrap();
@@ -356,7 +356,7 @@ impl MovePackage {
         storage_id: ObjectID,
         self_id: ObjectID,
         version: SequenceNumber,
-        modules: impl IntoIterator<Item = CompiledModule>,
+        modules: &[CompiledModule],
         max_move_package_size: u64,
         type_origin_table: Vec<TypeOrigin>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
