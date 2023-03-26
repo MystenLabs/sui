@@ -505,10 +505,10 @@ We provide a few operators for combining filters:
 
 ### Example using a combined filter
 
-The following example demonstrates how to subscribe to Move events (`MoveEvent`) emitted by the `0x2::devnet_nft` package from the [Sui Client CLI](cli-client.md#creating-example-nfts) `create-example-nft` command:
+The following example demonstrates how to subscribe to Move events (`MoveEvent`) that a `<PACKAGE-MODULE-ID>::nft` package emits:
 
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}]}
+>> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-MODULE-ID>"}, {"Module":"nft"}]}]}
 << {"jsonrpc":"2.0","result":3121662727959200,"id":1}
 ```
 

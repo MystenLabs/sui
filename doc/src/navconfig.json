@@ -114,7 +114,7 @@
 				"fileName": "build/install"
 			},
 			{
-				"label": "Connect to Sui Devnet",
+				"label": "Connect to a Sui Network",
 				"fileName": "build/devnet"
 			},
 			{
