@@ -17,7 +17,7 @@ export function TxnImage({
 }) {
     const { data: nftMeta } = useGetNFTMeta(id);
 
-    return nftMeta?.url ? (
+    return nftMeta?.imageUrl ? (
         <div
             className={cx(
                 actionLabel ? 'py-3.5 first:pt-0 flex gap-2 flex-col' : ''
@@ -33,7 +33,7 @@ export function TxnImage({
                     borderRadius="sm"
                     size="xs"
                     name={nftMeta.name}
-                    src={nftMeta.url}
+                    src={nftMeta.imageUrl}
                 />
                 <div className="flex flex-col gap-1 justify-center break-all w-56">
                     {nftMeta.name && (
