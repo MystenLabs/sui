@@ -466,7 +466,7 @@ impl From<&PublicKey> for SuiAddress {
     }
 }
 
-/// A MultiSig address is the first 20 bytes of the hash of
+/// A MultiSig address is the 32 bytes of the hash of
 /// `flag_MultiSig || threshold || flag_1 || pk_1 || weight_1 || ... || flag_n || pk_n || weight_n`
 /// of all participating public keys and its weight.
 impl From<MultiSigPublicKey> for SuiAddress {
