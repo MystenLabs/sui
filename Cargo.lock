@@ -5750,6 +5750,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "lru",
+ "mysten-common",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-test-utils",

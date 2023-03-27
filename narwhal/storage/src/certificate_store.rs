@@ -10,8 +10,8 @@ use std::sync::Arc;
 use std::{cmp::Ordering, collections::BTreeMap, iter};
 use tap::Tap;
 
-use crate::NotifySubscribers;
 use config::AuthorityIdentifier;
+use mysten_common::sync::notify_read::NotifyRead;
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
     Map,
@@ -215,7 +215,7 @@ pub struct CertificateStore<T: Cache = CertificateStoreCache> {
     /// certificate here to not waste space. To dereference we use the certificates_by_id storage.
     certificate_id_by_origin: DBMap<(AuthorityIdentifier, Round), CertificateDigest>,
     /// The pub/sub to notify for a write that happened for a certificate digest id
-    notify_subscribers: NotifySubscribers<CertificateDigest, Certificate>,
+    notify_subscribers: Arc<NotifyRead<CertificateDigest, Certificate>>,
     /// An LRU cache to keep recent certificates
     cache: Arc<T>,
 }
@@ -231,7 +231,7 @@ impl<T: Cache> CertificateStore<T> {
             certificates_by_id,
             certificate_id_by_round,
             certificate_id_by_origin,
-            notify_subscribers: NotifySubscribers::new(),
+            notify_subscribers: Arc::new(NotifyRead::new()),
             cache: Arc::new(certificate_store_cache),
         }
     }
@@ -429,7 +429,7 @@ impl<T: Cache> CertificateStore<T> {
     /// Waits to get notified until the requested certificate becomes available
     pub async fn notify_read(&self, id: CertificateDigest) -> StoreResult<Certificate> {
         // we register our interest to be notified with the value
-        let receiver = self.notify_subscribers.subscribe(&id);
+        let receiver = self.notify_subscribers.register_one(&id);
 
         // let's read the value because we might have missed the opportunity
         // to get notified about it
@@ -442,9 +442,7 @@ impl<T: Cache> CertificateStore<T> {
         }
 
         // now wait to hear back the result
-        let result = receiver
-            .await
-            .expect("Irrecoverable error while waiting to receive the notify_read result");
+        let result = receiver.await;
 
         Ok(result)
     }
