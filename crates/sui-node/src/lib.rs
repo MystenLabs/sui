@@ -897,10 +897,12 @@ impl SuiNode {
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
             if let Err(err) = self.end_of_epoch_channel.send(latest_system_state.clone()) {
-                warn!(
-                    "Failed to send end of epoch notification to subscriber: {:?}",
-                    err
-                );
+                if self.state.is_fullnode(&cur_epoch_store) {
+                    warn!(
+                        "Failed to send end of epoch notification to subscriber: {:?}",
+                        err
+                    );
+                }
             }
 
             cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
