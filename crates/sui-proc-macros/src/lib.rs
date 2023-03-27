@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{
     fold::{fold_expr, Fold},
-    parse2, parse_macro_input, BinOp, Expr, ExprMacro, UnOp,
+    parse::Parser,
+    parse2, parse_macro_input,
+    punctuated::Punctuated,
+    BinOp, Expr, ExprMacro, Token, UnOp,
 };
 
 #[proc_macro_attribute]
@@ -227,8 +230,21 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     result.into()
 }
 
+#[proc_macro]
+pub fn checked_arithmetic(input: TokenStream) -> TokenStream {
+    let input_file = CheckArithmetic.fold_file(parse_macro_input!(input));
+
+    let output_items = input_file.items;
+
+    let output = quote! {
+        #(#output_items)*
+    };
+
+    TokenStream::from(output)
+}
+
 #[proc_macro_attribute]
-pub fn use_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn with_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_item = parse_macro_input!(item as syn::Item);
 
     match input_item {
@@ -240,8 +256,12 @@ pub fn use_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStr
             let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
             TokenStream::from(quote! { #transformed_impl })
         }
-        _ => panic!(
-            "The use_checked_arithmetic attribute can only be applied to functions and impl blocks"
+        _ => {
+            let error = syn::Error::new_spanned(item, "could not process macro contents");
+            return Expr::Verbatim(error.to_compile_error());
+        }
+            panic!(
+            "The with_checked_arithmetic attribute can only be applied to functions and impl blocks"
         ),
     }
 }
@@ -253,27 +273,46 @@ impl Fold for CheckArithmetic {
         let expr = fold_expr(self, expr);
         let expr = match expr {
             Expr::Macro(expr_macro) => {
-                let ExprMacro { attrs, mac } = expr_macro;
-                let orig_len = attrs.len();
+                let ExprMacro { mut attrs, mut mac } = expr_macro;
 
-                let attrs = attrs
-                    .into_iter()
-                    .filter(|attr| !attr.path.is_ident("allow_macro"))
-                    .collect::<Vec<_>>();
+                if let Some(idx) = attrs
+                    .iter()
+                    .position(|attr| attr.path.is_ident("skip_checked_arithmetic"))
+                {
+                    // Skip processing macro because it is annotated with
+                    // #[skip_checked_arithmetic]
+                    attrs.remove(idx);
+                    let expr_macro = Expr::Macro(ExprMacro { attrs, mac });
+                    quote!(#expr_macro)
+                } else {
+                    // Parse the macro's contents as a comma-separated list of expressions.
+                    let parser = Punctuated::<Expr, Token![,]>::parse_terminated;
+                    let Ok(exprs) = parser.parse(mac.tokens.clone().into()) else {
+                    let error = syn::Error::new_spanned(mac.tokens, "could not process macro contents");
+                    return Expr::Verbatim(error.to_compile_error());
+                };
 
-                let allow_present = attrs.len() != orig_len;
+                    // Fold each sub expression.
+                    let folded_exprs = exprs
+                        .into_iter()
+                        .map(|expr| self.fold_expr(expr))
+                        .collect::<Vec<_>>();
 
-                if !allow_present {
-                    unimplemented!(
-                        "#[use_checked_arithmetic] cannot descend into macros. \
-                        If you are sure the macro does not have any unsafe arithmetic, \
-                        you can add #[allow_macro] to the macro invocation."
-                    );
+                    // Convert the folded expressions back into tokens and reconstruct the macro.
+                    let mut folded_tokens = proc_macro2::TokenStream::new();
+                    for (i, folded_expr) in folded_exprs.into_iter().enumerate() {
+                        if i > 0 {
+                            folded_tokens.extend(std::iter::once::<proc_macro2::TokenTree>(
+                                proc_macro2::Punct::new(',', proc_macro2::Spacing::Alone).into(),
+                            ));
+                        }
+                        folded_expr.to_tokens(&mut folded_tokens);
+                    }
+
+                    mac.tokens = folded_tokens;
+                    let expr_macro = ExprMacro { attrs, mac };
+                    quote!(#expr_macro)
                 }
-
-                let expr_macro = ExprMacro { attrs, mac };
-
-                quote!(#expr_macro)
             }
 
             Expr::AssignOp(expr_assign_op) => {
@@ -306,19 +345,19 @@ impl Fold for CheckArithmetic {
                 let rhs = &expr_binary.right;
                 match op {
                     BinOp::Add(_) => {
-                        quote!(#lhs.checked_add(#rhs).expect("Overflow or underflow in addition"))
+                        quote!((#lhs).checked_add(#rhs).expect("Overflow or underflow in addition"))
                     }
                     BinOp::Sub(_) => {
-                        quote!(#lhs.checked_sub(#rhs).expect("Overflow or underflow in subtraction"))
+                        quote!((#lhs).checked_sub(#rhs).expect("Overflow or underflow in subtraction"))
                     }
                     BinOp::Mul(_) => {
-                        quote!(#lhs.checked_mul(#rhs).expect("Overflow or underflow in multiplication"))
+                        quote!((#lhs).checked_mul(#rhs).expect("Overflow or underflow in multiplication"))
                     }
                     BinOp::Div(_) => {
-                        quote!(#lhs.checked_div(#rhs).expect("Overflow or underflow in division"))
+                        quote!((#lhs).checked_div(#rhs).expect("Overflow or underflow in division"))
                     }
                     BinOp::Rem(_) => {
-                        quote!(#lhs.checked_rem(#rhs).expect("Overflow or underflow in remainder"))
+                        quote!((#lhs).checked_rem(#rhs).expect("Overflow or underflow in remainder"))
                     }
                     _ => quote!(#expr_binary),
                 }

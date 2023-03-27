@@ -13,6 +13,7 @@ proc-macro = true
 quote = "1"
 syn = "1.0.104"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+proc-macro2 = "1"
 
 [target.'cfg(msim)'.dependencies]
 msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "888a9dc4331b0ed944bd6e37bac982bbcf0625d5", package = "msim-macros" }

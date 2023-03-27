@@ -26,7 +26,10 @@ use sui_cost_tables::{
     bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE},
     units_types::GasUnit,
 };
+use sui_macros::checked_arithmetic;
 use sui_protocol_config::*;
+
+checked_arithmetic! {
 
 // A bucket defines a range of units that will be priced the same.
 // A cost for the bucket is defined to make the step function non linear.
@@ -667,4 +670,6 @@ pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
             object_id: gas_object.id(),
         })?
         .value())
+}
+
 }

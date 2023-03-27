@@ -144,16 +144,18 @@ macro_rules! fail_point_async {
     ($tag: expr) => {};
 }
 
+// These tests need to be run in release mode, since debug mode does overflow checks by default!
 #[cfg(test)]
 mod test {
     use super::*;
+
+    checked_arithmetic! {
 
     struct Test {
         a: i32,
         b: i32,
     }
 
-    #[use_checked_arithmetic]
     fn unchecked_add(a: i32, b: i32) -> i32 {
         a + b
     }
@@ -169,7 +171,6 @@ mod test {
         unchecked_add(i32::MAX, 1);
     }
 
-    #[use_checked_arithmetic]
     fn unchecked_add_hidden(a: i32, b: i32) -> i32 {
         let inner = |a: i32, b: i32| a + b;
         inner(a, b)
@@ -181,7 +182,6 @@ mod test {
         unchecked_add_hidden(i32::MAX, 1);
     }
 
-    #[use_checked_arithmetic]
     fn unchecked_add_hidden_2(a: i32, b: i32) -> i32 {
         fn inner(a: i32, b: i32) -> i32 {
             a + b
@@ -195,7 +195,6 @@ mod test {
         unchecked_add_hidden_2(i32::MAX, 1);
     }
 
-    #[use_checked_arithmetic]
     impl Test {
         fn add(&self) -> i32 {
             self.a + self.b
@@ -210,41 +209,76 @@ mod test {
     }
 
     #[test]
-    fn test_non_overflow() {
-        #[use_checked_arithmetic]
+    #[should_panic]
+    fn test_macro_overflow() {
+        #[allow(arithmetic_overflow)]
         fn f() {
-            fn check_eq<T: Eq + Debug>(a: T, b: T) {
-                #[allow_macro]
-                assert_eq!(a, b);
-            }
+            println!("{}", i32::MAX + 1);
+        }
 
-            check_eq(1i32 + 2i32, 3i32);
-            check_eq(3i32 - 1i32, 2i32);
-            check_eq(4i32 * 3i32, 12i32);
-            check_eq(12i32 / 3i32, 4i32);
-            check_eq(12i32 % 5i32, 2i32);
+        f()
+    }
+
+    // Make sure that we still do addition correctly!
+    #[test]
+    fn test_non_overflow() {
+        fn f() {
+            assert_eq!(1i32 + 2i32, 3i32);
+            assert_eq!(3i32 - 1i32, 2i32);
+            assert_eq!(4i32 * 3i32, 12i32);
+            assert_eq!(12i32 / 3i32, 4i32);
+            assert_eq!(12i32 % 5i32, 2i32);
 
             let mut a = 1i32;
             a += 2i32;
-            check_eq(a, 3i32);
+            assert_eq!(a, 3i32);
 
             let mut a = 3i32;
             a -= 1i32;
-            check_eq(a, 2i32);
+            assert_eq!(a, 2i32);
 
             let mut a = 4i32;
             a *= 3i32;
-            check_eq(a, 12i32);
+            assert_eq!(a, 12i32);
 
             let mut a = 12i32;
             a /= 3i32;
-            check_eq(a, 4i32);
+            assert_eq!(a, 4i32);
 
             let mut a = 12i32;
             a %= 5i32;
-            check_eq(a, 2i32);
+            assert_eq!(a, 2i32);
         }
 
         f();
+    }
+
+    #[test]
+    fn test_more_macro_syntax() {
+        struct Foo {
+            a: i32,
+            b: i32,
+        }
+
+        impl Foo {
+            const BAR: i32 = 1;
+
+            fn new(a: i32, b: i32) -> Foo {
+                Foo { a, b }
+            }
+        }
+
+        fn new_foo(a: i32) -> Foo {
+            Foo { a, b: 0 }
+        }
+
+        assert_eq!(Foo::BAR + 1, 2);
+        assert_eq!(Foo::new(1, 2).b, 2);
+        assert_eq!(new_foo(1).a, 1);
+
+        let _v = vec![Foo::new(1, 2), Foo::new(3, 2)];
+    }
+
+
     }
 }

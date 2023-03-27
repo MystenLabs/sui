@@ -48,6 +48,7 @@ sui-cost-tables = { path = "../sui-cost-tables"}
 sui-protocol-config = { path = "../sui-protocol-config" }
 shared-crypto = { path = "../shared-crypto" }
 mysten-network = { path = "../mysten-network" }
+sui-macros = { path = "../sui-macros" }
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 

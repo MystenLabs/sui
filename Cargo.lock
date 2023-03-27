@@ -9261,6 +9261,7 @@ name = "sui-proc-macros"
 version = "0.7.0"
 dependencies = [
  "msim-macros",
+ "proc-macro2 1.0.51",
  "quote 1.0.23",
  "syn 1.0.107",
  "workspace-hack",
@@ -9709,6 +9710,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
+ "sui-macros",
  "sui-protocol-config",
  "tap",
  "test-utils",
