@@ -7,8 +7,8 @@ import {
   SignedMessage,
 } from "@mysten/sui.js";
 import {
-  SuiSignTransactionInput,
-  SuiSignAndExecuteTransactionInput,
+  SuiSignTransactionBlockInput,
+  SuiSignAndExecuteTransactionBlockInput,
   WalletAccount,
   SuiSignMessageInput,
 } from "@mysten/wallet-standard";
@@ -35,14 +35,14 @@ export interface WalletAdapter {
     callback: WalletAdapterEvents[E]
   ) => () => void;
   signMessage(messageInput: SuiSignMessageInput): Promise<SignedMessage>;
-  signTransaction(
-    transactionInput: SuiSignTransactionInput
+  signTransactionBlock(
+    transactionInput: SuiSignTransactionBlockInput
   ): Promise<SignedTransaction>;
   /**
    * Suggest a transaction for the user to sign. Supports all valid transaction types.
    */
-  signAndExecuteTransaction(
-    transactionInput: SuiSignAndExecuteTransactionInput
+  signAndExecuteTransactionBlock(
+    transactionInput: SuiSignAndExecuteTransactionBlockInput
   ): Promise<SuiTransactionResponse>;
 
   getAccounts: () => Promise<readonly WalletAccount[]>;

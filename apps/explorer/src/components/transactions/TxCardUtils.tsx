@@ -151,7 +151,7 @@ export const getDataOnTxDigests = (
     transactions: string[]
 ) =>
     rpc
-        .multiGetTransactions({
+        .multiGetTransactionBlocks({
             digests: dedupe(transactions),
             options: {
                 showInput: true,

@@ -23,7 +23,7 @@ describe('Test Move call with a vector of objects as input', () => {
       target: `${packageId}::entry_point_vector::mint`,
       arguments: [tx.pure(String(val))],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction({
+    const result = await toolbox.signer.signAndExecuteTransactionBlock({
       transactionBlock: tx,
       options: {
         showEffects: true,
@@ -40,7 +40,7 @@ describe('Test Move call with a vector of objects as input', () => {
       target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
       arguments: [vec],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction({
+    const result = await toolbox.signer.signAndExecuteTransactionBlock({
       transactionBlock: tx,
       options: {
         showEffects: true,
@@ -75,7 +75,7 @@ describe('Test Move call with a vector of objects as input', () => {
       arguments: [tx.object(coinIDs[0]), vec],
     });
     tx.setGasPayment([coin]);
-    const result = await toolbox.signer.signAndExecuteTransaction({
+    const result = await toolbox.signer.signAndExecuteTransactionBlock({
       transactionBlock: tx,
       options: {
         showEffects: true,

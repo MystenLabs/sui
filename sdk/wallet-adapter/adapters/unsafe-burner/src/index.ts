@@ -33,7 +33,10 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     this.#account = new ReadonlyWalletAccount({
       address: this.#keypair.getPublicKey().toSuiAddress(),
       chains: ["sui:unknown"],
-      features: ["sui:signAndExecuteTransaction", "sui:signTransaction"],
+      features: [
+        "sui:signAndExecuteTransactionBlock",
+        "sui:signTransactionBlock",
+      ],
       publicKey: this.#keypair.getPublicKey().toBytes(),
     });
     this.#signer = new RawSigner(this.#keypair, this.#provider);
@@ -53,17 +56,17 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
     return this.#signer.signMessage({ message: messageInput.message });
   };
 
-  signTransaction: WalletAdapter["signTransaction"] = async (
+  signTransactionBlock: WalletAdapter["signTransactionBlock"] = async (
     transactionInput
   ) => {
-    return this.#signer.signTransaction({
+    return this.#signer.signTransactionBlock({
       transactionBlock: transactionInput.transactionBlock,
     });
   };
 
-  signAndExecuteTransaction: WalletAdapter["signAndExecuteTransaction"] =
+  signAndExecuteTransactionBlock: WalletAdapter["signAndExecuteTransactionBlock"] =
     async (transactionInput) => {
-      return await this.#signer.signAndExecuteTransaction({
+      return await this.#signer.signAndExecuteTransactionBlock({
         transactionBlock: transactionInput.transactionBlock,
         options: transactionInput.options,
         requestType: transactionInput.requestType,

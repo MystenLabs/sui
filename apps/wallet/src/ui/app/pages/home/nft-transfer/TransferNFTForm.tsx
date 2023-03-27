@@ -37,7 +37,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             const tx = new TransactionBlock();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
 
-            return signer.signAndExecuteTransaction({
+            return signer.signAndExecuteTransactionBlock({
                 transactionBlock: tx,
                 options: {
                     showInput: true,

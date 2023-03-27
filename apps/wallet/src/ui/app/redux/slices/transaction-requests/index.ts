@@ -67,11 +67,11 @@ export const respondToTransactionRequest = createAsyncThunk<
                     const tx = TransactionBlock.from(txRequest.tx.data);
                     if (txRequest.tx.justSign) {
                         // Just a signing request, do not submit
-                        txSigned = await signer.signTransaction({
+                        txSigned = await signer.signTransactionBlock({
                             transactionBlock: tx,
                         });
                     } else {
-                        txResult = await signer.signAndExecuteTransaction({
+                        txResult = await signer.signAndExecuteTransactionBlock({
                             transactionBlock: tx,
                             options: txRequest.tx.options,
                             requestType: txRequest.tx.requestType,

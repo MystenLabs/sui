@@ -6,32 +6,32 @@ import type {
   SuiTransactionResponse,
   SuiTransactionResponseOptions,
 } from "@mysten/sui.js";
-import type { SuiSignTransactionInput } from "./suiSignTransaction";
+import type { SuiSignTransactionBlockInput } from "./suiSignTransactionBlock";
 
-/** The latest API version of the signAndExecuteTransaction API. */
-export type SuiSignAndExecuteTransactionVersion = "2.0.0";
+/** The latest API version of the signAndExecuteTransactionBlock API. */
+export type SuiSignAndExecuteTransactionBlockVersion = "1.0.0";
 
 /**
  * A Wallet Standard feature for signing a transaction, and submitting it to the
  * network. The wallet is expected to submit the transaction to the network via RPC,
  * and return the transaction response.
  */
-export type SuiSignAndExecuteTransactionFeature = {
+export type SuiSignAndExecuteTransactionBlockFeature = {
   /** Namespace for the feature. */
-  "sui:signAndExecuteTransaction": {
+  "sui:signAndExecuteTransactionBlock": {
     /** Version of the feature API. */
-    version: SuiSignAndExecuteTransactionVersion;
-    signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod;
+    version: SuiSignAndExecuteTransactionBlockVersion;
+    signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod;
   };
 };
 
-export type SuiSignAndExecuteTransactionMethod = (
-  input: SuiSignAndExecuteTransactionInput
-) => Promise<SuiSignAndExecuteTransactionOutput>;
+export type SuiSignAndExecuteTransactionBlockMethod = (
+  input: SuiSignAndExecuteTransactionBlockInput
+) => Promise<SuiSignAndExecuteTransactionBlockOutput>;
 
 /** Input for signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionInput
-  extends SuiSignTransactionInput {
+export interface SuiSignAndExecuteTransactionBlockInput
+  extends SuiSignTransactionBlockInput {
   /**
    * `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
    * Defaults to `WaitForLocalExecution` if options.showEffects or options.showEvents is true
@@ -42,5 +42,5 @@ export interface SuiSignAndExecuteTransactionInput
 }
 
 /** Output of signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionOutput
+export interface SuiSignAndExecuteTransactionBlockOutput
   extends SuiTransactionResponse {}

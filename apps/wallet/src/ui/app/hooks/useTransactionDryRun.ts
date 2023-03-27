@@ -14,7 +14,7 @@ export function useTransactionDryRun(
     const response = useQuery({
         queryKey: ['dryRunTransaction', transactionBlock.serialize()],
         queryFn: () => {
-            return signer.dryRunTransaction({ transactionBlock });
+            return signer.dryRunTransactionBlock({ transactionBlock });
         },
     });
     return response;

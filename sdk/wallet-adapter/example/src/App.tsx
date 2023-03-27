@@ -6,21 +6,21 @@ import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
 import { TransactionBlock } from "@mysten/sui.js";
 import { useEffect } from "react";
 
-const transaction = new TransactionBlock();
-transaction.moveCall({
+const transactionBlock = new TransactionBlock();
+transactionBlock.moveCall({
   target: `0x2::devnet_nft::mint`,
   arguments: [
-    transaction.pure("foo"),
-    transaction.pure("bar"),
-    transaction.pure("baz"),
+    transactionBlock.pure("foo"),
+    transactionBlock.pure("bar"),
+    transactionBlock.pure("baz"),
   ],
 });
 
 function App() {
   const {
     currentWallet,
-    signTransaction,
-    signAndExecuteTransaction,
+    signTransactionBlock,
+    signAndExecuteTransactionBlock,
     signMessage,
   } = useWalletKit();
 
@@ -34,7 +34,7 @@ function App() {
       <div>
         <button
           onClick={async () => {
-            console.log(await signTransaction({ transaction }));
+            console.log(await signTransactionBlock({ transactionBlock }));
           }}
         >
           Sign Transaction
@@ -44,8 +44,8 @@ function App() {
         <button
           onClick={async () => {
             console.log(
-              await signAndExecuteTransaction({
-                transaction,
+              await signAndExecuteTransactionBlock({
+                transactionBlock,
                 options: { showEffects: true },
               })
             );

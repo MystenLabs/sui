@@ -134,7 +134,7 @@ export async function publishPackage(
   // Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
   tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
 
-  const publishTxn = await toolbox.signer.signAndExecuteTransaction({
+  const publishTxn = await toolbox.signer.signAndExecuteTransactionBlock({
     transactionBlock: tx,
     options: {
       showEffects: true,
@@ -197,7 +197,7 @@ export async function paySui(
     tx.transferObjects([coin], tx.pure(recipient));
   });
 
-  const txn = await signer.signAndExecuteTransaction({
+  const txn = await signer.signAndExecuteTransactionBlock({
     transactionBlock: tx,
     options: {
       showEffects: true,

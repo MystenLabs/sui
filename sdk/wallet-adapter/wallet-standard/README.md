@@ -36,8 +36,8 @@ Features are standard methods consumers can use to interact with a wallet. To be
 
 - `standard:connect` - Used to initiate a connection to the wallet.
 - `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
-- `sui:signTransaction` - Used to prompt the user to sign a transaction, and return the serializated transaction and transaction signature back to the user. This method does not submit the transaction for execution.
-- `sui:signAndExecuteTransaction` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
+- `sui:signTransactionBlock` - Used to prompt the user to sign a transaction block, and return the serializated transaction block and signature back to the user. This method does not submit the transaction block for execution.
+- `sui:signAndExecuteTransactionBlock` - Used to prompt the user to sign a transaction block, then submit it for execution to the blockchain.
 
 You can implement these features in your wallet class under the `features` property:
 
@@ -48,8 +48,8 @@ import {
   StandardEventsFeature,
   StandardEventsOnMethod,
   SuiFeatures,
-  SuiTransactionMethod,
-  SuiSignAndExecuteTransactionMethod
+  SuiSignTransactionBlockMethod,
+  SuiSignAndExecuteTransactionBlockMethod
 } from "@mysten/wallet-standard";
 
 class YourWallet implements Wallet {
@@ -63,31 +63,31 @@ class YourWallet implements Wallet {
         version: "1.0.0",
         on: this.#on,
       },
-      "sui:signTransaction": {
+      "sui:signTransactionBlock": {
         version: "1.0.0",
-        signTransaction: this.#signTransaction,
+        signTransactionBlock: this.#signTransactionBlock,
       },
-      "sui:signAndExecuteTransaction": {
+      "sui:signAndExecuteTransactionBlock": {
         version: "1.1.0",
-        signAndExecuteTransaction: this.#signAndExecuteTransaction,
+        signAndExecuteTransactionBlock: this.#signAndExecuteTransaction,
       },
     };
   },
 
   #on: StandardEventsOnMethod = () => {
-    // Your wallet's events on implementation.
+    // Your wallet's on implementation.
   };
 
   #connect: StandardConnectMethod = () => {
-    // Your wallet's connect implementation
+    // Your wallet's implementation
   };
 
-  #signTransaction: SuiTransactionMethod = () => {
-    // Your wallet's signTransaction implementation
+  #signTransactionBlock: SuiSignTransactionBlockMethod = () => {
+    // Your wallet's implementation
   };
 
-  #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
-    // Your wallet's signAndExecuteTransaction implementation
+  #signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = () => {
+    // Your wallet's implementation
   };
 }
 ```
@@ -114,7 +114,7 @@ class YourWallet implements Wallet {
           chains: [SUI_DEVNET_CHAIN],
           // The features that this account supports. This can be a subset of the wallet's supported features.
           // These features must exist on the wallet as well.
-          features: ["sui:signAndExecuteTransaction"],
+          features: ["sui:signAndExecuteTransactionBlock"],
         })
     );
   }

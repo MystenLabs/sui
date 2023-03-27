@@ -145,8 +145,8 @@ describe('Transaction Builders', () => {
 });
 
 async function validateTransaction(signer: RawSigner, tx: TransactionBlock) {
-  const localDigest = await signer.getTransactionDigest(tx);
-  const result = await signer.signAndExecuteTransaction({
+  const localDigest = await signer.getTransactionBlockDigest(tx);
+  const result = await signer.signAndExecuteTransactionBlock({
     transactionBlock: tx,
     options: {
       showEffects: true,

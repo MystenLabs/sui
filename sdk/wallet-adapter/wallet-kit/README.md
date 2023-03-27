@@ -48,7 +48,7 @@ import { TransactionBlock } from "@mysten/sui.js";
 import { useWalletKit } from "@mysten/wallet-kit";
 
 export function SendTransaction() {
-  const { signAndExecuteTransaction } = useWalletKit();
+  const { signAndExecuteTransactionBlock } = useWalletKit();
 
   const handleClick = async () => {
     const tx = new TransactionBlock();
@@ -62,7 +62,7 @@ export function SendTransaction() {
         ),
       ],
     });
-    await signAndExecuteTransaction({ transactionBlock: tx });
+    await signAndExecuteTransactionBlock({ transactionBlock: tx });
   };
 
   return (
