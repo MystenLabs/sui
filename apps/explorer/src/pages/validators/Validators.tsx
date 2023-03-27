@@ -7,7 +7,7 @@ import {
     type ApyByValidator,
     useGetValidatorsEvents,
 } from '@mysten/core';
-import { type SuiSystemStateSummary, type SuiEvent } from '@mysten/sui.js';
+import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -31,12 +31,13 @@ const APY_DECIMALS = 3;
 const NodeMap = lazy(() => import('../../components/node-map'));
 
 export function validatorsTableData(
-    systemState: SuiSystemStateSummary,
+    validators: SuiValidatorSummary[],
+    atRiskValidators: [string, number][],
     validatorEvents: SuiEvent[],
     rollingAverageApys: ApyByValidator | null
 ) {
     return {
-        data: systemState.activeValidators.map((validator) => {
+        data: validators.map((validator) => {
             const validatorName = validator.name;
             const totalStake = validator.stakingPoolSuiBalance;
             const img = validator.imageUrl;
@@ -57,7 +58,7 @@ export function validatorsTableData(
                 img: img,
                 address: validator.suiAddress,
                 lastReward: +event?.pool_staking_reward || 0,
-                atRisk: systemState.atRiskValidators.some(
+                atRisk: atRiskValidators.some(
                     ([address]) => address === validator.suiAddress
                 ),
             };
@@ -119,7 +120,7 @@ export function validatorsTableData(
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
             },
             {
-                header: 'Next Epoch Gas Price',
+                header: 'Proposed Next Epoch Gas Price',
                 accessorKey: 'nextEpochGasPrice',
                 enableSorting: true,
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
@@ -234,7 +235,8 @@ function ValidatorPageResult() {
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
         return validatorsTableData(
-            data,
+            data.activeValidators,
+            data.atRiskValidators,
             validatorEvents.data,
             rollingAverageApys
         );

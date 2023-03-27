@@ -159,7 +159,7 @@ export function ValidatorStats({
                                     unavailable
                                 />
                                 <Stats
-                                    label="Next Epoch Gas Price"
+                                    label="Proposed Next Epoch Gas Price"
                                     tooltip="This validator's gas price quote for the next epoch."
                                 >
                                     <DelegationAmount

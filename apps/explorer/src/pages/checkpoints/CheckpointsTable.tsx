@@ -2,51 +2,72 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { TableFooter } from '~/components/Table/TableFooter';
 import { TxTableCol } from '~/components/transactions/TxCardUtils';
 import { TxTimeType } from '~/components/tx-time/TxTimeType';
 import { CheckpointLink } from '~/ui/InternalLink';
-import { usePaginationStack } from '~/ui/Pagination';
+import { useBoundedPaginationStack } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
 import { TableCard } from '~/ui/TableCard';
 import { Text } from '~/ui/Text';
 
 interface CheckpointsTableProps {
     initialLimit: number;
+    initialCursor?: string;
+    maxCursor?: string;
     disablePagination?: boolean;
     refetchInterval?: number;
 }
 
 export function CheckpointsTable({
     initialLimit,
+    initialCursor,
+    maxCursor,
     disablePagination,
     refetchInterval,
 }: CheckpointsTableProps) {
     const rpc = useRpcClient();
     const [limit, setLimit] = useState(initialLimit);
+    const [cursor, setCursor] = useState(initialCursor);
 
     const countQuery = useQuery(['checkpoints', 'count'], () =>
         rpc.getLatestCheckpointSequenceNumber()
     );
+    const pagination = useBoundedPaginationStack<string>(
+        initialCursor,
+        maxCursor
+    );
 
-    const pagination = usePaginationStack<string>();
+    const count = useMemo(() => {
+        if (maxCursor && initialCursor) return +initialCursor - +maxCursor;
+        return Number(countQuery.data ?? 0);
+    }, [countQuery.data, initialCursor, maxCursor]);
 
     const { data: checkpointsData } = useQuery(
-        ['checkpoints', { limit, cursor: pagination.cursor }],
+        ['checkpoints', { limit, cursor }],
         () =>
             rpc.getCheckpoints({
-                limit,
+                limit:
+                    cursor && maxCursor && +cursor - +limit < +maxCursor
+                        ? +cursor - +maxCursor
+                        : limit,
                 descendingOrder: true,
-                cursor: pagination.cursor,
+                cursor,
             }),
         {
             keepPreviousData: true,
             // Disable refetching if not on the first page:
-            refetchInterval: pagination.cursor ? undefined : refetchInterval,
+            refetchInterval: cursor ? undefined : refetchInterval,
         }
     );
+
+    useEffect(() => {
+        if (pagination.cursor) {
+            setCursor(pagination.cursor);
+        }
+    }, [pagination]);
 
     const checkpointsTable = useMemo(
         () =>
@@ -133,7 +154,7 @@ export function CheckpointsTable({
                 <TableFooter
                     label="Checkpoints"
                     data={checkpointsData}
-                    count={Number(countQuery.data)}
+                    count={count}
                     limit={limit}
                     onLimitChange={setLimit}
                     pagination={pagination}
