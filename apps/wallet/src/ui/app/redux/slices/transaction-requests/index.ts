@@ -4,7 +4,7 @@
 import {
     fromB64,
     type SignerWithProvider,
-    Transaction,
+    TransactionBlock,
     type SignedMessage,
     type SignedTransaction,
 } from '@mysten/sui.js';
@@ -64,15 +64,15 @@ export const respondToTransactionRequest = createAsyncThunk<
                         message: fromB64(txRequest.tx.message),
                     });
                 } else if (txRequest.tx.type === 'transaction') {
-                    const tx = Transaction.from(txRequest.tx.data);
+                    const tx = TransactionBlock.from(txRequest.tx.data);
                     if (txRequest.tx.justSign) {
                         // Just a signing request, do not submit
                         txSigned = await signer.signTransaction({
-                            transaction: tx,
+                            transactionBlock: tx,
                         });
                     } else {
                         txResult = await signer.signAndExecuteTransaction({
-                            transaction: tx,
+                            transactionBlock: tx,
                             options: txRequest.tx.options,
                             requestType: txRequest.tx.requestType,
                         });

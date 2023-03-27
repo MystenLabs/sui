@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, Transaction } from '../../src';
+import { getExecutionStatusType, ObjectId, TransactionBlock } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test ID as args to entry functions', () => {
@@ -16,7 +16,7 @@ describe('Test ID as args to entry functions', () => {
   });
 
   it('Test ID as arg to entry functions', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::test::test_id`,
       arguments: [
@@ -26,7 +26,7 @@ describe('Test ID as args to entry functions', () => {
       ],
     });
     const result = await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
+      transactionBlock: tx,
       options: {
         showEffects: true,
       },
@@ -35,7 +35,7 @@ describe('Test ID as args to entry functions', () => {
   });
 
   it('Test ID as arg to entry functions', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::test::test_id_non_mut`,
       arguments: [
@@ -45,7 +45,7 @@ describe('Test ID as args to entry functions', () => {
       ],
     });
     const result = await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
+      transactionBlock: tx,
       options: {
         showEffects: true,
       },

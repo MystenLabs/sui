@@ -4,7 +4,7 @@
 import {
     formatAddress,
     type SuiAddress,
-    type Transaction,
+    type TransactionBlock,
 } from '@mysten/sui.js';
 
 import { DescriptionItem, DescriptionList } from './DescriptionList';
@@ -14,7 +14,7 @@ import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
 
 interface Props {
     sender?: SuiAddress;
-    transaction: Transaction;
+    transaction: TransactionBlock;
 }
 
 export function GasFees({ sender, transaction }: Props) {

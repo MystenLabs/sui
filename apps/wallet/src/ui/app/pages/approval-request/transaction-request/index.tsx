@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // import { Transaction } from '@mysten/sui.js';
-import { Transaction } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js';
 import { useCallback, useMemo } from 'react';
 
 import { GasFees } from './GasFees';
@@ -24,7 +24,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     const signer = useSigner(addressForTransaction);
     const dispatch = useAppDispatch();
     const transaction = useMemo(() => {
-        const tx = Transaction.from(txRequest.tx.data);
+        const tx = TransactionBlock.from(txRequest.tx.data);
         if (addressForTransaction) {
             tx.setSenderIfNotSet(addressForTransaction);
         }
