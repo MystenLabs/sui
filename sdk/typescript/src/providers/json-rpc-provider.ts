@@ -4,7 +4,6 @@
 import { ErrorResponse, HttpHeaders, JsonRpcClient } from '../rpc/client';
 import {
   ExecuteTransactionRequestType,
-  GetTxnDigestsResponse,
   ObjectId,
   PaginatedTransactionResponse,
   SubscriptionId,
@@ -472,62 +471,6 @@ export class JsonRpcProvider {
       PaginatedTransactionResponse,
       this.options.skipDataValidation,
     );
-  }
-
-  /**
-   * @deprecated this method will be removed by April 2023.
-   * Use `queryTransactions` instead
-   */
-  async queryTransactionsForObjectDeprecated(
-    objectID: ObjectId,
-    descendingOrder: boolean = true,
-  ): Promise<GetTxnDigestsResponse> {
-    const filters = [{ InputObject: objectID }, { ChangedObject: objectID }];
-    if (!objectID || !isValidSuiObjectId(normalizeSuiObjectId(objectID))) {
-      throw new Error('Invalid Sui Object id');
-    }
-    const results = await Promise.all(
-      filters.map((filter) =>
-        this.client.requestWithType(
-          'suix_queryTransactions',
-          [{ filter }, null, null, descendingOrder],
-          PaginatedTransactionResponse,
-          this.options.skipDataValidation,
-        ),
-      ),
-    );
-    return [
-      ...results[0].data.map((r) => r.digest),
-      ...results[1].data.map((r) => r.digest),
-    ];
-  }
-
-  /**
-   * @deprecated this method will be removed by April 2023.
-   * Use `queryTransactions` instead
-   */
-  async queryTransactionsForAddressDeprecated(
-    addressID: SuiAddress,
-    descendingOrder: boolean = true,
-  ): Promise<GetTxnDigestsResponse> {
-    const filters = [{ ToAddress: addressID }, { FromAddress: addressID }];
-    if (!addressID || !isValidSuiAddress(normalizeSuiAddress(addressID))) {
-      throw new Error('Invalid Sui address');
-    }
-    const results = await Promise.all(
-      filters.map((filter) =>
-        this.client.requestWithType(
-          'suix_queryTransactions',
-          [{ filter }, null, null, descendingOrder],
-          PaginatedTransactionResponse,
-          this.options.skipDataValidation,
-        ),
-      ),
-    );
-    return [
-      ...results[0].data.map((r) => r.digest),
-      ...results[1].data.map((r) => r.digest),
-    ];
   }
 
   async getTransaction(input: {

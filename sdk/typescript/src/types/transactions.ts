@@ -267,9 +267,6 @@ export const DevInspectResults = object({
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
 
-export const GetTxnDigestsResponse = array(TransactionDigest);
-export type GetTxnDigestsResponse = Infer<typeof GetTxnDigestsResponse>;
-
 export type SuiTransactionResponseQuery = {
   filter?: TransactionFilter;
   options?: SuiTransactionResponseOptions;
