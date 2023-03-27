@@ -10,7 +10,7 @@ The steps in this section provide guidance on making updates related to the chan
 
 ### Sui Framework split into two Move packages
 
-Updated 3/27/03
+Updated 3/27/23
 
 The Sui Framework (`sui-framework`) Move package contains modules central to Sui Move, including `object`, `transfer` and `dynamic_field`. The framework package is often a dependency of application packages developed on Sui. Previously, `sui-framework` included a `governance` folder that defined a number of modules related to the operations of Sui’s system, such as `validator_set` and `staking_pool`. These modules are fundamentally different from the other library modules within the framework, and are not commonly used by developers. To simplify, this release splits `sui-framework` into two Sui Move packages to improve modularity, usability and upgrading.
 
