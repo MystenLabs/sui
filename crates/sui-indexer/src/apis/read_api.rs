@@ -172,7 +172,7 @@ where
             .await?)
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionResponseOptions>,
@@ -181,7 +181,10 @@ where
             .migrated_methods
             .contains(&"multi_get_transactions_with_options".to_string())
         {
-            return self.fullnode.multi_get_transactions(digests, options).await;
+            return self
+                .fullnode
+                .multi_get_transaction_blocks(digests, options)
+                .await;
         }
         Ok(self
             .multi_get_transactions_with_options_internal(&digests, options)

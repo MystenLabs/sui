@@ -65,10 +65,9 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     }
 
     // TODO(chris): re-enable after rewriting get_transactions_in_range_deprecated with query_transactions
-
-    // // test get_transaction_batch
+    // test get_transaction_batch
     // let batch_responses: Vec<SuiTransactionResponse> = http_client
-    //     .multi_get_transactions(tx, Some(SuiTransactionResponseOptions::new()))
+    //     .multi_get_transaction_blocks(tx, Some(SuiTransactionResponseOptions::new()))
     //     .await?;
 
     // assert_eq!(5, batch_responses.len());

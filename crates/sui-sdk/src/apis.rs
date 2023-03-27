@@ -136,7 +136,7 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .multi_get_transactions(digests, Some(options))
+            .multi_get_transaction_blocks(digests, Some(options))
             .await?)
     }
 

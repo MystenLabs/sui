@@ -642,7 +642,7 @@ fn get_unexecuted_transactions(
 
     // read remaining unexecuted transactions from store
     let executable_txns: Vec<_> = authority_store
-        .multi_get_transactions(&unexecuted_txns)
+        .multi_get_transaction_blocks(&unexecuted_txns)
         .expect("Failed to get checkpoint txes from store")
         .into_iter()
         .enumerate()

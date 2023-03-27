@@ -413,7 +413,7 @@ pub mod pg_integration_test {
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
 
         let tx_multi_read_tx_response_1 = indexer_rpc_client
-            .multi_get_transactions(
+            .multi_get_transaction_blocks(
                 vec![tx_response.digest, nft_digest],
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -423,7 +423,7 @@ pub mod pg_integration_test {
         assert_eq!(tx_multi_read_tx_response_1[1].digest, nft_digest);
 
         let tx_multi_read_tx_response_2 = indexer_rpc_client
-            .multi_get_transactions(
+            .multi_get_transaction_blocks(
                 vec![nft_digest, tx_response.digest],
                 Some(SuiTransactionResponseOptions::full_content()),
             )

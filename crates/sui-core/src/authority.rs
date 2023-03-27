@@ -2265,7 +2265,7 @@ impl AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
-        Ok(self.database.multi_get_transactions(digests)?)
+        Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
     pub async fn multi_get_executed_effects(

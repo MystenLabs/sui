@@ -29,7 +29,7 @@ pub trait ReadApi {
     /// The method will throw an error if the input contains any duplicate or
     /// the input size exceeds QUERY_MAX_RESULT_LIMIT
     #[method(name = "multiGetTransactions")]
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         /// A list of transaction digests.
         digests: Vec<TransactionDigest>,

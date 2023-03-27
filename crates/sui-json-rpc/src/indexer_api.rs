@@ -153,7 +153,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect()
         } else {
             self.read_api
-                .multi_get_transactions(digests, Some(opts))
+                .multi_get_transaction_blocks(digests, Some(opts))
                 .await?
         };
 

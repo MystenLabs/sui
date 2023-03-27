@@ -356,7 +356,7 @@ impl ReadApiServer for ReadApi {
         ))
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionResponseOptions>,
