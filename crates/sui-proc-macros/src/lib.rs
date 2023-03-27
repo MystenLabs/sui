@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{
-    fold::{fold_expr, Fold},
-    parse2, parse_macro_input, BinOp, Expr, UnOp,
+    fold::{fold_expr, fold_item_macro, fold_stmt, Fold},
+    parse::Parser,
+    parse2, parse_macro_input,
+    punctuated::Punctuated,
+    Attribute, BinOp, Expr, ExprBinary, ExprMacro, Item, ItemMacro, Stmt, StmtMacro, Token, UnOp,
 };
 
 #[proc_macro_attribute]
@@ -51,9 +54,9 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     use sui_simulator::sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
                     use sui_simulator::sui_framework::build_move_package;
                     use sui_simulator::tempfile::TempDir;
-		    use sui_simulator::move_package::package_hooks::register_package_hooks;
+                    use sui_simulator::move_package::package_hooks::register_package_hooks;
 
-		    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
+                    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                     path.push("../../sui_programmability/examples/basics");
                     let mut build_config = BuildConfig::default();
@@ -153,16 +156,17 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 #[proc_macro_attribute]
 pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
-    let args = parse_macro_input!(args as syn::AttributeArgs);
+    let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
+    let args = arg_parser.parse(args).unwrap();
 
     let header = if cfg!(msim) {
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #args*)]
             #[::sui_macros::init_static_initializers]
         }
     } else {
         quote! {
-            #[::tokio::test(#(#args)*)]
+            #[::tokio::test(#args*)]
             // though this is not required for tokio, we do it to get logs as well.
             #[::sui_macros::init_static_initializers]
         }
@@ -185,11 +189,12 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
-    let args = parse_macro_input!(args as syn::AttributeArgs);
+    let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
+    let args = arg_parser.parse(args).unwrap();
 
     let result = if cfg!(msim) {
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #args*)]
             #[::sui_macros::init_static_initializers]
             #input
         }
@@ -227,52 +232,217 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     result.into()
 }
 
-#[proc_macro_attribute]
-pub fn use_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input_item = parse_macro_input!(item as syn::Item);
+#[proc_macro]
+pub fn checked_arithmetic(input: TokenStream) -> TokenStream {
+    let input_file = CheckArithmetic.fold_file(parse_macro_input!(input));
 
+    let output_items = input_file.items;
+
+    let output = quote! {
+        #(#output_items)*
+    };
+
+    TokenStream::from(output)
+}
+
+#[proc_macro_attribute]
+pub fn with_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_item = parse_macro_input!(item as Item);
     match input_item {
-        syn::Item::Fn(input_fn) => {
+        Item::Fn(input_fn) => {
             let transformed_fn = CheckArithmetic.fold_item_fn(input_fn);
             TokenStream::from(quote! { #transformed_fn })
         }
-        syn::Item::Impl(input_impl) => {
+        Item::Impl(input_impl) => {
             let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
             TokenStream::from(quote! { #transformed_impl })
         }
-        _ => panic!(
-            "The use_checked_arithmetic attribute can only be applied to functions and impl blocks"
-        ),
+        _ => {
+            let err = syn::Error::new_spanned(
+                input_item,
+                "The with_checked_arithmetic attribute can only be applied to functions and impl blocks",
+            );
+            err.to_compile_error().into()
+        }
     }
 }
 
 struct CheckArithmetic;
 
+impl CheckArithmetic {
+    fn maybe_skip_macro(&self, attrs: &mut Vec<Attribute>) -> bool {
+        if let Some(idx) = attrs
+            .iter()
+            .position(|attr| attr.path().is_ident("skip_checked_arithmetic"))
+        {
+            // Skip processing macro because it is annotated with
+            // #[skip_checked_arithmetic]
+            attrs.remove(idx);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn process_macro_contents(
+        &mut self,
+        tokens: proc_macro2::TokenStream,
+    ) -> syn::Result<proc_macro2::TokenStream> {
+        // Parse the macro's contents as a comma-separated list of expressions.
+        let parser = Punctuated::<Expr, Token![,]>::parse_terminated;
+        let Ok(exprs) = parser.parse(tokens.clone().into()) else {
+            return Err(syn::Error::new_spanned(
+                tokens,
+                "could not process macro contents - use #[skip_checked_arithmetic] to skip this macro"
+            ));
+        };
+
+        // Fold each sub expression.
+        let folded_exprs = exprs
+            .into_iter()
+            .map(|expr| self.fold_expr(expr))
+            .collect::<Vec<_>>();
+
+        // Convert the folded expressions back into tokens and reconstruct the macro.
+        let mut folded_tokens = proc_macro2::TokenStream::new();
+        for (i, folded_expr) in folded_exprs.into_iter().enumerate() {
+            if i > 0 {
+                folded_tokens.extend(std::iter::once::<proc_macro2::TokenTree>(
+                    proc_macro2::Punct::new(',', proc_macro2::Spacing::Alone).into(),
+                ));
+            }
+            folded_expr.to_tokens(&mut folded_tokens);
+        }
+
+        Ok(folded_tokens)
+    }
+}
+
 impl Fold for CheckArithmetic {
+    fn fold_stmt(&mut self, stmt: Stmt) -> Stmt {
+        let stmt = fold_stmt(self, stmt);
+        if let Stmt::Macro(stmt_macro) = stmt {
+            let StmtMacro {
+                mut attrs,
+                mut mac,
+                semi_token,
+            } = stmt_macro;
+
+            if self.maybe_skip_macro(&mut attrs) {
+                Stmt::Macro(StmtMacro {
+                    attrs,
+                    mac,
+                    semi_token,
+                })
+            } else {
+                match self.process_macro_contents(mac.tokens.clone()) {
+                    Ok(folded_tokens) => {
+                        mac.tokens = folded_tokens;
+                        Stmt::Macro(StmtMacro {
+                            attrs,
+                            mac,
+                            semi_token,
+                        })
+                    }
+                    Err(error) => parse2(error.to_compile_error()).unwrap(),
+                }
+            }
+        } else {
+            stmt
+        }
+    }
+
+    fn fold_item_macro(&mut self, mut item_macro: ItemMacro) -> ItemMacro {
+        if !self.maybe_skip_macro(&mut item_macro.attrs) {
+            let err = syn::Error::new_spanned(
+                item_macro.to_token_stream(),
+                "cannot process macros - use #[skip_checked_arithmetic] to skip \
+                    processing this macro",
+            );
+
+            return parse2(err.to_compile_error()).unwrap();
+        }
+        fold_item_macro(self, item_macro)
+    }
+
     fn fold_expr(&mut self, expr: Expr) -> Expr {
         let expr = fold_expr(self, expr);
         let expr = match expr {
+            Expr::Macro(expr_macro) => {
+                let ExprMacro { mut attrs, mut mac } = expr_macro;
+
+                if self.maybe_skip_macro(&mut attrs) {
+                    return Expr::Macro(ExprMacro { attrs, mac });
+                } else {
+                    match self.process_macro_contents(mac.tokens.clone()) {
+                        Ok(folded_tokens) => {
+                            mac.tokens = folded_tokens;
+                            let expr_macro = Expr::Macro(ExprMacro { attrs, mac });
+                            quote!(#expr_macro)
+                        }
+                        Err(error) => {
+                            return Expr::Verbatim(error.to_compile_error());
+                        }
+                    }
+                }
+            }
+
             Expr::Binary(expr_binary) => {
-                let op = &expr_binary.op;
-                let lhs = &expr_binary.left;
-                let rhs = &expr_binary.right;
+                let ExprBinary {
+                    attrs,
+                    left,
+                    op,
+                    mut right,
+                } = expr_binary;
+
+                // Remove parens from rhs since it will be passed as a function argument
+                // otherwise we get lint errors
+                if let Expr::Paren(paren) = right.as_ref() {
+                    // i don't even think rust allows this, but just in case
+                    assert!(paren.attrs.is_empty(), "TODO: attrs on parenthesized");
+                    right = paren.expr.clone();
+                }
+
                 match op {
                     BinOp::Add(_) => {
-                        quote!(#lhs.checked_add(#rhs).expect("Overflow or underflow in addition"))
+                        quote!((#left).checked_add(#right).expect("Overflow or underflow in addition"))
                     }
                     BinOp::Sub(_) => {
-                        quote!(#lhs.checked_sub(#rhs).expect("Overflow or underflow in subtraction"))
+                        quote!((#left).checked_sub(#right).expect("Overflow or underflow in subtraction"))
                     }
                     BinOp::Mul(_) => {
-                        quote!(#lhs.checked_mul(#rhs).expect("Overflow or underflow in multiplication"))
+                        quote!((#left).checked_mul(#right).expect("Overflow or underflow in multiplication"))
                     }
                     BinOp::Div(_) => {
-                        quote!(#lhs.checked_div(#rhs).expect("Overflow or underflow in division"))
+                        quote!((#left).checked_div(#right).expect("Overflow or underflow in division"))
                     }
                     BinOp::Rem(_) => {
-                        quote!(#lhs.checked_rem(#rhs).expect("Overflow or underflow in remainder"))
+                        quote!((#left).checked_rem(#right).expect("Overflow or underflow in remainder"))
                     }
-                    _ => quote!(#expr_binary),
+                    BinOp::AddAssign(_) => {
+                        quote!(#left = #left.checked_add(#right).expect("Overflow or underflow in addition assignment"))
+                    }
+                    BinOp::SubAssign(_) => {
+                        quote!(#left = #left.checked_sub(#right).expect("Overflow or underflow in subtraction assignment"))
+                    }
+                    BinOp::MulAssign(_) => {
+                        quote!(#left = #left.checked_mul(#right).expect("Overflow or underflow in multiplication assignment"))
+                    }
+                    BinOp::DivAssign(_) => {
+                        quote!(#left = #left.checked_div(#right).expect("Overflow or underflow in division assignment"))
+                    }
+                    BinOp::RemAssign(_) => {
+                        quote!(#left = #left.checked_rem(#right).expect("Overflow or underflow in remainder assignment"))
+                    }
+                    _ => {
+                        let expr_binary = ExprBinary {
+                            attrs,
+                            left,
+                            op,
+                            right,
+                        };
+                        quote!(#expr_binary)
+                    }
                 }
             }
             Expr::Unary(expr_unary) => {
