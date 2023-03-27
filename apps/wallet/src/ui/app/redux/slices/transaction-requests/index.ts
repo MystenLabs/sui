@@ -16,7 +16,7 @@ import {
 
 import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 
-import type { SuiTransactionResponse } from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse } from '@mysten/sui.js';
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import type { RootState } from '_redux/RootReducer';
@@ -34,7 +34,7 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        txResponse: SuiTransactionResponse | null;
+        txResponse: SuiTransactionBlockResponse | null;
     },
     {
         txRequestID: string;
@@ -54,7 +54,7 @@ export const respondToTransactionRequest = createAsyncThunk<
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
         let txSigned: SignedTransaction | undefined = undefined;
-        let txResult: SuiTransactionResponse | SignedMessage | undefined =
+        let txResult: SuiTransactionBlockResponse | SignedMessage | undefined =
             undefined;
         let txResultError: string | undefined;
         if (approved) {

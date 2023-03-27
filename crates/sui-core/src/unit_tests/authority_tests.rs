@@ -34,7 +34,7 @@ use tracing::info;
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
-    SuiTransactionEffectsAPI, SuiTypeTag,
+    SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};

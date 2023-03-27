@@ -10,7 +10,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{TransactionBuilderClient, TransactionBuilderServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    BigInt, RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    BigInt, RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -156,7 +157,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        tx_builder_mode: Option<SuiTransactionBuilderMode>,
+        tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
             .move_call(
@@ -179,7 +180,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        tx_builder_mode: Option<SuiTransactionBuilderMode>,
+        tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
         self.fullnode
             .batch_transaction(signer, params, gas, gas_budget, tx_builder_mode)

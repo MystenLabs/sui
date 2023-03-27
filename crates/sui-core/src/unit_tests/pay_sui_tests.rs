@@ -378,7 +378,7 @@ async fn test_pay_all_sui_success_multiple_input_coins() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct PaySuiTransactionExecutionResult {
+struct PaySuiTransactionBlockExecutionResult {
     pub authority_state: Arc<AuthorityState>,
     pub txn_result: Result<SignedTransactionEffects, SuiError>,
 }
@@ -390,7 +390,7 @@ async fn execute_pay_sui(
     sender: SuiAddress,
     sender_key: AccountKeyPair,
     gas_budget: u64,
-) -> PaySuiTransactionExecutionResult {
+) -> PaySuiTransactionBlockExecutionResult {
     let authority_state = init_state().await;
 
     let input_coin_refs: Vec<ObjectRef> = input_coin_objects
@@ -412,7 +412,7 @@ async fn execute_pay_sui(
         .await
         .map(|(_, effects)| effects);
 
-    PaySuiTransactionExecutionResult {
+    PaySuiTransactionBlockExecutionResult {
         authority_state,
         txn_result,
     }
@@ -424,7 +424,7 @@ async fn execute_pay_all_sui(
     sender: SuiAddress,
     sender_key: AccountKeyPair,
     gas_budget: u64,
-) -> PaySuiTransactionExecutionResult {
+) -> PaySuiTransactionBlockExecutionResult {
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
         .with_objects(
@@ -459,7 +459,7 @@ async fn execute_pay_all_sui(
     let txn_result = send_and_confirm_transaction(&authority_state, tx)
         .await
         .map(|(_, effects)| effects);
-    PaySuiTransactionExecutionResult {
+    PaySuiTransactionBlockExecutionResult {
         authority_state,
         txn_result,
     }

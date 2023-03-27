@@ -16,8 +16,8 @@ use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
-    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionResponse,
-    SuiTransactionResponseQuery, TransactionsPage,
+    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseQuery, TransactionsPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -64,7 +64,7 @@ impl<S: IndexerStore> IndexerApi<S> {
 
     fn query_transactions_internal(
         &self,
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
@@ -215,7 +215,7 @@ impl<S: IndexerStore> IndexerApi<S> {
         Ok(Page {
             data: tx_digests
                 .into_iter()
-                .map(SuiTransactionResponse::new)
+                .map(SuiTransactionBlockResponse::new)
                 .collect(),
             next_cursor,
             has_next_page,
@@ -285,7 +285,7 @@ where
 
     async fn query_transaction_blocks(
         &self,
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,

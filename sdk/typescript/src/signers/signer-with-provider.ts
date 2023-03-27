@@ -14,8 +14,8 @@ import {
   SuiAddress,
   DevInspectResults,
   DryRunTransactionResponse,
-  SuiTransactionResponse,
-  SuiTransactionResponseOptions,
+  SuiTransactionBlockResponse,
+  SuiTransactionBlockResponseOptions,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
@@ -120,12 +120,12 @@ export abstract class SignerWithProvider implements Signer {
   async signAndExecuteTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
     /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
-    options?: SuiTransactionResponseOptions;
+    options?: SuiTransactionBlockResponseOptions;
     /** `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
      * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
      */
     requestType?: ExecuteTransactionRequestType;
-  }): Promise<SuiTransactionResponse> {
+  }): Promise<SuiTransactionBlockResponse> {
     const { transactionBytes, signature } = await this.signTransactionBlock({
       transactionBlock: input.transactionBlock,
     });

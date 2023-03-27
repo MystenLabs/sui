@@ -14,9 +14,9 @@ import {
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
   SuiMoveNormalizedStruct,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   TransactionDigest,
-  SuiTransactionResponseQuery,
+  SuiTransactionBlockResponseQuery,
   RpcApiVersion,
   parseVersionFromString,
   PaginatedEvents,
@@ -41,7 +41,7 @@ import {
   DryRunTransactionResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
-  SuiTransactionResponseOptions,
+  SuiTransactionBlockResponseOptions,
   SuiEvent,
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
@@ -455,7 +455,9 @@ export class JsonRpcProvider {
    * Get transaction blocks for a given query criteria
    */
   async queryTransactionBlocks(
-    input: SuiTransactionResponseQuery & PaginationArguments & OrderArguments,
+    input: SuiTransactionBlockResponseQuery &
+      PaginationArguments &
+      OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
       'suix_queryTransactions',
@@ -463,7 +465,7 @@ export class JsonRpcProvider {
         {
           filter: input.filter,
           options: input.options,
-        } as SuiTransactionResponseQuery,
+        } as SuiTransactionBlockResponseQuery,
         input.cursor,
         input.limit,
         (input.order || 'descending') === 'descending',
@@ -475,23 +477,23 @@ export class JsonRpcProvider {
 
   async getTransactionBlock(input: {
     digest: TransactionDigest;
-    options?: SuiTransactionResponseOptions;
-  }): Promise<SuiTransactionResponse> {
+    options?: SuiTransactionBlockResponseOptions;
+  }): Promise<SuiTransactionBlockResponse> {
     if (!isValidTransactionDigest(input.digest)) {
       throw new Error('Invalid Transaction digest');
     }
     return await this.client.requestWithType(
       'sui_getTransaction',
       [input.digest, input.options],
-      SuiTransactionResponse,
+      SuiTransactionBlockResponse,
       this.options.skipDataValidation,
     );
   }
 
   async multiGetTransactionBlocks(input: {
     digests: TransactionDigest[];
-    options?: SuiTransactionResponseOptions;
-  }): Promise<SuiTransactionResponse[]> {
+    options?: SuiTransactionBlockResponseOptions;
+  }): Promise<SuiTransactionBlockResponse[]> {
     input.digests.forEach((d) => {
       if (!isValidTransactionDigest(d)) {
         throw new Error(`Invalid Transaction digest ${d}`);
@@ -506,7 +508,7 @@ export class JsonRpcProvider {
     return await this.client.requestWithType(
       'sui_multiGetTransactions',
       [input.digests, input.options],
-      array(SuiTransactionResponse),
+      array(SuiTransactionBlockResponse),
       this.options.skipDataValidation,
     );
   }
@@ -514,9 +516,9 @@ export class JsonRpcProvider {
   async executeTransactionBlock(input: {
     transactionBlock: Uint8Array | string;
     signature: SerializedSignature | SerializedSignature[];
-    options?: SuiTransactionResponseOptions;
+    options?: SuiTransactionBlockResponseOptions;
     requestType?: ExecuteTransactionRequestType;
-  }): Promise<SuiTransactionResponse> {
+  }): Promise<SuiTransactionBlockResponse> {
     return await this.client.requestWithType(
       'sui_executeTransaction',
       [
@@ -527,7 +529,7 @@ export class JsonRpcProvider {
         input.options,
         input.requestType,
       ],
-      SuiTransactionResponse,
+      SuiTransactionBlockResponse,
       this.options.skipDataValidation,
     );
   }

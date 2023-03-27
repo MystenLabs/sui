@@ -6,7 +6,7 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiEvent,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionResponseQuery, TransactionsPage,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionsPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -36,7 +36,7 @@ pub trait IndexerApi {
     async fn query_transaction_blocks(
         &self,
         /// the transaction query criteria.
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
         cursor: Option<TransactionDigest>,
         /// Maximum item returned per page, default to QUERY_MAX_RESULT_LIMIT if not specified.

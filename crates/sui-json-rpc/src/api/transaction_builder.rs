@@ -7,7 +7,8 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BigInt, RPCTransactionRequestParams, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    BigInt, RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBytes,
 };
 
 use sui_open_rpc_macros::open_rpc;
@@ -134,8 +135,8 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-        /// Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBuilderMode::Commit` when it's None.
-        execution_mode: Option<SuiTransactionBuilderMode>,
+        /// Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBlockBuilderMode::Commit` when it's None.
+        execution_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
     /// Create an unsigned transaction to publish a Move package.
@@ -215,7 +216,7 @@ pub trait TransactionBuilder {
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
         /// Whether this is a regular transaction or a Dev Inspect Transaction
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBytes>;
 
     /// Add stake to a validator's staking pool using multiple coins and amount.

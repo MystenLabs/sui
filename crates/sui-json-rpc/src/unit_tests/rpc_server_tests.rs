@@ -18,8 +18,8 @@ use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::ObjectsPage;
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, TransactionBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
@@ -115,12 +115,12 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let tx_bytes1 = tx_bytes.clone();
     let dryrun_response = http_client.dry_run_transaction_block(tx_bytes).await?;
 
-    let tx_response: SuiTransactionResponse = http_client
+    let tx_response: SuiTransactionBlockResponse = http_client
         .execute_transaction_block(
             tx_bytes1,
             signatures,
             Some(
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_effects()
                     .with_object_changes(),
             ),
@@ -128,7 +128,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let SuiTransactionResponse {
+    let SuiTransactionBlockResponse {
         effects,
         object_changes,
         ..
@@ -187,11 +187,11 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
-    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 6);
+    matches!(tx_response, SuiTransactionBlockResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 6);
     Ok(())
 }
 
@@ -248,11 +248,11 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
-    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 1);
+    matches!(tx_response, SuiTransactionBlockResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 1);
     Ok(())
 }
 
@@ -436,7 +436,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
             tx_bytes,
             signatures,
             Some(
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_events(),
             ),
@@ -513,12 +513,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-    let tx_response: SuiTransactionResponse = http_client
+    let tx_response: SuiTransactionBlockResponse = http_client
         .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_events(),
             ),
@@ -589,12 +589,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionBlockResponse { effects, .. } = tx_response;
 
     assert_eq!(SuiExecutionStatus::Success, *effects.unwrap().status());
 
@@ -651,7 +651,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new()),
+            Some(SuiTransactionBlockResponseOptions::new()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
@@ -720,7 +720,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
             .execute_transaction_block(
                 tx_bytes,
                 signatures,
-                Some(SuiTransactionResponseOptions::new()),
+                Some(SuiTransactionBlockResponseOptions::new()),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -777,7 +777,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new()),
+            Some(SuiTransactionBlockResponseOptions::new()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
@@ -861,7 +861,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_balance_changes()),
+            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

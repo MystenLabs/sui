@@ -10,7 +10,8 @@ use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponseOptions,
+    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
@@ -136,7 +137,7 @@ pub async fn submit(
         .quorum_driver()
         .execute_transaction_block(
             signed_tx,
-            SuiTransactionResponseOptions::new()
+            SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects()
                 .with_balance_changes(),

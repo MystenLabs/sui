@@ -5,14 +5,14 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
-    SuiTransactionEffectsAPI,
+    OwnedObjectRef, SuiObjectRef, SuiTransactionBlock, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
 use crate::schema::transactions::transaction_digest;
-use crate::types::SuiTransactionFullResponse;
+use crate::types::SuiTransactionBlockFullResponse;
 use crate::PgPoolConnection;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
@@ -52,7 +52,7 @@ pub struct Transaction {
 
 pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
-    tx_resps: Vec<SuiTransactionFullResponse>,
+    tx_resps: Vec<SuiTransactionBlockFullResponse>,
 ) -> Result<usize, IndexerError> {
     let new_txs: Vec<Transaction> = tx_resps
         .into_iter()
@@ -78,10 +78,10 @@ pub fn commit_transactions(
     })
 }
 
-impl TryFrom<SuiTransactionFullResponse> for Transaction {
+impl TryFrom<SuiTransactionBlockFullResponse> for Transaction {
     type Error = IndexerError;
 
-    fn try_from(tx_resp: SuiTransactionFullResponse) -> Result<Self, Self::Error> {
+    fn try_from(tx_resp: SuiTransactionBlockFullResponse) -> Result<Self, Self::Error> {
         let tx_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction {:?} to JSON with error: {:?}",
@@ -198,25 +198,25 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
     }
 }
 
-impl TryInto<SuiTransactionFullResponse> for Transaction {
+impl TryInto<SuiTransactionBlockFullResponse> for Transaction {
     type Error = IndexerError;
 
-    fn try_into(self) -> Result<SuiTransactionFullResponse, Self::Error> {
-        let transaction: SuiTransaction =
+    fn try_into(self) -> Result<SuiTransactionBlockFullResponse, Self::Error> {
+        let transaction: SuiTransactionBlock =
             serde_json::from_str(&self.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
-                    "Failed converting transaction JSON {:?} to SuiTransaction with error: {:?}",
+                    "Failed converting transaction JSON {:?} to SuiTransactionBlock with error: {:?}",
                     self.transaction_content, err
                 ))
             })?;
-        let effects: SuiTransactionEffects = serde_json::from_str(&self.transaction_effects_content).map_err(|err| {
+        let effects: SuiTransactionBlockEffects = serde_json::from_str(&self.transaction_effects_content).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
-                "Failed converting transaction effect JSON {:?} to SuiTransactionEffects with error: {:?}",
+                "Failed converting transaction effect JSON {:?} to SuiTransactionBlockEffects with error: {:?}",
                 self.transaction_effects_content, err
             ))
         })?;
 
-        Ok(SuiTransactionFullResponse {
+        Ok(SuiTransactionBlockFullResponse {
             digest: self.transaction_digest.parse().map_err(|e| {
                 IndexerError::InsertableParsingError(format!(
                     "Failed to parse transaction digest {} : {:?}",

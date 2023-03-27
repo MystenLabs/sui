@@ -5,8 +5,8 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 
 use sui_open_rpc_macros::open_rpc;
@@ -34,10 +34,10 @@ pub trait WriteApi {
         /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signatures: Vec<Base64>,
         /// options for specifying the content to be returned
-        options: Option<SuiTransactionResponseOptions>,
-        /// The request type, derived from `SuiTransactionResponseOptions` if None
+        options: Option<SuiTransactionBlockResponseOptions>,
+        /// The request type, derived from `SuiTransactionBlockResponseOptions` if None
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> RpcResult<SuiTransactionResponse>;
+    ) -> RpcResult<SuiTransactionBlockResponse>;
 
     /// Runs the transaction in dev-inspect mode. Which allows for nearly any
     /// transaction (or Move call) with any arguments. Detailed results are

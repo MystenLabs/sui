@@ -3,7 +3,7 @@
 
 import {
   SignedTransaction,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   Transaction,
 } from "@mysten/sui.js";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
@@ -49,9 +49,8 @@ export function App() {
     null
   );
   const [signedTx, setSignedTx] = useState<SignedTransaction | null>(null);
-  const [executedTx, setExecutedTx] = useState<SuiTransactionResponse | null>(
-    null
-  );
+  const [executedTx, setExecutedTx] =
+    useState<SuiTransactionBlockResponse | null>(null);
 
   return (
     <div className="p-8">

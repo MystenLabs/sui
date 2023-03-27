@@ -10,7 +10,7 @@ import {
   isSharedObjectInput,
   ObjectId,
   SuiObjectData,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   SUI_SYSTEM_STATE_OBJECT_ID,
   TransactionBlock,
 } from '../../src';
@@ -20,7 +20,7 @@ import { publishPackage, setup, TestToolbox } from './utils/setup';
 describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
-  let publishTxn: SuiTransactionResponse;
+  let publishTxn: SuiTransactionBlockResponse;
   let sharedObjectId: ObjectId;
 
   beforeAll(async () => {

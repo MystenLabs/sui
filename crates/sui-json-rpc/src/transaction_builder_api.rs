@@ -13,7 +13,7 @@ use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
+    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
     TransactionBytes,
 };
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
@@ -248,11 +248,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
         let data: TransactionData = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
+            SuiTransactionBlockBuilderMode::DevInspect => {
                 self.dev_inspect_builder
                     .move_call(
                         signer,
@@ -266,7 +266,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     )
                     .await?
             }
-            SuiTransactionBuilderMode::Commit => {
+            SuiTransactionBlockBuilderMode::Commit => {
                 self.builder
                     .move_call(
                         signer,
@@ -290,16 +290,16 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
         let data = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
+            SuiTransactionBlockBuilderMode::DevInspect => {
                 self.dev_inspect_builder
                     .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
-            SuiTransactionBuilderMode::Commit => {
+            SuiTransactionBlockBuilderMode::Commit => {
                 self.builder
                     .batch_transaction(signer, params, gas, gas_budget)
                     .await?
