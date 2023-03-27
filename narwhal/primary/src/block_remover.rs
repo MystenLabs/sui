@@ -14,8 +14,8 @@ use store::rocks::TypedStoreError;
 
 use tracing::{debug, instrument, warn};
 use types::{
-    metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, HeaderAPI, HeaderDigest,
-    Round,
+    metered_channel::Sender, BatchDigest, Certificate, CertificateAPI, CertificateDigest,
+    HeaderAPI, HeaderDigest, Round,
 };
 
 #[cfg(test)]
@@ -138,7 +138,7 @@ impl BlockRemover {
         batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>>,
     ) -> Result<(), Either<TypedStoreError, ValidatorDagError>> {
         let header_digests: Vec<HeaderDigest> =
-            certificates.iter().map(|c| c.header.digest()).collect();
+            certificates.iter().map(|c| c.header().digest()).collect();
 
         self.header_store
             .remove_all(header_digests)
@@ -173,7 +173,11 @@ impl BlockRemover {
         if !certificates.is_empty() {
             let all_certs = certificates.clone();
             // Unwrap safe since list is not empty.
-            let highest_round = certificates.iter().map(|c| c.header.round()).max().unwrap();
+            let highest_round = certificates
+                .iter()
+                .map(|c| c.header().round())
+                .max()
+                .unwrap();
 
             // We signal that these certificates must have been committed by the external consensus
             self.tx_committed_certificates

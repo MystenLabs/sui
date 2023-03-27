@@ -13,8 +13,8 @@ use std::{collections::HashSet, sync::Arc};
 
 use tracing::{debug, instrument};
 use types::{
-    BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate, CertificateDigest,
-    HeaderAPI,
+    BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate, CertificateAPI,
+    CertificateDigest, HeaderAPI,
 };
 
 #[cfg(test)]
@@ -127,7 +127,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         // Send batch requests to workers.
         let certificate = certificate.unwrap();
         let batch_requests: Vec<_> = certificate
-            .header
+            .header()
             .payload()
             .iter()
             .map(|(batch_digest, (worker_id, _))| {

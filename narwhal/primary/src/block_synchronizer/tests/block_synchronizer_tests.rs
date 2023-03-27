@@ -19,8 +19,8 @@ use tokio::{
     time::{sleep, timeout},
 };
 use types::{
-    GetCertificatesResponse, Header, HeaderAPI, MockPrimaryToPrimary, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
+    CertificateAPI, GetCertificatesResponse, Header, HeaderAPI, MockPrimaryToPrimary,
+    PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
 };
 
 use fastcrypto::traits::KeyPair as _;
@@ -645,7 +645,7 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload() {
+            for (digest, (worker_id, _)) in certificate.header().payload() {
                 payload_store.write(digest, worker_id).unwrap();
             }
         }

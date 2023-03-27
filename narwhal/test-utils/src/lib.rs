@@ -34,8 +34,8 @@ use store::{reopen, rocks, rocks::DBMap};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusStore,
-    FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
+    Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, CommittedSubDagShell,
+    ConsensusStore, FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
     GetCertificatesResponse, Header, HeaderAPI, HeaderV1Builder, PayloadAvailabilityRequest,
     PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
@@ -524,7 +524,7 @@ fn this_cert_parents_with_slow_nodes(
         // one we want to create the certificate for.
         if let Some((_, inclusion_probability)) = slow_nodes
             .iter()
-            .find(|(id, _)| *id != *authority_id && *id == parent.header.author())
+            .find(|(id, _)| *id != *authority_id && *id == parent.header().author())
         {
             let f: f64 = thread_rng().gen_range(0_f64..1_f64);
 
@@ -647,7 +647,7 @@ pub fn mock_signed_certificate(
 
     let mut votes = Vec::new();
     for (name, signer) in signers {
-        let sig = Signature::new_secure(&to_intent_message(cert.header.digest()), signer);
+        let sig = Signature::new_secure(&to_intent_message(cert.header().digest()), signer);
         votes.push((*name, sig))
     }
     let cert = Certificate::new_unverified(committee, Header::V1(header), votes).unwrap();

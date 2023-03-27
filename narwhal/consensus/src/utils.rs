@@ -5,7 +5,7 @@ use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
 use std::collections::HashSet;
 use tracing::debug;
-use types::{Certificate, CertificateDigest, HeaderAPI, Round};
+use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 
 /// Order the past leaders that we didn't already commit.
 pub fn order_leaders<'a, LeaderElector>(
@@ -47,7 +47,11 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
             .get(&r)
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(digest, _)| parents.iter().any(|x| x.header.parents().contains(digest)))
+            .filter(|(digest, _)| {
+                parents
+                    .iter()
+                    .any(|x| x.header().parents().contains(digest))
+            })
             .map(|(_, certificate)| certificate)
             .collect();
     }
@@ -72,7 +76,7 @@ pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificat
             // Do not try to order parents of the certificate, since they have been GC'ed.
             continue;
         }
-        for parent in x.header.parents() {
+        for parent in x.header().parents() {
             let (digest, certificate) = match state
                 .dag
                 .get(&(x.round() - 1))

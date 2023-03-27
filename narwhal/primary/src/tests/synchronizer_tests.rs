@@ -20,7 +20,10 @@ use std::{
 };
 use test_utils::{make_optimal_signed_certificates, mock_signed_certificate, CommitteeFixture};
 use tokio::sync::{oneshot, watch};
-use types::{error::DagError, Certificate, Header, HeaderAPI, PreSubscribedBroadcastSender, Round};
+use types::{
+    error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, PreSubscribedBroadcastSender,
+    Round,
+};
 
 #[tokio::test]
 async fn accept_certificates() {
@@ -836,7 +839,7 @@ async fn sync_batches_drops_old() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload() {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
