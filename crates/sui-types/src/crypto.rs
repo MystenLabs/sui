@@ -72,10 +72,6 @@ pub type NetworkKeyPair = Ed25519KeyPair;
 pub type NetworkPublicKey = Ed25519PublicKey;
 pub type NetworkPrivateKey = Ed25519PrivateKey;
 
-pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
-pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
-pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
-
 pub type DefaultHash = Blake2b256;
 
 pub const DEFAULT_EPOCH_ID: EpochId = 0;
