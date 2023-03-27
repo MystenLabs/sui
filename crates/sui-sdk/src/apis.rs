@@ -227,14 +227,14 @@ impl ReadApi {
         Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 
-    pub async fn dry_run_transaction(
+    pub async fn dry_run_transaction_block(
         &self,
         tx: TransactionData,
     ) -> SuiRpcResult<DryRunTransactionResponse> {
         Ok(self
             .api
             .http
-            .dry_run_transaction(Base64::from_bytes(&bcs::to_bytes(&tx)?))
+            .dry_run_transaction_block(Base64::from_bytes(&bcs::to_bytes(&tx)?))
             .await?)
     }
 }
@@ -438,7 +438,7 @@ impl QuorumDriver {
     /// the fullnode until the fullnode recognizes this transaction, or
     /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
     /// error is returned from this call.
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
         options: SuiTransactionResponseOptions,
@@ -449,7 +449,7 @@ impl QuorumDriver {
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .execute_transaction(
+            .execute_transaction_block(
                 tx_bytes,
                 signatures,
                 Some(options),

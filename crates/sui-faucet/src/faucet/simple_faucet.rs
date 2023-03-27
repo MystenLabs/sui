@@ -410,7 +410,7 @@ impl SimpleFaucet {
         let client = self.wallet.get_client().await?;
         Ok(client
             .quorum_driver()
-            .execute_transaction(
+            .execute_transaction_block(
                 tx.clone(),
                 SuiTransactionResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),

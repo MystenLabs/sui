@@ -377,7 +377,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let start = Arc::new(Instant::now());
                                 let res = worker.proxy
-                                    .execute_transaction(b.0.clone().into())
+                                    .execute_transaction_block(b.0.clone().into())
                                     .then(|res| async move  {
                                         match res {
                                             Ok(effects) => {
@@ -429,7 +429,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                 // TODO: clone committee for each request is not ideal.
                                 let committee_cloned = Arc::new(worker.proxy.clone_committee());
                                 let res = worker.proxy
-                                    .execute_transaction(tx.clone().into())
+                                    .execute_transaction_block(tx.clone().into())
                                 .then(|res| async move {
                                     match res {
                                         Ok(effects) => {

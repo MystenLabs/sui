@@ -80,7 +80,7 @@ pub mod pg_integration_test {
         Ok(gas_objects)
     }
 
-    async fn sign_and_execute_transaction(
+    async fn sign_and_execute_transaction_block(
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
         transaction_bytes: TransactionBytes,
@@ -92,7 +92,7 @@ pub mod pg_integration_test {
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(sender)?);
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let tx_response = indexer_rpc_client
-            .execute_transaction(
+            .execute_transaction_block(
                 tx_bytes,
                 signatures,
                 Some(SuiTransactionResponseOptions::full_content()),
@@ -114,7 +114,7 @@ pub mod pg_integration_test {
         let transaction_bytes: TransactionBytes = indexer_rpc_client
             .transfer_object(*sender, object_id, gas, 2000, *recipient)
             .await?;
-        let tx_response = sign_and_execute_transaction(
+        let tx_response = sign_and_execute_transaction_block(
             test_cluster,
             indexer_rpc_client,
             transaction_bytes,
@@ -713,7 +713,7 @@ pub mod pg_integration_test {
                 2000,
             )
             .await?;
-        let tx_response = sign_and_execute_transaction(
+        let tx_response = sign_and_execute_transaction_block(
             &test_cluster,
             &indexer_rpc_client,
             transaction_bytes,

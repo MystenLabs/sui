@@ -391,7 +391,7 @@ mod sim_only_tests {
         let txn = TransactionKind::programmable(pt);
 
         let response = client
-            .dev_inspect_transaction(
+            .dev_inspect_transaction_block(
                 sender,
                 Base64::from_bytes(&bcs::to_bytes(&txn).unwrap()),
                 /* gas_price */ None,

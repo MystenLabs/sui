@@ -134,7 +134,7 @@ impl TestContext {
         let resp = self
             .get_fullnode_client()
             .quorum_driver()
-            .execute_transaction(
+            .execute_transaction_block(
                 Transaction::from_data(txn_data, Intent::default(), vec![signature])
                     .verify()
                     .unwrap(),

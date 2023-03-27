@@ -53,7 +53,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         let response = http_client
-            .execute_transaction(
+            .execute_transaction_block(
                 tx_bytes,
                 signatures,
                 Some(SuiTransactionResponseOptions::new()),
@@ -128,7 +128,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new().with_raw_input()),
@@ -186,7 +186,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
             let response = client
                 .quorum_driver()
-                .execute_transaction(
+                .execute_transaction_block(
                     tx,
                     SuiTransactionResponseOptions::new(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),

@@ -1122,7 +1122,7 @@ impl AuthorityState {
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
-    pub async fn dev_inspect_transaction(
+    pub async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,

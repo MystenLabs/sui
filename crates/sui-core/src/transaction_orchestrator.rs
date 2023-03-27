@@ -171,7 +171,7 @@ where
         tx_type = ?request.transaction_type(),
     ),
     err)]
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         request: ExecuteTransactionRequest,
     ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {

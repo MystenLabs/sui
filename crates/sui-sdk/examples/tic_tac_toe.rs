@@ -102,7 +102,7 @@ impl TicTacToe {
         let response = self
             .client
             .quorum_driver()
-            .execute_transaction(
+            .execute_transaction_block(
                 Transaction::from_data(create_game_call, Intent::default(), vec![signature])
                     .verify()?,
                 SuiTransactionResponseOptions::full_content(),
@@ -201,7 +201,7 @@ impl TicTacToe {
             let response = self
                 .client
                 .quorum_driver()
-                .execute_transaction(
+                .execute_transaction_block(
                     Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
                         .verify()?,
                     SuiTransactionResponseOptions::new().with_effects(),

@@ -102,7 +102,7 @@ async fn test_get_staked_sui() {
     let tx = to_sender_signed_transaction(delegation_tx, keystore.get_key(&address).unwrap());
     client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             tx,
             SuiTransactionResponseOptions::new(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),

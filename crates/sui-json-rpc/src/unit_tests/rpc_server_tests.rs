@@ -113,10 +113,10 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
     let tx_bytes1 = tx_bytes.clone();
-    let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
+    let dryrun_response = http_client.dry_run_transaction_block(tx_bytes).await?;
 
     let tx_response: SuiTransactionResponse = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes1,
             signatures,
             Some(
@@ -184,7 +184,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new().with_effects()),
@@ -245,7 +245,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new().with_effects()),
@@ -432,7 +432,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(
@@ -514,7 +514,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response: SuiTransactionResponse = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(
@@ -586,7 +586,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new().with_effects()),
@@ -648,7 +648,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new()),
@@ -717,7 +717,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
         http_client
-            .execute_transaction(
+            .execute_transaction_block(
                 tx_bytes,
                 signatures,
                 Some(SuiTransactionResponseOptions::new()),
@@ -774,7 +774,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new()),
@@ -853,10 +853,12 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-    let dryrun_response = http_client.dry_run_transaction(tx_bytes.clone()).await?;
+    let dryrun_response = http_client
+        .dry_run_transaction_block(tx_bytes.clone())
+        .await?;
 
     let executed_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(SuiTransactionResponseOptions::new().with_balance_changes()),

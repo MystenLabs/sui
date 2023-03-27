@@ -52,7 +52,7 @@ impl TransactionExecutionApi {
         }
     }
 
-    async fn execute_transaction(
+    async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
@@ -89,7 +89,7 @@ impl TransactionExecutionApi {
         let digest = *txn.digest();
 
         let transaction_orchestrator = self.transaction_orchestrator.clone();
-        let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction(
+        let response = spawn_monitored_task!(transaction_orchestrator.execute_transaction_block(
             ExecuteTransactionRequest {
                 transaction: txn,
                 request_type,
@@ -153,7 +153,7 @@ impl TransactionExecutionApi {
         }
     }
 
-    async fn dry_run_transaction(
+    async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
     ) -> Result<DryRunTransactionResponse, Error> {
@@ -185,7 +185,7 @@ impl TransactionExecutionApi {
 
 #[async_trait]
 impl WriteApiServer for TransactionExecutionApi {
-    async fn execute_transaction(
+    async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
@@ -193,11 +193,11 @@ impl WriteApiServer for TransactionExecutionApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionResponse> {
         Ok(self
-            .execute_transaction(tx_bytes, signatures, opts, request_type)
+            .execute_transaction_block(tx_bytes, signatures, opts, request_type)
             .await?)
     }
 
-    async fn dev_inspect_transaction(
+    async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
@@ -208,12 +208,15 @@ impl WriteApiServer for TransactionExecutionApi {
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state
-            .dev_inspect_transaction(sender_address, tx_kind, gas_price.map(<u64>::from))
+            .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(<u64>::from))
             .await?)
     }
 
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
-        Ok(self.dry_run_transaction(tx_bytes).await?)
+    async fn dry_run_transaction_block(
+        &self,
+        tx_bytes: Base64,
+    ) -> RpcResult<DryRunTransactionResponse> {
+        Ok(self.dry_run_transaction_block(tx_bytes).await?)
     }
 }
 

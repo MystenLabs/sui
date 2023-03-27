@@ -134,7 +134,7 @@ pub async fn submit(
     let response = context
         .client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             signed_tx,
             SuiTransactionResponseOptions::new()
                 .with_input()
@@ -307,7 +307,11 @@ pub async fn metadata(
             budget: budget * gas_price,
         })?;
 
-    let dry_run = context.client.read_api().dry_run_transaction(data).await?;
+    let dry_run = context
+        .client
+        .read_api()
+        .dry_run_transaction_block(data)
+        .await?;
     let effects = dry_run.effects;
 
     if let SuiExecutionStatus::Failure { error } = effects.status() {
