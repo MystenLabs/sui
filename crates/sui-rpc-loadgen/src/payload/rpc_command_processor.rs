@@ -3,13 +3,13 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use dashmap::DashMap;
 use futures::future::join_all;
-
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponse,
     SuiTransactionResponseOptions,
 };
 use tokio::sync::RwLock;
@@ -18,7 +18,7 @@ use tracing::debug;
 
 use crate::load_test::LoadTestConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
@@ -28,10 +28,13 @@ use crate::payload::{
 
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
 pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
+pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 2000;
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
     clients: Arc<RwLock<Vec<SuiClient>>>,
+    // for equivocation prevention in `WaitForEffectsCert` mode
+    object_ref_cache: Arc<DashMap<ObjectID, ObjectRef>>,
 }
 
 impl RpcCommandProcessor {
@@ -48,6 +51,7 @@ impl RpcCommandProcessor {
 
         Self {
             clients: Arc::new(RwLock::new(clients)),
+            object_ref_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -67,6 +71,60 @@ impl RpcCommandProcessor {
     pub(crate) async fn get_clients(&self) -> Result<Vec<SuiClient>> {
         let read = self.clients.read().await;
         Ok(read.clone())
+    }
+
+    /// sign_and_execute transaction and update `object_ref_cache`
+    pub(crate) async fn sign_and_execute(
+        &self,
+        client: &SuiClient,
+        keypair: &SuiKeyPair,
+        txn_data: TransactionData,
+        request_type: ExecuteTransactionRequestType,
+    ) -> SuiTransactionResponse {
+        let resp = sign_and_execute(client, keypair, txn_data, request_type).await;
+        let effects = resp.effects.as_ref().unwrap();
+        let object_ref_cache = self.object_ref_cache.clone();
+        // NOTE: for now we don't need to care about deleted objects
+        for (owned_object_ref, _) in effects.all_changed_objects() {
+            let id = owned_object_ref.object_id();
+            let current = object_ref_cache.get_mut(&id);
+            match current {
+                Some(mut c) => {
+                    if c.1 < owned_object_ref.version() {
+                        *c = owned_object_ref.reference.to_object_ref();
+                    }
+                }
+                None => {
+                    object_ref_cache.insert(id, owned_object_ref.reference.to_object_ref());
+                }
+            };
+        }
+        resp
+    }
+
+    /// get the latest object ref from local cache, and if not exist, fetch from fullnode
+    pub(crate) async fn get_object_ref(
+        &self,
+        client: &SuiClient,
+        object_id: &ObjectID,
+    ) -> ObjectRef {
+        let object_ref_cache = self.object_ref_cache.clone();
+        let current = object_ref_cache.get_mut(object_id);
+        match current {
+            Some(c) => *c,
+            None => {
+                let resp = client
+                    .read_api()
+                    .get_object_with_options(*object_id, SuiObjectDataOptions::new())
+                    .await
+                    .unwrap_or_else(|_| panic!("Unable to fetch object reference {object_id}"));
+                let object_ref = resp.object_ref_if_exists().unwrap_or_else(|| {
+                    panic!("Unable to extract object reference {object_id} from response {resp:?}")
+                });
+                object_ref_cache.insert(*object_id, object_ref);
+                object_ref
+            }
+        }
     }
 }
 
@@ -191,49 +249,138 @@ async fn prepare_new_signer_and_coins(
     num_coins: usize,
     num_transactions_per_coin: u64,
 ) -> (Vec<ObjectID>, String) {
-    // TODO: This is due to the limit of number of objects that can be created in a single transaction
-    // we can bypass the limit to use multiple split coin transactions
-    if num_coins > 2000 {
-        panic!("num_threads * num_chunks_per_thread cannot exceed 2000, current val {num_coins}")
-    }
-    let num_coins = num_coins as u64;
+    // TODO(chris): consider reference gas price
+    let amount_per_coin = num_transactions_per_coin * DEFAULT_GAS_BUDGET;
+    let pay_amount = amount_per_coin * num_coins as u64;
+    let num_split_txns =
+        num_transactions_needed(num_coins, MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION);
+    let (gas_fee_for_split, gas_fee_for_pay_sui) = (
+        DEFAULT_LARGE_GAS_BUDGET * num_split_txns as u64,
+        DEFAULT_GAS_BUDGET,
+    );
+
     let primary_keypair = SuiKeyPair::decode_base64(&signer_info.encoded_keypair)
         .expect("Decoding keypair should not fail");
     let sender = SuiAddress::from(&primary_keypair.public());
     let (coin, balance) = get_coin_with_max_balance(client, sender).await;
+    // The balance needs to cover `pay_amount` plus
+    // 1. gas fee for pay_sui from the primary address to the burner address
+    // 2. gas fee for splitting the primary coin into `num_coins`
+    let required_balance = pay_amount + gas_fee_for_split + gas_fee_for_pay_sui;
+    if required_balance > balance {
+        panic!("Current balance {balance} is smaller than require amount of MIST to fund the operation {required_balance}");
+    }
+
+    // There is a limit for the number of new objects in a transactions, therefore we need
+    // multiple split transactions if the `num_coins` is large
+    let split_amounts = calculate_split_amounts(
+        num_coins,
+        amount_per_coin,
+        MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION,
+    );
+
+    debug!("split_amounts {split_amounts:?}");
 
     // We don't want to split coins in our primary address because we want to avoid having
     // a million coin objects in our address. We can also fetch directly from the faucet, but in
     // some environment that might not be possible when faucet resource is scarce
     let (burner_address, burner_keypair): (_, AccountKeyPair) = get_key_pair();
     let burner_keypair = SuiKeyPair::Ed25519(burner_keypair);
-    // Some coins has an enormous amount of gas, we want to limit the max pay amount so that
-    // we don't squander the entire balance
-    // TODO(chris): consider reference gas price
-    let max_pay_amount = num_transactions_per_coin * DEFAULT_GAS_BUDGET * num_coins;
-    let amount_for_primary_coin =
-        // we need to subtract the following
-        // 1. gas fee(i.e., `DEFAULT_GAS_BUDGET`) for pay_sui from the primary address to the burner address
-        // 2. gas fee(i.e., DEFAULT_LARGE_GAS_BUDGET) for splitting the primary coin into `num_coins`
-        max_pay_amount.min(balance - DEFAULT_LARGE_GAS_BUDGET - DEFAULT_GAS_BUDGET);
+    let pay_amounts = split_amounts
+        .iter()
+        .map(|(amount, _)| *amount)
+        .chain(std::iter::once(gas_fee_for_split))
+        .collect::<Vec<_>>();
+
+    debug!("pay_amounts {pay_amounts:?}");
+
     pay_sui(
         client,
         &primary_keypair,
         vec![coin],
         DEFAULT_GAS_BUDGET,
-        vec![burner_address; 2],
-        vec![amount_for_primary_coin, DEFAULT_LARGE_GAS_BUDGET],
+        vec![burner_address; pay_amounts.len()],
+        pay_amounts,
     )
     .await;
 
-    let coin_to_split =
-        get_coin_with_balance(client, burner_address, amount_for_primary_coin).await;
-    let mut results: Vec<ObjectID> =
-        split_coins(client, &burner_keypair, coin_to_split, num_coins).await;
-    results.push(coin_to_split);
-    debug!("Split {coin_to_split} into {results:?} for gas payment");
+    let coins = get_sui_coin_ids(client, burner_address).await;
+    let gas_coin_id = get_coin_with_balance(&coins, gas_fee_for_split);
+    let primary_coin = get_coin_with_balance(&coins, split_amounts[0].0);
+    assert!(!coins.is_empty());
+    let mut results: Vec<ObjectID> = vec![];
+    assert!(!split_amounts.is_empty());
+    if split_amounts.len() == 1 && split_amounts[0].1 == 0 {
+        results.push(get_coin_with_balance(&coins, split_amounts[0].0));
+    } else if split_amounts.len() == 1 {
+        results.extend(
+            split_coins(
+                client,
+                &burner_keypair,
+                primary_coin,
+                gas_coin_id,
+                split_amounts[0].1 as u64,
+            )
+            .await,
+        );
+    } else {
+        let (max_amount, max_split) = &split_amounts[0];
+        let (remainder_amount, remainder_split) = split_amounts.last().unwrap();
+        let primary_coins = coins
+            .iter()
+            .filter(|(_, balance)| balance == max_amount)
+            .map(|(id, _)| (*id, *max_split as u64))
+            .chain(
+                coins
+                    .iter()
+                    .filter(|(_, balance)| balance == remainder_amount)
+                    .map(|(id, _)| (*id, *remainder_split as u64)),
+            )
+            .collect::<Vec<_>>();
+
+        for (coin_id, splits) in primary_coins {
+            results
+                .extend(split_coins(client, &burner_keypair, coin_id, gas_coin_id, splits).await);
+        }
+    }
     assert_eq!(results.len(), num_coins as usize);
+    debug!("Split off {} coins for gas payment {results:?}", num_coins);
     (results, burner_keypair.encode_base64())
+}
+
+/// Calculate the number of transactions needed to split the given number of coins.
+/// new_coins_per_txn must be greater than 0
+fn num_transactions_needed(num_coins: usize, new_coins_per_txn: usize) -> usize {
+    assert!(new_coins_per_txn > 0);
+    if num_coins == 1 {
+        return 0;
+    }
+    ((num_coins + new_coins_per_txn - 1) / new_coins_per_txn) as usize
+}
+
+/// Calculate the split amounts for a given number of coins, amount per coin, and maximum number of coins per transaction.
+/// Returns a Vec of (primary_coin_amount, split_into_n_coins)
+fn calculate_split_amounts(
+    num_coins: usize,
+    amount_per_coin: u64,
+    max_coins_per_txn: usize,
+) -> Vec<(u64, usize)> {
+    let total_amount = amount_per_coin * num_coins as u64;
+    let num_transactions = num_transactions_needed(num_coins, max_coins_per_txn);
+
+    if num_transactions == 0 {
+        return vec![(total_amount, 0)];
+    }
+
+    let amount_per_transaction = max_coins_per_txn as u64 * amount_per_coin;
+    let remaining_amount = total_amount - amount_per_transaction * (num_transactions as u64 - 1);
+    let mut split_amounts: Vec<(u64, usize)> =
+        vec![(amount_per_transaction, max_coins_per_txn); num_transactions - 1];
+    split_amounts.push((
+        remaining_amount,
+        num_coins - max_coins_per_txn * (num_transactions - 1),
+    ));
+    split_amounts
 }
 
 async fn get_coin_with_max_balance(client: &SuiClient, address: SuiAddress) -> (ObjectID, u64) {
@@ -242,10 +389,8 @@ async fn get_coin_with_max_balance(client: &SuiClient, address: SuiAddress) -> (
     coins.into_iter().max_by(|a, b| a.1.cmp(&b.1)).unwrap()
 }
 
-async fn get_coin_with_balance(client: &SuiClient, address: SuiAddress, balance: u64) -> ObjectID {
-    let coins = get_sui_coin_ids(client, address).await;
-    assert!(!coins.is_empty());
-    coins.into_iter().find(|a| a.1 == balance).unwrap().0
+fn get_coin_with_balance(coins: &[(ObjectID, u64)], target: u64) -> ObjectID {
+    coins.iter().find(|(_, b)| b == &target).unwrap().0
 }
 
 // TODO: move this to the Rust SDK
@@ -281,13 +426,20 @@ async fn pay_sui(
         .pay(sender, input_coins, recipients, amounts, None, gas_budget)
         .await
         .expect("Failed to construct pay sui transaction");
-    sign_and_execute(client, keypair, tx).await
+    sign_and_execute(
+        client,
+        keypair,
+        tx,
+        ExecuteTransactionRequestType::WaitForLocalExecution,
+    )
+    .await
 }
 
 async fn split_coins(
     client: &SuiClient,
     keypair: &SuiKeyPair,
     coin_to_split: ObjectID,
+    gas_payment: ObjectID,
     num_coins: u64,
 ) -> Vec<ObjectID> {
     let sender = SuiAddress::from(&keypair.public());
@@ -297,25 +449,32 @@ async fn split_coins(
             sender,
             coin_to_split,
             num_coins,
-            None,
+            Some(gas_payment),
             DEFAULT_LARGE_GAS_BUDGET,
         )
         .await
         .expect("Failed to construct split coin transaction");
-    sign_and_execute(client, keypair, split_coin_tx)
-        .await
-        .effects
-        .unwrap()
-        .created()
-        .iter()
-        .map(|owned_object_ref| owned_object_ref.reference.object_id)
-        .collect::<Vec<_>>()
+    sign_and_execute(
+        client,
+        keypair,
+        split_coin_tx,
+        ExecuteTransactionRequestType::WaitForLocalExecution,
+    )
+    .await
+    .effects
+    .unwrap()
+    .created()
+    .iter()
+    .map(|owned_object_ref| owned_object_ref.reference.object_id)
+    .chain(std::iter::once(coin_to_split))
+    .collect::<Vec<_>>()
 }
 
 pub(crate) async fn sign_and_execute(
     client: &SuiClient,
     keypair: &SuiKeyPair,
     txn_data: TransactionData,
+    request_type: ExecuteTransactionRequestType,
 ) -> SuiTransactionResponse {
     let signature =
         Signature::new_secure(&IntentMessage::new(Intent::default(), &txn_data), keypair);
@@ -326,8 +485,8 @@ pub(crate) async fn sign_and_execute(
             Transaction::from_data(txn_data, Intent::default(), vec![signature])
                 .verify()
                 .expect("signature error"),
-            SuiTransactionResponseOptions::full_content(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            SuiTransactionResponseOptions::new().with_effects(),
+            Some(request_type),
         )
         .await
     {
@@ -354,4 +513,75 @@ pub(crate) async fn sign_and_execute(
         }
     };
     transaction_response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{assert_eq, vec};
+
+    #[test]
+    fn test_calculate_split_amounts_no_split_needed() {
+        let num_coins = 10;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 20;
+        let expected = vec![(1000, 10)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_exact_split() {
+        let num_coins = 10;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5), (500, 5)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_with_remainder() {
+        let num_coins = 12;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5), (500, 5), (200, 2)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_single_coin() {
+        let num_coins = 1;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(100, 0)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_max_coins_equals_num_coins() {
+        let num_coins = 5;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: new_coins_per_txn > 0")]
+    fn test_calculate_split_amounts_zero_max_coins() {
+        let num_coins = 5;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 0;
+
+        calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+    }
 }
