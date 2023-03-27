@@ -100,7 +100,7 @@ export function App() {
                 try {
                   const signed = await signTransaction({
                     transaction: Transaction.from(
-                      sponsoredTx!.TransactionBlockBytes
+                      sponsoredTx!.transactionBlockBytes
                     ),
                   });
                   setSignedTx(signed);
@@ -122,8 +122,8 @@ export function App() {
               onClick={async () => {
                 setLoading(true);
                 try {
-                  const executed = await provider.executeTransaction({
-                    transaction: signedTx!.TransactionBlockBytes,
+                  const executed = await provider.executeTransactionBlock({
+                    transactionBlock: signedTx!.transactionBlockBytes,
                     signature: [signedTx!.signature, sponsoredTx!.signature],
                     options: {
                       showEffects: true,

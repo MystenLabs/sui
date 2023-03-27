@@ -82,29 +82,29 @@ export abstract class SignerWithProvider implements Signer {
   async signTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
-    let TransactionBlockBytes;
+    let transactionBlockBytes;
 
     if (TransactionBlock.is(input.transactionBlock)) {
       // If the sender has not yet been set on the transaction, then set it.
       // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
       input.transactionBlock.setSenderIfNotSet(await this.getAddress());
-      TransactionBlockBytes = await input.transactionBlock.build({
+      transactionBlockBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
     } else if (input.transactionBlock instanceof Uint8Array) {
-      TransactionBlockBytes = input.transactionBlock;
+      transactionBlockBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
 
     const intentMessage = messageWithIntent(
       IntentScope.TransactionData,
-      TransactionBlockBytes,
+      transactionBlockBytes,
     );
     const signature = await this.signData(intentMessage);
 
     return {
-      TransactionBlockBytes: toB64(TransactionBlockBytes),
+      transactionBlockBytes: toB64(transactionBlockBytes),
       signature,
     };
   }
@@ -126,13 +126,13 @@ export abstract class SignerWithProvider implements Signer {
      */
     requestType?: ExecuteTransactionRequestType;
   }): Promise<SuiTransactionBlockResponse> {
-    const { TransactionBlockBytes, signature } =
+    const { transactionBlockBytes, signature } =
       await this.signTransactionBlock({
         transactionBlock: input.transactionBlock,
       });
 
     return await this.provider.executeTransactionBlock({
-      transactionBlock: TransactionBlockBytes,
+      transactionBlock: transactionBlockBytes,
       signature,
       options: input.options,
       requestType: input.requestType,

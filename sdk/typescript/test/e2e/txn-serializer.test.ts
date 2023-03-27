@@ -38,11 +38,11 @@ describe('Transaction Serialization and deserialization', () => {
     mutable: boolean[],
   ) {
     tx.setSender(await toolbox.address());
-    const TransactionBlockBytes = await tx.build({
+    const transactionBlockBytes = await tx.build({
       provider: toolbox.provider,
     });
     const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(
-      TransactionBlockBytes,
+      transactionBlockBytes,
     );
     expect(
       deserializedTxnBuilder.inputs
@@ -50,7 +50,7 @@ describe('Transaction Serialization and deserialization', () => {
         .map((i) => isMutableSharedObjectInput(i.value)),
     ).toStrictEqual(mutable);
     const reserializedTxnBytes = await deserializedTxnBuilder.build();
-    expect(reserializedTxnBytes).toEqual(TransactionBlockBytes);
+    expect(reserializedTxnBytes).toEqual(transactionBlockBytes);
   }
 
   it('Move Shared Object Call with mutable reference', async () => {
