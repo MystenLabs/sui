@@ -147,7 +147,7 @@ jobs:
           ${{ steps.get-comment-body.outputs.narwhal }}
           ```
   indexer-bench:
-    name: Indexer
+    name: indexer
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
