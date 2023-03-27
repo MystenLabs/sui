@@ -1581,7 +1581,7 @@ where
         }
     }
 
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         transaction: &VerifiedTransaction,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {

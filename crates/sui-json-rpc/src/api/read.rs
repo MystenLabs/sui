@@ -17,7 +17,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 pub trait ReadApi {
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
@@ -29,7 +29,7 @@ pub trait ReadApi {
     /// The method will throw an error if the input contains any duplicate or
     /// the input size exceeds QUERY_MAX_RESULT_LIMIT
     #[method(name = "multiGetTransactions")]
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
@@ -115,7 +115,7 @@ pub trait ReadApi {
 
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionNumber")]
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt>;
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]

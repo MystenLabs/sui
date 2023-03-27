@@ -247,7 +247,7 @@ async fn test_tx_across_epoch_boundaries() {
             let tx = tx.into_inner();
             tokio::task::spawn(async move {
                 match to
-                    .execute_transaction(ExecuteTransactionRequest {
+                    .execute_transaction_block(ExecuteTransactionRequest {
                         transaction: tx.clone(),
                         request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
                     })
@@ -297,7 +297,7 @@ async fn execute_with_orchestrator(
     request_type: ExecuteTransactionRequestType,
 ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction_block(ExecuteTransactionRequest {
             transaction: txn.into(),
             request_type,
         })

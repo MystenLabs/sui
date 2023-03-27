@@ -610,7 +610,7 @@ async fn test_transaction(
 
     let response = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             Transaction::from_data(data.clone(), Intent::default(), vec![signature])
                 .verify()
                 .unwrap(),

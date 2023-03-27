@@ -30,7 +30,7 @@ impl WriteApi {
 
 #[async_trait]
 impl WriteApiServer for WriteApi {
-    async fn execute_transaction(
+    async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
@@ -38,11 +38,11 @@ impl WriteApiServer for WriteApi {
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionResponse> {
         self.fullnode
-            .execute_transaction(tx_bytes, signatures, options, request_type)
+            .execute_transaction_block(tx_bytes, signatures, options, request_type)
             .await
     }
 
-    async fn dev_inspect_transaction(
+    async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
@@ -50,12 +50,15 @@ impl WriteApiServer for WriteApi {
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
-            .dev_inspect_transaction(sender_address, tx_bytes, gas_price, epoch)
+            .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)
             .await
     }
 
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
-        self.fullnode.dry_run_transaction(tx_bytes).await
+    async fn dry_run_transaction_block(
+        &self,
+        tx_bytes: Base64,
+    ) -> RpcResult<DryRunTransactionResponse> {
+        self.fullnode.dry_run_transaction_block(tx_bytes).await
     }
 }
 

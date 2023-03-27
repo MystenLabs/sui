@@ -552,7 +552,7 @@ async fn call_0x5(
         Transaction::from_data(tx_data, Intent::default(), vec![signature]).verify()?;
     sui_client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             transaction,
             SuiTransactionResponseOptions::full_content(),
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),

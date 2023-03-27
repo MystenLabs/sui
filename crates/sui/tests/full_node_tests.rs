@@ -146,7 +146,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
         ],
     );
 
-    context.execute_transaction(tx).await.unwrap();
+    context.execute_transaction_block(tx).await.unwrap();
 
     assert_eq!(sponsor, context.get_object_owner(&sent_coin).await.unwrap(),);
     Ok(())
@@ -726,7 +726,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction_block(ExecuteTransactionRequest {
             transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
         })
@@ -754,7 +754,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction_block(ExecuteTransactionRequest {
             transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
         })
@@ -963,7 +963,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         sender,
         recipient,
     );
-    context.execute_transaction(nft_transfer_tx).await.unwrap();
+    context
+        .execute_transaction_block(nft_transfer_tx)
+        .await
+        .unwrap();
     sleep(Duration::from_secs(1)).await;
 
     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;

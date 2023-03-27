@@ -160,7 +160,7 @@ pub trait ValidatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
@@ -284,7 +284,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .into_sui_system_state_summary())
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         if std::env::var("BENCH_MODE").is_ok() {
             return self.execute_bench_transaction(tx).await;
         }
@@ -573,7 +573,7 @@ impl ValidatorProxy for FullNodeProxy {
             .await?)
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -583,7 +583,7 @@ impl ValidatorProxy for FullNodeProxy {
             match self
                 .sui_client
                 .quorum_driver()
-                .execute_transaction(
+                .execute_transaction_block(
                     tx.clone(),
                     SuiTransactionResponseOptions::new().with_effects(),
                     None,
@@ -609,7 +609,7 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        self.execute_transaction(tx).await
+        self.execute_transaction_block(tx).await
     }
 
     fn clone_committee(&self) -> Committee {

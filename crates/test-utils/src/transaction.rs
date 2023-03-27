@@ -137,7 +137,7 @@ pub async fn publish_package_with_wallet(
 
     let resp = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             transaction,
             SuiTransactionResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -200,7 +200,7 @@ pub async fn submit_move_transaction(
 
     let resp = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             tx,
             SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
@@ -472,7 +472,7 @@ pub async fn delete_devnet_nft(
     let client = context.get_client().await.unwrap();
     let resp = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             tx,
             SuiTransactionResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),

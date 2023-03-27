@@ -146,17 +146,17 @@ where
         return self.fullnode.multi_get_objects(object_ids, options).await;
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
         if !self
             .migrated_methods
             .contains(&"get_total_transaction_number".to_string())
         {
-            return self.fullnode.get_total_transaction_number().await;
+            return self.fullnode.get_total_transaction_blocks().await;
         }
         Ok(self.get_total_transaction_number_internal()?.into())
     }
 
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
         options: Option<SuiTransactionResponseOptions>,
@@ -165,14 +165,14 @@ where
             .migrated_methods
             .contains(&"get_transaction".to_string())
         {
-            return self.fullnode.get_transaction(digest, options).await;
+            return self.fullnode.get_transaction_block(digest, options).await;
         }
         Ok(self
             .get_transaction_with_options_internal(&digest, options)
             .await?)
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionResponseOptions>,
@@ -181,7 +181,10 @@ where
             .migrated_methods
             .contains(&"multi_get_transactions_with_options".to_string())
         {
-            return self.fullnode.multi_get_transactions(digests, options).await;
+            return self
+                .fullnode
+                .multi_get_transaction_blocks(digests, options)
+                .await;
         }
         Ok(self
             .multi_get_transactions_with_options_internal(&digests, options)

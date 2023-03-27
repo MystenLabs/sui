@@ -200,7 +200,10 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             );
             let proxy_ref = proxy.clone();
             futures.push(async move {
-                if let Ok(effects) = proxy_ref.execute_transaction(transaction.into()).await {
+                if let Ok(effects) = proxy_ref
+                    .execute_transaction_block(transaction.into())
+                    .await
+                {
                     effects.created()[0].0
                 } else {
                     panic!("Failed to create shared counter!");

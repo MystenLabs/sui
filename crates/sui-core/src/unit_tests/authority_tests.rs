@@ -211,7 +211,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
 }
 
 #[tokio::test]
-async fn test_dry_run_transaction() {
+async fn test_dry_run_transaction_block() {
     let (validator, fullnode, transaction, gas_object_id, shared_object_id) =
         construct_shared_object_transaction_with_sequence_number(None).await;
     let initial_shared_object_version = validator
@@ -577,7 +577,7 @@ async fn test_dev_inspect_dynamic_field() {
     };
     let kind = TransactionKind::programmable(pt);
     let DevInspectResults { error, .. } = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await
         .unwrap();
     // produces an error
@@ -819,7 +819,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     };
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await
         .unwrap()
         .results
@@ -881,7 +881,7 @@ async fn test_dev_inspect_uses_unbound_object() {
     let kind = TransactionKind::programmable(pt);
 
     let result = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await;
     let Err(err) = result else { panic!() };
     assert!(err.to_string().contains("ObjectNotFound"));
@@ -3266,7 +3266,7 @@ async fn test_store_revert_transfer_sui() {
     );
     // Transaction should not be deleted on revert in case it's needed
     // to execute a future state sync checkpoint.
-    assert!(db.get_transaction(&tx_digest).unwrap().is_some());
+    assert!(db.get_transaction_block(&tx_digest).unwrap().is_some());
     assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
@@ -4569,7 +4569,7 @@ pub async fn call_dev_inspect(
     ));
     let kind = TransactionKind::programmable(builder.finish());
     authority
-        .dev_inspect_transaction(*sender, kind, Some(1))
+        .dev_inspect_transaction_block(*sender, kind, Some(1))
         .await
 }
 
@@ -5129,7 +5129,7 @@ async fn test_for_inc_201_dev_inspect() {
     builder.command(Command::Publish(modules, system_package_ids()));
     let kind = TransactionKind::programmable(builder.finish());
     let DevInspectResults { events, .. } = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await
         .unwrap();
 
