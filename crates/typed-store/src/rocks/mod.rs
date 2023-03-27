@@ -1849,6 +1849,7 @@ pub fn default_db_options() -> DBOptions {
     let mut block_options = BlockBasedOptions::default();
     // Configure a 64MiB block cache.
     block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
+
     // Set a bloomfilter with 1% false positive rate.
     block_options.set_bloom_filter(10.0, false);
 
@@ -1858,7 +1859,7 @@ pub fn default_db_options() -> DBOptions {
     opt.options.set_block_based_table_factory(&block_options);
     // Set memtable bloomfilter.
     opt.options.set_memtable_prefix_bloom_ratio(0.02);
-
+    opt.options.set_table_cache_num_shard_bits(1);
     opt
 }
 
