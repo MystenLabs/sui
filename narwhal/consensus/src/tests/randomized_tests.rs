@@ -31,13 +31,13 @@ use types::{Certificate, CertificateDigest};
 pub struct FailureModes {
     // The probability of having failures per round. The failures should
     // be <=f , otherwise no DAG could be created. The provided number gives the probability of having
-    // failures up to f. Ex for input `failures_probability = 0.2` it means we'll have 20% change of
+    // failures up to f. Ex for input `failures_probability = 0.2` it means we'll have 20% chance of
     // having failures up to 33% of the nodes.
     pub nodes_failure_probability: f64,
 
     // The percentage of slow nodes we want to introduce to our sample. Basically a slow node is one
-    // that might be able to produce certificates, but those are never get referenced by others. That has
-    // as an effect that when they are leaders might also not get enough support - or no support at all.
+    // that might be able to produce certificates, but these certificates never get referenced by others.
+    // Consequently when those nodes are leaders they might also not get enough support - or no support at all.
     // For example, a value of 0.2 means that we want up to 20% of our nodes to behave as slow nodes.
     pub slow_nodes_percentage: f64,
 
@@ -72,7 +72,7 @@ async fn bullshark_randomised_tests() {
     // A range of the committee size to be used
     const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=8;
     // A range of rounds for which we will create DAGs
-    const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
+    const DAG_ROUNDS: RangeInclusive<Round> = 7..=20;
     // The number of different execution plans to be created and tested against for every generated DAG
     const EXECUTION_PLANS: u64 = 1_000;
     // The number of DAGs that should be generated and tested against for every set of properties.
