@@ -17,7 +17,7 @@ use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
-    SuiTransactionDataAPI, SuiTransactionEffectsAPI,
+    SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
 };
 use sui_sdk::error::Error;
 use sui_sdk::SuiClient;
@@ -37,7 +37,7 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
-use crate::types::SuiTransactionFullResponse;
+use crate::types::SuiTransactionBlockFullResponse;
 use crate::utils::multi_get_full_transactions;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
@@ -493,7 +493,7 @@ where
     }
 
     fn index_packages(
-        transactions: &[SuiTransactionFullResponse],
+        transactions: &[SuiTransactionBlockFullResponse],
         changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = changed_objects

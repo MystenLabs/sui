@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
-    NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionResponseOptions,
+    NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber};
 use sui_types::digests::CheckpointDigest;
@@ -25,7 +25,7 @@ use crate::models::packages::Package;
 use crate::models::system_state::{DBSystemStateSummary, DBValidatorSummary};
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 use crate::models::transactions::Transaction;
-use crate::types::SuiTransactionFullResponse;
+use crate::types::SuiTransactionBlockFullResponse;
 
 #[async_trait]
 pub trait IndexerStore {
@@ -73,8 +73,8 @@ pub trait IndexerStore {
     async fn compose_full_transaction_response(
         &self,
         tx: Transaction,
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> Result<SuiTransactionFullResponse, IndexerError>;
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockFullResponse, IndexerError>;
 
     fn get_all_transaction_digest_page(
         &self,
@@ -194,7 +194,7 @@ pub trait IndexerStore {
 #[derive(Clone, Debug)]
 pub struct CheckpointData {
     pub checkpoint: RpcCheckpoint,
-    pub transactions: Vec<SuiTransactionFullResponse>,
+    pub transactions: Vec<SuiTransactionBlockFullResponse>,
     pub changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
 }
 

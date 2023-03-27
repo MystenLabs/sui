@@ -17,8 +17,8 @@ use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionResponse,
-    SuiTransactionResponseQuery, TransactionsPage,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -126,12 +126,12 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
 
     async fn query_transaction_blocks(
         &self,
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage> {
+    ) -> RpcResult<TransactionBlocksPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
         let opts = query.options.unwrap_or_default();
@@ -146,10 +146,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         digests.truncate(limit);
         let next_cursor = digests.last().cloned().map_or(cursor, Some);
 
-        let data: Vec<SuiTransactionResponse> = if opts.only_digest() {
+        let data: Vec<SuiTransactionBlockResponse> = if opts.only_digest() {
             digests
                 .into_iter()
-                .map(SuiTransactionResponse::new)
+                .map(SuiTransactionBlockResponse::new)
                 .collect()
         } else {
             self.read_api

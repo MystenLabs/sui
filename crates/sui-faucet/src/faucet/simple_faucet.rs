@@ -15,8 +15,8 @@ use std::path::Path;
 use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_types::object::Owner;
@@ -232,7 +232,7 @@ impl SimpleFaucet {
         recipient: SuiAddress,
         coin_id: ObjectID,
         tx_data: TransactionData,
-    ) -> Result<SuiTransactionResponse, FaucetError> {
+    ) -> Result<SuiTransactionBlockResponse, FaucetError> {
         let signature = self
             .wallet
             .config
@@ -370,7 +370,7 @@ impl SimpleFaucet {
         coin_id: ObjectID,
         recipient: SuiAddress,
         uuid: Uuid,
-    ) -> SuiTransactionResponse {
+    ) -> SuiTransactionBlockResponse {
         let mut retry_delay = Duration::from_millis(500);
 
         loop {
@@ -400,7 +400,7 @@ impl SimpleFaucet {
         coin_id: ObjectID,
         recipient: SuiAddress,
         uuid: Uuid,
-    ) -> Result<SuiTransactionResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
         self.metrics.current_executions_in_flight.inc();
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_executions_in_flight.dec();
@@ -412,7 +412,7 @@ impl SimpleFaucet {
             .quorum_driver()
             .execute_transaction_block(
                 tx.clone(),
-                SuiTransactionResponseOptions::new().with_effects(),
+                SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
@@ -472,7 +472,7 @@ impl SimpleFaucet {
 
     async fn check_and_map_transfer_gas_result(
         &self,
-        res: SuiTransactionResponse,
+        res: SuiTransactionBlockResponse,
         number_of_coins: usize,
         recipient: SuiAddress,
     ) -> Result<(TransactionDigest, Vec<ObjectID>), FaucetError> {

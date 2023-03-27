@@ -17,7 +17,7 @@ use test_utils::network::TestClusterBuilder;
 //     let client = SuiClientBuilder::default().build(rpc_url).await?;
 //     let txs = client
 //         .read_api()
-//         .get_transactions_stream(SuiTransactionResponseQuery::default(), None, true)
+//         .get_transactions_stream(SuiTransactionBlockResponseQuery::default(), None, true)
 //         .collect::<Vec<_>>()
 //         .await;
 
@@ -36,7 +36,7 @@ use test_utils::network::TestClusterBuilder;
 
 //     let txs = client
 //         .read_api()
-//         .get_transactions_stream(SuiTransactionResponseQuery::default(), None, true)
+//         .get_transactions_stream(SuiTransactionBlockResponseQuery::default(), None, true)
 //         .collect::<Vec<_>>()
 //         .await;
 

@@ -9,7 +9,7 @@ import {
   getTransactionDigest,
   ObjectId,
   RawSigner,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   SUI_SYSTEM_STATE_OBJECT_ID,
   TransactionBlock,
   SuiObjectData,
@@ -27,7 +27,7 @@ import {
 describe('Transaction Builders', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
-  let publishTxn: SuiTransactionResponse;
+  let publishTxn: SuiTransactionBlockResponse;
   let sharedObjectId: ObjectId;
 
   beforeAll(async () => {

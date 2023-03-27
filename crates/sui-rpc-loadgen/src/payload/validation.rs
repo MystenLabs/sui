@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::time::Instant;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, TransactionDigest};
@@ -62,14 +62,14 @@ pub(crate) async fn check_transactions(
     cross_validate: bool,
     verify_objects: bool,
 ) {
-    let transactions: Vec<Vec<SuiTransactionResponse>> =
+    let transactions: Vec<Vec<SuiTransactionBlockResponse>> =
         join_all(clients.iter().enumerate().map(|(i, client)| async move {
             let start_time = Instant::now();
             let transactions = client
                 .read_api()
                 .multi_get_transactions_with_options(
                     digests.to_vec(),
-                    SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
+                    SuiTransactionBlockResponseOptions::full_content(), // todo(Will) support options for this
                 )
                 .await;
             let elapsed_time = start_time.elapsed();
@@ -111,7 +111,7 @@ pub(crate) async fn check_transactions(
     }
 }
 
-pub(crate) fn get_all_object_ids(response: &SuiTransactionResponse) -> Vec<ObjectID> {
+pub(crate) fn get_all_object_ids(response: &SuiTransactionBlockResponse) -> Vec<ObjectID> {
     let objects = match response.effects.as_ref() {
         // TODO: handle deleted and wrapped objects
         Some(effects) => effects.all_changed_objects(),

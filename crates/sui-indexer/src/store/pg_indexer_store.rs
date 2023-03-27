@@ -26,8 +26,8 @@ use sui_json_rpc_types::{
     NetworkMetrics, SuiEvent, SuiObjectDataFilter,
 };
 use sui_json_rpc_types::{
-    SuiTransaction, SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents,
-    SuiTransactionResponseOptions,
+    SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -62,7 +62,7 @@ use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::{IndexerStore, TemporaryEpochStore};
-use crate::types::SuiTransactionFullResponse;
+use crate::types::SuiTransactionBlockFullResponse;
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 
@@ -409,18 +409,18 @@ impl IndexerStore for PgIndexerStore {
     async fn compose_full_transaction_response(
         &self,
         tx: Transaction,
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> Result<SuiTransactionFullResponse, IndexerError> {
-        let transaction: SuiTransaction =
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockFullResponse, IndexerError> {
+        let transaction: SuiTransactionBlock =
             serde_json::from_str(&tx.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
-                    "Failed converting transaction JSON {:?} to SuiTransaction with error: {:?}",
+                    "Failed converting transaction JSON {:?} to SuiTransactionBlock with error: {:?}",
                     tx.transaction_content, err
                 ))
             })?;
-        let effects: SuiTransactionEffects = serde_json::from_str(&tx.transaction_effects_content).map_err(|err| {
+        let effects: SuiTransactionBlockEffects = serde_json::from_str(&tx.transaction_effects_content).map_err(|err| {
         IndexerError::InsertableParsingError(format!(
-            "Failed converting transaction effect JSON {:?} to SuiTransactionEffects with error: {:?}",
+            "Failed converting transaction effect JSON {:?} to SuiTransactionBlockEffects with error: {:?}",
             tx.transaction_effects_content, err
         ))
         })?;
@@ -462,7 +462,7 @@ impl IndexerStore for PgIndexerStore {
             /* descending_order */ false,
         )?;
 
-        Ok(SuiTransactionFullResponse {
+        Ok(SuiTransactionBlockFullResponse {
             digest: tx_digest,
             transaction,
             raw_transaction: tx.raw_transaction,
@@ -470,7 +470,7 @@ impl IndexerStore for PgIndexerStore {
             confirmed_local_execution: tx.confirmed_local_execution,
             timestamp_ms: tx.timestamp_ms as u64,
             checkpoint: tx.checkpoint_sequence_number as u64,
-            events: SuiTransactionEvents { data: events.data },
+            events: SuiTransactionBlockEvents { data: events.data },
             object_changes,
             balance_changes,
         })

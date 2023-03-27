@@ -23,8 +23,8 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionEffects, SuiTransactionEffectsAPI,
-    SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -71,7 +71,7 @@ use futures::FutureExt;
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
     CertifiedTransactionEffects(CertifiedTransactionEffects, TransactionEvents),
-    SuiTransactionEffects(SuiTransactionEffects),
+    SuiTransactionBlockEffects(SuiTransactionBlockEffects),
 }
 
 impl ExecutionEffects {
@@ -80,7 +80,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().mutated().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .mutated()
                 .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
@@ -93,7 +93,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().created().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
                 .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
@@ -106,7 +106,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().deleted().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .deleted()
                 .iter()
                 .map(|refe| refe.to_object_ref())
@@ -119,7 +119,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 Some(certified_effects.auth_sig())
             }
-            ExecutionEffects::SuiTransactionEffects(_) => None,
+            ExecutionEffects::SuiTransactionBlockEffects(_) => None,
         }
     }
 
@@ -128,7 +128,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 *certified_effects.data().gas_object()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 let refe = &sui_tx_effects.gas_object();
                 (refe.reference.to_object_ref(), refe.owner)
             }
@@ -147,7 +147,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().status().is_ok()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 sui_tx_effects.status().is_ok()
             }
         }
@@ -585,13 +585,13 @@ impl ValidatorProxy for FullNodeProxy {
                 .quorum_driver()
                 .execute_transaction_block(
                     tx.clone(),
-                    SuiTransactionResponseOptions::new().with_effects(),
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
                     None,
                 )
                 .await
             {
                 Ok(resp) => {
-                    let effects = ExecutionEffects::SuiTransactionEffects(
+                    let effects = ExecutionEffects::SuiTransactionBlockEffects(
                         resp.effects.expect("effects field should not be None"),
                     );
                     return Ok(effects);

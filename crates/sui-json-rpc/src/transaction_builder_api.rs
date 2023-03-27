@@ -13,8 +13,8 @@ use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBuilderMode, SuiTypeTag,
-    TransactionBytes,
+    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBlockBytes,
 };
 use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
 use sui_open_rpc::Module;
@@ -93,12 +93,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn transfer_sui(
@@ -108,12 +108,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         gas_budget: u64,
         recipient: SuiAddress,
         amount: Option<u64>,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn pay(
@@ -124,7 +124,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         amounts: Vec<BigInt>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .pay(
@@ -136,7 +136,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 gas_budget,
             )
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn pay_sui(
@@ -146,7 +146,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         recipients: Vec<SuiAddress>,
         amounts: Vec<BigInt>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .pay_sui(
@@ -157,7 +157,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 gas_budget,
             )
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn pay_all_sui(
@@ -166,12 +166,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .pay_all_sui(signer, input_coins, recipient, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn publish(
@@ -181,7 +181,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
             .map(|data| data.to_vec().map_err(|e| anyhow::anyhow!(e)))
@@ -190,7 +190,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
             .builder
             .publish(sender, compiled_modules, dependencies, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn split_coin(
@@ -200,12 +200,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         split_amounts: Vec<u64>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn split_coin_equal(
@@ -215,12 +215,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         split_count: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .split_coin_equal(signer, coin_object_id, split_count, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn merge_coin(
@@ -230,12 +230,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn move_call(
@@ -248,11 +248,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
-    ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
+    ) -> RpcResult<TransactionBlockBytes> {
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
         let data: TransactionData = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
+            SuiTransactionBlockBuilderMode::DevInspect => {
                 self.dev_inspect_builder
                     .move_call(
                         signer,
@@ -266,7 +266,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     )
                     .await?
             }
-            SuiTransactionBuilderMode::Commit => {
+            SuiTransactionBlockBuilderMode::Commit => {
                 self.builder
                     .move_call(
                         signer,
@@ -281,7 +281,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     .await?
             }
         };
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn batch_transaction(
@@ -290,22 +290,22 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
-    ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
+    ) -> RpcResult<TransactionBlockBytes> {
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
         let data = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
+            SuiTransactionBlockBuilderMode::DevInspect => {
                 self.dev_inspect_builder
                     .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
-            SuiTransactionBuilderMode::Commit => {
+            SuiTransactionBlockBuilderMode::Commit => {
                 self.builder
                     .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
         };
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn request_add_stake(
@@ -316,8 +316,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         validator: SuiAddress,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
-        Ok(TransactionBytes::from_data(
+    ) -> RpcResult<TransactionBlockBytes> {
+        Ok(TransactionBlockBytes::from_data(
             self.builder
                 .request_add_stake(signer, coins, amount, validator, gas, gas_budget)
                 .await?,
@@ -330,8 +330,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
-        Ok(TransactionBytes::from_data(
+    ) -> RpcResult<TransactionBlockBytes> {
+        Ok(TransactionBlockBytes::from_data(
             self.builder
                 .request_withdraw_stake(signer, staked_sui, gas, gas_budget)
                 .await?,

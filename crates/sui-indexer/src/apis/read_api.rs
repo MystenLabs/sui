@@ -12,7 +12,7 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -20,7 +20,7 @@ use sui_types::digests::TransactionDigest;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
-use crate::types::{SuiTransactionFullResponse, SuiTransactionFullResponseWithOptions};
+use crate::types::{SuiTransactionBlockFullResponse, SuiTransactionBlockFullResponseWithOptions};
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -46,17 +46,17 @@ impl<S: IndexerStore> ReadApi<S> {
     async fn get_transaction_with_options_internal(
         &self,
         digest: &TransactionDigest,
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> Result<SuiTransactionResponse, IndexerError> {
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockResponse, IndexerError> {
         let tx = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?;
-        let tx_full_resp: SuiTransactionFullResponse = self
+        let tx_full_resp: SuiTransactionBlockFullResponse = self
             .state
             .compose_full_transaction_response(tx, options.clone())
             .await?;
 
-        let sui_transaction_response = SuiTransactionFullResponseWithOptions {
+        let sui_transaction_response = SuiTransactionBlockFullResponseWithOptions {
             response: tx_full_resp,
             options: options.unwrap_or_default(),
         }
@@ -67,8 +67,8 @@ impl<S: IndexerStore> ReadApi<S> {
     async fn multi_get_transactions_with_options_internal(
         &self,
         digests: &[TransactionDigest],
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> Result<Vec<SuiTransactionResponse>, IndexerError> {
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> Result<Vec<SuiTransactionBlockResponse>, IndexerError> {
         let digest_strs = digests
             .iter()
             .map(|digest| digest.base58_encode())
@@ -92,12 +92,12 @@ impl<S: IndexerStore> ReadApi<S> {
             self.state
                 .compose_full_transaction_response(tx, options.clone())
         });
-        let tx_full_resp_vec: Vec<SuiTransactionFullResponse> = join_all(tx_full_resp_futures)
+        let tx_full_resp_vec: Vec<SuiTransactionBlockFullResponse> = join_all(tx_full_resp_futures)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
 
-        let tx_resp_vec: Vec<SuiTransactionResponse> =
+        let tx_resp_vec: Vec<SuiTransactionBlockResponse> =
             tx_full_resp_vec.into_iter().map(|tx| tx.into()).collect();
         Ok(tx_resp_vec)
     }
@@ -159,8 +159,8 @@ where
     async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<SuiTransactionResponse> {
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<SuiTransactionBlockResponse> {
         if !self
             .migrated_methods
             .contains(&"get_transaction".to_string())
@@ -175,8 +175,8 @@ where
     async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<Vec<SuiTransactionResponse>> {
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         if !self
             .migrated_methods
             .contains(&"multi_get_transactions_with_options".to_string())

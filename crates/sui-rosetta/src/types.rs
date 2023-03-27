@@ -15,7 +15,7 @@ use serde_json::Value;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
 
-use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionKind};
+use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockKind};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
@@ -411,15 +411,15 @@ pub enum OperationType {
     ProgrammableTransaction,
 }
 
-impl From<&SuiTransactionKind> for OperationType {
-    fn from(tx: &SuiTransactionKind) -> Self {
+impl From<&SuiTransactionBlockKind> for OperationType {
+    fn from(tx: &SuiTransactionBlockKind) -> Self {
         match tx {
-            SuiTransactionKind::ChangeEpoch(_) => OperationType::EpochChange,
-            SuiTransactionKind::Genesis(_) => OperationType::Genesis,
-            SuiTransactionKind::ConsensusCommitPrologue(_) => {
+            SuiTransactionBlockKind::ChangeEpoch(_) => OperationType::EpochChange,
+            SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
+            SuiTransactionBlockKind::ConsensusCommitPrologue(_) => {
                 OperationType::ConsensusCommitPrologue
             }
-            SuiTransactionKind::ProgrammableTransaction(_) => {
+            SuiTransactionBlockKind::ProgrammableTransaction(_) => {
                 OperationType::ProgrammableTransaction
             }
         }

@@ -19,8 +19,8 @@ use sui_json_rpc_types::{
     DryRunTransactionResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
-    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
-    SuiTransactionResponseQuery, TransactionsPage,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
@@ -123,8 +123,8 @@ impl ReadApi {
     pub async fn get_transaction_with_options(
         &self,
         digest: TransactionDigest,
-        options: SuiTransactionResponseOptions,
-    ) -> SuiRpcResult<SuiTransactionResponse> {
+        options: SuiTransactionBlockResponseOptions,
+    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         Ok(self
             .api
             .http
@@ -135,8 +135,8 @@ impl ReadApi {
     pub async fn multi_get_transactions_with_options(
         &self,
         digests: Vec<TransactionDigest>,
-        options: SuiTransactionResponseOptions,
-    ) -> SuiRpcResult<Vec<SuiTransactionResponse>> {
+        options: SuiTransactionBlockResponseOptions,
+    ) -> SuiRpcResult<Vec<SuiTransactionBlockResponse>> {
         Ok(self
             .api
             .http
@@ -150,11 +150,11 @@ impl ReadApi {
 
     pub async fn query_transaction_blocks(
         &self,
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: bool,
-    ) -> SuiRpcResult<TransactionsPage> {
+    ) -> SuiRpcResult<TransactionBlocksPage> {
         Ok(self
             .api
             .http
@@ -181,10 +181,10 @@ impl ReadApi {
 
     pub fn get_transactions_stream(
         &self,
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
         descending_order: bool,
-    ) -> impl Stream<Item = SuiTransactionResponse> + '_ {
+    ) -> impl Stream<Item = SuiTransactionBlockResponse> + '_ {
         stream::unfold(
             (vec![], cursor, true, query),
             move |(mut data, cursor, first, query)| async move {
@@ -441,12 +441,12 @@ impl QuorumDriver {
     pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
-        options: SuiTransactionResponseOptions,
+        options: SuiTransactionBlockResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> SuiRpcResult<SuiTransactionResponse> {
+    ) -> SuiRpcResult<SuiTransactionBlockResponse> {
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
-        let mut response: SuiTransactionResponse = self
+        let mut response: SuiTransactionBlockResponse = self
             .api
             .http
             .execute_transaction_block(
@@ -490,7 +490,7 @@ impl QuorumDriver {
             let resp = ReadApiClient::get_transaction_block(
                 &c.http,
                 tx_digest,
-                Some(SuiTransactionResponseOptions::new()),
+                Some(SuiTransactionBlockResponseOptions::new()),
             )
             .await;
             if let Err(err) = resp {

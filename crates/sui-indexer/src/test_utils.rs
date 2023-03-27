@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use prometheus::Registry;
-use sui_json_rpc_types::SuiTransactionResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tokio::task::JoinHandle;
 
 use crate::errors::IndexerError;
@@ -34,21 +34,21 @@ pub async fn start_test_indexer(
 }
 
 #[derive(Clone)]
-pub struct SuiTransactionResponseBuilder<'a> {
-    response: SuiTransactionResponse,
-    full_response: &'a SuiTransactionResponse,
+pub struct SuiTransactionBlockResponseBuilder<'a> {
+    response: SuiTransactionBlockResponse,
+    full_response: &'a SuiTransactionBlockResponse,
 }
 
-impl<'a> SuiTransactionResponseBuilder<'a> {
-    pub fn new(full_response: &'a SuiTransactionResponse) -> Self {
+impl<'a> SuiTransactionBlockResponseBuilder<'a> {
+    pub fn new(full_response: &'a SuiTransactionBlockResponse) -> Self {
         Self {
-            response: SuiTransactionResponse::default(),
+            response: SuiTransactionBlockResponse::default(),
             full_response,
         }
     }
 
     pub fn with_input(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             transaction: self.full_response.transaction.clone(),
             ..self.response
         };
@@ -56,7 +56,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_raw_input(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             raw_transaction: self.full_response.raw_transaction.clone(),
             ..self.response
         };
@@ -64,7 +64,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_effects(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             effects: self.full_response.effects.clone(),
             ..self.response
         };
@@ -72,7 +72,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_events(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             events: self.full_response.events.clone(),
             ..self.response
         };
@@ -80,7 +80,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_balance_changes(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             balance_changes: self.full_response.balance_changes.clone(),
             ..self.response
         };
@@ -88,7 +88,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_object_changes(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             object_changes: self.full_response.object_changes.clone(),
             ..self.response
         };
@@ -96,7 +96,7 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
     }
 
     pub fn with_input_and_changes(mut self) -> Self {
-        self.response = SuiTransactionResponse {
+        self.response = SuiTransactionBlockResponse {
             transaction: self.full_response.transaction.clone(),
             balance_changes: self.full_response.balance_changes.clone(),
             object_changes: self.full_response.object_changes.clone(),
@@ -105,8 +105,8 @@ impl<'a> SuiTransactionResponseBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> SuiTransactionResponse {
-        SuiTransactionResponse {
+    pub fn build(self) -> SuiTransactionBlockResponse {
+        SuiTransactionBlockResponse {
             transaction: self.response.transaction,
             raw_transaction: self.response.raw_transaction,
             effects: self.response.effects,

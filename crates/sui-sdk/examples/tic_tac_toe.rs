@@ -14,11 +14,11 @@ use clap::Subcommand;
 use serde::Deserialize;
 
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionResponseOptions};
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiTransactionBlockResponseOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     json::SuiJsonValue,
-    rpc_types::{SuiData, SuiTransactionEffectsAPI},
+    rpc_types::{SuiData, SuiTransactionBlockEffectsAPI},
     types::{
         base_types::{ObjectID, SuiAddress},
         id::UID,
@@ -105,7 +105,7 @@ impl TicTacToe {
             .execute_transaction_block(
                 Transaction::from_data(create_game_call, Intent::default(), vec![signature])
                     .verify()?,
-                SuiTransactionResponseOptions::full_content(),
+                SuiTransactionBlockResponseOptions::full_content(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -204,7 +204,7 @@ impl TicTacToe {
                 .execute_transaction_block(
                     Transaction::from_data(place_mark_call, Intent::default(), vec![signature])
                         .verify()?,
-                    SuiTransactionResponseOptions::new().with_effects(),
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await?;

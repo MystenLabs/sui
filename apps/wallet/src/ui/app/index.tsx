@@ -13,7 +13,7 @@ import { ApprovalRequestPage } from '_pages/approval-request';
 import HomePage, {
     NftsPage,
     TokensPage,
-    TransactionsPage,
+    TransactionBlocksPage,
     TransferCoinPage,
     NFTDetailsPage,
     ReceiptPage,
@@ -66,7 +66,10 @@ const App = () => {
                     path="nft-transfer/:nftId"
                     element={<NftTransferPage />}
                 />
-                <Route path="transactions" element={<TransactionsPage />} />
+                <Route
+                    path="transactions"
+                    element={<TransactionBlocksPage />}
+                />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
                 <Route path="stake/*" element={<Staking />} />
