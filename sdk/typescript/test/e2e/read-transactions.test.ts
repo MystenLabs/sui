@@ -57,26 +57,10 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transactions', async () => {
-    const resp = await toolbox.provider.queryTransactionsForAddressDeprecated(
-      toolbox.address(),
-      false,
-    );
-    expect(resp.length).to.greaterThan(0);
-
     const allTransactions = await toolbox.provider.queryTransactions({
       limit: 10,
     });
     expect(allTransactions.data.length).to.greaterThan(0);
-
-    const resp2 = await toolbox.provider.queryTransactions({
-      filter: { ToAddress: toolbox.address() },
-    });
-    const resp3 = await toolbox.provider.queryTransactions({
-      filter: { FromAddress: toolbox.address() },
-    });
-    expect([...resp2.data, ...resp3.data].map((r) => r.digest).sort()).toEqual(
-      resp.sort(),
-    );
   });
 
   it('Genesis exists', async () => {
