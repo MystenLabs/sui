@@ -66,10 +66,7 @@ export function DelegationDetailCard({
 
     const suiEarned = BigInt(delegationData?.estimatedReward || 0n);
 
-    const apy = useMemo(() => {
-        if (!rollingAverageApys) return 0;
-        return rollingAverageApys?.[validatorAddress] || 0;
-    }, [rollingAverageApys, validatorAddress]);
+    const apy = rollingAverageApys?.[validatorAddress] || 0;
 
     const delegationId =
         delegationData?.status === 'Active' && delegationData?.stakedSuiId;

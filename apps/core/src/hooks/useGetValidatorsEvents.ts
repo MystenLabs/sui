@@ -24,7 +24,7 @@ export function useGetValidatorsEvents({
     // since we are getting events base on the number of validators, we need to make sure that the limit is not null and cache by the limit
     // number of validators can change from network to network
     return useQuery(
-        ['validatorEvents', limit],
+        ['validatorEvents', eventLimit, eventCursor?.txDigest, order],
         () =>
             rpc.queryEvents({
                 query: { MoveEventType: VALIDATORS_EVENTS_QUERY },

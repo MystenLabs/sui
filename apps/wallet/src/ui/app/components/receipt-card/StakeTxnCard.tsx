@@ -3,7 +3,6 @@
 
 import { useGetRollingAverageApys } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js';
-import { useMemo } from 'react';
 
 import { useGetTimeBeforeEpochNumber } from '_app/staking/useGetTimeBeforeEpochNumber';
 import { ValidatorLogo } from '_app/staking/validators/ValidatorLogo';
@@ -31,10 +30,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
         system?.activeValidators?.length || null
     );
 
-    const apy = useMemo(() => {
-        if (!rollingAverageApys) return 0;
-        return rollingAverageApys[validatorAddress] || 0;
-    }, [rollingAverageApys, validatorAddress]);
+    const apy = rollingAverageApys?.[validatorAddress] || 0;
 
     // Reward will be available after 2 epochs
     // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING

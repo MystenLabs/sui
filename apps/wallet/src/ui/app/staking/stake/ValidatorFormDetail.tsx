@@ -82,10 +82,7 @@ export function ValidatorFormDetail({
         );
     }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
-    const apy = useMemo(() => {
-        if (!rollingAverageApys) return 0;
-        return rollingAverageApys?.[validatorAddress] || 0;
-    }, [rollingAverageApys, validatorAddress]);
+    const apy = rollingAverageApys?.[validatorAddress] || 0;
 
     if (isLoading || loadingValidators) {
         return (
