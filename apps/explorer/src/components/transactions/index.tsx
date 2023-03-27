@@ -29,7 +29,7 @@ export function Transactions({
     const rpc = useRpcClient();
 
     const countQuery = useQuery(['transactions', 'count'], () =>
-        rpc.getTotalTransactionNumber()
+        rpc.getTotalTransactionBlocks()
     );
 
     const pagination = usePaginationStack();
@@ -37,7 +37,7 @@ export function Transactions({
     const transactionQuery = useQuery(
         ['transactions', { limit, cursor: pagination.cursor }],
         async () =>
-            rpc.queryTransactions({
+            rpc.queryTransactionBlocks({
                 order: 'descending',
                 cursor: pagination.cursor,
                 limit,

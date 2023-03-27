@@ -27,7 +27,7 @@ function ReceiptPage() {
     const { data, isLoading, isError } = useQuery(
         ['transactions-by-id', transactionId],
         async () => {
-            return rpc.getTransaction({
+            return rpc.getTransactionBlock({
                 digest: transactionId!,
                 options: {
                     showObjectChanges: true,

@@ -452,9 +452,9 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Get transactions for a given query criteria
+   * Get transaction blocks for a given query criteria
    */
-  async queryTransactions(
+  async queryTransactionBlocks(
     input: SuiTransactionResponseQuery & PaginationArguments & OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
@@ -473,7 +473,7 @@ export class JsonRpcProvider {
     );
   }
 
-  async getTransaction(input: {
+  async getTransactionBlock(input: {
     digest: TransactionDigest;
     options?: SuiTransactionResponseOptions;
   }): Promise<SuiTransactionResponse> {
@@ -488,7 +488,7 @@ export class JsonRpcProvider {
     );
   }
 
-  async multiGetTransactions(input: {
+  async multiGetTransactionBlocks(input: {
     digests: TransactionDigest[];
     options?: SuiTransactionResponseOptions;
   }): Promise<SuiTransactionResponse[]> {
@@ -511,7 +511,7 @@ export class JsonRpcProvider {
     );
   }
 
-  async executeTransaction(input: {
+  async executeTransactionBlock(input: {
     transactionBlock: Uint8Array | string;
     signature: SerializedSignature | SerializedSignature[];
     options?: SuiTransactionResponseOptions;
@@ -536,7 +536,7 @@ export class JsonRpcProvider {
    * Get total number of transactions
    */
 
-  async getTotalTransactionNumber(): Promise<bigint> {
+  async getTotalTransactionBlocks(): Promise<bigint> {
     const resp = await this.client.requestWithType(
       'sui_getTotalTransactionNumber',
       [],
@@ -651,11 +651,11 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Runs the transaction in dev-inpsect mode. Which allows for nearly any
+   * Runs the transaction block in dev-inpsect mode. Which allows for nearly any
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    */
-  async devInspectTransaction(input: {
+  async devInspectTransactionBlock(input: {
     transactionBlock: TransactionBlock | string | Uint8Array;
     sender: SuiAddress;
     /** Default to use the network reference gas price stored in the Sui System State object */
@@ -689,9 +689,9 @@ export class JsonRpcProvider {
   }
 
   /**
-   * Dry run a transaction and return the result.
+   * Dry run a transaction block and return the result.
    */
-  async dryRunTransaction(input: {
+  async dryRunTransactionBlock(input: {
     transactionBlock: Uint8Array | string;
   }): Promise<DryRunTransactionResponse> {
     return await this.client.requestWithType(

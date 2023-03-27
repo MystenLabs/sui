@@ -56,6 +56,6 @@ async function validateDevInspectTransaction(
   transactionBlock: TransactionBlock,
   status: 'success' | 'failure',
 ) {
-  const result = await signer.devInspectTransaction({ transactionBlock });
+  const result = await signer.devInspectTransactionBlock({ transactionBlock });
   expect(result.effects.status.status).toEqual(status);
 }

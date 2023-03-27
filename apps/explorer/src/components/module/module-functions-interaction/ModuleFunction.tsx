@@ -47,7 +47,7 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { isConnected, signAndExecuteTransaction } = useWalletKit();
+    const { isConnected, signAndExecuteTransactionBlock } = useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
@@ -85,7 +85,7 @@ export function ModuleFunction({
                             : tx.object(param)
                     ) ?? [],
             });
-            const result = await signAndExecuteTransaction({
+            const result = await signAndExecuteTransactionBlock({
                 transactionBlock: tx,
                 options: {
                     showEffects: true,

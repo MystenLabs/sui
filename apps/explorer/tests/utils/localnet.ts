@@ -35,7 +35,7 @@ export async function split_coin(address: string) {
         arguments: [tx.object(coin_id), tx.pure(10)],
     });
 
-    const result = await signer.signAndExecuteTransaction({
+    const result = await signer.signAndExecuteTransactionBlock({
         transactionBlock: tx,
         options: {
             showInput: true,

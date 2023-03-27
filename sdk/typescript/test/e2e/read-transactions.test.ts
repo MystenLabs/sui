@@ -20,19 +20,19 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Total Transactions', async () => {
-    const numTransactions = await toolbox.provider.getTotalTransactionNumber();
+    const numTransactions = await toolbox.provider.getTotalTransactionBlocks();
     expect(numTransactions).toBeGreaterThan(0);
   });
 
   it('Get Transaction', async () => {
     const digest = transactions[0].digest;
-    const txn = await toolbox.provider.getTransaction({ digest });
+    const txn = await toolbox.provider.getTransactionBlock({ digest });
     expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
   it('Multi Get Pay Transactions', async () => {
     const digests = transactions.map((t) => t.digest);
-    const txns = await toolbox.provider.multiGetTransactions({
+    const txns = await toolbox.provider.multiGetTransactionBlocks({
       digests,
       options: { showBalanceChanges: true },
     });
@@ -44,12 +44,12 @@ describe('Transaction Reading API', () => {
 
   it('Query Transactions with opts', async () => {
     const options = { showEvents: true, showEffects: true };
-    const resp = await toolbox.provider.queryTransactions({
+    const resp = await toolbox.provider.queryTransactionBlocks({
       options,
       limit: 1,
     });
     const digest = resp.data[0].digest;
-    const response2 = await toolbox.provider.getTransaction({
+    const response2 = await toolbox.provider.getTransactionBlock({
       digest,
       options,
     });
@@ -57,18 +57,18 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transactions', async () => {
-    const allTransactions = await toolbox.provider.queryTransactions({
+    const allTransactions = await toolbox.provider.queryTransactionBlocks({
       limit: 10,
     });
     expect(allTransactions.data.length).to.greaterThan(0);
   });
 
   it('Genesis exists', async () => {
-    const allTransactions = await toolbox.provider.queryTransactions({
+    const allTransactions = await toolbox.provider.queryTransactionBlocks({
       limit: 1,
       order: 'ascending',
     });
-    const resp = await toolbox.provider.getTransaction({
+    const resp = await toolbox.provider.getTransactionBlock({
       digest: allTransactions.data[0].digest,
       options: { showInput: true },
     });
