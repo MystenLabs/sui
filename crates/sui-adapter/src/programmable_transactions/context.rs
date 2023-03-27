@@ -197,6 +197,25 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
     }
 
+    pub fn set_link_context(&mut self, package_id: ObjectID) -> Result<(), ExecutionError> {
+        match self.state_view.get_package(&package_id) {
+            Ok(Some(package)) => {
+                self.set_linkage(&package);
+                Ok(())
+            },
+            Ok(None) => invariant_violation!(format!(
+                "Link context not found or not a package: {package_id}",
+            )),
+            Err(err) => invariant_violation!(format!(
+                "Error fetching {package_id} as link context: {err}",
+            )),
+        }
+    }
+
+    pub fn set_linkage(&mut self, package: &MovePackage) {
+        *self.session.get_resolver_mut() = LinkageView::from_package(self.state_view, package);
+    }
+
     /// Takes the user events from the runtime and tags them with the Move module of the function
     /// that was invoked for the command
     pub fn take_user_events(

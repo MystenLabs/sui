@@ -10,26 +10,24 @@ use move_core_types::{
 };
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
-    error::{SuiError, SuiResult},
+    error::{ExecutionError, SuiError, SuiResult},
     event::Event,
-    move_package::UpgradeInfo,
+    move_package::{MovePackage, UpgradeInfo},
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 use super::types::StorageView;
 
-/// TODO Docs
-#[allow(dead_code)]
+/// Exposes module and linkage resolution to the Move runtime.  The first by delegating to
+/// `StorageView` and the second via linkage information that is loaded from a move package.
 pub struct LinkageView<'state, S: StorageView> {
     state_view: &'state S,
     linkage_info: Option<LinkageInfo>,
 }
 
-/// TODO Docs
-#[allow(dead_code)]
 pub struct LinkageInfo {
-    link_context: ObjectID,
+    link_context: AccountAddress,
     linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
@@ -41,8 +39,24 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
         }
     }
 
+    pub fn from_package(state_view: &'state S, package: &MovePackage) -> Self {
+        Self {
+            state_view,
+            linkage_info: Some(package.into()),
+        }
+    }
+
     pub fn storage(&self) -> &'state S {
         self.state_view
+    }
+}
+
+impl From<&MovePackage> for LinkageInfo {
+    fn from(package: &MovePackage) -> Self {
+        Self {
+            link_context: package.id().into(),
+            linkage_table: package.linkage_table().clone(),
+        }
     }
 }
 
@@ -50,11 +64,33 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
-        AccountAddress::ZERO
+        if let Some(LinkageInfo { link_context, .. }) = &self.linkage_info {
+            *link_context
+        } else {
+            AccountAddress::ZERO
+        }
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        Ok(module_id.clone())
+        let runtime_id = ObjectID::from_address(*module_id.address());
+
+        let Some(linkage) = &self.linkage_info else {
+            return Err(ExecutionError::invariant_violation(
+                "Missing linkage context"
+            ).into());
+        };
+
+        let Some(upgrade) = linkage.linkage_table.get(&runtime_id) else {
+            return Err(ExecutionError::invariant_violation(format!(
+                "Missing linkage for {runtime_id} in context {}",
+                linkage.link_context,
+            )).into());
+        };
+
+        Ok(ModuleId::new(
+            upgrade.upgraded_id.into(),
+            module_id.name().to_owned(),
+        ))
     }
 
     fn defining_module(
