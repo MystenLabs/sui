@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY } from '@mysten/core';
 import { type SuiValidatorSummary } from '@mysten/sui.js';
-import { useMemo } from 'react';
 
 import { DelegationAmount } from './DelegationAmount';
 
@@ -15,12 +13,13 @@ type StatsCardProps = {
     validatorData: SuiValidatorSummary;
     epoch: number | string;
     epochRewards: number;
+    apy: number;
 };
 
 export function ValidatorStats({
     validatorData,
-    epoch,
     epochRewards,
+    apy,
 }: StatsCardProps) {
     // TODO: add missing fields
     // const numberOfDelegators = 0;
@@ -29,10 +28,6 @@ export function ValidatorStats({
     //  const tallyingScore =  0;
     //  const lastNarwhalRound = 0;
 
-    const apy = useMemo(
-        () => calculateAPY(validatorData, +epoch),
-        [validatorData, epoch]
-    );
     const totalStake = +validatorData.stakingPoolSuiBalance;
     const commission = +validatorData.commissionRate / 100;
     const rewardsPoolBalance = +validatorData.rewardsPool;

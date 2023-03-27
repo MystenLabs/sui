@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY, roundFloat } from '@mysten/core';
+import {
+    roundFloat,
+    useGetRollingAverageApys,
+    type ApyByValidator,
+    useGetValidatorsEvents,
+} from '@mysten/core';
 import { type SuiSystemStateSummary, type SuiEvent } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
@@ -9,7 +14,6 @@ import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { StakeColumn } from '~/components/top-validators-card/StakeColumn';
 import { DelegationAmount } from '~/components/validator/DelegationAmount';
 import { useGetSystemObject } from '~/hooks/useGetObject';
-import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
@@ -28,7 +32,8 @@ const NodeMap = lazy(() => import('../../components/node-map'));
 
 export function validatorsTableData(
     systemState: SuiSystemStateSummary,
-    validatorEvents: SuiEvent[]
+    validatorEvents: SuiEvent[],
+    rollingAverageApys: ApyByValidator | null
 ) {
     return {
         data: systemState.activeValidators.map((validator) => {
@@ -46,7 +51,7 @@ export function validatorsTableData(
                     logo: validator.imageUrl,
                 },
                 stake: totalStake,
-                apy: calculateAPY(validator, systemState.epoch),
+                apy: rollingAverageApys?.[validator.suiAddress] || 0,
                 nextEpochGasPrice: validator.nextEpochGasPrice,
                 commission: +validator.commissionRate / 100,
                 img: img,
@@ -180,10 +185,7 @@ export function validatorsTableData(
 function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
-    const numberOfValidators = useMemo(
-        () => data?.activeValidators.length || null,
-        [data]
-    );
+    const numberOfValidators = data?.activeValidators.length || 0;
 
     const {
         data: validatorEvents,
@@ -193,6 +195,9 @@ function ValidatorPageResult() {
         limit: numberOfValidators,
         order: 'descending',
     });
+
+    const { data: rollingAverageApys } =
+        useGetRollingAverageApys(numberOfValidators);
 
     const totalStaked = useMemo(() => {
         if (!data) return 0;
@@ -205,18 +210,15 @@ function ValidatorPageResult() {
     }, [data]);
 
     const averageAPY = useMemo(() => {
-        if (!data) return 0;
-        const validators = data.activeValidators;
-
-        const validatorsApy = validators.map((av) =>
-            calculateAPY(av, +data.epoch)
-        );
-        return roundFloat(
-            validatorsApy.reduce((acc, cur) => acc + cur, 0) /
-                validatorsApy.length,
-            APY_DECIMALS
-        );
-    }, [data]);
+        if (
+            !rollingAverageApys ||
+            Object.keys(rollingAverageApys)?.length === 0
+        )
+            return 0;
+        const apys = Object.values(rollingAverageApys);
+        const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
+        return roundFloat(averageAPY / apys.length, APY_DECIMALS);
+    }, [rollingAverageApys]);
 
     const lastEpochRewardOnAllValidators = useMemo(() => {
         if (!validatorEvents) return 0;
@@ -231,8 +233,12 @@ function ValidatorPageResult() {
 
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
-        return validatorsTableData(data, validatorEvents.data);
-    }, [validatorEvents, data]);
+        return validatorsTableData(
+            data,
+            validatorEvents.data,
+            rollingAverageApys
+        );
+    }, [data, validatorEvents, rollingAverageApys]);
 
     const defaultSorting = [{ id: 'stake', desc: false }];
 

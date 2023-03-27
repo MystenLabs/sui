@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
-import { type PaginatedEvents, type EventId } from '@mysten/sui.js';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-
-export const VALIDATORS_EVENTS_QUERY =
-    '0x3::validator_set::ValidatorEpochInfoEvent';
+import { useRpcClient } from '../api/RpcClientContext';
+import { type EventId, VALIDATORS_EVENTS_QUERY } from '@mysten/sui.js';
+import { useQuery } from '@tanstack/react-query';
 
 type GetValidatorsEvent = {
     cursor?: EventId | null;
@@ -19,24 +16,19 @@ export function useGetValidatorsEvents({
     cursor,
     limit,
     order,
-}: GetValidatorsEvent): UseQueryResult<PaginatedEvents> {
+}: GetValidatorsEvent) {
     const rpc = useRpcClient();
-    const eventCursor = cursor || null;
-    const eventLimit = limit || null;
-
     // since we are getting events base on the number of validators, we need to make sure that the limit is not null and cache by the limit
     // number of validators can change from network to network
-    const response = useQuery(
-        ['validatorEvents', limit],
+    return useQuery(
+        ['validatorEvents', limit, cursor?.txDigest, order],
         () =>
             rpc.queryEvents({
                 query: { MoveEventType: VALIDATORS_EVENTS_QUERY },
-                cursor: eventCursor?.txDigest,
-                limit: eventLimit,
+                cursor: cursor?.txDigest,
+                limit,
                 order,
             }),
         { enabled: !!limit }
     );
-
-    return response;
 }

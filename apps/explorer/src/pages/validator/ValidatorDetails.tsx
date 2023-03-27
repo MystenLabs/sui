@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useGetRollingAverageApys, useGetValidatorsEvents } from '@mysten/core';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
 import { useGetSystemObject } from '~/hooks/useGetObject';
-import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
@@ -22,6 +22,8 @@ function ValidatorDetails() {
     }, [id, data]);
 
     const numberOfValidators = data?.activeValidators.length ?? null;
+    const { data: rollingAverageApys, isLoading: validatorsApysLoading } =
+        useGetRollingAverageApys(numberOfValidators);
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
@@ -38,7 +40,7 @@ function ValidatorDetails() {
         return +rewards || 0;
     }, [id, validatorEvents]);
 
-    if (isLoading || validatorsEventsLoading) {
+    if (isLoading || validatorsEventsLoading || validatorsApysLoading) {
         return (
             <div className="mb-10 flex items-center justify-center">
                 <LoadingSpinner />
@@ -46,7 +48,7 @@ function ValidatorDetails() {
         );
     }
 
-    if (!validatorData || !data || !validatorEvents) {
+    if (!validatorData || !data || !validatorEvents || !id) {
         return (
             <div className="mb-10 flex items-center justify-center">
                 <Banner variant="error" spacing="lg" fullWidth>
@@ -56,6 +58,7 @@ function ValidatorDetails() {
         );
     }
 
+    const apy = rollingAverageApys?.[id] || 0;
     return (
         <div className="mb-10">
             <div className="flex flex-col flex-nowrap gap-5 md:flex-row md:gap-0">
@@ -66,6 +69,7 @@ function ValidatorDetails() {
                     validatorData={validatorData}
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
+                    apy={apy}
                 />
             </div>
         </div>

@@ -24,6 +24,8 @@ export const OBJECT_MODULE_NAME = 'object';
 export const UID_STRUCT_NAME = 'UID';
 export const ID_STRUCT_NAME = 'ID';
 export const SUI_TYPE_ARG = `${SUI_FRAMEWORK_ADDRESS}::sui::SUI`;
+export const VALIDATORS_EVENTS_QUERY =
+  '0x3::validator_set::ValidatorEpochInfoEvent';
 
 export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
 
