@@ -54,6 +54,7 @@ impl ToFromBytes for GenericSignature {
                     Signature::from_bytes(bytes).map_err(|_| FastCryptoError::InvalidSignature)?,
                 )),
                 SignatureScheme::MultiSig => {
+                    // The flag is added to the bytes representation of MultiSig in MultiSig::as_ref().
                     let multisig: MultiSig =
                         bcs::from_bytes(bytes.get(1..).ok_or(FastCryptoError::InvalidInput)?)
                             .map_err(|_| FastCryptoError::InvalidSignature)?;
