@@ -16,7 +16,6 @@ pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
     let pg_connection_pool = new_pg_connection_pool(&config.base_connection_url())
-        .await
         .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
     if config.reset_db {
         reset_database(
