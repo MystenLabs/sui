@@ -201,7 +201,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions with smaller range
     let tx = client
         .read_api()
-        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(3), true)
+        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(3), true)
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
@@ -210,7 +210,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get all transactions paged
     let first_page = client
         .read_api()
-        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(5), false)
+        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(5), false)
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
@@ -218,7 +218,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     let second_page = client
         .read_api()
-        .query_transactions(
+        .query_transaction_blocks(
             SuiTransactionResponseQuery::default(),
             first_page.next_cursor,
             None,
@@ -236,7 +236,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get 10 latest transactions paged
     let latest = client
         .read_api()
-        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(10), true)
+        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(10), true)
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
@@ -247,7 +247,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get from address txs in ascending order
     let address_txs_asc = client
         .read_api()
-        .query_transactions(
+        .query_transaction_blocks(
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(
                 cluster.accounts[0],
             )),
@@ -262,7 +262,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get from address txs in descending order
     let address_txs_desc = client
         .read_api()
-        .query_transactions(
+        .query_transaction_blocks(
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(
                 cluster.accounts[0],
             )),
@@ -282,7 +282,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions
     let tx = client
         .read_api()
-        .query_transactions(SuiTransactionResponseQuery::default(), None, Some(20), true)
+        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(20), true)
         .await
         .unwrap();
     assert_eq!(20, tx.data.len());

@@ -148,7 +148,7 @@ impl ReadApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    pub async fn query_transactions(
+    pub async fn query_transaction_blocks(
         &self,
         query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
@@ -158,7 +158,7 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .query_transactions(query, cursor, limit, Some(descending_order))
+            .query_transaction_blocks(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
@@ -192,7 +192,12 @@ impl ReadApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .query_transactions(query.clone(), cursor, Some(100), descending_order)
+                        .query_transaction_blocks(
+                            query.clone(),
+                            cursor,
+                            Some(100),
+                            descending_order,
+                        )
                         .await
                         .ok()?;
                     let mut data = page.data;

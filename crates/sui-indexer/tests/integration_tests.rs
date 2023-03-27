@@ -280,7 +280,7 @@ pub mod pg_integration_test {
         let checkpoint_seq_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::Checkpoint(2u64));
         let mut checkpoint_query_tx_digest_vec = indexer_rpc_client
-            .query_transactions(checkpoint_seq_query, None, None, None)
+            .query_transaction_blocks(checkpoint_seq_query, None, None, None)
             .await
             .unwrap()
             .data
@@ -317,7 +317,7 @@ pub mod pg_integration_test {
         let from_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(sender));
         let tx_from_query_response = indexer_rpc_client
-            .query_transactions(from_query, None, None, None)
+            .query_transaction_blocks(from_query, None, None, None)
             .await?;
         assert!(!tx_from_query_response.has_next_page);
         assert_eq!(tx_from_query_response.data.len(), 3);
@@ -326,7 +326,7 @@ pub mod pg_integration_test {
             TransactionFilter::TransactionKind("ProgrammableTransaction".to_string()),
         );
         let tx_kind_query_response = indexer_rpc_client
-            .query_transactions(tx_kind_query, None, None, None)
+            .query_transaction_blocks(tx_kind_query, None, None, None)
             .await?;
         assert!(!tx_kind_query_response.has_next_page);
         assert_eq!(tx_kind_query_response.data.len(), 3);
@@ -335,7 +335,7 @@ pub mod pg_integration_test {
         let to_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(recipient));
         let tx_to_query_response = indexer_rpc_client
-            .query_transactions(to_query, None, None, None)
+            .query_transaction_blocks(to_query, None, None, None)
             .await?;
         // the address has received 2 transactions, one is genesis
         assert!(!tx_to_query_response.has_next_page);
@@ -348,7 +348,7 @@ pub mod pg_integration_test {
                 to: recipient,
             });
         let tx_from_to_query_response = indexer_rpc_client
-            .query_transactions(from_to_query, None, None, None)
+            .query_transaction_blocks(from_to_query, None, None, None)
             .await?;
         assert!(!tx_from_to_query_response.has_next_page);
         assert_eq!(tx_from_to_query_response.data.len(), 1);
@@ -362,7 +362,7 @@ pub mod pg_integration_test {
             TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
         );
         let tx_mutation_query_response = indexer_rpc_client
-            .query_transactions(mutation_query, None, None, None)
+            .query_transaction_blocks(mutation_query, None, None, None)
             .await?;
         // the coin is first created by genesis tx, then transferred by the above tx
         assert!(!tx_mutation_query_response.has_next_page);
@@ -373,7 +373,7 @@ pub mod pg_integration_test {
             TransactionFilter::InputObject(*gas_objects.first().unwrap()),
         );
         let tx_input_query_response = indexer_rpc_client
-            .query_transactions(input_query, None, None, None)
+            .query_transaction_blocks(input_query, None, None, None)
             .await?;
         assert_eq!(tx_input_query_response.data.len(), 2);
 
@@ -385,7 +385,7 @@ pub mod pg_integration_test {
                 function: None,
             });
         let tx_move_call_query_response = indexer_rpc_client
-            .query_transactions(move_call_query, None, None, None)
+            .query_transaction_blocks(move_call_query, None, None, None)
             .await?;
         assert_eq!(tx_move_call_query_response.data.len(), 1);
         assert_eq!(

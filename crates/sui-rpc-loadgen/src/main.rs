@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             from_address,
             to_address,
         } => (
-            Command::new_query_transactions(from_address, to_address),
+            Command::new_query_transaction_blocks(from_address, to_address),
             common,
             false,
         ),

@@ -82,7 +82,7 @@ impl RpcExampleProvider {
             self.get_owned_objects(),
             self.get_total_transaction_blocks(),
             self.get_transaction_block(),
-            self.query_transactions(),
+            self.query_transaction_blocks(),
             self.get_events(),
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
@@ -384,7 +384,7 @@ impl RpcExampleProvider {
         )
     }
 
-    fn query_transactions(&mut self) -> Examples {
+    fn query_transaction_blocks(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
         let has_next_page = data.len() > (9 - 5);
         data.truncate(9 - 5);
