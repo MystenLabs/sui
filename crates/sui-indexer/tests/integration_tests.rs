@@ -21,8 +21,8 @@ pub mod pg_integration_test {
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::objects::{
-        compose_object_bulk_insert_query, compose_object_bulk_insert_update_query, NamedBcsBytes,
-        Object, ObjectStatus,
+        compose_object_bulk_insert_query, compose_object_bulk_insert_update_query,
+        group_and_sort_objects, NamedBcsBytes, Object, ObjectStatus,
     };
     use sui_indexer::models::owners::OwnerType;
     use sui_indexer::schema::objects;
@@ -1000,7 +1000,7 @@ pub mod pg_integration_test {
         let pg_connection_pool = new_pg_connection_pool(&db_url).await.unwrap();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
 
-        let mut bulk_data = (1..=10000)
+        let bulk_data = (1..=10000)
             .into_iter()
             .map(|_| Object {
                 epoch: 0,
@@ -1030,24 +1030,49 @@ pub mod pg_integration_test {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 10000);
 
-        bulk_data = bulk_data
+        let mutated_bulk_data = bulk_data
+            .clone()
             .into_iter()
             .map(|mut object| {
                 object.object_status = ObjectStatus::Mutated;
+                object.version = 1;
                 object
             })
             .collect::<Vec<_>>();
+        let mutated_bulk_data_same_checkpoint = bulk_data
+            .into_iter()
+            .map(|mut object| {
+                object.object_status = ObjectStatus::Mutated;
+                object.version = 2;
+                object
+            })
+            .chain(mutated_bulk_data)
+            .collect::<Vec<_>>();
         let mut pg_pool_conn = get_pg_pool_connection(&pg_connection_pool).unwrap();
-        let insert_update_query = compose_object_bulk_insert_update_query(&bulk_data);
-        eprintln!("insert_update_query: {}", insert_update_query);
-        let result: Result<usize, IndexerError> = pg_pool_conn
-            .build_transaction()
-            .serializable()
-            .read_write()
-            .run(|conn| diesel::sql_query(insert_update_query).execute(conn))
-            .map_err(IndexerError::PostgresError);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 10000);
+        let mut mutated_object_groups = group_and_sort_objects(mutated_bulk_data_same_checkpoint);
+        let mut counter = 0;
+        loop {
+            let mutated_object_group = mutated_object_groups
+                .iter_mut()
+                .filter_map(|group| group.pop())
+                .collect::<Vec<_>>();
+            if mutated_object_group.is_empty() {
+                break;
+            }
+            // bulk insert/update via UNNEST trick
+            let insert_update_query =
+                compose_object_bulk_insert_update_query(&mutated_object_group);
+            let result: Result<usize, IndexerError> = pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run(|conn| diesel::sql_query(insert_update_query).execute(conn))
+                .map_err(IndexerError::PostgresError);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), 10000);
+            counter += 1;
+        }
+        assert_eq!(counter, 2);
     }
 
     #[tokio::test]
