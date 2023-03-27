@@ -269,7 +269,9 @@ For more details about Sui Explorer, see the [Explorer README](https://github.co
 
 You can also use a local Sui Wallet to test with your local network. You can then see transactions executed from your local Sui Wallet on your local Sui Explorer.
 
-**Note:** To run the command you have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
+**Note:** To run the command you must have `pnpm` installed. See [Install Sui Wallet and Sui Explorer locally](#install-sui-wallet-and-sui-explorer-locally) for details.
+
+Before you start the Sui Wallet app, update its default environment to point to your local network. To do so, first make a copy of `sui/apps/wallet/configs/environment/.env.defaults` and rename it to `.env` in the same directory. In your `.env` file, edit the first line to read `API_ENV=local` and then save the file.
 
 Run the following command from the `sui` root folder to start Sui Wallet on your local network:
 
@@ -277,15 +279,21 @@ Run the following command from the `sui` root folder to start Sui Wallet on your
 pnpm wallet start
 ```
 
-Follow [this guide](https://github.com/MystenLabs/sui/blob/main/apps/wallet/README.md#install-the-extension-to-chrome) to load your locally built wallet to chrome
+### Add local Sui Wallet to Chrome
 
-**Note** You can set the default environment for the wallet to use so that you don't have to switch network manually. For details, see [https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables](https://github.com/MystenLabs/sui/tree/main/apps/wallet#environment-variables). 
+After you build your local version of Sui Wallet, you can add the extension to Chrome: 
+
+1. Open a Chrome browser to `chrome://extensions`.
+1. Click the **Developer mode** toggle to enable, if it's not already on.
+1. Click the **Load unpacked** button and select your `sui/apps/wallet/dist` directory.
+
+Consult the Sui Wallet [Readme](https://github.com/MystenLabs/sui/blob/main/apps/wallet/README.md#install-the-extension-to-chrome) for more information on working with a locally built wallet on Chrome.
 
 ## Generate example data
 
 Use the TypeScript SDK to add example data to your network. 
 
-**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first
+**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first.
 
 Run the following command from the `sui` root folder: 
 
