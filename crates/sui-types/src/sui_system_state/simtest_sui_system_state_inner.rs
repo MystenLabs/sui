@@ -211,7 +211,7 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SimTestSuiSystemStateInnerV2 {
+pub struct SimTestSuiSystemStateInnerShallowV2 {
     pub new_dummy_field: u64,
     pub epoch: u64,
     pub protocol_version: u64,
@@ -225,7 +225,7 @@ pub struct SimTestSuiSystemStateInnerV2 {
     pub extra_fields: Bag,
 }
 
-impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV2 {
+impl SuiSystemStateTrait for SimTestSuiSystemStateInnerShallowV2 {
     fn epoch(&self) -> u64 {
         self.epoch
     }
@@ -311,14 +311,14 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV2 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SimTestValidatorSetV3 {
-    pub active_validators: Vec<SimTestValidatorV3>,
+pub struct SimTestValidatorSetDeepV2 {
+    pub active_validators: Vec<SimTestValidatorDeepV2>,
     pub inactive_validators: Table,
     pub extra_fields: Bag,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SimTestValidatorV3 {
+pub struct SimTestValidatorDeepV2 {
     pub new_dummy_field: u64,
     metadata: SimTestValidatorMetadataV1,
     #[serde(skip)]
@@ -328,7 +328,7 @@ pub struct SimTestValidatorV3 {
     pub extra_fields: Bag,
 }
 
-impl SimTestValidatorV3 {
+impl SimTestValidatorDeepV2 {
     pub fn verified_metadata(&self) -> &VerifiedSimTestValidatorMetadataV1 {
         self.verified_metadata
             .get_or_init(|| self.metadata.verify())
@@ -340,12 +340,12 @@ impl SimTestValidatorV3 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct SimTestSuiSystemStateInnerV3 {
+pub struct SimTestSuiSystemStateInnerDeepV2 {
     pub new_dummy_field: u64,
     pub epoch: u64,
     pub protocol_version: u64,
     pub system_state_version: u64,
-    pub validators: SimTestValidatorSetV3,
+    pub validators: SimTestValidatorSetDeepV2,
     pub storage_fund: Balance,
     pub parameters: SimTestSystemParametersV1,
     pub reference_gas_price: u64,
@@ -354,7 +354,7 @@ pub struct SimTestSuiSystemStateInnerV3 {
     pub extra_fields: Bag,
 }
 
-impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV3 {
+impl SuiSystemStateTrait for SimTestSuiSystemStateInnerDeepV2 {
     fn epoch(&self) -> u64 {
         self.epoch
     }

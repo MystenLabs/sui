@@ -11,7 +11,7 @@ module sui_system::sui_system_state_inner {
     use sui::table::{Self, Table};
     use sui::object::ID;
 
-    use sui_system::validator::{Validator, ValidatorV3};
+    use sui_system::validator::{Validator, ValidatorV2};
     use sui_system::validator_wrapper::ValidatorWrapper;
     use sui_system::validator_wrapper;
     use sui::object;
@@ -20,7 +20,8 @@ module sui_system::sui_system_state_inner {
     friend sui_system::sui_system;
 
     const SYSTEM_STATE_VERSION_V1: u64 = 18446744073709551605;  // u64::MAX - 10
-    const SYSTEM_STATE_VERSION_V3: u64 = 18446744073709551607;  // u64::MAX - 8
+    // Not using MAX - 9 since it's already used in the shallow upgrade test.
+    const SYSTEM_STATE_VERSION_V2: u64 = 18446744073709551607;  // u64::MAX - 8
 
     struct SystemParameters has store {
         epoch_duration_ms: u64,
@@ -33,8 +34,8 @@ module sui_system::sui_system_state_inner {
         extra_fields: Bag,
     }
 
-    struct ValidatorSetV3 has store {
-        active_validators: vector<ValidatorV3>,
+    struct ValidatorSetV2 has store {
+        active_validators: vector<ValidatorV2>,
         inactive_validators: Table<ID, ValidatorWrapper>,
         extra_fields: Bag,
     }
@@ -52,12 +53,12 @@ module sui_system::sui_system_state_inner {
         extra_fields: Bag,
     }
 
-    struct SuiSystemStateInnerV3 has store {
+    struct SuiSystemStateInnerV2 has store {
         new_dummy_field: u64,
         epoch: u64,
         protocol_version: u64,
         system_state_version: u64,
-        validators: ValidatorSetV3,
+        validators: ValidatorSetV2,
         storage_fund: Balance<SUI>,
         parameters: SystemParameters,
         reference_gas_price: u64,
@@ -94,7 +95,7 @@ module sui_system::sui_system_state_inner {
     }
 
     public(friend) fun advance_epoch(
-        self: &mut SuiSystemStateInnerV3,
+        self: &mut SuiSystemStateInnerV2,
         new_epoch: u64,
         next_protocol_version: u64,
         storage_reward: Balance<SUI>,
@@ -117,7 +118,7 @@ module sui_system::sui_system_state_inner {
     }
 
     public(friend) fun advance_epoch_safe_mode(
-        self: &mut SuiSystemStateInnerV3,
+        self: &mut SuiSystemStateInnerV2,
         new_epoch: u64,
         next_protocol_version: u64,
         storage_reward: Balance<SUI>,
@@ -132,8 +133,8 @@ module sui_system::sui_system_state_inner {
         balance::join(&mut self.storage_fund, storage_reward);
     }
 
-    public(friend) fun protocol_version(self: &SuiSystemStateInnerV3): u64 { self.protocol_version }
-    public(friend) fun system_state_version(self: &SuiSystemStateInnerV3): u64 { self.system_state_version }
+    public(friend) fun protocol_version(self: &SuiSystemStateInnerV2): u64 { self.protocol_version }
+    public(friend) fun system_state_version(self: &SuiSystemStateInnerV2): u64 { self.system_state_version }
     public(friend) fun genesis_system_state_version(): u64 {
         SYSTEM_STATE_VERSION_V1
     }
@@ -146,7 +147,7 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    public(friend) fun v1_to_v3(v2: SuiSystemStateInner): SuiSystemStateInnerV3 {
+    public(friend) fun v1_to_v2(v1: SuiSystemStateInner): SuiSystemStateInnerV2 {
         let SuiSystemStateInner {
             epoch,
             protocol_version,
@@ -158,14 +159,14 @@ module sui_system::sui_system_state_inner {
             safe_mode,
             epoch_start_timestamp_ms,
             extra_fields,
-        } = v2;
-        let new_validator_set = validator_set_v1_to_v3(validators);
+        } = v1;
+        let new_validator_set = validator_set_v1_to_v2(validators);
         assert!(old_system_state_version == SYSTEM_STATE_VERSION_V1, 0);
-        SuiSystemStateInnerV3 {
+        SuiSystemStateInnerV2 {
             new_dummy_field: 100,
             epoch,
             protocol_version,
-            system_state_version: SYSTEM_STATE_VERSION_V3,
+            system_state_version: SYSTEM_STATE_VERSION_V2,
             validators: new_validator_set,
             storage_fund,
             parameters,
@@ -177,12 +178,12 @@ module sui_system::sui_system_state_inner {
     }
 
     /// Load the dummy inactive validator added in the base version, trigger it to be upgraded.
-    fun touch_dummy_inactive_validator(self: &mut SuiSystemStateInnerV3) {
+    fun touch_dummy_inactive_validator(self: &mut SuiSystemStateInnerV2) {
         let validator_wrapper = table::borrow_mut(&mut self.validators.inactive_validators, object::id_from_address(@0x0));
         let _ = validator_wrapper::load_validator_maybe_upgrade(validator_wrapper);
     }
 
-    fun validator_set_v1_to_v3(v1: ValidatorSet): ValidatorSetV3 {
+    fun validator_set_v1_to_v2(v1: ValidatorSet): ValidatorSetV2 {
         let ValidatorSet {
             active_validators,
             inactive_validators,
@@ -191,12 +192,12 @@ module sui_system::sui_system_state_inner {
         let new_active_validators = vector[];
         while (!vector::is_empty(&active_validators)) {
             let validator = vector::pop_back(&mut active_validators);
-            let validator = validator::v1_to_v3(validator);
+            let validator = validator::v1_to_v2(validator);
             vector::push_back(&mut new_active_validators, validator);
         };
         vector::destroy_empty(active_validators);
         vector::reverse(&mut new_active_validators);
-        ValidatorSetV3 {
+        ValidatorSetV2 {
             active_validators: new_active_validators,
             inactive_validators,
             extra_fields,

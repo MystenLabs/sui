@@ -27,8 +27,8 @@ pub mod sui_system_state_summary;
 mod simtest_sui_system_state_inner;
 #[cfg(msim)]
 use self::simtest_sui_system_state_inner::{
-    SimTestSuiSystemStateInnerV1, SimTestSuiSystemStateInnerV2, SimTestSuiSystemStateInnerV3,
-    SimTestValidatorV1, SimTestValidatorV3,
+    SimTestSuiSystemStateInnerDeepV2, SimTestSuiSystemStateInnerShallowV2,
+    SimTestSuiSystemStateInnerV1, SimTestValidatorDeepV2, SimTestValidatorV1,
 };
 
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
@@ -40,9 +40,9 @@ pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance
 #[cfg(msim)]
 pub const SUI_SYSTEM_STATE_SIM_TEST_V1: u64 = 18446744073709551605; // u64::MAX - 10
 #[cfg(msim)]
-pub const SUI_SYSTEM_STATE_SIM_TEST_V2: u64 = 18446744073709551606; // u64::MAX - 9
+pub const SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2: u64 = 18446744073709551606; // u64::MAX - 9
 #[cfg(msim)]
-pub const SUI_SYSTEM_STATE_SIM_TEST_V3: u64 = 18446744073709551607; // u64::MAX - 8
+pub const SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2: u64 = 18446744073709551607; // u64::MAX - 8
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 /// This repreents the object with 0x5 ID.
@@ -94,9 +94,9 @@ pub enum SuiSystemState {
     #[cfg(msim)]
     SimTestV1(SimTestSuiSystemStateInnerV1),
     #[cfg(msim)]
-    SimTestV2(SimTestSuiSystemStateInnerV2),
+    SimTestShallowV2(SimTestSuiSystemStateInnerShallowV2),
     #[cfg(msim)]
-    SimTestV3(SimTestSuiSystemStateInnerV3),
+    SimTestDeepV2(SimTestSuiSystemStateInnerDeepV2),
 }
 
 /// This is the fixed type used by genesis.
@@ -174,8 +174,8 @@ where
             Ok(SuiSystemState::SimTestV1(result))
         }
         #[cfg(msim)]
-        SUI_SYSTEM_STATE_SIM_TEST_V2 => {
-            let result: SimTestSuiSystemStateInnerV2 =
+        SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2 => {
+            let result: SimTestSuiSystemStateInnerShallowV2 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
                         SuiError::DynamicFieldReadError(format!(
@@ -184,11 +184,11 @@ where
                         ))
                     },
                 )?;
-            Ok(SuiSystemState::SimTestV2(result))
+            Ok(SuiSystemState::SimTestShallowV2(result))
         }
         #[cfg(msim)]
-        SUI_SYSTEM_STATE_SIM_TEST_V3 => {
-            let result: SimTestSuiSystemStateInnerV3 =
+        SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2 => {
+            let result: SimTestSuiSystemStateInnerDeepV2 =
                 get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
                     |err| {
                         SuiError::DynamicFieldReadError(format!(
@@ -197,7 +197,7 @@ where
                         ))
                     },
                 )?;
-            Ok(SuiSystemState::SimTestV3(result))
+            Ok(SuiSystemState::SimTestDeepV2(result))
         }
         _ => Err(SuiError::SuiSystemStateReadError(format!(
             "Unsupported SuiSystemState version: {}",
@@ -253,8 +253,8 @@ where
             Ok(validator.into_sui_validator_summary())
         }
         #[cfg(msim)]
-        SUI_SYSTEM_STATE_SIM_TEST_V3 => {
-            let validator: SimTestValidatorV3 =
+        SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2 => {
+            let validator: SimTestValidatorDeepV2 =
                 get_dynamic_field_from_store(object_store, versioned.id.id.bytes, &version)
                     .map_err(|err| {
                         SuiError::SuiSystemStateReadError(format!(

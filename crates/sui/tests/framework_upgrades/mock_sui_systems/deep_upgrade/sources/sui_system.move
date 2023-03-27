@@ -10,7 +10,7 @@ module sui_system::sui_system {
     use sui::dynamic_field;
 
     use sui_system::validator::Validator;
-    use sui_system::sui_system_state_inner::{Self, SuiSystemStateInnerV3, SuiSystemStateInner};
+    use sui_system::sui_system_state_inner::{Self, SuiSystemStateInnerV2, SuiSystemStateInner};
 
     friend sui_system::genesis;
 
@@ -98,21 +98,21 @@ module sui_system::sui_system {
         )
     }
 
-    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV3 {
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV3 {
+    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         let version = self.version;
         if (version == sui_system_state_inner::genesis_system_state_version()) {
             let inner: SuiSystemStateInner = dynamic_field::remove(&mut self.id, version);
-            let new_inner = sui_system_state_inner::v1_to_v3(inner);
+            let new_inner = sui_system_state_inner::v1_to_v2(inner);
             version = sui_system_state_inner::system_state_version(&new_inner);
             dynamic_field::add(&mut self.id, version, new_inner);
             self.version = version;
         };
 
-        let inner: &mut SuiSystemStateInnerV3 = dynamic_field::borrow_mut(&mut self.id, version);
+        let inner: &mut SuiSystemStateInnerV2 = dynamic_field::borrow_mut(&mut self.id, version);
         assert!(sui_system_state_inner::system_state_version(inner) == version, 0);
         inner
     }

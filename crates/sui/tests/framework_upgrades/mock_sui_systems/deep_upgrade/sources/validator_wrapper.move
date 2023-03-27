@@ -5,7 +5,7 @@ module sui_system::validator_wrapper {
     use sui::versioned::Versioned;
     use sui::versioned;
     use sui::tx_context::TxContext;
-    use sui_system::validator::{Validator, ValidatorV3};
+    use sui_system::validator::{Validator, ValidatorV2};
     use sui_system::validator;
 
     friend sui_system::sui_system;
@@ -29,13 +29,13 @@ module sui_system::validator_wrapper {
 
     /// This function should always return the latest supported version.
     /// If the inner version is old, we upgrade it lazily in-place.
-    public(friend) fun load_validator_maybe_upgrade(self: &mut ValidatorWrapper): &mut ValidatorV3 {
+    public(friend) fun load_validator_maybe_upgrade(self: &mut ValidatorWrapper): &mut ValidatorV2 {
         upgrade_to_latest(self);
         versioned::load_value_mut(&mut self.inner)
     }
 
     /// Destroy the wrapper and retrieve the inner validator object.
-    public(friend) fun destroy(self: ValidatorWrapper): ValidatorV3 {
+    public(friend) fun destroy(self: ValidatorWrapper): ValidatorV2 {
         upgrade_to_latest(&mut self);
         let ValidatorWrapper { inner } = self;
         versioned::destroy(inner)
@@ -45,7 +45,7 @@ module sui_system::validator_wrapper {
         let version = version(self);
         if (version == VALIDATOR_VERSION_V1) {
             let (v1, cap) = versioned::remove_value_for_upgrade(&mut self.inner);
-            let v3 = validator::v1_to_v3(v1);
+            let v3 = validator::v1_to_v2(v1);
             versioned::upgrade(&mut self.inner, VALIDATOR_VERSION_V3, v3, cap);
         };
         assert!(version(self) == VALIDATOR_VERSION_V3, EInvalidVersion);

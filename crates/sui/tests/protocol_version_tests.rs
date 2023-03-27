@@ -70,7 +70,8 @@ mod sim_only_tests {
     use sui_types::id::ID;
     use sui_types::sui_system_state::{
         get_validator_from_table, SuiSystemState, SuiSystemStateTrait,
-        SUI_SYSTEM_STATE_SIM_TEST_V1, SUI_SYSTEM_STATE_SIM_TEST_V2, SUI_SYSTEM_STATE_SIM_TEST_V3,
+        SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2, SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2,
+        SUI_SYSTEM_STATE_SIM_TEST_V1,
     };
     use sui_types::{
         base_types::SequenceNumber,
@@ -590,9 +591,9 @@ mod sim_only_tests {
         let system_state = test_cluster.wait_for_epoch(Some(2)).await;
         assert_eq!(
             system_state.system_state_version(),
-            SUI_SYSTEM_STATE_SIM_TEST_V2
+            SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2
         );
-        assert!(matches!(system_state, SuiSystemState::SimTestV2(_)));
+        assert!(matches!(system_state, SuiSystemState::SimTestShallowV2(_)));
     }
 
     #[sim_test]
@@ -633,9 +634,9 @@ mod sim_only_tests {
         let system_state = test_cluster.wait_for_epoch(Some(2)).await;
         assert_eq!(
             system_state.system_state_version(),
-            SUI_SYSTEM_STATE_SIM_TEST_V3
+            SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2
         );
-        if let SuiSystemState::SimTestV3(inner) = system_state {
+        if let SuiSystemState::SimTestDeepV2(inner) = system_state {
             // Make sure we have 1 inactive validator for latter testing.
             assert_eq!(inner.validators.inactive_validators.size, 1);
             get_validator_from_table(
@@ -645,7 +646,7 @@ mod sim_only_tests {
             )
             .unwrap();
         } else {
-            panic!("Expecting SimTestV3 type");
+            panic!("Expecting SimTestDeepV2 type");
         }
     }
 

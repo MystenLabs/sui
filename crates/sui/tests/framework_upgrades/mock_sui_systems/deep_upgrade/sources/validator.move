@@ -33,7 +33,7 @@ module sui_system::validator {
         extra_fields: Bag,
     }
 
-    struct ValidatorV3 has store {
+    struct ValidatorV2 has store {
         new_dummy_field: u64,
         metadata: ValidatorMetadata,
         voting_power: u64,
@@ -73,14 +73,14 @@ module sui_system::validator {
         }
     }
 
-    public(friend) fun v1_to_v3(v1: Validator): ValidatorV3 {
+    public(friend) fun v1_to_v2(v1: Validator): ValidatorV2 {
         let Validator {
             metadata,
             voting_power,
             stake,
             extra_fields,
         } = v1;
-        ValidatorV3 {
+        ValidatorV2 {
             new_dummy_field: 100,
             metadata,
             voting_power,
