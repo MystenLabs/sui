@@ -235,7 +235,11 @@ impl MultiSigPublicKey {
             || pks.len() != weights.len()
             || pks.len() > MAX_SIGNER_IN_MULTISIG
             || weights.iter().any(|w| *w == 0)
-            || weights.iter().map(|w| *w as ThresholdUnit).sum::<ThresholdUnit>() < threshold
+            || weights
+                .iter()
+                .map(|w| *w as ThresholdUnit)
+                .sum::<ThresholdUnit>()
+                < threshold
         {
             return Err(SuiError::InvalidSignature {
                 error: "Invalid number of public keys".to_string(),
@@ -263,8 +267,13 @@ impl MultiSigPublicKey {
         if self.threshold == 0
             || self.pubkeys().is_empty()
             || self.pubkeys().len() > MAX_SIGNER_IN_MULTISIG
-            || self.pubkeys().iter().any(|(_pk, weight) | *weight == 0)
-            || self.pubkeys().iter().map(|(_pk, weight)| *weight as ThresholdUnit).sum::<ThresholdUnit>() < self.threshold
+            || self.pubkeys().iter().any(|(_pk, weight)| *weight == 0)
+            || self
+                .pubkeys()
+                .iter()
+                .map(|(_pk, weight)| *weight as ThresholdUnit)
+                .sum::<ThresholdUnit>()
+                < self.threshold
         {
             return Err(FastCryptoError::InvalidInput);
         }
