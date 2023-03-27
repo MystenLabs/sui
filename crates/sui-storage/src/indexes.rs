@@ -352,6 +352,8 @@ impl IndexStore {
             Some(TransactionFilter::ToAddress(address)) => {
                 Ok(self.get_transactions_to_addr(address, cursor, limit, reverse)?)
             }
+            // NOTE: filter via checkpoint sequence number is implemented in
+            // `get_transactions` of authority.rs.
             Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
             None => {
                 let iter = self.tables.transaction_order.iter();

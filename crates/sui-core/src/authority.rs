@@ -2340,6 +2340,23 @@ impl AuthorityState {
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+        if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
+            let checkpoint_contents =
+                self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
+            let iter = checkpoint_contents.iter().map(|c| c.transaction);
+            if reverse {
+                let iter = iter
+                    .rev()
+                    .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
+                    .skip(usize::from(cursor.is_some()));
+                return Ok(iter.take(limit.unwrap_or(usize::max_value())).collect());
+            } else {
+                let iter = iter
+                    .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
+                    .skip(usize::from(cursor.is_some()));
+                return Ok(iter.take(limit.unwrap_or(usize::max_value())).collect());
+            }
+        }
         self.get_indexes()?
             .get_transactions(filter, cursor, limit, reverse)
     }

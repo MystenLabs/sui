@@ -6,10 +6,13 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::base_types::SuiAddress;
+use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::ObjectID;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionFilter {
+    /// Query by checkpoint.
+    Checkpoint(CheckpointSequenceNumber),
     /// Query by move function.
     MoveFunction {
         package: ObjectID,
