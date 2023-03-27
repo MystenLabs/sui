@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Write;
@@ -58,6 +59,32 @@ impl SuiObjectResponse {
             data: None,
             error: Some(error),
         }
+    }
+}
+
+impl Ord for SuiObjectResponse {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (&self.data, &other.data) {
+            (Some(data), Some(data_2)) => {
+                if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Greater) {
+                    return Ordering::Greater;
+                } else if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Less) {
+                    return Ordering::Less;
+                }
+                Ordering::Equal
+            }
+            // In this ordering those with data will come before SuiObjectResponses that are errors.
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            // SuiObjectResponses that are errors are just considered equal.
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for SuiObjectResponse {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
