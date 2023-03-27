@@ -207,14 +207,16 @@ export function DelegationDetailCard({
                             </Card>
                         </div>
                         <div className="flex gap-2.5 w-full my-3.75">
-                        {!inActiveValidator ? (<Button
-                                size="tall"
-                                variant="outline"
-                                to={stakeByValidatorAddress}
-                                before={<StakeAdd16 />}
-                                text="Stake SUI"
-                                disabled={!stakingEnabled}
-                            />) : null}
+                            {!inActiveValidator ? (
+                                <Button
+                                    size="tall"
+                                    variant="outline"
+                                    to={stakeByValidatorAddress}
+                                    before={<StakeAdd16 />}
+                                    text="Stake SUI"
+                                    disabled={!stakingEnabled}
+                                />
+                            ) : null}
 
                             {Boolean(totalStake) && delegationId && (
                                 <Button
