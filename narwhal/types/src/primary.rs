@@ -977,12 +977,9 @@ impl fmt::Debug for Certificate {
 }
 
 impl PartialEq for Certificate {
-    // TODO(arun): How to make sure this is correctly updated when a new variant is added?
-    #[allow(unreachable_patterns)]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Certificate::V1(data), Certificate::V1(other_data)) => data.eq(other_data),
-            _ => false,
         }
     }
 }

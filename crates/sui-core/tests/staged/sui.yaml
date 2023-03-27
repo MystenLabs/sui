@@ -598,3 +598,4 @@ UpgradeInfo:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+
