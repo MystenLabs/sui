@@ -17,7 +17,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::debug;
+use tracing::{debug, error};
 
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
@@ -493,17 +493,21 @@ impl ReadApiServer for ReadApi {
             let events = self
                 .state
                 .multi_get_events(&event_digests_list)
-                .map_err(|e| anyhow!("{e}"))?
+                .map_err(|e| {
+                    error!("Failed to call multi_get_events for transactions {digests:?} with event digests {event_digests_list:?}");
+                    anyhow!("{e}")
+                })?
                 .into_iter();
 
             // construct a hashmap of event digests -> events for fast lookup
-            let mut event_digest_to_events = event_digests_list
+            let event_digest_to_events = event_digests_list
                 .into_iter()
                 .zip(events)
                 .collect::<HashMap<_, _>>();
 
             // fill cache with the events
             for (_, cache_entry) in temp_response.iter_mut() {
+                let transaction_digest = cache_entry.digest;
                 let event_digest: Option<Option<TransactionEventsDigest>> = cache_entry
                     .effects
                     .as_ref()
@@ -511,17 +515,21 @@ impl ReadApiServer for ReadApi {
                 let event_digest = event_digest.flatten();
                 if event_digest.is_some() {
                     // safe to unwrap because `is_some` is checked
+                    let event_digest = event_digest.as_ref().unwrap();
                     let events: Option<RpcResult<SuiTransactionEvents>> = event_digest_to_events
-                        .remove(event_digest.as_ref().unwrap())
-                        .expect("This can only happen if there are two or more transaction digests sharing the same event digests, which should never happen")
-                        .map(|e| to_sui_transaction_events(self, cache_entry.digest, e));
+                        .get(event_digest)
+                        .cloned()
+                        .unwrap_or_else(|| panic!("Expect event digest {event_digest:?} to be found in cache for transaction {transaction_digest}"))
+                        .map(|events| to_sui_transaction_events(self, cache_entry.digest, events));
                     match events {
                         Some(Ok(e)) => cache_entry.events = Some(e),
                         Some(Err(e)) => cache_entry.errors.push(e.to_string()),
-                        None => cache_entry.errors.push(format!(
-                            "Failed to fetch events with event digest {:?}",
-                            event_digest.unwrap()
-                        )),
+                        None => {
+                            error!("Failed to fetch events with event digest {event_digest:?} for txn {transaction_digest}");
+                            cache_entry.errors.push(format!(
+                                "Failed to fetch events with event digest {event_digest:?}",
+                            ))
+                        }
                     }
                 } else {
                     // events field will be Some if and only if `show_events` is true and
