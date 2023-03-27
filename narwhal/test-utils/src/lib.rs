@@ -34,7 +34,6 @@ use store::rocks::MetricConf;
 use store::rocks::ReadWriteOptions;
 use store::{reopen, rocks, rocks::DBMap};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tonic::codegen::http::uri::Authority;
 use tracing::info;
 use types::{
     Batch, BatchDigest, Certificate, CertificateAPI, CertificateDigest, CommittedSubDagShell,
@@ -531,7 +530,8 @@ pub fn make_certificates_with_slow_nodes(
     for round in range {
         next_parents.clear();
         for name in names {
-            let this_cert_parents = this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes, &mut rand);
+            let this_cert_parents =
+                this_cert_parents_with_slow_nodes(name, parents.clone(), slow_nodes, &mut rand);
             let (_, certificate) = mock_certificate(committee, *name, round, this_cert_parents);
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
@@ -628,12 +628,12 @@ pub fn make_signed_certificates(
 
 pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
     committee: &Committee,
-    origin: PublicKey,
+    origin: AuthorityIdentifier,
     round: Round,
     parents: BTreeSet<CertificateDigest>,
     rand: &mut R,
 ) -> (CertificateDigest, Certificate) {
-    let header_builder = HeaderBuilder::default();
+    let header_builder = HeaderV1Builder::default();
     let header = header_builder
         .author(origin)
         .round(round)
@@ -642,7 +642,7 @@ pub fn mock_certificate_with_rand<R: RngCore + ?Sized>(
         .payload(fixture_payload_with_rand(1, rand))
         .build()
         .unwrap();
-    let certificate = Certificate::new_unsigned(committee, header, Vec::new()).unwrap();
+    let certificate = Certificate::new_unsigned(committee, Header::V1(header), Vec::new()).unwrap();
     (certificate.digest(), certificate)
 }
 

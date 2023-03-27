@@ -5,8 +5,7 @@ use crate::consensus::ConsensusProtocol;
 use crate::consensus::ConsensusState;
 use crate::consensus_utils::make_consensus_store;
 use crate::metrics::ConsensusMetrics;
-use config::{Committee, Stake};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use fastcrypto::hash::HashFunction;
 use prometheus::Registry;
@@ -24,6 +23,7 @@ use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
+use types::HeaderAPI;
 use types::Round;
 use types::{Certificate, CertificateDigest};
 
@@ -215,27 +215,27 @@ pub fn make_certificates_with_parameters(
     //Pick the slow nodes - ensure we don't have more than 33% of slow nodes
     assert!(modes.slow_nodes_percentage <= 0.33, "Slow nodes can't be more than 33% of total nodes - otherwise we'll basically simulate a consensus stall");
 
-    let mut keys: Vec<PublicKey> = committee
+    let mut ids: Vec<AuthorityIdentifier> = committee
         .authorities()
-        .map(|(key, _)| key.clone())
+        .map(|authority| authority.id())
         .collect();
 
     // Now shuffle authorities and pick the slow nodes, if should exist
-    keys.shuffle(&mut rand);
+    ids.shuffle(&mut rand);
 
     // Step 1 - determine the slow nodes , assuming those should exist
-    let slow_node_keys: Vec<(PublicKey, f64)> = {
+    let slow_node_ids: Vec<(AuthorityIdentifier, f64)> = {
         let num_of_slow_nodes =
             (committee.total_stake() as f64 * modes.slow_nodes_percentage) as Stake;
         let s = num_of_slow_nodes.min(committee.validity_threshold() - 1);
 
-        keys.iter()
+        ids.iter()
             .take(s as usize)
-            .map(|k| (k.clone(), 1.0 - modes.slow_nodes_failure_probability))
+            .map(|k| (*k, 1.0 - modes.slow_nodes_failure_probability))
             .collect()
     };
 
-    println!("Slow nodes: {:?}", slow_node_keys);
+    println!("Slow nodes: {:?}", slow_node_ids);
 
     let mut certificates = VecDeque::new();
     let mut parents = initial_parents;
@@ -255,9 +255,9 @@ pub fn make_certificates_with_parameters(
         let mut total_failures = 0;
 
         // shuffle keys to introduce extra randomness
-        keys.shuffle(&mut rand);
+        ids.shuffle(&mut rand);
 
-        for name in keys.iter() {
+        for name in ids.iter() {
             let current_parents = parents.clone();
 
             // Step 2 -- introduce failures (assuming those are enabled)
@@ -281,14 +281,14 @@ pub fn make_certificates_with_parameters(
                 test_utils::this_cert_parents_with_slow_nodes(
                     name,
                     current_parents.clone(),
-                    slow_node_keys.as_slice(),
+                    slow_node_ids.as_slice(),
                     &mut rand,
                 );
 
             // We want to ensure that we always refer to "our" certificate of the previous round -
             // assuming that exist, so we can re-add it later.
             let my_parent_digest = if let Some(my_previous_round) =
-                current_parents.iter().find(|c| c.header.author == *name)
+                current_parents.iter().find(|c| c.origin() == *name)
             {
                 parent_digests.remove(&my_previous_round.digest());
                 Some(my_previous_round.digest())
@@ -330,7 +330,7 @@ pub fn make_certificates_with_parameters(
             // Now create the certificate with the provided parents
             let (_, certificate) = mock_certificate_with_rand(
                 committee,
-                name.clone(),
+                *name,
                 round,
                 parents_digests.clone(),
                 &mut rand,
@@ -359,7 +359,7 @@ pub fn make_certificates_with_parameters(
                 let parents = certificates_per_round.get(&(round - 1)).unwrap();
                 round_certs
                     .iter()
-                    .flat_map(|c| c.header.parents.clone())
+                    .flat_map(|c| c.header.parents().clone())
                     .for_each(|digest| {
                         parents
                             .iter()
@@ -392,7 +392,7 @@ fn generate_and_run_execution_plans(
         "Running execution plans for run_id {} for rounds={}, committee={}, gc_depth={}, modes={:?}",
         run_id,
         dag_rounds,
-        committee.authorities.len(),
+        committee.size(),
         gc_depth,
         modes
     );
@@ -437,7 +437,7 @@ fn generate_and_run_execution_plans(
             // A sanity check that we indeed attempt to send to Bullshark a certificate
             // whose parents have already been inserted.
             if c.round() > 1 {
-                for parent in &c.header.parents {
+                for parent in c.header.parents() {
                     assert!(inserted_certificates.contains(parent));
                 }
             }
@@ -462,7 +462,7 @@ fn generate_and_run_execution_plans(
                 run_id,
                 seed,
                 dag_rounds,
-                committee.authorities.len(),
+                committee.size(),
                 gc_depth,
                 modes
             );
@@ -510,7 +510,7 @@ fn create_execution_plan(
         // for the first round of certificates we don't want to include their parents, as we won't
         // have them available anyways - so we want those to be our roots.
         if certificate.round() > 1 {
-            for parent in &certificate.header.parents {
+            for parent in certificate.header.parents() {
                 adjacency_parent_to_children
                     .entry(*parent)
                     .or_default()

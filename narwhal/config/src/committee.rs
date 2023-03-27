@@ -177,14 +177,14 @@ impl Committee {
     fn calculate_quorum_threshold(&self) -> NonZeroU64 {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
+        let total_votes: Stake = self.total_stake();
         NonZeroU64::new(2 * total_votes / 3 + 1).unwrap()
     }
 
     fn calculate_validity_threshold(&self) -> NonZeroU64 {
         // If N = 3f + 1 + k (0 <= k < 3)
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
+        let total_votes: Stake = self.total_stake();
         NonZeroU64::new((total_votes + 2) / 3).unwrap()
     }
 
@@ -270,6 +270,10 @@ impl Committee {
     /// Returns the stake required to reach availability (f+1).
     pub fn validity_threshold(&self) -> Stake {
         self.validity_threshold
+    }
+
+    pub fn total_stake(&self) -> Stake {
+        self.authorities.values().map(|x| x.stake).sum()
     }
 
     /// Returns a leader node as a weighted choice seeded by the provided integer

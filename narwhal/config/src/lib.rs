@@ -24,6 +24,7 @@ use thiserror::Error;
 use tracing::info;
 use utils::get_available_port;
 
+pub mod committee;
 pub use committee::*;
 mod duration_format;
 pub mod utils;
