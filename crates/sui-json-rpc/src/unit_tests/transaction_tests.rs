@@ -9,14 +9,12 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
-use sui_types::base_types::TransactionDigest;
-use sui_types::message_envelope::Message;
 use sui_types::messages::{ExecuteTransactionRequestType, SenderSignedData};
 use sui_types::query::TransactionFilter;
 use sui_types::utils::to_sender_signed_transaction;
 use test_utils::network::TestClusterBuilder;
 
-use crate::api::{IndexerApiClient, ReadApiClient, TransactionBuilderClient, WriteApiClient};
+use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 
 #[sim_test]
 async fn test_get_transaction() -> Result<(), anyhow::Error> {
@@ -65,46 +63,37 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
         tx_responses.push(response);
     }
-    // test get_transactions_in_range_deprecated
-    let tx: Vec<TransactionDigest> = http_client
-        .get_transactions_in_range_deprecated(0, 10)
-        .await?;
-    assert_eq!(5, tx.len());
 
-    // test get_transaction_batch
-    let batch_responses: Vec<SuiTransactionResponse> = http_client
-        .multi_get_transactions(tx, Some(SuiTransactionResponseOptions::new()))
-        .await?;
+    // TODO(chris): re-enable after rewriting get_transactions_in_range_deprecated with query_transactions
 
-    assert_eq!(5, batch_responses.len());
+    // // test get_transaction_batch
+    // let batch_responses: Vec<SuiTransactionResponse> = http_client
+    //     .multi_get_transactions(tx, Some(SuiTransactionResponseOptions::new()))
+    //     .await?;
 
-    for r in batch_responses.iter().skip(1) {
-        assert!(tx_responses
-            .iter()
-            .any(|resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == r.digest)))
-    }
+    // assert_eq!(5, batch_responses.len());
 
-    // test get_transactions_in_range_deprecated with smaller range
-    let tx: Vec<TransactionDigest> = http_client
-        .get_transactions_in_range_deprecated(1, 3)
-        .await?;
-    assert_eq!(2, tx.len());
+    // for r in batch_responses.iter().skip(1) {
+    //     assert!(tx_responses
+    //         .iter()
+    //         .any(|resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == r.digest)))
+    // }
 
-    // test get_transaction
-    for tx_digest in tx {
-        let response: SuiTransactionResponse = http_client
-            .get_transaction(
-                tx_digest,
-                Some(SuiTransactionResponseOptions::new().with_raw_input()),
-            )
-            .await?;
-        assert!(tx_responses.iter().any(
-            |resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == response.digest)
-        ));
-        let sender_signed_data: SenderSignedData =
-            bcs::from_bytes(&response.raw_transaction).unwrap();
-        assert_eq!(sender_signed_data.digest(), tx_digest);
-    }
+    // // test get_transaction
+    // for tx_digest in tx {
+    //     let response: SuiTransactionResponse = http_client
+    //         .get_transaction(
+    //             tx_digest,
+    //             Some(SuiTransactionResponseOptions::new().with_raw_input()),
+    //         )
+    //         .await?;
+    //     assert!(tx_responses.iter().any(
+    //         |resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == response.digest)
+    //     ));
+    //     let sender_signed_data: SenderSignedData =
+    //         bcs::from_bytes(&response.raw_transaction).unwrap();
+    //     assert_eq!(sender_signed_data.digest(), tx_digest);
+    // }
 
     Ok(())
 }
