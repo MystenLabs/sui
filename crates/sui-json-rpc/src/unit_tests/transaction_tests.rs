@@ -17,7 +17,7 @@ use test_utils::network::TestClusterBuilder;
 use crate::api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
 
 #[sim_test]
-async fn test_get_transaction() -> Result<(), anyhow::Error> {
+async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let address = cluster.accounts.first().unwrap();
@@ -81,7 +81,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
     // // test get_transaction
     // for tx_digest in tx {
     //     let response: SuiTransactionResponse = http_client
-    //         .get_transaction(
+    //         .get_transaction_block(
     //             tx_digest,
     //             Some(SuiTransactionResponseOptions::new().with_raw_input()),
     //         )

@@ -125,7 +125,11 @@ impl ReadApi {
         digest: TransactionDigest,
         options: SuiTransactionResponseOptions,
     ) -> SuiRpcResult<SuiTransactionResponse> {
-        Ok(self.api.http.get_transaction(digest, Some(options)).await?)
+        Ok(self
+            .api
+            .http
+            .get_transaction_block(digest, Some(options))
+            .await?)
     }
 
     pub async fn multi_get_transactions_with_options(
@@ -478,7 +482,7 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = ReadApiClient::get_transaction(
+            let resp = ReadApiClient::get_transaction_block(
                 &c.http,
                 tx_digest,
                 Some(SuiTransactionResponseOptions::new()),

@@ -156,7 +156,7 @@ where
         Ok(self.get_total_transaction_number_internal()?.into())
     }
 
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
         options: Option<SuiTransactionResponseOptions>,
@@ -165,7 +165,7 @@ where
             .migrated_methods
             .contains(&"get_transaction".to_string())
         {
-            return self.fullnode.get_transaction(digest, options).await;
+            return self.fullnode.get_transaction_block(digest, options).await;
         }
         Ok(self
             .get_transaction_with_options_internal(&digest, options)

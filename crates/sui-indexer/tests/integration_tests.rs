@@ -187,11 +187,11 @@ pub mod pg_integration_test {
             assert!(transaction.is_ok());
             let _fullnode_rpc_tx = test_cluster
                 .rpc_client()
-                .get_transaction(tx_digest, Some(SuiTransactionResponseOptions::new()))
+                .get_transaction_block(tx_digest, Some(SuiTransactionResponseOptions::new()))
                 .await
                 .unwrap();
             let _indexer_rpc_tx = indexer_rpc_client
-                .get_transaction(tx_digest, Some(SuiTransactionResponseOptions::new()))
+                .get_transaction_block(tx_digest, Some(SuiTransactionResponseOptions::new()))
                 .await
                 .unwrap();
 
@@ -297,7 +297,7 @@ pub mod pg_integration_test {
         assert_eq!(checkpoint_query_tx_digest_vec, checkpoint_tx_digest_vec);
 
         let tx_read_response = indexer_rpc_client
-            .get_transaction(
+            .get_transaction_block(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -1084,7 +1084,7 @@ pub mod pg_integration_test {
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
         let full_transaction_response = indexer_rpc_client
-            .get_transaction(
+            .get_transaction_block(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -1103,7 +1103,9 @@ pub mod pg_integration_test {
         ];
         let futures = sui_transaction_response_options
             .into_iter()
-            .map(|option| indexer_rpc_client.get_transaction(tx_response.digest, Some(option)))
+            .map(|option| {
+                indexer_rpc_client.get_transaction_block(tx_response.digest, Some(option))
+            })
             .collect::<Vec<_>>();
 
         let received_transaction_results: Vec<SuiTransactionResponse> = join_all(futures)
@@ -1173,7 +1175,7 @@ pub mod pg_integration_test {
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
         // We do this as checkpoint field is only returned in the read api
         let tx_response = indexer_rpc_client
-            .get_transaction(
+            .get_transaction_block(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
             )

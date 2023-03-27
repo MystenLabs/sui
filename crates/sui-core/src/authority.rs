@@ -2237,7 +2237,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<(VerifiedTransaction, TransactionEffects), anyhow::Error> {
-        let transaction = self.database.get_transaction(&digest)?;
+        let transaction = self.database.get_transaction_block(&digest)?;
         let effects = self.database.get_executed_effects(&digest)?;
         match (transaction, effects) {
             (Some(transaction), Some(effects)) => Ok((transaction, effects)),
@@ -2249,7 +2249,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<VerifiedTransaction, anyhow::Error> {
-        let transaction = self.database.get_transaction(&digest)?;
+        let transaction = self.database.get_transaction_block(&digest)?;
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
@@ -2582,7 +2582,7 @@ impl AuthorityState {
         let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
             return Ok(None);
         };
-        let Some(transaction) = self.database.get_transaction(tx_digest)? else {
+        let Some(transaction) = self.database.get_transaction_block(tx_digest)? else {
             return Ok(None);
         };
 
@@ -2604,7 +2604,7 @@ impl AuthorityState {
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
-            if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
+            if let Some(transaction) = self.database.get_transaction_block(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
                 let events = if let Some(digest) = effects.events_digest() {
                     self.get_transaction_events(digest)?

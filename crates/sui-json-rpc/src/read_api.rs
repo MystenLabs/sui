@@ -261,7 +261,7 @@ impl ReadApiServer for ReadApi {
         Ok(self.state.get_total_transaction_number()?.into())
     }
 
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
         opts: Option<SuiTransactionResponseOptions>,

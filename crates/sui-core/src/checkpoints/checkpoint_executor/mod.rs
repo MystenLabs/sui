@@ -551,7 +551,7 @@ fn extract_end_of_epoch_tx(
         .expect("Final checkpoint must have at least one transaction");
 
     let change_epoch_tx = authority_store
-        .get_transaction(&digests.transaction)
+        .get_transaction_block(&digests.transaction)
         .expect("read cannot fail");
 
     let change_epoch_tx = VerifiedExecutableTransaction::new_from_checkpoint(
@@ -606,7 +606,7 @@ fn get_unexecuted_transactions(
             .transaction;
 
         let change_epoch_tx = authority_store
-            .get_transaction(&change_epoch_tx_digest)
+            .get_transaction_block(&change_epoch_tx_digest)
             .expect("read cannot fail")
             .unwrap_or_else(||
                 panic!(
@@ -746,7 +746,7 @@ async fn execute_transactions(
                 let pending_digest = missing_digests.first().unwrap();
                 let missing_input = transaction_manager.get_missing_input(pending_digest);
                 let pending_transaction = authority_store
-                    .get_transaction(pending_digest)?
+                    .get_transaction_block(pending_digest)?
                     .expect("state-sync should have ensured that the transaction exists");
 
                 warn!(

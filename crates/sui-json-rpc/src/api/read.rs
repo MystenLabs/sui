@@ -17,7 +17,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 pub trait ReadApi {
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
