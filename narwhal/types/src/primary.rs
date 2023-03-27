@@ -454,7 +454,51 @@ impl PartialEq for Header {
 /// A Vote on a Header is a claim by the voting authority that all payloads and the full history
 /// of Certificates included in the Header are available.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Vote {
+#[enum_dispatch(VoteAPI)]
+pub enum Vote {
+    V1(VoteV1),
+}
+
+impl Vote {
+    // TODO: Add version number and match on that
+    pub async fn new(
+        header: &Header,
+        author: &AuthorityIdentifier,
+        signature_service: &SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
+    ) -> Self {
+        Vote::V1(VoteV1::new(header, author, signature_service).await)
+    }
+
+    pub fn new_with_signer<S>(header: &Header, author: &AuthorityIdentifier, signer: &S) -> Self
+    where
+        S: Signer<Signature>,
+    {
+        Vote::V1(VoteV1::new_with_signer(header, author, signer))
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
+    type TypedDigest = VoteDigest;
+
+    fn digest(&self) -> VoteDigest {
+        match self {
+            Vote::V1(data) => data.digest(),
+        }
+    }
+}
+
+#[enum_dispatch]
+pub trait VoteAPI {
+    fn header_digest(&self) -> HeaderDigest;
+    fn round(&self) -> Round;
+    fn epoch(&self) -> Epoch;
+    fn origin(&self) -> AuthorityIdentifier;
+    fn author(&self) -> AuthorityIdentifier;
+    fn signature(&self) -> &<PublicKey as VerifyingKey>::Sig;
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct VoteV1 {
     // HeaderDigest, round, epoch and origin for the header being voted on.
     pub header_digest: HeaderDigest,
     pub round: Round,
@@ -466,7 +510,28 @@ pub struct Vote {
     pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
-impl Vote {
+impl VoteAPI for VoteV1 {
+    fn header_digest(&self) -> HeaderDigest {
+        self.header_digest
+    }
+    fn round(&self) -> Round {
+        self.round
+    }
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+    fn origin(&self) -> AuthorityIdentifier {
+        self.origin
+    }
+    fn author(&self) -> AuthorityIdentifier {
+        self.author
+    }
+    fn signature(&self) -> &<PublicKey as VerifyingKey>::Sig {
+        &self.signature
+    }
+}
+
+impl VoteV1 {
     pub async fn new(
         header: &Header,
         author: &AuthorityIdentifier,
@@ -544,11 +609,11 @@ impl fmt::Display for VoteDigest {
     }
 }
 
-impl Hash<{ crypto::DIGEST_LENGTH }> for Vote {
+impl Hash<{ crypto::DIGEST_LENGTH }> for VoteV1 {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
-        VoteDigest(self.header_digest.0)
+        VoteDigest(self.header_digest().0)
     }
 }
 
@@ -558,10 +623,10 @@ impl fmt::Debug for Vote {
             f,
             "{}: V{}({}, {}, E{})",
             self.digest(),
-            self.round,
-            self.author,
-            self.origin,
-            self.epoch
+            self.round(),
+            self.author(),
+            self.origin(),
+            self.epoch()
         )
     }
 }
@@ -1232,7 +1297,20 @@ pub struct WorkerInfoResponse {
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
-pub struct VoteInfo {
+#[enum_dispatch(VoteInfoAPI)]
+pub enum VoteInfo {
+    V1(VoteInfoV1),
+}
+
+#[enum_dispatch]
+pub trait VoteInfoAPI {
+    fn epoch(&self) -> Epoch;
+    fn round(&self) -> Round;
+    fn vote_digest(&self) -> VoteDigest;
+}
+
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct VoteInfoV1 {
     /// The latest Epoch for which a vote was sent to given authority
     pub epoch: Epoch,
     /// The latest round for which a vote was sent to given authority
@@ -1241,12 +1319,34 @@ pub struct VoteInfo {
     pub vote_digest: VoteDigest,
 }
 
+impl VoteInfoAPI for VoteInfoV1 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
+    fn round(&self) -> Round {
+        self.round
+    }
+
+    fn vote_digest(&self) -> VoteDigest {
+        self.vote_digest
+    }
+}
+
+impl From<&VoteV1> for VoteInfoV1 {
+    fn from(vote: &VoteV1) -> Self {
+        VoteInfoV1 {
+            epoch: vote.epoch(),
+            round: vote.round(),
+            vote_digest: vote.digest(),
+        }
+    }
+}
+
 impl From<&Vote> for VoteInfo {
     fn from(vote: &Vote) -> Self {
-        VoteInfo {
-            epoch: vote.epoch,
-            round: vote.round,
-            vote_digest: vote.digest(),
+        match vote {
+            Vote::V1(vote) => VoteInfo::V1(VoteInfoV1::from(vote)),
         }
     }
 }

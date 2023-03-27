@@ -40,8 +40,9 @@ use types::{
     PayloadAvailabilityResponse, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest,
     RequestBatchesResponse, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
-    SendCertificateResponse, SequenceNumber, TimestampMs, Transaction, Vote, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
+    SendCertificateResponse, SequenceNumber, TimestampMs, Transaction, Vote, VoteAPI,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerSynchronizeMessage, WorkerToWorker,
+    WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -860,7 +861,7 @@ impl CommitteeFixture {
         let votes: Vec<_> = self
             .votes(header)
             .into_iter()
-            .map(|x| (x.author, x.signature))
+            .map(|x| (x.author(), x.signature().clone()))
             .collect();
         Certificate::new_unverified(&committee, header.clone(), votes).unwrap()
     }
