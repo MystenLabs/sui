@@ -314,7 +314,6 @@ impl Primary {
             // needs to fetch payloads.
             // With 200MiB buffer size and ~500ms RTT, the max throughput ~400MiB/s.
             quic_config.stream_receive_window = Some(100 << 20);
-            quic_config.receive_window = Some(200 << 20);
             quic_config.send_window = Some(200 << 20);
             quic_config.crypto_buffer_size = Some(10 << 20);
             // Enable keep alives every 5s
