@@ -147,7 +147,9 @@ jobs:
           ${{ steps.get-comment-body.outputs.narwhal }}
           ```
   indexer-bench:
-    name: Indexer Benchmarks
+    name: indexer
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -167,7 +169,7 @@ jobs:
 
       - name: Run indexer benchmark
         run: |
-          cargo +nightly bench --bench indexer_benchmark | tee output.txt
+          cargo bench --bench indexer_benchmark | tee output.txt
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
