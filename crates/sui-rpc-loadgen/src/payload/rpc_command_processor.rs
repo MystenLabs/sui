@@ -26,7 +26,8 @@ use crate::payload::{
     Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
 };
 
-pub(crate) const DEFAULT_GAS_BUDGET: u64 = 100_000;
+pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
+pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
@@ -38,7 +39,7 @@ impl RpcCommandProcessor {
         let clients = join_all(urls.iter().map(|url| async {
             SuiClientBuilder::default()
                 .max_concurrent_requests(usize::MAX)
-                .request_timeout(Duration::from_secs(10))
+                .request_timeout(Duration::from_secs(60))
                 .build(url.clone())
                 .await
                 .unwrap()
@@ -110,7 +111,8 @@ impl Processor for RpcCommandProcessor {
                 prepare_new_signer_and_coins(
                     clients.first().unwrap(),
                     config.signer_info.as_ref().unwrap(),
-                    config.num_threads,
+                    config.num_threads * config.num_chunks_per_thread,
+                    config.max_repeat as u64 + 1,
                 )
                 .await,
             )
@@ -118,6 +120,7 @@ impl Processor for RpcCommandProcessor {
             None
         };
 
+        let num_chunks = config.num_chunks_per_thread;
         Ok(command_payloads
             .into_iter()
             .enumerate()
@@ -127,7 +130,7 @@ impl Processor for RpcCommandProcessor {
                     .as_ref()
                     .map(|(coins, encoded_keypair)| SignerInfo {
                         encoded_keypair: encoded_keypair.clone(),
-                        gas_payment: Some(coins[i]),
+                        gas_payment: Some(coins[num_chunks * i..(i + 1) * num_chunks].to_vec()),
                         gas_budget: None,
                     }),
             })
@@ -186,33 +189,67 @@ async fn prepare_new_signer_and_coins(
     client: &SuiClient,
     signer_info: &SignerInfo,
     num_coins: usize,
+    num_transactions_per_coin: u64,
 ) -> (Vec<ObjectID>, String) {
+    // TODO: This is due to the limit of number of objects that can be created in a single transaction
+    // we can bypass the limit to use multiple split coin transactions
+    if num_coins > 2000 {
+        panic!("num_threads * num_chunks_per_thread cannot exceed 2000, current val {num_coins}")
+    }
+    let num_coins = num_coins as u64;
     let primary_keypair = SuiKeyPair::decode_base64(&signer_info.encoded_keypair)
         .expect("Decoding keypair should not fail");
     let sender = SuiAddress::from(&primary_keypair.public());
-    let coins = get_sui_coin_ids(client, sender).await;
-    // one coin for splitting, the other coins for gas payment
-    let coin_to_split: ObjectID = coins[0];
-    let coin_for_split_gas: ObjectID = coins[1];
+    let (coin, balance) = get_coin_with_max_balance(client, sender).await;
 
     // We don't want to split coins in our primary address because we want to avoid having
     // a million coin objects in our address. We can also fetch directly from the faucet, but in
     // some environment that might not be possible when faucet resource is scarce
     let (burner_address, burner_keypair): (_, AccountKeyPair) = get_key_pair();
     let burner_keypair = SuiKeyPair::Ed25519(burner_keypair);
-    transfer_coin(client, &primary_keypair, coin_to_split, burner_address).await;
-    transfer_coin(client, &primary_keypair, coin_for_split_gas, burner_address).await;
+    // Some coins has an enormous amount of gas, we want to limit the max pay amount so that
+    // we don't squander the entire balance
+    // TODO(chris): consider reference gas price
+    let max_pay_amount = num_transactions_per_coin * DEFAULT_GAS_BUDGET * num_coins;
+    let amount_for_primary_coin =
+        // we need to subtract the following
+        // 1. gas fee(i.e., `DEFAULT_GAS_BUDGET`) for pay_sui from the primary address to the burner address
+        // 2. gas fee(i.e., DEFAULT_LARGE_GAS_BUDGET) for splitting the primary coin into `num_coins`
+        max_pay_amount.min(balance - DEFAULT_LARGE_GAS_BUDGET - DEFAULT_GAS_BUDGET);
+    pay_sui(
+        client,
+        &primary_keypair,
+        vec![coin],
+        DEFAULT_GAS_BUDGET,
+        vec![burner_address; 2],
+        vec![amount_for_primary_coin, DEFAULT_LARGE_GAS_BUDGET],
+    )
+    .await;
 
+    let coin_to_split =
+        get_coin_with_balance(client, burner_address, amount_for_primary_coin).await;
     let mut results: Vec<ObjectID> =
-        split_coins(client, &burner_keypair, coin_to_split, num_coins as u64).await;
+        split_coins(client, &burner_keypair, coin_to_split, num_coins).await;
     results.push(coin_to_split);
     debug!("Split {coin_to_split} into {results:?} for gas payment");
-    assert_eq!(results.len(), num_coins);
+    assert_eq!(results.len(), num_coins as usize);
     (results, burner_keypair.encode_base64())
 }
 
+async fn get_coin_with_max_balance(client: &SuiClient, address: SuiAddress) -> (ObjectID, u64) {
+    let coins = get_sui_coin_ids(client, address).await;
+    assert!(!coins.is_empty());
+    coins.into_iter().max_by(|a, b| a.1.cmp(&b.1)).unwrap()
+}
+
+async fn get_coin_with_balance(client: &SuiClient, address: SuiAddress, balance: u64) -> ObjectID {
+    let coins = get_sui_coin_ids(client, address).await;
+    assert!(!coins.is_empty());
+    coins.into_iter().find(|a| a.1 == balance).unwrap().0
+}
+
 // TODO: move this to the Rust SDK
-async fn get_sui_coin_ids(client: &SuiClient, address: SuiAddress) -> Vec<ObjectID> {
+async fn get_sui_coin_ids(client: &SuiClient, address: SuiAddress) -> Vec<(ObjectID, u64)> {
     match client
         .coin_read_api()
         .get_coins(address, None, None, None)
@@ -221,7 +258,7 @@ async fn get_sui_coin_ids(client: &SuiClient, address: SuiAddress) -> Vec<Object
         Ok(page) => page
             .data
             .into_iter()
-            .map(|c| c.coin_object_id)
+            .map(|c| (c.coin_object_id, c.balance))
             .collect::<Vec<_>>(),
         Err(e) => {
             panic!("get_sui_coin_ids error for address {address} {e}")
@@ -230,19 +267,21 @@ async fn get_sui_coin_ids(client: &SuiClient, address: SuiAddress) -> Vec<Object
     // TODO: implement iteration over next page
 }
 
-async fn transfer_coin(
+async fn pay_sui(
     client: &SuiClient,
     keypair: &SuiKeyPair,
-    coin_id: ObjectID,
-    recipient: SuiAddress,
+    input_coins: Vec<ObjectID>,
+    gas_budget: u64,
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
 ) -> SuiTransactionResponse {
     let sender = SuiAddress::from(&keypair.public());
-    let txn = client
+    let tx = client
         .transaction_builder()
-        .transfer_object(sender, coin_id, None, DEFAULT_GAS_BUDGET, recipient)
+        .pay(sender, input_coins, recipients, amounts, None, gas_budget)
         .await
-        .expect("Failed to construct transfer coin transaction");
-    sign_and_execute(client, keypair, txn).await
+        .expect("Failed to construct pay sui transaction");
+    sign_and_execute(client, keypair, tx).await
 }
 
 async fn split_coins(
@@ -254,7 +293,13 @@ async fn split_coins(
     let sender = SuiAddress::from(&keypair.public());
     let split_coin_tx = client
         .transaction_builder()
-        .split_coin_equal(sender, coin_to_split, num_coins, None, DEFAULT_GAS_BUDGET)
+        .split_coin_equal(
+            sender,
+            coin_to_split,
+            num_coins,
+            None,
+            DEFAULT_LARGE_GAS_BUDGET,
+        )
         .await
         .expect("Failed to construct split coin transaction");
     sign_and_execute(client, keypair, split_coin_tx)
@@ -267,7 +312,7 @@ async fn split_coins(
         .collect::<Vec<_>>()
 }
 
-async fn sign_and_execute(
+pub(crate) async fn sign_and_execute(
     client: &SuiClient,
     keypair: &SuiKeyPair,
     txn_data: TransactionData,
@@ -275,7 +320,7 @@ async fn sign_and_execute(
     let signature =
         Signature::new_secure(&IntentMessage::new(Intent::default(), &txn_data), keypair);
 
-    let transaction_response = client
+    let transaction_response = match client
         .quorum_driver()
         .execute_transaction(
             Transaction::from_data(txn_data, Intent::default(), vec![signature])
@@ -285,7 +330,13 @@ async fn sign_and_execute(
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
-        .unwrap_or_else(|_| panic!("Execute Transaction Failed"));
+    {
+        Ok(response) => response,
+        Err(e) => {
+            panic!("sign_and_execute error {e}")
+        }
+    };
+
     match &transaction_response.effects {
         Some(effects) => {
             if let SuiExecutionStatus::Failure { error } = effects.status() {
