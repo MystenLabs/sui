@@ -31,7 +31,7 @@ function AddressResult() {
             <div>
                 <div className="border-b border-gray-45 pb-5">
                     <Heading color="gray-90" variant="heading4/semibold">
-                        Transactions
+                        Transaction Blocks
                     </Heading>
                 </div>
                 <ErrorBoundary>

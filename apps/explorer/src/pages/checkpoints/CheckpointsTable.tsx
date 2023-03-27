@@ -138,6 +138,7 @@ export function CheckpointsTable({
                     onLimitChange={setLimit}
                     pagination={pagination}
                     disablePagination={disablePagination}
+                    href="/recent?tab=checkpoints"
                 />
             </div>
         </div>

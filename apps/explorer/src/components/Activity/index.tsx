@@ -11,6 +11,7 @@ import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 type Props = {
+    initialTab?: string | null;
     initialLimit: number;
     disablePagination?: boolean;
 };
@@ -19,7 +20,14 @@ const AUTO_REFRESH_ID = 'auto-refresh';
 const REFETCH_INTERVAL_SECONDS = 10;
 const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
-export function Activity({ initialLimit, disablePagination }: Props) {
+export function Activity({
+    initialTab,
+    initialLimit,
+    disablePagination,
+}: Props) {
+    const [selectedIndex, setSelectedIndex] = useState(
+        initialTab === 'checkpoints' ? 1 : 0
+    );
     const [paused, setPaused] = useState(false);
 
     const handlePauseChange = () => {
@@ -39,10 +47,14 @@ export function Activity({ initialLimit, disablePagination }: Props) {
 
     return (
         <div>
-            <TabGroup size="lg">
+            <TabGroup
+                size="lg"
+                selectedIndex={selectedIndex}
+                onChange={setSelectedIndex}
+            >
                 <div className="relative">
                     <TabList>
-                        <Tab>Transactions</Tab>
+                        <Tab>Transaction Blocks</Tab>
                         <Tab>Checkpoints</Tab>
                     </TabList>
 

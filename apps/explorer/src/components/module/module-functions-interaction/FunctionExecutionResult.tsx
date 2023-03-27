@@ -48,13 +48,13 @@ export function FunctionExecutionResult({
         >
             <div className="space-y-4 text-bodySmall">
                 <LinkGroup
-                    title="Transaction ID"
+                    title="Digest"
                     links={
                         result
                             ? [
                                   {
                                       text: getTransactionDigest(result),
-                                      to: `/transaction/${encodeURIComponent(
+                                      to: `/txblock/${encodeURIComponent(
                                           getTransactionDigest(result)
                                       )}`,
                                   },

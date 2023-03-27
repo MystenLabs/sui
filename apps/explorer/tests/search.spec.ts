@@ -37,5 +37,5 @@ test('can search for transaction', async ({ page }) => {
     const txid = getTransactionDigest(tx);
     await page.goto('/');
     await search(page, txid);
-    await expect(page).toHaveURL(`/transaction/${txid}`);
+    await expect(page).toHaveURL(`/txblock/${txid}`);
 });
