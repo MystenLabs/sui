@@ -185,10 +185,7 @@ export function validatorsTableData(
 function ValidatorPageResult() {
     const { data, isLoading, isSuccess, isError } = useGetSystemObject();
 
-    const numberOfValidators = useMemo(
-        () => data?.activeValidators.length || null,
-        [data]
-    );
+    const numberOfValidators = data?.activeValidators.length || 0;
 
     const {
         data: validatorEvents,
@@ -213,8 +210,11 @@ function ValidatorPageResult() {
     }, [data]);
 
     const averageAPY = useMemo(() => {
-        if (!rollingAverageApys) return 0;
-
+        if (
+            !rollingAverageApys ||
+            Object.keys(rollingAverageApys)?.length === 0
+        )
+            return 0;
         const apys = Object.values(rollingAverageApys);
         const averageAPY = apys?.reduce((acc, cur) => acc + cur, 0);
         return roundFloat(averageAPY / apys.length, APY_DECIMALS);

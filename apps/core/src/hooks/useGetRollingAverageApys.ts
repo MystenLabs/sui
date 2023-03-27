@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMemo } from 'react';
+import BigNumber from 'bignumber.js';
 
 import { useGetValidatorsEvents } from './useGetValidatorsEvents';
 import { roundFloat } from '../utils/roundFloat';
@@ -38,6 +39,17 @@ export interface ApyByValidator {
     [validatorAddress: string]: number;
 }
 
+const calculateApy = (stake: string, poolStakingReward: string) => {
+    const poolStakingRewardBigNumber = new BigNumber(poolStakingReward);
+    const stakeBigNumber = new BigNumber(stake);
+    // Calculate the ratio of pool_staking_reward / stake
+    const ratio = poolStakingRewardBigNumber.dividedBy(stakeBigNumber);
+
+    // Perform the exponentiation and subtraction using BigNumber
+    const apy = ratio.plus(1).pow(365).minus(1);
+    return apy.toNumber();
+};
+
 export function useGetRollingAverageApys(numberOfValidators: number | null) {
     // Set the limit to the number of validators  * the rolling average
     // Order the response in descending order so that the most recent epoch are at the top
@@ -46,48 +58,50 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
         order: 'descending',
     });
 
-    const apyCal = useMemo<ApyByValidator | null>(() => {
-        if (!validatorEpochEvents?.data || !validatorEpochEvents?.data?.data) {
-            return null;
-        }
-        const apyGroups: ApyGroups = {};
-        validatorEpochEvents.data.data.forEach(({ parsedJson }) => {
-            const { stake, pool_staking_reward, validator_address } =
-                parsedJson as ParsedJson;
-            const apy = Math.pow(1 + +pool_staking_reward / +stake, 365) - 1;
-
-            if (!apyGroups[validator_address]) {
-                apyGroups[validator_address] = [];
+    const apyByValidator =
+        useMemo<ApyByValidator | null>(() => {
+            if (
+                !validatorEpochEvents?.data ||
+                !validatorEpochEvents?.data?.data
+            ) {
+                return null;
             }
-            // If the APY is greater than 10000% or isNAN, set it to 0
-            apyGroups[validator_address].push(
-                Number.isNaN(apy) || apy > 10_000 ? 0 : apy
-            );
-        });
+            const apyGroups: ApyGroups = {};
+            validatorEpochEvents.data.data.forEach(({ parsedJson }) => {
+                const { stake, pool_staking_reward, validator_address } =
+                    parsedJson as ParsedJson;
 
-        const apyByValidator: ApyByValidator = Object.keys(apyGroups).reduce(
-            (acc, validatorAddr) => {
-                const apys = apyGroups[validatorAddr]
+                if (!apyGroups[validator_address]) {
+                    apyGroups[validator_address] = [];
+                }
+                const apyFloat = calculateApy(stake, pool_staking_reward);
+
+                // If the APY is greater than 10000% or isNAN, set it to 0
+                apyGroups[validator_address].push(
+                    Number.isNaN(apyFloat) || apyFloat > 10_000 ? 0 : apyFloat
+                );
+            });
+
+            const apyByValidator: ApyByValidator = Object.entries(
+                apyGroups
+            ).reduce((acc, [validatorAddr, apyArr]) => {
+                const apys = apyArr
                     .slice(0, ROLLING_AVERAGE)
                     .map((entry) => entry);
 
                 const avgApy =
-                    (apys.reduce((sum, apy) => sum + apy, 0) / apys.length) *
-                    100;
-
+                    apys.reduce((sum, apy) => sum + apy, 0) / apys.length;
                 acc[validatorAddr] = roundFloat(avgApy, DEFAULT_APY_DECIMALS);
-
+                console.log(apyArr)
                 return acc;
-            },
-            {} as ApyByValidator
-        );
-        // return object with validator address as key and APY as value
-        // { '0x123': 0.1234, '0x456': 0.4567 }
-        return apyByValidator;
-    }, [validatorEpochEvents.data]);
+            }, {} as ApyByValidator);
+            // return object with validator address as key and APY as value
+            // { '0x123': 0.1234, '0x456': 0.4567 }
+            return apyByValidator;
+        }, [validatorEpochEvents.data]) || null;
 
     return {
         ...validatorEpochEvents,
-        data: apyCal,
+        data: apyByValidator,
     };
 }
