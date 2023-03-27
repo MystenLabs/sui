@@ -257,8 +257,8 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
-        Ok(self.state.get_total_transaction_number()?.into())
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+        Ok(self.state.get_total_transaction_blocks()?.into())
     }
 
     async fn get_transaction_block(

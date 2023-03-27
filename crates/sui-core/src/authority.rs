@@ -2229,7 +2229,7 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+    pub fn get_total_transaction_blocks(&self) -> Result<u64, anyhow::Error> {
         Ok(self.get_indexes()?.next_sequence_number())
     }
 

@@ -80,7 +80,7 @@ impl RpcExampleProvider {
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_owned_objects(),
-            self.get_total_transaction_number(),
+            self.get_total_transaction_blocks(),
             self.get_transaction_block(),
             self.query_transactions(),
             self.get_events(),
@@ -352,7 +352,7 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_total_transaction_number(&mut self) -> Examples {
+    fn get_total_transaction_blocks(&mut self) -> Examples {
         Examples::new(
             "sui_getTotalTransactionNumber",
             vec![ExamplePairing::new(

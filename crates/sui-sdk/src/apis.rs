@@ -116,8 +116,8 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_total_transaction_number().await?.into())
+    pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_total_transaction_blocks().await?.into())
     }
 
     pub async fn get_transaction_with_options(

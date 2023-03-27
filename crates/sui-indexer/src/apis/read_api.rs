@@ -146,12 +146,12 @@ where
         return self.fullnode.multi_get_objects(object_ids, options).await;
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
         if !self
             .migrated_methods
             .contains(&"get_total_transaction_number".to_string())
         {
-            return self.fullnode.get_total_transaction_number().await;
+            return self.fullnode.get_total_transaction_blocks().await;
         }
         Ok(self.get_total_transaction_number_internal()?.into())
     }

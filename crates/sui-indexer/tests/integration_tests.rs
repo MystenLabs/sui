@@ -248,7 +248,7 @@ pub mod pg_integration_test {
         // At least 1 transaction + 1 genesis, others are like Consensus Commit Prologue
         assert!(tx_count >= 2);
         let rpc_tx_count = indexer_rpc_client
-            .get_total_transaction_number()
+            .get_total_transaction_blocks()
             .await
             .unwrap();
         assert!(<u64>::from(rpc_tx_count) >= 2);

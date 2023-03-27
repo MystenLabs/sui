@@ -115,7 +115,7 @@ pub trait ReadApi {
 
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionNumber")]
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt>;
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
