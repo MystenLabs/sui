@@ -12,7 +12,7 @@ use fastcrypto::error::FastCryptoError;
 use move_binary_format::{access::ModuleAccess, errors::VMError};
 use move_binary_format::{errors::Location, file_format::FunctionDefinitionIndex};
 use move_core_types::{
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::MoveResolver,
     vm_status::{StatusCode, StatusType},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -742,14 +742,10 @@ impl From<ExecutionErrorKind> for ExecutionError {
     }
 }
 
-pub fn convert_vm_error<
-    'r,
-    E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + LinkageResolver<Error = E>,
->(
+pub fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
     error: VMError,
-    vm: &'r MoveVM,
-    state_view: &'r S,
+    vm: &MoveVM,
+    state_view: &S,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {

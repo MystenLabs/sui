@@ -26,10 +26,11 @@ use sui_types::{
 };
 
 use crate::{
-    adapter::{missing_unwrapped_msg, new_session},
+    adapter::{missing_unwrapped_msg, new_native_extensions},
     execution_mode::ExecutionMode,
 };
 
+use super::linkage_view::LinkageView;
 use super::types::*;
 
 /// Maintains all runtime state specific to programmable transactions
@@ -46,7 +47,7 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, S: StorageView> {
     /// The gas status used for metering
     pub gas_status: &'a mut SuiGasStatus<'b>,
     /// The session used for interacting with Move types and calls
-    pub session: Session<'state, 'vm, S>,
+    pub session: Session<'state, 'vm, LinkageView<'state, S>>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
     /// Newly published packages
@@ -93,7 +94,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         // TODO remove this
         let tmp_session = new_session(
             vm,
-            state_view,
+            LinkageView::new(state_view),
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -148,15 +149,15 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         };
         // the session was just used for ability and layout metadata fetching, no changes should
         // exist. Plus, Sui Move does not use these changes or events
-        let (change_set, move_events) = tmp_session
-            .finish()
-            .map_err(|e| sui_types::error::convert_vm_error(e, vm, state_view))?;
+        let (res, linkage) = tmp_session.finish();
+        let (change_set, move_events) =
+            res.map_err(|e| sui_types::error::convert_vm_error(e, vm, &linkage))?;
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
         assert_invariant!(move_events.is_empty(), "Events must be empty");
         // make the real session
         let session = new_session(
             vm,
-            state_view,
+            linkage,
             object_owner_map,
             !gas_status.is_unmetered(),
             protocol_config,
@@ -549,9 +550,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
         }
 
-        let (change_set, events, mut native_context_extensions) = session
-            .finish_with_extensions()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+        let (res, linkage) = session.finish_with_extensions();
+        let (change_set, events, mut native_context_extensions) =
+            res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
         // Sui Move programs should never touch global state, so resources should be empty
         assert_invariant!(
             change_set.resources().next().is_none(),
@@ -583,7 +584,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         // TODO remove this
         let tmp_session = new_session(
             vm,
-            state_view,
+            LinkageView::new(state_view),
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -612,7 +613,6 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             let move_object = unsafe {
                 create_written_object(
                     vm,
-                    state_view,
                     &tmp_session,
                     protocol_config,
                     &input_object_metadata,
@@ -632,17 +632,16 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         for (id, (write_kind, recipient, ty, move_type, value)) in writes {
             let abilities = tmp_session
                 .get_type_abilities(&ty)
-                .map_err(|e| convert_vm_error(e, vm, state_view))?;
+                .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
             let has_public_transfer = abilities.has_store();
             let layout = tmp_session
                 .get_type_layout(&move_type.clone().into())
-                .map_err(|e| convert_vm_error(e, vm, state_view))?;
+                .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
                 create_written_object(
                     vm,
-                    state_view,
                     &tmp_session,
                     protocol_config,
                     &input_object_metadata,
@@ -671,9 +670,10 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             };
             object_changes.insert(id, ObjectChange::Delete(version, delete_kind));
         }
-        let (change_set, move_events) = tmp_session
-            .finish()
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+
+        let (res, linkage) = tmp_session.finish();
+        let (change_set, move_events) = res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
+
         // the session was just used for ability and layout metadata fetching, no changes should
         // exist. Plus, Sui Move does not use these changes or events
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
@@ -687,7 +687,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
 
     /// Convert a VM Error to an execution one
     pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-        sui_types::error::convert_vm_error(error, self.vm, self.state_view)
+        sui_types::error::convert_vm_error(error, self.vm, self.session.get_resolver())
     }
 
     /// Special case errors for type arguments to Move functions
@@ -775,11 +775,25 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     }
 }
 
+fn new_session<'state, 'vm, S: StorageView>(
+    vm: &'vm MoveVM,
+    linkage: LinkageView<'state, S>,
+    input_objects: BTreeMap<ObjectID, Owner>,
+    is_metered: bool,
+    protocol_config: &ProtocolConfig,
+) -> Session<'state, 'vm, LinkageView<'state, S>> {
+    let store = linkage.storage();
+    vm.new_session_with_extensions(
+        linkage,
+        new_native_extensions(store, input_objects, is_metered, protocol_config),
+    )
+}
+
 /// Load an input object from the state_view
 fn load_object<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
-    session: &Session<S>,
+    session: &Session<LinkageView<S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     override_as_immutable: bool,
     id: ObjectID,
@@ -811,7 +825,7 @@ fn load_object<S: StorageView>(
     let prev = object_owner_map.insert(id, obj.owner);
     // protected by transaction input checker
     assert_invariant!(prev.is_none(), format!("Duplicate input object {}", id));
-    let obj_value = ObjectValue::from_object(vm, state_view, session, obj)?;
+    let obj_value = ObjectValue::from_object(vm, session, obj)?;
     Ok(InputValue::new_object(object_metadata, obj_value))
 }
 
@@ -819,7 +833,7 @@ fn load_object<S: StorageView>(
 fn load_call_arg<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
-    session: &Session<S>,
+    session: &Session<LinkageView<S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
@@ -835,7 +849,7 @@ fn load_call_arg<S: StorageView>(
 fn load_object_arg<S: StorageView>(
     vm: &MoveVM,
     state_view: &S,
-    session: &Session<S>,
+    session: &Session<LinkageView<S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
@@ -919,8 +933,7 @@ fn refund_max_gas_budget(
 /// the StructTag, or from the runtime correctly propagating from the inputs
 unsafe fn create_written_object<S: StorageView>(
     vm: &MoveVM,
-    state_view: &S,
-    session: &Session<S>,
+    session: &Session<LinkageView<S>>,
     protocol_config: &ProtocolConfig,
     input_object_metadata: &BTreeMap<ObjectID, InputObjectMetadata>,
     loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
@@ -952,7 +965,7 @@ unsafe fn create_written_object<S: StorageView>(
 
     let type_tag = session
         .get_type_tag(&type_)
-        .map_err(|e| sui_types::error::convert_vm_error(e, vm, state_view))?;
+        .map_err(|e| sui_types::error::convert_vm_error(e, vm, session.get_resolver()))?;
 
     let struct_tag = match type_tag {
         TypeTag::Struct(inner) => *inner,

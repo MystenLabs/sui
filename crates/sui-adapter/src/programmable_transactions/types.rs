@@ -7,7 +7,7 @@ use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -22,10 +22,11 @@ use sui_types::{
     TypeTag,
 };
 
+use super::linkage_view::LinkageView;
+
 pub trait StorageView:
     ResourceResolver<Error = SuiError>
     + ModuleResolver<Error = SuiError>
-    + LinkageResolver<Error = SuiError>
     + BackingPackageStore
     + Storage
     + ParentSync
@@ -36,7 +37,6 @@ pub trait StorageView:
 impl<
         T: ResourceResolver<Error = SuiError>
             + ModuleResolver<Error = SuiError>
-            + LinkageResolver<Error = SuiError>
             + BackingPackageStore
             + Storage
             + ParentSync
@@ -190,8 +190,7 @@ impl Value {
 impl ObjectValue {
     pub fn new<S: StorageView>(
         vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+        session: &Session<LinkageView<S>>,
         type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
@@ -208,7 +207,7 @@ impl ObjectValue {
         let tag: StructTag = type_.into();
         let type_ = session
             .load_type(&TypeTag::Struct(Box::new(tag)))
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+            .map_err(|e| convert_vm_error(e, vm, session.get_resolver()))?;
         Ok(Self {
             type_,
             has_public_transfer,
@@ -219,26 +218,23 @@ impl ObjectValue {
 
     pub fn from_object<S: StorageView>(
         vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+        session: &Session<LinkageView<S>>,
         object: &Object,
     ) -> Result<Self, ExecutionError> {
         let Object { data, .. } = object;
         match data {
             Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(vm, state_view, session, move_object),
+            Data::Move(move_object) => Self::from_move_object(vm, session, move_object),
         }
     }
 
     pub fn from_move_object<S: StorageView>(
         vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+        session: &Session<LinkageView<S>>,
         object: &MoveObject,
     ) -> Result<Self, ExecutionError> {
         Self::new(
             vm,
-            state_view,
             session,
             object.type_().clone(),
             object.has_public_transfer(),
