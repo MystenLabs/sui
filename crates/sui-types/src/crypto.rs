@@ -752,17 +752,11 @@ impl ToFromBytes for Signature {
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
-                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else if x == &Secp256k1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else if x == &Secp256r1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else {
                     Err(FastCryptoError::InvalidInput)
                 }
