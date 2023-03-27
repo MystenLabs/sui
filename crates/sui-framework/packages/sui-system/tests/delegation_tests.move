@@ -106,6 +106,26 @@ module sui_system::stake_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = staking_pool::EStakedSuiBelowThreshold)]
+    fun test_split_below_threshold() {
+        let scenario_val = test_scenario::begin(STAKER_ADDR_1);
+        let scenario = &mut scenario_val;
+        set_up_sui_system_state(scenario);
+        // Stake 2 SUI
+        governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 2, scenario);
+
+        test_scenario::next_tx(scenario, STAKER_ADDR_1);
+        {
+            let staked_sui = test_scenario::take_from_sender<StakedSui>(scenario);
+            let ctx = test_scenario::ctx(scenario);
+            // The remaining amount after splitting is below the threshold so this should fail.
+            staking_pool::split_staked_sui(&mut staked_sui, 1 * MIST_PER_SUI + 1, ctx);
+            test_scenario::return_to_sender(scenario, staked_sui);
+        };
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
     fun test_add_remove_stake_flow() {
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;

@@ -351,6 +351,15 @@ The epoch value corresponds to the first epoch this change takes place.
 ## Constants
 
 
+<a name="0x3_validator_set_MIN_STAKING_THRESHOLD"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
+</code></pre>
+
+
+
 <a name="0x3_validator_set_EInvalidCap"></a>
 
 
@@ -491,15 +500,6 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 <pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: u64 = 7;
-</code></pre>
-
-
-
-<a name="0x3_validator_set_MIN_STAKING_THRESHOLD"></a>
-
-
-
-<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
 </code></pre>
 
 
