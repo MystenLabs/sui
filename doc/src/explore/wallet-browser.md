@@ -202,29 +202,6 @@ To view all of the transactions for your address, click **Apps** and then click 
 
 Sui Explorer opens with the details for your wallet address displayed.
 
-## Mint an example NFT
-
-You can mint an example Sui NFT directly from Sui Wallet.
-
-Click **Apps**, then click **Mint an NFT**. In the current version, you can mint only example NFTs.
-
-## Create a new NFT
-
-The [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site lets you create a new NFT on the Sui network using your own image file. To access the site directly from Sui Wallet, click the **Apps** tab, and then click **Sui NFT Mint**. You must have an active wallet to mint NFTs.
-
-To mint a new NFT using the demo site
-1. Open the [Sui Wallet demo](https://sui-wallet-demo.sui.io/) site.
-1. Click **Connect**.
-1. In your Sui Wallet, click **Connect** to connect your wallet with the demo site.
-   You may need to enter your wallet password.
-1. Enter a **Name** and **Description** for your NFT, and then enter Image URL to the image to use.
-1. Click **Create**.
-1. Click **Approve** in your wallet to allow the site to add the NFT to your wallet and withdraw gas fees from your SUI balance.
-
-After you successfully create a new NFT, you can transfer it to another wallet address. Enter the address to send it to in the **Recipient** field, then click **Transfer**. Click **Approve** in your wallet to allow the transfer.
-
-You can view details for the transactions to create the NFT and then transfer it in [Sui Explorer](https://explorer.sui.io/).
-
 ## View your NFTs
 
 Click the **NFTs** tab to view all of the NFTS that you mint, purchase, or receive in your wallet. This includes any NFTs that you obtain from connected apps.  Click on an NFT to view additional details about it, view a larger NFT image, or send the NFT to another address.
