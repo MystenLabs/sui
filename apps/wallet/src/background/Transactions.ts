@@ -3,7 +3,7 @@
 
 import {
     type SignedTransaction,
-    type SuiTransactionResponse,
+    type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import { type SuiSignMessageOutput } from '@mysten/wallet-standard';
 import { filter, lastValueFrom, map, race, Subject, take } from 'rxjs';
@@ -44,7 +44,7 @@ class Transactions {
                   sign: SuiSignTransactionSerialized;
               },
         connection: ContentScriptConnection
-    ): Promise<SuiTransactionResponse | SignedTransaction> {
+    ): Promise<SuiTransactionBlockResponse | SignedTransaction> {
         const { txResultError, txResult, txSigned } =
             await this.requestApproval(
                 tx ?? {

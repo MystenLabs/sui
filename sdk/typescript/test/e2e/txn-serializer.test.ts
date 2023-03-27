@@ -10,7 +10,7 @@ import {
   isSharedObjectInput,
   ObjectId,
   SuiObjectData,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   SUI_SYSTEM_STATE_OBJECT_ID,
   TransactionBlock,
 } from '../../src';
@@ -20,7 +20,7 @@ import { publishPackage, setup, TestToolbox } from './utils/setup';
 describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
-  let publishTxn: SuiTransactionResponse;
+  let publishTxn: SuiTransactionBlockResponse;
   let sharedObjectId: ObjectId;
 
   beforeAll(async () => {
@@ -38,16 +38,19 @@ describe('Transaction Serialization and deserialization', () => {
     mutable: boolean[],
   ) {
     tx.setSender(await toolbox.address());
-    const transactionBytes = await tx.build({ provider: toolbox.provider });
-    const deserializedTxnBuilder =
-      TransactionBlockDataBuilder.fromBytes(transactionBytes);
+    const transactionBlockBytes = await tx.build({
+      provider: toolbox.provider,
+    });
+    const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(
+      transactionBlockBytes,
+    );
     expect(
       deserializedTxnBuilder.inputs
         .filter((i) => isSharedObjectInput(i.value))
         .map((i) => isMutableSharedObjectInput(i.value)),
     ).toStrictEqual(mutable);
     const reserializedTxnBytes = await deserializedTxnBuilder.build();
-    expect(reserializedTxnBytes).toEqual(transactionBytes);
+    expect(reserializedTxnBytes).toEqual(transactionBlockBytes);
   }
 
   it('Move Shared Object Call with mutable reference', async () => {

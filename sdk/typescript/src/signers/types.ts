@@ -4,7 +4,7 @@
 import { SerializedSignature } from '../cryptography/signature';
 
 export type SignedTransaction = {
-  transactionBytes: string;
+  transactionBlockBytes: string;
   signature: SerializedSignature;
 };
 

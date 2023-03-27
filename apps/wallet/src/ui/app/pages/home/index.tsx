@@ -38,7 +38,7 @@ const HomePage = ({ disableNavigation }: Props) => {
 export default HomePage;
 export { default as NftsPage } from './nfts';
 export { default as TokensPage } from './tokens';
-export { default as TransactionsPage } from './transactions';
+export { default as TransactionBlocksPage } from './transactions';
 export { default as TransferCoinPage } from './transfer-coin';
 export { default as NFTDetailsPage } from './nft-details';
 export { default as NftTransferPage } from './nft-transfer';

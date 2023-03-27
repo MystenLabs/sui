@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_json_rpc_types::{
-    BalanceChange, ObjectChange, SuiCommand, SuiTransaction, SuiTransactionDataAPI,
-    SuiTransactionEffects, SuiTransactionEffectsAPI, SuiTransactionEvents, SuiTransactionKind,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    BalanceChange, ObjectChange, SuiCommand, SuiTransactionBlock, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
+    SuiTransactionBlockKind, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::digests::TransactionDigest;
 use sui_types::messages::{SenderSignedData, TransactionDataAPI};
@@ -16,13 +16,13 @@ use crate::models::addresses::Address;
 use crate::models::transaction_index::{InputObject, MoveCall, Recipient};
 
 #[derive(Debug, Clone)]
-pub struct SuiTransactionFullResponse {
+pub struct SuiTransactionBlockFullResponse {
     pub digest: TransactionDigest,
     /// Transaction input data
-    pub transaction: SuiTransaction,
+    pub transaction: SuiTransactionBlock,
     pub raw_transaction: Vec<u8>,
-    pub effects: SuiTransactionEffects,
-    pub events: SuiTransactionEvents,
+    pub effects: SuiTransactionBlockEffects,
+    pub events: SuiTransactionBlockEvents,
     pub object_changes: Option<Vec<ObjectChange>>,
     pub balance_changes: Option<Vec<BalanceChange>>,
     pub timestamp_ms: u64,
@@ -30,11 +30,11 @@ pub struct SuiTransactionFullResponse {
     pub checkpoint: CheckpointSequenceNumber,
 }
 
-impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
+impl TryFrom<SuiTransactionBlockResponse> for SuiTransactionBlockFullResponse {
     type Error = anyhow::Error;
 
-    fn try_from(response: SuiTransactionResponse) -> Result<Self, Self::Error> {
-        let SuiTransactionResponse {
+    fn try_from(response: SuiTransactionBlockResponse) -> Result<Self, Self::Error> {
+        let SuiTransactionBlockResponse {
             digest,
             transaction,
             raw_transaction,
@@ -50,49 +50,49 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
 
         let transaction = transaction.ok_or_else(|| {
             anyhow::anyhow!(
-                "Transaction is None in SuiTransactionFullResponse of digest {:?}.",
+                "Transaction is None in SuiTransactionBlockFullResponse of digest {:?}.",
                 digest
             )
         })?;
         let effects = effects.ok_or_else(|| {
             anyhow::anyhow!(
-                "Effects is None in SuiTransactionFullResponse of digest {:?}.",
+                "Effects is None in SuiTransactionBlockFullResponse of digest {:?}.",
                 digest
             )
         })?;
         let events = events.ok_or_else(|| {
             anyhow::anyhow!(
-                "Events is None in SuiTransactionFullResponse of digest {:?}.",
+                "Events is None in SuiTransactionBlockFullResponse of digest {:?}.",
                 digest
             )
         })?;
         let timestamp_ms = timestamp_ms.ok_or_else(|| {
             anyhow::anyhow!(
-                "TimestampMs is None in SuiTransactionFullResponse of digest {:?}.",
+                "TimestampMs is None in SuiTransactionBlockFullResponse of digest {:?}.",
                 digest
             )
         })?;
         let checkpoint = checkpoint.ok_or_else(|| {
             anyhow::anyhow!(
-                "Checkpoint is None in SuiTransactionFullResponse of digest {:?}.",
+                "Checkpoint is None in SuiTransactionBlockFullResponse of digest {:?}.",
                 digest
             )
         })?;
         if raw_transaction.is_empty() {
             return Err(anyhow::anyhow!(
-                "Unexpected empty RawTransaction in SuiTransactionFullResponse of digest {:?}.",
+                "Unexpected empty RawTransaction in SuiTransactionBlockFullResponse of digest {:?}.",
                 digest
             ));
         }
         if !errors.is_empty() {
             return Err(anyhow::anyhow!(
-                "Errors in SuiTransactionFullResponse of digest {:?}: {:?}",
+                "Errors in SuiTransactionBlockFullResponse of digest {:?}: {:?}",
                 digest,
                 errors
             ));
         }
 
-        Ok(SuiTransactionFullResponse {
+        Ok(SuiTransactionBlockFullResponse {
             digest,
             transaction,
             raw_transaction,
@@ -107,9 +107,9 @@ impl TryFrom<SuiTransactionResponse> for SuiTransactionFullResponse {
     }
 }
 
-impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
-    fn from(response: SuiTransactionFullResponse) -> Self {
-        let SuiTransactionFullResponse {
+impl From<SuiTransactionBlockFullResponse> for SuiTransactionBlockResponse {
+    fn from(response: SuiTransactionBlockFullResponse) -> Self {
+        let SuiTransactionBlockFullResponse {
             digest,
             transaction,
             effects,
@@ -122,7 +122,7 @@ impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
             raw_transaction,
         } = response;
 
-        SuiTransactionResponse {
+        SuiTransactionBlockResponse {
             digest,
             transaction: Some(transaction),
             raw_transaction,
@@ -138,16 +138,16 @@ impl From<SuiTransactionFullResponse> for SuiTransactionResponse {
     }
 }
 
-pub struct SuiTransactionFullResponseWithOptions {
-    pub response: SuiTransactionFullResponse,
-    pub options: SuiTransactionResponseOptions,
+pub struct SuiTransactionBlockFullResponseWithOptions {
+    pub response: SuiTransactionBlockFullResponse,
+    pub options: SuiTransactionBlockResponseOptions,
 }
 
-impl From<SuiTransactionFullResponseWithOptions> for SuiTransactionResponse {
-    fn from(value: SuiTransactionFullResponseWithOptions) -> Self {
-        let SuiTransactionFullResponseWithOptions { response, options } = value;
+impl From<SuiTransactionBlockFullResponseWithOptions> for SuiTransactionBlockResponse {
+    fn from(value: SuiTransactionBlockFullResponseWithOptions) -> Self {
+        let SuiTransactionBlockFullResponseWithOptions { response, options } = value;
 
-        SuiTransactionResponse {
+        SuiTransactionBlockResponse {
             digest: response.digest,
             transaction: options.show_input.then_some(response.transaction),
             raw_transaction: options
@@ -172,7 +172,7 @@ impl From<SuiTransactionFullResponseWithOptions> for SuiTransactionResponse {
     }
 }
 
-impl SuiTransactionFullResponse {
+impl SuiTransactionBlockFullResponse {
     pub fn get_input_objects(&self, epoch: u64) -> Result<Vec<InputObject>, IndexerError> {
         let raw_tx = self.raw_transaction.clone();
         let sender_signed_data: SenderSignedData = bcs::from_bytes(&raw_tx).map_err(|err| {
@@ -208,7 +208,7 @@ impl SuiTransactionFullResponse {
         let tx_kind = self.transaction.data.transaction();
         let sender = self.transaction.data.sender();
         match tx_kind {
-            SuiTransactionKind::ProgrammableTransaction(pt) => {
+            SuiTransactionBlockKind::ProgrammableTransaction(pt) => {
                 let move_calls: Vec<MoveCall> = pt
                     .commands
                     .clone()

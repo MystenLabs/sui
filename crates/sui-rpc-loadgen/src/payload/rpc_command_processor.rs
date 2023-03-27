@@ -9,8 +9,8 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use tokio::sync::RwLock;
 use tokio::time::sleep;
@@ -80,7 +80,7 @@ impl RpcCommandProcessor {
         keypair: &SuiKeyPair,
         txn_data: TransactionData,
         request_type: ExecuteTransactionRequestType,
-    ) -> SuiTransactionResponse {
+    ) -> SuiTransactionBlockResponse {
         let resp = sign_and_execute(client, keypair, txn_data, request_type).await;
         let effects = resp.effects.as_ref().unwrap();
         let object_ref_cache = self.object_ref_cache.clone();
@@ -419,7 +419,7 @@ async fn pay_sui(
     gas_budget: u64,
     recipients: Vec<SuiAddress>,
     amounts: Vec<u64>,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     let sender = SuiAddress::from(&keypair.public());
     let tx = client
         .transaction_builder()
@@ -475,7 +475,7 @@ pub(crate) async fn sign_and_execute(
     keypair: &SuiKeyPair,
     txn_data: TransactionData,
     request_type: ExecuteTransactionRequestType,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     let signature =
         Signature::new_secure(&IntentMessage::new(Intent::default(), &txn_data), keypair);
 
@@ -485,7 +485,7 @@ pub(crate) async fn sign_and_execute(
             Transaction::from_data(txn_data, Intent::default(), vec![signature])
                 .verify()
                 .expect("signature error"),
-            SuiTransactionResponseOptions::new().with_effects(),
+            SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(request_type),
         )
         .await

@@ -9,7 +9,7 @@ import {
 import type {
     SignedTransaction,
     SuiAddress,
-    SuiTransactionResponse,
+    SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 
 export type TransactionDataType = {
@@ -32,7 +32,7 @@ export type ApprovalRequest = {
     approved: boolean | null;
     origin: string;
     originFavIcon?: string;
-    txResult?: SuiTransactionResponse | SuiSignMessageOutput;
+    txResult?: SuiTransactionBlockResponse | SuiSignMessageOutput;
     txResultError?: string;
     txSigned?: SignedTransaction;
     createdDate: string;
@@ -48,7 +48,7 @@ export interface SignMessageApprovalRequest
 export interface TransactionApprovalRequest
     extends Omit<ApprovalRequest, 'txResult' | 'tx'> {
     tx: TransactionDataType;
-    txResult?: SuiTransactionResponse;
+    txResult?: SuiTransactionBlockResponse;
 }
 
 export function isSignMessageApprovalRequest(

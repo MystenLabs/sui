@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_json_rpc_types::SuiTransactionResponseQuery;
+use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionResponse,
-    SuiTransactionResponseOptions, TransactionBytes,
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
@@ -39,10 +39,10 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     let gas_id = objects.last().unwrap().object().unwrap().object_id;
 
     // Make some transactions
-    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionBlockResponse> = Vec::new();
     for obj in &objects[..objects.len() - 1] {
         let oref = obj.object().unwrap();
-        let transaction_bytes: TransactionBytes = http_client
+        let transaction_bytes: TransactionBlockBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
         let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -56,7 +56,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
             .execute_transaction_block(
                 tx_bytes,
                 signatures,
-                Some(SuiTransactionResponseOptions::new()),
+                Some(SuiTransactionBlockResponseOptions::new()),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;
@@ -66,8 +66,8 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
 
     // TODO(chris): re-enable after rewriting get_transactions_in_range_deprecated with query_transactions
     // test get_transaction_batch
-    // let batch_responses: Vec<SuiTransactionResponse> = http_client
-    //     .multi_get_transaction_blocks(tx, Some(SuiTransactionResponseOptions::new()))
+    // let batch_responses: Vec<SuiTransactionBlockResponse> = http_client
+    //     .multi_get_transaction_blocks(tx, Some(SuiTransactionBlockResponseOptions::new()))
     //     .await?;
 
     // assert_eq!(5, batch_responses.len());
@@ -75,19 +75,19 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     // for r in batch_responses.iter().skip(1) {
     //     assert!(tx_responses
     //         .iter()
-    //         .any(|resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == r.digest)))
+    //         .any(|resp| matches!(resp, SuiTransactionBlockResponse {digest, ..} if *digest == r.digest)))
     // }
 
     // // test get_transaction
     // for tx_digest in tx {
-    //     let response: SuiTransactionResponse = http_client
+    //     let response: SuiTransactionBlockResponse = http_client
     //         .get_transaction_block(
     //             tx_digest,
-    //             Some(SuiTransactionResponseOptions::new().with_raw_input()),
+    //             Some(SuiTransactionBlockResponseOptions::new().with_raw_input()),
     //         )
     //         .await?;
     //     assert!(tx_responses.iter().any(
-    //         |resp| matches!(resp, SuiTransactionResponse {digest, ..} if *digest == response.digest)
+    //         |resp| matches!(resp, SuiTransactionBlockResponse {digest, ..} if *digest == response.digest)
     //     ));
     //     let sender_signed_data: SenderSignedData =
     //         bcs::from_bytes(&response.raw_transaction).unwrap();
@@ -117,7 +117,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
     let object_to_transfer = objects.first().unwrap().object().unwrap().object_id;
 
     // Make a transfer transactions
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .transfer_object(*address, object_to_transfer, None, 1000, *address)
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -131,7 +131,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
         .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_raw_input()),
+            Some(SuiTransactionBlockResponseOptions::new().with_raw_input()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
@@ -153,7 +153,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
 
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let mut tx_responses: Vec<SuiTransactionResponse> = Vec::new();
+    let mut tx_responses: Vec<SuiTransactionBlockResponse> = Vec::new();
 
     let client = context.get_client().await.unwrap();
 
@@ -188,7 +188,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
                 .quorum_driver()
                 .execute_transaction_block(
                     tx,
-                    SuiTransactionResponseOptions::new(),
+                    SuiTransactionBlockResponseOptions::new(),
                     Some(ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await
@@ -201,7 +201,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions with smaller range
     let tx = client
         .read_api()
-        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(3), true)
+        .query_transaction_blocks(
+            SuiTransactionBlockResponseQuery::default(),
+            None,
+            Some(3),
+            true,
+        )
         .await
         .unwrap();
     assert_eq!(3, tx.data.len());
@@ -210,7 +215,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get all transactions paged
     let first_page = client
         .read_api()
-        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(5), false)
+        .query_transaction_blocks(
+            SuiTransactionBlockResponseQuery::default(),
+            None,
+            Some(5),
+            false,
+        )
         .await
         .unwrap();
     assert_eq!(5, first_page.data.len());
@@ -219,7 +229,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let second_page = client
         .read_api()
         .query_transaction_blocks(
-            SuiTransactionResponseQuery::default(),
+            SuiTransactionBlockResponseQuery::default(),
             first_page.next_cursor,
             None,
             false,
@@ -236,7 +246,12 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get 10 latest transactions paged
     let latest = client
         .read_api()
-        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(10), true)
+        .query_transaction_blocks(
+            SuiTransactionBlockResponseQuery::default(),
+            None,
+            Some(10),
+            true,
+        )
         .await
         .unwrap();
     assert_eq!(10, latest.data.len());
@@ -248,7 +263,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let address_txs_asc = client
         .read_api()
         .query_transaction_blocks(
-            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(
+            SuiTransactionBlockResponseQuery::new_with_filter(TransactionFilter::FromAddress(
                 cluster.accounts[0],
             )),
             None,
@@ -263,7 +278,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     let address_txs_desc = client
         .read_api()
         .query_transaction_blocks(
-            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(
+            SuiTransactionBlockResponseQuery::new_with_filter(TransactionFilter::FromAddress(
                 cluster.accounts[0],
             )),
             None,
@@ -282,16 +297,21 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
     // test get_recent_transactions
     let tx = client
         .read_api()
-        .query_transaction_blocks(SuiTransactionResponseQuery::default(), None, Some(20), true)
+        .query_transaction_blocks(
+            SuiTransactionBlockResponseQuery::default(),
+            None,
+            Some(20),
+            true,
+        )
         .await
         .unwrap();
     assert_eq!(20, tx.data.len());
 
     // test get_transaction
     for tx_resp in tx.data {
-        let response: SuiTransactionResponse = client
+        let response: SuiTransactionBlockResponse = client
             .read_api()
-            .get_transaction_with_options(tx_resp.digest, SuiTransactionResponseOptions::new())
+            .get_transaction_with_options(tx_resp.digest, SuiTransactionBlockResponseOptions::new())
             .await
             .unwrap();
         assert!(tx_responses

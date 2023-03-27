@@ -3,7 +3,7 @@
 
 import {
   SignedTransaction,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   SignedMessage,
 } from "@mysten/sui.js";
 import {
@@ -43,7 +43,7 @@ export interface WalletAdapter {
    */
   signAndExecuteTransactionBlock(
     transactionInput: SuiSignAndExecuteTransactionBlockInput
-  ): Promise<SuiTransactionResponse>;
+  ): Promise<SuiTransactionBlockResponse>;
 
   getAccounts: () => Promise<readonly WalletAccount[]>;
 }

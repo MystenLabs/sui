@@ -19,6 +19,9 @@ In [PR 9618](https://github.com/MystenLabs/sui/pull/9618), the `sui-framework` c
 - `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
 - `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
 - `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
+- `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
+- `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
+- `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
 
 If you develop Sui Move code depending on `sui-framework`, the `Move.toml` file of your Move package has to change to reflect the path changes:
 
@@ -287,7 +290,7 @@ const txns = await provider.multiGetTransactionBlocks({
 This release makes the following changes related to reading events:
 
 - Removes System events such as `Publish`, `TransferObject`, `NewObject` and keeps only `MoveEvents`.
-- Adds an `object_changes` and `balance_changes` field in `SuiTransactionResponse`
+- Adds an `object_changes` and `balance_changes` field in `SuiTransactionBlockResponse`
 
 ```tsx
 import { JsonRpcProvider } from "@mysten/sui.js";
@@ -474,7 +477,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw a delegation from a validator's staking pool.
     #[method(name = "requestWithdrawDelegation")]
@@ -490,7 +493,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Switch delegation from the current validator to a new one.
     #[method(name = "requestSwitchDelegation")]
@@ -508,7 +511,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
          gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 ```
 
 Effective with release .28, the function names are:
@@ -530,7 +533,7 @@ Effective with release .28, the function names are:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw stake from a validator's staking pool.
     #[method(name = "requestWithdrawStake")]
@@ -546,7 +549,7 @@ Effective with release .28, the function names are:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 ```
 
 ### Changes to getDelegatedStakes

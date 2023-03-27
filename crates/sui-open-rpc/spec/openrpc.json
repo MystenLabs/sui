@@ -126,14 +126,14 @@
         },
         {
           "name": "request_type",
-          "description": "The request type, derived from `SuiTransactionResponseOptions` if None",
+          "description": "The request type, derived from `SuiTransactionBlockResponseOptions` if None",
           "schema": {
             "$ref": "#/components/schemas/ExecuteTransactionRequestType"
           }
         }
       ],
       "result": {
-        "name": "SuiTransactionResponse",
+        "name": "SuiTransactionBlockResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionResponse"
@@ -791,7 +791,7 @@
         }
       ],
       "result": {
-        "name": "SuiTransactionResponse",
+        "name": "SuiTransactionBlockResponse",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/TransactionResponse"
@@ -1007,7 +1007,7 @@
         }
       ],
       "result": {
-        "name": "Vec<SuiTransactionResponse>",
+        "name": "Vec<SuiTransactionBlockResponse>",
         "required": true,
         "schema": {
           "type": "array",
@@ -1829,7 +1829,7 @@
         }
       ],
       "result": {
-        "name": "TransactionsPage",
+        "name": "TransactionBlocksPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"
@@ -1917,15 +1917,15 @@
           "name": "txn_builder_mode",
           "description": "Whether this is a regular transaction or a Dev Inspect Transaction",
           "schema": {
-            "$ref": "#/components/schemas/SuiTransactionBuilderMode"
+            "$ref": "#/components/schemas/SuiTransactionBlockBuilderMode"
           }
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -1981,10 +1981,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2070,17 +2070,17 @@
         },
         {
           "name": "execution_mode",
-          "description": "Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBuilderMode::Commit` when it's None.",
+          "description": "Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBlockBuilderMode::Commit` when it's None.",
           "schema": {
-            "$ref": "#/components/schemas/SuiTransactionBuilderMode"
+            "$ref": "#/components/schemas/SuiTransactionBlockBuilderMode"
           }
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2153,10 +2153,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2208,10 +2208,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2277,10 +2277,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2342,10 +2342,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2413,10 +2413,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2464,10 +2464,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2528,10 +2528,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2589,10 +2589,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2648,10 +2648,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2709,10 +2709,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     }
@@ -6808,7 +6808,7 @@
           }
         }
       },
-      "SuiTransactionBuilderMode": {
+      "SuiTransactionBlockBuilderMode": {
         "oneOf": [
           {
             "description": "Regular Sui Transactions that are committed on chain",
@@ -7110,7 +7110,7 @@
           }
         }
       },
-      "TransactionBytes": {
+      "TransactionBlockBytes": {
         "type": "object",
         "required": [
           "gas",

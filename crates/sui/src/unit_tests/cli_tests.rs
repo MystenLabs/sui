@@ -28,7 +28,7 @@ use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionEffects, SuiTransactionEffectsAPI,
+    SuiObjectResponseQuery, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
@@ -977,7 +977,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
     let package = effects
@@ -1045,7 +1045,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let SuiClientCommandResult::Upgrade(response) = resp else {
         unreachable!("Invalid upgrade response");
     };
-    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
 
