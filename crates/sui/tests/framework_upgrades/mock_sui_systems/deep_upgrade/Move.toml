@@ -1,5 +1,5 @@
 [package]
-name = "SuiSystemUpgrade"
+name = "SuiSystemDeepUpgrade"
 version = "0.0.1"
 
 [dependencies]

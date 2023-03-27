@@ -7,6 +7,7 @@ module sui_system::validator_wrapper {
     use sui::tx_context::TxContext;
     use sui_system::validator::Validator;
 
+    friend sui_system::sui_system;
     friend sui_system::sui_system_state_inner;
 
     const EInvalidVersion: u64 = 0;
@@ -33,13 +34,7 @@ module sui_system::validator_wrapper {
     public(friend) fun destroy(self: ValidatorWrapper): Validator {
         upgrade_to_latest(&mut self);
         let ValidatorWrapper { inner } = self;
-        versioned::destroy<Validator>(inner)
-    }
-
-    #[test_only]
-    /// Load the inner validator with assumed type. This should be used for testing only.
-    public(friend) fun get_inner_validator_ref(self: &ValidatorWrapper): &Validator {
-        versioned::load_value<Validator>(&self.inner)
+        versioned::destroy(inner)
     }
 
     fun upgrade_to_latest(self: &mut ValidatorWrapper) {
