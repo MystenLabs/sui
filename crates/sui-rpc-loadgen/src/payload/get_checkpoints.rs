@@ -7,7 +7,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashSet;
 use futures::future::join_all;
+use itertools::Itertools;
 use std::sync::Arc;
+
 use sui_json_rpc_types::{BigInt, CheckpointId};
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -95,14 +97,24 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                 .collect::<Vec<_>>();
 
             if op.verify_transactions {
-                check_transactions(
+                let transaction_responses = check_transactions(
                     &clients,
                     &transaction_digests,
                     cross_validate,
                     op.verify_objects,
                 )
-                .await;
+                .await
+                .into_iter()
+                .concat();
+
+                if op.record {
+                    self.add_addresses(transaction_responses);
+                };
             }
+
+            if op.record {
+                self.add_transaction_digests(transaction_digests);
+            };
 
             if cross_validate {
                 let valid_checkpoint = checkpoints.iter().enumerate().find_map(|(i, x)| {

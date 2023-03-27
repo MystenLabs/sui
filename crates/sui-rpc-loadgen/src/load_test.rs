@@ -65,6 +65,8 @@ impl<R: Processor + Send + Sync + Clone + 'static> LoadTest<R> {
             get_tps(num_successful_commands, elapsed_time),
         );
 
+        self.processor.dump_cache_to_file(&self.config);
+
         Ok(())
     }
 

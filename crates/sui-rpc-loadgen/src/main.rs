@@ -36,6 +36,9 @@ struct Opts {
     /// the path to log file directory
     #[clap(long, default_value = "~/.sui/sui_config/logs")]
     logs_directory: String,
+
+    #[clap(long, default_value = "~/.sui/loadgen/data")]
+    data_directory: String,
 }
 
 #[derive(Parser)]
@@ -73,6 +76,10 @@ pub enum ClapCommand {
 
         #[clap(long, default_value_t = true)]
         verify_objects: bool,
+
+        // Whether to record data from checkpoint
+        #[clap(long, default_value_t = true)]
+        record: bool,
 
         #[clap(flatten)]
         common: CommonOptions,
@@ -114,16 +121,19 @@ fn get_sui_config_directory() -> PathBuf {
     }
 }
 
+pub fn expand_path(dir_path: &str) -> String {
+    shellexpand::full(&dir_path)
+        .map(|v| v.into_owned())
+        .unwrap_or_else(|e| panic!("Failed to expand directory '{:?}': {}", dir_path, e))
+}
+
 fn get_log_file_path(dir_path: String) -> String {
     let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let timestamp = current_time.as_secs();
     // use timestamp to signify which file is newer
     let log_filename = format!("sui-rpc-loadgen.{}.log", timestamp);
 
-    let dir_path = match shellexpand::full(&dir_path) {
-        Ok(v) => v,
-        Err(e) => panic!("Failed to expand directory '{:?}': {}", dir_path, e),
-    };
+    let dir_path = expand_path(&dir_path);
     format!("{dir_path}/{log_filename}")
 }
 
@@ -155,8 +165,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             end,
             verify_transactions,
             verify_objects,
+            record,
         } => (
-            Command::new_get_checkpoints(start, end, verify_transactions, verify_objects),
+            Command::new_get_checkpoints(start, end, verify_transactions, verify_objects, record),
             common,
             false,
         ),
@@ -177,7 +188,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_repeat_interval(Duration::from_millis(common.interval_in_ms))
         .with_repeat_n_times(common.repeat);
 
-    let processor = RpcCommandProcessor::new(&opts.urls).await;
+    let processor = RpcCommandProcessor::new(&opts.urls, expand_path(&opts.data_directory)).await;
 
     let load_test = LoadTest {
         processor,

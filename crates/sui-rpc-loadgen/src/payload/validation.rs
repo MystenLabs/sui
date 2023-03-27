@@ -61,7 +61,7 @@ pub(crate) async fn check_transactions(
     digests: &[TransactionDigest],
     cross_validate: bool,
     verify_objects: bool,
-) {
+) -> Vec<Vec<SuiTransactionBlockResponse>> {
     let transactions: Vec<Vec<SuiTransactionBlockResponse>> =
         join_all(clients.iter().enumerate().map(|(i, client)| async move {
             let start_time = Instant::now();
@@ -109,6 +109,7 @@ pub(crate) async fn check_transactions(
 
         check_objects(clients, &object_ids, cross_validate).await;
     }
+    transactions
 }
 
 pub(crate) fn get_all_object_ids(response: &SuiTransactionBlockResponse) -> Vec<ObjectID> {
