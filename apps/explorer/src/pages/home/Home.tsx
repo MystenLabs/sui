@@ -8,6 +8,7 @@ import { TopValidatorsCard } from '../../components/top-validators-card/TopValid
 
 import { Activity } from '~/components/Activity';
 import { HomeMetrics } from '~/components/HomeMetrics';
+import { Card } from '~/ui/Card';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const NodeMap = lazy(() => import('../../components/node-map'));
@@ -18,43 +19,37 @@ function Home() {
     return (
         <div
             data-testid="home-page"
-            // NOTE: The gap-y isn't used currently, but added for consistency when we eventually use grid layouts more naturally.
             className="grid grid-cols-1 gap-y-10 gap-x-12 md:grid-cols-2"
         >
-            <div className="flex flex-col gap-10">
-                <ErrorBoundary>
-                    <HomeMetrics />
-                </ErrorBoundary>
+            <ErrorBoundary>
+                <HomeMetrics />
+            </ErrorBoundary>
 
-                <ErrorBoundary>
-                    <Activity
-                        initialLimit={TRANSACTIONS_LIMIT}
-                        disablePagination
-                    />
-                </ErrorBoundary>
+            <ErrorBoundary>
+                <Suspense fallback={<Card />}>
+                    <NodeMap minHeight={280} />
+                </Suspense>
+            </ErrorBoundary>
+
+            <ErrorBoundary>
+                <Activity initialLimit={TRANSACTIONS_LIMIT} disablePagination />
+            </ErrorBoundary>
+
+            <div data-testid="validators-table">
+                <TabGroup>
+                    <TabList>
+                        <Tab>Validators</Tab>
+                    </TabList>
+                    <TabPanels>
+                        <TabPanel>
+                            <ErrorBoundary>
+                                <TopValidatorsCard limit={10} showIcon />
+                            </ErrorBoundary>
+                        </TabPanel>
+                    </TabPanels>
+                </TabGroup>
             </div>
-
-            <div className="flex flex-col gap-10">
-                <ErrorBoundary>
-                    <Suspense fallback={null}>
-                        <NodeMap minHeight={280} />
-                    </Suspense>
-                </ErrorBoundary>
-                <div data-testid="validators-table">
-                    <TabGroup>
-                        <TabList>
-                            <Tab>Validators</Tab>
-                        </TabList>
-                        <TabPanels>
-                            <TabPanel>
-                                <ErrorBoundary>
-                                    <TopValidatorsCard limit={10} showIcon />
-                                </ErrorBoundary>
-                            </TabPanel>
-                        </TabPanels>
-                    </TabGroup>
-                </div>
-                {/* <div>
+            {/* <div>
                     <TabGroup>
                         <TabList>
                             <Tab>Recent Packages</Tab>
@@ -68,7 +63,6 @@ function Home() {
                         </TabPanels>
                     </TabGroup>
                 </div> */}
-            </div>
         </div>
     );
 }

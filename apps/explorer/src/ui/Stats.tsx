@@ -44,7 +44,7 @@ export function Stats({
                 }
                 color={unavailable ? 'steel-dark' : 'steel-darker'}
             >
-                {unavailable || !children ? '--' : children}
+                {unavailable || children == null ? '--' : children}
             </Heading>
         </div>
     );
