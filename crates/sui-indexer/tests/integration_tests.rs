@@ -276,6 +276,26 @@ pub mod pg_integration_test {
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
         wait_until_next_checkpoint(&store).await;
 
+        // query tx with checkpoint sequence
+        let checkpoint_seq_query =
+            SuiTransactionResponseQuery::new_with_filter(TransactionFilter::Checkpoint(2u64));
+        let mut checkpoint_query_tx_digest_vec = indexer_rpc_client
+            .query_transactions(checkpoint_seq_query, None, None, None)
+            .await
+            .unwrap()
+            .data
+            .into_iter()
+            .map(|tx| tx.digest)
+            .collect::<Vec<_>>();
+        let mut checkpoint_tx_digest_vec = indexer_rpc_client
+            .get_checkpoint(CheckpointId::SequenceNumber(2u64.into()))
+            .await
+            .unwrap()
+            .transactions;
+        checkpoint_query_tx_digest_vec.sort();
+        checkpoint_tx_digest_vec.sort();
+        assert_eq!(checkpoint_query_tx_digest_vec, checkpoint_tx_digest_vec);
+
         let tx_read_response = indexer_rpc_client
             .get_transaction(
                 tx_response.digest,
