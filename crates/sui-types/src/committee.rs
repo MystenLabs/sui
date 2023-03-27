@@ -48,9 +48,6 @@ pub struct Committee {
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     index_map: HashMap<AuthorityName, usize>,
-    // TODO: This is no longer needed. This file needs a cleanup since we removed the optional
-    // cached expanded keys.
-    loaded: bool,
 }
 
 impl Committee {
@@ -72,7 +69,6 @@ impl Committee {
             voting_rights,
             expanded_keys,
             index_map,
-            loaded: true,
         }
     }
 
@@ -128,21 +124,7 @@ impl Committee {
         (expanded_keys, index_map)
     }
 
-    pub fn reload_fields(&mut self) {
-        let (expanded_keys, index_map) = Committee::load_inner(&self.voting_rights);
-        self.expanded_keys = expanded_keys;
-        self.index_map = index_map;
-        self.loaded = true;
-    }
-
     pub fn authority_index(&self, author: &AuthorityName) -> Option<u32> {
-        if !self.loaded {
-            return self
-                .voting_rights
-                .iter()
-                .position(|(a, _)| a == author)
-                .map(|i| i as u32);
-        }
         self.index_map.get(author).map(|i| *i as u32)
     }
 
