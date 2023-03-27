@@ -40,6 +40,11 @@ function ValidatorDetails() {
         return +rewards || 0;
     }, [id, validatorEvents]);
 
+    const tatallyScore =
+        validatorEvents?.data.find(
+            ({ parsedJson }) => parsedJson?.validator_address === id
+        )?.parsedJson?.tallying_rule_global_score || null;
+
     if (isLoading || validatorsEventsLoading || validatorsApysLoading) {
         return (
             <div className="mb-10 flex items-center justify-center">
@@ -70,6 +75,7 @@ function ValidatorDetails() {
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
                     apy={apy}
+                    tallyingScore={tatallyScore}
                 />
             </div>
         </div>
