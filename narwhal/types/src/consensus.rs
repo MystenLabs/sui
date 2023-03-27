@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Batch, Certificate, CertificateDigest, HeaderAPI, Round};
+use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ impl CommittedSubDag {
     pub fn num_batches(&self) -> usize {
         self.certificates
             .iter()
-            .map(|x| x.header.payload().len())
+            .map(|x| x.header().payload().len())
             .sum()
     }
 

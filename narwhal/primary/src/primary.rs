@@ -66,12 +66,12 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
-    now, Certificate, CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, HeaderAPI, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimary,
-    PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
-    SendCertificateResponse, Vote, WorkerInfoResponse, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, HeaderAPI,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, Vote, WorkerInfoResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -811,7 +811,7 @@ impl PrimaryReceiverHandler {
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
-                parent_authorities.insert(parent.header.author()),
+                parent_authorities.insert(parent.header().author()),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
             stake += committee.stake_by_id(parent.origin());
@@ -1111,7 +1111,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             if let Some(certificate) = certificate_option {
                 let payload_available = match self.payload_store.read_all(
                     certificate
-                        .header
+                        .header()
                         .payload()
                         .iter()
                         .map(|(batch, (worker_id, _))| (*batch, *worker_id)),

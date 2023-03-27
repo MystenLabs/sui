@@ -18,8 +18,9 @@ use storage::CertificateStore;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
-    metered_channel, Certificate, CertificateDigest, CommittedSubDag, CommittedSubDagShell,
-    ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI, ReputationScores, Round, Timestamp,
+    metered_channel, Certificate, CertificateAPI, CertificateDigest, CommittedSubDag,
+    CommittedSubDagShell, ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI,
+    ReputationScores, Round, Timestamp,
 };
 
 #[cfg(test)]
@@ -191,10 +192,10 @@ impl ConsensusState {
             .last_committed_round
             .with_label_values(&[])
             .set(self.last_round.committed_round as i64);
-        let elapsed = certificate.metadata.created_at.elapsed().as_secs_f64();
+        let elapsed = certificate.metadata().created_at.elapsed().as_secs_f64();
         self.metrics
             .certificate_commit_latency
-            .observe(certificate.metadata.created_at.elapsed().as_secs_f64());
+            .observe(certificate.metadata().created_at.elapsed().as_secs_f64());
 
         // NOTE: This log entry is used to compute performance.
         tracing::debug!(
@@ -219,7 +220,7 @@ impl ConsensusState {
         if let Some(round_table) = dag.get(&(round - 1)) {
             let store_parents: BTreeSet<&CertificateDigest> =
                 round_table.iter().map(|(_, (digest, _))| digest).collect();
-            for parent_digest in certificate.header.parents() {
+            for parent_digest in certificate.header().parents() {
                 if !store_parents.contains(parent_digest) {
                     panic!("Parent digest {parent_digest:?} not found in DAG for {certificate:?}!");
                 }
@@ -418,13 +419,13 @@ where
 
                             if i % 5_000 == 0 {
                                 #[cfg(not(feature = "benchmark"))]
-                                tracing::debug!("Committed {}", certificate.header);
+                                tracing::debug!("Committed {}", certificate.header());
                             }
 
                             #[cfg(feature = "benchmark")]
-                            for digest in certificate.header.payload().keys() {
+                            for digest in certificate.header().payload().keys() {
                                 // NOTE: This log entry is used to compute performance.
-                                tracing::info!("Committed {} -> {:?}", certificate.header, digest);
+                                tracing::info!("Committed {} -> {:?}", certificate.header(), digest);
                             }
 
                             commited_certificates.push(certificate.clone());

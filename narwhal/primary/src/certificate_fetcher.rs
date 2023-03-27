@@ -27,8 +27,8 @@ use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::Receiver,
-    Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
-    HeaderAPI, Round,
+    Certificate, CertificateAPI, ConditionalBroadcastReceiver, FetchCertificatesRequest,
+    FetchCertificatesResponse, HeaderAPI, Round,
 };
 
 #[cfg(test)]
@@ -132,7 +132,7 @@ impl CertificateFetcher {
         loop {
             tokio::select! {
                 Some(certificate) = self.rx_certificate_fetcher.recv() => {
-                    let header = &certificate.header;
+                    let header = &certificate.header();
                     if header.epoch() != self.committee.epoch() {
                         continue;
                     }

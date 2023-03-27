@@ -15,7 +15,7 @@ use tracing::warn;
 use types::{
     ensure,
     error::{DagError, DagResult},
-    Certificate, Header, Vote,
+    Certificate, CertificateAPI, Header, Vote,
 };
 
 /// Aggregates votes for a particular header into a certificate.
@@ -63,7 +63,7 @@ impl VotesAggregator {
             let (_, pks) = cert.signed_by(committee);
 
             let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(cert.digest());
-            match AggregateSignature::try_from(&cert.aggregated_signature)
+            match AggregateSignature::try_from(cert.aggregated_signature())
                 .map_err(|_| DagError::InvalidSignature)?
                 .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             {

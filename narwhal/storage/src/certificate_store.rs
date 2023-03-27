@@ -703,7 +703,7 @@ mod test {
         rocks::{open_cf, DBMap, ReadWriteOptions},
     };
     use test_utils::{temp_dir, CommitteeFixture};
-    use types::{Certificate, CertificateDigest, HeaderAPI, Round};
+    use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
         let (certificate_map, certificate_id_by_round_map, certificate_id_by_origin_map) =
@@ -768,7 +768,7 @@ mod test {
         let committee = fixture.committee();
         let mut current_round: Vec<_> = Certificate::genesis(&committee)
             .into_iter()
-            .map(|cert| cert.header)
+            .map(|cert| cert.header().clone())
             .collect();
 
         let mut result: Vec<Certificate> = Vec::new();
@@ -862,7 +862,7 @@ mod test {
         let mut certs = Vec::new();
         for r in &rounds {
             let mut c = cert.clone();
-            c.header.update_round(*r);
+            c.header_mut().update_round(*r);
             certs.push(c);
         }
 

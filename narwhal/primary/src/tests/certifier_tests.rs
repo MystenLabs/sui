@@ -16,7 +16,8 @@ use test_utils::CommitteeFixture;
 use tokio::sync::watch;
 use tokio::time::Duration;
 use types::{
-    MockPrimaryToPrimary, PreSubscribedBroadcastSender, PrimaryToPrimaryServer, RequestVoteResponse,
+    CertificateAPI, MockPrimaryToPrimary, PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
+    RequestVoteResponse,
 };
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -131,7 +132,7 @@ async fn propose_header() {
     let proposed_digest = proposed_header.digest();
     tx_headers.send(proposed_header).await.unwrap();
     let certificate = rx_new_certificates.recv().await.unwrap();
-    assert_eq!(certificate.header.digest(), proposed_digest);
+    assert_eq!(certificate.header().digest(), proposed_digest);
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -361,7 +362,7 @@ async fn run_vote_aggregator_with_param(
     if expect_cert {
         // A cert is expected, checks that the header digest matches.
         let certificate = rx_new_certificates.recv().await.unwrap();
-        assert_eq!(certificate.header.digest(), proposed_digest);
+        assert_eq!(certificate.header().digest(), proposed_digest);
     } else {
         // A cert is not expected, checks that it times out without forming the cert.
         assert!(
