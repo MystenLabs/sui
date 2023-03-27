@@ -15,14 +15,14 @@ You must serialize transaction data following [Binary Canonical Serialization](h
 The following example demonstrates how to to serialize data for a transfer using the Sui CLI. This returns serialized transaction data in Base64. Submit the raw transaction to execute as `tx_bytes`.
  
 ```shell
-target/debug/sui client serialize-transfer-sui --to $ADDRESS --sui-coin-object-id $OBJECT_ID --gas-budget 1000
+sui client serialize-transfer-sui --to $ADDRESS --sui-coin-object-id $OBJECT_ID --gas-budget 1000
 
 Raw tx_bytes to execute: $TX_BYTES
 ```
 
 ## Sign the serialized data
 
-You can sign the data using the device and programming language you choose. Sui accepts signatures for pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1 and native multisig. To learn more about multisig, see [Sui Multisig](sui-multisig.md).
+You can sign the data using the device and programming language you choose. Sui accepts signatures for pure Ed25519, ECDSA Secp256k1, ECDSA Secp256r1 and native multisig. To learn more about multisig, see [Sui Multi-Signature](sui-multisig.md).
 
 The signature is committed to an intent message of the transaction data. To learn how to construct an intent message, see [Sui Intent signing](sui-intent_signing.md). 
 
@@ -44,7 +44,7 @@ An accepted pure Ed25519 signature follows:
 This example uses the `keytool` command to sign, using the Ed25519 key corresponding to the provided address stored in `sui.keystore`. This commands outputs the signature, the public key, and the flag encoded in Base64. This command is backed by [fastcrypto](https://crates.io/crates/fastcrypto).
  
 ```shell
-target/debug/sui keytool sign --address $ADDRESS --data $TX_BYTES
+sui keytool sign --address $ADDRESS --data $TX_BYTES
 
 Signer address: $ADDRESS
 Raw tx_bytes to execute: $TX_BYTES
