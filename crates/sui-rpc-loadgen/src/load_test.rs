@@ -33,6 +33,8 @@ pub struct LoadTestConfig {
     /// should divide tasks across multiple threads
     pub divide_tasks: bool,
     pub signer_info: Option<SignerInfo>,
+    pub num_chunks_per_thread: usize,
+    pub max_repeat: usize,
 }
 
 pub(crate) struct LoadTest<R: Processor + Send + Sync + Clone> {

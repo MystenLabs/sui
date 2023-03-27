@@ -15,12 +15,12 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::IndexerApiClient;
 use sui_json_rpc::api::MoveUtilsClient;
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DryRunTransactionResponse,
-    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiCoinMetadata, SuiCommittee, SuiEvent,
-    SuiGetPastObjectRequest, SuiMoveNormalizedModule, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiPastObjectResponse, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions, SuiTransactionResponseQuery,
-    TransactionsPage,
+    Balance, Checkpoint, CheckpointId, CheckpointedObjectID, Coin, CoinPage, DelegatedStake,
+    DryRunTransactionResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
+    SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
+    SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_types::balance::Supply;
 use sui_types::base_types::{
@@ -50,14 +50,13 @@ impl ReadApi {
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
-        checkpoint: Option<CheckpointId>,
     ) -> SuiRpcResult<ObjectsPage> {
         Ok(self
             .api
             .http
-            .get_owned_objects(address, query, cursor, limit, checkpoint)
+            .get_owned_objects(address, query, cursor, limit)
             .await?)
     }
 

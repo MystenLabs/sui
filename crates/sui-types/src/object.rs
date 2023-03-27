@@ -932,6 +932,17 @@ impl ObjectRead {
             Self::Exists(_, o, _) => Ok(o),
         }
     }
+
+    pub fn object(&self) -> UserInputResult<&Object> {
+        match self {
+            Self::Deleted(oref) => Err(UserInputError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(UserInputError::ObjectNotFound {
+                object_id: *id,
+                version: None,
+            }),
+            Self::Exists(_, o, _) => Ok(o),
+        }
+    }
 }
 
 impl Default for ObjectFormatOptions {

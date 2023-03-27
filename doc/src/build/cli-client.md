@@ -18,7 +18,6 @@ The Sui Client CLI supports the following commands:
 | `active-env` | Default environment used for commands when none specified. |
 | `addresses` | Obtain the Addresses managed by the client. |
 | `call` | Call Move function. |
-| `create-example-nft` | Create an example NFT. |
 | `dynamic-field` | Query a dynamic field by address. |
 | `envs` | List all Sui environments. |
 | `execute-signed-tx` | Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute. |
@@ -286,36 +285,6 @@ the object ID of the object to transfer, and, optionally, the ID of the coin obj
 ```shell
 sui client transfer --to 0xcd2630011f6cb9aef960ed42d95b04e063c44a6143083ef89a35ea02b85c61b7 --object-id 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget 1000
 ```
-
-## Create an example NFT
-
-You can add an example NFT to an address using the `create-example-nft` command. The command adds an NFT to the active address.
-
-```shell
-sui client create-example-nft
-```
-
-The command invokes the `mint` function in the `devnet_nft` module, which mints a Sui object with three attributes: name, description, and image URL with [default values](https://github.com/MystenLabs/sui/blob/27dff728a4c9cb65cd5d92a574105df20cb51887/sui/src/wallet_commands.rs#L39) and transfers the object to your address. You can also provide custom values using the following instructions:
-
-
-`create-example-nft` command usage:
-
-```shell
-sui client create-example-nft [OPTIONS]
-
-OPTIONS:
-        --description <DESCRIPTION>    Description of the NFT
-        --gas <GAS>                    ID of the gas object for gas payment, in 32 bytes Hex string
-                                       If not provided, a gas object with at least gas_budget value
-                                       will be selected
-        --gas-budget <GAS_BUDGET>      Gas budget for this transfer
-    -h, --help                         Print help information
-        --json                         Return command outputs in json format
-        --name <NAME>                  Name of the NFT
-        --url <URL>                    Display url(e.g., an image url) of the NFT
-
-```
-
 
 ## Merge and split coin objects
 

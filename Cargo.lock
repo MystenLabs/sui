@@ -9427,6 +9427,7 @@ dependencies = [
  "futures",
  "futures-core",
  "jsonrpsee",
+ "move-core-types",
  "serde 1.0.152",
  "serde_json",
  "shared-crypto",
