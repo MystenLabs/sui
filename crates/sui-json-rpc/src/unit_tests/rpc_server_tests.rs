@@ -19,7 +19,7 @@ use sui_json_rpc_types::ObjectsPage;
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, TransactionBytes,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
@@ -104,7 +104,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let obj = objects.clone().first().unwrap().object().unwrap().object_id;
     let gas = objects.clone().last().unwrap().object().unwrap().object_id;
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .transfer_object(*address, obj, Some(gas), 1000, *address)
         .await?;
 
@@ -168,7 +168,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
             *address,
             compiled_modules_bytes,
@@ -224,7 +224,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let module = "pay".to_string();
     let function = "split".to_string();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .move_call(
             *address,
             package_id,
@@ -416,7 +416,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
             *address,
             compiled_modules_bytes,
@@ -498,7 +498,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
             *address,
             compiled_modules_bytes,
@@ -566,7 +566,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     // Mint 100000 coin
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .move_call(
             *address,
             SUI_FRAMEWORK_ADDRESS.into(),
@@ -638,7 +638,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
 
     let coin = objects.data[0].object()?.object_id;
     // Delegate some SUI
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -699,7 +699,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
 
     // Delegate some SUI
     for i in 0..3 {
-        let transaction_bytes: TransactionBytes = http_client
+        let transaction_bytes: TransactionBlockBytes = http_client
             .request_add_stake(
                 *address,
                 vec![coins.data[i].coin_object_id],
@@ -759,7 +759,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
         }
     ));
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .request_withdraw_stake(
             *address,
             staked_sui_copy[0].stakes[2].staked_sui_id,
@@ -833,7 +833,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .active_validators[0]
         .sui_address;
     // Delegate some SUI
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .request_add_stake(
             *address,
             vec![

@@ -5,7 +5,7 @@ use sui_config::SUI_KEYSTORE_FILENAME;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, TransactionBytes,
+    SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
@@ -42,7 +42,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     let mut tx_responses: Vec<SuiTransactionBlockResponse> = Vec::new();
     for obj in &objects[..objects.len() - 1] {
         let oref = obj.object().unwrap();
-        let transaction_bytes: TransactionBytes = http_client
+        let transaction_bytes: TransactionBlockBytes = http_client
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
         let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -117,7 +117,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
     let object_to_transfer = objects.first().unwrap().object().unwrap().object_id;
 
     // Make a transfer transactions
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .transfer_object(*address, object_to_transfer, None, 1000, *address)
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);

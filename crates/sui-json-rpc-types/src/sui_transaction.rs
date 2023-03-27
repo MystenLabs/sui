@@ -1443,7 +1443,7 @@ pub struct MoveCallParams {
 #[serde_as]
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct TransactionBytes {
+pub struct TransactionBlockBytes {
     /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
     pub tx_bytes: Base64,
     /// the gas objects to be used
@@ -1452,7 +1452,7 @@ pub struct TransactionBytes {
     pub input_objects: Vec<SuiInputObjectKind>,
 }
 
-impl TransactionBytes {
+impl TransactionBlockBytes {
     pub fn from_data(data: TransactionData) -> Result<Self, anyhow::Error> {
         Ok(Self {
             tx_bytes: Base64::from_bytes(bcs::to_bytes(&data)?.as_slice()),

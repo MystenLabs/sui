@@ -14,7 +14,7 @@ use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions, TransactionBytes,
+    SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
@@ -122,7 +122,7 @@ impl TestContext {
         // TODO cache this?
         let rpc_client = HttpClientBuilder::default().build(fn_rpc_url)?;
 
-        TransactionBytes::to_data(rpc_client.request(method, params).await?)
+        TransactionBlockBytes::to_data(rpc_client.request(method, params).await?)
     }
 
     async fn sign_and_execute(

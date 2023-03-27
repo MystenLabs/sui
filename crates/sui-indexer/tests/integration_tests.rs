@@ -36,7 +36,7 @@ pub mod pg_integration_test {
         BigInt, CheckpointId, EventFilter, SuiMoveObject, SuiObjectData, SuiObjectDataFilter,
         SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
         SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-        SuiTransactionBlockResponseQuery, TransactionBytes,
+        SuiTransactionBlockResponseQuery, TransactionBlockBytes,
     };
     use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
     use sui_types::base_types::{ObjectID, SuiAddress};
@@ -83,7 +83,7 @@ pub mod pg_integration_test {
     async fn sign_and_execute_transaction_block(
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
-        transaction_bytes: TransactionBytes,
+        transaction_bytes: TransactionBlockBytes,
         sender: &SuiAddress,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -111,7 +111,7 @@ pub mod pg_integration_test {
         object_id: ObjectID,
         gas: Option<ObjectID>,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
-        let transaction_bytes: TransactionBytes = indexer_rpc_client
+        let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
             .transfer_object(*sender, object_id, gas, 2000, *recipient)
             .await?;
         let tx_response = sign_and_execute_transaction_block(

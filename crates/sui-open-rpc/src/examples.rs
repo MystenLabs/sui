@@ -25,7 +25,7 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
     SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionBytes,
+    SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
     TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
@@ -155,7 +155,7 @@ impl RpcExampleProvider {
             1000,
         );
 
-        let result = TransactionBytes::from_data(data).unwrap();
+        let result = TransactionBlockBytes::from_data(data).unwrap();
 
         Examples::new(
             "sui_batchTransaction",
@@ -175,7 +175,7 @@ impl RpcExampleProvider {
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signatures, _, _, result) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data).unwrap();
+        let tx_bytes = TransactionBlockBytes::from_data(data).unwrap();
 
         Examples::new(
             "sui_executeTransaction",

@@ -82,29 +82,29 @@ export abstract class SignerWithProvider implements Signer {
   async signTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
-    let transactionBytes;
+    let TransactionBlockBytes;
 
     if (TransactionBlock.is(input.transactionBlock)) {
       // If the sender has not yet been set on the transaction, then set it.
       // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
       input.transactionBlock.setSenderIfNotSet(await this.getAddress());
-      transactionBytes = await input.transactionBlock.build({
+      TransactionBlockBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
     } else if (input.transactionBlock instanceof Uint8Array) {
-      transactionBytes = input.transactionBlock;
+      TransactionBlockBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
 
     const intentMessage = messageWithIntent(
       IntentScope.TransactionData,
-      transactionBytes,
+      TransactionBlockBytes,
     );
     const signature = await this.signData(intentMessage);
 
     return {
-      transactionBytes: toB64(transactionBytes),
+      TransactionBlockBytes: toB64(TransactionBlockBytes),
       signature,
     };
   }
@@ -126,12 +126,13 @@ export abstract class SignerWithProvider implements Signer {
      */
     requestType?: ExecuteTransactionRequestType;
   }): Promise<SuiTransactionBlockResponse> {
-    const { transactionBytes, signature } = await this.signTransactionBlock({
-      transactionBlock: input.transactionBlock,
-    });
+    const { TransactionBlockBytes, signature } =
+      await this.signTransactionBlock({
+        transactionBlock: input.transactionBlock,
+      });
 
     return await this.provider.executeTransactionBlock({
-      transactionBlock: transactionBytes,
+      transactionBlock: TransactionBlockBytes,
       signature,
       options: input.options,
       requestType: input.requestType,

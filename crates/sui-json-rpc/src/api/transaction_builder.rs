@@ -8,7 +8,7 @@ use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     BigInt, RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag,
-    TransactionBytes,
+    TransactionBlockBytes,
 };
 
 use sui_open_rpc_macros::open_rpc;
@@ -32,7 +32,7 @@ pub trait TransactionBuilder {
         gas_budget: u64,
         /// the recipient's Sui address
         recipient: SuiAddress,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.
     #[method(name = "transferSui")]
@@ -48,7 +48,7 @@ pub trait TransactionBuilder {
         recipient: SuiAddress,
         /// the amount to be split out and transferred
         amount: Option<u64>,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send `Coin<T>` to a list of addresses, where `T` can be any coin type, following a list of amounts,
     /// The object specified in the `gas` field will be used to pay the gas fee for the transaction.
@@ -69,7 +69,7 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send SUI coins to a list of addresses, following a list of amounts.
     /// This is for SUI coin only and does not require a separate gas coin object.
@@ -93,7 +93,7 @@ pub trait TransactionBuilder {
         amounts: Vec<BigInt>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Send all SUI coins to one recipient.
     /// This is for SUI coin only and does not require a separate gas coin object.
@@ -113,7 +113,7 @@ pub trait TransactionBuilder {
         recipient: SuiAddress,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.
     #[method(name = "moveCall")]
@@ -137,7 +137,7 @@ pub trait TransactionBuilder {
         gas_budget: u64,
         /// Whether this is a Normal transaction or a Dev Inspect Transaction. Default to be `SuiTransactionBlockBuilderMode::Commit` when it's None.
         execution_mode: Option<SuiTransactionBlockBuilderMode>,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to publish a Move package.
     #[method(name = "publish")]
@@ -153,7 +153,7 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to split a coin object into multiple coins.
     #[method(name = "splitCoin")]
@@ -169,7 +169,7 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to split a coin object into multiple equal-size coins.
     #[method(name = "splitCoinEqual")]
@@ -185,7 +185,7 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned transaction to merge multiple coins into one coin.
     #[method(name = "mergeCoins")]
@@ -201,7 +201,7 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Create an unsigned batched transaction.
     #[method(name = "batchTransaction")]
@@ -217,7 +217,7 @@ pub trait TransactionBuilder {
         gas_budget: u64,
         /// Whether this is a regular transaction or a Dev Inspect Transaction
         txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Add stake to a validator's staking pool using multiple coins and amount.
     #[method(name = "requestAddStake")]
@@ -235,7 +235,7 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw stake from a validator's staking pool.
     #[method(name = "requestWithdrawStake")]
@@ -249,5 +249,5 @@ pub trait TransactionBuilder {
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 }

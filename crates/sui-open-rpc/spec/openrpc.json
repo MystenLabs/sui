@@ -1922,10 +1922,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -1981,10 +1981,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2077,10 +2077,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2153,10 +2153,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2208,10 +2208,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2277,10 +2277,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2342,10 +2342,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2413,10 +2413,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2464,10 +2464,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2528,10 +2528,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2589,10 +2589,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2648,10 +2648,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     },
@@ -2709,10 +2709,10 @@
         }
       ],
       "result": {
-        "name": "TransactionBytes",
+        "name": "TransactionBlockBytes",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionBytes"
+          "$ref": "#/components/schemas/TransactionBlockBytes"
         }
       }
     }
@@ -7110,7 +7110,7 @@
           }
         }
       },
-      "TransactionBytes": {
+      "TransactionBlockBytes": {
         "type": "object",
         "required": [
           "gas",

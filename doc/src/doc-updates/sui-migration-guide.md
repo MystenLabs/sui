@@ -474,7 +474,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw a delegation from a validator's staking pool.
     #[method(name = "requestWithdrawDelegation")]
@@ -490,7 +490,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Switch delegation from the current validator to a new one.
     #[method(name = "requestSwitchDelegation")]
@@ -508,7 +508,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
          gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 ```
 
 Effective with release .28, the function names are:
@@ -530,7 +530,7 @@ Effective with release .28, the function names are:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw stake from a validator's staking pool.
     #[method(name = "requestWithdrawStake")]
@@ -546,7 +546,7 @@ Effective with release .28, the function names are:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 ```
 
 ### Changes to getDelegatedStakes
