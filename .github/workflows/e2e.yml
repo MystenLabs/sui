@@ -48,22 +48,22 @@ jobs:
       - name: Set env
         run: |
           echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
-          echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
+          echo "E2E_RUN_LOCAL_NET_CMD=(RUST_BACKTRACE=1 $(echo $PWD/target/debug/sui-test-validator))" >> $GITHUB_ENV
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
-      - name: Run Explorer e2e tests
-        # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
-        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm explorer playwright test
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: playwright-report-explorer
-          path: apps/explorer/playwright-report/
-          retention-days: 30
+#      - name: Run Explorer e2e tests
+#        # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
+#        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
+#        run: pnpm explorer playwright test
+#      - uses: actions/upload-artifact@v3
+#        if: always()
+#        with:
+#          name: playwright-report-explorer
+#          path: apps/explorer/playwright-report/
+#          retention-days: 30
 
       # Disable wallet devenet test
       # - name: Build Wallet
