@@ -57,7 +57,7 @@ async fn make_batch() {
     let expected_batch = Batch::new(vec![tx.clone(), tx.clone()]);
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();
 
-    assert_eq!(batch.transactions, expected_batch.transactions);
+    assert_eq!(batch.transactions(), expected_batch.transactions());
 
     // Eventually deliver message
     assert!(resp.send(()).is_ok());
@@ -105,7 +105,7 @@ async fn batch_timeout() {
     // Ensure the batch is as expected.
     let (batch, resp) = rx_quorum_waiter.recv().await.unwrap();
     let expected_batch = Batch::new(vec![tx.clone()]);
-    assert_eq!(batch.transactions, expected_batch.transactions);
+    assert_eq!(batch.transactions(), expected_batch.transactions());
 
     // Eventually deliver message
     assert!(resp.send(()).is_ok());

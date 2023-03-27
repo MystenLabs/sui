@@ -2,17 +2,23 @@
 AuthorityIdentifier:
   NEWTYPESTRUCT: U16
 Batch:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: BatchV1
+BatchDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+BatchV1:
   STRUCT:
     - transactions:
         SEQ:
           SEQ: U8
     - metadata:
         TYPENAME: Metadata
-BatchDigest:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
 Certificate:
   ENUM:
     0:
