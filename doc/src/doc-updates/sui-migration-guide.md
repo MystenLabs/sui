@@ -8,6 +8,59 @@ Sui release .28 introduces many [Breaking changes](sui-breaking-changes.md) that
 
 The steps in this section provide guidance on making updates related to the changes to Sui Move.
 
+### Sui Framework split into two Move packages
+
+Updated 3/27/23
+
+The Sui Framework (`sui-framework`) Move package contains modules central to Sui Move, including `object`, `transfer` and `dynamic_field`. The framework package is often a dependency of application packages developed on Sui. Previously, `sui-framework` included a `governance` folder that defined a number of modules related to the operations of Sui’s system, such as `validator_set` and `staking_pool`. These modules are fundamentally different from the other library modules within the framework, and are not commonly used by developers. To simplify, this release splits `sui-framework` into two Sui Move packages to improve modularity, usability and upgrading.
+
+In [PR 9618](https://github.com/MystenLabs/sui/pull/9618), the `sui-framework` crate now contains three Move packages in the `packages` directory: `move-stdlib`, `sui-framework` and `sui-system`:
+
+ * `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
+ * `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
+ * `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
+
+If you develop Sui Move code depending on `sui-framework`, the `Move.toml` file of your Move package has to change to reflect the path changes:
+
+**Prior to this release:**
+
+```rust
+[package]
+name = "Example"
+version = "0.0.1"
+published-at = "0x42"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/", rev = "devnet" }
+
+[addresses]
+example = "0x42"
+```
+
+**Updated for this release:**
+
+```rust
+[package]
+name = "Example"
+version = "0.0.1"
+published-at = "0x42"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
+
+[addresses]
+example = "0x42"
+```
+
+If your Sui Move code uses a module in the `governance` folder:
+
+`genesis.move`, `sui_system.move`, `validator_cap.move`, `voting_power.move`, 
+`stake_subsidy.move`, `sui_system_state_inner.move`, `validator_set.move`, 
+`staking_pool.move`, `validator.move`, or `validator_wrapper.move`
+
+The modules are now in the `sui-system` package. You must list `SuiSystem` as a dependency, and access these modules via `0x3` or the `sui_system` named address.
+
+
 ### Erecover and verify
 
 In this release, `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message.
