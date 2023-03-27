@@ -5,6 +5,12 @@ on:
      branches: [ main, extensions ]
   workflow_dispatch:
 
+permissions:
+  # deployments permission to deploy GitHub pages website
+  deployments: write
+  # contents permission to update benchmark contents in gh-pages branch
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
@@ -140,3 +146,41 @@ jobs:
           ```
           ${{ steps.get-comment-body.outputs.narwhal }}
           ```
+  indexer-bench:
+    name: Indexer Benchmarks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgrespw
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+
+      - name: Run indexer benchmark
+        run: |
+          cargo +nightly bench --bench indexer_benchmark | tee output.txt
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "cargo"
+          output-file-path: output.txt
+          benchmark-data-dir-path: "bench/indexer"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # Show alert with commit comment on detecting possible performance regression
+          alert-threshold: '200%'
+          comment-on-alert: true
+          fail-on-alert: true

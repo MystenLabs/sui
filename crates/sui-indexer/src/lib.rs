@@ -175,7 +175,7 @@ pub fn establish_connection(db_url: String) -> PgConnection {
     PgConnection::establish(&db_url).unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
 }
 
-pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
     Pool::builder().build(manager).map_err(|e| {
