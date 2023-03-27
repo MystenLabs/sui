@@ -23,7 +23,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 pub struct SignerInfo {
     pub encoded_keypair: String,
     /// Different thread should use different gas_payment to avoid equivocation
-    pub gas_payment: Option<ObjectID>,
+    pub gas_payment: Option<Vec<ObjectID>>,
     pub gas_budget: Option<u64>,
 }
 

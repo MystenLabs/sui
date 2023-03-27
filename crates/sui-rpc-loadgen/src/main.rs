@@ -45,6 +45,10 @@ pub struct CommonOptions {
 
     #[clap(short, long, default_value_t = 0)]
     pub interval_in_ms: u64,
+
+    /// different chunks will be executed concurrently on the same thread
+    #[clap(long, default_value_t = 1)]
+    num_chunks_per_thread: usize,
 }
 
 #[derive(Parser)]
@@ -183,6 +187,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             // TODO: pass in from config
             divide_tasks: true,
             signer_info,
+            num_chunks_per_thread: common.num_chunks_per_thread,
+            max_repeat: common.repeat,
         },
     };
     load_test.run().await?;

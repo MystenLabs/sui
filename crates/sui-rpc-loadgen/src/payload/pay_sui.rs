@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::payload::rpc_command_processor::DEFAULT_GAS_BUDGET;
+use crate::payload::rpc_command_processor::{sign_and_execute, DEFAULT_GAS_BUDGET};
 use crate::payload::{PaySui, ProcessPayload, RpcCommandProcessor, SignerInfo};
 use async_trait::async_trait;
-use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::SuiTransactionResponseOptions;
-use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
-use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
+use futures::future::join_all;
+use sui_json_rpc_types::SuiTransactionResponse;
+use sui_sdk::SuiClient;
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
 use tracing::debug;
 
 #[async_trait]
@@ -27,42 +27,39 @@ impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
         let recipient = SuiAddress::random_for_testing_only();
         let amount = 1;
         let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let gas_payments = gas_payment.unwrap();
 
         let keypair =
             SuiKeyPair::decode_base64(&encoded_keypair).expect("Decoding keypair should not fail");
-        let signer_address = SuiAddress::from(&keypair.public());
 
-        debug!("Pay Sui to {recipient} with {amount} MIST with {gas_payment:?}");
+        debug!(
+            "Transfer Sui {} time to {recipient} with {amount} MIST with {gas_payments:?}",
+            gas_payments.len()
+        );
         for client in clients.iter() {
-            let transfer_tx = client
-                .transaction_builder()
-                .transfer_sui(
-                    signer_address,
-                    gas_payment.unwrap(),
-                    gas_budget,
-                    recipient,
-                    Some(amount),
-                )
-                .await?;
-            debug!("transfer_tx {:?}", transfer_tx);
-            let signature = Signature::new_secure(
-                &IntentMessage::new(Intent::default(), &transfer_tx),
-                &keypair,
-            );
-
-            let transaction_response = client
-                .quorum_driver()
-                .execute_transaction(
-                    Transaction::from_data(transfer_tx, Intent::default(), vec![signature])
-                        .verify()?,
-                    SuiTransactionResponseOptions::full_content(),
-                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-                )
-                .await?;
-
-            debug!("transaction_response {transaction_response:?}");
+            join_all(gas_payments.iter().map(|gas| async {
+                transfer_sui(client, &keypair, *gas, gas_budget, recipient, amount).await;
+            }))
+            .await;
         }
 
         Ok(())
     }
+}
+
+async fn transfer_sui(
+    client: &SuiClient,
+    keypair: &SuiKeyPair,
+    gas_payment: ObjectID,
+    gas_budget: u64,
+    recipient: SuiAddress,
+    amount: u64,
+) -> SuiTransactionResponse {
+    let sender = SuiAddress::from(&keypair.public());
+    let tx = client
+        .transaction_builder()
+        .transfer_sui(sender, gas_payment, gas_budget, recipient, Some(amount))
+        .await
+        .expect("Failed to construct transfer coin transaction");
+    sign_and_execute(client, keypair, tx).await
 }
