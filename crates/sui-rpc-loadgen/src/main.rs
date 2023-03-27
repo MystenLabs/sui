@@ -92,11 +92,14 @@ pub enum ClapCommand {
     },
     #[clap(name = "query-transactions")]
     QueryTransactions {
-        #[clap(short, long)]
-        from_address: Option<String>,
+        #[clap(long)]
+        address: Option<String>,
 
         #[clap(short, long)]
-        to_address: Option<String>,
+        address_type: Option<String>,
+
+        #[clap(long)]
+        from_file: Option<bool>,
 
         #[clap(flatten)]
         common: CommonOptions,
@@ -173,10 +176,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ),
         ClapCommand::QueryTransactions {
             common,
-            from_address,
-            to_address,
+            address,
+            address_type,
+            from_file,
         } => (
-            Command::new_query_transaction_blocks(from_address, to_address),
+            Command::new_query_transaction_blocks(address, address_type, from_file),
             common,
             false,
         ),

@@ -90,12 +90,20 @@ impl Command {
     }
 
     pub fn new_query_transaction_blocks(
-        from_address: Option<String>,
-        to_address: Option<String>,
+        address: Option<String>,
+        address_type: Option<String>,
+        from_file: Option<bool>,
     ) -> Self {
+        let address_type = address_type.map(|s| match s.as_str() {
+            "from" => AddressType::FromAddress,
+            "to" => AddressType::ToAddress,
+            _ => panic!("Invalid address type: {}", s),
+        });
+
         let query_transactions = QueryTransactions {
-            from_address: from_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
-            to_address: to_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+            address: address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+            address_type,
+            from_file,
         };
         Self {
             data: CommandData::QueryTransactions(query_transactions),
@@ -148,8 +156,15 @@ pub struct PaySui {}
 
 #[derive(Clone, Default)]
 pub struct QueryTransactions {
-    pub from_address: Option<SuiAddress>,
-    pub to_address: Option<SuiAddress>,
+    pub address: Option<SuiAddress>,
+    pub address_type: Option<AddressType>,
+    pub from_file: Option<bool>,
+}
+
+#[derive(Clone)]
+pub enum AddressType {
+    FromAddress,
+    ToAddress,
 }
 
 #[async_trait]

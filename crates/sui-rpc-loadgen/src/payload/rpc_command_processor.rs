@@ -5,10 +5,11 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use dashmap::{DashMap, DashSet};
 use futures::future::join_all;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::fs::{self, File};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
@@ -144,7 +145,7 @@ impl RpcCommandProcessor {
         }
     }
 
-    pub(crate) fn add_addresses(&self, responses: Vec<SuiTransactionBlockResponse>) {
+    pub(crate) fn add_addresses_from_response(&self, responses: Vec<SuiTransactionBlockResponse>) {
         for response in responses {
             let transaction = response.transaction;
             if let Some(transaction) = transaction {
@@ -154,6 +155,16 @@ impl RpcCommandProcessor {
         }
     }
 
+    pub(crate) fn add_addresses(&self, addresses: Vec<SuiAddress>) {
+        for address in addresses {
+            self.addresses.insert(address);
+        }
+    }
+
+    pub(crate) fn get_addresses(&self) -> &Arc<DashSet<SuiAddress>> {
+        &self.addresses
+    }
+
     pub(crate) fn dump_cache_to_file(&self) {
         // TODO: be more granular
         let digests: Vec<TransactionDigest> = self.transaction_digests.iter().map(|x| *x).collect();
@@ -161,6 +172,26 @@ impl RpcCommandProcessor {
 
         let addresses: Vec<SuiAddress> = self.addresses.iter().map(|x| *x).collect();
         write_data_to_file(&addresses, &format!("{}/addresses", &self.data_dir)).unwrap();
+    }
+
+    pub(crate) fn load_cache_from_file(&self, cache_type: &str) {
+        let entity_type = CacheType::from_str(cache_type)
+            .unwrap_or_else(|| panic!("Invalid cache type received: {}", cache_type));
+
+        let file_path = format!("{}/{}", &self.data_dir, cache_type);
+
+        match entity_type {
+            CacheType::SuiAddress => {
+                let addresses: Vec<SuiAddress> =
+                    read_data_from_file(&file_path).expect("Failed to read addresses");
+                self.add_addresses(addresses);
+            }
+            CacheType::TransactionDigest => {
+                let digests: Vec<TransactionDigest> =
+                    read_data_from_file(&file_path).expect("Failed to read digests");
+                self.add_transaction_digests(digests);
+            }
+        }
     }
 }
 
@@ -189,6 +220,13 @@ impl Processor for RpcCommandProcessor {
 
     async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>> {
         let clients = self.get_clients().await?;
+        if let CommandData::QueryTransactions(command_data) = &config.command.data {
+            if let Some(true) = command_data.from_file {
+                // TODO: how to generalize for other commands, flexibility beyond addresses
+                self.load_cache_from_file("addresses");
+            }
+        }
+
         let command_payloads = match &config.command.data {
             CommandData::GetCheckpoints(data) => {
                 if !config.divide_tasks {
@@ -258,6 +296,35 @@ fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), any
     serde_json::to_writer(file, data).map_err(|e| anyhow!("Error writing to file: {}", e))?;
 
     Ok(())
+}
+
+enum CacheType {
+    SuiAddress,
+    TransactionDigest,
+}
+
+impl CacheType {
+    fn from_str(entity_type: &str) -> Option<Self> {
+        match entity_type {
+            "addresses" => Some(Self::SuiAddress),
+            "digests" => Some(Self::TransactionDigest),
+            _ => None,
+        }
+    }
+}
+
+fn read_data_from_file<T: DeserializeOwned>(file_path: &str) -> Result<T, anyhow::Error> {
+    let filename = format!("{}.json", file_path);
+    let path = Path::new(&filename);
+    if !path.exists() {
+        return Err(anyhow!("File not found: {}", file_path));
+    }
+
+    let file = File::open(path).map_err(|e| anyhow::anyhow!("Error opening file: {}", e))?;
+    let deserialized_data: T =
+        serde_json::from_reader(file).map_err(|e| anyhow!("Deserialization error: {}", e))?;
+
+    Ok(deserialized_data)
 }
 
 async fn divide_checkpoint_tasks(
