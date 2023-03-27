@@ -440,3 +440,30 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
     );
     bulk_insert_query
 }
+
+pub fn group_and_sort_objects(objects: Vec<Object>) -> Vec<Vec<Object>> {
+    let mut objects_sorted = objects;
+    objects_sorted.sort_by(|a, b| a.object_id.cmp(&b.object_id));
+    // Group objects by object_id
+    let mut groups: Vec<Vec<Object>> = vec![];
+    let mut current_group: Vec<Object> = vec![];
+    let mut current_object_id = String::new();
+    for object in objects_sorted {
+        if object.object_id != current_object_id {
+            if !current_group.is_empty() {
+                // Sort the group by version, in a reverse order to be popped later
+                current_group.sort_by(|a, b| b.version.cmp(&a.version));
+                groups.push(current_group);
+            }
+            current_group = vec![];
+            current_object_id = object.object_id.clone();
+        }
+        current_group.push(object);
+    }
+    // Sort the last group by version, in a reverse order to be popped later
+    if !current_group.is_empty() {
+        current_group.sort_by(|a, b| b.version.cmp(&a.version));
+        groups.push(current_group);
+    }
+    groups
+}

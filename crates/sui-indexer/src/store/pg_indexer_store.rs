@@ -45,7 +45,9 @@ use crate::models::checkpoints::Checkpoint;
 use crate::models::epoch::DBEpochInfo;
 use crate::models::events::Event;
 use crate::models::network_metrics::{DBMoveCallMetrics, DBNetworkMetrics};
-use crate::models::objects::{compose_object_bulk_insert_update_query, Object};
+use crate::models::objects::{
+    compose_object_bulk_insert_update_query, group_and_sort_objects, Object,
+};
 use crate::models::system_state::DBValidatorSummary;
 use crate::models::transactions::Transaction;
 use crate::schema::{
@@ -1075,9 +1077,22 @@ impl IndexerStore for PgIndexerStore {
                 .iter()
                 .flat_map(|changes| changes.mutated_objects.iter().cloned())
                 .collect();
-            // bulk insert/update via UNNEST trick
-            let insert_update_query = compose_object_bulk_insert_update_query(&all_mutated_objects);
-            diesel::sql_query(insert_update_query).execute(conn)?;
+            // NOTE: to avoid error of `ON CONFLICT DO UPDATE command cannot affect row a second time`,
+            // we have to limit update of one object once in a query.
+            let mut mutated_object_groups = group_and_sort_objects(all_mutated_objects);
+            loop {
+                let mutated_object_group = mutated_object_groups
+                    .iter_mut()
+                    .filter_map(|group| group.pop())
+                    .collect::<Vec<_>>();
+                if mutated_object_group.is_empty() {
+                    break;
+                }
+                // bulk insert/update via UNNEST trick
+                let insert_update_query =
+                    compose_object_bulk_insert_update_query(&mutated_object_group);
+                diesel::sql_query(insert_update_query).execute(conn)?;
+            }
             // TODO(gegao): monitor the deletion batch size to see
             // if bulk update via unnest is necessary.
             let all_deleted_changes = objects_changes
