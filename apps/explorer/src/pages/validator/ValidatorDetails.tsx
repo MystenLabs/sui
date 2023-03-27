@@ -23,7 +23,7 @@ function ValidatorDetails() {
 
     const numberOfValidators = data?.activeValidators.length ?? null;
     const { data: rollingAverageApys, isLoading: validatorsApysLoading } =
-        useGetRollingAverageApys(numberOfValidators || 0);
+        useGetRollingAverageApys(numberOfValidators);
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
