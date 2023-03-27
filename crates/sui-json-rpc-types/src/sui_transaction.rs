@@ -1479,6 +1479,9 @@ impl OwnedObjectRef {
     pub fn object_id(&self) -> ObjectID {
         self.reference.object_id
     }
+    pub fn version(&self) -> SequenceNumber {
+        self.reference.version
+    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
