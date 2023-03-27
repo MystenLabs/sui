@@ -224,7 +224,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
             bcs: None,
             display: None,
         });
@@ -263,7 +263,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
             bcs: None,
             display: None,
         });
@@ -313,7 +313,7 @@ impl RpcExampleProvider {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+                type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
                 owner: Some(Owner::AddressOwner(owner)),
                 previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
                 storage_rebate: None,

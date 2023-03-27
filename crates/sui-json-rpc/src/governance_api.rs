@@ -43,7 +43,7 @@ impl GovernanceReadApi {
     async fn get_staked_sui(&self, owner: SuiAddress) -> Result<Vec<StakedSui>, Error> {
         Ok(self
             .state
-            .get_move_objects(owner, MoveObjectType::StakedSui)
+            .get_move_objects(owner, MoveObjectType::staked_sui())
             .await?)
     }
 
