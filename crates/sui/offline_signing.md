@@ -59,7 +59,7 @@ Now that you have obtained the serialized signature, you can submit using the ex
 sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIG
 ----- Certificate ----
 Transaction Hash: $TX_ID
-Transaction Signature: $SIGNSTURE
+Transaction Signature: $SIGNATURE
 Signed Authorities Bitmap: RoaringBitmap<[0, 1, 3]>
 Transaction Kind : Transfer SUI
 Recipient : $ADDRESS
