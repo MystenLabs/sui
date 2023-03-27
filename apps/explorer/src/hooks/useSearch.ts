@@ -31,7 +31,7 @@ const getResultsForTransaction = async (
 ) => {
     if (!isValidTransactionDigest(query)) return null;
 
-    const txdata = await rpc.getTransaction({ digest: query });
+    const txdata = await rpc.getTransactionBlock({ digest: query });
     return {
         label: 'transaction',
         results: [
@@ -89,11 +89,14 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
         return null;
 
     const [from, to] = await Promise.all([
-        rpc.queryTransactions({
+        rpc.queryTransactionBlocks({
             filter: { FromAddress: normalized },
             limit: 1,
         }),
-        rpc.queryTransactions({ filter: { ToAddress: normalized }, limit: 1 }),
+        rpc.queryTransactionBlocks({
+            filter: { ToAddress: normalized },
+            limit: 1,
+        }),
     ]);
 
     if (from.data?.length || to.data?.length) {

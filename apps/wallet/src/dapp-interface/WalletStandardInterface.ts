@@ -9,14 +9,14 @@ import {
     SUI_TESTNET_CHAIN,
     SUI_LOCALNET_CHAIN,
     type SuiFeatures,
-    type SuiSignAndExecuteTransactionMethod,
+    type SuiSignAndExecuteTransactionBlockMethod,
     type StandardConnectFeature,
     type StandardConnectMethod,
     type Wallet,
     type StandardEventsFeature,
     type StandardEventsOnMethod,
     type StandardEventsListeners,
-    type SuiSignTransactionMethod,
+    type SuiSignTransactionBlockMethod,
     type SuiSignMessageMethod,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
@@ -113,13 +113,14 @@ export class SuiWallet implements Wallet {
                 version: '1.0.0',
                 on: this.#on,
             },
-            'sui:signTransaction': {
-                version: '2.0.0',
-                signTransaction: this.#signTransaction,
+            'sui:signTransactionBlock': {
+                version: '1.0.0',
+                signTransactionBlock: this.#signTransactionBlock,
             },
-            'sui:signAndExecuteTransaction': {
-                version: '2.0.0',
-                signAndExecuteTransaction: this.#signAndExecuteTransaction,
+            'sui:signAndExecuteTransactionBlock': {
+                version: '1.0.0',
+                signAndExecuteTransactionBlock:
+                    this.#signAndExecuteTransactionBlock,
             },
             'suiWallet:stake': {
                 version: '0.0.1',
@@ -224,7 +225,7 @@ export class SuiWallet implements Wallet {
         return { accounts: this.accounts };
     };
 
-    #signTransaction: SuiSignTransactionMethod = async (input) => {
+    #signTransactionBlock: SuiSignTransactionBlockMethod = async (input) => {
         if (!TransactionBlock.is(input.transactionBlock)) {
             throw new Error(
                 'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
@@ -249,33 +250,35 @@ export class SuiWallet implements Wallet {
         );
     };
 
-    #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
-        input
-    ) => {
-        if (!TransactionBlock.is(input.transactionBlock)) {
-            throw new Error(
-                'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
-            );
-        }
+    #signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod =
+        async (input) => {
+            if (!TransactionBlock.is(input.transactionBlock)) {
+                throw new Error(
+                    'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+                );
+            }
 
-        return mapToPromise(
-            this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
-                type: 'execute-transaction-request',
-                transaction: {
-                    type: 'transaction',
-                    data: input.transactionBlock.serialize(),
-                    options: input.options,
-                    // account might be undefined if previous version of adapters is used
-                    // in that case use the first account address
-                    account:
-                        input.account?.address ||
-                        this.#accounts[0]?.address ||
-                        '',
-                },
-            }),
-            (response) => response.result
-        );
-    };
+            return mapToPromise(
+                this.#send<
+                    ExecuteTransactionRequest,
+                    ExecuteTransactionResponse
+                >({
+                    type: 'execute-transaction-request',
+                    transaction: {
+                        type: 'transaction',
+                        data: input.transactionBlock.serialize(),
+                        options: input.options,
+                        // account might be undefined if previous version of adapters is used
+                        // in that case use the first account address
+                        account:
+                            input.account?.address ||
+                            this.#accounts[0]?.address ||
+                            '',
+                    },
+                }),
+                (response) => response.result
+            );
+        };
 
     #stake = async (input: StakeInput) => {
         this.#send<StakeRequest, void>({

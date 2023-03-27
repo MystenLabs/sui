@@ -28,7 +28,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 
             const results = await Promise.all(
                 filters.map((filter) =>
-                    rpc.queryTransactions({
+                    rpc.queryTransactionBlocks({
                         filter,
                         order: 'descending',
                         limit: 100,

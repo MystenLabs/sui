@@ -79,7 +79,7 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a transaction.
    */
-  async signTransaction(input: {
+  async signTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
     let transactionBytes;
@@ -110,14 +110,14 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
-   * Sign a transaction and submit to the Fullnode for execution.
+   * Sign a transaction block and submit to the Fullnode for execution.
    *
    * @param options specify which fields to return (e.g., transaction, effects, events, etc).
    * By default, only the transaction digest will be returned.
    * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`.
    * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
    */
-  async signAndExecuteTransaction(input: {
+  async signAndExecuteTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
     /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
     options?: SuiTransactionResponseOptions;
@@ -126,11 +126,11 @@ export abstract class SignerWithProvider implements Signer {
      */
     requestType?: ExecuteTransactionRequestType;
   }): Promise<SuiTransactionResponse> {
-    const { transactionBytes, signature } = await this.signTransaction({
+    const { transactionBytes, signature } = await this.signTransactionBlock({
       transactionBlock: input.transactionBlock,
     });
 
-    return await this.provider.executeTransaction({
+    return await this.provider.executeTransactionBlock({
       transactionBlock: transactionBytes,
       signature,
       options: input.options,
@@ -143,7 +143,7 @@ export abstract class SignerWithProvider implements Signer {
    * @param tx BCS serialized transaction data or a `Transaction` object
    * @returns transaction digest
    */
-  async getTransactionDigest(
+  async getTransactionBlockDigest(
     tx: Uint8Array | TransactionBlock,
   ): Promise<string> {
     if (TransactionBlock.is(tx)) {
@@ -161,20 +161,23 @@ export abstract class SignerWithProvider implements Signer {
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    */
-  async devInspectTransaction(
+  async devInspectTransactionBlock(
     input: Omit<
-      Parameters<JsonRpcProvider['devInspectTransaction']>[0],
+      Parameters<JsonRpcProvider['devInspectTransactionBlock']>[0],
       'sender'
     >,
   ): Promise<DevInspectResults> {
     const address = await this.getAddress();
-    return this.provider.devInspectTransaction({ sender: address, ...input });
+    return this.provider.devInspectTransactionBlock({
+      sender: address,
+      ...input,
+    });
   }
 
   /**
    * Dry run a transaction and return the result.
    */
-  async dryRunTransaction(input: {
+  async dryRunTransactionBlock(input: {
     transactionBlock: TransactionBlock | string | Uint8Array;
   }): Promise<DryRunTransactionResponse> {
     let dryRunTxBytes: Uint8Array;
@@ -191,7 +194,9 @@ export abstract class SignerWithProvider implements Signer {
       throw new Error('Unknown transaction format');
     }
 
-    return this.provider.dryRunTransaction({ transactionBlock: dryRunTxBytes });
+    return this.provider.dryRunTransactionBlock({
+      transactionBlock: dryRunTxBytes,
+    });
   }
 
   /**
@@ -201,9 +206,9 @@ export abstract class SignerWithProvider implements Signer {
    * @throws whens fails to estimate the gas cost
    */
   async getGasCostEstimation(
-    ...args: Parameters<SignerWithProvider['dryRunTransaction']>
+    ...args: Parameters<SignerWithProvider['dryRunTransactionBlock']>
   ) {
-    const txEffects = await this.dryRunTransaction(...args);
+    const txEffects = await this.dryRunTransactionBlock(...args);
     const gasEstimation = getTotalGasUsedUpperBound(txEffects.effects);
     if (typeof gasEstimation === 'undefined') {
       throw new Error('Failed to estimate the gas cost from transaction');

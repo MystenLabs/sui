@@ -19,7 +19,7 @@ describe('Test Move call with strings', () => {
       target: `${packageId}::entry_point_types::${funcName}`,
       arguments: [tx.pure(str), tx.pure(len)],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction({
+    const result = await toolbox.signer.signAndExecuteTransactionBlock({
       transactionBlock: tx,
       options: {
         showEffects: true,

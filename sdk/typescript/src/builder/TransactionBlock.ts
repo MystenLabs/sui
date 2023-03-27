@@ -626,7 +626,9 @@ export class TransactionBlock {
       }
 
       if (!this.blockData.gasConfig.budget) {
-        const dryRunResult = await expectProvider(provider).dryRunTransaction({
+        const dryRunResult = await expectProvider(
+          provider,
+        ).dryRunTransactionBlock({
           transactionBlock: this.#blockData.build({
             overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
           }),

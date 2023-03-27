@@ -135,7 +135,7 @@ function StakingCard() {
                     amount,
                     validatorAddress
                 );
-                return await signer.signAndExecuteTransaction({
+                return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
                     options: {
                         showInput: true,
@@ -162,7 +162,7 @@ function StakingCard() {
             });
             try {
                 const transactionBlock = createUnstakeTransaction(stakedSuiId);
-                return await signer.signAndExecuteTransaction({
+                return await signer.signAndExecuteTransactionBlock({
                     transactionBlock,
                     options: {
                         showInput: true,

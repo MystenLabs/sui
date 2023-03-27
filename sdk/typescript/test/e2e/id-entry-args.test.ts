@@ -25,7 +25,7 @@ describe('Test ID as args to entry functions', () => {
         ),
       ],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction({
+    const result = await toolbox.signer.signAndExecuteTransactionBlock({
       transactionBlock: tx,
       options: {
         showEffects: true,
@@ -44,7 +44,7 @@ describe('Test ID as args to entry functions', () => {
         ),
       ],
     });
-    const result = await toolbox.signer.signAndExecuteTransaction({
+    const result = await toolbox.signer.signAndExecuteTransactionBlock({
       transactionBlock: tx,
       options: {
         showEffects: true,

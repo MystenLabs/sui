@@ -54,8 +54,8 @@ example = "0x42"
 
 If your Sui Move code uses a module in the `governance` folder:
 
-`genesis.move`, `sui_system.move`, `validator_cap.move`, `voting_power.move`, 
-`stake_subsidy.move`, `sui_system_state_inner.move`, `validator_set.move`, 
+`genesis.move`, `sui_system.move`, `validator_cap.move`, `voting_power.move`,
+`stake_subsidy.move`, `sui_system_state_inner.move`, `validator_set.move`,
 `staking_pool.move`, `validator.move`, or `validator_wrapper.move`
 
 The modules are now in the `sui-system` package. You must list `SuiSystem` as a dependency, and access these modules via `0x3` or the `sui_system` named address.
@@ -265,13 +265,13 @@ The `sui_getTransaction`and `sui_multiGetTransaction` functions now take an add
 
     // Updated for release .28
     const provider = new JsonRpcProvider();
-    const txn = await provider.getTransaction({
+    const txn = await provider.getTransactionBlock({
       digest: '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
       // only fetch the effects field
       options: { showEffects: true },
     });
     // You can also fetch multiple transactions in one batch request
-    const txns = await provider.multiGetTransactions({
+    const txns = await provider.multiGetTransactionBlocks({
       digests: [
         '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
         '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
