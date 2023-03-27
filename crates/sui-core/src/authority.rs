@@ -2233,22 +2233,6 @@ impl AuthorityState {
         Ok(self.get_indexes()?.next_sequence_number())
     }
 
-    pub fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?
-            .get_transactions_in_range_deprecated(start, end)
-    }
-
-    pub fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?.get_recent_transactions(count)
-    }
-
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
