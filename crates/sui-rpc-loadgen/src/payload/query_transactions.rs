@@ -64,7 +64,7 @@ impl<'a> ProcessPayload<'a, &'a QueryTransactions> for RpcCommandProcessor {
                 let with_query = query.clone();
                 async move {
                     let start_time = Instant::now();
-                    let transactions = query_transactions(client, with_query, cursor, None)
+                    let transactions = query_transaction_blocks(client, with_query, cursor, None)
                         .await
                         .unwrap();
                     let elapsed_time = start_time.elapsed();
@@ -88,7 +88,7 @@ impl<'a> ProcessPayload<'a, &'a QueryTransactions> for RpcCommandProcessor {
     }
 }
 
-async fn query_transactions(
+async fn query_transaction_blocks(
     client: &SuiClient,
     query: SuiTransactionResponseQuery,
     cursor: Option<TransactionDigest>,
@@ -96,7 +96,7 @@ async fn query_transactions(
 ) -> Result<Page<SuiTransactionResponse, TransactionDigest>> {
     let transactions = client
         .read_api()
-        .query_transactions(query, cursor, limit, true)
+        .query_transaction_blocks(query, cursor, limit, true)
         .await
         .unwrap();
     Ok(transactions)

@@ -80,7 +80,7 @@ pub mod pg_integration_test {
         Ok(gas_objects)
     }
 
-    async fn sign_and_execute_transaction(
+    async fn sign_and_execute_transaction_block(
         test_cluster: &TestCluster,
         indexer_rpc_client: &HttpClient,
         transaction_bytes: TransactionBytes,
@@ -92,7 +92,7 @@ pub mod pg_integration_test {
             to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(sender)?);
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let tx_response = indexer_rpc_client
-            .execute_transaction(
+            .execute_transaction_block(
                 tx_bytes,
                 signatures,
                 Some(SuiTransactionResponseOptions::full_content()),
@@ -114,7 +114,7 @@ pub mod pg_integration_test {
         let transaction_bytes: TransactionBytes = indexer_rpc_client
             .transfer_object(*sender, object_id, gas, 2000, *recipient)
             .await?;
-        let tx_response = sign_and_execute_transaction(
+        let tx_response = sign_and_execute_transaction_block(
             test_cluster,
             indexer_rpc_client,
             transaction_bytes,
@@ -187,11 +187,11 @@ pub mod pg_integration_test {
             assert!(transaction.is_ok());
             let _fullnode_rpc_tx = test_cluster
                 .rpc_client()
-                .get_transaction(tx_digest, Some(SuiTransactionResponseOptions::new()))
+                .get_transaction_block(tx_digest, Some(SuiTransactionResponseOptions::new()))
                 .await
                 .unwrap();
             let _indexer_rpc_tx = indexer_rpc_client
-                .get_transaction(tx_digest, Some(SuiTransactionResponseOptions::new()))
+                .get_transaction_block(tx_digest, Some(SuiTransactionResponseOptions::new()))
                 .await
                 .unwrap();
 
@@ -248,7 +248,7 @@ pub mod pg_integration_test {
         // At least 1 transaction + 1 genesis, others are like Consensus Commit Prologue
         assert!(tx_count >= 2);
         let rpc_tx_count = indexer_rpc_client
-            .get_total_transaction_number()
+            .get_total_transaction_blocks()
             .await
             .unwrap();
         assert!(<u64>::from(rpc_tx_count) >= 2);
@@ -280,7 +280,7 @@ pub mod pg_integration_test {
         let checkpoint_seq_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::Checkpoint(2u64));
         let mut checkpoint_query_tx_digest_vec = indexer_rpc_client
-            .query_transactions(checkpoint_seq_query, None, None, None)
+            .query_transaction_blocks(checkpoint_seq_query, None, None, None)
             .await
             .unwrap()
             .data
@@ -297,7 +297,7 @@ pub mod pg_integration_test {
         assert_eq!(checkpoint_query_tx_digest_vec, checkpoint_tx_digest_vec);
 
         let tx_read_response = indexer_rpc_client
-            .get_transaction(
+            .get_transaction_block(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -317,7 +317,7 @@ pub mod pg_integration_test {
         let from_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::FromAddress(sender));
         let tx_from_query_response = indexer_rpc_client
-            .query_transactions(from_query, None, None, None)
+            .query_transaction_blocks(from_query, None, None, None)
             .await?;
         assert!(!tx_from_query_response.has_next_page);
         assert_eq!(tx_from_query_response.data.len(), 3);
@@ -326,7 +326,7 @@ pub mod pg_integration_test {
             TransactionFilter::TransactionKind("ProgrammableTransaction".to_string()),
         );
         let tx_kind_query_response = indexer_rpc_client
-            .query_transactions(tx_kind_query, None, None, None)
+            .query_transaction_blocks(tx_kind_query, None, None, None)
             .await?;
         assert!(!tx_kind_query_response.has_next_page);
         assert_eq!(tx_kind_query_response.data.len(), 3);
@@ -335,7 +335,7 @@ pub mod pg_integration_test {
         let to_query =
             SuiTransactionResponseQuery::new_with_filter(TransactionFilter::ToAddress(recipient));
         let tx_to_query_response = indexer_rpc_client
-            .query_transactions(to_query, None, None, None)
+            .query_transaction_blocks(to_query, None, None, None)
             .await?;
         // the address has received 2 transactions, one is genesis
         assert!(!tx_to_query_response.has_next_page);
@@ -348,7 +348,7 @@ pub mod pg_integration_test {
                 to: recipient,
             });
         let tx_from_to_query_response = indexer_rpc_client
-            .query_transactions(from_to_query, None, None, None)
+            .query_transaction_blocks(from_to_query, None, None, None)
             .await?;
         assert!(!tx_from_to_query_response.has_next_page);
         assert_eq!(tx_from_to_query_response.data.len(), 1);
@@ -362,7 +362,7 @@ pub mod pg_integration_test {
             TransactionFilter::ChangedObject(*gas_objects.first().unwrap()),
         );
         let tx_mutation_query_response = indexer_rpc_client
-            .query_transactions(mutation_query, None, None, None)
+            .query_transaction_blocks(mutation_query, None, None, None)
             .await?;
         // the coin is first created by genesis tx, then transferred by the above tx
         assert!(!tx_mutation_query_response.has_next_page);
@@ -373,7 +373,7 @@ pub mod pg_integration_test {
             TransactionFilter::InputObject(*gas_objects.first().unwrap()),
         );
         let tx_input_query_response = indexer_rpc_client
-            .query_transactions(input_query, None, None, None)
+            .query_transaction_blocks(input_query, None, None, None)
             .await?;
         assert_eq!(tx_input_query_response.data.len(), 2);
 
@@ -385,7 +385,7 @@ pub mod pg_integration_test {
                 function: None,
             });
         let tx_move_call_query_response = indexer_rpc_client
-            .query_transactions(move_call_query, None, None, None)
+            .query_transaction_blocks(move_call_query, None, None, None)
             .await?;
         assert_eq!(tx_move_call_query_response.data.len(), 1);
         assert_eq!(
@@ -413,7 +413,7 @@ pub mod pg_integration_test {
         wait_until_transaction_synced(&store, nft_digest.base58_encode().as_str()).await;
 
         let tx_multi_read_tx_response_1 = indexer_rpc_client
-            .multi_get_transactions(
+            .multi_get_transaction_blocks(
                 vec![tx_response.digest, nft_digest],
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -423,7 +423,7 @@ pub mod pg_integration_test {
         assert_eq!(tx_multi_read_tx_response_1[1].digest, nft_digest);
 
         let tx_multi_read_tx_response_2 = indexer_rpc_client
-            .multi_get_transactions(
+            .multi_get_transaction_blocks(
                 vec![nft_digest, tx_response.digest],
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -713,7 +713,7 @@ pub mod pg_integration_test {
                 2000,
             )
             .await?;
-        let tx_response = sign_and_execute_transaction(
+        let tx_response = sign_and_execute_transaction_block(
             &test_cluster,
             &indexer_rpc_client,
             transaction_bytes,
@@ -1084,7 +1084,7 @@ pub mod pg_integration_test {
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client).await?;
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
         let full_transaction_response = indexer_rpc_client
-            .get_transaction(
+            .get_transaction_block(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
             )
@@ -1103,7 +1103,9 @@ pub mod pg_integration_test {
         ];
         let futures = sui_transaction_response_options
             .into_iter()
-            .map(|option| indexer_rpc_client.get_transaction(tx_response.digest, Some(option)))
+            .map(|option| {
+                indexer_rpc_client.get_transaction_block(tx_response.digest, Some(option))
+            })
             .collect::<Vec<_>>();
 
         let received_transaction_results: Vec<SuiTransactionResponse> = join_all(futures)
@@ -1173,7 +1175,7 @@ pub mod pg_integration_test {
         wait_until_transaction_synced(&store, tx_response.digest.base58_encode().as_str()).await;
         // We do this as checkpoint field is only returned in the read api
         let tx_response = indexer_rpc_client
-            .get_transaction(
+            .get_transaction_block(
                 tx_response.digest,
                 Some(SuiTransactionResponseOptions::full_content()),
             )

@@ -33,7 +33,7 @@ pub trait IndexerApi {
 
     /// Return list of transactions for a specified query criteria.
     #[method(name = "queryTransactions")]
-    async fn query_transactions(
+    async fn query_transaction_blocks(
         &self,
         /// the transaction query criteria.
         query: SuiTransactionResponseQuery,

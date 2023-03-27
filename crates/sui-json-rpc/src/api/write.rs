@@ -27,7 +27,7 @@ pub trait WriteApi {
     ///     a bool type in the response is set to false to indicated the case.
     /// request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true
     #[method(name = "executeTransaction", deprecated)]
-    async fn execute_transaction(
+    async fn execute_transaction_block(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
@@ -43,7 +43,7 @@ pub trait WriteApi {
     /// transaction (or Move call) with any arguments. Detailed results are
     /// provided, including both the transaction effects and any return values.
     #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(
+    async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
         /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
@@ -57,5 +57,8 @@ pub trait WriteApi {
     /// Return transaction execution effects including the gas cost summary,
     /// while the effects are not committed to the chain.
     #[method(name = "dryRunTransaction")]
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse>;
+    async fn dry_run_transaction_block(
+        &self,
+        tx_bytes: Base64,
+    ) -> RpcResult<DryRunTransactionResponse>;
 }

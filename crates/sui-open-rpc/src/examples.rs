@@ -80,9 +80,9 @@ impl RpcExampleProvider {
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_owned_objects(),
-            self.get_total_transaction_number(),
-            self.get_transaction(),
-            self.query_transactions(),
+            self.get_total_transaction_blocks(),
+            self.get_transaction_block(),
+            self.query_transaction_blocks(),
             self.get_events(),
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
@@ -352,7 +352,7 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_total_transaction_number(&mut self) -> Examples {
+    fn get_total_transaction_blocks(&mut self) -> Examples {
         Examples::new(
             "sui_getTotalTransactionNumber",
             vec![ExamplePairing::new(
@@ -363,7 +363,7 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transaction(&mut self) -> Examples {
+    fn get_transaction_block(&mut self) -> Examples {
         let (_, _, _, _, result) = self.get_transfer_data_response();
         Examples::new(
             "sui_getTransaction",
@@ -384,7 +384,7 @@ impl RpcExampleProvider {
         )
     }
 
-    fn query_transactions(&mut self) -> Examples {
+    fn query_transaction_blocks(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
         let has_next_page = data.len() > (9 - 5);
         data.truncate(9 - 5);

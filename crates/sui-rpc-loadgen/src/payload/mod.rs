@@ -87,7 +87,7 @@ impl Command {
         }
     }
 
-    pub fn new_query_transactions(
+    pub fn new_query_transaction_blocks(
         from_address: Option<String>,
         to_address: Option<String>,
     ) -> Self {

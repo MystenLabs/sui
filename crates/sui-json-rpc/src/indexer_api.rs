@@ -124,7 +124,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    async fn query_transactions(
+    async fn query_transaction_blocks(
         &self,
         query: SuiTransactionResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -153,7 +153,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .collect()
         } else {
             self.read_api
-                .multi_get_transactions(digests, Some(opts))
+                .multi_get_transaction_blocks(digests, Some(opts))
                 .await?
         };
 

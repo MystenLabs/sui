@@ -283,7 +283,7 @@ where
         })
     }
 
-    async fn query_transactions(
+    async fn query_transaction_blocks(
         &self,
         query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
@@ -296,7 +296,7 @@ where
         {
             return self
                 .fullnode
-                .query_transactions(query, cursor, limit, descending_order)
+                .query_transaction_blocks(query, cursor, limit, descending_order)
                 .await;
         }
         Ok(self.query_transactions_internal(query, cursor, limit, descending_order)?)

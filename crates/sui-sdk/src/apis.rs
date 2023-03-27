@@ -116,8 +116,8 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
-        Ok(self.api.http.get_total_transaction_number().await?.into())
+    pub async fn get_total_transaction_blocks(&self) -> SuiRpcResult<u64> {
+        Ok(self.api.http.get_total_transaction_blocks().await?.into())
     }
 
     pub async fn get_transaction_with_options(
@@ -125,7 +125,11 @@ impl ReadApi {
         digest: TransactionDigest,
         options: SuiTransactionResponseOptions,
     ) -> SuiRpcResult<SuiTransactionResponse> {
-        Ok(self.api.http.get_transaction(digest, Some(options)).await?)
+        Ok(self
+            .api
+            .http
+            .get_transaction_block(digest, Some(options))
+            .await?)
     }
 
     pub async fn multi_get_transactions_with_options(
@@ -136,7 +140,7 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .multi_get_transactions(digests, Some(options))
+            .multi_get_transaction_blocks(digests, Some(options))
             .await?)
     }
 
@@ -144,7 +148,7 @@ impl ReadApi {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
-    pub async fn query_transactions(
+    pub async fn query_transaction_blocks(
         &self,
         query: SuiTransactionResponseQuery,
         cursor: Option<TransactionDigest>,
@@ -154,7 +158,7 @@ impl ReadApi {
         Ok(self
             .api
             .http
-            .query_transactions(query, cursor, limit, Some(descending_order))
+            .query_transaction_blocks(query, cursor, limit, Some(descending_order))
             .await?)
     }
 
@@ -188,7 +192,12 @@ impl ReadApi {
                     Some((item, (data, cursor, false, query)))
                 } else if (cursor.is_none() && first) || cursor.is_some() {
                     let page = self
-                        .query_transactions(query.clone(), cursor, Some(100), descending_order)
+                        .query_transaction_blocks(
+                            query.clone(),
+                            cursor,
+                            Some(100),
+                            descending_order,
+                        )
                         .await
                         .ok()?;
                     let mut data = page.data;
@@ -218,14 +227,14 @@ impl ReadApi {
         Ok(self.api.http.get_reference_gas_price().await?.into())
     }
 
-    pub async fn dry_run_transaction(
+    pub async fn dry_run_transaction_block(
         &self,
         tx: TransactionData,
     ) -> SuiRpcResult<DryRunTransactionResponse> {
         Ok(self
             .api
             .http
-            .dry_run_transaction(Base64::from_bytes(&bcs::to_bytes(&tx)?))
+            .dry_run_transaction_block(Base64::from_bytes(&bcs::to_bytes(&tx)?))
             .await?)
     }
 }
@@ -429,7 +438,7 @@ impl QuorumDriver {
     /// the fullnode until the fullnode recognizes this transaction, or
     /// until times out (see WAIT_FOR_TX_TIMEOUT_SEC). If it times out, an
     /// error is returned from this call.
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
         options: SuiTransactionResponseOptions,
@@ -440,7 +449,7 @@ impl QuorumDriver {
         let mut response: SuiTransactionResponse = self
             .api
             .http
-            .execute_transaction(
+            .execute_transaction_block(
                 tx_bytes,
                 signatures,
                 Some(options),
@@ -478,7 +487,7 @@ impl QuorumDriver {
     ) -> SuiRpcResult<()> {
         let start = Instant::now();
         loop {
-            let resp = ReadApiClient::get_transaction(
+            let resp = ReadApiClient::get_transaction_block(
                 &c.http,
                 tx_digest,
                 Some(SuiTransactionResponseOptions::new()),

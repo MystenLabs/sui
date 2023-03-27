@@ -257,11 +257,11 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
-        Ok(self.state.get_total_transaction_number()?.into())
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+        Ok(self.state.get_total_transaction_blocks()?.into())
     }
 
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
         opts: Option<SuiTransactionResponseOptions>,
@@ -356,7 +356,7 @@ impl ReadApiServer for ReadApi {
         ))
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
         opts: Option<SuiTransactionResponseOptions>,
