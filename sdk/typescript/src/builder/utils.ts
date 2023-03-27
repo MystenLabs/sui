@@ -16,4 +16,4 @@ export type WellKnownEncoding =
       type: string;
     };
 
-export const COMMAND_TYPE = Symbol('command-argument-type');
+export const TRANSACTION_TYPE = Symbol('transaction-argument-type');

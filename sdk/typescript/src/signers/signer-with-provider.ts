@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { Transaction } from '../builder';
-import { TransactionDataBuilder } from '../builder/TransactionData';
+import { TransactionBlock } from '../builder';
+import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData';
 import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { HttpHeaders } from '../rpc/client';
@@ -80,19 +80,19 @@ export abstract class SignerWithProvider implements Signer {
    * Sign a transaction.
    */
   async signTransaction(input: {
-    transaction: Uint8Array | Transaction;
+    transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
     let transactionBytes;
 
-    if (Transaction.is(input.transaction)) {
+    if (TransactionBlock.is(input.transactionBlock)) {
       // If the sender has not yet been set on the transaction, then set it.
       // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
-      input.transaction.setSenderIfNotSet(await this.getAddress());
-      transactionBytes = await input.transaction.build({
+      input.transactionBlock.setSenderIfNotSet(await this.getAddress());
+      transactionBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
-    } else if (input.transaction instanceof Uint8Array) {
-      transactionBytes = input.transaction;
+    } else if (input.transactionBlock instanceof Uint8Array) {
+      transactionBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
@@ -118,7 +118,7 @@ export abstract class SignerWithProvider implements Signer {
    * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
    */
   async signAndExecuteTransaction(input: {
-    transaction: Uint8Array | Transaction;
+    transactionBlock: Uint8Array | TransactionBlock;
     /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
     options?: SuiTransactionResponseOptions;
     /** `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
@@ -127,11 +127,11 @@ export abstract class SignerWithProvider implements Signer {
     requestType?: ExecuteTransactionRequestType;
   }): Promise<SuiTransactionResponse> {
     const { transactionBytes, signature } = await this.signTransaction({
-      transaction: input.transaction,
+      transactionBlock: input.transactionBlock,
     });
 
     return await this.provider.executeTransaction({
-      transaction: transactionBytes,
+      transactionBlock: transactionBytes,
       signature,
       options: input.options,
       requestType: input.requestType,
@@ -143,12 +143,14 @@ export abstract class SignerWithProvider implements Signer {
    * @param tx BCS serialized transaction data or a `Transaction` object
    * @returns transaction digest
    */
-  async getTransactionDigest(tx: Uint8Array | Transaction): Promise<string> {
-    if (Transaction.is(tx)) {
+  async getTransactionDigest(
+    tx: Uint8Array | TransactionBlock,
+  ): Promise<string> {
+    if (TransactionBlock.is(tx)) {
       tx.setSenderIfNotSet(await this.getAddress());
       return tx.getDigest({ provider: this.provider });
     } else if (tx instanceof Uint8Array) {
-      return TransactionDataBuilder.getDigestFromBytes(tx);
+      return TransactionBlockDataBuilder.getDigestFromBytes(tx);
     } else {
       throw new Error('Unknown transaction format.');
     }
@@ -173,23 +175,23 @@ export abstract class SignerWithProvider implements Signer {
    * Dry run a transaction and return the result.
    */
   async dryRunTransaction(input: {
-    transaction: Transaction | string | Uint8Array;
+    transactionBlock: TransactionBlock | string | Uint8Array;
   }): Promise<DryRunTransactionResponse> {
     let dryRunTxBytes: Uint8Array;
-    if (Transaction.is(input.transaction)) {
-      input.transaction.setSenderIfNotSet(await this.getAddress());
-      dryRunTxBytes = await input.transaction.build({
+    if (TransactionBlock.is(input.transactionBlock)) {
+      input.transactionBlock.setSenderIfNotSet(await this.getAddress());
+      dryRunTxBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
-    } else if (typeof input.transaction === 'string') {
-      dryRunTxBytes = fromB64(input.transaction);
-    } else if (input.transaction instanceof Uint8Array) {
-      dryRunTxBytes = input.transaction;
+    } else if (typeof input.transactionBlock === 'string') {
+      dryRunTxBytes = fromB64(input.transactionBlock);
+    } else if (input.transactionBlock instanceof Uint8Array) {
+      dryRunTxBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
 
-    return this.provider.dryRunTransaction({ transaction: dryRunTxBytes });
+    return this.provider.dryRunTransaction({ transactionBlock: dryRunTxBytes });
   }
 
   /**

@@ -10,7 +10,7 @@ import {
     RawSigner,
     type Keypair,
     localnetConnection,
-    Transaction,
+    TransactionBlock,
 } from '@mysten/sui.js';
 
 const addressToKeypair = new Map<string, Keypair>();
@@ -28,7 +28,7 @@ export async function split_coin(address: string) {
     const coins = await provider.getCoins({ owner: address });
     const coin_id = coins.data[0].coinObjectId;
 
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
         target: '0x2::pay::split',
         typeArguments: ['0x2::sui::SUI'],
@@ -36,7 +36,7 @@ export async function split_coin(address: string) {
     });
 
     const result = await signer.signAndExecuteTransaction({
-        transaction: tx,
+        transactionBlock: tx,
         options: {
             showInput: true,
             showEffects: true,

@@ -64,7 +64,7 @@ function TransferCoinPage() {
                 });
 
                 return signer.signAndExecuteTransaction({
-                    transaction,
+                    transactionBlock: transaction,
                     options: {
                         showInput: true,
                         showEffects: true,

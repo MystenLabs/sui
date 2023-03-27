@@ -9,7 +9,7 @@ import {
   ObjectId,
   SuiObjectData,
   SUI_FRAMEWORK_ADDRESS,
-  Transaction,
+  TransactionBlock,
 } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -18,13 +18,13 @@ describe('Test Move call with a vector of objects as input', () => {
   let packageId: ObjectId;
 
   async function mintObject(val: number) {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::entry_point_vector::mint`,
       arguments: [tx.pure(String(val))],
     });
     const result = await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
+      transactionBlock: tx,
       options: {
         showEffects: true,
       },
@@ -34,14 +34,14 @@ describe('Test Move call with a vector of objects as input', () => {
   }
 
   async function destroyObjects(objects: ObjectId[]) {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const vec = tx.makeMoveVec({ objects: objects.map((id) => tx.object(id)) });
     tx.moveCall({
       target: `${packageId}::entry_point_vector::two_obj_vec_destroy`,
       arguments: [vec],
     });
     const result = await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
+      transactionBlock: tx,
       options: {
         showEffects: true,
       },
@@ -65,7 +65,7 @@ describe('Test Move call with a vector of objects as input', () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coin = coins[3].data as SuiObjectData;
     const coinIDs = coins.map((coin) => Coin.getID(coin));
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const vec = tx.makeMoveVec({
       objects: [tx.object(coinIDs[1]), tx.object(coinIDs[2])],
     });
@@ -76,7 +76,7 @@ describe('Test Move call with a vector of objects as input', () => {
     });
     tx.setGasPayment([coin]);
     const result = await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
+      transactionBlock: tx,
       options: {
         showEffects: true,
       },

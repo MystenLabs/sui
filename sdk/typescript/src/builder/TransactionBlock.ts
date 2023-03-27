@@ -16,13 +16,13 @@ import {
   SUI_TYPE_ARG,
 } from '../types';
 import {
-  Commands,
-  CommandArgument,
-  TransactionCommand,
-  TransactionInput,
-  getTransactionCommandType,
-  MoveCallCommand,
-} from './Commands';
+  Transactions,
+  TransactionArgument,
+  TransactionType,
+  TransactionBlockInput,
+  getTransactionType,
+  MoveCallTransaction,
+} from './Transactions';
 import {
   BuilderCallArg,
   getIdFromCallArg,
@@ -32,18 +32,18 @@ import {
 } from './Inputs';
 import { getPureSerializationType, isTxContext } from './serializer';
 import {
-  TransactionDataBuilder,
+  TransactionBlockDataBuilder,
   TransactionExpiration,
-} from './TransactionData';
-import { COMMAND_TYPE, create, WellKnownEncoding } from './utils';
+} from './TransactionBlockData';
+import { TRANSACTION_TYPE, create, WellKnownEncoding } from './utils';
 
-type TransactionResult = CommandArgument & CommandArgument[];
+type TransactionResult = TransactionArgument & TransactionArgument[];
 
 function createTransactionResult(index: number): TransactionResult {
-  const baseResult: CommandArgument = { kind: 'Result', index };
+  const baseResult: TransactionArgument = { kind: 'Result', index };
 
-  const nestedResults: CommandArgument[] = [];
-  const nestedResultFor = (resultIndex: number): CommandArgument =>
+  const nestedResults: TransactionArgument[] = [];
+  const nestedResultFor = (resultIndex: number): TransactionArgument =>
     (nestedResults[resultIndex] ??= {
       kind: 'NestedResult',
       index,
@@ -116,9 +116,9 @@ interface BuildOptions {
 /**
  * Transaction Builder
  */
-export class Transaction {
+export class TransactionBlock {
   /** Returns `true` if the object is an instance of the Transaction builder class. */
-  static is(obj: unknown): obj is Transaction {
+  static is(obj: unknown): obj is TransactionBlock {
     return (
       !!obj &&
       typeof obj === 'object' &&
@@ -131,9 +131,9 @@ export class Transaction {
    * Supports either a byte array, or base64-encoded bytes.
    */
   static fromKind(serialized: string | Uint8Array) {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
 
-    tx.#transactionData = TransactionDataBuilder.fromKindBytes(
+    tx.#blockData = TransactionBlockDataBuilder.fromKindBytes(
       typeof serialized === 'string' ? fromB64(serialized) : serialized,
     );
 
@@ -147,15 +147,15 @@ export class Transaction {
    * - A byte array (or base64-encoded bytes) containing BCS transaction data.
    */
   static from(serialized: string | Uint8Array) {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
 
     // Check for bytes:
     if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
-      tx.#transactionData = TransactionDataBuilder.fromBytes(
+      tx.#blockData = TransactionBlockDataBuilder.fromBytes(
         typeof serialized === 'string' ? fromB64(serialized) : serialized,
       );
     } else {
-      tx.#transactionData = TransactionDataBuilder.restore(
+      tx.#blockData = TransactionBlockDataBuilder.restore(
         JSON.parse(serialized),
       );
     }
@@ -163,9 +163,9 @@ export class Transaction {
     return tx;
   }
 
-  /** A helper to retrieve the Transaction builder `Commands` */
-  static get Commands() {
-    return Commands;
+  /** A helper to retrieve the Transaction builder `Transactions` */
+  static get Transactions() {
+    return Transactions;
   }
 
   /** A helper to retrieve the Transaction builder `Inputs` */
@@ -174,28 +174,28 @@ export class Transaction {
   }
 
   setSender(sender: string) {
-    this.#transactionData.sender = sender;
+    this.#blockData.sender = sender;
   }
   /**
    * Sets the sender only if it has not already been set.
    * This is useful for sponsored transaction flows where the sender may not be the same as the signer address.
    */
   setSenderIfNotSet(sender: string) {
-    if (!this.#transactionData.sender) {
-      this.#transactionData.sender = sender;
+    if (!this.#blockData.sender) {
+      this.#blockData.sender = sender;
     }
   }
   setExpiration(expiration?: TransactionExpiration) {
-    this.#transactionData.expiration = expiration;
+    this.#blockData.expiration = expiration;
   }
   setGasPrice(price: number | bigint) {
-    this.#transactionData.gasConfig.price = String(price);
+    this.#blockData.gasConfig.price = String(price);
   }
   setGasBudget(budget: number | bigint) {
-    this.#transactionData.gasConfig.budget = String(budget);
+    this.#blockData.gasConfig.budget = String(budget);
   }
   setGasOwner(owner: string) {
-    this.#transactionData.gasConfig.owner = owner;
+    this.#blockData.gasConfig.owner = owner;
   }
   setGasPayment(payments: SuiObjectRef[]) {
     if (payments.length >= MAX_GAS_OBJECTS) {
@@ -203,15 +203,15 @@ export class Transaction {
         `Payment objects exceed maximum amount ${MAX_GAS_OBJECTS}`,
       );
     }
-    this.#transactionData.gasConfig.payment = payments.map((payment) =>
+    this.#blockData.gasConfig.payment = payments.map((payment) =>
       mask(payment, SuiObjectRef),
     );
   }
 
-  #transactionData: TransactionDataBuilder;
+  #blockData: TransactionBlockDataBuilder;
   /** Get a snapshot of the transaction data, in JSON form: */
-  get transactionData() {
-    return this.#transactionData.snapshot();
+  get blockData() {
+    return this.#blockData.snapshot();
   }
 
   // Used to brand transaction classes so that they can be identified, even between multiple copies
@@ -220,14 +220,14 @@ export class Transaction {
     return true;
   }
 
-  constructor(transaction?: Transaction) {
-    this.#transactionData = new TransactionDataBuilder(
-      transaction ? transaction.#transactionData : undefined,
+  constructor(transaction?: TransactionBlock) {
+    this.#blockData = new TransactionBlockDataBuilder(
+      transaction ? transaction.#blockData : undefined,
     );
   }
 
   /** Returns an argument for the gas coin, to be used in a transaction. */
-  get gas(): CommandArgument {
+  get gas(): TransactionArgument {
     return { kind: 'GasCoin' };
   }
 
@@ -241,7 +241,7 @@ export class Transaction {
    *
    */
   #input(type: 'object' | 'pure', value?: unknown) {
-    const index = this.#transactionData.inputs.length;
+    const index = this.#blockData.inputs.length;
     const input = create(
       {
         kind: 'Input',
@@ -250,9 +250,9 @@ export class Transaction {
         index,
         type,
       },
-      TransactionInput,
+      TransactionBlockInput,
     );
-    this.#transactionData.inputs.push(input);
+    this.#blockData.inputs.push(input);
     return input;
   }
 
@@ -262,7 +262,7 @@ export class Transaction {
   object(value: ObjectId | ObjectCallArg) {
     const id = getIdFromCallArg(value);
     // deduplicate
-    const inserted = this.#transactionData.inputs.find(
+    const inserted = this.#blockData.inputs.find(
       (i) => i.type === 'object' && id === getIdFromCallArg(i.value),
     );
     return inserted ?? this.#input('object', value);
@@ -294,32 +294,33 @@ export class Transaction {
     );
   }
 
-  /** Add a command to the transaction. */
-  add(command: TransactionCommand) {
-    // TODO: This should also look at the command arguments and add any referenced commands that are not present in this transaction.
-    const index = this.#transactionData.commands.push(command);
+  /** Add a transaction to the transaction block. */
+  add(transaction: TransactionType) {
+    const index = this.#blockData.transactions.push(transaction);
     return createTransactionResult(index - 1);
   }
 
   // Method shorthands:
 
-  splitCoins(...args: Parameters<(typeof Commands)['SplitCoins']>) {
-    return this.add(Commands.SplitCoins(...args));
+  splitCoins(...args: Parameters<(typeof Transactions)['SplitCoins']>) {
+    return this.add(Transactions.SplitCoins(...args));
   }
-  mergeCoins(...args: Parameters<(typeof Commands)['MergeCoins']>) {
-    return this.add(Commands.MergeCoins(...args));
+  mergeCoins(...args: Parameters<(typeof Transactions)['MergeCoins']>) {
+    return this.add(Transactions.MergeCoins(...args));
   }
-  publish(...args: Parameters<(typeof Commands)['Publish']>) {
-    return this.add(Commands.Publish(...args));
+  publish(...args: Parameters<(typeof Transactions)['Publish']>) {
+    return this.add(Transactions.Publish(...args));
   }
-  moveCall(...args: Parameters<(typeof Commands)['MoveCall']>) {
-    return this.add(Commands.MoveCall(...args));
+  moveCall(...args: Parameters<(typeof Transactions)['MoveCall']>) {
+    return this.add(Transactions.MoveCall(...args));
   }
-  transferObjects(...args: Parameters<(typeof Commands)['TransferObjects']>) {
-    return this.add(Commands.TransferObjects(...args));
+  transferObjects(
+    ...args: Parameters<(typeof Transactions)['TransferObjects']>
+  ) {
+    return this.add(Transactions.TransferObjects(...args));
   }
-  makeMoveVec(...args: Parameters<(typeof Commands)['MakeMoveVec']>) {
-    return this.add(Commands.MakeMoveVec(...args));
+  makeMoveVec(...args: Parameters<(typeof Transactions)['MakeMoveVec']>) {
+    return this.add(Transactions.MakeMoveVec(...args));
   }
 
   /**
@@ -335,7 +336,7 @@ export class Transaction {
    * and performing a dry run).
    */
   serialize() {
-    return JSON.stringify(this.#transactionData.snapshot());
+    return JSON.stringify(this.#blockData.snapshot());
   }
 
   /** Build the transaction to BCS bytes. */
@@ -344,7 +345,7 @@ export class Transaction {
     onlyTransactionKind,
   }: BuildOptions = {}): Promise<Uint8Array> {
     await this.#prepare({ provider, onlyTransactionKind });
-    return this.#transactionData.build({ onlyTransactionKind });
+    return this.#blockData.build({ onlyTransactionKind });
   }
 
   /** Derive transaction digest */
@@ -354,13 +355,12 @@ export class Transaction {
     provider?: JsonRpcProvider;
   } = {}): Promise<string> {
     await this.#prepare({ provider });
-    return this.#transactionData.getDigest();
+    return this.#blockData.getDigest();
   }
 
   // The current default is just picking _all_ coins we can which may not be ideal.
   async #selectGasPayment(provider?: JsonRpcProvider) {
-    const gasOwner =
-      this.#transactionData.gasConfig.owner ?? this.#transactionData.sender;
+    const gasOwner = this.#blockData.gasConfig.owner ?? this.#blockData.sender;
 
     const coins = await expectProvider(provider).getCoins({
       owner: gasOwner!,
@@ -370,7 +370,7 @@ export class Transaction {
     const paymentCoins = coins.data
       // Filter out coins that are also used as input:
       .filter((coin) => {
-        const matchingInput = this.#transactionData.inputs.find((input) => {
+        const matchingInput = this.#blockData.inputs.find((input) => {
           if (
             is(input.value, BuilderCallArg) &&
             'Object' in input.value &&
@@ -403,53 +403,53 @@ export class Transaction {
    * so that it can be built into bytes.
    */
   async #prepare({ provider, onlyTransactionKind }: BuildOptions) {
-    if (!onlyTransactionKind && !this.#transactionData.sender) {
+    if (!onlyTransactionKind && !this.#blockData.sender) {
       throw new Error('Missing transaction sender');
     }
 
-    const { inputs, commands } = this.#transactionData;
+    const { inputs, transactions } = this.#blockData;
 
-    const moveModulesToResolve: MoveCallCommand[] = [];
+    const moveModulesToResolve: MoveCallTransaction[] = [];
 
     // Keep track of the object references that will need to be resolved at the end of the transaction.
     // We keep the input by-reference to avoid needing to re-resolve it:
     const objectsToResolve: {
       id: string;
-      input: TransactionInput;
+      input: TransactionBlockInput;
       normalizedType?: SuiMoveNormalizedType;
     }[] = [];
 
-    commands.forEach((command) => {
+    transactions.forEach((transaction) => {
       // Special case move call:
-      if (command.kind === 'MoveCall') {
+      if (transaction.kind === 'MoveCall') {
         // Determine if any of the arguments require encoding.
         // - If they don't, then this is good to go.
         // - If they do, then we need to fetch the normalized move module.
-        const needsResolution = command.arguments.some(
+        const needsResolution = transaction.arguments.some(
           (arg) =>
             arg.kind === 'Input' &&
             !is(inputs[arg.index].value, BuilderCallArg),
         );
 
         if (needsResolution) {
-          moveModulesToResolve.push(command);
+          moveModulesToResolve.push(transaction);
         }
 
         return;
       }
 
-      // Get the matching struct definition for the command, and use it to attempt to automatically
+      // Get the matching struct definition for the transaction, and use it to attempt to automatically
       // encode the matching inputs.
-      const commandType = getTransactionCommandType(command);
-      if (!commandType.schema) return;
+      const transactionType = getTransactionType(transaction);
+      if (!transactionType.schema) return;
 
-      Object.entries(command).forEach(([key, value]) => {
+      Object.entries(transaction).forEach(([key, value]) => {
         if (key === 'kind') return;
-        const keySchema = (commandType.schema as any)[key];
+        const keySchema = (transactionType.schema as any)[key];
         const isArray = keySchema.type === 'array';
         const wellKnownEncoding: WellKnownEncoding = isArray
-          ? keySchema.schema[COMMAND_TYPE]
-          : keySchema[COMMAND_TYPE];
+          ? keySchema.schema[TRANSACTION_TYPE]
+          : keySchema[TRANSACTION_TYPE];
 
         // This argument has unknown encoding, assume it must be fully-encoded:
         if (!wellKnownEncoding) return;
@@ -477,7 +477,7 @@ export class Transaction {
         };
 
         if (isArray) {
-          value.forEach((arrayItem: CommandArgument) => {
+          value.forEach((arrayItem: TransactionArgument) => {
             if (arrayItem.kind !== 'Input') return;
             encodeInput(arrayItem.index);
           });
@@ -595,7 +595,7 @@ export class Transaction {
         const initialSharedVersion = getSharedObjectInitialVersion(object);
 
         if (initialSharedVersion) {
-          // There could be multiple commands that reference the same shared object.
+          // There could be multiple transactions that reference the same shared object.
           // If one of them is a mutable reference, then we should mark the input
           // as mutable.
           const mutable =
@@ -615,19 +615,19 @@ export class Transaction {
     }
 
     if (!onlyTransactionKind) {
-      if (!this.#transactionData.gasConfig.price) {
+      if (!this.#blockData.gasConfig.price) {
         this.setGasPrice(await expectProvider(provider).getReferenceGasPrice());
       }
 
-      if (!this.#transactionData.gasConfig.payment) {
-        this.#transactionData.gasConfig.payment = await this.#selectGasPayment(
+      if (!this.#blockData.gasConfig.payment) {
+        this.#blockData.gasConfig.payment = await this.#selectGasPayment(
           provider,
         );
       }
 
-      if (!this.transactionData.gasConfig.budget) {
+      if (!this.blockData.gasConfig.budget) {
         const dryRunResult = await expectProvider(provider).dryRunTransaction({
-          transaction: this.#transactionData.build({
+          transactionBlock: this.#blockData.build({
             overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
           }),
         });
@@ -641,8 +641,8 @@ export class Transaction {
 
         const coinOverhead =
           GAS_OVERHEAD_PER_COIN *
-          BigInt(this.transactionData.gasConfig.payment?.length || 0n) *
-          BigInt(this.transactionData.gasConfig.price || 1n);
+          BigInt(this.blockData.gasConfig.payment?.length || 0n) *
+          BigInt(this.blockData.gasConfig.price || 1n);
 
         this.setGasBudget(
           BigInt(dryRunResult.effects.gasUsed.computationCost) +

@@ -58,7 +58,7 @@ import { any, is, array, string } from 'superstruct';
 import { toB64 } from '@mysten/bcs';
 import { SerializedSignature } from '../cryptography/signature';
 import { Connection, devnetConnection } from '../rpc/connection';
-import { Transaction } from '../builder';
+import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
 
@@ -512,7 +512,7 @@ export class JsonRpcProvider {
   }
 
   async executeTransaction(input: {
-    transaction: Uint8Array | string;
+    transactionBlock: Uint8Array | string;
     signature: SerializedSignature | SerializedSignature[];
     options?: SuiTransactionResponseOptions;
     requestType?: ExecuteTransactionRequestType;
@@ -520,9 +520,9 @@ export class JsonRpcProvider {
     return await this.client.requestWithType(
       'sui_executeTransaction',
       [
-        typeof input.transaction === 'string'
-          ? input.transaction
-          : toB64(input.transaction),
+        typeof input.transactionBlock === 'string'
+          ? input.transactionBlock
+          : toB64(input.transactionBlock),
         Array.isArray(input.signature) ? input.signature : [input.signature],
         input.options,
         input.requestType,
@@ -656,7 +656,7 @@ export class JsonRpcProvider {
    * provided, including both the transaction effects and any return values.
    */
   async devInspectTransaction(input: {
-    transaction: Transaction | string | Uint8Array;
+    transactionBlock: TransactionBlock | string | Uint8Array;
     sender: SuiAddress;
     /** Default to use the network reference gas price stored in the Sui System State object */
     gasPrice?: bigint | number | null;
@@ -664,20 +664,20 @@ export class JsonRpcProvider {
     epoch?: number | null;
   }): Promise<DevInspectResults> {
     let devInspectTxBytes;
-    if (Transaction.is(input.transaction)) {
-      input.transaction.setSenderIfNotSet(input.sender);
+    if (TransactionBlock.is(input.transactionBlock)) {
+      input.transactionBlock.setSenderIfNotSet(input.sender);
       devInspectTxBytes = toB64(
-        await input.transaction.build({
+        await input.transactionBlock.build({
           provider: this,
           onlyTransactionKind: true,
         }),
       );
-    } else if (typeof input.transaction === 'string') {
-      devInspectTxBytes = input.transaction;
-    } else if (input.transaction instanceof Uint8Array) {
-      devInspectTxBytes = toB64(input.transaction);
+    } else if (typeof input.transactionBlock === 'string') {
+      devInspectTxBytes = input.transactionBlock;
+    } else if (input.transactionBlock instanceof Uint8Array) {
+      devInspectTxBytes = toB64(input.transactionBlock);
     } else {
-      throw new Error('Unknown transaction format.');
+      throw new Error('Unknown transaction block format.');
     }
 
     return await this.client.requestWithType(
@@ -692,14 +692,14 @@ export class JsonRpcProvider {
    * Dry run a transaction and return the result.
    */
   async dryRunTransaction(input: {
-    transaction: Uint8Array | string;
+    transactionBlock: Uint8Array | string;
   }): Promise<DryRunTransactionResponse> {
     return await this.client.requestWithType(
       'sui_dryRunTransaction',
       [
-        typeof input.transaction === 'string'
-          ? input.transaction
-          : toB64(input.transaction),
+        typeof input.transactionBlock === 'string'
+          ? input.transactionBlock
+          : toB64(input.transactionBlock),
       ],
       DryRunTransactionResponse,
       this.options.skipDataValidation,

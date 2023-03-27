@@ -3,10 +3,10 @@
 
 import "./App.css";
 import { ConnectButton, useWalletKit } from "@mysten/wallet-kit";
-import { Transaction } from "@mysten/sui.js";
+import { TransactionBlock } from "@mysten/sui.js";
 import { useEffect } from "react";
 
-const transaction = new Transaction();
+const transaction = new TransactionBlock();
 transaction.moveCall({
   target: `0x2::devnet_nft::mint`,
   arguments: [

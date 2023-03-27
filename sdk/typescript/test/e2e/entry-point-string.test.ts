@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { getExecutionStatusType, ObjectId, Transaction } from '../../src';
+import { getExecutionStatusType, ObjectId, TransactionBlock } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with strings', () => {
@@ -14,13 +14,13 @@ describe('Test Move call with strings', () => {
     len: number,
     funcName: string,
   ) {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::entry_point_types::${funcName}`,
       arguments: [tx.pure(str), tx.pure(len)],
     });
     const result = await toolbox.signer.signAndExecuteTransaction({
-      transaction: tx,
+      transactionBlock: tx,
       options: {
         showEffects: true,
       },

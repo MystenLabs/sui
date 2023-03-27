@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiAddress, toB64, Transaction } from '@mysten/sui.js';
+import { type SuiAddress, toB64, TransactionBlock } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -225,7 +225,7 @@ export class SuiWallet implements Wallet {
     };
 
     #signTransaction: SuiSignTransactionMethod = async (input) => {
-        if (!Transaction.is(input.transaction)) {
+        if (!TransactionBlock.is(input.transactionBlock)) {
             throw new Error(
                 'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
             );
@@ -242,7 +242,7 @@ export class SuiWallet implements Wallet {
                         input.account?.address ||
                         this.#accounts[0]?.address ||
                         '',
-                    transaction: input.transaction.serialize(),
+                    transaction: input.transactionBlock.serialize(),
                 },
             }),
             (response) => response.result
@@ -252,7 +252,7 @@ export class SuiWallet implements Wallet {
     #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
         input
     ) => {
-        if (!Transaction.is(input.transaction)) {
+        if (!TransactionBlock.is(input.transactionBlock)) {
             throw new Error(
                 'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
             );
@@ -263,7 +263,7 @@ export class SuiWallet implements Wallet {
                 type: 'execute-transaction-request',
                 transaction: {
                     type: 'transaction',
-                    data: input.transaction.serialize(),
+                    data: input.transactionBlock.serialize(),
                     options: input.options,
                     // account might be undefined if previous version of adapters is used
                     // in that case use the first account address
