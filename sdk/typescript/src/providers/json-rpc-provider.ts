@@ -170,7 +170,7 @@ export class JsonRpcProvider {
         Date.now() + (this.options.versionCacheTimeoutInSeconds ?? 0) * 1000;
       return this.rpcApiVersion;
     } catch (err) {
-      console.warn('Error fetching version number of the RPC API', err);
+      console.warn('Error fetching version number of the RPC API ', err);
     }
     return undefined;
   }
