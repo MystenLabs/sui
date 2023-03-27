@@ -68,7 +68,6 @@
 <b>use</b> <a href="">0x2::coin</a>;
 <b>use</b> <a href="">0x2::event</a>;
 <b>use</b> <a href="">0x2::object</a>;
-<b>use</b> <a href="">0x2::pay</a>;
 <b>use</b> <a href="">0x2::sui</a>;
 <b>use</b> <a href="">0x2::table</a>;
 <b>use</b> <a href="">0x2::transfer</a>;
@@ -2252,7 +2251,7 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
 
 <pre><code><b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(coins: <a href="">vector</a>&lt;Coin&lt;SUI&gt;&gt;, amount: <a href="_Option">option::Option</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext): Balance&lt;SUI&gt; {
     <b>let</b> merged_coin = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
-    <a href="_join_vec">pay::join_vec</a>(&<b>mut</b> merged_coin, coins);
+    <a href="_join_n">coin::join_n</a>(&<b>mut</b> merged_coin, coins);
 
     <b>let</b> total_balance = <a href="_into_balance">coin::into_balance</a>(merged_coin);
     // <b>return</b> the full amount <b>if</b> amount is not specified

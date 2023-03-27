@@ -11,10 +11,8 @@ module sui::coin {
     use sui::balance::{Self, Balance, Supply};
     use sui::tx_context::TxContext;
     use sui::object::{Self, UID};
-    use sui::transfer;
     use sui::url::{Self, Url};
     use std::vector;
-    use sui::event;
 
     /// A type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -53,19 +51,6 @@ module sui::coin {
     struct TreasuryCap<phantom T> has key, store {
         id: UID,
         total_supply: Supply<T>
-    }
-
-    // === Events ===
-
-    /// Emitted when new currency is created through the `create_currency` call.
-    /// Contains currency metadata for off-chain discovery. Type parameter `T`
-    /// matches the one in `Coin<T>`
-    struct CurrencyCreated<phantom T> has copy, drop {
-        /// Number of decimal places the coin uses.
-        /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
-        /// E.g., a coin with `value` 7002 and decimals 3 should be displayed as 7.002
-        /// This is metadata for display usage only.
-        decimals: u8
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -175,6 +160,14 @@ module sui::coin {
         aborts_if before_val + c.balance.value > MAX_U64;
     }
 
+    /// Join a `vec` of coins into `self`.
+    public entry fun join_n<T>(self: &mut Coin<T>, vec: vector<Coin<T>>) {
+        while (vector::length(&vec) > 0) {
+            join(self, vector::pop_back(&mut vec));
+        };
+        vector::destroy_empty(vec)
+    }
+
     /// Split coin `self` to two coins, one with balance `split_amount`,
     /// and the remaining balance is left is `self`.
     public fun split<T>(
@@ -258,11 +251,6 @@ module sui::coin {
         // Make sure there's only one instance of the type T
         assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
-        // Emit Currency metadata as an event.
-        event::emit(CurrencyCreated<T> {
-            decimals
-        });
-
         (
             TreasuryCap {
                 id: object::new(ctx),
@@ -340,15 +328,6 @@ module sui::coin {
 
     spec burn {
         include Burn<T>;
-    }
-
-    // === Entrypoints ===
-
-    /// Mint `amount` of `Coin` and send it to `recipient`. Invokes `mint()`.
-    public entry fun mint_and_transfer<T>(
-        c: &mut TreasuryCap<T>, amount: u64, recipient: address, ctx: &mut TxContext
-    ) {
-        transfer::public_transfer(mint(c, amount, ctx), recipient)
     }
 
     // === Update coin metadata ===

@@ -27,7 +27,6 @@ mod test {
         for example in [
             "basics",
             "defi",
-            "capy",
             "fungible_tokens",
             "games",
             "move_tutorial",

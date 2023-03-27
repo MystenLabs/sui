@@ -4,7 +4,7 @@
 #[test_only]
 module sui::coin_balance_tests {
     use sui::test_scenario::{Self, ctx};
-    use sui::pay;
+
     use sui::coin;
     use sui::balance;
     use sui::sui::SUI;
@@ -33,7 +33,7 @@ module sui::coin_balance_tests {
         assert!(balance::value(&balance) == 100, 0);
 
         let coin = coin::from_balance(balance, ctx(test));
-        pay::keep(coin, ctx(test));
+        sui::transfer::public_transfer(coin, sui::tx_context::sender(ctx(test)));
         test_scenario::end(scenario);
     }
 }

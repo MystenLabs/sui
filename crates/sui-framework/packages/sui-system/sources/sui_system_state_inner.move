@@ -18,7 +18,6 @@ module sui_system::sui_system_state_inner {
     use sui::vec_set::{Self, VecSet};
     use std::option;
     use std::vector;
-    use sui::pay;
     use sui::event;
     use sui::table::Table;
     use sui::bag::Bag;
@@ -904,7 +903,7 @@ module sui_system::sui_system_state_inner {
     /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
     fun extract_coin_balance(coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
         let merged_coin = vector::pop_back(&mut coins);
-        pay::join_vec(&mut merged_coin, coins);
+        coin::join_n(&mut merged_coin, coins);
 
         let total_balance = coin::into_balance(merged_coin);
         // return the full amount if amount is not specified

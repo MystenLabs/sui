@@ -5,7 +5,6 @@
 module fungible_tokens::basket_tests {
     use fungible_tokens::basket::{Self, Reserve};
     use fungible_tokens::managed::MANAGED;
-    use sui::pay;
     use sui::coin;
     use sui::sui::SUI;
     use sui::test_scenario;
@@ -38,8 +37,8 @@ module fungible_tokens::basket_tests {
             assert!(coin::value(&sui) == num_coins, 3);
             assert!(coin::value(&managed) == num_coins, 4);
 
-            pay::keep(sui, ctx);
-            pay::keep(managed, ctx);
+            sui::transfer::public_transfer(sui, sui::tx_context::sender(ctx));
+            sui::transfer::public_transfer(managed, sui::tx_context::sender(ctx));
             test_scenario::return_shared(reserve_val);
         };
         test_scenario::end(scenario_val);

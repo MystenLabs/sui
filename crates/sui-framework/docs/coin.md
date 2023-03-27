@@ -11,7 +11,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Resource `Coin`](#0x2_coin_Coin)
 -  [Resource `CoinMetadata`](#0x2_coin_CoinMetadata)
 -  [Resource `TreasuryCap`](#0x2_coin_TreasuryCap)
--  [Struct `CurrencyCreated`](#0x2_coin_CurrencyCreated)
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
 -  [Function `treasury_into_supply`](#0x2_coin_treasury_into_supply)
@@ -25,6 +24,7 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `take`](#0x2_coin_take)
 -  [Function `put`](#0x2_coin_put)
 -  [Function `join`](#0x2_coin_join)
+-  [Function `join_n`](#0x2_coin_join_n)
 -  [Function `split`](#0x2_coin_split)
 -  [Function `divide_into_n`](#0x2_coin_divide_into_n)
 -  [Function `zero`](#0x2_coin_zero)
@@ -33,7 +33,6 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
--  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
 -  [Function `update_description`](#0x2_coin_update_description)
@@ -49,9 +48,7 @@ tokens and coins. <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> can be d
 <b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x1::string</a>;
 <b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="event.md#0x2_event">0x2::event</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
-<b>use</b> <a href="transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="types.md#0x2_types">0x2::types</a>;
 <b>use</b> <a href="url.md#0x2_url">0x2::url</a>;
@@ -184,39 +181,6 @@ coins of type <code>T</code>. Transferable
 </dt>
 <dd>
 
-</dd>
-</dl>
-
-
-</details>
-
-<a name="0x2_coin_CurrencyCreated"></a>
-
-## Struct `CurrencyCreated`
-
-Emitted when new currency is created through the <code>create_currency</code> call.
-Contains currency metadata for off-chain discovery. Type parameter <code>T</code>
-matches the one in <code><a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</code>
-
-
-<pre><code><b>struct</b> <a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; <b>has</b> <b>copy</b>, drop
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>decimals: u8</code>
-</dt>
-<dd>
- Number of decimal places the coin uses.
- A coin with <code>value </code> N and <code>decimals</code> D should be shown as N / 10^D
- E.g., a coin with <code>value</code> 7002 and decimals 3 should be displayed as 7.002
- This is metadata for display usage only.
 </dd>
 </dl>
 
@@ -620,6 +584,34 @@ Aborts if <code>c.value + self.value &gt; U64_MAX</code>
 
 </details>
 
+<a name="0x2_coin_join_n"></a>
+
+## Function `join_n`
+
+Join a <code>vec</code> of coins into <code>self</code>.
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_join_n">join_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, vec: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_join_n">join_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, vec: <a href="">vector</a>&lt;<a href="coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;) {
+    <b>while</b> (<a href="_length">vector::length</a>(&vec) &gt; 0) {
+        <a href="coin.md#0x2_coin_join">join</a>(self, <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> vec));
+    };
+    <a href="_destroy_empty">vector::destroy_empty</a>(vec)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_split"></a>
 
 ## Function `split`
@@ -810,11 +802,6 @@ type, ensuring that there's only one <code><a href="coin.md#0x2_coin_TreasuryCap
     // Make sure there's only one instance of the type T
     <b>assert</b>!(sui::types::is_one_time_witness(&witness), <a href="coin.md#0x2_coin_EBadWitness">EBadWitness</a>);
 
-    // Emit Currency metadata <b>as</b> an <a href="event.md#0x2_event">event</a>.
-    <a href="event.md#0x2_event_emit">event::emit</a>(<a href="coin.md#0x2_coin_CurrencyCreated">CurrencyCreated</a>&lt;T&gt; {
-        decimals
-    });
-
     (
         <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> {
             id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
@@ -955,33 +942,6 @@ accordingly.
 
 
 <pre><code><b>include</b> <a href="coin.md#0x2_coin_Burn">Burn</a>&lt;T&gt;;
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_coin_mint_and_transfer"></a>
-
-## Function `mint_and_transfer`
-
-Mint <code>amount</code> of <code><a href="coin.md#0x2_coin_Coin">Coin</a></code> and send it to <code>recipient</code>. Invokes <code><a href="coin.md#0x2_coin_mint">mint</a>()</code>.
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> entry <b>fun</b> <a href="coin.md#0x2_coin_mint_and_transfer">mint_and_transfer</a>&lt;T&gt;(
-    c: &<b>mut</b> <a href="coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
-) {
-    <a href="transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="coin.md#0x2_coin_mint">mint</a>(c, amount, ctx), recipient)
-}
 </code></pre>
 
 

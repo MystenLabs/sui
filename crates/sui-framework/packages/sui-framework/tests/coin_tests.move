@@ -5,9 +5,8 @@
 module sui::coin_tests {
     use std::option;
     use sui::coin::{Self, Coin};
-    use sui::pay;
     use sui::url;
-    use sui::test_scenario;
+    use sui::test_scenario::{Self, ctx};
     use sui::transfer;
     use sui::tx_context;
     use std::string;
@@ -21,7 +20,7 @@ module sui::coin_tests {
     fun coin_tests_metadata() {
         let scenario = test_scenario::begin(TEST_ADDR);
         let test = &mut scenario;
-        let ctx = test_scenario::ctx(test);
+        let ctx = ctx(test);
         let witness = COIN_TESTS{};
         let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx);
 
@@ -63,23 +62,38 @@ module sui::coin_tests {
         let scenario = test_scenario::begin(TEST_ADDR);
         let test = &mut scenario;
         let witness = COIN_TESTS{};
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), test_scenario::ctx(test));
+        let (treasury, metadata) = coin::create_currency(witness, 6, b"COIN_TESTS", b"coin_name", b"description", option::some(url::new_unsafe_from_bytes(b"icon_url")), ctx(test));
 
         let balance = coin::mint_balance<COIN_TESTS>(&mut treasury, 1000);
-        let coin = coin::from_balance(balance, test_scenario::ctx(test));
+        let coin = coin::from_balance(balance, ctx(test));
         let value = coin::value(&coin);
         assert!(value == 1000, 0);
-        pay::keep(coin, test_scenario::ctx(test));
+        sui::transfer::public_transfer(coin, tx_context::sender(ctx(test)));
 
-        coin::mint_and_transfer<COIN_TESTS>(&mut treasury, 42, TEST_ADDR, test_scenario::ctx(test));
+        let to_send = coin::mint<COIN_TESTS>(&mut treasury, 42, ctx(test));
+        transfer::public_transfer(to_send, TEST_ADDR);
         test_scenario::next_epoch(test, TEST_ADDR); // needed or else we won't have a value for `most_recent_id_for_address` coming up next.
         let coin = test_scenario::take_from_address<Coin<COIN_TESTS>>(test, TEST_ADDR);
         let value = coin::value(&coin);
         assert!(value == 42, 0);
-        pay::keep(coin, test_scenario::ctx(test));
+        sui::transfer::public_transfer(coin, tx_context::sender(ctx(test)));
 
         transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, tx_context::sender(test_scenario::ctx(test)));
+        transfer::public_transfer(treasury, tx_context::sender(ctx(test)));
         test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun coin_join_n_test() {
+        let ctx = &mut tx_context::dummy();
+        let amt = 10_000;
+
+        let source = coin::mint_for_testing<COIN_TESTS>(amt, ctx);
+        let multiple_coins = coin::divide_into_n(&mut source, 10, ctx);
+        coin::join_n(&mut source, multiple_coins);
+
+        assert!(coin::value(&source) == 10_000, 0);
+
+        coin::burn_for_testing(source);
     }
 }
