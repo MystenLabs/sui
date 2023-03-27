@@ -83,6 +83,14 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<String>, IndexerError>;
 
+    fn get_transaction_digest_page_by_checkpoint(
+        &self,
+        checkpoint_sequence_number: i64,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError>;
+
     fn get_transaction_digest_page_by_transaction_kind(
         &self,
         kind: String,

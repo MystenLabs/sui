@@ -703,6 +703,40 @@ impl IndexerStore for PgIndexerStore {
         }).context(&format!("Failed reading all transaction digests with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
+    fn get_transaction_digest_page_by_checkpoint(
+        &self,
+        checkpoint_sequence_number: i64,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<String>, IndexerError> {
+        read_only!(&self.cp, |conn| {
+            let mut boxed_query = transactions_dsl::transactions
+                .filter(transactions_dsl::checkpoint_sequence_number.eq(checkpoint_sequence_number))
+                .into_boxed();
+            if let Some(start_sequence) = start_sequence {
+                if is_descending {
+                    boxed_query = boxed_query.filter(transactions_dsl::id.lt(start_sequence));
+                } else {
+                    boxed_query = boxed_query.filter(transactions_dsl::id.gt(start_sequence));
+                }
+            }
+            if is_descending {
+                boxed_query
+                    .order(transactions_dsl::id.desc())
+                    .limit((limit) as i64)
+                    .select(transactions_dsl::transaction_digest)
+                    .load::<String>(conn)
+            } else {
+                boxed_query
+                    .order(transactions_dsl::id.asc())
+                    .limit((limit) as i64)
+                    .select(transactions_dsl::transaction_digest)
+                    .load::<String>(conn)
+            }
+        }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
+    }
+
     fn get_transaction_digest_page_by_transaction_kind(
         &self,
         kind: String,
