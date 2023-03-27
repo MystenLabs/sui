@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use std::time::Instant;
 use sui_json_rpc_types::{
-    Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionsPage,
+    Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::TransactionDigest;
@@ -38,7 +38,7 @@ impl<'a> ProcessPayload<'a, &'a QueryTransactions> for RpcCommandProcessor {
             options: None, // not supported on indexer
         };
 
-        let results: Vec<TransactionsPage> = Vec::new();
+        let results: Vec<TransactionBlocksPage> = Vec::new();
 
         // Paginate results, if any
         while results.is_empty() || results.iter().any(|r| r.has_next_page) {

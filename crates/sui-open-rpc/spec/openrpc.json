@@ -1829,7 +1829,7 @@
         }
       ],
       "result": {
-        "name": "TransactionsPage",
+        "name": "TransactionBlocksPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"

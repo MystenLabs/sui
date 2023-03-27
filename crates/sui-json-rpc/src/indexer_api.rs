@@ -18,7 +18,7 @@ use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseQuery, TransactionsPage,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -131,7 +131,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage> {
+    ) -> RpcResult<TransactionBlocksPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
         let opts = query.options.unwrap_or_default();

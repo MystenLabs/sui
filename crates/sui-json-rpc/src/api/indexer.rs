@@ -6,7 +6,8 @@ use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiEvent,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionsPage,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery,
+    TransactionBlocksPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -43,7 +44,7 @@ pub trait IndexerApi {
         limit: Option<usize>,
         /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage>;
+    ) -> RpcResult<TransactionBlocksPage>;
 
     /// Return list of events for a specified query criteria.
     #[method(name = "queryEvents")]

@@ -17,7 +17,7 @@ use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
     SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseQuery, TransactionsPage,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -68,7 +68,7 @@ impl<S: IndexerStore> IndexerApi<S> {
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
-    ) -> Result<TransactionsPage, IndexerError> {
+    ) -> Result<TransactionBlocksPage, IndexerError> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT)?;
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
@@ -289,7 +289,7 @@ where
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage> {
+    ) -> RpcResult<TransactionBlocksPage> {
         if !self
             .migrated_methods
             .contains(&"query_transactions".to_string())

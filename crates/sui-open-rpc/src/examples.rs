@@ -25,7 +25,8 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
     SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery, TransactionBytes, TransactionsPage, TransferObjectParams,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionBytes,
+    TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::random_object_ref;
@@ -394,7 +395,7 @@ impl RpcExampleProvider {
             .map(SuiTransactionBlockResponse::new)
             .collect();
 
-        let result = TransactionsPage {
+        let result = TransactionBlocksPage {
             data,
             next_cursor,
             has_next_page,

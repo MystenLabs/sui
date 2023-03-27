@@ -94,7 +94,7 @@ impl SuiTransactionBlockResponseQuery {
     }
 }
 
-pub type TransactionsPage = Page<SuiTransactionBlockResponse, TransactionDigest>;
+pub type TransactionBlocksPage = Page<SuiTransactionBlockResponse, TransactionDigest>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
 #[serde(
