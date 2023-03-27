@@ -22,3 +22,12 @@ export const DisclosureBoxClosed: StoryObj<DisclosureBoxProps> = {
         preview: 'Preview content',
     },
 };
+
+export const DisclosureBoxOutline: StoryObj<DisclosureBoxProps> = {
+    ...DisclosureBoxDefault,
+    args: {
+        title: 'Outline disclosure box',
+        preview: 'Preview content',
+        variant: 'outline',
+    },
+};

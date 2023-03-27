@@ -20,7 +20,6 @@ const disclosureBoxStyles = cva('', {
     },
 });
 
-// adding a sub title to the disclosure box for disappearing preview
 export interface DisclosureBoxProps
     extends VariantProps<typeof disclosureBoxStyles> {
     defaultOpen?: boolean;
@@ -45,9 +44,9 @@ export function DisclosureBox({
                             as="div"
                             className="flex cursor-pointer flex-nowrap items-center px-5 py-3.75"
                         >
-                            <div className="flex flex-1 text-body font-semibold text-gray-90">
+                            <div className="flex flex-1 gap-1 text-body font-semibold text-gray-90">
                                 {title}
-                                {preview && !open ? preview : null}
+                                {preview && !open ? <div>{preview}</div> : null}
                             </div>
 
                             <ChevronRight12 className="text-caption text-steel ui-open:rotate-90" />
