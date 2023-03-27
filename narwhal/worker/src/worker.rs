@@ -9,15 +9,15 @@ use crate::{
     quorum_waiter::QuorumWaiter,
     TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
-use anemo::{codegen::InboundRequestLayer, types::Address};
+use anemo::types::Address;
 use anemo::{types::PeerInfo, Network, PeerId};
+use anemo_tower::set_header::SetResponseHeaderLayer;
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
     callback::CallbackLayer,
     set_header::SetRequestHeaderLayer,
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
-use anemo_tower::{rate_limit, set_header::SetResponseHeaderLayer};
 use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
 use mysten_metrics::spawn_logged_monitored_task;
@@ -117,29 +117,12 @@ impl Worker {
 
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
-        let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+        let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
             tx_others_batch,
             store: worker.store.clone(),
             validator: validator.clone(),
         });
-        // Apply rate limits from configuration as needed.
-        if let Some(limit) = parameters.anemo.report_batch_rate_limit {
-            worker_service = worker_service.add_layer_for_report_batch(InboundRequestLayer::new(
-                rate_limit::RateLimitLayer::new(
-                    governor::Quota::per_second(limit),
-                    rate_limit::WaitMode::Block,
-                ),
-            ));
-        }
-        if let Some(limit) = parameters.anemo.request_batch_rate_limit {
-            worker_service = worker_service.add_layer_for_request_batch(InboundRequestLayer::new(
-                rate_limit::RateLimitLayer::new(
-                    governor::Quota::per_second(limit),
-                    rate_limit::WaitMode::Block,
-                ),
-            ));
-        }
 
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             authority_id: worker.authority.id(),
