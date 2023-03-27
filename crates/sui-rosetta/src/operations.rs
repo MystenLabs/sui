@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use sui_json_rpc_types::SuiProgrammableMoveCall;
-use sui_json_rpc_types::SuiProgrammableTransaction;
+use sui_json_rpc_types::SuiProgrammableTransactionBlock;
 use sui_json_rpc_types::{BalanceChange, SuiArgument};
 use sui_json_rpc_types::{SuiCallArg, SuiCommand};
 use sui_sdk::rpc_types::{
@@ -225,7 +225,7 @@ impl Operations {
     fn parse_programmable_transaction(
         sender: SuiAddress,
         status: Option<OperationStatus>,
-        pt: SuiProgrammableTransaction,
+        pt: SuiProgrammableTransactionBlock,
     ) -> Result<Vec<Operation>, Error> {
         #[derive(Debug)]
         enum KnownValue {
@@ -356,7 +356,7 @@ impl Operations {
             };
             Ok(id.cloned())
         }
-        let SuiProgrammableTransaction { inputs, commands } = &pt;
+        let SuiProgrammableTransactionBlock { inputs, commands } = &pt;
         let mut known_results: Vec<Vec<KnownValue>> = vec![];
         let mut aggregated_recipients: HashMap<SuiAddress, u64> = HashMap::new();
         let mut needs_generic = false;

@@ -264,7 +264,7 @@ pub enum SuiTransactionBlockKind {
     ConsensusCommitPrologue(SuiConsensusCommitPrologue),
     /// A series of commands where the results of one command can be used in future
     /// commands
-    ProgrammableTransaction(SuiProgrammableTransaction),
+    ProgrammableTransaction(SuiProgrammableTransactionBlock),
     // .. more transaction types go here
 }
 
@@ -321,7 +321,7 @@ impl SuiTransactionBlockKind {
                 })
             }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
-                SuiProgrammableTransaction::try_from(p, module_cache)?,
+                SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
         })
     }
@@ -1047,7 +1047,7 @@ pub enum SuiInputObjectKind {
 /// A series of commands where the results of one command can be used in future
 /// commands
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiProgrammableTransaction {
+pub struct SuiProgrammableTransactionBlock {
     /// Input objects or primitive values
     pub inputs: Vec<SuiCallArg>,
     /// The commands to be executed sequentially. A failure in any command will
@@ -1055,7 +1055,7 @@ pub struct SuiProgrammableTransaction {
     pub commands: Vec<SuiCommand>,
 }
 
-impl Display for SuiProgrammableTransaction {
+impl Display for SuiProgrammableTransactionBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Self { inputs, commands } = self;
         writeln!(f, "Inputs: {inputs:?}")?;
@@ -1067,14 +1067,14 @@ impl Display for SuiProgrammableTransaction {
     }
 }
 
-impl SuiProgrammableTransaction {
+impl SuiProgrammableTransactionBlock {
     fn try_from(
         value: ProgrammableTransaction,
         module_cache: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
         let ProgrammableTransaction { inputs, commands } = value;
         let input_types = Self::resolve_input_type(&inputs, &commands, module_cache);
-        Ok(SuiProgrammableTransaction {
+        Ok(SuiProgrammableTransactionBlock {
             inputs: inputs
                 .into_iter()
                 .zip(input_types)
