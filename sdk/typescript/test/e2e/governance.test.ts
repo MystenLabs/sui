@@ -69,7 +69,7 @@ async function addStake(signer: RawSigner) {
   );
 
   return await signer.signAndExecuteTransaction({
-    transaction: tx,
+    transactionBlock: tx,
     options: {
       showEffects: true,
     },

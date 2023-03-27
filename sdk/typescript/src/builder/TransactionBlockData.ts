@@ -19,7 +19,7 @@ import {
 import { hashTypedData } from '../cryptography/hash';
 import { normalizeSuiAddress, SuiObjectRef } from '../types';
 import { builder } from './bcs';
-import { TransactionCommand, TransactionInput } from './Commands';
+import { TransactionType, TransactionBlockInput } from './Transactions';
 import { BuilderCallArg, PureCallArg } from './Inputs';
 import { create } from './utils';
 
@@ -59,8 +59,8 @@ export const SerializedTransactionDataBuilder = object({
   sender: optional(SuiAddress),
   expiration: TransactionExpiration,
   gasConfig: GasConfig,
-  inputs: array(TransactionInput),
-  commands: array(TransactionCommand),
+  inputs: array(TransactionBlockInput),
+  transactions: array(TransactionType),
 });
 export type SerializedTransactionDataBuilder = Infer<
   typeof SerializedTransactionDataBuilder
@@ -74,7 +74,7 @@ function prepareSuiAddress(address: string) {
 // crates/sui-protocol-config/src/lib.rs
 const TRANSACTION_DATA_MAX_SIZE = 128 * 1024;
 
-export class TransactionDataBuilder {
+export class TransactionBlockDataBuilder {
   static fromKindBytes(bytes: Uint8Array) {
     const kind = builder.de('TransactionKind', bytes);
     const programmableTx = kind?.ProgrammableTransaction;
@@ -94,15 +94,15 @@ export class TransactionDataBuilder {
               index,
               type: is(value, PureCallArg) ? 'pure' : 'object',
             },
-            TransactionInput,
+            TransactionBlockInput,
           ),
         ),
-        commands: programmableTx.commands,
+        transactions: programmableTx.transactions,
       },
       SerializedTransactionDataBuilder,
     );
 
-    return TransactionDataBuilder.restore(serialized);
+    return TransactionBlockDataBuilder.restore(serialized);
   }
 
   static fromBytes(bytes: Uint8Array) {
@@ -127,20 +127,20 @@ export class TransactionDataBuilder {
               index,
               type: is(value, PureCallArg) ? 'pure' : 'object',
             },
-            TransactionInput,
+            TransactionBlockInput,
           ),
         ),
-        commands: programmableTx.commands,
+        transactions: programmableTx.transactions,
       },
       SerializedTransactionDataBuilder,
     );
 
-    return TransactionDataBuilder.restore(serialized);
+    return TransactionBlockDataBuilder.restore(serialized);
   }
 
   static restore(data: SerializedTransactionDataBuilder) {
     assert(data, SerializedTransactionDataBuilder);
-    const transactionData = new TransactionDataBuilder();
+    const transactionData = new TransactionBlockDataBuilder();
     Object.assign(transactionData, data);
     return transactionData;
   }
@@ -160,15 +160,15 @@ export class TransactionDataBuilder {
   sender?: string;
   expiration?: TransactionExpiration;
   gasConfig: GasConfig;
-  inputs: TransactionInput[];
-  commands: TransactionCommand[];
+  inputs: TransactionBlockInput[];
+  transactions: TransactionType[];
 
-  constructor(clone?: TransactionDataBuilder) {
+  constructor(clone?: TransactionBlockDataBuilder) {
     this.sender = clone?.sender;
     this.expiration = clone?.expiration;
     this.gasConfig = clone?.gasConfig ?? {};
     this.inputs = clone?.inputs ?? [];
-    this.commands = clone?.commands ?? [];
+    this.transactions = clone?.transactions ?? [];
   }
 
   build({
@@ -176,7 +176,7 @@ export class TransactionDataBuilder {
     onlyTransactionKind,
   }: {
     overrides?: Pick<
-      Partial<TransactionDataBuilder>,
+      Partial<TransactionBlockDataBuilder>,
       'sender' | 'gasConfig' | 'expiration'
     >;
     onlyTransactionKind?: boolean;
@@ -190,7 +190,7 @@ export class TransactionDataBuilder {
     const kind = {
       ProgrammableTransaction: {
         inputs,
-        commands: this.commands,
+        transactions: this.transactions,
       },
     };
 
@@ -232,7 +232,7 @@ export class TransactionDataBuilder {
       kind: {
         ProgrammableTransaction: {
           inputs,
-          commands: this.commands,
+          transactions: this.transactions,
         },
       },
     };
@@ -248,7 +248,7 @@ export class TransactionDataBuilder {
 
   getDigest() {
     const bytes = this.build({ onlyTransactionKind: false });
-    return TransactionDataBuilder.getDigestFromBytes(bytes);
+    return TransactionBlockDataBuilder.getDigestFromBytes(bytes);
   }
 
   snapshot(): SerializedTransactionDataBuilder {

@@ -132,18 +132,18 @@ import {
   Ed25519Keypair,
   JsonRpcProvider,
   RawSigner,
-  Transaction,
+  TransactionBlock,
 } from '@mysten/sui.js';
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const tx = new Transaction();
+const tx = new TransactionBlock();
 tx.transferObjects(
   [tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0')],
   tx.pure('0xd84058cb73bdeabe123b56632713dcd65e1a6c92'),
 );
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
+const result = await signer.signAndExecuteTransaction({ transactionBlock: tx });
 console.log({ result });
 ```
 
@@ -156,16 +156,16 @@ import {
   Ed25519Keypair,
   JsonRpcProvider,
   RawSigner,
-  Transaction,
+  TransactionBlock,
 } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const tx = new Transaction();
+const tx = new TransactionBlock();
 const [coin] = tx.splitCoins(tx.gas, tx.pure(1000));
 tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
+const result = await signer.signAndExecuteTransaction({ transactionBlock: tx });
 console.log({ result });
 ```
 
@@ -176,17 +176,17 @@ import {
   Ed25519Keypair,
   JsonRpcProvider,
   RawSigner,
-  Transaction,
+  TransactionBlock,
 } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const tx = new Transaction();
+const tx = new TransactionBlock();
 tx.mergeCoin(tx.object('0x5015b016ab570df14c87649eda918e09e5cc61e0'), [
   tx.object('0xcc460051569bfb888dedaf5182e76f473ee351af'),
 ]);
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
+const result = await signer.signAndExecuteTransaction({ transactionBlock: tx });
 console.log({ result });
 ```
 
@@ -197,19 +197,19 @@ import {
   Ed25519Keypair,
   JsonRpcProvider,
   RawSigner,
-  Transaction,
+  TransactionBlock,
 } from '@mysten/sui.js';
 // Generate a new Keypair
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
 const packageObjectId = '0x...';
-const tx = new Transaction();
+const tx = new TransactionBlock();
 tx.moveCall({
   target: `${packageObjectId}::nft::mint`,
   arguments: [tx.pure('Example NFT')],
 });
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
+const result = await signer.signAndExecuteTransaction({ transactionBlock: tx });
 console.log({ result });
 ```
 
@@ -222,7 +222,7 @@ import {
   Ed25519Keypair,
   JsonRpcProvider,
   RawSigner,
-  Transaction,
+  TransactionBlock,
   normalizeSuiObjectId,
 } from '@mysten/sui.js';
 const { execSync } = require('child_process');
@@ -236,14 +236,14 @@ const compiledModulesAndDependencies = JSON.parse(
     { encoding: 'utf-8' },
   ),
 );
-const tx = new Transaction();
+const tx = new TransactionBlock();
 tx.publish(
   compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
   compiledModulesAndDeps.dependencies.map((addr: string) =>
     normalizeSuiObjectId(addr),
   ),
 );
-const result = await signer.signAndExecuteTransaction({ transaction: tx });
+const result = await signer.signAndExecuteTransaction({ transactionBlock: tx });
 console.log({ result });
 ```
 

@@ -14,7 +14,7 @@ import {
   localnetConnection,
   Connection,
   Coin,
-  Transaction,
+  TransactionBlock,
   RawSigner,
   FaucetResponse,
   assert,
@@ -120,7 +120,7 @@ export async function publishPackage(
       { encoding: 'utf-8' },
     ),
   );
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   // TODO: Publish dry runs fail currently, so we need to set a gas budget:
   tx.setGasBudget(10000);
 
@@ -135,7 +135,7 @@ export async function publishPackage(
   tx.transferObjects([cap], tx.pure(await toolbox.signer.getAddress()));
 
   const publishTxn = await toolbox.signer.signAndExecuteTransaction({
-    transaction: tx,
+    transactionBlock: tx,
     options: {
       showEffects: true,
       showObjectChanges: true,
@@ -173,7 +173,7 @@ export async function paySui(
   amounts?: number[],
   coinId?: ObjectId,
 ) {
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
 
   recipients = recipients ?? getRandomAddresses(numRecipients);
   amounts = amounts ?? Array(numRecipients).fill(DEFAULT_SEND_AMOUNT);
@@ -198,7 +198,7 @@ export async function paySui(
   });
 
   const txn = await signer.signAndExecuteTransaction({
-    transaction: tx,
+    transactionBlock: tx,
     options: {
       showEffects: true,
       showObjectChanges: true,

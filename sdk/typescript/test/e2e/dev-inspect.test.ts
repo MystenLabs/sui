@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { RawSigner, SuiObjectData, Transaction } from '../../src';
+import { RawSigner, SuiObjectData, TransactionBlock } from '../../src';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test dev inspect', () => {
@@ -16,7 +16,7 @@ describe('Test dev inspect', () => {
   });
 
   it('Dev inspect split + transfer', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const coin = tx.splitCoins(tx.gas, [tx.pure(10)]);
     tx.transferObjects([coin], tx.pure(toolbox.address()));
     await validateDevInspectTransaction(toolbox.signer, tx, 'success');
@@ -25,7 +25,7 @@ describe('Test dev inspect', () => {
   it('Move Call that returns struct', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
 
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const coin_0 = coins[0].data as SuiObjectData;
     const obj = tx.moveCall({
       target: `${packageId}::serializer_tests::return_struct`,
@@ -40,7 +40,7 @@ describe('Test dev inspect', () => {
   });
 
   it('Move Call that aborts', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::serializer_tests::test_abort`,
       typeArguments: [],
@@ -53,9 +53,9 @@ describe('Test dev inspect', () => {
 
 async function validateDevInspectTransaction(
   signer: RawSigner,
-  transaction: Transaction,
+  transactionBlock: TransactionBlock,
   status: 'success' | 'failure',
 ) {
-  const result = await signer.devInspectTransaction({ transaction });
+  const result = await signer.devInspectTransaction({ transactionBlock });
   expect(result.effects.status.status).toEqual(status);
 }

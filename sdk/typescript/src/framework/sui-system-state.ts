@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Transaction } from '../builder';
+import { TransactionBlock } from '../builder';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import {
   getObjectReference,
@@ -39,9 +39,9 @@ export class SuiSystemStateUtil {
     coins: ObjectId[],
     amount: bigint,
     validatorAddress: SuiAddress,
-  ): Promise<Transaction> {
+  ): Promise<TransactionBlock> {
     // TODO: validate coin types and handle locked coins
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
 
     const coin = tx.splitCoins(tx.gas, [tx.pure(amount)]);
     tx.moveCall({
@@ -73,8 +73,8 @@ export class SuiSystemStateUtil {
   public static async newRequestWithdrawlStakeTxn(
     stake: ObjectId,
     stakedCoinId: ObjectId,
-  ): Promise<Transaction> {
-    const tx = new Transaction();
+  ): Promise<TransactionBlock> {
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${SUI_SYSTEM_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${WITHDRAW_STAKE_FUN_NAME}`,
       arguments: [
