@@ -23,9 +23,7 @@ use sui_json_rpc_types::{
     SuiTransactionResponseQuery, TransactionsPage,
 };
 use sui_types::balance::Supply;
-use sui_types::base_types::{
-    ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxSequenceNumber,
-};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
 use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
@@ -120,18 +118,6 @@ impl ReadApi {
 
     pub async fn get_total_transaction_number(&self) -> SuiRpcResult<u64> {
         Ok(self.api.http.get_total_transaction_number().await?.into())
-    }
-
-    pub async fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> SuiRpcResult<Vec<TransactionDigest>> {
-        Ok(self
-            .api
-            .http
-            .get_transactions_in_range_deprecated(start, end)
-            .await?)
     }
 
     pub async fn get_transaction_with_options(

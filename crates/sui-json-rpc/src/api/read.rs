@@ -10,22 +10,11 @@ use sui_json_rpc_types::{
     SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait ReadApi {
-    /// Return list of transaction digests within the queried range.
-    /// This method will be removed before April 2023, please use `queryTransactions` instead
-    #[method(name = "getTransactionsInRangeDeprecated", deprecated)]
-    async fn get_transactions_in_range_deprecated(
-        &self,
-        /// the matching transactions' sequence number will be greater than or equals to the starting sequence number
-        start: TxSequenceNumber,
-        /// the matching transactions' sequence number will be less than the ending sequence number
-        end: TxSequenceNumber,
-    ) -> RpcResult<Vec<TransactionDigest>>;
-
     /// Return the transaction response object.
     #[method(name = "getTransaction")]
     async fn get_transaction(

@@ -15,7 +15,7 @@ use sui_json_rpc_types::{
     SuiTransactionResponse, SuiTransactionResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{ObjectID, SequenceNumber, TxSequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::digests::TransactionDigest;
 
 use crate::errors::IndexerError;
@@ -154,16 +154,6 @@ where
             return self.fullnode.get_total_transaction_number().await;
         }
         Ok(self.get_total_transaction_number_internal()?.into())
-    }
-
-    async fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> RpcResult<Vec<TransactionDigest>> {
-        self.fullnode
-            .get_transactions_in_range_deprecated(start, end)
-            .await
     }
 
     async fn get_transaction(
