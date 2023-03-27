@@ -715,20 +715,20 @@ mod tests {
                 0,
                 (
                     HashSet::from_iter(vec![batch2.digest()]),
-                    HashSet::from_iter(test_pks(&[3, 4])),
+                    HashSet::from_iter(test_pks(&[4, 5])),
                 ),
             ),
             (
                 1,
                 (
                     HashSet::from_iter(vec![batch1.digest()]),
-                    HashSet::from_iter(test_pks(&[1, 2])),
+                    HashSet::from_iter(test_pks(&[1, 2, 3])),
                 ),
             ),
         ]);
         // one batch available locally on worker 1
         network.put(1, &[1, 2, 3], batch1.clone());
-        // othe batch available remotely on worker 0
+        // other batch available remotely on worker 0
         network.put(0, &[4, 5], batch2.clone());
         let fetcher = Fetcher {
             network,
