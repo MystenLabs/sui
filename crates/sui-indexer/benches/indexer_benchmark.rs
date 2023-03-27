@@ -19,6 +19,7 @@ use sui_indexer::store::{
     IndexerStore, PgIndexerStore, TemporaryCheckpointStore, TransactionObjectChanges,
 };
 use sui_indexer::utils::reset_database;
+use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GasCoin;
@@ -36,10 +37,17 @@ fn indexer_benchmark(c: &mut Criterion) {
     reset_database(&mut pg_connection_pool.get().unwrap(), true).unwrap();
     let store = PgIndexerStore::new(pg_connection_pool);
 
-    let mut checkpoints = (1..150).map(create_checkpoint).collect::<Vec<_>>();
+    let mut checkpoints = (0..150).map(create_checkpoint).collect::<Vec<_>>();
 
     c.bench_function("persist_checkpoint", |b| {
         b.iter(|| store.persist_checkpoint(&checkpoints.pop().unwrap()))
+    });
+
+    let mut checkpoints = (20..100)
+        .cycle()
+        .map(|i| CheckpointId::SequenceNumber(i.into()));
+    c.bench_function("get_checkpoint", |b| {
+        b.iter(|| store.get_checkpoint(checkpoints.next().unwrap()).unwrap())
     });
 }
 
