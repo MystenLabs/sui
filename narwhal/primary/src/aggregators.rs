@@ -15,7 +15,7 @@ use tracing::warn;
 use types::{
     ensure,
     error::{DagError, DagResult},
-    Certificate, CertificateAPI, Header, Vote,
+    Certificate, CertificateAPI, Header, Vote, VoteAPI,
 };
 
 /// Aggregates votes for a particular header into a certificate.
@@ -44,7 +44,7 @@ impl VotesAggregator {
         committee: &Committee,
         header: &Header,
     ) -> DagResult<Option<Certificate>> {
-        let author = vote.author;
+        let author = vote.author();
 
         // Ensure it is the first time this authority votes.
         ensure!(
@@ -52,7 +52,7 @@ impl VotesAggregator {
             DagError::AuthorityReuse(author.to_string())
         );
 
-        self.votes.push((author, vote.signature));
+        self.votes.push((author, vote.signature().clone()));
         self.weight += committee.stake_by_id(author);
 
         self.metrics

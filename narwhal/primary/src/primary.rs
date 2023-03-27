@@ -70,7 +70,7 @@ use types::{
     FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, HeaderAPI,
     PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
     PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
-    SendCertificateRequest, SendCertificateResponse, Vote, WorkerInfoResponse,
+    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerInfoResponse,
     WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
@@ -869,8 +869,8 @@ impl PrimaryReceiverHandler {
             .map_err(DagError::StoreError)?;
 
         if let Some(vote_info) = result {
-            if header.epoch() < vote_info.epoch
-                || (header.epoch() == vote_info.epoch && header.round() < vote_info.round)
+            if header.epoch() < vote_info.epoch()
+                || (header.epoch() == vote_info.epoch() && header.round() < vote_info.round())
             {
                 // Already voted on a newer Header for this publicKey.
                 return Err(DagError::TooOld(
@@ -879,11 +879,11 @@ impl PrimaryReceiverHandler {
                     narwhal_round,
                 ));
             }
-            if header.epoch() == vote_info.epoch && header.round() == vote_info.round {
+            if header.epoch() == vote_info.epoch() && header.round() == vote_info.round() {
                 // Make sure we don't vote twice for the same authority in the same epoch/round.
                 let temp_vote =
                     Vote::new(header, &self.authority_id, &self.signature_service).await;
-                if temp_vote.digest() != vote_info.vote_digest {
+                if temp_vote.digest() != vote_info.vote_digest() {
                     info!(
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
                         header.author(),
@@ -892,7 +892,7 @@ impl PrimaryReceiverHandler {
                     );
                     self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(
-                        vote_info.vote_digest,
+                        vote_info.vote_digest(),
                         header.round(),
                     ));
                 }

@@ -23,7 +23,7 @@ use types::{
     error::{DagError, DagResult},
     metered_channel::Receiver,
     Certificate, CertificateDigest, ConditionalBroadcastReceiver, Header, HeaderAPI,
-    PrimaryToPrimaryClient, RequestVoteRequest, Vote,
+    PrimaryToPrimaryClient, RequestVoteRequest, Vote, VoteAPI,
 };
 
 #[cfg(test)]
@@ -205,40 +205,40 @@ impl Certifier {
 
         // Verify the vote. Note that only the header digest is signed by the vote.
         ensure!(
-            vote.header_digest == header.digest()
-                && vote.origin == header.author()
-                && vote.author == authority,
-            DagError::UnexpectedVote(vote.header_digest)
+            vote.header_digest() == header.digest()
+                && vote.origin() == header.author()
+                && vote.author() == authority,
+            DagError::UnexpectedVote(vote.header_digest())
         );
         // Possible equivocations.
         ensure!(
-            header.epoch() == vote.epoch,
+            header.epoch() == vote.epoch(),
             DagError::InvalidEpoch {
                 expected: header.epoch(),
-                received: vote.epoch
+                received: vote.epoch()
             }
         );
         ensure!(
-            header.round() == vote.round,
+            header.round() == vote.round(),
             DagError::InvalidRound {
                 expected: header.round(),
-                received: vote.round
+                received: vote.round()
             }
         );
 
         // Ensure the header is from the correct epoch.
         ensure!(
-            vote.epoch == committee.epoch(),
+            vote.epoch() == committee.epoch(),
             DagError::InvalidEpoch {
                 expected: committee.epoch(),
-                received: vote.epoch
+                received: vote.epoch()
             }
         );
 
         // Ensure the authority has voting rights.
         ensure!(
-            committee.stake_by_id(vote.author) > 0,
-            DagError::UnknownAuthority(vote.author.to_string())
+            committee.stake_by_id(vote.author()) > 0,
+            DagError::UnknownAuthority(vote.author().to_string())
         );
 
         Ok(vote)
