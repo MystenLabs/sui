@@ -28,9 +28,14 @@ export type SignaturePubkeyPair = {
  */
 export type SerializedSignature = string;
 
+/**
+ * Signature scheme mirroring Rust implementation, see [enum SignatureScheme]. 
+ */
 export const SIGNATURE_SCHEME_TO_FLAG = {
   ED25519: 0x00,
   Secp256k1: 0x01,
+  Secp256r1: 0x02,
+  MultiSig: 0x03,
 };
 
 export const SIGNATURE_FLAG_TO_SCHEME = {
