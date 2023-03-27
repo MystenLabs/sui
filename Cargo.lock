@@ -5120,7 +5120,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snarkos-node-metrics"
 version = "2.0.2"
-source = "git+https://github.com/eqlabs/snarkos?branch=bft_testnet3_rebased_metrics#f1871e3195fb49edc84270b69d9c079a90ed1ebe"
+source = "git+https://github.com/eqlabs/snarkos?branch=bft_testnet3#72fe74f1719a17f2b31fea4f7d7772fb35aeace4"
 dependencies = [
  "metrics",
  "metrics-exporter-prometheus",

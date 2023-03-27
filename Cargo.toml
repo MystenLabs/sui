@@ -56,7 +56,7 @@ fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "235
 
 # metrics
 metrics = "0.20"
-snarkos-metrics = { git = "https://github.com/eqlabs/snarkos", branch = "bft_testnet3_rebased_metrics", package = "snarkos-node-metrics" }
+snarkos-metrics = { git = "https://github.com/eqlabs/snarkos", branch = "bft_testnet3", package = "snarkos-node-metrics" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313" }

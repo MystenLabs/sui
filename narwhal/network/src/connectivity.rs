@@ -24,6 +24,7 @@ pub struct ConnectionMonitor {
     network: anemo::NetworkRef,
 
     // Only used with metrics, but not worth the effort to make it conditional.
+    // TODO(metrics): Make this conditional at some point?
     #[allow(dead_code)]
     peer_id_types: HashMap<PeerId, String>,
     connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
@@ -64,8 +65,6 @@ impl ConnectionMonitor {
             // TODO(metrics): Set `network_peer_connected` to 0
         }
         */
-
-        // TODO(metrics): Set `network_peers` to `connected_peers.len() as i64`
 
         // now report the connected peers
         let mut peer_count: usize = connected_peers.len();
