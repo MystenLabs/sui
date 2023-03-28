@@ -7,7 +7,7 @@ Database snapshots provide a point-in-time view of a database's store. In Sui, t
 Snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you're more easily able to recover quickly from catastrophic failures in your system or hardware.   
 
 
-## Enabling snapsots
+## Enabling snapshots
 
 Full nodes do not take snapshots by default. To enable this feature:
 
@@ -32,7 +32,7 @@ Full nodes do not take snapshots by default. To enable this feature:
     * `object-store-connection-limit`: Number of simultaneous connections to the object store.
  1. Save the sui-node.yaml file and restart the node.
 
-## Restoring from snapsot
+## Restoring from snapshots
 
 To restore from a snapshot, follow these steps:
 
