@@ -202,7 +202,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             Ok(Some(package)) => {
                 self.set_linkage(&package);
                 Ok(())
-            },
+            }
             Ok(None) => invariant_violation!(format!(
                 "Link context not found or not a package: {package_id}",
             )),
@@ -214,6 +214,10 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
 
     pub fn set_linkage(&mut self, package: &MovePackage) {
         *self.session.get_resolver_mut() = LinkageView::from_package(self.state_view, package);
+    }
+
+    pub fn reset_linkage(&mut self) {
+        *self.session.get_resolver_mut() = LinkageView::new(self.state_view);
     }
 
     /// Takes the user events from the runtime and tags them with the Move module of the function

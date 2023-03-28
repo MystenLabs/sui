@@ -267,8 +267,9 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                 type_arguments,
                 arguments,
             } = *move_call;
+            context.set_link_context(package)?;
             let module_id = ModuleId::new(package.into(), module);
-            execute_move_call::<_, Mode>(
+            let res = execute_move_call::<_, Mode>(
                 context,
                 &mut argument_updates,
                 &module_id,
@@ -276,7 +277,9 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                 type_arguments,
                 arguments,
                 /* is_init */ false,
-            )?
+            );
+            context.reset_linkage();
+            res?
         }
         Command::Publish(modules, dep_ids) => {
             execute_move_publish::<_, Mode>(context, &mut argument_updates, modules, dep_ids)?
@@ -432,7 +435,7 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
     let storage_id = runtime_id;
 
     let dependencies = fetch_packages(context, &dep_ids)?;
-    let package = context.new_package(&modules, &dependencies)?;
+    let package_obj = context.new_package(&modules, &dependencies)?;
 
     publish_and_verify_modules(context, runtime_id, &modules)?;
 
@@ -450,23 +453,35 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         })
         .collect::<Vec<_>>();
 
-    for module_id in &modules_to_init {
-        let return_values = execute_move_call::<_, Mode>(
-            context,
-            argument_updates,
-            module_id,
-            INIT_FN_NAME,
-            vec![],
-            vec![],
-            /* is init */ true,
-        )?;
+    let Some(package) = package_obj.data.try_as_package() else {
+        invariant_violation!("Newly created package object is not a package");
+    };
+
+    context.set_linkage(package);
+    let returns: Result<Vec<_>, _> = modules_to_init
+        .iter()
+        .map(|module_id| {
+            execute_move_call::<_, Mode>(
+                context,
+                argument_updates,
+                module_id,
+                INIT_FN_NAME,
+                vec![],
+                vec![],
+                /* is_init */ true,
+            )
+        })
+        .collect();
+    context.reset_linkage();
+
+    for return_values in returns? {
         assert_invariant!(
             return_values.is_empty(),
             "init should not have return values"
         )
     }
 
-    context.write_package(package)?;
+    context.write_package(package_obj)?;
     let values = if Mode::packages_are_predefined() {
         // no upgrade cap for genesis modules
         vec![]

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use move_core_types::{
     account_address::AccountAddress,
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
@@ -72,14 +73,15 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        let runtime_id = ObjectID::from_address(*module_id.address());
-
         let Some(linkage) = &self.linkage_info else {
-            return Err(ExecutionError::invariant_violation(
-                "Missing linkage context"
-            ).into());
+            return Ok(module_id.clone());
         };
 
+        if module_id.address() == &linkage.link_context {
+            return Ok(module_id.clone());
+        }
+
+        let runtime_id = ObjectID::from_address(*module_id.address());
         let Some(upgrade) = linkage.linkage_table.get(&runtime_id) else {
             return Err(ExecutionError::invariant_violation(format!(
                 "Missing linkage for {runtime_id} in context {}",
@@ -96,7 +98,7 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
     fn defining_module(
         &self,
         module_id: &ModuleId,
-        _struct: &move_core_types::identifier::IdentStr,
+        _struct: &IdentStr,
     ) -> Result<ModuleId, Self::Error> {
         Ok(module_id.clone())
     }
