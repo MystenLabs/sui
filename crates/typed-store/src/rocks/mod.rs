@@ -1832,6 +1832,9 @@ pub fn base_db_options() -> DBOptions {
     // According to docs, we almost certainly want to set this to number of cores to not be bottlenecked
     // by rocksdb
     opt.increase_parallelism((num_cpus::get() as i32) / 8);
+
+    opt.set_enable_pipelined_write(true);
+
     DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),
