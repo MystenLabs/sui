@@ -151,7 +151,7 @@ pub(crate) async fn check_objects(
     cross_validate: bool,
 ) {
     let chunks = chunk_entities(object_ids, None);
-    let results = join_all(chunks.iter().map(|chunk| get_objects(clients, chunk))).await;
+    let results = join_all(chunks.iter().map(|chunk| multi_get_object(clients, chunk))).await;
 
     if cross_validate {
         for result in results {
@@ -160,7 +160,7 @@ pub(crate) async fn check_objects(
     }
 }
 
-pub(crate) async fn get_objects(
+pub(crate) async fn multi_get_object(
     clients: &[SuiClient],
     object_ids: &[ObjectID],
 ) -> Vec<Vec<SuiObjectResponse>> {
