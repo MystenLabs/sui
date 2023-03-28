@@ -59,6 +59,10 @@ function ValidatorDetails() {
     }
 
     const apy = rollingAverageApys?.[id] || 0;
+    const tallyingScore =
+        validatorEvents?.data.find(
+            ({ parsedJson }) => parsedJson?.validator_address === id
+        )?.parsedJson?.tallying_rule_global_score || null;
     return (
         <div className="mb-10">
             <div className="flex flex-col flex-nowrap gap-5 md:flex-row md:gap-0">
@@ -70,6 +74,7 @@ function ValidatorDetails() {
                     epoch={data.epoch}
                     epochRewards={validatorRewards}
                     apy={apy}
+                    tallyingScore={tallyingScore}
                 />
             </div>
         </div>
