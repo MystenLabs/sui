@@ -239,23 +239,24 @@ pub fn make_certificates_with_parameters(
             .collect()
     };
 
-    println!("Slow nodes: {:?}", slow_nodes.iter().map(|(a, _)| a.id()).collect::<Vec<AuthorityIdentifier>>());
+    println!(
+        "Slow nodes: {:?}",
+        slow_nodes
+            .iter()
+            .map(|(a, _)| a.id())
+            .collect::<Vec<AuthorityIdentifier>>()
+    );
 
     let mut certificates = VecDeque::new();
     let mut parents = initial_parents;
     let mut next_parents = Vec::new();
-    let mut certificates_per_round: HashMap<Round, Vec<Certificate>> = HashMap::new();
-
-    parents.iter().for_each(|c| {
-        certificates_per_round
-            .entry(c.round())
-            .or_default()
-            .push(c.clone());
-    });
+    let mut certificate_digests: HashSet<CertificateDigest> =
+        parents.iter().map(|c| c.digest()).collect();
 
     for round in range {
         next_parents.clear();
 
+        let mut total_round_stake = 0;
         let mut total_failures = 0;
 
         // shuffle authorities to introduce extra randomness
@@ -347,42 +348,35 @@ pub fn make_certificates_with_parameters(
             );
 
             // group certificates by round for easy access
-            certificates_per_round
-                .entry(certificate.round())
-                .or_default()
-                .push(certificate.clone());
+            certificate_digests.insert(certificate.digest());
 
             certificates.push_back(certificate.clone());
             next_parents.push(certificate);
+
+            // update the total round stake
+            total_round_stake += authority.stake();
         }
         parents = next_parents.clone();
+
+        // Sanity checks
+        // Ensure total stake of the round provides strong quorum
+        assert!(
+            total_round_stake >= committee.quorum_threshold(),
+            "Strong quorum is needed per round to ensure DAG advance"
+        );
+
+        // Ensure each certificate's parents exist from previous processing
+        parents
+            .iter()
+            .flat_map(|c| c.header.parents())
+            .for_each(|digest| {
+                assert!(
+                    certificate_digests.contains(digest),
+                    "Certificate with digest {} should be found in processed certificates",
+                    digest
+                );
+            });
     }
-
-    // sanity check - before return, ensure that we have at least 2f+1 certificates per round and
-    // not certificate exists (except the genesis ones) whose parent is missing.
-    certificates_per_round
-        .iter()
-        .for_each(|(round, round_certs)| {
-            assert!(round_certs.len() >= committee.quorum_threshold() as usize);
-
-            if *round > 0 {
-                let parents = certificates_per_round.get(&(round - 1)).unwrap();
-                round_certs
-                    .iter()
-                    .flat_map(|c| c.header.parents().clone())
-                    .for_each(|digest| {
-                        parents
-                            .iter()
-                            .find(|c| c.digest() == digest)
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "Certificate with digest {} should be found in parents",
-                                    digest
-                                )
-                            });
-                    });
-            }
-        });
 
     (certificates, next_parents)
 }
