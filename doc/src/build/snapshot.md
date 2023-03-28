@@ -2,9 +2,9 @@
 title: Database Snapshots
 ---
 
-Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for Full nodes. 
+Database snapshots provide a point-in-time view of a database's store. In Sui, the database snapshot captures a running database's view of the Sui network from a particular node at the end of an epoch. While validators can enable snapshots, they are typically most valuable for Full node operators. 
 
-Snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that happened after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you're able to quickly recover from catastrophic failures in your system or hardware.   
+Snapshots of the Sui network enable Full node operators a way to bootstrap a Full node without having to execute all the transactions that occurred after genesis. You can upload snapshots to remote object stores like S3, Google Cloud Storage, Azure Blob Storage, and similar services. These services typically run the export process in the background so there is no degradation in performance for your Full node. With snapshots stored in the cloud, you're more easily able to recover quickly from catastrophic failures in your system or hardware.   
 
 
 ## Enabling snapsots
@@ -12,7 +12,7 @@ Snapshots of the Sui network enable Full node operators a way to bootstrap a Ful
 Full nodes do not take snapshots by default. To enable this feature:
 
  1. Stop your node, if it's running.
- 1. Open your sui-node.yaml config file. If you followed the steps in [Run a Sui Full Node with Indexer](../build/fullnode.md), this file is in the `sui` project root.
+ 1. Open your sui-node.yaml config file.
  1. Add an entry to the config file for `db-checkpoint-config`. Using Amazon's S3 service as an example:
     ```yaml
     db-checkpoint-config:
@@ -38,7 +38,7 @@ To restore from a snapshot, follow these steps:
 
  1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in storage.
  1. Place the snapshot into the directory that the `db-config` value points to in your sui-node.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command: 
-    ```aws s3 cp s3://<BUCKET-NAME>/dir /opt/sio/db/authorities_db/ --recursive —exclude “*” —include “epoch_10*”```.
+    ```aws s3 cp s3://<BUCKET-NAME>/dir /opt/sio/db/authorities_db/ --recursive —exclude “*” —include “epoch_10*”```
  1. Mark downloaded snapshot as live:
     ```mv  /opt/sio/db/authorities_db/epoch_10  /opt/sio/db/authorities_db/live```
- 1. Start the sui node.
+ 1. Start the Sui node.
