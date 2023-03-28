@@ -17,7 +17,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
@@ -115,7 +115,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
-            error!(?object_id, "Failed to get object: {:?}", e);
+            warn!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
         })?;
         let options = options.unwrap_or_default();
@@ -189,7 +189,7 @@ impl ReadApiServer for ReadApi {
             .get_past_object_read(&object_id, version)
             .await
             .map_err(|e| {
-                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?}");
+                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
                 anyhow!("{e}")
             })?;
         let options = options.unwrap_or_default();
@@ -292,7 +292,7 @@ impl ReadApiServer for ReadApi {
             .state
             .get_transaction_checkpoint_sequence(&digest)
             .map_err(|e| {
-                error!("Failed to get_transaction for transaction {digest:?}");
+                error!("Failed to get_transaction for transaction {digest:?} with error: {e:?}");
                 anyhow!("{e}")
             })?
         {
@@ -786,7 +786,7 @@ pub async fn get_move_modules_by_package(
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
     let object_read = state.get_object_read(&package).await.map_err(|e| {
-        error!("Failed to call get_move_modules_by_package for package: {package:?}");
+        warn!("Failed to call get_move_modules_by_package for package: {package:?}");
         anyhow!("{e}")
     })?;
 
