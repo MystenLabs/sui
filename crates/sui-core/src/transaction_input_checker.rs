@@ -76,6 +76,7 @@ pub async fn check_transaction_input_with_given_gas(
     transaction: &TransactionData,
     gas_object: Object,
 ) -> SuiResult<(SuiGasStatus<'static>, InputObjects)> {
+    transaction.check_version_supported(epoch_store.protocol_config())?;
     transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
     check_non_system_packages_to_be_published(transaction, epoch_store.protocol_config())?;
     let mut input_objects = transaction.input_objects()?;
