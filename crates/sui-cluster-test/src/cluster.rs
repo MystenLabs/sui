@@ -199,13 +199,18 @@ impl Cluster for LocalNewCluster {
         // This cluster has fullnode handle, safe to unwrap
         let fullnode_url = test_cluster.fullnode_handle.rpc_url.clone();
 
+        let migrated_methods = if options.use_indexer_experimental_methods {
+            IndexerConfig::all_implemented_methods()
+        } else {
+            vec![]
+        };
         if options.pg_address.is_some() && indexer_address.is_some() {
             let config = IndexerConfig {
                 db_url: options.pg_address.clone().unwrap(),
                 rpc_client_url: fullnode_url.clone(),
                 rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
                 rpc_server_port: indexer_address.as_ref().unwrap().port(),
-                migrated_methods: IndexerConfig::all_migrated_methods(),
+                migrated_methods,
                 reset_db: true,
                 ..Default::default()
             };
