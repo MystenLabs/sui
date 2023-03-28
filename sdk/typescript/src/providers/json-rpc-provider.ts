@@ -61,6 +61,7 @@ import { Connection, devnetConnection } from '../rpc/connection';
 import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
+import { NetworkMetrics } from '../types/metrics';
 
 export const TARGETED_RPC_VERSION = '0.29.0';
 
@@ -810,6 +811,14 @@ export class JsonRpcProvider {
       'suix_getCommitteeInfo',
       [input?.epoch],
       CommitteeInfo,
+    );
+  }
+
+  async getNetworkMetrics() {
+    return await this.client.requestWithType(
+      'suix_getNetworkMetrics',
+      [],
+      NetworkMetrics,
     );
   }
 }
