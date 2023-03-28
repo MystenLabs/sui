@@ -22,7 +22,7 @@ export const parameters = {
             extension: {
                 name: 'Chrome Extension',
                 styles: {
-                    height: '595px',
+                    height: '600px',
                     width: '360px',
                 },
                 type: 'mobile',
