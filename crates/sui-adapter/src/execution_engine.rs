@@ -84,7 +84,7 @@ pub fn execute_transaction_to_effects<
 
     #[cfg(debug_assertions)]
     let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
-
+    let txn_kind_dbg = format!("gas: {:#?}\nkind: {:#?}", gas, transaction_kind);
     let (gas_cost_summary, execution_result) = execute_transaction::<Mode, _>(
         &mut temporary_store,
         transaction_kind,
@@ -121,6 +121,7 @@ pub fn execute_transaction_to_effects<
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
     }
+    temporary_store.check_seq_invariants(&txn_kind_dbg);
     let (inner, effects) = temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,

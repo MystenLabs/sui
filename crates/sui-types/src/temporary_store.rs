@@ -265,6 +265,28 @@ impl<S> TemporaryStore<S> {
         }
     }
 
+    pub fn check_seq_invariants(&self, transaction_dbg: &str) {
+        for (id, (obj, _kind)) in &self.written {
+            // Update the version for the written object.
+            if let Data::Move(obj) = &obj.data {
+                if obj.version() >= self.lamport_timestamp {
+                    println!(
+                        "NOT AN INCREMENT: object {}\n\nDEBUG: {}",
+                        id, transaction_dbg
+                    );
+                }
+            }
+        }
+        for (id, (version, _kind)) in &self.deleted {
+            if version >= &self.lamport_timestamp {
+                println!(
+                    "NOT AN INCREMENT: object {}\n\nDEBUG: {}",
+                    id, transaction_dbg
+                );
+            }
+        }
+    }
+
     pub fn to_effects(
         mut self,
         shared_object_refs: Vec<ObjectRef>,
