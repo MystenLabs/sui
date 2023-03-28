@@ -11899,6 +11899,7 @@ dependencies = [
  "symbolic-demangle",
  "syn 0.15.44",
  "syn 1.0.107",
+ "syn 2.0.10",
  "sync_wrapper",
  "synstructure",
  "sysinfo",
