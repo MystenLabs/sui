@@ -552,7 +552,7 @@ impl ProtocolConfig {
     }
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
-        self.feature_flags.package_upgrades
+        self.feature_flags.commit_root_state_digest
     }
 }
 
