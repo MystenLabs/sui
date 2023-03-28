@@ -91,7 +91,7 @@ export const genTableDataFromTxData = (
                     <TxTimeType timestamp={transaction.timestampMs} />
                 </TxTableCol>
             ),
-            transactionId: (
+            digest: (
                 <TxTableCol isFirstCol isHighlightedOnHover>
                     <TransactionLink
                         digest={transaction.digest}
@@ -124,8 +124,8 @@ export const genTableDataFromTxData = (
     }),
     columns: [
         {
-            header: 'Transaction ID',
-            accessorKey: 'transactionId',
+            header: 'Digest',
+            accessorKey: 'digest',
         },
         {
             header: () => <TxTableHeader label="Sender" />,

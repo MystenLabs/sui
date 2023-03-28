@@ -39,7 +39,7 @@ export const CheckpointSequenceLink = createInternalLink(
 export const AddressLink = createInternalLink('address', 'address');
 export const ObjectLink = createInternalLink('object', 'objectId');
 export const TransactionLink = createInternalLink(
-    'transaction',
+    'txblock',
     'digest',
     formatDigest
 );

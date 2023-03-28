@@ -12,12 +12,12 @@ import { flattenSuiArguments } from './utils';
 
 import { ObjectLink } from '~/ui/InternalLink';
 
-export interface CommandProps<T> {
+export interface TransactionProps<T> {
     type: string;
     data: T;
 }
 
-function CommandContent({
+function TransactionContent({
     type,
     children,
 }: {
@@ -26,17 +26,11 @@ function CommandContent({
 }) {
     return (
         <>
-            <div
-                data-testid="programmable-transactions-command-label"
-                className="text-heading6 font-semibold text-steel-darker"
-            >
+            <div className="text-heading6 font-semibold text-steel-darker">
                 {type}
             </div>
             {children && (
-                <div
-                    data-testid="programmable-transactions-command-content"
-                    className="text-bodyMedium pt-2 font-medium text-steel-dark"
-                >
+                <div className="text-bodyMedium pt-2 font-medium text-steel-dark">
                     {children}
                 </div>
             )}
@@ -47,15 +41,15 @@ function CommandContent({
 function ArrayArgument({
     type,
     data,
-}: CommandProps<(SuiArgument | SuiArgument[])[] | undefined>) {
+}: TransactionProps<(SuiArgument | SuiArgument[])[] | undefined>) {
     return (
-        <CommandContent type={type}>
+        <TransactionContent type={type}>
             {data && <>({flattenSuiArguments(data)})</>}
-        </CommandContent>
+        </TransactionContent>
     );
 }
 
-function MoveCall({ type, data }: CommandProps<MoveCallSuiTransaction>) {
+function MoveCall({ type, data }: TransactionProps<MoveCallSuiTransaction>) {
     const {
         module,
         package: movePackage,
@@ -64,7 +58,7 @@ function MoveCall({ type, data }: CommandProps<MoveCallSuiTransaction>) {
         type_arguments: typeArgs,
     } = data;
     return (
-        <CommandContent type={type}>
+        <TransactionContent type={type}>
             (package: <ObjectLink objectId={movePackage} />, module:{' '}
             <ObjectLink
                 objectId={`${movePackage}?module=${module}`}
@@ -73,14 +67,14 @@ function MoveCall({ type, data }: CommandProps<MoveCallSuiTransaction>) {
             , function: <span className="text-sui-dark">{func}</span>
             {args && <>, arguments: [{flattenSuiArguments(args!)}]</>}
             {typeArgs && <>, type_arguments: {typeArgs}</>})
-        </CommandContent>
+        </TransactionContent>
     );
 }
 
-export function Command({
+export function Transaction({
     type,
     data,
-}: CommandProps<
+}: TransactionProps<
     (SuiArgument | SuiArgument[])[] | MoveCallSuiTransaction | SuiMovePackage
 >) {
     if (type === 'MoveCall') {

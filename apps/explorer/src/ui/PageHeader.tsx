@@ -23,7 +23,11 @@ export interface PageHeaderProps {
     status?: 'success' | 'failure';
 }
 
-const TYPE_TO_ICON: Record<string, typeof CallIcon> = {
+const TYPE_TO_COPY: Partial<Record<PageHeaderType, string>> = {
+    Transaction: 'Transaction Block',
+};
+
+const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon> = {
     Transaction: CallIcon,
     Checkpoint: Flag16,
     Object: Nft16,
@@ -51,7 +55,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
             <div className="mb-3 flex items-center gap-2">
                 {Icon && <Icon className="text-steel-dark" />}
                 <Heading variant="heading4/semibold" color="steel-darker">
-                    {type}
+                    {type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
                 </Heading>
             </div>
             <div className="flex flex-col gap-2 lg:flex-row">

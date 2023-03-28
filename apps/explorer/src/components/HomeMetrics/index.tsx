@@ -101,8 +101,8 @@ export function HomeMetrics() {
                         {formatAmount(countsData?.objects)}
                     </StatsWrapper>
                     <StatsWrapper
-                        label="Transactions"
-                        tooltip="Total transactions counter (updates every one min)"
+                        label="Transaction Blocks"
+                        tooltip="Total transaction blocks counter (updates every one min)"
                     >
                         {formatAmount(countsData?.transactions)}
                     </StatsWrapper>

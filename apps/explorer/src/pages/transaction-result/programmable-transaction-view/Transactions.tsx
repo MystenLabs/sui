@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { type SuiTransaction } from '@mysten/sui.js';
 
-import { Command } from './Command';
+import { Transaction } from './Transaction';
 
 import { TableHeader } from '~/ui/TableHeader';
 
@@ -10,23 +10,21 @@ interface Props {
     transactions: SuiTransaction[];
 }
 
-export function Commands({ transactions }: Props) {
+export function Transactions({ transactions }: Props) {
     if (!transactions?.length) {
         return null;
     }
 
     return (
         <>
-            <TableHeader>Commands</TableHeader>
+            <TableHeader>Transactions</TableHeader>
             <ul className="flex flex-col gap-8">
-                {transactions.map((command, index) => {
-                    const commandName = Object.keys(command)[0];
-                    const commandData =
-                        command[commandName as keyof typeof command];
+                {transactions.map((transaction, index) => {
+                    const [[type, data]] = Object.entries(transaction);
 
                     return (
                         <li key={index}>
-                            <Command type={commandName} data={commandData} />
+                            <Transaction type={type} data={data} />
                         </li>
                     );
                 })}

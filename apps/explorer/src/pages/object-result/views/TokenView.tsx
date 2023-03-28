@@ -128,7 +128,7 @@ export function TokenView({ data }: { data: DataType }) {
                                                 {data.version}
                                             </Text>
                                         </DescriptionItem>
-                                        <DescriptionItem title="Last Transaction ID">
+                                        <DescriptionItem title="Last Transaction Block Digest">
                                             <TransactionLink
                                                 digest={data.data.tx_digest!}
                                                 noTruncate
@@ -267,7 +267,7 @@ export function TokenView({ data }: { data: DataType }) {
                 </div>
             </div>
             <div>
-                <h2 className={styles.header}>Transactions</h2>
+                <h2 className={styles.header}>Transaction Blocks</h2>
                 <TransactionsForAddress address={data.id} type="object" />
             </div>
         </div>
