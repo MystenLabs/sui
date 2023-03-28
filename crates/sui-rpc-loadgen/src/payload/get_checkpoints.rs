@@ -91,7 +91,8 @@ impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
                 .concat();
 
                 if op.record {
-                    self.add_addresses_from_response(transaction_responses);
+                    self.add_addresses_from_response(&transaction_responses);
+                    self.add_object_ids_from_response(&transaction_responses);
                 };
             }
 

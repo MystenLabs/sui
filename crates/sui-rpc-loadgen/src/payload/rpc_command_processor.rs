@@ -150,12 +150,25 @@ impl RpcCommandProcessor {
         }
     }
 
-    pub(crate) fn add_addresses_from_response(&self, responses: Vec<SuiTransactionBlockResponse>) {
+    pub(crate) fn add_addresses_from_response(&self, responses: &[SuiTransactionBlockResponse]) {
         for response in responses {
-            let transaction = response.transaction;
+            let transaction = &response.transaction;
             if let Some(transaction) = transaction {
-                let data = transaction.data;
+                let data = &transaction.data;
                 self.addresses.insert(*data.sender());
+            }
+        }
+    }
+
+    pub(crate) fn add_object_ids_from_response(&self, responses: &[SuiTransactionBlockResponse]) {
+        for response in responses {
+            let effects = &response.effects;
+            if let Some(effects) = effects {
+                let all_changed_objects = effects.all_changed_objects();
+                for (object_ref, _) in all_changed_objects {
+                    self.object_ref_cache
+                        .insert(object_ref.object_id(), object_ref.reference.to_object_ref());
+                }
             }
         }
     }
@@ -163,18 +176,38 @@ impl RpcCommandProcessor {
     pub(crate) fn dump_cache_to_file(&self) {
         // TODO: be more granular
         let digests: Vec<TransactionDigest> = self.transaction_digests.iter().map(|x| *x).collect();
-        write_data_to_file(
-            &digests,
-            &format!("{}/{}", &self.data_dir, CacheType::TransactionDigest),
-        )
-        .unwrap();
+        if !digests.is_empty() {
+            write_data_to_file(
+                &digests,
+                &format!("{}/{}", &self.data_dir, CacheType::TransactionDigest),
+            )
+            .unwrap();
+        }
 
         let addresses: Vec<SuiAddress> = self.addresses.iter().map(|x| *x).collect();
-        write_data_to_file(
-            &addresses,
-            &format!("{}/{}", &self.data_dir, CacheType::SuiAddress),
-        )
-        .unwrap();
+        if !addresses.is_empty() {
+            write_data_to_file(
+                &addresses,
+                &format!("{}/{}", &self.data_dir, CacheType::SuiAddress),
+            )
+            .unwrap();
+        }
+
+        let mut object_ids: Vec<ObjectID> = Vec::new();
+        let cloned_object_cache = self.object_ref_cache.clone();
+
+        for item in cloned_object_cache.iter() {
+            let object_id = item.key();
+            object_ids.push(*object_id);
+        }
+
+        if !object_ids.is_empty() {
+            write_data_to_file(
+                &object_ids,
+                &format!("{}/{}", &self.data_dir, CacheType::ObjectID),
+            )
+            .unwrap();
+        }
     }
 }
 
@@ -287,6 +320,7 @@ fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), any
 pub enum CacheType {
     SuiAddress,
     TransactionDigest,
+    ObjectID,
 }
 
 impl fmt::Display for CacheType {
@@ -294,6 +328,7 @@ impl fmt::Display for CacheType {
         match self {
             CacheType::SuiAddress => write!(f, "SuiAddress"),
             CacheType::TransactionDigest => write!(f, "TransactionDigest"),
+            CacheType::ObjectID => write!(f, "ObjectID"),
         }
     }
 }
