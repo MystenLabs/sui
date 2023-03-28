@@ -26,7 +26,7 @@ You can sign the data using the device and programming language you choose. Sui 
 
 The signature is committed to an intent message of the transaction data. To learn how to construct an intent message, see [Sui Intent signing](sui-intent_signing.md). 
 
-Before you pass it in to the signing API, you must first hash the intent message to 32 bytes using with Blake2b. Depending on the signing scheme, Sui performs an additional hashing is internally to the signing API. For ECDSA Secp256k1 and Secp256r1, you must use SHA-2 SHA256 as the internal hash function. For pure Ed25519, you must use SHA-512. 
+Before you pass it in to the signing API, you must first hash the intent message to 32 bytes using Blake2b. To be compatible with existing standards and hardware secure modules (HSMs), the signing algorithms perform additional hashing internally. For ECDSA Secp256k1 and Secp256r1, you must use SHA-2 SHA256 as the internal hash function. For pure Ed25519, you must use SHA-512. 
 
 Additional signature requirements:
 
