@@ -20,7 +20,7 @@ use sui_types::digests::TransactionDigest;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
-use crate::types::{SuiTransactionBlockFullResponse, SuiTransactionBlockFullResponseWithOptions};
+use crate::types::SuiTransactionBlockResponseWithOptions;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -51,13 +51,12 @@ impl<S: IndexerStore> ReadApi<S> {
         let tx = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?;
-        let tx_full_resp: SuiTransactionBlockFullResponse = self
+        let sui_tx_resp = self
             .state
-            .compose_full_transaction_response(tx, options.clone())
+            .compose_sui_transaction_block_response(tx, options.clone())
             .await?;
-
-        let sui_transaction_response = SuiTransactionBlockFullResponseWithOptions {
-            response: tx_full_resp,
+        let sui_transaction_response = SuiTransactionBlockResponseWithOptions {
+            response: sui_tx_resp,
             options: options.unwrap_or_default(),
         }
         .into();
@@ -88,18 +87,15 @@ impl<S: IndexerStore> ReadApi<S> {
                 "Transaction count changed after reorder, this should never happen.".to_string(),
             ));
         }
-        let tx_full_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
+        let sui_tx_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
             self.state
-                .compose_full_transaction_response(tx, options.clone())
+                .compose_sui_transaction_block_response(tx, options.clone())
         });
-        let tx_full_resp_vec: Vec<SuiTransactionBlockFullResponse> = join_all(tx_full_resp_futures)
+        let sui_tx_resp_vec = join_all(sui_tx_resp_futures)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-
-        let tx_resp_vec: Vec<SuiTransactionBlockResponse> =
-            tx_full_resp_vec.into_iter().map(|tx| tx.into()).collect();
-        Ok(tx_resp_vec)
+        Ok(sui_tx_resp_vec)
     }
 
     fn get_object_with_options_internal(
