@@ -1,7 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Implements an English auction extension for the Kiosk.
+/// Implements an English auction extension for the Kiosk. The auction
+/// logic is straightforward: the auction is started by calling `start`,
+/// an `AuctionStarted` event is emitted and the item is avalable for
+/// bidding. The auction ends when the `until_epoch` epoch is reached.
+///
+/// - If there is no bid, the auction can be `cancel`-ed by the kiosk owner.
+/// - If there is, the auction can be `end`-ed by the highest bidder. In this
+/// case the item and the `TransferRequest` are returned to the caller to
+/// apply transfer policy and give an option to move the item.
 module kiosk::auction_ext {
     use std::option::{Self, Option};
     use sui::dynamic_field as df;
@@ -23,6 +31,8 @@ module kiosk::auction_ext {
     const ENoBid: u64 = 3;
     /// Only the current leader can end the auction.
     const ENotWinner: u64 = 4;
+    /// Only the owner can cancel the auction.
+    const ENotOwner: u64 = 5;
 
     /// Stores Auction configuration as well as the state (current bid,
     /// current winner, etc.)
@@ -92,14 +102,20 @@ module kiosk::auction_ext {
             AuctionedKey { item_id }
         );
 
-        let old_coin = option::swap(&mut auction_mut.current_bid, payment);
-        let old_bidder = auction_mut.current_leader;
+        if (option::is_none(&auction_mut.current_bid)) {
+            assert!(paid_amt >= auction_mut.start_price, EBidTooLow);
+            option::fill(&mut auction_mut.current_bid, payment)
+        } else {
+            let old_coin = option::swap(&mut auction_mut.current_bid, payment);
+            let old_bidder = auction_mut.current_leader;
 
-        assert!(epoch(ctx) <= auction_mut.until_epoch, ETooLate);
-        assert!(paid_amt > auction_mut.start_price, EBidTooLow);
-        assert!(coin::value(&old_coin) > paid_amt, EBidTooLow);
+            assert!(epoch(ctx) <= auction_mut.until_epoch, ETooLate);
+            assert!(coin::value(&old_coin) < paid_amt, EBidTooLow);
 
-        sui::transfer::public_transfer(old_coin, old_bidder);
+            sui::transfer::public_transfer(old_coin, old_bidder)
+        };
+
+
         auction_mut.current_leader = sender(ctx)
     }
 
@@ -131,12 +147,13 @@ module kiosk::auction_ext {
         )
     }
 
-    /// An auction can only be canceled at any time if there hasn't been
-    /// a single bid yet. The item is returned to the `Kiosk` and the `PurchaseCap`
-    /// is destroyed.
+    /// An auction can only be canceled by the kiosk owner at any time if there
+    /// hasn't been a single bid yet. The item is returned to the `Kiosk` and
+    /// the `PurchaseCap` is destroyed.
     public fun cancel<T: key + store>(
-        kiosk: &mut Kiosk, item_id: ID
+        kiosk: &mut Kiosk, kiosk_cap: &KioskOwnerCap, item_id: ID
     ) {
+        assert!(kiosk::has_access(kiosk, kiosk_cap), ENotOwner);
         let Auction<T> {
             purchase_cap,
             current_bid,
@@ -153,5 +170,107 @@ module kiosk::auction_ext {
 
         option::destroy_none(current_bid);
         kiosk::return_purchase_cap(kiosk, purchase_cap)
+    }
+}
+
+#[test_only]
+module kiosk::auction_ext_tests {
+    use kiosk::auction_ext;
+    use sui::kiosk::{Self, Kiosk};
+    use sui::transfer_policy as policy;
+    use sui::object::ID;
+    use sui::kiosk_test_utils::{
+        Self as utils,
+        Asset
+    };
+    use sui::transfer::{public_share_object, public_transfer};
+    use sui::test_scenario::{
+        Self as test,
+        Scenario,
+        ctx,
+    };
+    use sui::tx_context::{
+        sender,
+        increment_epoch_number as next_epoch
+    };
+
+    #[test]
+    fun test_auction_flow() {
+        let (alice, bob, carl) = utils::folks();
+
+        // Alice: creates a Kiosk and places an asset;
+        // Epoch: 0
+        let test = test::begin(alice);
+        let item_id = prepare(&mut test);
+
+        // Bob: learns that an auction has started and makes a bid;
+        // Epoch: 0 -> 1
+        let effects = test::next_tx(&mut test, bob); {
+            let kiosk = test::take_shared<Kiosk>(&test);
+            let ctx = ctx(&mut test);
+
+            auction_ext::bid<Asset>(&mut kiosk, item_id, utils::get_sui(100, ctx), ctx);
+            test::return_shared(kiosk);
+            next_epoch(ctx);
+        };
+
+        // make sure an event is emitted
+        assert!(test::num_user_events(&effects) == 1, 0);
+
+        // Carl: makes a higher bid;
+        // Epoch: 1 -> 4
+        test::next_tx(&mut test, carl); {
+            let kiosk = test::take_shared<Kiosk>(&test);
+            let ctx = ctx(&mut test);
+
+            auction_ext::bid<Asset>(&mut kiosk, item_id, utils::get_sui(200, ctx), ctx);
+            test::return_shared(kiosk);
+            next_epoch(ctx);
+            next_epoch(ctx);
+            next_epoch(ctx);
+        };
+
+        // Carl: ends the auction and receives the asset;
+        // Epoch: 3
+        test::next_tx(&mut test, carl); {
+            let kiosk = test::take_shared<Kiosk>(&test);
+            let ctx = ctx(&mut test);
+            let (item, transfer_req) = auction_ext::end<Asset>(&mut kiosk, item_id, ctx);
+
+            assert!(policy::item(&transfer_req) == item_id, 0);
+            assert!(policy::paid(&transfer_req) == 200, 1);
+            assert!(policy::from(&transfer_req) == sui::object::id(&kiosk), 2);
+
+            test::return_shared(kiosk);
+
+            // Hack: we need to confirm transfer request
+            let (policy, policy_cap) = utils::get_policy(ctx);
+            policy::confirm_request(&policy, transfer_req);
+            utils::return_policy(policy, policy_cap, ctx);
+            public_transfer(item, carl);
+        };
+
+        test::end(test);
+    }
+
+    /// Prepare the test scenario:
+    /// - sender creates a Kiosk and places an asset
+    /// - item_id is returned for further use
+    /// - KioskOwnerCap is sent to sender
+    /// - Auction for item is started
+    ///
+    /// Params:
+    /// - start_price = 0
+    /// - until_epoch = 3
+    fun prepare(test: &mut Scenario): ID {
+        let (item, item_id) = utils::get_asset(ctx(test));
+        let (kiosk, kiosk_cap) = utils::get_kiosk(ctx(test));
+
+        kiosk::place(&mut kiosk, &kiosk_cap, item);
+        auction_ext::start<Asset>(&mut kiosk, &kiosk_cap, item_id, 0, 3, ctx(test));
+
+        public_transfer(kiosk_cap, sender(ctx(test)));
+        public_share_object(kiosk);
+        (item_id)
     }
 }
