@@ -392,6 +392,15 @@ the epoch advancement transaction.
 ## Constants
 
 
+<a name="0x3_sui_system_state_inner_ENotSystemAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ENotSystemAddress">ENotSystemAddress</a>: u64 = 2;
+</code></pre>
+
+
+
 <a name="0x3_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
 
 
@@ -428,6 +437,15 @@ the epoch advancement transaction.
 
 
 
+<a name="0x3_sui_system_state_inner_EAdvancedToWrongEpoch"></a>
+
+
+
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>: u64 = 8;
+</code></pre>
+
+
+
 <a name="0x3_sui_system_state_inner_EBpsTooLarge"></a>
 
 
@@ -442,15 +460,6 @@ the epoch advancement transaction.
 
 
 <pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ECannotReportOneself">ECannotReportOneself</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="0x3_sui_system_state_inner_EEpochNumberMismatch"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EEpochNumberMismatch">EEpochNumberMismatch</a>: u64 = 2;
 </code></pre>
 
 
@@ -491,11 +500,11 @@ the epoch advancement transaction.
 
 
 
-<a name="0x3_sui_system_state_inner_EStakedSuiFromWrongEpoch"></a>
+<a name="0x3_sui_system_state_inner_EStakeWithdrawBeforeActivation"></a>
 
 
 
-<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EStakedSuiFromWrongEpoch">EStakedSuiFromWrongEpoch</a>: u64 = 6;
+<pre><code><b>const</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EStakeWithdrawBeforeActivation">EStakeWithdrawBeforeActivation</a>: u64 = 6;
 </code></pre>
 
 
@@ -992,7 +1001,10 @@ Withdraw some portion of a stake from a validator's staking pool.
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(stake_activation_epoch(&staked_sui) &lt;= <a href="_epoch">tx_context::epoch</a>(ctx), 0);
+    <b>assert</b>!(
+        stake_activation_epoch(&staked_sui) &lt;= <a href="_epoch">tx_context::epoch</a>(ctx),
+        <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EStakeWithdrawBeforeActivation">EStakeWithdrawBeforeActivation</a>
+    );
     <a href="validator_set.md#0x3_validator_set_request_withdraw_stake">validator_set::request_withdraw_stake</a>(
         &<b>mut</b> self.validators, staked_sui, ctx,
     );
@@ -1826,7 +1838,7 @@ gas coins.
 
     self.epoch = self.epoch + 1;
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
-    <b>assert</b>!(new_epoch == self.epoch, 0);
+    <b>assert</b>!(new_epoch == self.epoch, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>);
 
     <b>let</b> computation_reward_amount_before_distribution = <a href="_value">balance::value</a>(&computation_reward);
     <b>let</b> storage_fund_reward_amount_before_distribution = <a href="_value">balance::value</a>(&storage_fund_reward);
@@ -1935,7 +1947,7 @@ version
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, 0);
+    <b>assert</b>!(<a href="_sender">tx_context::sender</a>(ctx) == @0x0, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ENotSystemAddress">ENotSystemAddress</a>);
 
     self.epoch = new_epoch;
     self.protocol_version = next_protocol_version;

@@ -140,12 +140,13 @@ module sui_system::sui_system_state_inner {
     // Errors
     const ENotValidator: u64 = 0;
     const ELimitExceeded: u64 = 1;
-    const EEpochNumberMismatch: u64 = 2;
+    const ENotSystemAddress: u64 = 2;
     const ECannotReportOneself: u64 = 3;
     const EReportRecordNotFound: u64 = 4;
     const EBpsTooLarge: u64 = 5;
-    const EStakedSuiFromWrongEpoch: u64 = 6;
+    const EStakeWithdrawBeforeActivation: u64 = 6;
     const ESafeModeGasNotProcessed: u64 = 7;
+    const EAdvancedToWrongEpoch: u64 = 8;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
@@ -381,7 +382,10 @@ module sui_system::sui_system_state_inner {
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) {
-        assert!(stake_activation_epoch(&staked_sui) <= tx_context::epoch(ctx), 0);
+        assert!(
+            stake_activation_epoch(&staked_sui) <= tx_context::epoch(ctx),
+            EStakeWithdrawBeforeActivation
+        );
         validator_set::request_withdraw_stake(
             &mut self.validators, staked_sui, ctx,
         );
@@ -738,7 +742,7 @@ module sui_system::sui_system_state_inner {
 
         self.epoch = self.epoch + 1;
         // Sanity check to make sure we are advancing to the right epoch.
-        assert!(new_epoch == self.epoch, 0);
+        assert!(new_epoch == self.epoch, EAdvancedToWrongEpoch);
 
         let computation_reward_amount_before_distribution = balance::value(&computation_reward);
         let storage_fund_reward_amount_before_distribution = balance::value(&storage_fund_reward);
@@ -827,7 +831,7 @@ module sui_system::sui_system_state_inner {
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, 0);
+        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
         self.epoch = new_epoch;
         self.protocol_version = next_protocol_version;

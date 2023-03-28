@@ -39,6 +39,8 @@ module sui_system::stake_subsidy {
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
+    const ESubsidyDecreaseRateTooLarge: u64 = 0;
+
     public(friend) fun create(
         balance: Balance<SUI>,
         initial_distribution_amount: u64,
@@ -49,7 +51,7 @@ module sui_system::stake_subsidy {
         // Rate can't be higher than 100%.
         assert!(
             stake_subsidy_decrease_rate <= (BASIS_POINT_DENOMINATOR as u16),
-            0,
+            ESubsidyDecreaseRateTooLarge,
         );
 
         StakeSubsidy {
