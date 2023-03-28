@@ -110,24 +110,15 @@
 				"title": "Sui Cryptography",
 				"items": [{
 						"label": "Sui Intent Signing",
-						"fileName": "learn/cryptography/"
+						"fileName": "learn/cryptography/sui-intent-signing"
 					},
 					{
-						"label": "Sui Gas Pricing",
-						"fileName": "learn/tokenomics/gas-pricing"
+						"label": "Sui Offline Signing",
+						"fileName": "learn/cryptography/sui-offline-signing"
 					},
 					{
-						"label": "Sui Storage Fund",
-						"fileName": "learn/tokenomics/storage-fund"
-					},
-					{
-						"label": "Proof-of-Stake",
-						"fileName": "learn/tokenomics/proof-of-stake"
-					},
-					{
-						"label": "Tokenomics White Paper",
-						"link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/tokenomics.pdf",
-						"external": true
+						"label": "Sui Multi-Signature",
+						"fileName": "learn/cryptography/sui-multisig"
 					}
 				]
 			},
