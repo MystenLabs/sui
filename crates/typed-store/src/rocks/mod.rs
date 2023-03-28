@@ -1809,7 +1809,9 @@ pub fn base_db_options() -> DBOptions {
     // of shards, ie 2^10. Increase in case of lock contentions.
     opt.set_table_cache_num_shard_bits(10);
 
-    opt.set_compression_type(rocksdb::DBCompressionType::None);
+    opt.set_compression_type(rocksdb::DBCompressionType::Lz4);
+    opt.set_bottommost_compression_type(rocksdb::DBCompressionType::Zstd);
+    opt.set_bottommost_zstd_max_train_bytes(0, true);
 
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
@@ -1829,10 +1831,8 @@ pub fn base_db_options() -> DBOptions {
     opt.set_max_total_wal_size(
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
-    // According to docs, we almost certainly want to set this to number of cores to not be bottlenecked
-    // by rocksdb
-    opt.increase_parallelism((num_cpus::get() as i32) / 8);
 
+    opt.increase_parallelism(4);
     opt.set_enable_pipelined_write(true);
 
     DBOptions {
