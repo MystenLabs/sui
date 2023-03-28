@@ -312,32 +312,6 @@ impl SshConnection {
         Err(error.unwrap())
     }
 
-    /// Execute a ssh command from a given path.
-    /// TODO: Eventually remove this function and use `execute` through the ssh manager instead.
-    pub fn execute_from_path<P: AsRef<Path>>(
-        &self,
-        command: String,
-        path: P,
-    ) -> SshResult<(String, String)> {
-        let mut error = None;
-        for _ in 0..self.retries + 1 {
-            let channel = match self.session.channel_session() {
-                Ok(x) => x,
-                Err(e) => {
-                    error = Some(self.make_session_error(e));
-                    continue;
-                }
-            };
-
-            let command = format!("(cd {} && {command})", path.as_ref().display());
-            match self.execute_impl(channel, command) {
-                r @ Ok(..) => return r,
-                Err(e) => error = Some(e),
-            }
-        }
-        Err(error.unwrap())
-    }
-
     /// Execute an ssh command on the remote machine and return both stdout and stderr.
     fn execute_impl(&self, mut channel: Channel, command: String) -> SshResult<(String, String)> {
         channel
@@ -377,6 +351,7 @@ impl SshConnection {
     }
 
     /// Upload a file to the remote machines through scp.
+    #[allow(dead_code)]
     pub fn upload<P: AsRef<Path>>(&self, path: P, content: &[u8]) -> SshResult<()> {
         let size = content.len() as u64;
         let mut error = None;

@@ -134,6 +134,14 @@ fn default_multiaddr_address() -> Multiaddr {
 }
 
 impl ValidatorGenesisInfo {
+    pub const DEFAULT_NETWORK_PORT: u16 = 1000;
+    pub const DEFAULT_P2P_PORT: u16 = 2000;
+    pub const DEFAULT_P2P_LISTEN_PORT: u16 = 3000;
+    pub const DEFAULT_METRICS_PORT: u16 = 4000;
+    pub const DEFAULT_NARWHAL_METRICS_PORT: u16 = 5000;
+    pub const DEFAULT_NARWHAL_PRIMARY_PORT: u16 = 6000;
+    pub const DEFAULT_NARWHAL_WORKER_PORT: u16 = 7000;
+
     pub fn from_localhost_for_testing(
         key_pair: AuthorityKeyPair,
         worker_key_pair: NetworkKeyPair,
@@ -180,15 +188,22 @@ impl ValidatorGenesisInfo {
             worker_key_pair,
             account_key_pair,
             network_key_pair,
-            network_address: make_tcp_addr(1000 + port_offset),
-            p2p_address: make_udp_addr(5000 + port_offset),
-            p2p_listen_address: p2p_listen_address.map(|x| SocketAddr::new(x, 4000 + port_offset)),
-            metrics_address: format!("127.0.0.1:{}", 6000 + port_offset).parse().unwrap(),
-            narwhal_metrics_address: make_tcp_addr(7000 + port_offset),
+            network_address: make_tcp_addr(Self::DEFAULT_NETWORK_PORT + port_offset),
+            p2p_address: make_udp_addr(Self::DEFAULT_P2P_PORT + port_offset),
+            p2p_listen_address: p2p_listen_address
+                .map(|x| SocketAddr::new(x, Self::DEFAULT_P2P_LISTEN_PORT + port_offset)),
+            metrics_address: format!("0.0.0.0:{}", Self::DEFAULT_METRICS_PORT + port_offset)
+                .parse()
+                .unwrap(),
+            narwhal_metrics_address: make_tcp_addr(
+                Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
+            ),
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: make_udp_addr(2000 + port_offset),
-            narwhal_worker_address: make_udp_addr(3000 + port_offset),
+            narwhal_primary_address: make_udp_addr(
+                Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,
+            ),
+            narwhal_worker_address: make_udp_addr(Self::DEFAULT_NARWHAL_WORKER_PORT + port_offset),
         }
     }
 }
