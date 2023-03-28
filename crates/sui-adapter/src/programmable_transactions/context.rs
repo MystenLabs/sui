@@ -584,6 +584,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         }
         // we need a new session just for deserializing and fetching abilities. Which is sad
         // TODO remove this
+        // TODO do we need (some part of) linkage context from the entire transactional execution
+        // here (e.g., type origin info for all objects that have been "touched" by the
+        // transaction)?
         let tmp_session = new_tmp_session(
             vm,
             LinkageView::new(state_view, SUI_FRAMEWORK_OBJECT_ID)?,
