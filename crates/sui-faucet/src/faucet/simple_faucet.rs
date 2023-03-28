@@ -851,6 +851,79 @@ mod tests {
         assert!(candidates.get(&tiny_coin_id).is_none());
     }
 
+    #[tokio::test]
+    async fn test_faucet_not_enough_funds() {
+        telemetry_subscribers::init_for_testing();
+        let test_cluster = TestClusterBuilder::new().build().await.unwrap();
+        let address = test_cluster.get_address_0();
+        let npc_address = test_cluster.get_address_1();
+        let mut context = test_cluster.wallet;
+        let gases = get_current_gases(address, &mut context).await;
+
+        let small_value: u64 = 100;
+        let res = SuiClientCommands::SplitCoin {
+            coin_id: *gases[0].id(),
+            amounts: Some(vec![small_value + DEFAULT_GAS_COMPUTATION_BUCKET]),
+            gas_budget: 50000,
+            gas: None,
+            count: None,
+        }
+        .execute(&mut context)
+        .await
+        .unwrap();
+
+        let small_coin_id = if let SuiClientCommandResult::SplitCoin(resp) = res {
+            assert!(matches!(
+                resp.effects.as_ref().unwrap().status(),
+                SuiExecutionStatus::Success
+            ));
+            resp.effects.as_ref().unwrap().created()[0]
+                .reference
+                .object_id
+        } else {
+            panic!("split command did not return SuiClientCommandResult::SplitCoin");
+        };
+
+        // Get the latest list of gas
+        let gases = get_current_gases(address, &mut context).await;
+        // transfer all the coins except the small one
+        for coin in gases {
+            if coin.id() != &small_coin_id {
+                let result = SuiClientCommands::TransferSui { 
+                    to: npc_address,
+                    sui_coin_object_id: *coin.id(),
+                    gas_budget: 10000,
+                    amount: None }
+                    .execute(&mut context)
+                    .await
+                    .unwrap();
+                if let SuiClientCommandResult::TransferSui(resp) = result {
+                    assert!(matches!(
+                        resp.effects.as_ref().unwrap().status(),
+                        SuiExecutionStatus::Success
+                    ))
+                } else {
+                    panic!("TransferSui transaction failed or did not return SuiClientCommandResult::TransferSui")
+                }
+            }
+        }
+
+        // create a new faucet
+        let tmp = tempfile::tempdir().unwrap();
+        let prom_registry = Registry::new();
+        let faucet = SimpleFaucet::new(context, &prom_registry, &tmp.path().join("faucet.wal"))
+            .await
+            .unwrap();
+        let amounts = &vec![small_value + 1];
+        let result = faucet.send(
+            Uuid::new_v4(),
+            SuiAddress::random_for_testing_only(),
+            amounts
+        ).await;
+        assert!(result.is_err(), "Expected an error because of insufficient faucet founds but got: {:?}", result.unwrap());
+        
+    }
+
     async fn test_basic_interface(faucet: &impl Faucet) {
         let recipient = SuiAddress::random_for_testing_only();
         let amounts = vec![1, 2, 3];
