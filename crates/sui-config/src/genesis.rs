@@ -768,9 +768,6 @@ impl Builder {
             CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
-        // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_sig().len(), self.validators.len() as u64);
-
         let genesis = Genesis {
             checkpoint,
             checkpoint_contents,
