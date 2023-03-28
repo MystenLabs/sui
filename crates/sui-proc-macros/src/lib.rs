@@ -157,23 +157,21 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
     let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
-    let args = arg_parser.parse(args).unwrap();
+    let args = arg_parser.parse(args).unwrap().into_iter();
 
     let header = if cfg!(msim) {
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #args*)]
-            #[::sui_macros::init_static_initializers]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)* )]
         }
     } else {
         quote! {
-            #[::tokio::test(#args*)]
-            // though this is not required for tokio, we do it to get logs as well.
-            #[::sui_macros::init_static_initializers]
+            #[::tokio::test(#(#args)*)]
         }
     };
 
     let result = quote! {
         #header
+        #[::sui_macros::init_static_initializers]
         #input
     };
 
@@ -190,11 +188,11 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
 pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
     let arg_parser = Punctuated::<syn::Meta, Token![,]>::parse_terminated;
-    let args = arg_parser.parse(args).unwrap();
+    let args = arg_parser.parse(args).unwrap().into_iter();
 
     let result = if cfg!(msim) {
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #args*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
             #[::sui_macros::init_static_initializers]
             #input
         }
