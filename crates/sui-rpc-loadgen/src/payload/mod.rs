@@ -7,18 +7,18 @@ mod pay_sui;
 mod query_transactions;
 mod rpc_command_processor;
 mod validation;
+use strum_macros::EnumString;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
-use std::str::FromStr;
 use std::time::Duration;
 
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::{base_types::SuiAddress, messages_checkpoint::CheckpointSequenceNumber};
 
 use crate::load_test::LoadTestConfig;
-pub use rpc_command_processor::RpcCommandProcessor;
-use sui_types::base_types::{ObjectID, SuiAddress};
+pub use rpc_command_processor::{load_addresses_from_file, RpcCommandProcessor};
+use sui_types::base_types::ObjectID;
 
 #[derive(Default, Clone)]
 pub struct SignerInfo {
@@ -91,15 +91,15 @@ impl Command {
     }
 
     pub fn new_query_transaction_blocks(
-        from_address: Option<String>,
-        to_address: Option<String>,
+        address_type: AddressQueryType,
+        addresses: Vec<SuiAddress>,
     ) -> Self {
-        let query_transactions = QueryTransactions {
-            from_address: from_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
-            to_address: to_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+        let query_transactions = QueryTransactionBlocks {
+            address_type,
+            addresses,
         };
         Self {
-            data: CommandData::QueryTransactions(query_transactions),
+            data: CommandData::QueryTransactionBlocks(query_transactions),
             ..Default::default()
         }
     }
@@ -121,7 +121,7 @@ pub enum CommandData {
     DryRun(DryRun),
     GetCheckpoints(GetCheckpoints),
     PaySui(PaySui),
-    QueryTransactions(QueryTransactions),
+    QueryTransactionBlocks(QueryTransactionBlocks),
 }
 
 impl Default for CommandData {
@@ -148,9 +148,23 @@ pub struct GetCheckpoints {
 pub struct PaySui {}
 
 #[derive(Clone, Default)]
-pub struct QueryTransactions {
-    pub from_address: Option<SuiAddress>,
-    pub to_address: Option<SuiAddress>,
+pub struct QueryTransactionBlocks {
+    pub address_type: AddressQueryType,
+    pub addresses: Vec<SuiAddress>,
+}
+
+#[derive(Clone, EnumString)]
+#[strum(serialize_all = "lowercase")]
+pub enum AddressQueryType {
+    From,
+    To,
+    Both,
+}
+
+impl Default for AddressQueryType {
+    fn default() -> Self {
+        AddressQueryType::From
+    }
 }
 
 #[async_trait]

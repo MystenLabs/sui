@@ -5,8 +5,10 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use dashmap::{DashMap, DashSet};
 use futures::future::join_all;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::fmt;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,6 +32,9 @@ use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
 use crate::payload::{
     Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
 };
+
+use super::validation::chunk_entities;
+use super::QueryTransactionBlocks;
 
 pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
 pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
@@ -75,7 +80,7 @@ impl RpcCommandProcessor {
             CommandData::DryRun(ref v) => self.process(v, signer_info).await,
             CommandData::GetCheckpoints(ref v) => self.process(v, signer_info).await,
             CommandData::PaySui(ref v) => self.process(v, signer_info).await,
-            CommandData::QueryTransactions(ref v) => self.process(v, signer_info).await,
+            CommandData::QueryTransactionBlocks(ref v) => self.process(v, signer_info).await,
         }
     }
 
@@ -145,7 +150,7 @@ impl RpcCommandProcessor {
         }
     }
 
-    pub(crate) fn add_addresses(&self, responses: Vec<SuiTransactionBlockResponse>) {
+    pub(crate) fn add_addresses_from_response(&self, responses: Vec<SuiTransactionBlockResponse>) {
         for response in responses {
             let transaction = response.transaction;
             if let Some(transaction) = transaction {
@@ -158,10 +163,18 @@ impl RpcCommandProcessor {
     pub(crate) fn dump_cache_to_file(&self) {
         // TODO: be more granular
         let digests: Vec<TransactionDigest> = self.transaction_digests.iter().map(|x| *x).collect();
-        write_data_to_file(&digests, &format!("{}/digests", &self.data_dir)).unwrap();
+        write_data_to_file(
+            &digests,
+            &format!("{}/{}", &self.data_dir, CacheType::TransactionDigest),
+        )
+        .unwrap();
 
         let addresses: Vec<SuiAddress> = self.addresses.iter().map(|x| *x).collect();
-        write_data_to_file(&addresses, &format!("{}/addresses", &self.data_dir)).unwrap();
+        write_data_to_file(
+            &addresses,
+            &format!("{}/{}", &self.data_dir, CacheType::SuiAddress),
+        )
+        .unwrap();
     }
 }
 
@@ -199,6 +212,13 @@ impl Processor for RpcCommandProcessor {
                     vec![config.command.clone(); config.num_threads]
                 } else {
                     divide_checkpoint_tasks(&clients, data, config.num_threads).await
+                }
+            }
+            CommandData::QueryTransactionBlocks(data) => {
+                if !config.divide_tasks {
+                    vec![config.command.clone(); config.num_threads]
+                } else {
+                    divide_query_transaction_blocks_tasks(data, config.num_threads).await
                 }
             }
             _ => vec![config.command.clone(); config.num_threads],
@@ -264,6 +284,48 @@ fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), any
     Ok(())
 }
 
+pub enum CacheType {
+    SuiAddress,
+    TransactionDigest,
+}
+
+impl fmt::Display for CacheType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CacheType::SuiAddress => write!(f, "SuiAddress"),
+            CacheType::TransactionDigest => write!(f, "TransactionDigest"),
+        }
+    }
+}
+
+// TODO(Will): Consider using enums for input and output? Would mean we need to do checks any time we use generic load_cache_from_file
+pub fn load_addresses_from_file(filepath: String) -> Vec<SuiAddress> {
+    let path = format!("{}/{}", filepath, CacheType::SuiAddress);
+    let addresses: Vec<SuiAddress> = read_data_from_file(&path).expect("Failed to read addresses");
+    addresses
+}
+
+fn read_data_from_file<T: DeserializeOwned>(file_path: &str) -> Result<T, anyhow::Error> {
+    let mut path_buf = PathBuf::from(file_path);
+
+    // Check if the file has a JSON extension
+    if path_buf.extension().map_or(true, |ext| ext != "json") {
+        // If not, add .json to the filename
+        path_buf.set_extension("json");
+    }
+
+    let path = path_buf.as_path();
+    if !path.exists() {
+        return Err(anyhow!("File not found: {}", file_path));
+    }
+
+    let file = File::open(path).map_err(|e| anyhow::anyhow!("Error opening file: {}", e))?;
+    let deserialized_data: T =
+        serde_json::from_reader(file).map_err(|e| anyhow!("Deserialization error: {}", e))?;
+
+    Ok(deserialized_data)
+}
+
 async fn divide_checkpoint_tasks(
     clients: &[SuiClient],
     data: &GetCheckpoints,
@@ -301,6 +363,22 @@ async fn divide_checkpoint_tasks(
                 data.record,
             )
         })
+        .collect()
+}
+
+async fn divide_query_transaction_blocks_tasks(
+    data: &QueryTransactionBlocks,
+    num_chunks: usize,
+) -> Vec<Command> {
+    let chunk_size = if data.addresses.len() < num_chunks {
+        1
+    } else {
+        data.addresses.len() as u64 / num_chunks as u64
+    };
+    let chunked = chunk_entities(data.addresses.as_slice(), Some(chunk_size as usize));
+    chunked
+        .into_iter()
+        .map(|chunk| Command::new_query_transaction_blocks(data.address_type.clone(), chunk))
         .collect()
 }
 
