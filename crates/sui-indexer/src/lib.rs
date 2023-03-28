@@ -47,7 +47,10 @@ pub mod utils;
 pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
-pub const MIGRATED_METHODS: [&str; 7] = [
+/// Returns all endpoints for which we have implemented on the indexer,
+/// some of them are not validated yet.
+/// NOTE: we only use this for integration testing
+const IMPLEMENTED_METHODS: [&str; 7] = [
     "get_checkpoint",
     "get_latest_checkpoint_sequence_number",
     "get_object_with_options",
@@ -96,10 +99,8 @@ impl IndexerConfig {
         )
     }
 
-    /// returns all endpoints for which we have implemented on the indexer
-    /// NOTE: we only use this for integration testing
-    pub fn all_migrated_methods() -> Vec<String> {
-        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
+    pub fn all_implemented_methods() -> Vec<String> {
+        IMPLEMENTED_METHODS.iter().map(|&s| s.to_string()).collect()
     }
 }
 
