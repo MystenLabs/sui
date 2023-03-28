@@ -5165,7 +5165,7 @@ async fn test_for_inc_201_dry_run() {
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let (DryRunTransactionResponse { events, .. }, _, _) = fullnode
+    let (DryRunTransactionBlockResponse { events, .. }, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),

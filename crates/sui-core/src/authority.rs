@@ -46,8 +46,8 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
-    Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
-    SuiObjectDataFilter, SuiTransactionBlockEvents,
+    Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -1019,7 +1019,7 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
     ) -> Result<
         (
-            DryRunTransactionResponse,
+            DryRunTransactionBlockResponse,
             BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
             TransactionEffects,
         ),
@@ -1105,7 +1105,7 @@ impl AuthorityState {
         let balance_changes = Vec::new();
 
         Ok((
-            DryRunTransactionResponse {
+            DryRunTransactionBlockResponse {
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),

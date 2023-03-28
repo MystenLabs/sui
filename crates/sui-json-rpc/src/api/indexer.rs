@@ -33,7 +33,7 @@ pub trait IndexerApi {
     ) -> RpcResult<ObjectsPage>;
 
     /// Return list of transactions for a specified query criteria.
-    #[method(name = "queryTransactions")]
+    #[method(name = "queryTransactionBlocks")]
     async fn query_transaction_blocks(
         &self,
         /// the transaction query criteria.

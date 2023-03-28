@@ -38,7 +38,7 @@ import {
   CheckpointDigest,
   Checkpoint,
   CommitteeInfo,
-  DryRunTransactionResponse,
+  DryRunTransactionBlockResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   SuiTransactionBlockResponseOptions,
@@ -460,7 +460,7 @@ export class JsonRpcProvider {
       OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
-      'suix_queryTransactions',
+      'suix_queryTransactionBlocks',
       [
         {
           filter: input.filter,
@@ -483,7 +483,7 @@ export class JsonRpcProvider {
       throw new Error('Invalid Transaction digest');
     }
     return await this.client.requestWithType(
-      'sui_getTransaction',
+      'sui_getTransactionBlock',
       [input.digest, input.options],
       SuiTransactionBlockResponse,
       this.options.skipDataValidation,
@@ -506,7 +506,7 @@ export class JsonRpcProvider {
     }
 
     return await this.client.requestWithType(
-      'sui_multiGetTransactions',
+      'sui_multiGetTransactionBlocks',
       [input.digests, input.options],
       array(SuiTransactionBlockResponse),
       this.options.skipDataValidation,
@@ -520,7 +520,7 @@ export class JsonRpcProvider {
     requestType?: ExecuteTransactionRequestType;
   }): Promise<SuiTransactionBlockResponse> {
     return await this.client.requestWithType(
-      'sui_executeTransaction',
+      'sui_executeTransactionBlock',
       [
         typeof input.transactionBlock === 'string'
           ? input.transactionBlock
@@ -540,7 +540,7 @@ export class JsonRpcProvider {
 
   async getTotalTransactionBlocks(): Promise<bigint> {
     const resp = await this.client.requestWithType(
-      'sui_getTotalTransactionNumber',
+      'sui_getTotalTransactionBlocks',
       [],
       string(),
       this.options.skipDataValidation,
@@ -683,7 +683,7 @@ export class JsonRpcProvider {
     }
 
     return await this.client.requestWithType(
-      'sui_devInspectTransaction',
+      'sui_devInspectTransactionBlock',
       [input.sender, devInspectTxBytes, input.gasPrice, input.epoch],
       DevInspectResults,
       this.options.skipDataValidation,
@@ -695,15 +695,15 @@ export class JsonRpcProvider {
    */
   async dryRunTransactionBlock(input: {
     transactionBlock: Uint8Array | string;
-  }): Promise<DryRunTransactionResponse> {
+  }): Promise<DryRunTransactionBlockResponse> {
     return await this.client.requestWithType(
-      'sui_dryRunTransaction',
+      'sui_dryRunTransactionBlock',
       [
         typeof input.transactionBlock === 'string'
           ? input.transactionBlock
           : toB64(input.transactionBlock),
       ],
-      DryRunTransactionResponse,
+      DryRunTransactionBlockResponse,
       this.options.skipDataValidation,
     );
   }

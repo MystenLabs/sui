@@ -16,7 +16,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 #[rpc(server, client, namespace = "sui")]
 pub trait ReadApi {
     /// Return the transaction response object.
-    #[method(name = "getTransaction")]
+    #[method(name = "getTransactionBlock")]
     async fn get_transaction_block(
         &self,
         /// the digest of the queried transaction
@@ -28,7 +28,7 @@ pub trait ReadApi {
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
     /// the input size exceeds QUERY_MAX_RESULT_LIMIT
-    #[method(name = "multiGetTransactions")]
+    #[method(name = "multiGetTransactionBlocks")]
     async fn multi_get_transaction_blocks(
         &self,
         /// A list of transaction digests.
@@ -114,7 +114,7 @@ pub trait ReadApi {
     ) -> RpcResult<Vec<SuiEvent>>;
 
     /// Return the total number of transactions known to the server.
-    #[method(name = "getTotalTransactionNumber")]
+    #[method(name = "getTotalTransactionBlocks")]
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
 
     /// Return the sequence number of the latest checkpoint that has been executed

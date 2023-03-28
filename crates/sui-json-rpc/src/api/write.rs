@@ -5,7 +5,7 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransactionBlockResponse,
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 
@@ -26,7 +26,7 @@ pub trait WriteApi {
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
     /// request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true
-    #[method(name = "executeTransaction", deprecated)]
+    #[method(name = "executeTransactionBlock")]
     async fn execute_transaction_block(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
@@ -42,7 +42,7 @@ pub trait WriteApi {
     /// Runs the transaction in dev-inspect mode. Which allows for nearly any
     /// transaction (or Move call) with any arguments. Detailed results are
     /// provided, including both the transaction effects and any return values.
-    #[method(name = "devInspectTransaction")]
+    #[method(name = "devInspectTransactionBlock")]
     async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
@@ -56,9 +56,9 @@ pub trait WriteApi {
 
     /// Return transaction execution effects including the gas cost summary,
     /// while the effects are not committed to the chain.
-    #[method(name = "dryRunTransaction")]
+    #[method(name = "dryRunTransactionBlock")]
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
-    ) -> RpcResult<DryRunTransactionResponse>;
+    ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
