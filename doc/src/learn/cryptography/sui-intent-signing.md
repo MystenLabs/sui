@@ -28,7 +28,7 @@ pub struct IntentMessage<T> {
 }
 ```
 
-To create an intent struct, include the `IntentScope` (what the type of the message is), `IntentVersion` (what version the network supports), `AppId` (what application that the signature refers to).
+To create an intent struct, include the `IntentScope` (what the type of the message is), `IntentVersion` (what version the network supports), and `AppId` (what application that the signature refers to).
 
 ```rust
 pub struct Intent {
@@ -38,7 +38,7 @@ pub struct Intent {
 }
 ```
 
-To see detailed definition for each field, see each enum definition [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs).
+To see a detailed definition for each field, see each enum definition [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs).
 
 The serialization of an `Intent` is a 3-byte array where each field is represented by a byte.
 
@@ -46,7 +46,7 @@ The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concaten
 
 ## User Signature
 
-To create a user signature, construct a intent message first, and create the signature over the BCS serialized value of the intent message (`intent || message`).
+To create a user signature, construct an intent message first, and create the signature over the BCS serialized value of the intent message (`intent || message`).
 
 Here is an example in Rust:
 

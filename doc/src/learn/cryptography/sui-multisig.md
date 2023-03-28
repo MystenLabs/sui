@@ -2,7 +2,7 @@
 title: Sui Multi-Signature
 ---
 
-Sui supports Multi-Signature (Multisig) transactions. A multisig transaction is one that requires more than one private key to authorize it. This topic demonstrate the workflow to create a multisig transaction in Sui, and then submit it using the Sui CLI against a local network. To learn how to set up a local network, see [Sui Local Network](../build/sui-local-network.md).
+Sui supports multi-signature (multisig) transactions. A multisig transaction is one that requires more than one private key to authorize it. This topic demonstrate the workflow to create a multisig transaction in Sui, and then submit it using the Sui CLI against a local network. To learn how to set up a local network, see [Sui Local Network](../build/sui-local-network.md).
 
 ## Step 1: Add keys to Sui keystore
 
@@ -72,7 +72,7 @@ Raw tx_bytes to execute: $TX_BYTES
 
 ## Step 4: Sign the transaction with two keys
 
-Use the following code sample to sign the transaction with two keys in `sui.keystore`. You can do this other tools as long as you serialize it to `flag || sig || pk`.
+Use the following code sample to sign the transaction with two keys in `sui.keystore`. You can do this with other tools as long as you serialize it to `flag || sig || pk`.
 
 ```shell
 sui keytool sign --address $ADDR_1 --data $TX_BYTES
