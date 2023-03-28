@@ -5,8 +5,9 @@ use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use futures::{stream::FuturesUnordered, StreamExt};
-use prometheus::Registry;
+use prometheus::{IntCounterVec, Registry};
 use roaring::RoaringBitmap;
+use std::future::Future;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -51,7 +52,7 @@ use sui_types::{
     sui_system_state::SuiSystemStateTrait,
 };
 use tokio::{task::JoinSet, time::timeout};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -63,7 +64,6 @@ pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
-use futures::FutureExt;
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
@@ -321,10 +321,41 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let mut epoch = 0;
 
+        async fn retry<T, F: Future<Output = Result<T, SuiError>>>(
+            gen: impl Fn() -> F,
+            name: AuthorityName,
+            metrics: IntCounterVec,
+        ) -> T {
+            loop {
+                let fut = gen();
+                match fut.await {
+                    Ok(r) => return r,
+                    Err(e) => {
+                        metrics
+                            .with_label_values(&[&name.concise().to_string(), e.as_ref()])
+                            .inc();
+                        warn!("RPC error from {} {:?}", name, e);
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
+                }
+            }
+        }
+
         // Send the transaction to all validators.
+        let metrics = self.qd.authority_aggregator().load().metrics.clone();
         let mut futures = FuturesUnordered::new();
         for (name, client) in self.clients.iter() {
-            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
+            let client = client.clone();
+            let tx = tx.clone();
+            let fut = retry(
+                move || {
+                    let client = client.clone();
+                    let tx = tx.clone();
+                    async move { client.handle_transaction(tx).await }
+                },
+                *name,
+                metrics.process_tx_errors.clone(),
+            );
             futures.push(fut);
         }
 
@@ -334,37 +365,23 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let mut total_stake = 0;
         let mut votes = Vec::new();
         let mut certificate = None;
-        while let Some((response, name)) = futures.next().await {
-            match response {
-                Ok(response) => match response.status {
-                    // If all goes well, the authority returns a vote.
-                    TransactionStatus::Signed(signature) => {
-                        epoch = signature.epoch;
-                        total_stake += self.committee.weight(&signature.authority);
-                        votes.push(signature);
+        while let Some(response) = futures.next().await {
+            match response.status {
+                // If all goes well, the authority returns a vote.
+                TransactionStatus::Signed(signature) => {
+                    epoch = signature.epoch;
+                    total_stake += self.committee.weight(&signature.authority);
+                    votes.push(signature);
+                }
+                // The transaction may be submitted again in case the certificate's submission failed.
+                TransactionStatus::Executed(cert, _effects, _) => {
+                    tracing::warn!("Transaction already submitted: {tx:?}");
+                    if let Some(cert) = cert {
+                        certificate = Some(CertifiedTransaction::new_from_data_and_sig(
+                            tx.data().clone(),
+                            cert,
+                        ));
                     }
-                    // The transaction may be submitted again in case the certificate's submission failed.
-                    TransactionStatus::Executed(cert, _effects, _) => {
-                        tracing::warn!("Transaction already submitted: {tx:?}");
-                        if let Some(cert) = cert {
-                            certificate = Some(CertifiedTransaction::new_from_data_and_sig(
-                                tx.data().clone(),
-                                cert,
-                            ));
-                        }
-                    }
-                },
-                // This typically happens when the validators are overloaded and the transaction is
-                // immediately rejected.
-                Err(e) => {
-                    self.qd
-                        .authority_aggregator()
-                        .load()
-                        .metrics
-                        .process_tx_errors
-                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                        .inc();
-                    tracing::warn!("Failed to submit transaction: {e}")
                 }
             }
 
@@ -425,41 +442,27 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let client = client.clone();
             let certificate = certified_transaction.clone();
             let name = *name;
-            futures.push(async move {
-                client
-                    .handle_certificate(certificate)
-                    .map(move |r| (r, name))
-                    .await
-            });
+            futures.push(retry(
+                move || {
+                    let client = client.clone();
+                    let certificate = certificate.clone();
+                    async move { client.handle_certificate(certificate).await }
+                },
+                name,
+                metrics.process_cert_errors.clone(),
+            ))
         }
 
         // Wait for the replies from a quorum of validators.
-        while let Some((response, name)) = futures.next().await {
-            match response {
-                // If all goes well, the validators reply with signed effects.
-                Ok(HandleCertificateResponse {
-                    signed_effects,
-                    events,
-                }) => {
-                    let author = signed_effects.auth_sig().authority;
-                    transaction_effects = Some(signed_effects.data().clone());
-                    transaction_events = Some(events);
-                    total_stake += self.committee.weight(&author);
-                }
-
-                // This typically happens when the validators are overloaded and the certificate is
-                // immediately rejected.
-                Err(e) => {
-                    self.qd
-                        .authority_aggregator()
-                        .load()
-                        .metrics
-                        .process_cert_errors
-                        .with_label_values(&[&name.concise().to_string(), e.as_ref()])
-                        .inc();
-                    tracing::warn!("Failed to submit certificate: {e}")
-                }
-            }
+        while let Some(response) = futures.next().await {
+            let HandleCertificateResponse {
+                signed_effects,
+                events,
+            } = response;
+            let author = signed_effects.auth_sig().authority;
+            transaction_effects = Some(signed_effects.data().clone());
+            transaction_events = Some(events);
+            total_stake += self.committee.weight(&author);
 
             if total_stake >= self.committee.quorum_threshold() {
                 break;
@@ -476,7 +479,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         {
             let mut requests = self.requests.lock().unwrap();
             requests.spawn(async move {
-                let _ = timeout(Duration::from_secs(10), futures.collect::<Vec<_>>()).await;
+                let _ = timeout(Duration::from_secs(60), futures.collect::<Vec<_>>()).await;
             });
         }
 
