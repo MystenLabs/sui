@@ -14,7 +14,7 @@
 -  [Function `version`](#0x3_validator_wrapper_version)
 
 
-<pre><code><b>use</b> <a href="">0x2::tx_context</a>;
+<pre><code><b>use</b> <a href="../../../build/Sui/docs/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 <b>use</b> <a href="">0x2::versioned</a>;
 <b>use</b> <a href="validator.md#0x3_validator">0x3::validator</a>;
 </code></pre>
@@ -68,7 +68,7 @@
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_create_v1">create_v1</a>(<a href="validator.md#0x3_validator">validator</a>: <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_create_v1">create_v1</a>(<a href="validator.md#0x3_validator">validator</a>: <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, ctx: &<b>mut</b> <a href="../../../build/Sui/docs/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">validator_wrapper::ValidatorWrapper</a>
 </code></pre>
 
 
