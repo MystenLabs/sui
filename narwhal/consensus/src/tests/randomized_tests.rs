@@ -268,7 +268,7 @@ pub fn make_certificates_with_parameters(
             // Step 2 -- introduce failures (assuming those are enabled)
             // We disable the failure probability if we have already reached the maximum number
             // of allowed failures (f)
-            let should_fail = if total_failures + 1 == committee.validity_threshold() {
+            let should_fail = if committee.reached_validity(total_failures + 1) {
                 false
             } else {
                 let b = Bernoulli::new(modes.nodes_failure_probability).unwrap();
@@ -361,7 +361,7 @@ pub fn make_certificates_with_parameters(
         // Sanity checks
         // Ensure total stake of the round provides strong quorum
         assert!(
-            total_round_stake >= committee.quorum_threshold(),
+            committee.reached_quorum(total_round_stake),
             "Strong quorum is needed per round to ensure DAG advance"
         );
 

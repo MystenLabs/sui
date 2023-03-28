@@ -272,6 +272,16 @@ impl Committee {
         self.validity_threshold
     }
 
+    /// Returns true if the provided stake has reached quorum (2f+1)
+    pub fn reached_quorum(&self, stake: Stake) -> bool {
+        stake >= self.quorum_threshold()
+    }
+
+    /// Returns true if the provided stake has reached availability (f+1)
+    pub fn reached_validity(&self, stake: Stake) -> bool {
+        stake >= self.validity_threshold()
+    }
+
     pub fn total_stake(&self) -> Stake {
         self.authorities.values().map(|x| x.stake).sum()
     }
