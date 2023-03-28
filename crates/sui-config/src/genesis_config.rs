@@ -179,9 +179,11 @@ impl ValidatorGenesisInfo {
         assert!(port_offset < 1000);
         let port_offset: u16 = port_offset.try_into().unwrap();
         let make_tcp_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/{}/tcp/{}/http", ip, port).parse().unwrap() };
+            |port: u16| -> Multiaddr { format!("/ip4/{ip}/tcp/{port}/http").parse().unwrap() };
         let make_udp_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/{}/udp/{}", ip, port).parse().unwrap() };
+            |port: u16| -> Multiaddr { format!("/ip4/{ip}/udp/{port}").parse().unwrap() };
+        let make_tcp_zero_addr =
+            |port: u16| -> Multiaddr { format!("/ip4/0.0.0.0/tcp/{port}/http").parse().unwrap() };
 
         ValidatorGenesisInfo {
             key_pair,
@@ -195,7 +197,7 @@ impl ValidatorGenesisInfo {
             metrics_address: format!("0.0.0.0:{}", Self::DEFAULT_METRICS_PORT + port_offset)
                 .parse()
                 .unwrap(),
-            narwhal_metrics_address: make_tcp_addr(
+            narwhal_metrics_address: make_tcp_zero_addr(
                 Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
             ),
             gas_price: DEFAULT_GAS_PRICE,
@@ -251,6 +253,8 @@ impl GenesisConfig {
     /// A predictable rng seed used to generate benchmark configs. This seed may also be needed
     /// by other crates (e.g. the load generators).
     pub const BENCHMARKS_RNG_SEED: u64 = 0;
+    /// Port offset for benchmarks' genesis configs.
+    pub const BENCHMARKS_PORT_OFFSET: usize = 500;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -352,7 +356,7 @@ impl GenesisConfig {
                         NetworkKeyPair::generate(&mut rng),   // network_key_pair
                         Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
                         ip.to_string(),
-                        500, // port_offset
+                        Self::BENCHMARKS_PORT_OFFSET,
                     ),
                 }
             })
