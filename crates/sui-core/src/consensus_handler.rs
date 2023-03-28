@@ -16,7 +16,7 @@ use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{CertificateAPI, ConsensusOutput, HeaderAPI};
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -168,11 +168,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             let output_cert = Arc::new(cert);
             for batch in batches {
                 self.metrics.consensus_handler_processed_batches.inc();
-                for serialized_transaction in batch.transactions {
+                for serialized_transaction in batch.transactions() {
                     bytes += serialized_transaction.len();
 
                     let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                        &serialized_transaction,
+                        serialized_transaction,
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
@@ -189,7 +189,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                         .with_label_values(&[classify(&transaction)])
                         .inc();
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, output_cert.clone()));
+                    transactions.push((
+                        serialized_transaction.clone(),
+                        transaction,
+                        output_cert.clone(),
+                    ));
                 }
             }
         }

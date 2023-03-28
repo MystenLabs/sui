@@ -9,7 +9,7 @@ use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_config::{Epoch, WorkerCache};
 use narwhal_executor::ExecutionState;
-use narwhal_types::{ConsensusOutput, TransactionProto, TransactionsClient};
+use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
 use std::sync::Arc;
@@ -30,8 +30,11 @@ impl ExecutionState for NoOpExecutionState {
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         for (_, batches) in consensus_output.batches {
             for batch in batches {
-                for transaction in batch.transactions.into_iter() {
-                    assert_eq!(transaction, Bytes::from(self.epoch.to_be_bytes().to_vec()));
+                for transaction in batch.transactions().iter() {
+                    assert_eq!(
+                        transaction.clone(),
+                        Bytes::from(self.epoch.to_be_bytes().to_vec())
+                    );
                 }
             }
         }

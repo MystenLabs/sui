@@ -25,7 +25,7 @@ use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, trace, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CertificateAPI, CommittedSubDag,
+    metered_channel, Batch, BatchAPI, BatchDigest, Certificate, CertificateAPI, CommittedSubDag,
     ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, RequestBatchesResponse, Timestamp,
 };
 
@@ -330,7 +330,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             for (local_batch_digest, local_batch) in local_batches {
                 if remaining_digests.remove(&local_batch_digest) {
                     let batch_fetch_duration =
-                        local_batch.metadata.created_at.elapsed().as_secs_f64();
+                        local_batch.metadata().created_at.elapsed().as_secs_f64();
                     self.metrics
                         .batch_execution_latency
                         .observe(batch_fetch_duration);
@@ -360,7 +360,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 for (remote_batch_digest, remote_batch) in remote_batches {
                     if remaining_digests.remove(&remote_batch_digest) {
                         let batch_fetch_duration =
-                            remote_batch.metadata.created_at.elapsed().as_secs_f64();
+                            remote_batch.metadata().created_at.elapsed().as_secs_f64();
                         self.metrics
                             .batch_execution_latency
                             .observe(batch_fetch_duration);

@@ -24,8 +24,9 @@ use store::rocks::ReadWriteOptions;
 use test_utils::{batch, temp_dir, test_network, transaction, CommitteeFixture};
 use tokio::sync::watch;
 use types::{
-    MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender, TransactionProto,
-    TransactionsClient, WorkerBatchMessage, WorkerToPrimaryServer, WorkerToWorkerClient,
+    BatchAPI, MockWorkerToPrimary, MockWorkerToWorker, PreSubscribedBroadcastSender,
+    TransactionProto, TransactionsClient, WorkerBatchMessage, WorkerToPrimaryServer,
+    WorkerToWorkerClient,
 };
 
 // A test validator that rejects every transaction / batch
@@ -229,7 +230,7 @@ async fn handle_remote_clients_transactions() {
 
     let join_handle = tokio::task::spawn(async move {
         let mut fut_list = FuturesOrdered::new();
-        for tx in batch.transactions {
+        for tx in batch.transactions() {
             let txn = TransactionProto {
                 transaction: Bytes::from(tx.clone()),
             };
@@ -344,12 +345,12 @@ async fn handle_local_clients_transactions() {
 
     let join_handle = tokio::task::spawn(async move {
         let mut fut_list = FuturesOrdered::new();
-        for txn in batch.transactions {
+        for txn in batch.transactions() {
             // Calls to submit_transaction are now blocking, so we need to drive them
             // all at the same time, rather than sequentially.
             let inner_client = client.clone();
             fut_list.push_back(async move {
-                inner_client.submit_transaction(txn).await.unwrap();
+                inner_client.submit_transaction(txn.clone()).await.unwrap();
             });
         }
 
