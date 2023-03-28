@@ -87,7 +87,7 @@ impl ProtocolCommands for SuiProtocol {
 
         let working_dir = self.working_dir.clone();
         Box::new(move |i| {
-            let validator_config = SuiProtocol::validator_configs(i);
+            let validator_config = sui_config::validator_config_file(i);
             let config_path: PathBuf = [&working_dir, &validator_config.into()].iter().collect();
             let path = config_path.display();
             let address = listen_addresses[i].clone();
@@ -179,8 +179,8 @@ impl SuiProtocol {
     }
 }
 
-/// TODO: All these functions and variables are already defined in other parts of the codebase
-/// or should not be needed after #9695 lands.
+// TODO: All these functions and variables are already defined in other parts of the codebase
+// or should not be needed after #9695 lands.
 // impl SuiProtocol {
 //     const AUTHORITIES_DB: &str = "authorities_db";
 //     const CONSENSUS_DB: &str = "consensus_db";

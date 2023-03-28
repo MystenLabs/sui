@@ -365,10 +365,17 @@ impl GenesisConfig {
             gas_object_ranges: Some(genesis_gas_objects),
         };
 
+        // Benchmarks require a deterministic genesis. Every validator locally generates it own
+        // genesis; it is thus important they have the same parameters.
+        let parameters = GenesisCeremonyParameters {
+            chain_start_timestamp_ms: 0,
+            ..GenesisCeremonyParameters::new()
+        };
+
         // Make a new genesis configuration.
         GenesisConfig {
             validator_config_info: Some(validator_config_info),
-            parameters: GenesisCeremonyParameters::new(),
+            parameters,
             committee_size: ips.len(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,
