@@ -78,17 +78,17 @@ New entries added 03/20/23.
 
 **[Major API breaking changes]** - `GetTransaction` API refactoring
 
-- [RPC] `sui_getTransaction` and `sui_multiGetTransaction` now take in an additional optional parameter called `options` that specifies which fields to retrieve (such as `transaction`, `effects`, `events`, etc). By default, these operations return only the transaction digest.
+- [RPC] `sui_getTransactionBlock` and `sui_multiGetTransaction` now take in an additional optional parameter called `options` that specifies which fields to retrieve (such as `transaction`, `effects`, `events`, etc). By default, these operations return only the transaction digest.
 - [TS SDK] Renamed `provider.getTransactionWithEffects` to `provider.getTransactionResponse`. The new method takes in an additional parameter, `SuiTransactionBlockResponseOptions`, to configure which fields to retrieve (such as `transaction`, `effects`, `events`, etc). By default, this method returns only the transaction digest.
 
 For more information, see [PR 8888](https://github.com/MystenLabs/sui/pull/8888).
 
 ---
 
-**[Major API breaking changes] sui_executeTransaction refactoring**
+**[Major API breaking changes] sui_executeTransactionBlock refactoring**
 
-- Removed `sui_executeTransactionSerializedSig` and `sui_submitTransaction` operations.
-- The `sui_executeTransaction` operation now takes a vector of signatures instead of a single signature to support Sponsored Transactions.
+- Removed `sui_executeTransactionBlockSerializedSig` and `sui_submitTransaction` operations.
+- The `sui_executeTransactionBlock` operation now takes a vector of signatures instead of a single signature to support Sponsored Transactions.
 
 To learn more, see [PR 9068](https://github.com/MystenLabs/sui/pull/9068).
 
@@ -132,7 +132,7 @@ Added 03/20/23
 
 ---
 
-**[API breaking change]** - To reduce the size of Sui Full node synchronization payloads, this release removes events from `TransactionEffect`. The events are still included in the `SuiTransactionBlockResponse` returned by `sui_getTransaction` and `sui_submitTransaction` endpoints. For more information, see [PR 7822](https://github.com/MystenLabs/sui/pull/7822).
+**[API breaking change]** - To reduce the size of Sui Full node synchronization payloads, this release removes events from `TransactionEffect`. The events are still included in the `SuiTransactionBlockResponse` returned by `sui_getTransactionBlock` and `sui_submitTransaction` endpoints. For more information, see [PR 7822](https://github.com/MystenLabs/sui/pull/7822).
 
 ---
 

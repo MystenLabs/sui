@@ -16,7 +16,7 @@ use sui_json_rpc::api::IndexerApiClient;
 use sui_json_rpc::api::MoveUtilsClient;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointedObjectID, Coin, CoinPage, DelegatedStake,
-    DryRunTransactionResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
+    DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -230,7 +230,7 @@ impl ReadApi {
     pub async fn dry_run_transaction_block(
         &self,
         tx: TransactionData,
-    ) -> SuiRpcResult<DryRunTransactionResponse> {
+    ) -> SuiRpcResult<DryRunTransactionBlockResponse> {
         Ok(self
             .api
             .http

@@ -178,7 +178,7 @@ impl RpcExampleProvider {
         let tx_bytes = TransactionBlockBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_executeTransaction",
+            "sui_executeTransactionBlock",
             vec![ExamplePairing::new(
                 "Execute an transaction with serialized signatures",
                 vec![
@@ -355,7 +355,7 @@ impl RpcExampleProvider {
 
     fn get_total_transaction_blocks(&mut self) -> Examples {
         Examples::new(
-            "sui_getTotalTransactionNumber",
+            "sui_getTotalTransactionBlocks",
             vec![ExamplePairing::new(
                 "Get total number of transactions",
                 vec![],
@@ -367,7 +367,7 @@ impl RpcExampleProvider {
     fn get_transaction_block(&mut self) -> Examples {
         let (_, _, _, _, result) = self.get_transfer_data_response();
         Examples::new(
-            "sui_getTransaction",
+            "sui_getTransactionBlock",
             vec![ExamplePairing::new(
                 "Return the transaction response object for specified transaction digest",
                 vec![
@@ -401,7 +401,7 @@ impl RpcExampleProvider {
             has_next_page,
         };
         Examples::new(
-            "sui_queryTransactions",
+            "suix_queryTransactionBlocks",
             vec![ExamplePairing::new(
                 "Return the transaction digest for specified query criteria",
                 vec![

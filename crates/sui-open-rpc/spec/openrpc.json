@@ -16,7 +16,7 @@
   },
   "methods": [
     {
-      "name": "sui_devInspectTransaction",
+      "name": "sui_devInspectTransactionBlock",
       "tags": [
         {
           "name": "Write API"
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "sui_dryRunTransaction",
+      "name": "sui_dryRunTransactionBlock",
       "tags": [
         {
           "name": "Write API"
@@ -82,15 +82,15 @@
         }
       ],
       "result": {
-        "name": "DryRunTransactionResponse",
+        "name": "DryRunTransactionBlockResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/DryRunTransactionResponse"
+          "$ref": "#/components/schemas/DryRunTransactionBlockResponse"
         }
       }
     },
     {
-      "name": "sui_executeTransaction",
+      "name": "sui_executeTransactionBlock",
       "tags": [
         {
           "name": "Write API"
@@ -121,7 +121,7 @@
           "name": "options",
           "description": "options for specifying the content to be returned",
           "schema": {
-            "$ref": "#/components/schemas/TransactionResponseOptions"
+            "$ref": "#/components/schemas/TransactionBlockResponseOptions"
           }
         },
         {
@@ -136,7 +136,7 @@
         "name": "SuiTransactionBlockResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
+          "$ref": "#/components/schemas/TransactionBlockResponse"
         }
       },
       "examples": [
@@ -289,8 +289,7 @@
             }
           }
         }
-      ],
-      "deprecated": true
+      ]
     },
     {
       "name": "sui_getCheckpoint",
@@ -739,7 +738,7 @@
       ]
     },
     {
-      "name": "sui_getTotalTransactionNumber",
+      "name": "sui_getTotalTransactionBlocks",
       "tags": [
         {
           "name": "Read API"
@@ -766,7 +765,7 @@
       ]
     },
     {
-      "name": "sui_getTransaction",
+      "name": "sui_getTransactionBlock",
       "tags": [
         {
           "name": "Read API"
@@ -786,7 +785,7 @@
           "name": "options",
           "description": "options for specifying the content to be returned",
           "schema": {
-            "$ref": "#/components/schemas/TransactionResponseOptions"
+            "$ref": "#/components/schemas/TransactionBlockResponseOptions"
           }
         }
       ],
@@ -794,7 +793,7 @@
         "name": "SuiTransactionBlockResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/TransactionResponse"
+          "$ref": "#/components/schemas/TransactionBlockResponse"
         }
       },
       "examples": [
@@ -979,7 +978,7 @@
       }
     },
     {
-      "name": "sui_multiGetTransactions",
+      "name": "sui_multiGetTransactionBlocks",
       "tags": [
         {
           "name": "Read API"
@@ -1002,7 +1001,7 @@
           "name": "options",
           "description": "config options to control which fields to fetch",
           "schema": {
-            "$ref": "#/components/schemas/TransactionResponseOptions"
+            "$ref": "#/components/schemas/TransactionBlockResponseOptions"
           }
         }
       ],
@@ -1012,7 +1011,7 @@
         "schema": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/TransactionResponse"
+            "$ref": "#/components/schemas/TransactionBlockResponse"
           }
         }
       }
@@ -1788,7 +1787,7 @@
       }
     },
     {
-      "name": "suix_queryTransactions",
+      "name": "suix_queryTransactionBlocks",
       "tags": [
         {
           "name": "Extended API"
@@ -1801,7 +1800,7 @@
           "description": "the transaction query criteria.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/TransactionResponseQuery"
+            "$ref": "#/components/schemas/TransactionBlockResponseQuery"
           }
         },
         {
@@ -1832,9 +1831,58 @@
         "name": "TransactionBlocksPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_TransactionResponse_and_TransactionDigest"
+          "$ref": "#/components/schemas/Page_for_TransactionBlockResponse_and_TransactionDigest"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified query criteria",
+          "params": [
+            {
+              "name": "query",
+              "value": {
+                "filter": {
+                  "InputObject": "0x93633829fcba6d6e0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8"
+                },
+                "options": null
+              }
+            },
+            {
+              "name": "cursor",
+              "value": "HxidAfFfyr4kXSiWeVq1J6Tk526YUVDoSUY5PSnS4tEJ"
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "descending_order",
+              "value": false
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "digest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                },
+                {
+                  "digest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+                },
+                {
+                  "digest": "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk"
+                },
+                {
+                  "digest": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
+                }
+              ],
+              "nextCursor": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F",
+              "hasNextPage": false
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_subscribeEvent",
@@ -3149,7 +3197,7 @@
             "description": "Summary of effects that likely would be generated if the transaction is actually run. Note however, that not all dev-inspect transactions are actually usable as transactions so it might not be possible actually generate these effects from a normal transaction.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/TransactionEffects"
+                "$ref": "#/components/schemas/TransactionBlockEffects"
               }
             ]
           },
@@ -3187,7 +3235,7 @@
           }
         ]
       },
-      "DryRunTransactionResponse": {
+      "DryRunTransactionBlockResponse": {
         "type": "object",
         "required": [
           "balanceChanges",
@@ -3203,7 +3251,7 @@
             }
           },
           "effects": {
-            "$ref": "#/components/schemas/TransactionEffects"
+            "$ref": "#/components/schemas/TransactionBlockEffects"
           },
           "events": {
             "type": "array",
@@ -5226,7 +5274,7 @@
           }
         }
       },
-      "Page_for_TransactionResponse_and_TransactionDigest": {
+      "Page_for_TransactionBlockResponse_and_TransactionDigest": {
         "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
         "type": "object",
         "required": [
@@ -5237,7 +5285,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TransactionResponse"
+              "$ref": "#/components/schemas/TransactionBlockResponse"
             }
           },
           "hasNextPage": {
@@ -7080,7 +7128,7 @@
           }
         }
       },
-      "Transaction": {
+      "TransactionBlock": {
         "type": "object",
         "required": [
           "data",
@@ -7088,7 +7136,7 @@
         ],
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/TransactionData"
+            "$ref": "#/components/schemas/TransactionBlockData"
           },
           "txSignatures": {
             "type": "array",
@@ -7130,7 +7178,7 @@
           }
         }
       },
-      "TransactionData": {
+      "TransactionBlockData": {
         "oneOf": [
           {
             "type": "object",
@@ -7154,21 +7202,13 @@
                 "$ref": "#/components/schemas/SuiAddress"
               },
               "transaction": {
-                "$ref": "#/components/schemas/TransactionKind"
+                "$ref": "#/components/schemas/TransactionBlockKind"
               }
             }
           }
         ]
       },
-      "TransactionDigest": {
-        "description": "A transaction will have a (unique) digest.",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Digest"
-          }
-        ]
-      },
-      "TransactionEffects": {
+      "TransactionBlockEffects": {
         "oneOf": [
           {
             "description": "The response from processing a transaction or a certified transaction",
@@ -7243,7 +7283,7 @@
                 "description": "The version that every modified (mutated or deleted) object had before it was modified by this transaction.",
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/TransactionEffectsModifiedAtVersions"
+                  "$ref": "#/components/schemas/TransactionBlockEffectsModifiedAtVersions"
                 }
               },
               "mutated": {
@@ -7301,7 +7341,7 @@
           }
         ]
       },
-      "TransactionEffectsModifiedAtVersions": {
+      "TransactionBlockEffectsModifiedAtVersions": {
         "type": "object",
         "required": [
           "objectId",
@@ -7315,6 +7355,307 @@
             "$ref": "#/components/schemas/SequenceNumber"
           }
         }
+      },
+      "TransactionBlockKind": {
+        "oneOf": [
+          {
+            "description": "A system transaction that will update epoch information on-chain.",
+            "type": "object",
+            "required": [
+              "computation_charge",
+              "epoch",
+              "epoch_start_timestamp_ms",
+              "kind",
+              "storage_charge",
+              "storage_rebate"
+            ],
+            "properties": {
+              "computation_charge": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt"
+              },
+              "epoch_start_timestamp_ms": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ChangeEpoch"
+                ]
+              },
+              "storage_charge": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "storage_rebate": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "A system transaction used for initializing the initial state of the chain.",
+            "type": "object",
+            "required": [
+              "kind",
+              "objects"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "Genesis"
+                ]
+              },
+              "objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectID"
+                }
+              }
+            }
+          },
+          {
+            "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "epoch": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologue"
+                ]
+              },
+              "round": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
+            "description": "A series of commands where the results of one command can be used in future commands",
+            "type": "object",
+            "required": [
+              "commands",
+              "inputs",
+              "kind"
+            ],
+            "properties": {
+              "commands": {
+                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiCommand"
+                }
+              },
+              "inputs": {
+                "description": "Input objects or primitive values",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiCallArg"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ProgrammableTransaction"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "TransactionBlockResponse": {
+        "type": "object",
+        "required": [
+          "digest"
+        ],
+        "properties": {
+          "balanceChanges": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BalanceChange"
+            }
+          },
+          "checkpoint": {
+            "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "confirmedLocalExecution": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "digest": {
+            "$ref": "#/components/schemas/TransactionDigest"
+          },
+          "effects": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionBlockEffects"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "events": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "objectChanges": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ObjectChange"
+            }
+          },
+          "rawTransaction": {
+            "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
+          },
+          "timestampMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "transaction": {
+            "description": "Transaction input data",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "TransactionBlockResponseOptions": {
+        "type": "object",
+        "properties": {
+          "showBalanceChanges": {
+            "description": "Whether to show balance_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showEffects": {
+            "description": "Whether to show transaction effects. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showEvents": {
+            "description": "Whether to show transaction events. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showInput": {
+            "description": "Whether to show transaction input data. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showObjectChanges": {
+            "description": "Whether to show object_changes. Default to be False",
+            "default": false,
+            "type": "boolean"
+          },
+          "showRawInput": {
+            "description": "Whether to show bcs-encoded transaction input data",
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "TransactionBlockResponseQuery": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "description": "If None, no filter will be applied",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "description": "config which fields to include in the response, by default only digest is included",
+            "default": null,
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionBlockResponseOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "TransactionDigest": {
+        "description": "A transaction will have a (unique) digest.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Digest"
+          }
+        ]
       },
       "TransactionEventsDigest": {
         "$ref": "#/components/schemas/Digest"
@@ -7460,299 +7801,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "TransactionKind": {
-        "oneOf": [
-          {
-            "description": "A system transaction that will update epoch information on-chain.",
-            "type": "object",
-            "required": [
-              "computation_charge",
-              "epoch",
-              "epoch_start_timestamp_ms",
-              "kind",
-              "storage_charge",
-              "storage_rebate"
-            ],
-            "properties": {
-              "computation_charge": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "epoch": {
-                "$ref": "#/components/schemas/BigInt"
-              },
-              "epoch_start_timestamp_ms": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "ChangeEpoch"
-                ]
-              },
-              "storage_charge": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "storage_rebate": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              }
-            }
-          },
-          {
-            "description": "A system transaction used for initializing the initial state of the chain.",
-            "type": "object",
-            "required": [
-              "kind",
-              "objects"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "Genesis"
-                ]
-              },
-              "objects": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ObjectID"
-                }
-              }
-            }
-          },
-          {
-            "description": "A system transaction marking the start of a series of transactions scheduled as part of a checkpoint",
-            "type": "object",
-            "required": [
-              "commit_timestamp_ms",
-              "epoch",
-              "kind",
-              "round"
-            ],
-            "properties": {
-              "commit_timestamp_ms": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "epoch": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "ConsensusCommitPrologue"
-                ]
-              },
-              "round": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
-              }
-            }
-          },
-          {
-            "description": "A series of commands where the results of one command can be used in future commands",
-            "type": "object",
-            "required": [
-              "commands",
-              "inputs",
-              "kind"
-            ],
-            "properties": {
-              "commands": {
-                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiCommand"
-                }
-              },
-              "inputs": {
-                "description": "Input objects or primitive values",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiCallArg"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "ProgrammableTransaction"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "TransactionResponse": {
-        "type": "object",
-        "required": [
-          "digest"
-        ],
-        "properties": {
-          "balanceChanges": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/BalanceChange"
-            }
-          },
-          "checkpoint": {
-            "description": "The checkpoint number when this transaction was included and hence finalized. This is only returned in the read api, not in the transaction execution api.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "confirmedLocalExecution": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "digest": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          },
-          "effects": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TransactionEffects"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "errors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "events": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            }
-          },
-          "objectChanges": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "$ref": "#/components/schemas/ObjectChange"
-            }
-          },
-          "rawTransaction": {
-            "description": "BCS encoded [SenderSignedData] that includes input object references returns empty array if `show_raw_transaction` is false",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Base64"
-              }
-            ]
-          },
-          "timestampMs": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "transaction": {
-            "description": "Transaction input data",
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Transaction"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "TransactionResponseOptions": {
-        "type": "object",
-        "properties": {
-          "showBalanceChanges": {
-            "description": "Whether to show balance_changes. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showEffects": {
-            "description": "Whether to show transaction effects. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showEvents": {
-            "description": "Whether to show transaction events. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showInput": {
-            "description": "Whether to show transaction input data. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showObjectChanges": {
-            "description": "Whether to show object_changes. Default to be False",
-            "default": false,
-            "type": "boolean"
-          },
-          "showRawInput": {
-            "description": "Whether to show bcs-encoded transaction input data",
-            "default": false,
-            "type": "boolean"
-          }
-        }
-      },
-      "TransactionResponseQuery": {
-        "type": "object",
-        "properties": {
-          "filter": {
-            "description": "If None, no filter will be applied",
-            "default": null,
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TransactionFilter"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "options": {
-            "description": "config which fields to include in the response, by default only digest is included",
-            "default": null,
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TransactionResponseOptions"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
       },
       "TransferObjectParams": {
         "type": "object",
