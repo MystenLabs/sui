@@ -48,11 +48,14 @@ export default function AutoLockTimerSelector() {
             >
                 <Form>
                     <InputWithAction
+                        type="number"
                         name="timer"
                         min={AUTO_LOCK_TIMER_MIN_MINUTES}
                         max={AUTO_LOCK_TIMER_MAX_MINUTES}
                         step="1"
+                        actionDisabled="auto"
                         actionText="Save"
+                        placeholder="Auto lock minutes"
                     />
                 </Form>
             </Formik>

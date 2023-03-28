@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo::types::PeerInfo;
 use anemo::{types::PeerEvent, Network, Peer, PeerId, Request, Response};
 use futures::StreamExt;
-use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,7 +11,10 @@ use std::{
     time::Duration,
 };
 use sui_config::p2p::{DiscoveryConfig, P2pConfig, SeedPeer};
+use sui_types::multiaddr::Multiaddr;
 use tap::{Pipe, TapFallible};
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::watch;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},
@@ -58,6 +61,11 @@ pub struct NodeInfo {
     pub timestamp_ms: u64,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TrustedPeerChangeEvent {
+    pub new_peers: Vec<PeerInfo>,
+}
+
 struct DiscoveryEventLoop {
     config: P2pConfig,
     discovery_config: DiscoveryConfig,
@@ -67,6 +75,7 @@ struct DiscoveryEventLoop {
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
+    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl DiscoveryEventLoop {
@@ -91,10 +100,13 @@ impl DiscoveryEventLoop {
                 peer_event = peer_events.recv() => {
                     self.handle_peer_event(peer_event);
                 },
+                Ok(()) = self.trusted_peer_change_rx.changed() => {
+                    let event: TrustedPeerChangeEvent = self.trusted_peer_change_rx.borrow_and_update().clone();
+                    self.handle_trusted_peer_change_event(event);
+                }
                 Some(task_result) = self.tasks.join_next() => {
                     task_result.unwrap();
                 },
-
                 // Once the shutdown notification resolves we can terminate the event loop
                 _ = &mut self.shutdown_handle => {
                     break;
@@ -114,7 +126,7 @@ impl DiscoveryEventLoop {
             .config
             .external_address
             .clone()
-            .and_then(|addr| multiaddr_to_anemo_address(&addr).map(|_| addr))
+            .and_then(|addr| addr.to_anemo_address().ok().map(|_| addr))
             .into_iter()
             .collect();
         let our_info = NodeInfo {
@@ -132,7 +144,8 @@ impl DiscoveryEventLoop {
                 continue;
             };
 
-            let Some(address) = multiaddr_to_anemo_address(address) else {
+            let Ok(address) = address.to_anemo_address() else {
+                debug!(p2p_address=?address, "Can't convert p2p address to anemo address");
                 continue;
             };
 
@@ -152,12 +165,19 @@ impl DiscoveryEventLoop {
         }
     }
 
-    fn handle_peer_event(
+    // TODO: we don't boot out old committee member yets, however we may want to do this
+    // in the future along with other network management work.
+    fn handle_trusted_peer_change_event(
         &mut self,
-        peer_event: Result<PeerEvent, tokio::sync::broadcast::error::RecvError>,
+        trusted_peer_change_event: TrustedPeerChangeEvent,
     ) {
-        use tokio::sync::broadcast::error::RecvError;
+        for peer_info in trusted_peer_change_event.new_peers {
+            debug!(?peer_info, "Add committee member as preferred peer.");
+            self.network.known_peers().insert(peer_info);
+        }
+    }
 
+    fn handle_peer_event(&mut self, peer_event: Result<PeerEvent, RecvError>) {
         match peer_event {
             Ok(PeerEvent::NewPeer(peer_id)) => {
                 if let Some(peer) = self.network.peer(peer_id) {
@@ -267,7 +287,7 @@ impl DiscoveryEventLoop {
 
 async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
     for multiaddr in &info.addresses {
-        if let Some(address) = multiaddr_to_anemo_address(multiaddr) {
+        if let Ok(address) = multiaddr.to_anemo_address() {
             // Ignore the result and just log the error if there is one
             if network
                 .connect_with_peer_id(address, info.peer_id)
@@ -295,7 +315,10 @@ async fn try_to_connect_to_seed_peers(
     let network = &network;
 
     futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
-        multiaddr_to_anemo_address(&seed.address).map(|address| (seed, address))
+        seed.address
+            .to_anemo_address()
+            .ok()
+            .map(|address| (seed, address))
     }))
     .for_each_concurrent(
         config.target_concurrent_connections(),
@@ -408,27 +431,6 @@ fn update_known_peers(state: Arc<RwLock<State>>, found_peers: Vec<NodeInfo>) {
             Entry::Vacant(v) => {
                 v.insert(peer);
             }
-        }
-    }
-}
-
-pub fn multiaddr_to_anemo_address(multiaddr: &Multiaddr) -> Option<anemo::types::Address> {
-    use multiaddr::Protocol;
-    let mut iter = multiaddr.iter();
-
-    match (iter.next(), iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port)), None) => {
-            Some((ipaddr, port).into())
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port)), None) => {
-            Some((hostname.as_ref(), port).into())
-        }
-        _ => {
-            tracing::warn!("unsupported p2p multiaddr: '{multiaddr}'");
-            None
         }
     }
 }

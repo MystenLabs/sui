@@ -7,38 +7,39 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage};
+use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::messages::{TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE};
+use sui_types::messages::{
+    SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
+};
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{
-        random_object_ref, AuthorityName, ExecutionDigests, ObjectRef, SuiAddress,
-        TransactionDigest,
-    },
+    base_types::{AuthorityName, ExecutionDigests, ObjectRef, SuiAddress, TransactionDigest},
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature},
     message_envelope::Message,
     messages::{CertifiedTransaction, Transaction, TransactionEffects},
-    object::{Object, Owner},
+    object::Object,
 };
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(10);
+const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 2_000;
 
@@ -105,7 +106,13 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         transaction.data().clone(),
         signers
             .map(|(name, signer)| {
-                AuthoritySignInfo::new(committee.epoch, transaction.data(), *name, signer)
+                AuthoritySignInfo::new(
+                    committee.epoch,
+                    transaction.data(),
+                    Intent::default().with_scope(IntentScope::SenderSignedTransaction),
+                    *name,
+                    signer,
+                )
             })
             .collect(),
         committee,
@@ -119,19 +126,21 @@ pub fn create_fake_cert_and_effect_digest<'a>(
 }
 
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects {
-        transaction_digest: *tx.digest(),
-        gas_object: (
-            random_object_ref(),
-            Owner::AddressOwner(tx.data().intent_message.value.sender()),
-        ),
-        ..Default::default()
-    }
+    TransactionEffects::new_with_tx(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
+    compile_example_package("../../sui_programmability/examples/basics")
+}
+
+pub fn compile_nfts_package() -> CompiledPackage {
+    compile_example_package("../../sui_programmability/examples/nfts")
+}
+
+pub fn compile_example_package(relative_path: &str) -> CompiledPackage {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sui_programmability/examples/basics");
+    path.push(relative_path);
 
     let build_config = BuildConfig::new_for_testing();
     sui_framework::build_move_package(&path, build_config).unwrap()
@@ -153,8 +162,10 @@ async fn init_genesis(
         .collect();
     let pkg = Object::new_package(
         modules,
+        OBJECT_START_VERSION,
         TransactionDigest::genesis(),
         ProtocolConfig::get_for_max_version().max_move_package_size(),
+        &sui_framework::make_system_packages(),
     )
     .unwrap();
     let pkg_id = pkg.id();
@@ -173,10 +184,8 @@ async fn init_genesis(
             name: format!("validator-{i}"),
             protocol_key: authority_name,
             worker_key: worker_name,
-            account_key: account_key_pair.public(),
+            account_address: SuiAddress::from(&account_key_pair.public()),
             network_key: network_key_pair.public().clone(),
-            stake: 1,
-            delegation: 0,
             gas_price: 1,
             commission_rate: 0,
             network_address: sui_config::utils::new_tcp_network_address(),
@@ -268,6 +277,28 @@ pub fn make_transfer_sui_transaction(
     to_sender_signed_transaction(data, keypair)
 }
 
+pub fn make_pay_sui_transaction(
+    gas_object: ObjectRef,
+    coins: Vec<ObjectRef>,
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    gas_price: Option<u64>,
+) -> VerifiedTransaction {
+    let data = TransactionData::new_pay_sui(
+        sender,
+        coins,
+        recipients,
+        amounts,
+        gas_object,
+        MAX_GAS,
+        gas_price.unwrap_or(DUMMY_GAS_PRICE),
+    )
+    .unwrap();
+    to_sender_signed_transaction(data, keypair)
+}
+
 pub fn make_transfer_object_transaction(
     object_ref: ObjectRef,
     gas_object: ObjectRef,
@@ -285,4 +316,57 @@ pub fn make_transfer_object_transaction(
         gas_price.unwrap_or(DUMMY_GAS_PRICE),
     );
     to_sender_signed_transaction(data, keypair)
+}
+
+/// Make a tx that refers to a non-existent object
+pub fn make_dummy_tx(
+    receiver: SuiAddress,
+    sender: SuiAddress,
+    sender_sec: &AccountKeyPair,
+) -> VerifiedTransaction {
+    Transaction::from_data_and_signer(
+        TransactionData::new_transfer_with_dummy_gas_price(
+            receiver,
+            random_object_ref(),
+            sender,
+            random_object_ref(),
+            10000,
+        ),
+        Intent::default(),
+        vec![sender_sec],
+    )
+    .verify()
+    .unwrap()
+}
+
+/// Make a cert using an arbitrarily large committee.
+pub fn make_cert_with_large_committee(
+    committee: &Committee,
+    key_pairs: &[AuthorityKeyPair],
+    transaction: &VerifiedTransaction,
+) -> CertifiedTransaction {
+    // assumes equal weighting.
+    let len = committee.voting_rights.len();
+    assert_eq!(len, key_pairs.len());
+    let count = (len * 2 + 2) / 3;
+
+    let sigs: Vec<_> = key_pairs
+        .iter()
+        .take(count)
+        .map(|key_pair| {
+            SignedTransaction::new(
+                committee.epoch(),
+                transaction.clone().into_message(),
+                key_pair,
+                AuthorityPublicKeyBytes::from(key_pair.public()),
+            )
+            .auth_sig()
+            .clone()
+        })
+        .collect();
+
+    let cert =
+        CertifiedTransaction::new(transaction.clone().into_message(), sigs, committee).unwrap();
+    cert.verify_signature(committee).unwrap();
+    cert
 }

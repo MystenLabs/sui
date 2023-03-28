@@ -11,32 +11,32 @@ module a::m {
     struct S<T> has key, store { id: sui::object::UID, v: T }
 }
 
-//# publish
+//# publish --dependencies a
 module t1::m {
     fun t(s: a::m::S<u64>) {
-        sui::transfer::transfer(s, @100)
+        sui::transfer::public_transfer(s, @100)
     }
     fun t_gen<T: key + store>(s: T) {
-        sui::transfer::transfer(s, @100)
+        sui::transfer::public_transfer(s, @100)
     }
 }
 
-//# publish
+//# publish --dependencies a
 module t3::m {
     fun t(s: a::m::S<u64>) {
-        sui::transfer::freeze_object(s)
+        sui::transfer::public_freeze_object(s)
     }
     fun t_gen<T: key + store>(s: T) {
-        sui::transfer::freeze_object(s)
+        sui::transfer::public_freeze_object(s)
     }
 }
 
-//# publish
+//# publish --dependencies a
 module t4::m {
     fun t(s: a::m::S<u64>) {
-        sui::transfer::share_object(s)
+        sui::transfer::public_share_object(s)
     }
     fun t_gen<T: key + store>(s: T) {
-        sui::transfer::share_object(s)
+        sui::transfer::public_share_object(s)
     }
 }

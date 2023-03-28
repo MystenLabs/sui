@@ -4,7 +4,7 @@ expression: bytecode_calib
 ---
 // Move bytecode v6
 module 2.bytecode_calibration_tests {
-use 0000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
 
 
 struct ObjectWithU8Field has drop, store {

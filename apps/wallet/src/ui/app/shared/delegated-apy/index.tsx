@@ -1,17 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { roundFloat, useGetRollingAverageApys } from '@mysten/core';
 import { type SuiAddress } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { calculateAPY } from '../../staking/calculateAPY';
-import { STATE_OBJECT } from '../../staking/usePendingDelegation';
+import { useSystemState } from '../../staking/useSystemState';
 import { Text } from '_app/shared/text';
 import { IconTooltip } from '_app/shared/tooltip';
-import { validatorsFields } from '_app/staking/validatorsFields';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { roundFloat } from '_helpers';
-import { useGetObject } from '_hooks';
 
 const APY_DECIMALS = 3;
 
@@ -20,31 +17,24 @@ type DelegatedAPYProps = {
 };
 
 export function DelegatedAPY({ stakedValidators }: DelegatedAPYProps) {
-    const { data, isLoading } = useGetObject(STATE_OBJECT);
-
-    const validatorsData = data && validatorsFields(data);
+    const { data, isLoading } = useSystemState();
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        data?.activeValidators.length || null
+    );
 
     const averageNetworkAPY = useMemo(() => {
-        if (!validatorsData) return 0;
-        const validators = validatorsData.validators.fields.active_validators;
+        if (!data || !rollingAverageApys) return 0;
 
         let stakedAPYs = 0;
 
-        validators.forEach((validator) => {
-            if (
-                stakedValidators.includes(
-                    validator.fields.delegation_staking_pool.fields
-                        .validator_address
-                )
-            ) {
-                stakedAPYs += calculateAPY(validator, +validatorsData.epoch);
-            }
+        stakedValidators.forEach((validatorAddress) => {
+            stakedAPYs += rollingAverageApys?.[validatorAddress] || 0;
         });
 
         const averageAPY = stakedAPYs / stakedValidators.length;
 
         return roundFloat(averageAPY || 0, APY_DECIMALS);
-    }, [stakedValidators, validatorsData]);
+    }, [data, rollingAverageApys, stakedValidators]);
 
     if (isLoading) {
         return (

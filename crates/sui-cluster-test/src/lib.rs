@@ -12,21 +12,24 @@ use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_faucet::CoinInfo;
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponse, TransactionBytes};
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions, TransactionBlockBytes,
+};
 use sui_types::base_types::TransactionDigest;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use test_utils::messages::make_transactions_with_wallet_context;
 
+use shared_crypto::intent::Intent;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
-use sui_types::intent::Intent;
 use sui_types::{
     base_types::SuiAddress,
     messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 use test_case::{
-    call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
+    coin_merge_split_test::CoinMergeSplitTest,
     fullnode_build_publish_transaction_test::FullNodeBuildPublishTransactionTest,
     fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
@@ -119,27 +122,35 @@ impl TestContext {
         // TODO cache this?
         let rpc_client = HttpClientBuilder::default().build(fn_rpc_url)?;
 
-        TransactionBytes::to_data(rpc_client.request(method, params).await?)
+        TransactionBlockBytes::to_data(rpc_client.request(method, params).await?)
     }
 
     async fn sign_and_execute(
         &self,
         txn_data: TransactionData,
         desc: &str,
-    ) -> SuiTransactionResponse {
+    ) -> SuiTransactionBlockResponse {
         let signature = self.get_context().sign(&txn_data, desc);
         let resp = self
             .get_fullnode_client()
             .quorum_driver()
-            .execute_transaction(
+            .execute_transaction_block(
                 Transaction::from_data(txn_data, Intent::default(), vec![signature])
                     .verify()
                     .unwrap(),
+                SuiTransactionBlockResponseOptions::new()
+                    .with_object_changes()
+                    .with_balance_changes()
+                    .with_effects()
+                    .with_events(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e));
-        assert!(matches!(resp.effects.status, SuiExecutionStatus::Success));
+        assert!(matches!(
+            resp.effects.as_ref().unwrap().status(),
+            SuiExecutionStatus::Success
+        ));
         resp
     }
 
@@ -193,7 +204,7 @@ impl TestContext {
             .client
             .get_fullnode_client()
             .read_api()
-            .get_transaction(digest)
+            .get_transaction_with_options(digest, SuiTransactionBlockResponseOptions::new())
             .await
         {
             Ok(_) => (true, digest, retry_times),
@@ -274,7 +285,6 @@ impl ClusterTest {
         let tests = vec![
             TestCase::new(NativeTransferTest {}),
             TestCase::new(CoinMergeSplitTest {}),
-            TestCase::new(CallContractTest {}),
             TestCase::new(SharedCounterTest {}),
             TestCase::new(FullNodeExecuteTransactionTest {}),
             TestCase::new(FullNodeBuildPublishTransactionTest {}),

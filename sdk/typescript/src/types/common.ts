@@ -2,23 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
+  define,
   Infer,
   literal,
   number,
   object,
   string,
   union,
-  unknown,
 } from 'superstruct';
-import { CallArg, TransactionData } from './sui-bcs';
-import { sha256Hash } from '../cryptography/hash';
-import { BCS, fromB58, toB58 } from '@mysten/bcs';
+import { CallArg } from './sui-bcs';
+import { fromB58 } from '@mysten/bcs';
 
 export const TransactionDigest = string();
 export type TransactionDigest = Infer<typeof TransactionDigest>;
 
 export const TransactionEffectsDigest = string();
 export type TransactionEffectsDigest = Infer<typeof TransactionEffectsDigest>;
+
+export const TransactionEventDigest = string();
+export type TransactionEventDigest = Infer<typeof TransactionEventDigest>;
 
 export const ObjectId = string();
 export type ObjectId = Infer<typeof ObjectId>;
@@ -45,14 +47,13 @@ export const ObjectOwner = union([
 ]);
 export type ObjectOwner = Infer<typeof ObjectOwner>;
 
-// TODO: Figure out if we actually should have validaton on this:
-export const SuiJsonValue = unknown();
 export type SuiJsonValue =
   | boolean
   | number
   | string
   | CallArg
   | Array<SuiJsonValue>;
+export const SuiJsonValue = define<SuiJsonValue>('SuiJsonValue', () => true);
 
 // source of truth is
 // https://github.com/MystenLabs/sui/blob/acb2b97ae21f47600e05b0d28127d88d0725561d/crates/sui-types/src/base_types.rs#L171
@@ -76,7 +77,7 @@ export function isValidTransactionDigest(
 // which uses the Move account address length
 // https://github.com/move-language/move/blob/67ec40dc50c66c34fd73512fcc412f3b68d67235/language/move-core/types/src/account_address.rs#L23 .
 
-export const SUI_ADDRESS_LENGTH = 20;
+export const SUI_ADDRESS_LENGTH = 32;
 export function isValidSuiAddress(value: string): value is SuiAddress {
   return isHex(value) && getHexByteLength(value) === SUI_ADDRESS_LENGTH;
 }
@@ -112,24 +113,6 @@ export function normalizeSuiObjectId(
   forceAdd0x: boolean = false,
 ): ObjectId {
   return normalizeSuiAddress(value, forceAdd0x);
-}
-
-/**
- * Generate transaction digest.
- *
- * @param data transaction data
- * @param signatureScheme signature scheme
- * @param signature signature as a base64 string
- * @param publicKey public key
- */
-export function generateTransactionDigest(
-  data: TransactionData,
-  bcs: BCS,
-): string {
-  const txBytes = bcs.ser('TransactionData', data).toBytes();
-  const hash = sha256Hash('TransactionData', txBytes);
-
-  return toB58(hash);
 }
 
 function isHex(value: string): boolean {

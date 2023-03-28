@@ -2,21 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::utils;
 use anyhow::Result;
-use config::{SharedWorkerCache, WorkerId};
+use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
-use crypto::PublicKey;
 use fastcrypto::hash::Hash;
 use futures::future::try_join_all;
 use itertools::Either;
 use network::PrimaryToWorkerRpc;
 use std::{collections::HashMap, sync::Arc};
-use storage::{CertificateStore, PayloadToken};
-use store::{rocks::TypedStoreError, Store};
+use storage::{CertificateStore, HeaderStore, PayloadStore};
+use store::rocks::TypedStoreError;
 
 use tracing::{debug, instrument, warn};
 use types::{
-    metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
-    Round,
+    metered_channel::Sender, BatchDigest, Certificate, CertificateAPI, CertificateDigest,
+    HeaderAPI, HeaderDigest, Round,
 };
 
 #[cfg(test)]
@@ -29,20 +28,22 @@ pub mod block_remover_tests;
 /// there certificates and headers are stored, and the corresponding
 /// batches as well.
 pub struct BlockRemover {
-    /// The public key of this primary.
-    name: PublicKey,
+    /// The id of this primary.
+    authority_id: AuthorityIdentifier,
+    /// The network's committee
+    committee: Committee,
 
     /// The worker information cache.
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
 
     /// Storage that keeps the Certificates by their digest id.
     certificate_store: CertificateStore,
 
     /// Storage that keeps the headers by their digest id
-    header_store: Store<HeaderDigest, Header>,
+    header_store: HeaderStore,
 
     /// The persistent storage for payload markers from workers.
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+    payload_store: PayloadStore,
 
     /// The Dag structure for managing the stored certificates
     dag: Option<Arc<Dag>>,
@@ -57,17 +58,19 @@ pub struct BlockRemover {
 impl BlockRemover {
     #[must_use]
     pub fn new(
-        name: PublicKey,
-        worker_cache: SharedWorkerCache,
+        authority_id: AuthorityIdentifier,
+        committee: Committee,
+        worker_cache: WorkerCache,
         certificate_store: CertificateStore,
-        header_store: Store<HeaderDigest, Header>,
-        payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
+        header_store: HeaderStore,
+        payload_store: PayloadStore,
         dag: Option<Arc<Dag>>,
         worker_network: anemo::Network,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
     ) -> BlockRemover {
         Self {
-            name,
+            authority_id,
+            committee,
             worker_cache,
             certificate_store,
             header_store,
@@ -101,8 +104,13 @@ impl BlockRemover {
         for (worker_id, batch_digests) in batches_by_worker.iter() {
             let worker_name = self
                 .worker_cache
-                .load()
-                .worker(&self.name, worker_id)
+                .worker(
+                    self.committee
+                        .authority(&self.authority_id)
+                        .unwrap()
+                        .protocol_key(),
+                    worker_id,
+                )
                 .expect("Worker id not found")
                 .name;
 
@@ -130,11 +138,10 @@ impl BlockRemover {
         batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>>,
     ) -> Result<(), Either<TypedStoreError, ValidatorDagError>> {
         let header_digests: Vec<HeaderDigest> =
-            certificates.iter().map(|c| c.header.digest()).collect();
+            certificates.iter().map(|c| c.header().digest()).collect();
 
         self.header_store
             .remove_all(header_digests)
-            .await
             .map_err(Either::Left)?;
 
         // delete batch from the payload store as well
@@ -146,7 +153,6 @@ impl BlockRemover {
         }
         self.payload_store
             .remove_all(batches_to_cleanup)
-            .await
             .map_err(Either::Left)?;
 
         // NOTE: delete certificates in the end since if we need to repeat the request
@@ -167,7 +173,11 @@ impl BlockRemover {
         if !certificates.is_empty() {
             let all_certs = certificates.clone();
             // Unwrap safe since list is not empty.
-            let highest_round = certificates.iter().map(|c| c.header.round).max().unwrap();
+            let highest_round = certificates
+                .iter()
+                .map(|c| c.header().round())
+                .max()
+                .unwrap();
 
             // We signal that these certificates must have been committed by the external consensus
             self.tx_committed_certificates

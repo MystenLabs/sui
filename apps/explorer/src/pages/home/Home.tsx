@@ -3,16 +3,16 @@
 import { lazy, Suspense } from 'react';
 
 import { ErrorBoundary } from '../../components/error-boundary/ErrorBoundary';
-import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
+// import { RecentModulesCard } from '../../components/recent-packages-card/RecentPackagesCard';
 import { TopValidatorsCard } from '../../components/top-validators-card/TopValidatorsCard';
-import { LatestTxCard } from '../../components/transaction-card/RecentTxCard';
 
+import { Activity } from '~/components/Activity';
 import { HomeMetrics } from '~/components/HomeMetrics';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
 const NodeMap = lazy(() => import('../../components/node-map'));
 
-const TXN_PER_PAGE = 25;
+const TRANSACTIONS_LIMIT = 25;
 
 function Home() {
     return (
@@ -27,9 +27,9 @@ function Home() {
                 </ErrorBoundary>
 
                 <ErrorBoundary>
-                    <LatestTxCard
-                        txPerPage={TXN_PER_PAGE}
-                        paginationtype="more button"
+                    <Activity
+                        initialLimit={TRANSACTIONS_LIMIT}
+                        disablePagination
                     />
                 </ErrorBoundary>
             </div>
@@ -54,7 +54,7 @@ function Home() {
                         </TabPanels>
                     </TabGroup>
                 </div>
-                <div>
+                {/* <div>
                     <TabGroup>
                         <TabList>
                             <Tab>Recent Packages</Tab>
@@ -67,7 +67,7 @@ function Home() {
                             </TabPanel>
                         </TabPanels>
                     </TabGroup>
-                </div>
+                </div> */}
             </div>
         </div>
     );

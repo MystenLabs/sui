@@ -3,7 +3,7 @@ name = "coin_metadata"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../../../../../../crates/sui-framework" }
+Sui = { local = "../../../../../../crates/sui-framework/packages/sui-framework" }
 
 [addresses]
 coin_metadata =  "0x0"

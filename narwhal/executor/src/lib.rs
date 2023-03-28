@@ -12,8 +12,7 @@ use tracing::info;
 
 use crate::metrics::ExecutorMetrics;
 use async_trait::async_trait;
-use config::{Committee, SharedWorkerCache};
-use crypto::PublicKey;
+use config::{AuthorityIdentifier, Committee, WorkerCache};
 
 use prometheus::Registry;
 
@@ -52,9 +51,9 @@ pub struct Executor;
 impl Executor {
     /// Spawn a new client subscriber.
     pub fn spawn<State>(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         network: oneshot::Receiver<anemo::Network>,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         committee: Committee,
         execution_state: State,
         shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
@@ -67,12 +66,12 @@ impl Executor {
     {
         let metrics = ExecutorMetrics::new(registry);
 
-        // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
+        // This will be needed in the `Subscriber`.
         let arc_metrics = Arc::new(metrics);
 
         // Spawn the subscriber.
         let subscriber_handle = spawn_subscriber(
-            name,
+            authority_id,
             network,
             worker_cache,
             committee,
@@ -121,6 +120,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
             certificates,
             leader,
             sub_dag_index,
+            reputation_score: compressed_sub_dag.reputation_score,
         });
     }
 

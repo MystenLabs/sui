@@ -29,14 +29,13 @@ async fn simple_primary_worker_node_start_stop() {
         .randomize_ports(true)
         .build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let shared_committee = committee.clone();
+    let worker_cache = fixture.worker_cache();
 
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
     let network_key_pair = authority.network_keypair();
 
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let (tx_confirmation, _rx_confirmation) = channel(10);
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
@@ -47,7 +46,7 @@ async fn simple_primary_worker_node_start_stop() {
         .start(
             key_pair.copy(),
             network_key_pair.copy(),
-            shared_committee.clone(),
+            committee.clone(),
             worker_cache.clone(),
             &store,
             execution_state,
@@ -62,7 +61,7 @@ async fn simple_primary_worker_node_start_stop() {
         .start(
             key_pair.public().clone(),
             vec![(0, authority.worker(0).keypair().copy())],
-            shared_committee,
+            committee,
             worker_cache,
             &store,
             TrivialTransactionValidator::default(),
@@ -109,14 +108,13 @@ async fn primary_node_restart() {
         .randomize_ports(true)
         .build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let shared_committee = committee.clone();
+    let worker_cache = fixture.worker_cache();
 
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
     let network_key_pair = authority.network_keypair();
 
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let (tx_confirmation, _rx_confirmation) = channel(10);
     let execution_state = Arc::new(SimpleExecutionState::new(tx_confirmation));
@@ -127,7 +125,7 @@ async fn primary_node_restart() {
         .start(
             key_pair.copy(),
             network_key_pair.copy(),
-            shared_committee.clone(),
+            committee.clone(),
             worker_cache.clone(),
             &store,
             execution_state.clone(),
@@ -147,7 +145,7 @@ async fn primary_node_restart() {
         .start(
             key_pair.copy(),
             network_key_pair.copy(),
-            shared_committee.clone(),
+            committee.clone(),
             worker_cache.clone(),
             &store,
             execution_state,

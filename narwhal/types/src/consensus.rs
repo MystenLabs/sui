@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Batch, Certificate, CertificateDigest, Round};
-use crypto::PublicKey;
+use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -33,6 +33,8 @@ pub struct CommittedSubDag {
     pub leader: Certificate,
     /// The index associated with this CommittedSubDag
     pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ReputationScores,
 }
 
 impl CommittedSubDag {
@@ -47,7 +49,7 @@ impl CommittedSubDag {
     pub fn num_batches(&self) -> usize {
         self.certificates
             .iter()
-            .map(|x| x.header.payload.len())
+            .map(|x| x.header().payload().len())
             .sum()
     }
 
@@ -58,8 +60,48 @@ impl CommittedSubDag {
             .map_or_else(|| false, |x| x == output)
     }
 
-    pub fn round(&self) -> Round {
+    pub fn leader_round(&self) -> Round {
         self.leader.round()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ReputationScores {
+    /// Holds the score for every authority. If an authority is not amongst
+    /// the records of the map then we assume that its score is zero.
+    pub scores_per_authority: HashMap<AuthorityIdentifier, u64>,
+    /// When true it notifies us that those scores will be the last updated scores of the
+    /// current schedule before they get reset for the next schedule and start
+    /// scoring from the beginning. In practice we can leverage this information to
+    /// use the scores during the next schedule until the next final ones are calculated.
+    pub final_of_schedule: bool,
+}
+
+impl ReputationScores {
+    /// Creating a new ReputationScores instance pre-populating the authorities entries with
+    /// zero score value.
+    pub fn new(committee: &Committee) -> Self {
+        let scores_per_authority = committee.authorities().map(|a| (a.id(), 0_u64)).collect();
+
+        Self {
+            scores_per_authority,
+            ..Default::default()
+        }
+    }
+    /// Adds the provided `score` to the existing score for the provided `authority`
+    pub fn add_score(&mut self, authority: AuthorityIdentifier, score: u64) {
+        self.scores_per_authority
+            .entry(authority)
+            .and_modify(|value| *value += score)
+            .or_insert(score);
+    }
+
+    pub fn total_authorities(&self) -> u64 {
+        self.scores_per_authority.len() as u64
+    }
+
+    pub fn all_zero(&self) -> bool {
+        !self.scores_per_authority.values().any(|e| *e > 0)
     }
 }
 
@@ -69,8 +111,12 @@ pub struct CommittedSubDagShell {
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
+    // The round of the leader
+    pub leader_round: Round,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
+    /// The so far calculated reputation score for nodes
+    pub reputation_score: ReputationScores,
 }
 
 impl CommittedSubDagShell {
@@ -78,7 +124,9 @@ impl CommittedSubDagShell {
         Self {
             certificates: sub_dag.certificates.iter().map(|x| x.digest()).collect(),
             leader: sub_dag.leader.digest(),
+            leader_round: sub_dag.leader.round(),
             sub_dag_index: sub_dag.sub_dag_index,
+            reputation_score: sub_dag.reputation_score.clone(),
         }
     }
 }
@@ -92,7 +140,7 @@ pub type StoreResult<T> = Result<T, TypedStoreError>;
 /// The persistent storage of the sequencer.
 pub struct ConsensusStore {
     /// The latest committed round of each validator.
-    last_committed: DBMap<PublicKey, Round>,
+    last_committed: DBMap<AuthorityIdentifier, Round>,
     /// The global consensus sequence.
     committed_sub_dags_by_index: DBMap<SequenceNumber, CommittedSubDagShell>,
 }
@@ -100,7 +148,7 @@ pub struct ConsensusStore {
 impl ConsensusStore {
     /// Create a new consensus store structure by using already loaded maps.
     pub fn new(
-        last_committed: DBMap<PublicKey, Round>,
+        last_committed: DBMap<AuthorityIdentifier, Round>,
         sequence: DBMap<SequenceNumber, CommittedSubDagShell>,
     ) -> Self {
         Self {
@@ -119,7 +167,7 @@ impl ConsensusStore {
     /// Persist the consensus state.
     pub fn write_consensus_state(
         &self,
-        last_committed: &HashMap<PublicKey, Round>,
+        last_committed: &HashMap<AuthorityIdentifier, Round>,
         sub_dag: &CommittedSubDag,
     ) -> Result<(), TypedStoreError> {
         let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
@@ -134,7 +182,7 @@ impl ConsensusStore {
     }
 
     /// Load the last committed round of each validator.
-    pub fn read_last_committed(&self) -> HashMap<PublicKey, Round> {
+    pub fn read_last_committed(&self) -> HashMap<AuthorityIdentifier, Round> {
         self.last_committed.iter().collect()
     }
 
@@ -148,6 +196,16 @@ impl ConsensusStore {
             .map(|(seq, _)| seq)
             .unwrap_or_default();
         s
+    }
+
+    /// Returns thet latest subdag committed. If none is committed yet, then
+    /// None is returned instead.
+    pub fn get_latest_sub_dag(&self) -> Option<CommittedSubDagShell> {
+        self.committed_sub_dags_by_index
+            .iter()
+            .skip_to_last()
+            .next()
+            .map(|(_, subdag)| subdag)
     }
 
     /// Load all the sub dags committed with sequence number of at least `from`.

@@ -1,32 +1,33 @@
 
-<a name="0x2_stake_subsidy"></a>
+<a name="0x3_stake_subsidy"></a>
 
-# Module `0x2::stake_subsidy`
+# Module `0x3::stake_subsidy`
 
 
 
--  [Struct `StakeSubsidy`](#0x2_stake_subsidy_StakeSubsidy)
+-  [Struct `StakeSubsidy`](#0x3_stake_subsidy_StakeSubsidy)
 -  [Constants](#@Constants_0)
--  [Function `create`](#0x2_stake_subsidy_create)
--  [Function `mint_stake_subsidy_proportional_to_total_stake_testnet`](#0x2_stake_subsidy_mint_stake_subsidy_proportional_to_total_stake_testnet)
--  [Function `advance_epoch`](#0x2_stake_subsidy_advance_epoch)
--  [Function `withdraw_all`](#0x2_stake_subsidy_withdraw_all)
--  [Function `current_epoch_subsidy_amount`](#0x2_stake_subsidy_current_epoch_subsidy_amount)
+-  [Function `create`](#0x3_stake_subsidy_create)
+-  [Function `advance_epoch`](#0x3_stake_subsidy_advance_epoch)
+-  [Function `current_epoch_subsidy_amount`](#0x3_stake_subsidy_current_epoch_subsidy_amount)
 
 
-<pre><code><b>use</b> <a href="balance.md#0x2_balance">0x2::balance</a>;
-<b>use</b> <a href="sui.md#0x2_sui">0x2::sui</a>;
+<pre><code><b>use</b> <a href="">0x2::bag</a>;
+<b>use</b> <a href="">0x2::balance</a>;
+<b>use</b> <a href="">0x2::math</a>;
+<b>use</b> <a href="">0x2::sui</a>;
+<b>use</b> <a href="">0x2::tx_context</a>;
 </code></pre>
 
 
 
-<a name="0x2_stake_subsidy_StakeSubsidy"></a>
+<a name="0x3_stake_subsidy_StakeSubsidy"></a>
 
 ## Struct `StakeSubsidy`
 
 
 
-<pre><code><b>struct</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a> <b>has</b> store
+<pre><code><b>struct</b> <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> <b>has</b> store
 </code></pre>
 
 
@@ -37,23 +38,42 @@
 
 <dl>
 <dt>
-<code>epoch_counter: u64</code>
+<code><a href="">balance</a>: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
 </dt>
 <dd>
- This counter may be different from the current epoch number if
- in some epochs we decide to skip the subsidy.
+ Balance of SUI set aside for stake subsidies that will be drawn down over time.
 </dd>
 <dt>
-<code><a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;</code>
+<code>distribution_counter: u64</code>
 </dt>
 <dd>
- Balance storing the accumulated stake subsidy.
+ Count of the number of times stake subsidies have been distributed.
 </dd>
 <dt>
-<code>current_epoch_amount: u64</code>
+<code>current_distribution_amount: u64</code>
 </dt>
 <dd>
- The amount of stake subsidy to be minted this epoch.
+ The amount of stake subsidy to be drawn down per distribution.
+ This amount decays and decreases over time.
+</dd>
+<dt>
+<code>stake_subsidy_period_length: u64</code>
+</dt>
+<dd>
+ Number of distributions to occur before the distribution amount decays.
+</dd>
+<dt>
+<code>stake_subsidy_decrease_rate: u16</code>
+</dt>
+<dd>
+ The rate at which the distribution amount decays at the end of each
+ period. Expressed in basis points.
+</dd>
+<dt>
+<code>extra_fields: <a href="_Bag">bag::Bag</a></code>
+</dt>
+<dd>
+ Any extra fields that's not defined statically.
 </dd>
 </dl>
 
@@ -65,40 +85,22 @@
 ## Constants
 
 
-<a name="0x2_stake_subsidy_BASIS_POINT_DENOMINATOR"></a>
+<a name="0x3_stake_subsidy_BASIS_POINT_DENOMINATOR"></a>
 
 
 
-<pre><code><b>const</b> <a href="stake_subsidy.md#0x2_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+<pre><code><b>const</b> <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
 
-<a name="0x2_stake_subsidy_STAKE_SUBSIDY_DECREASE_RATE"></a>
-
-
-
-<pre><code><b>const</b> <a href="stake_subsidy.md#0x2_stake_subsidy_STAKE_SUBSIDY_DECREASE_RATE">STAKE_SUBSIDY_DECREASE_RATE</a>: u128 = 1000;
-</code></pre>
-
-
-
-<a name="0x2_stake_subsidy_STAKE_SUBSIDY_PERIOD_LENGTH"></a>
-
-
-
-<pre><code><b>const</b> <a href="stake_subsidy.md#0x2_stake_subsidy_STAKE_SUBSIDY_PERIOD_LENGTH">STAKE_SUBSIDY_PERIOD_LENGTH</a>: u64 = 30;
-</code></pre>
-
-
-
-<a name="0x2_stake_subsidy_create"></a>
+<a name="0x3_stake_subsidy_create"></a>
 
 ## Function `create`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_create">create</a>(initial_stake_subsidy_amount: u64): <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(<a href="">balance</a>: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, initial_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
 </code></pre>
 
 
@@ -107,11 +109,26 @@
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_create">create</a>(initial_stake_subsidy_amount: u64): <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
-    <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
-        epoch_counter: 0,
-        <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_zero">balance::zero</a>(),
-        current_epoch_amount: initial_stake_subsidy_amount,
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(
+    <a href="">balance</a>: Balance&lt;SUI&gt;,
+    initial_distribution_amount: u64,
+    stake_subsidy_period_length: u64,
+    stake_subsidy_decrease_rate: u16,
+    ctx: &<b>mut</b> TxContext,
+): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
+    // Rate can't be higher than 100%.
+    <b>assert</b>!(
+        stake_subsidy_decrease_rate &lt;= (<a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u16),
+        0,
+    );
+
+    <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
+        <a href="">balance</a>,
+        distribution_counter: 0,
+        current_distribution_amount: initial_distribution_amount,
+        stake_subsidy_period_length,
+        stake_subsidy_decrease_rate,
+        extra_fields: <a href="_new">bag::new</a>(ctx),
     }
 }
 </code></pre>
@@ -120,44 +137,14 @@
 
 </details>
 
-<a name="0x2_stake_subsidy_mint_stake_subsidy_proportional_to_total_stake_testnet"></a>
-
-## Function `mint_stake_subsidy_proportional_to_total_stake_testnet`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_mint_stake_subsidy_proportional_to_total_stake_testnet">mint_stake_subsidy_proportional_to_total_stake_testnet</a>(subsidy: &<b>mut</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>, supply: &<b>mut</b> <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, stake_subsidy_rate: u64, total_stake: u64)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_mint_stake_subsidy_proportional_to_total_stake_testnet">mint_stake_subsidy_proportional_to_total_stake_testnet</a>(
-    subsidy: &<b>mut</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a>, supply: &<b>mut</b> Supply&lt;SUI&gt;, stake_subsidy_rate: u64, total_stake: u64
-) {
-    <b>let</b> amount_to_mint = ((total_stake <b>as</b> u128) * (stake_subsidy_rate <b>as</b> u128)) / <a href="stake_subsidy.md#0x2_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
-    <a href="balance.md#0x2_balance_join">balance::join</a>(
-        &<b>mut</b> subsidy.<a href="balance.md#0x2_balance">balance</a>,
-        <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(supply, (amount_to_mint <b>as</b> u64))
-    );
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_stake_subsidy_advance_epoch"></a>
+<a name="0x3_stake_subsidy_advance_epoch"></a>
 
 ## Function `advance_epoch`
 
-Advance the epoch counter and mint new subsidy for the epoch.
+Advance the epoch counter and draw down the subsidy for the epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">advance_epoch</a>(subsidy: &<b>mut</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>, supply: &<b>mut</b> <a href="balance.md#0x2_balance_Supply">balance::Supply</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -166,19 +153,25 @@ Advance the epoch counter and mint new subsidy for the epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_advance_epoch">advance_epoch</a>(subsidy: &<b>mut</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a>, supply: &<b>mut</b> Supply&lt;SUI&gt;) {
-    // Mint new subsidy for this epoch.
-    <a href="balance.md#0x2_balance_join">balance::join</a>(
-        &<b>mut</b> subsidy.<a href="balance.md#0x2_balance">balance</a>,
-        <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(supply, subsidy.current_epoch_amount)
-    );
-    subsidy.epoch_counter = subsidy.epoch_counter + 1;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): Balance&lt;SUI&gt; {
+    // Take the minimum of the reward amount and the remaining <a href="">balance</a> in
+    // order <b>to</b> ensure we don't overdraft the remaining stake subsidy
+    // <a href="">balance</a>
+    <b>let</b> to_withdraw = <a href="_min">math::min</a>(self.current_distribution_amount, <a href="_value">balance::value</a>(&self.<a href="">balance</a>));
+
+    // Drawn down the subsidy for this epoch.
+    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = <a href="_split">balance::split</a>(&<b>mut</b> self.<a href="">balance</a>, to_withdraw);
+
+    self.distribution_counter = self.distribution_counter + 1;
+
     // Decrease the subsidy amount only when the current period ends.
-    <b>if</b> (subsidy.epoch_counter % <a href="stake_subsidy.md#0x2_stake_subsidy_STAKE_SUBSIDY_PERIOD_LENGTH">STAKE_SUBSIDY_PERIOD_LENGTH</a> == 0) {
-        <b>let</b> decrease_amount = (subsidy.current_epoch_amount <b>as</b> u128)
-            * <a href="stake_subsidy.md#0x2_stake_subsidy_STAKE_SUBSIDY_DECREASE_RATE">STAKE_SUBSIDY_DECREASE_RATE</a> / <a href="stake_subsidy.md#0x2_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
-        subsidy.current_epoch_amount = subsidy.current_epoch_amount - (decrease_amount <b>as</b> u64)
+    <b>if</b> (self.distribution_counter % self.stake_subsidy_period_length == 0) {
+        <b>let</b> decrease_amount = (self.current_distribution_amount <b>as</b> u128)
+            * (self.stake_subsidy_decrease_rate <b>as</b> u128) / <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+        self.current_distribution_amount = self.current_distribution_amount - (decrease_amount <b>as</b> u64)
     };
+
+    <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>
 }
 </code></pre>
 
@@ -186,40 +179,14 @@ Advance the epoch counter and mint new subsidy for the epoch.
 
 </details>
 
-<a name="0x2_stake_subsidy_withdraw_all"></a>
-
-## Function `withdraw_all`
-
-Withdraw all the minted stake subsidy.
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_withdraw_all">withdraw_all</a>(subsidy: &<b>mut</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): <a href="balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_withdraw_all">withdraw_all</a>(subsidy: &<b>mut</b> <a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): Balance&lt;SUI&gt; {
-    <b>let</b> amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&subsidy.<a href="balance.md#0x2_balance">balance</a>);
-    <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> subsidy.<a href="balance.md#0x2_balance">balance</a>, amount)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x2_stake_subsidy_current_epoch_subsidy_amount"></a>
+<a name="0x3_stake_subsidy_current_epoch_subsidy_amount"></a>
 
 ## Function `current_epoch_subsidy_amount`
 
 Returns the amount of stake subsidy to be added at the end of the current epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(subsidy: &<a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): u64
 </code></pre>
 
 
@@ -228,8 +195,8 @@ Returns the amount of stake subsidy to be added at the end of the current epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x2_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(subsidy: &<a href="stake_subsidy.md#0x2_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): u64 {
-    subsidy.current_epoch_amount
+<pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): u64 {
+    <a href="_min">math::min</a>(self.current_distribution_amount, <a href="_value">balance::value</a>(&self.<a href="">balance</a>))
 }
 </code></pre>
 

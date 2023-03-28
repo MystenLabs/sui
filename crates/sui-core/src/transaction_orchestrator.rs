@@ -6,13 +6,13 @@ Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
-use crate::authority::authority_notify_read::{NotifyRead, Registration};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::safe_client::SafeClientMetricsBase;
+use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use mysten_metrics::histogram::{Histogram, HistogramTimerGuard, HistogramVec};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
@@ -25,18 +25,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
-use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, QuorumDriverResponse, VerifiedCertifiedTransactionEffects,
-    VerifiedExecutableTransaction,
+    FinalizedEffects, QuorumDriverResponse, TransactionEffectsAPI,
+    VerifiedCertifiedTransactionEffects, VerifiedExecutableTransaction,
 };
 use sui_types::quorum_driver_types::{
     QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResult,
 };
+use sui_types::sui_system_state::SuiSystemState;
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::{self, Receiver};
+use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
@@ -61,7 +61,7 @@ pub struct TransactiondOrchestrator<A> {
 impl TransactiondOrchestrator<NetworkAuthorityClient> {
     pub async fn new_with_network_clients(
         validator_state: Arc<AuthorityState>,
-        reconfig_channel: broadcast::Receiver<Committee>,
+        reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -171,7 +171,7 @@ where
         tx_type = ?request.transaction_type(),
     ),
     err)]
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         request: ExecuteTransactionRequest,
     ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
@@ -210,16 +210,17 @@ where
             Err(err) => Err(err),
             Ok(response) => {
                 good_response_metrics.inc();
-                let QuorumDriverResponse { effects_cert } = response;
+                let QuorumDriverResponse { effects_cert, .. } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
                         false,
                     ))));
                 }
                 let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                     transaction,
-                    effects_cert.executed_epoch,
+                    effects_cert.executed_epoch(),
                 );
 
                 match Self::execute_finalized_tx_locally_with_timeout(
@@ -232,10 +233,12 @@ where
                 {
                     Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
                         true,
                     )))),
                     Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
                         false,
                     )))),
                 }
@@ -340,10 +343,10 @@ where
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(Ok((transaction, QuorumDriverResponse { effects_cert }))) => {
+                Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
                     let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
                         transaction,
-                        effects_cert.executed_epoch,
+                        effects_cert.executed_epoch(),
                     );
                     let tx_digest = executable_tx.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {

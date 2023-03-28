@@ -3,45 +3,55 @@
 
 import { Link } from 'react-router-dom';
 
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
-import NFTdisplay from '_components/nft-display';
-import { useAppSelector, useObjectsState } from '_hooks';
-import { accountNftsSelector } from '_redux/slices/account';
+import { NFTDisplayCard } from '_components/nft-display';
+import { useObjectsOwnedByAddress } from '_hooks';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
+import type { SuiObjectData } from '@mysten/sui.js';
+
 function NftsPage() {
-    const nfts = useAppSelector(accountNftsSelector);
-    const { error, loading, showError } = useObjectsState();
-    const isNftsFound = nfts.length > 0;
+    const accountAddress = useActiveAddress();
+    const { data, isLoading, error, isError } = useObjectsOwnedByAddress(
+        accountAddress,
+        { options: { showType: true, showDisplay: true } }
+    );
+    const nfts = data?.data
+        ?.filter(
+            ({ data }) =>
+                typeof data === 'object' && 'display' in data && data.display
+        )
+        .map(({ data }) => data as SuiObjectData);
     return (
-        <div className="flex flex-col flex-nowrap items-center gap-4 flex-1">
+        <div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
             <PageTitle title="NFTs" />
-            <Loading loading={loading}>
-                {showError && error ? (
+            <Loading loading={isLoading}>
+                {isError ? (
                     <Alert>
                         <div>
                             <strong>Sync error (data might be outdated)</strong>
                         </div>
-                        <small>{error.message}</small>
+                        <small>{(error as Error).message}</small>
                     </Alert>
                 ) : null}
-                {isNftsFound ? (
-                    <div className="grid grid-cols-2 gap-x-3.5 gap-y-4">
-                        {nfts.map((nft) => (
+                {nfts?.length ? (
+                    <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
+                        {nfts.map(({ objectId }) => (
                             <Link
                                 to={`/nft-details?${new URLSearchParams({
-                                    objectId: nft.reference.objectId,
+                                    objectId,
                                 }).toString()}`}
-                                key={nft.reference.objectId}
+                                key={objectId}
                                 className="no-underline"
                             >
                                 <ErrorBoundary>
-                                    <NFTdisplay
-                                        nftobj={nft}
+                                    <NFTDisplayCard
+                                        objectId={objectId}
                                         size="md"
-                                        showlabel
+                                        showLabel
                                         animateHover
                                         borderRadius="xl"
                                     />
@@ -50,7 +60,7 @@ function NftsPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-steel-darker font-semibold text-caption flex-1 self-center flex items-center">
+                    <div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
                         No NFTs found
                     </div>
                 )}

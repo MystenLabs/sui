@@ -1,7 +1,7 @@
 processed 10 tasks
 
 init:
-A: object(100), B: object(101)
+A: object(103), B: object(104)
 
 task 1 'publish'. lines 9-46:
 created: object(106)
@@ -12,7 +12,7 @@ created: object(108), object(109), object(110)
 written: object(107)
 
 task 3 'view-object'. lines 50-54:
-Owner: Shared
+Owner: Object ID: ( fake(108) )
 Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
 
@@ -21,12 +21,12 @@ created: object(112), object(113), object(114)
 written: object(111)
 
 task 5 'run'. lines 58-58:
-written: object(113), object(115)
+written: object(114), object(115)
 
 task 6 'view-object'. lines 60-64:
 Owner: Account Address ( B )
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(113)}}}
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}}
 
 task 7 'run'. lines 66-66:
 created: object(117), object(118), object(119)

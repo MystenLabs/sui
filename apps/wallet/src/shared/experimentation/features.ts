@@ -17,6 +17,7 @@ export enum FEATURES {
     STAKING_ENABLED = 'wallet-staking-enabled',
     WALLET_DAPPS = 'wallet-dapps',
     WALLET_MULTI_ACCOUNTS = 'wallet-multi-accounts',
+    WALLET_LEDGER_INTEGRATION = 'wallet-ledger-integration',
 }
 
 export function setAttributes(

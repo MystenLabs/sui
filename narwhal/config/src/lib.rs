@@ -9,24 +9,23 @@
 )]
 #![allow(clippy::mutable_key_type)]
 
-use arc_swap::ArcSwap;
 use crypto::{NetworkPublicKey, PublicKey};
 use fastcrypto::traits::EncodeDecodeBase64;
-use multiaddr::Multiaddr;
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use mysten_network::Multiaddr;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
     num::NonZeroU32,
-    sync::Arc,
     time::Duration,
 };
 use thiserror::Error;
 use tracing::info;
 use utils::get_available_port;
 
+pub mod committee;
+pub use committee::*;
 mod duration_format;
 pub mod utils;
 
@@ -135,29 +134,43 @@ pub struct Parameters {
     pub min_header_delay: Duration,
 
     /// The depth of the garbage collection (Denominated in number of rounds).
+    #[serde(default = "Parameters::default_gc_depth")]
     pub gc_depth: u64,
     /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_sync_retry_delay"
+    )]
     pub sync_retry_delay: Duration,
     /// Determine with how many nodes to sync when re-trying to send sync-request. These nodes
     /// are picked at random from the committee.
+    #[serde(default = "Parameters::default_sync_retry_nodes")]
     pub sync_retry_nodes: usize,
     /// The preferred batch size. The workers seal a batch of transactions when it reaches this size.
     /// Denominated in bytes.
+    #[serde(default = "Parameters::default_batch_size")]
     pub batch_size: usize,
     /// The delay after which the workers seal a batch of transactions, even if `max_batch_size`
     /// is not reached.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "Parameters::default_max_batch_delay"
+    )]
     pub max_batch_delay: Duration,
     /// The parameters for the block synchronizer
+    #[serde(default = "BlockSynchronizerParameters::default")]
     pub block_synchronizer: BlockSynchronizerParameters,
     /// The parameters for the Consensus API gRPC server
+    #[serde(default = "ConsensusAPIGrpcParameters::default")]
     pub consensus_api_grpc: ConsensusAPIGrpcParameters,
     /// The maximum number of concurrent requests for messages accepted from an un-trusted entity
+    #[serde(default = "Parameters::default_max_concurrent_requests")]
     pub max_concurrent_requests: usize,
     /// Properties for the prometheus metrics
+    #[serde(default = "PrometheusMetricsParameters::default")]
     pub prometheus_metrics: PrometheusMetricsParameters,
     /// Network admin server ports for primary & worker.
+    #[serde(default = "NetworkAdminServerParameters::default")]
     pub network_admin_server: NetworkAdminServerParameters,
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]
@@ -531,8 +544,6 @@ pub struct WorkerInfo {
     pub worker_address: Multiaddr,
 }
 
-pub type SharedWorkerCache = Arc<ArcSwap<WorkerCache>>;
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WorkerIndex(pub BTreeMap<WorkerId, WorkerInfo>);
 
@@ -542,12 +553,6 @@ pub struct WorkerCache {
     pub workers: BTreeMap<PublicKey, WorkerIndex>,
     /// The epoch number for workers
     pub epoch: Epoch,
-}
-
-impl From<WorkerCache> for SharedWorkerCache {
-    fn from(worker_cache: WorkerCache) -> Self {
-        Arc::new(ArcSwap::from_pointee(worker_cache))
-    }
 }
 
 impl std::fmt::Display for WorkerIndex {
@@ -671,238 +676,5 @@ impl WorkerCache {
                     .chain(authority.0.values().map(|address| &address.worker_address))
             })
             .collect()
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct Authority {
-    /// The voting power of this authority.
-    pub stake: Stake,
-    /// The network address of the primary.
-    pub primary_address: Multiaddr,
-    /// Network key of the primary.
-    pub network_key: NetworkPublicKey,
-}
-
-pub type SharedCommittee = Arc<ArcSwap<Committee>>;
-
-#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct Committee {
-    /// The authorities of epoch.
-    pub authorities: BTreeMap<PublicKey, Authority>,
-    /// The epoch number of this committee
-    pub epoch: Epoch,
-}
-
-impl From<Committee> for SharedCommittee {
-    fn from(committee: Committee) -> Self {
-        Arc::new(ArcSwap::from_pointee(committee))
-    }
-}
-
-impl std::fmt::Display for Committee {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Committee E{}: {:?}",
-            self.epoch(),
-            self.authorities
-                .keys()
-                .map(|x| {
-                    if let Some(k) = x.encode_base64().get(0..16) {
-                        k.to_owned()
-                    } else {
-                        format!("Invalid key: {}", x)
-                    }
-                })
-                .collect::<Vec<_>>()
-        )
-    }
-}
-
-impl Committee {
-    /// Returns the current epoch.
-    pub fn epoch(&self) -> Epoch {
-        self.epoch
-    }
-
-    /// Returns the keys in the committee
-    pub fn keys(&self) -> Vec<&PublicKey> {
-        self.authorities.keys().clone().collect::<Vec<&PublicKey>>()
-    }
-
-    pub fn authorities(&self) -> impl Iterator<Item = (&PublicKey, &Authority)> {
-        self.authorities.iter()
-    }
-
-    pub fn authority_by_network_key(
-        &self,
-        network_key: &NetworkPublicKey,
-    ) -> Option<(&PublicKey, &Authority)> {
-        self.authorities
-            .iter()
-            .find(|(_, authority)| authority.network_key == *network_key)
-    }
-
-    /// Returns the number of authorities.
-    pub fn size(&self) -> usize {
-        self.authorities.len()
-    }
-
-    /// Return the stake of a specific authority.
-    pub fn stake(&self, name: &PublicKey) -> Stake {
-        self.authorities
-            .get(&name.clone())
-            .map_or_else(|| 0, |x| x.stake)
-    }
-
-    /// Returns the stake required to reach a quorum (2f+1).
-    pub fn quorum_threshold(&self) -> Stake {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
-        2 * total_votes / 3 + 1
-    }
-
-    /// Returns the stake required to reach availability (f+1).
-    pub fn validity_threshold(&self) -> Stake {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
-        (total_votes + 2) / 3
-    }
-
-    /// Returns a leader node as a weighted choice seeded by the provided integer
-    pub fn leader(&self, seed: u64) -> PublicKey {
-        let mut seed_bytes = [0u8; 32];
-        seed_bytes[32 - 8..].copy_from_slice(&seed.to_le_bytes());
-        let mut rng = StdRng::from_seed(seed_bytes);
-        let choices = self
-            .authorities
-            .iter()
-            .map(|(name, authority)| (name, authority.stake as f32))
-            .collect::<Vec<_>>();
-        choices
-            .choose_weighted(&mut rng, |item| item.1)
-            .expect("Weighted choice error: stake values incorrect!")
-            .0
-            .clone()
-    }
-
-    /// Returns the primary address of the target primary.
-    pub fn primary(&self, to: &PublicKey) -> Result<Multiaddr, ConfigError> {
-        self.authorities
-            .get(&to.clone())
-            .map(|x| x.primary_address.clone())
-            .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
-    }
-
-    pub fn network_key(&self, pk: &PublicKey) -> Result<NetworkPublicKey, ConfigError> {
-        self.authorities
-            .get(&pk.clone())
-            .map(|x| x.network_key.clone())
-            .ok_or_else(|| ConfigError::NotInCommittee((*pk).encode_base64()))
-    }
-
-    /// Return all the network addresses in the committee.
-    pub fn others_primaries(
-        &self,
-        myself: &PublicKey,
-    ) -> Vec<(PublicKey, Multiaddr, NetworkPublicKey)> {
-        self.authorities
-            .iter()
-            .filter(|(name, _)| *name != myself)
-            .map(|(name, authority)| {
-                (
-                    name.clone(),
-                    authority.primary_address.clone(),
-                    authority.network_key.clone(),
-                )
-            })
-            .collect()
-    }
-
-    fn get_all_network_addresses(&self) -> HashSet<&Multiaddr> {
-        self.authorities
-            .values()
-            .map(|authority| &authority.primary_address)
-            .collect()
-    }
-
-    /// Return the network addresses that are present in the current committee but that are absent
-    /// from the new committee (provided as argument).
-    pub fn network_diff<'a>(&'a self, other: &'a Self) -> HashSet<&Multiaddr> {
-        self.get_all_network_addresses()
-            .difference(&other.get_all_network_addresses())
-            .cloned()
-            .collect()
-    }
-
-    /// Update the networking information of some of the primaries. The arguments are a full vector of
-    /// authorities which Public key and Stake must match the one stored in the current Committee. Any discrepancy
-    /// will generate no update and return a vector of errors.
-    pub fn update_primary_network_info(
-        &mut self,
-        mut new_info: BTreeMap<PublicKey, (Stake, Multiaddr)>,
-    ) -> Result<(), Vec<CommitteeUpdateError>> {
-        let mut errors = None;
-
-        let table = &self.authorities;
-        let push_error_and_return = |acc, error| {
-            let mut error_table = if let Err(errors) = acc {
-                errors
-            } else {
-                Vec::new()
-            };
-            error_table.push(error);
-            Err(error_table)
-        };
-
-        let res = table
-            .iter()
-            .fold(Ok(BTreeMap::new()), |acc, (pk, authority)| {
-                if let Some((stake, address)) = new_info.remove(pk) {
-                    if stake == authority.stake {
-                        match acc {
-                            // No error met yet, update the accumulator
-                            Ok(mut bmap) => {
-                                let mut res = authority.clone();
-                                res.primary_address = address;
-                                bmap.insert(pk.clone(), res);
-                                Ok(bmap)
-                            }
-                            // in error mode, continue
-                            _ => acc,
-                        }
-                    } else {
-                        // Stake does not match: create or append error
-                        push_error_and_return(
-                            acc,
-                            CommitteeUpdateError::DifferentStake(pk.to_string()),
-                        )
-                    }
-                } else {
-                    // This key is absent from new information
-                    push_error_and_return(
-                        acc,
-                        CommitteeUpdateError::MissingFromUpdate(pk.to_string()),
-                    )
-                }
-            });
-
-        // If there are elements left in new_info, they are not in the original table
-        // If new_info is empty, this is a no-op.
-        let res = new_info.iter().fold(res, |acc, (pk, _)| {
-            push_error_and_return(acc, CommitteeUpdateError::NotInCommittee(pk.to_string()))
-        });
-
-        match res {
-            Ok(new_table) => self.authorities = new_table,
-            Err(errs) => {
-                errors = Some(errs);
-            }
-        };
-
-        errors.map(Err).unwrap_or(Ok(()))
     }
 }

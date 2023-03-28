@@ -4,7 +4,7 @@
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use arc_swap::{ArcSwap, ArcSwapOption};
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{NetworkKeyPair, PublicKey};
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
@@ -40,14 +40,14 @@ impl WorkerNodeInner {
     #[instrument(level = "info", skip_all)]
     async fn start(
         &mut self,
-        // The primary's public key
+        // The primary's id
         primary_name: PublicKey,
         // The private-public network key pair of this authority.
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The transaction validator that should be used
@@ -71,8 +71,17 @@ impl WorkerNodeInner {
 
         let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
+        let authority = committee
+            .authority_by_key(&primary_name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Our node with key {:?} should be in committee",
+                    primary_name
+                )
+            });
+
         let handles = Worker::spawn(
-            primary_name,
+            authority.clone(),
             network_keypair,
             self.id,
             committee.clone(),
@@ -188,7 +197,7 @@ impl WorkerNode {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The transaction validator defining Tx acceptance,
@@ -253,7 +262,7 @@ impl WorkerNodes {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The transaction validator defining Tx acceptance,

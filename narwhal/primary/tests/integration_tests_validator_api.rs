@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
+use config::{AuthorityIdentifier, BlockSynchronizerParameters, Committee, Parameters};
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
 use fastcrypto::{hash::Hash, traits::KeyPair as _};
 use indexmap::IndexMap;
 use narwhal_primary as primary;
@@ -15,9 +15,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::NodeStorage;
-use storage::{CertificateStore, PayloadToken};
-use store::Store;
+use storage::{CertificateStore, HeaderStore};
+use storage::{NodeStorage, PayloadStore};
+use store::{rocks::DBMap, Map};
 use test_utils::{
     fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
     temp_dir, AuthorityFixture, CommitteeFixture,
@@ -25,10 +25,9 @@ use test_utils::{
 use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
-    CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
-    PreSubscribedBroadcastSender, ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult,
-    Transaction, ValidatorClient,
+    Batch, BatchAPI, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, PreSubscribedBroadcastSender,
+    ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -40,18 +39,16 @@ async fn test_get_collections() {
     };
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
-
-    let name = author.public_key();
     let signer = author.keypair().copy();
 
     let worker_id = 0;
     let worker_keypair = author.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let mut header_digests = Vec::new();
     // Blocks/Collections
@@ -62,11 +59,13 @@ async fn test_get_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), worker_id, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -76,25 +75,18 @@ async fn test_get_collections() {
         store.certificate_store.write(certificate.clone()).unwrap();
 
         // Write the header
-        store
-            .header_store
-            .async_write(header.clone().digest(), header.clone())
-            .await;
+        store.header_store.write(&header).unwrap();
 
         header_digests.push(header.clone().digest());
 
         // Write the batches to payload store
         store
             .payload_store
-            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
-            .await
+            .write_all(vec![(batch.clone().digest(), worker_id)])
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store
-                .batch_store
-                .async_write(batch.digest(), batch.clone())
-                .await;
+            store.batch_store.insert(&batch.digest(), &batch).unwrap();
         } else {
             missing_certificate = digest;
         }
@@ -104,13 +96,14 @@ async fn test_get_collections() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
-        name.clone(),
+        author.authority().clone(),
         signer.copy(),
         author.network_keypair().copy(),
         committee.clone(),
@@ -147,7 +140,7 @@ async fn test_get_collections() {
 
     // Spawn a `Worker` instance.
     Worker::spawn(
-        name.clone(),
+        author.authority().clone(),
         worker_keypair,
         worker_id,
         committee.clone(),
@@ -243,18 +236,16 @@ async fn test_remove_collections() {
     };
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
-
-    let name = author.public_key();
     let signer = author.keypair().copy();
 
     let worker_id = 0;
     let worker_keypair = author.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
     let mut header_digests = Vec::new();
     // Blocks/Collections
     let mut collection_digests = Vec::new();
@@ -280,11 +271,13 @@ async fn test_remove_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), worker_id, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -295,34 +288,28 @@ async fn test_remove_collections() {
         dag.insert(certificate.clone()).await.unwrap();
 
         // Write the header
-        store
-            .header_store
-            .async_write(header.clone().digest(), header.clone())
-            .await;
+        store.header_store.write(&header).unwrap();
 
         header_digests.push(header.clone().digest());
 
         // Write the batches to payload store
         store
             .payload_store
-            .sync_write_all(vec![((batch.clone().digest(), worker_id), 0)])
-            .await
+            .write_all(vec![(batch.clone().digest(), worker_id)])
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            store
-                .batch_store
-                .async_write(batch.digest(), batch.clone())
-                .await;
+            store.batch_store.insert(&batch.digest(), &batch).unwrap();
         }
     }
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     Primary::spawn(
-        name.clone(),
+        author.authority().clone(),
         signer.copy(),
         author.network_keypair().copy(),
         committee.clone(),
@@ -381,7 +368,7 @@ async fn test_remove_collections() {
 
     // Spawn a `Worker` instance.
     Worker::spawn(
-        name.clone(),
+        author.authority().clone(),
         worker_keypair,
         worker_id,
         committee.clone(),
@@ -481,14 +468,14 @@ async fn test_remove_collections() {
 async fn test_read_causal_signed_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
@@ -528,7 +515,7 @@ async fn test_read_causal_signed_certificates() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .collect::<Vec<_>>();
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
@@ -560,18 +547,18 @@ async fn test_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
     let keypair_1 = authority_1.keypair().copy();
-    let name_1 = keypair_1.public().clone();
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -597,7 +584,8 @@ async fn test_read_causal_signed_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates_2) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -606,12 +594,11 @@ async fn test_read_causal_signed_certificates() {
         ..Parameters::default()
     };
     let keypair_2 = authority_2.keypair().copy();
-    let name_2 = keypair_2.public().clone();
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -696,7 +683,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
@@ -706,7 +693,6 @@ async fn test_read_causal_unsigned_certificates() {
         ..Parameters::default()
     };
     let keypair_1 = authority_1.keypair().copy();
-    let name_1 = authority_1.public_key();
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -714,11 +700,10 @@ async fn test_read_causal_unsigned_certificates() {
     };
     let keypair_2 = authority_2.keypair().copy();
     let network_keypair_2 = authority_2.network_keypair().copy();
-    let name_2 = authority_2.public_key();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
@@ -761,10 +746,9 @@ async fn test_read_causal_unsigned_certificates() {
         1..=4,
         &genesis,
         &committee
-            .authorities
-            .keys()
-            .cloned()
-            .collect::<Vec<PublicKey>>(),
+            .authorities()
+            .map(|authority| authority.id())
+            .collect::<Vec<AuthorityIdentifier>>(),
     );
 
     collection_digests.extend(
@@ -794,11 +778,12 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -824,14 +809,15 @@ async fn test_read_causal_unsigned_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates_2) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates_2) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         keypair_2.copy(),
         network_keypair_2,
         committee.clone(),
@@ -936,7 +922,7 @@ async fn test_get_collections_with_missing_certificates() {
     // GIVEN keys for two primary nodes
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
@@ -954,8 +940,8 @@ async fn test_get_collections_with_missing_certificates() {
     };
 
     // AND create separate data stores for the 2 primaries
-    let store_primary_1 = NodeStorage::reopen(temp_dir());
-    let store_primary_2 = NodeStorage::reopen(temp_dir());
+    let store_primary_1 = NodeStorage::reopen(temp_dir(), None);
+    let store_primary_2 = NodeStorage::reopen(temp_dir(), None);
 
     // The certificate_1 will be stored in primary 1
     let (certificate_1, batch_1) = fixture_certificate(
@@ -981,9 +967,6 @@ async fn test_get_collections_with_missing_certificates() {
     )
     .await;
 
-    let name_1 = authority_1.public_key();
-    let name_2 = authority_2.public_key();
-
     let worker_id = 0;
     let worker_1_keypair = authority_1.worker(worker_id).keypair().copy();
     let worker_2_keypair = authority_2.worker(worker_id).keypair().copy();
@@ -1000,13 +983,14 @@ async fn test_get_collections_with_missing_certificates() {
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         authority_1.keypair().copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -1043,7 +1027,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     // Spawn a `Worker` instance for primary 1.
     Worker::spawn(
-        name_1,
+        authority_1.authority().clone(),
         worker_1_keypair,
         worker_id,
         committee.clone(),
@@ -1059,7 +1043,8 @@ async fn test_get_collections_with_missing_certificates() {
     let (tx_new_certificates_2, _) = test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -1076,7 +1061,7 @@ async fn test_get_collections_with_missing_certificates() {
     };
 
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         authority_2.keypair().copy(),
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -1105,7 +1090,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     // Spawn a `Worker` instance for primary 2.
     Worker::spawn(
-        name_2,
+        authority_2.authority().clone(),
         worker_2_keypair,
         worker_id,
         committee.clone(),
@@ -1158,7 +1143,8 @@ async fn test_get_collections_with_missing_certificates() {
 
                 if let Some(expected_batch) = batches_map.get(&id) {
                     assert_eq!(
-                        result_transactions, *expected_batch.transactions,
+                        result_transactions,
+                        *expected_batch.transactions(),
                         "Batch payload doesn't match"
                     );
                 } else {
@@ -1176,10 +1162,10 @@ async fn fixture_certificate(
     authority: &AuthorityFixture,
     committee: &Committee,
     fixture: &CommitteeFixture,
-    header_store: Store<HeaderDigest, Header>,
+    header_store: HeaderStore,
     certificate_store: CertificateStore,
-    payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    batch_store: Store<BatchDigest, Batch>,
+    payload_store: PayloadStore,
+    batch_store: DBMap<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
     let batch = fixture_batch_with_transactions(10);
     let worker_id = 0;
@@ -1189,11 +1175,13 @@ async fn fixture_certificate(
     let mut payload = IndexMap::new();
     payload.insert(batch_digest, (worker_id, 0));
 
-    let header = authority
-        .header_builder(committee)
-        .payload(payload)
-        .build(authority.keypair())
-        .unwrap();
+    let header = Header::V1(
+        authority
+            .header_builder(committee)
+            .payload(payload)
+            .build()
+            .unwrap(),
+    );
 
     let certificate = fixture.certificate(&header);
 
@@ -1201,18 +1189,15 @@ async fn fixture_certificate(
     certificate_store.write(certificate.clone()).unwrap();
 
     // Write the header
-    header_store
-        .async_write(header.clone().digest(), header.clone())
-        .await;
+    header_store.write(&header).unwrap();
 
     // Write the batches to payload store
     payload_store
-        .sync_write_all(vec![((batch_digest, worker_id), 0)])
-        .await
+        .write_all(vec![(batch_digest, worker_id)])
         .expect("couldn't store batches");
 
     // Add a batch to the workers store
-    batch_store.async_write(batch_digest, batch.clone()).await;
+    batch_store.insert(&batch_digest, &batch).unwrap();
 
     (certificate, batch)
 }

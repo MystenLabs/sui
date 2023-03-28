@@ -1,36 +1,163 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![recursion_limit = "256"]
+
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Result;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
-use sui_sdk::{SuiClient, SuiClientBuilder};
-
 use backoff::retry;
 use backoff::ExponentialBackoff;
+use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
+use url::Url;
+
+use apis::{
+    CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, ReadApi, TransactionBuilderApi,
+    WriteApi,
+};
+use errors::IndexerError;
+use handlers::checkpoint_handler::CheckpointHandler;
+use mysten_metrics::spawn_monitored_task;
+use store::IndexerStore;
+use sui_core::event_handler::EventHandler;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, CLIENT_SDK_TYPE_HEADER};
+use sui_sdk::{SuiClient, SuiClientBuilder};
+
+use crate::apis::MoveUtilsApi;
 
 pub mod apis;
 pub mod errors;
+mod handlers;
 pub mod metrics;
 pub mod models;
+pub mod processors;
 pub mod schema;
+pub mod store;
+pub mod test_utils;
+pub mod types;
 pub mod utils;
 
 pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
-use crate::apis::checkpoint_api::CheckpointApiImpl;
-use errors::IndexerError;
-// TODO: placeholder, read from env or config file.
-pub const FAKE_PKG_VERSION: &str = "0.0.0";
+pub const MIGRATED_METHODS: [&str; 7] = [
+    "get_checkpoint",
+    "get_latest_checkpoint_sequence_number",
+    "get_object_with_options",
+    "get_total_transaction_number",
+    "get_transaction",
+    "multi_get_transactions_with_options",
+    "query_transactions",
+];
 
-pub async fn new_rpc_client(http_url: String) -> Result<SuiClient, IndexerError> {
+#[derive(Parser, Clone, Debug)]
+#[clap(
+    name = "Sui indexer",
+    about = "An off-fullnode service serving data from Sui protocol",
+    rename_all = "kebab-case"
+)]
+pub struct IndexerConfig {
+    #[clap(long)]
+    pub db_url: String,
+    #[clap(long)]
+    pub rpc_client_url: String,
+    #[clap(long, default_value = "0.0.0.0", global = true)]
+    pub client_metric_host: String,
+    #[clap(long, default_value = "9184", global = true)]
+    pub client_metric_port: u16,
+    #[clap(long, default_value = "0.0.0.0", global = true)]
+    pub rpc_server_url: String,
+    #[clap(long, default_value = "9000", global = true)]
+    pub rpc_server_port: u16,
+    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    pub migrated_methods: Vec<String>,
+    #[clap(long)]
+    pub reset_db: bool,
+}
+
+impl IndexerConfig {
+    /// returns connection url without the db name
+    pub fn base_connection_url(&self) -> String {
+        let url = Url::parse(&self.db_url).expect("Failed to parse URL");
+        format!(
+            "{}://{}:{}@{}:{}/",
+            url.scheme(),
+            url.username(),
+            url.password().unwrap_or_default(),
+            url.host_str().unwrap_or_default(),
+            url.port().unwrap_or_default()
+        )
+    }
+
+    /// returns all endpoints for which we have implemented on the indexer
+    /// NOTE: we only use this for integration testing
+    pub fn all_migrated_methods() -> Vec<String> {
+        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
+    }
+}
+
+impl Default for IndexerConfig {
+    fn default() -> Self {
+        Self {
+            db_url: "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
+            rpc_client_url: "http://127.0.0.1:9000".to_string(),
+            client_metric_host: "0.0.0.0".to_string(),
+            client_metric_port: 9184,
+            rpc_server_url: "0.0.0.0".to_string(),
+            rpc_server_port: 9000,
+            migrated_methods: vec![],
+            reset_db: false,
+        }
+    }
+}
+
+pub struct Indexer;
+
+impl Indexer {
+    pub async fn start<S: IndexerStore + Sync + Send + Clone + 'static>(
+        config: &IndexerConfig,
+        registry: &Registry,
+        store: S,
+    ) -> Result<(), IndexerError> {
+        let event_handler = Arc::new(EventHandler::default());
+        let handle = build_json_rpc_server(registry, store.clone(), event_handler.clone(), config)
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
+        // let JSON RPC server run forever.
+        spawn_monitored_task!(handle.stopped());
+        info!(
+            "Sui indexer of version {:?} started...",
+            env!("CARGO_PKG_VERSION")
+        );
+
+        backoff::future::retry(ExponentialBackoff::default(), || async {
+            let event_handler_clone = event_handler.clone();
+            let rpc_client = new_rpc_client(config.rpc_client_url.as_str()).await?;
+            // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
+            // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
+            let cp = CheckpointHandler::new(
+                store.clone(),
+                rpc_client.clone(),
+                event_handler_clone,
+                registry,
+            );
+            cp.spawn()
+                .await
+                .expect("Indexer main should not run into errors.");
+            Ok(())
+        })
+        .await
+    }
+}
+
+pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
     info!("Getting new RPC client...");
     SuiClientBuilder::default()
         .build(http_url)
@@ -48,21 +175,18 @@ pub fn establish_connection(db_url: String) -> PgConnection {
     PgConnection::establish(&db_url).unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
 }
 
-pub async fn new_pg_connection_pool(db_url: String) -> Result<Arc<PgConnectionPool>, IndexerError> {
+pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
-    let pool = Pool::builder().build(manager).map_err(|e| {
+    Pool::builder().build(manager).map_err(|e| {
         IndexerError::PgConnectionPoolInitError(format!(
             "Failed to initialize connection pool with error: {:?}",
             e
         ))
-    })?;
-    Ok(Arc::new(pool))
+    })
 }
 
-pub fn get_pg_pool_connection(
-    pool: Arc<PgConnectionPool>,
-) -> Result<PgPoolConnection, IndexerError> {
+pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
     retry(ExponentialBackoff::default(), || {
         let pool_conn = pool.get()?;
         Ok(pool_conn)
@@ -75,27 +199,45 @@ pub fn get_pg_pool_connection(
     })
 }
 
-pub async fn build_json_rpc_server(
+pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
     prometheus_registry: &Registry,
-    pg_connection_pool: Arc<PgConnectionPool>,
+    state: S,
+    event_handler: Arc<EventHandler>,
+    config: &IndexerConfig,
 ) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(FAKE_PKG_VERSION, prometheus_registry);
+    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
-    builder
-        .register_module(CheckpointApiImpl::new(pg_connection_pool))
-        .map_err(|e| {
-            IndexerError::JsonRpcServerError(format!(
-                "Failed to register JSON-RPC module with error: {:?}",
-                e
-            ))
-        })?;
+    let mut headers = HeaderMap::new();
+    headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
 
-    // TODO: placeholder, read from env or config file.
-    let default_socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 3030);
-    builder.start(default_socket_addr).await.map_err(|e| {
-        IndexerError::JsonRpcServerError(format!(
-            "Failed to start JSON-RPC server with error: {:?}",
-            e
-        ))
-    })
+    let http_client = HttpClientBuilder::default()
+        .max_request_body_size(2 << 30)
+        .max_concurrent_requests(usize::MAX)
+        .set_headers(headers.clone())
+        .build(config.rpc_client_url.as_str())
+        .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
+
+    builder.register_module(ReadApi::new(
+        state.clone(),
+        http_client.clone(),
+        config.migrated_methods.clone(),
+    ))?;
+    builder.register_module(CoinReadApi::new(http_client.clone()))?;
+    builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
+    builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
+    builder.register_module(IndexerApi::new(
+        state.clone(),
+        http_client.clone(),
+        event_handler,
+        config.migrated_methods.clone(),
+    ))?;
+    builder.register_module(WriteApi::new(http_client.clone()))?;
+    builder.register_module(ExtendedApi::new(state.clone()))?;
+    builder.register_module(MoveUtilsApi::new(http_client))?;
+    let default_socket_addr = SocketAddr::new(
+        // unwrap() here is safe b/c the address is a static config.
+        IpAddr::V4(Ipv4Addr::from_str(config.rpc_server_url.as_str()).unwrap()),
+        config.rpc_server_port,
+    );
+    Ok(builder.start(default_socket_addr).await?)
 }

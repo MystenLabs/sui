@@ -6,13 +6,13 @@ use std::{
     time::Duration,
 };
 
-use mysten_metrics::spawn_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_types::messages::VerifiedExecutableTransaction;
 use tokio::{
     sync::{mpsc::UnboundedReceiver, oneshot, Semaphore},
     time::sleep,
 };
-use tracing::{debug, error, error_span, info, Instrument};
+use tracing::{error, error_span, info, trace, Instrument};
 
 use crate::authority::AuthorityState;
 
@@ -22,7 +22,7 @@ mod execution_driver_tests;
 
 // Execution should not encounter permanent failures, so any failure can and needs
 // to be retried.
-const EXECUTION_MAX_ATTEMPTS: usize = 10;
+pub const EXECUTION_MAX_ATTEMPTS: u32 = 10;
 const EXECUTION_FAILURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 /// When a notification that a new pending transaction is received we activate
@@ -65,12 +65,13 @@ pub async fn execution_process(
             info!("Authority state has shutdown. Exiting ...");
             return;
         };
+        authority.metrics.execution_driver_dispatch_queue.dec();
 
         // TODO: Ideally execution_driver should own a copy of epoch store and recreate each epoch.
         let epoch_store = authority.load_epoch_store_one_call_per_task();
 
         let digest = *certificate.digest();
-        debug!(?digest, "Pending certificate execution activated.");
+        trace!(?digest, "Pending certificate execution activated.");
 
         let limit = limit.clone();
         // hold semaphore permit until task completes. unwrap ok because we never close
@@ -79,6 +80,7 @@ pub async fn execution_process(
 
         // Certificate execution can take significant time, so run it in a separate task.
         spawn_monitored_task!(async move {
+            let _scope = monitored_scope("ExecutionDriver");
             let _guard = permit;
             if let Ok(true) = authority.is_tx_already_executed(&digest) {
                 return;

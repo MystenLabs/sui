@@ -47,13 +47,13 @@ module nfts::auction_lib {
     /// Creates an auction. This is executed by the owner of the asset to be
     /// auctioned.
     public(friend) fun create_auction<T: key + store>(
-        id: UID, to_sell: T, ctx: &mut TxContext
+        to_sell: T, ctx: &mut TxContext
     ): Auction<T> {
         // A question one might asked is how do we know that to_sell
         // is owned by the caller of this entry function and the
         // answer is that it's checked by the runtime.
         Auction<T> {
-            id,
+            id: object::new(ctx),
             to_sell: option::some(to_sell),
             owner: tx_context::sender(ctx),
             bid_data: option::none(),
@@ -118,10 +118,10 @@ module nfts::auction_lib {
             } = option::extract(bid_data);
 
             send_balance(funds, owner, ctx);
-            transfer::transfer(item, highest_bidder);
+            transfer::public_transfer(item, highest_bidder);
         } else {
             // no bids placed - send the item back to the original owner
-            transfer::transfer(item, owner);
+            transfer::public_transfer(item, owner);
         };
     }
 
@@ -152,7 +152,7 @@ module nfts::auction_lib {
 
     /// Helper for the most common operation - wrapping a balance and sending it
     fun send_balance(balance: Balance<SUI>, to: address, ctx: &mut TxContext) {
-        transfer::transfer(coin::from_balance(balance, ctx), to)
+        transfer::public_transfer(coin::from_balance(balance, ctx), to)
     }
 
     /// exposes transfer::transfer

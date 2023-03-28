@@ -6,8 +6,7 @@ use crate::{
 };
 use anemo::async_trait;
 use anyhow::Result;
-use config::{Epoch, WorkerId};
-use crypto::{PublicKey, Signature};
+use config::{AuthorityIdentifier, Epoch, WorkerId};
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -18,6 +17,7 @@ use storage::CertificateStore;
 use storage::NodeStorage;
 use tokio::sync::oneshot;
 
+use consensus::consensus::ConsensusRound;
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
@@ -27,8 +27,8 @@ use tokio::{
     time::sleep,
 };
 use types::{
-    BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header,
+    BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, Header, HeaderAPI,
     HeaderDigest, Metadata, PayloadAvailabilityRequest, PayloadAvailabilityResponse,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
@@ -127,22 +127,21 @@ fn verify_certificates_not_in_store(
 // Note: this should always mimic the Header struct, only changing the visibility of the id field to public
 #[allow(dead_code)]
 struct BadHeader {
-    pub author: PublicKey,
+    pub author: AuthorityIdentifier,
     pub round: Round,
     pub epoch: Epoch,
     pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
-    pub signature: Signature,
     pub metadata: Metadata,
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_basic() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let fake_primary = fixture.authorities().nth(1).unwrap();
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let gc_depth: Round = 50;
@@ -159,17 +158,18 @@ async fn fetch_certificates_basic() {
     let (tx_fetch_resp, rx_fetch_resp) = mpsc::channel(1000);
 
     // Create test stores.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
     let certificate_store = store.certificate_store.clone();
     let payload_store = store.payload_store.clone();
 
     // Signal rounds
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(0, 0));
     let (_tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
     // Make a synchronizer for certificates.
     let synchronizer = Arc::new(Synchronizer::new(
-        name.clone(),
+        id,
         fixture.committee(),
         worker_cache.clone(),
         gc_depth,
@@ -184,7 +184,7 @@ async fn fetch_certificates_basic() {
         metrics.clone(),
     ));
 
-    let fake_primary_addr = network::multiaddr_to_address(fake_primary.address()).unwrap();
+    let fake_primary_addr = fake_primary.address().to_anemo_address().unwrap();
     let fake_route =
         anemo::Router::new().add_rpc_service(PrimaryToPrimaryServer::new(NetworkProxy {
             request: tx_fetch_req,
@@ -203,12 +203,11 @@ async fn fetch_certificates_basic() {
 
     // Make a certificate fetcher
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
-        name.clone(),
+        id,
         fixture.committee(),
         client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
-        gc_depth,
         tx_shutdown.subscribe(),
         rx_certificate_fetcher,
         synchronizer.clone(),
@@ -223,7 +222,10 @@ async fn fetch_certificates_basic() {
             .expect("Writing certificate to store failed");
     }
 
-    let mut current_round: Vec<_> = genesis_certs.into_iter().map(|cert| cert.header).collect();
+    let mut current_round: Vec<_> = genesis_certs
+        .into_iter()
+        .map(|cert| cert.header().clone())
+        .collect();
     let mut headers = vec![];
     let rounds = 60;
     for i in 0..rounds {
@@ -236,8 +238,8 @@ async fn fetch_certificates_basic() {
     }
 
     // Avoid any sort of missing payload by pre-populating the batch
-    for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload.iter()) {
-        payload_store.async_write((*digest, *worker_id), 0u8).await;
+    for (digest, (worker_id, _)) in headers.iter().flat_map(|h| h.payload().iter()) {
+        payload_store.write(digest, worker_id).unwrap();
     }
 
     let total_certificates = fixture.authorities().count() * rounds as usize;
@@ -259,9 +261,10 @@ async fn fetch_certificates_basic() {
     // Send a primary message for a certificate with parents that do not exist locally, to trigger fetching.
     let target_index = 123;
     assert!(!synchronizer
-        .check_parents(&certificates[target_index].clone())
+        .get_missing_parents(&certificates[target_index].clone())
         .await
-        .unwrap());
+        .unwrap()
+        .is_empty());
 
     // Verify the fetch request.
     let mut req = rx_fetch_req.recv().await.unwrap();
@@ -358,18 +361,15 @@ async fn fetch_certificates_basic() {
     let mut certs = Vec::new();
     // Add cert missing parent info.
     let mut cert = certificates[num_written].clone();
-    cert.header.parents.clear();
+    cert.header_mut().clear_parents();
     certs.push(cert);
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
-    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header) };
-    let wrong_header = BadHeader {
-        id: OnceCell::with_value(HeaderDigest::default()),
-        ..cert_header
-    };
+    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header().clone()) };
+    let wrong_header = BadHeader { ..cert_header };
     let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
-    cert.header = wolf_header;
+    cert.update_header(wolf_header);
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());

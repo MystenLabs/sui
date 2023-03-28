@@ -14,6 +14,14 @@ build
 storage/
 !narwhal/storage
 
+# Move-related files
+Move.lock
+!crates/sui-framework/packages/move-stdlib/Move.lock
+!crates/sui-framework/packages/sui-framework/Move.lock
+!crates/sui-framework/packages/sui-system/Move.lock
+.trace
+.coverage_map.mvcov
+
 # Thumbnails
 ._*
 
@@ -34,6 +42,8 @@ node_modules
 dist/
 storybook-static/
 web-ext-artifacts/
+.next/
+next-env.d.ts
 
 # App test artifacts
 coverage/

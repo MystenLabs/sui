@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::NUM_SHUTDOWN_RECEIVERS;
-use fastcrypto::traits::KeyPair;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use test_utils::{fixture_payload, CommitteeFixture};
@@ -13,10 +12,9 @@ use types::PreSubscribedBroadcastSender;
 async fn propose_empty() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
-    let signature_service = SignatureService::new(primary.keypair().copy());
+    let name = primary.id();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
@@ -31,7 +29,6 @@ async fn propose_empty() {
     let _proposer_handle = Proposer::spawn(
         name,
         committee.clone(),
-        signature_service,
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 32,
         /* max_header_num_of_batches */ 100,
@@ -50,20 +47,19 @@ async fn propose_empty() {
 
     // Ensure the proposer makes a correct empty header.
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(header.round, 1);
-    assert!(header.payload.is_empty());
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert_eq!(header.round(), 1);
+    assert!(header.payload().is_empty());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 }
 
 #[tokio::test]
 async fn propose_payload_and_repropose_after_n_seconds() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
+    let name = primary.id();
     let header_resend_delay = Duration::from_secs(3);
-    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
@@ -78,9 +74,8 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     // Spawn the proposer.
     let _proposer_handle = Proposer::spawn(
-        name.clone(),
+        name,
         committee.clone(),
-        signature_service,
         ProposerStore::new_for_tests(),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ max_num_of_batches,
@@ -100,10 +95,11 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     );
 
     // Send enough digests for the header payload.
-    let mut name_bytes = [0u8; 32];
-    name_bytes.copy_from_slice(&name.as_ref()[..32]);
+    let mut b = [0u8; 32];
+    let r: Vec<u8> = (0..32).map(|_v| rand::random::<u8>()).collect();
+    b.copy_from_slice(r.as_slice());
 
-    let digest = BatchDigest(name_bytes);
+    let digest = BatchDigest(b);
     let worker_id = 0;
     let created_at_ts = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
@@ -112,19 +108,19 @@ async fn propose_payload_and_repropose_after_n_seconds() {
             digest,
             worker_id,
             timestamp: created_at_ts,
-            ack_channel: tx_ack,
+            ack_channel: Some(tx_ack),
         })
         .await
         .unwrap();
 
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(header.round, 1);
+    assert_eq!(header.round(), 1);
     assert_eq!(
-        header.payload.get(&digest),
+        header.payload().get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // WHEN available batches are more than the maximum ones
     let batches: IndexMap<BatchDigest, (WorkerId, TimestampMs)> =
@@ -138,7 +134,7 @@ async fn propose_payload_and_repropose_after_n_seconds() {
                 digest: batch_id,
                 worker_id,
                 timestamp: created_at,
-                ack_channel: tx_ack,
+                ack_channel: Some(tx_ack),
             })
             .await
             .unwrap();
@@ -161,8 +157,8 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 
     // THEN the header should contain max_num_of_batches
     let header = rx_headers.recv().await.unwrap();
-    assert_eq!(header.round, 2);
-    assert_eq!(header.payload.len(), max_num_of_batches);
+    assert_eq!(header.round(), 2);
+    assert_eq!(header.payload().len(), max_num_of_batches);
     assert!(rx_ack.await.is_ok());
 
     // Check all batches are acked.
@@ -185,10 +181,9 @@ async fn propose_payload_and_repropose_after_n_seconds() {
 async fn equivocation_protection() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let shared_worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let name = primary.public_key();
-    let signature_service = SignatureService::new(primary.keypair().copy());
+    let authority_id = primary.id();
     let proposer_store = ProposerStore::new_for_tests();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -201,9 +196,8 @@ async fn equivocation_protection() {
 
     // Spawn the proposer.
     let proposer_handle = Proposer::spawn(
-        name.clone(),
+        authority_id,
         committee.clone(),
-        signature_service.clone(),
         proposer_store.clone(),
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
@@ -223,10 +217,11 @@ async fn equivocation_protection() {
     );
 
     // Send enough digests for the header payload.
-    let mut name_bytes = [0u8; 32];
-    name_bytes.copy_from_slice(&name.as_ref()[..32]);
+    let mut b = [0u8; 32];
+    let r: Vec<u8> = (0..32).map(|_v| rand::random::<u8>()).collect();
+    b.copy_from_slice(r.as_slice());
 
-    let digest = BatchDigest(name_bytes);
+    let digest = BatchDigest(b);
     let worker_id = 0;
     let created_at_ts = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
@@ -235,7 +230,7 @@ async fn equivocation_protection() {
             digest,
             worker_id,
             timestamp: created_at_ts,
-            ack_channel: tx_ack,
+            ack_channel: Some(tx_ack),
         })
         .await
         .unwrap();
@@ -255,10 +250,10 @@ async fn equivocation_protection() {
     // Ensure the proposer makes a correct header from the provided payload.
     let header = rx_headers.recv().await.unwrap();
     assert_eq!(
-        header.payload.get(&digest),
+        header.payload().get(&digest),
         Some(&(worker_id, created_at_ts))
     );
-    assert!(header.verify(&committee, shared_worker_cache).is_ok());
+    assert!(header.validate(&committee, &worker_cache).is_ok());
 
     // restart the proposer.
     tx_shutdown.send().unwrap();
@@ -273,9 +268,8 @@ async fn equivocation_protection() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     let _proposer_handle = Proposer::spawn(
-        name.clone(),
+        authority_id,
         committee.clone(),
-        signature_service,
         proposer_store,
         /* header_num_of_batches_threshold */ 1,
         /* max_header_num_of_batches */ 10,
@@ -295,10 +289,11 @@ async fn equivocation_protection() {
     );
 
     // Send enough digests for the header payload.
-    let mut name_bytes = [0u8; 32];
-    name_bytes.copy_from_slice(&name.as_ref()[..32]);
+    let mut b = [0u8; 32];
+    let r: Vec<u8> = (0..32).map(|_v| rand::random::<u8>()).collect();
+    b.copy_from_slice(r.as_slice());
 
-    let digest = BatchDigest(name_bytes);
+    let digest = BatchDigest(b);
     let worker_id = 0;
     let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
     tx_our_digests
@@ -306,7 +301,7 @@ async fn equivocation_protection() {
             digest,
             worker_id,
             timestamp: 0,
-            ack_channel: tx_ack,
+            ack_channel: Some(tx_ack),
         })
         .await
         .unwrap();
@@ -325,7 +320,7 @@ async fn equivocation_protection() {
 
     // Ensure the proposer makes the same header as before
     let new_header = rx_headers.recv().await.unwrap();
-    if new_header.round == header.round {
+    if new_header.round() == header.round() {
         assert_eq!(header, new_header);
     }
 }

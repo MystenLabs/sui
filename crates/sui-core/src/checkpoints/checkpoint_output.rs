@@ -9,12 +9,13 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::ConsensusTransaction;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
     SignedCheckpointSummary, VerifiedCheckpoint,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use super::CheckpointMetrics;
 
@@ -67,16 +68,21 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         let checkpoint_seq = summary.sequence_number;
         let checkpoint_timestamp = summary.timestamp_ms;
         debug!(
-            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}"
+            "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}. 
+            {}ms left till end of epoch at timestamp {}",
+            self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
         );
         LogCheckpointOutput
             .checkpoint_created(summary, contents, epoch_store)
             .await?;
-        let summary = SignedCheckpointSummary::new_from_summary(
+
+        let summary = SignedCheckpointSummary::new(
+            epoch_store.epoch(),
             summary.clone(),
-            self.authority,
             &*self.signer,
+            self.authority,
         );
+
         let message = CheckpointSignatureMessage { summary };
         let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
         self.sender
@@ -101,9 +107,10 @@ impl CheckpointOutput for LogCheckpointOutput {
         contents: &CheckpointContents,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        debug!(
+        trace!(
             "Including following transactions in checkpoint {}: {:?}",
-            summary.sequence_number, contents
+            summary.sequence_number,
+            contents
         );
         info!(
             "Creating checkpoint {:?} at epoch {}, sequence {}, previous digest {:?}, transactions count {}, content digest {:?}, end_of_epoch_data {:?}",
@@ -128,8 +135,8 @@ impl CertifiedCheckpointOutput for LogCheckpointOutput {
     ) -> SuiResult {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
-            summary.summary.sequence_number,
-            summary.summary.digest()
+            summary.sequence_number,
+            summary.digest()
         );
         Ok(())
     }
@@ -153,8 +160,8 @@ impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
     ) -> SuiResult {
         info!(
             "Certified checkpoint with sequence {} and digest {}",
-            summary.summary.sequence_number,
-            summary.summary.digest()
+            summary.sequence_number,
+            summary.digest()
         );
         self.handle
             .send_checkpoint(VerifiedCheckpoint::new_unchecked(summary.to_owned()))

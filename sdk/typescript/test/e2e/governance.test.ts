@@ -6,88 +6,72 @@ import {
   RawSigner,
   getExecutionStatusType,
   SuiSystemStateUtil,
-  LocalTxnDataSerializer,
-  SUI_SYSTEM_STATE_OBJECT_ID,
-  assert as superStructAssert,
-  getMoveObject,
-  MoveSuiSystemObjectFields,
+  SUI_TYPE_ARG,
 } from '../../src';
-import { DEFAULT_GAS_BUDGET, setup, TestToolbox } from './utils/setup';
+import { setup, TestToolbox } from './utils/setup';
 
 const DEFAULT_STAKED_AMOUNT = 1;
 
-describe.each([{ useLocalTxnBuilder: true }, { useLocalTxnBuilder: false }])(
-  'Governance API',
-  ({ useLocalTxnBuilder }) => {
-    let toolbox: TestToolbox;
-    let signer: RawSigner;
+describe('Governance API', () => {
+  let toolbox: TestToolbox;
+  let signer: RawSigner;
 
-    beforeAll(async () => {
-      toolbox = await setup();
-      signer = new RawSigner(
-        toolbox.keypair,
-        toolbox.provider,
-        useLocalTxnBuilder
-          ? new LocalTxnDataSerializer(toolbox.provider)
-          : undefined,
-      );
+  beforeAll(async () => {
+    toolbox = await setup();
+    signer = new RawSigner(toolbox.keypair, toolbox.provider);
+  });
+
+  it('test requestAddStake', async () => {
+    const result = await addStake(signer);
+    expect(getExecutionStatusType(result)).toEqual('success');
+  });
+
+  it('test getDelegatedStakes', async () => {
+    await addStake(signer);
+    const stakes = await toolbox.provider.getStakes({
+      owner: toolbox.address(),
     });
-
-    it('test requestAddDelegation', async () => {
-      const result = await addDelegation(signer);
-      expect(getExecutionStatusType(result)).toEqual('success');
+    const stakesById = await toolbox.provider.getStakesByIds({
+      stakedSuiIds: [stakes[0].stakes[0].stakedSuiId],
     });
+    expect(stakes.length).greaterThan(0);
+    expect(stakesById[0].stakes[0]).toEqual(stakes[0].stakes[0]);
+  });
 
-    it('test getDelegatedStakes', async () => {
-      const stakes = await toolbox.provider.getDelegatedStakes(
-        toolbox.address(),
-      );
-      expect(stakes.length).greaterThan(0);
-    });
+  it('test requestWithdrawStake', async () => {
+    // TODO: implement this
+  });
 
-    it('test requestWithdrawDelegation', async () => {
-      // TODO: implement this
-    });
+  it('test getCommitteeInfo', async () => {
+    const committeeInfo = await toolbox.provider.getCommitteeInfo({ epoch: 0 });
+    expect(committeeInfo.validators?.length).greaterThan(0);
+  });
 
-    it('test requestSwitchDelegation', async () => {
-      // TODO: implement this
-    });
+  it('test getLatestSuiSystemState', async () => {
+    await toolbox.provider.getLatestSuiSystemState();
+  });
+});
 
-    it('test getValidators', async () => {
-      const validators = await toolbox.provider.getValidators();
-      expect(validators.length).greaterThan(0);
-    });
+async function addStake(signer: RawSigner) {
+  const coins = await signer.provider.getCoins({
+    owner: await signer.getAddress(),
+    coinType: SUI_TYPE_ARG,
+  });
 
-    it('test getCommiteeInfo', async () => {
-      const commiteeInfo = await toolbox.provider.getCommitteeInfo(0);
-      expect(commiteeInfo.committee_info?.length).greaterThan(0);
-    });
+  const system = await signer.provider.getLatestSuiSystemState();
+  const validators = system.activeValidators;
 
-    it('test getSuiSystemState', async () => {
-      await toolbox.provider.getSuiSystemState();
-    });
-
-    it('test Validator definition', async () => {
-      const data = await toolbox.provider.getObject(SUI_SYSTEM_STATE_OBJECT_ID);
-      const moveObject = getMoveObject(data);
-      superStructAssert(moveObject!.fields, MoveSuiSystemObjectFields);
-    });
-  },
-);
-
-async function addDelegation(signer: RawSigner) {
-  const coins = await signer.provider.getGasObjectsOwnedByAddress(
-    await signer.getAddress(),
+  const tx = await SuiSystemStateUtil.newRequestAddStakeTxn(
+    signer.provider,
+    [coins.data[0].coinObjectId],
+    BigInt(DEFAULT_STAKED_AMOUNT),
+    validators[0].suiAddress,
   );
 
-  const validators = await signer.provider.getValidators();
-
-  return await signer.signAndExecuteTransaction(
-    await SuiSystemStateUtil.newRequestAddDelegationTxn(
-      [coins[0].objectId],
-      BigInt(DEFAULT_STAKED_AMOUNT),
-      validators[0].sui_address,
-      DEFAULT_GAS_BUDGET,
-    ),
-  );
+  return await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
+    options: {
+      showEffects: true,
+    },
+  });
 }

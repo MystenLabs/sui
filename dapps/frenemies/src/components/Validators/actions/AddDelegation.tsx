@@ -17,7 +17,7 @@ import { StakeButton } from "../../StakeButton";
 
 interface Props {
   validator: SuiAddress;
-  /** Amount to Delegate */
+  /** Amount to Stake */
   amount: string;
 }
 
@@ -34,7 +34,7 @@ function toMist(sui: string) {
  */
 export function AddDelegation({ validator, amount }: Props) {
   const manageCoins = useManageCoin();
-  const { signAndExecuteTransaction } = useWalletKit();
+  const { signAndExecuteTransactionBlock } = useWalletKit();
   const getLatestCoins = useGetLatestCoins();
 
   const stake = useMutation(["stake-for-validator"], async () => {
@@ -44,7 +44,10 @@ export function AddDelegation({ validator, amount }: Props) {
       throw new Error("No coins found.");
     }
 
-    const totalBalance = coins.reduce((acc, coin) => (acc += BigInt(coin.balance)), 0n);
+    const totalBalance = coins.reduce(
+      (acc, coin) => (acc += BigInt(coin.balance)),
+      0n
+    );
 
     const mistAmount = toMist(amount);
 
@@ -62,13 +65,13 @@ export function AddDelegation({ validator, amount }: Props) {
 
     const stakeCoin = await manageCoins(coins, mistAmount, gasRequired);
 
-    await signAndExecuteTransaction(
-      {
+    await signAndExecuteTransactionBlock({
+      transaction: {
         kind: "moveCall",
         data: {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
           module: "sui_system",
-          function: "request_add_delegation_mul_coin",
+          function: "request_add_stake_mul_coin",
           typeArguments: [],
           gasBudget: Number(GAS_BUDGET),
           arguments: [
@@ -79,10 +82,10 @@ export function AddDelegation({ validator, amount }: Props) {
           ],
         },
       },
-      {
-        // requestType: "WaitForEffectsCert",
-      }
-    );
+      // options: {
+      // requestType: "WaitForEffectsCert",
+      // },
+    });
   });
 
   return (

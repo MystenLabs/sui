@@ -1,44 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { is, SuiObject, type MoveSuiSystemObjectFields } from '@mysten/sui.js';
+import { useGetRollingAverageApys, useGetValidatorsEvents } from '@mysten/core';
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { ValidatorMeta } from '~/components/validator/ValidatorMeta';
 import { ValidatorStats } from '~/components/validator/ValidatorStats';
-import { useGetObject } from '~/hooks/useGetObject';
-import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
-import { VALIDATORS_OBJECT_ID } from '~/pages/validator/ValidatorDataTypes';
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { Banner } from '~/ui/Banner';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { getValidatorMoveEvent } from '~/utils/getValidatorMoveEvent';
 
 function ValidatorDetails() {
     const { id } = useParams();
-    const { data, isLoading } = useGetObject(VALIDATORS_OBJECT_ID);
-
-    const validatorsData =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as MoveSuiSystemObjectFields)
-            : null;
+    const { data, isLoading } = useGetSystemObject();
 
     const validatorData = useMemo(() => {
-        if (!validatorsData) return null;
-        return (
-            validatorsData.validators.fields.active_validators.find(
-                (av) => av.fields.metadata.fields.sui_address === id
-            ) || null
-        );
-    }, [id, validatorsData]);
+        if (!data) return null;
+        return data.activeValidators.find((av) => av.suiAddress === id) || null;
+    }, [id, data]);
 
-    const numberOfValidators = useMemo(
-        () =>
-            validatorsData?.validators.fields.active_validators.length || null,
-        [validatorsData]
-    );
+    const numberOfValidators = data?.activeValidators.length ?? null;
+    const { data: rollingAverageApys, isLoading: validatorsApysLoading } =
+        useGetRollingAverageApys(numberOfValidators);
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
@@ -48,23 +33,24 @@ function ValidatorDetails() {
 
     const validatorRewards = useMemo(() => {
         if (!validatorEvents || !id) return 0;
-        return (
-            getValidatorMoveEvent(validatorEvents.data, id)?.fields
-                .stake_rewards || 0
-        );
+        const rewards = getValidatorMoveEvent(
+            validatorEvents.data,
+            id
+        )?.pool_staking_reward;
+        return +rewards || 0;
     }, [id, validatorEvents]);
 
-    if (isLoading || validatorsEventsLoading) {
+    if (isLoading || validatorsEventsLoading || validatorsApysLoading) {
         return (
-            <div className="mt-5 mb-10 flex items-center justify-center">
+            <div className="mb-10 flex items-center justify-center">
                 <LoadingSpinner />
             </div>
         );
     }
 
-    if (!validatorData || !validatorsData || !validatorEvents) {
+    if (!validatorData || !data || !validatorEvents || !id) {
         return (
-            <div className="mt-5 mb-10 flex items-center justify-center">
+            <div className="mb-10 flex items-center justify-center">
                 <Banner variant="error" spacing="lg" fullWidth>
                     No validator data found for {id}
                 </Banner>
@@ -72,16 +58,18 @@ function ValidatorDetails() {
         );
     }
 
+    const apy = rollingAverageApys?.[id] || 0;
     return (
-        <div className="mt-5 mb-10">
+        <div className="mb-10">
             <div className="flex flex-col flex-nowrap gap-5 md:flex-row md:gap-0">
                 <ValidatorMeta validatorData={validatorData} />
             </div>
             <div className="mt-5 md:mt-8">
                 <ValidatorStats
                     validatorData={validatorData}
-                    epoch={validatorsData.epoch}
+                    epoch={data.epoch}
                     epochRewards={validatorRewards}
+                    apy={apy}
                 />
             </div>
         </div>

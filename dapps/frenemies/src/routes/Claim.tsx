@@ -88,6 +88,9 @@ function Connected() {
   const submitWinner = useMutation(
     ["submit-winner"],
     async (values: z.infer<typeof Schema>) => {
+      if (!currentAccount) {
+        throw new Error("Missing account");
+      }
       const res = await fetch(
         import.meta.env.DEV
           ? "http://127.0.0.1:3003/frenemies"
@@ -98,7 +101,7 @@ function Connected() {
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            address: currentAccount!,
+            address: currentAccount.address,
             name: values.name,
             email: values.email,
           }),
@@ -112,14 +115,16 @@ function Connected() {
       const data = await res.json();
 
       await signAndExecuteTransaction({
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_NOOP,
-          module: "noop",
-          function: "noop_w_metadata",
-          typeArguments: [],
-          gasBudget: Number(GAS_BUDGET),
-          arguments: [data.bytes],
+        transaction: {
+          kind: "moveCall",
+          data: {
+            packageObjectId: config.VITE_NOOP,
+            module: "noop",
+            function: "noop_w_metadata",
+            typeArguments: [],
+            gasBudget: Number(GAS_BUDGET),
+            arguments: [data.bytes],
+          },
         },
       });
     }

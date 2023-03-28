@@ -3,7 +3,7 @@
 
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
-use crate::args::*;
+use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
 use anyhow::bail;
 use bimap::btree::BiBTreeMap;
 use move_binary_format::{file_format::CompiledScript, CompiledModule};
@@ -36,13 +36,15 @@ use std::{
 };
 use sui_adapter::execution_engine;
 use sui_adapter::{adapter::new_move_vm, execution_mode};
-use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_core::transaction_input_checker::check_objects;
+use sui_framework::{
+    make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
+};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::clock::Clock;
-use sui_types::epoch_data::EpochData;
-use sui_types::gas::SuiCostTable;
+use sui_types::gas::{GasCostSummary, SuiCostTable};
 use sui_types::id::UID;
-use sui_types::in_memory_storage::InMemoryStorage;
+use sui_types::messages::CallArg;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
@@ -50,24 +52,34 @@ use sui_types::{
     event::Event,
     gas,
     messages::{
-        ExecutionStatus, InputObjects, TransactionData, TransactionEffects, VerifiedTransaction,
+        ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
+        VerifiedTransaction,
     },
-    object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
+    object::{self, Object, ObjectFormatOptions},
     object::{MoveObject, Owner},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     SUI_FRAMEWORK_ADDRESS,
 };
+use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
+use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
+use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 
 pub(crate) type FakeID = u64;
 
-// initial value for fake object ID mapping
-const INIT_NEXT_FAKE: FakeID = 100;
+// initial value for fake object ID mapping. If the object ID is less than this value, it will not
+// be remapped.
+// This used to be set to 100, but when the system objects were excluded, this got bumped to avoid
+// breaking tests
+const INIT_NEXT_FAKE: FakeID = 103;
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
     21, 23, 199, 200, 234, 250, 252, 178, 94, 15, 202, 178, 62, 186, 88, 137, 233, 192, 130, 157,
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
+
+const DEFAULT_GAS_BUDGET: u64 = 10_000;
+const GAS_FOR_TESTING: u64 = 3_000_000;
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
@@ -85,6 +97,7 @@ struct TxnSummary {
     written: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
     events: Vec<Event>,
+    gas_summary: GasCostSummary,
 }
 
 static GENESIS: Lazy<Genesis> = Lazy::new(create_genesis_module_objects);
@@ -108,40 +121,12 @@ pub fn clone_genesis_objects() -> Vec<Object> {
     GENESIS.objects.clone()
 }
 
-pub fn get_framework_object_ref() -> ObjectRef {
-    GENESIS
-        .packages
-        .iter()
-        .find(|o| o.id() == SUI_FRAMEWORK_ADDRESS.into())
-        .unwrap()
-        .compute_object_reference()
-}
-
 /// Create and return objects wrapping the genesis modules for sui
 fn create_genesis_module_objects() -> Genesis {
-    let sui_modules = sui_framework::get_sui_framework();
-    let std_modules = sui_framework::get_move_stdlib();
-    let objects = vec![create_clock()];
-    // SAFETY: unwraps safe because genesis packages should never exceed max size
-    let packages = vec![
-        Object::new_package(
-            std_modules.clone(),
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-        Object::new_package(
-            sui_modules.clone(),
-            TransactionDigest::genesis(),
-            PROTOCOL_CONSTANTS.max_move_package_size(),
-        )
-        .unwrap(),
-    ];
-    let modules = vec![std_modules, sui_modules];
     Genesis {
-        objects,
-        packages,
-        modules,
+        objects: vec![create_clock()],
+        packages: make_system_objects(),
+        modules: make_system_modules(),
     }
 }
 
@@ -158,7 +143,7 @@ fn create_clock() -> Object {
     let move_object = unsafe {
         let has_public_transfer = false;
         MoveObject::new_from_execution(
-            Clock::type_(),
+            Clock::type_().into(),
             has_public_transfer,
             SUI_CLOCK_OBJECT_SHARED_VERSION,
             contents,
@@ -235,13 +220,16 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             named_address_mapping.insert(name, addr);
         }
 
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        let native_functions = sui_framework::natives::all_natives();
         let mut objects = clone_genesis_packages();
         objects.extend(clone_genesis_objects());
         let mut account_objects = BTreeMap::new();
         for (account, (addr, _)) in &accounts {
-            let obj = Object::with_id_owner_for_testing(ObjectID::new(rng.gen()), *addr);
+            let obj = Object::with_id_owner_gas_for_testing(
+                ObjectID::new(rng.gen()),
+                *addr,
+                GAS_FOR_TESTING,
+            );
             objects.push(obj.clone());
             account_objects.insert(account.clone(), obj);
         }
@@ -295,19 +283,45 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
     ) -> anyhow::Result<(Option<String>, CompiledModule)> {
-        let SuiPublishArgs { sender } = extra;
+        let SuiPublishArgs {
+            sender,
+            upgradeable,
+            view_gas_used,
+            dependencies,
+        } = extra;
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
             let mut buf = vec![];
             module.serialize(&mut buf).unwrap();
             buf
         };
-        let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let data = |sender, gas_payment| {
-            TransactionData::new_module_with_dummy_gas_price(
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let mut dependencies: Vec<_> = dependencies
+            .into_iter()
+            .map(|d| {
+                let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
+                    bail!("There is no published module address corresponding to name address {d}");
+                };
+                let id: ObjectID = addr.into_inner().into();
+                Ok(id)
+            })
+            .collect::<Result<_, _>>()?;
+        // we are assuming that all packages depend on the system packages, so these don't have to
+        // be provided explicitly as parameters
+        dependencies.extend(system_package_ids());
+        let data = |sender, gas| {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            if upgradeable {
+                let cap = builder.publish_upgradeable(vec![module_bytes], dependencies);
+                builder.transfer_arg(sender, cap);
+            } else {
+                builder.publish_immutable(vec![module_bytes], dependencies);
+            };
+            let pt = builder.finish();
+            TransactionData::new_programmable_with_dummy_gas_price(
                 sender,
-                gas_payment,
-                vec![module_bytes],
+                vec![gas],
+                pt,
                 gas_budget,
             )
         };
@@ -341,7 +355,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }
         }
         let view_events = false;
-        let output = self.object_summary_output(&summary, view_events);
+        let output = self.object_summary_output(&summary, view_events, view_gas_used);
         let published_module_bytes = self
             .storage
             .get_object(&created_package)
@@ -371,29 +385,35 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         let SuiRunArgs {
             sender,
             view_events,
+            view_gas_used,
         } = extra;
+        let mut builder = ProgrammableTransactionBuilder::new();
         let arguments = args
             .into_iter()
-            .map(|arg| arg.into_call_args(self))
+            .map(|arg| arg.into_argument(&mut builder, self))
             .collect::<anyhow::Result<_>>()?;
         let package_id = ObjectID::from(*module_id.address());
 
-        let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
-        let data = |sender, gas_payment| {
-            TransactionData::new_move_call_with_dummy_gas_price(
-                sender,
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let data = |sender, gas| {
+            builder.command(Command::move_call(
                 package_id,
                 module_id.name().to_owned(),
                 function.to_owned(),
                 type_args,
-                gas_payment,
                 arguments,
+            ));
+            let pt = builder.finish();
+            TransactionData::new_programmable_with_dummy_gas_price(
+                sender,
+                vec![gas],
+                pt,
                 gas_budget,
             )
         };
         let transaction = self.sign_txn(sender, data);
         let summary = self.execute_txn(transaction, gas_budget)?;
-        let output = self.object_summary_output(&summary, view_events);
+        let output = self.object_summary_output(&summary, view_events, view_gas_used);
         let empty = SerializedReturnValues {
             mutable_reference_outputs: vec![],
             return_values: vec![],
@@ -434,7 +454,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             start_line,
             command_lines_stop,
             stop_line: _,
-            data: _,
+            data,
         } = task;
         macro_rules! get_obj {
             ($fake_id:ident) => {{
@@ -493,29 +513,75 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 recipient,
                 sender,
                 gas_budget,
+                view_gas_used,
             }) => {
-                let obj = get_obj!(fake_id);
-                let obj_ref = obj.compute_object_reference();
+                let mut builder = ProgrammableTransactionBuilder::new();
+                let obj_arg = SuiValue::Object(fake_id).into_argument(&mut builder, self)?;
                 let recipient = match self.accounts.get(&recipient) {
                     Some((recipient, _)) => *recipient,
                     None => panic!("Unbound account {}", recipient),
                 };
-                let gas_budget = gas_budget.unwrap_or(GAS_VALUE_FOR_TESTING);
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let transaction = self.sign_txn(sender, |sender, gas| {
-                    TransactionData::new_transfer_with_dummy_gas_price(
-                        recipient, obj_ref, sender, gas, gas_budget,
+                    let rec_arg = builder.pure(recipient).unwrap();
+                    builder.command(sui_types::messages::Command::TransferObjects(
+                        vec![obj_arg],
+                        rec_arg,
+                    ));
+                    let pt = builder.finish();
+                    TransactionData::new_programmable_with_dummy_gas_price(
+                        sender,
+                        vec![gas],
+                        pt,
+                        gas_budget,
                     )
                 });
                 let summary = self.execute_txn(transaction, gas_budget)?;
-                let output = self.object_summary_output(&summary, false);
+                let output = self.object_summary_output(&summary, false, view_gas_used);
                 Ok(output)
             }
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction = VerifiedTransaction::new_consensus_commit_prologue(timestamp_ms);
-                let summary = self.execute_txn(transaction, GAS_VALUE_FOR_TESTING)?;
-                let output = self.object_summary_output(&summary, false);
+                let transaction =
+                    VerifiedTransaction::new_consensus_commit_prologue(0, 0, timestamp_ms);
+                let summary = self.execute_txn(transaction, DEFAULT_GAS_BUDGET)?;
+                let output = self.object_summary_output(&summary, false, false);
+                Ok(output)
+            }
+            SuiSubcommand::ProgrammableTransaction(ProgrammableTransactionCommand {
+                sender,
+                gas_budget,
+                inputs,
+                view_events,
+                view_gas_used,
+            }) => {
+                let inputs = self.compiled_state().resolve_args(inputs)?;
+                let inputs: Vec<CallArg> = inputs
+                    .into_iter()
+                    .map(|arg| arg.into_call_arg(self))
+                    .collect::<anyhow::Result<_>>()?;
+                let file = data.ok_or_else(|| {
+                    anyhow::anyhow!("Missing commands for programmable transaction")
+                })?;
+                let contents = std::fs::read_to_string(file.path())?;
+                let commands = ParsedCommand::parse_vec(&contents)?;
+                let state = &self.compiled_state;
+                let commands = commands
+                    .into_iter()
+                    .map(|c| c.into_command(&|s| Some(state.resolve_named_address(s))))
+                    .collect::<anyhow::Result<Vec<Command>>>()?;
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+                let transaction = self.sign_txn(sender, |sender, gas| {
+                    TransactionData::new_programmable_with_dummy_gas_price(
+                        sender,
+                        vec![gas],
+                        ProgrammableTransaction { inputs, commands },
+                        gas_budget,
+                    )
+                });
+                let summary = self.execute_txn(transaction, gas_budget)?;
+                let output = self.object_summary_output(&summary, view_events, view_gas_used);
                 Ok(output)
             }
         }
@@ -543,7 +609,8 @@ impl<'a> SuiTestAdapter<'a> {
                 (sender, &new_key_pair)
             }
         };
-        let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+        let gas_object =
+            Object::with_id_owner_gas_for_testing(gas_object_id, sender, GAS_FOR_TESTING);
         let gas_payment = gas_object.compute_object_reference();
         let storage_mut = Arc::get_mut(&mut self.storage).unwrap();
         storage_mut.insert_object(gas_object);
@@ -562,11 +629,14 @@ impl<'a> SuiTestAdapter<'a> {
             gas::start_gas_metering(gas_budget, 1, 1, SuiCostTable::new(&PROTOCOL_CONSTANTS))
                 .unwrap()
         };
-
-        let transaction_digest = TransactionDigest::new(self.rng.gen());
-        let objects_by_kind = transaction
+        transaction
             .data()
-            .intent_message
+            .transaction_data()
+            .validity_check(&PROTOCOL_CONSTANTS)?;
+        let transaction_digest = TransactionDigest::new(self.rng.gen());
+        let (input_objects, objects) = transaction
+            .data()
+            .intent_message()
             .value
             .input_objects()?
             .into_iter()
@@ -576,8 +646,12 @@ impl<'a> SuiTestAdapter<'a> {
                 let obj = self.storage.get_object(&id)?.clone();
                 Some((kind, obj))
             })
-            .collect::<Vec<_>>();
-        let input_objects = InputObjects::new(objects_by_kind);
+            .unzip();
+        let input_objects = check_objects(
+            transaction.data().transaction_data(),
+            input_objects,
+            objects,
+        )?;
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
         let temporary_store = TemporaryStore::new(
@@ -586,14 +660,20 @@ impl<'a> SuiTestAdapter<'a> {
             transaction_digest,
             &PROTOCOL_CONSTANTS,
         );
-        let transaction_data = transaction.into_inner().into_data().intent_message.value;
-        let signer = transaction_data.sender();
-        let gas = transaction_data.gas();
+        let transaction_data = &transaction
+            .into_inner()
+            .into_data()
+            .intent_message()
+            .value
+            .clone();
+        let (kind, signer, gas) = transaction_data.execution_parts();
+
         let (
             inner,
+            effects,
+            /*
             TransactionEffects {
                 status,
-                events,
                 created,
                 mutated,
                 unwrapped,
@@ -604,13 +684,14 @@ impl<'a> SuiTestAdapter<'a> {
                 gas_object: _,
                 ..
             },
+            */
             execution_error,
         ) = execution_engine::execute_transaction_to_effects::<execution_mode::Normal, _>(
             shared_object_refs,
             temporary_store,
-            transaction_data.kind,
+            kind,
             signer,
-            gas,
+            &gas,
             transaction_digest,
             transaction_dependencies,
             &self.vm,
@@ -620,15 +701,29 @@ impl<'a> SuiTestAdapter<'a> {
             &PROTOCOL_CONSTANTS,
         );
 
-        let mut created_ids: Vec<_> = created.iter().map(|((id, _, _), _)| *id).collect();
-        let unwrapped_ids: Vec<_> = unwrapped.iter().map(|((id, _, _), _)| *id).collect();
-        let mut written_ids: Vec<_> = mutated.iter().map(|((id, _, _), _)| *id).collect();
-        let mut deleted_ids: Vec<_> = deleted
+        let mut created_ids: Vec<_> = effects
+            .created()
             .iter()
-            .chain(&wrapped)
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let unwrapped_ids: Vec<_> = effects
+            .unwrapped()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut written_ids: Vec<_> = effects
+            .mutated()
+            .iter()
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects
+            .deleted()
+            .iter()
+            .chain(effects.wrapped())
             .map(|(id, _, _)| *id)
             .collect();
 
+        let gas_summary = effects.gas_cost_summary();
         // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
@@ -656,12 +751,13 @@ impl<'a> SuiTestAdapter<'a> {
         written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
-        match status {
+        match effects.status() {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
                 created: created_ids,
                 written: written_ids,
                 deleted: deleted_ids,
-                events,
+                events: inner.events.data,
+                gas_summary: gas_summary.clone(),
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
@@ -679,8 +775,8 @@ impl<'a> SuiTestAdapter<'a> {
     // between objects of the same type
     fn get_object_sorting_key(&self, id: &ObjectID) -> String {
         match &self.storage.get_object(id).unwrap().data {
-            sui_types::object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_)),
-            sui_types::object::Data::Package(pkg) => pkg
+            object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
+            object::Data::Package(pkg) => pkg
                 .serialized_module_map()
                 .keys()
                 .map(|s| s.as_str())
@@ -698,6 +794,30 @@ impl<'a> SuiTestAdapter<'a> {
     }
 
     fn enumerate_fake(&mut self, id: ObjectID) -> FakeID {
+        // Check if the object ID as a u64 is less than INIT_NEXT_FAKE. If it is, use that value
+        // as the "fake" ID. This essentially excludes the Sui System objects from the fake ID
+        // mapping.
+        let id_addr: SuiAddress = id.into();
+        let id_bytes: [u8; SUI_ADDRESS_LENGTH] = id_addr.to_inner();
+        let high = &id_bytes[0..(SUI_ADDRESS_LENGTH - 8)];
+        let low = [
+            id_bytes[SUI_ADDRESS_LENGTH - 8],
+            id_bytes[SUI_ADDRESS_LENGTH - 7],
+            id_bytes[SUI_ADDRESS_LENGTH - 6],
+            id_bytes[SUI_ADDRESS_LENGTH - 5],
+            id_bytes[SUI_ADDRESS_LENGTH - 4],
+            id_bytes[SUI_ADDRESS_LENGTH - 3],
+            id_bytes[SUI_ADDRESS_LENGTH - 2],
+            id_bytes[SUI_ADDRESS_LENGTH - 1],
+        ];
+        assert!(high.len() + low.len() == SUI_ADDRESS_LENGTH);
+        let id_u64 = u64::from_be_bytes(low);
+        // to check if `id < INIT_NEXT_FAKE`, we check that the "high" value bytes are all 0
+        // and that the "low" value bytes are less than `INIT_NEXT_FAKE` when converted to `u64`
+        if id_u64 < INIT_NEXT_FAKE && high.iter().copied().all(|u| u == 0) {
+            self.object_enumeration.insert(id, id_u64);
+            return id_u64;
+        }
         if let Some(fake) = self.object_enumeration.get_by_left(&id) {
             return *fake;
         }
@@ -714,8 +834,10 @@ impl<'a> SuiTestAdapter<'a> {
             written,
             deleted,
             events,
+            gas_summary,
         }: &TxnSummary,
         view_events: bool,
+        view_gas_summary: bool,
     ) -> Option<String> {
         let mut out = String::new();
         if view_events {
@@ -743,6 +865,10 @@ impl<'a> SuiTestAdapter<'a> {
             }
             write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
         }
+        if view_gas_summary {
+            out.push('\n');
+            write!(out, "gas summary: {}", gas_summary).unwrap();
+        }
 
         if out.is_empty() {
             None
@@ -763,6 +889,7 @@ impl<'a> SuiTestAdapter<'a> {
         objs.iter()
             .map(|id| match self.real_to_fake_object_id(id) {
                 None => "object(_)".to_string(),
+                Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
                 Some(fake) => format!("object({})", fake),
             })
             .collect::<Vec<_>>()
@@ -827,6 +954,7 @@ impl<'a> SuiTestAdapter<'a> {
         }
         match self.real_to_fake_object_id(&parsed.into()) {
             None => "_".to_string(),
+            Some(fake) if fake < INIT_NEXT_FAKE => format!("0x{fake:X}"),
             Some(fake) => format!("fake({})", fake),
         }
     }
@@ -858,20 +986,36 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "sui_system".to_string(),
+        NumericalAddress::new(
+            SUI_SYSTEM_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
 pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     // TODO invoke package system?
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
+    let sui_system_sources: String = {
+        let mut buf = sui_files.to_path_buf();
+        buf.push("packages");
+        buf.push("sui-system");
+        buf.push("sources");
+        buf.to_string_lossy().to_string()
+    };
     let sui_sources: String = {
         let mut buf = sui_files.to_path_buf();
+        buf.push("packages");
+        buf.push("sui-framework");
         buf.push("sources");
         buf.to_string_lossy().to_string()
     };
     let sui_deps = {
         let mut buf = sui_files.to_path_buf();
-        buf.push("deps");
+        buf.push("packages");
         buf.push("move-stdlib");
         buf.push("sources");
         buf.to_string_lossy().to_string()
@@ -879,7 +1023,7 @@ pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: vec![sui_sources, sui_deps],
+            paths: vec![sui_system_sources, sui_sources, sui_deps],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,

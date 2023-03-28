@@ -8,5 +8,12 @@
   "baseBranch": "main",
   "updateInternalDependencies": "minor",
   "privatePackages": false,
-  "ignore": ["sui-wallet", "sui-explorer", "@mysten/core", "sui-wallet-adapter-demo", "@dapp/frenemies"]
+  "ignore": [
+    "sui-wallet",
+    "sui-explorer",
+    "@mysten/core",
+    "sui-wallet-adapter-demo",
+    "wallet-kit-site",
+    "sponsored-transactions"
+  ]
 }

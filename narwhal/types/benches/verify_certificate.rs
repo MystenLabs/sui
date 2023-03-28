@@ -19,7 +19,7 @@ pub fn verify_certificates(c: &mut Criterion) {
             .committee_size(committee_size.try_into().unwrap())
             .build();
         let committee = fixture.committee();
-        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+        let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
         // process certificates for rounds, check we don't grow the dag too much
         let genesis = Certificate::genesis(&committee)
@@ -27,19 +27,19 @@ pub fn verify_certificates(c: &mut Criterion) {
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) =
-            make_optimal_certificates(&committee, 1..=1, &genesis, &keys);
+            make_optimal_certificates(&committee, 1..=1, &genesis, &ids);
         let certificate = certificates.front().unwrap().clone();
 
-        let data_size: usize = bincode::serialize(&certificate).unwrap().len();
+        let data_size: usize = bcs::to_bytes(&certificate).unwrap().len();
         bench_group.throughput(Throughput::Bytes(data_size as u64));
 
         bench_group.bench_with_input(
             BenchmarkId::new("with_committee_size", committee_size),
             &certificate,
             |b, cert| {
+                let worker_cache = fixture.worker_cache();
                 b.iter(|| {
-                    let worker_cache = fixture.shared_worker_cache();
-                    let _ = cert.verify(&committee, worker_cache);
+                    let _ = cert.verify(&committee, &worker_cache);
                 })
             },
         );

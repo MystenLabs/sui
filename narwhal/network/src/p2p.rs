@@ -16,9 +16,9 @@ use tokio::task::JoinHandle;
 use types::{
     Batch, BatchDigest, FetchCertificatesRequest, FetchCertificatesResponse,
     GetCertificatesRequest, GetCertificatesResponse, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    RequestBatchRequest, WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerReconfigureMessage, WorkerSynchronizeMessage,
-    WorkerToPrimaryClient, WorkerToWorkerClient,
+    RequestBatchRequest, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
+    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerOurBatchMessage,
+    WorkerSynchronizeMessage, WorkerToPrimaryClient, WorkerToWorkerClient,
 };
 
 fn unreliable_send<F, R, Fut>(
@@ -106,10 +106,11 @@ impl PrimaryToPrimaryRpc for anemo::Network {
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body())
     }
+
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
-        request: FetchCertificatesRequest,
+        request: impl anemo::types::request::IntoRequest<FetchCertificatesRequest> + Send,
     ) -> Result<FetchCertificatesResponse> {
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self
@@ -126,38 +127,6 @@ impl PrimaryToPrimaryRpc for anemo::Network {
 //
 // Primary-to-Worker
 //
-
-impl UnreliableNetwork<WorkerReconfigureMessage> for anemo::Network {
-    type Response = ();
-    fn unreliable_send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerReconfigureMessage,
-    ) -> Result<JoinHandle<Result<anemo::Response<()>>>> {
-        let message = message.to_owned();
-        let f =
-            move |peer| async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await };
-        unreliable_send(self, peer, f)
-    }
-}
-
-impl ReliableNetwork<WorkerReconfigureMessage> for anemo::Network {
-    type Response = ();
-    fn send(
-        &self,
-        peer: NetworkPublicKey,
-        message: &WorkerReconfigureMessage,
-    ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
-        let message = message.to_owned();
-        let f = move |peer| {
-            let message = message.clone();
-            async move { PrimaryToWorkerClient::new(peer).reconfigure(message).await }
-        };
-
-        send(self.clone(), peer, f)
-    }
-}
-
 impl UnreliableNetwork<WorkerSynchronizeMessage> for anemo::Network {
     type Response = ();
     fn unreliable_send(
@@ -310,5 +279,21 @@ impl WorkerRpc for anemo::Network {
             .await
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body().batch)
+    }
+
+    async fn request_batches(
+        &self,
+        peer: NetworkPublicKey,
+        request: impl anemo::types::request::IntoRequest<RequestBatchesRequest> + Send,
+    ) -> Result<RequestBatchesResponse> {
+        let peer_id = PeerId(peer.0.to_bytes());
+        let peer = self
+            .peer(peer_id)
+            .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let response = WorkerToWorkerClient::new(peer)
+            .request_batches(request)
+            .await
+            .map_err(|e| format_err!("Network error {:?}", e))?;
+        Ok(response.into_body())
     }
 }

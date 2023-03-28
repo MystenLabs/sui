@@ -1,80 +1,134 @@
-name: simtest-nightly
+name: Simulator Tests
+
+concurrency:
+  group: ${{ github.workflow }}
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # every day at 2am
+    - cron: '0 9 * * *' # UTC timing is every day at 1am PST
   workflow_dispatch:
-
-env:
-  CARGO_TERM_COLOR: always
-  # Disable incremental compilation.
-  #
-  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
-  # as it lets the compiler avoid recompiling code that hasn't changed. However,
-  # on CI, we're not making small edits; we're almost always building the entire
-  # project from scratch. Thus, incremental compilation on CI actually
-  # introduces *additional* overhead to support making future builds
-  # faster...but no future builds will ever occur in any given CI environment.
-  #
-  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
-  # for details.
-  CARGO_INCREMENTAL: 0
-  # Allow more retries for network requests in cargo (downloading crates) and
-  # rustup (installing toolchains). This should help to reduce flaky CI failures
-  # from transient network timeouts or other issues.
-  CARGO_NET_RETRY: 10
-  RUSTUP_MAX_RETRIES: 10
-  # Don't emit giant backtraces in the CI logs.
-  RUST_BACKTRACE: short
 
 jobs:
   simtest:
-    timeout-minutes: 90
-    runs-on: [ubuntu-ghcloud]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - uses: taiki-e/install-action@nextest
-      - name: cargo simtest
-        run: |
-          export MSIM_TEST_SEED=$(date +%s)
-          echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED"
-          MSIM_TEST_NUM=20 MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
-
-  report-status:
-    name: Report Status
+    timeout-minutes: 120
+    permissions:
+      # The "id-token: write" permission is required or Machine ID will not be
+      # able to authenticate with the cluster.
+      id-token: write
+      contents: read
     runs-on: ubuntu-latest
-    if: always()
-    needs: [release]
+
     steps:
-      - uses: technote-space/workflow-conclusion-action@v3
-      - name: Post to slack
-        uses: slackapi/slack-github-action@v1.23.0
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
+      - name: Install Teleport
+        uses: teleport-actions/setup@75c810ac63a7e9b28ca4795c6111619f2a13ac71 # pin@v1
         with:
-          channel-id: 'simtest-nightly'
-          payload: |
-            {
-              "text": "Workflow *${{ github.workflow }}* failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Workflow *${{ github.workflow }}* failed"
-                  }
-                },
-                {
-                  "type": "divider"
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "Logs are here: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  }
+          version: 11.3.1
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@6e73aa03a98e781ca6692817fbb6e554640a56b3 # pin@v1
+        with:
+          # Specify the publically accessible address of your Teleport proxy.
+          proxy: proxy.mysten-int.com:443
+          # Specify the name of the join token for your bot.
+          token: sui-simtest-token
+          # Specify the length of time that the generated credentials should be
+          # valid for. This is optional and defaults to "1h"
+          certificate-ttl: 2h
+
+      # Cargo clean and git restore on any left over files from git checkout      
+      - name: Environment clean
+        run: | 
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean && git restore ."
+ 
+      # Deleting files in tmpfs that usually fill up pretty quickly after each run
+      - name: Tmpfs clean
+        run: |  
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*.*"
+
+      # Checkout out the latest sui repo
+      - name: Checkout sui repo
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin main && git rebase origin/main"
+
+      # Setting up cargo and simtest
+      - name: Install simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+
+      # Build simtest
+      - name: Build simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 30 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off cd ~/sui && ./scripts/simtest/cargo-simtest simtest build"
+
+      # Run simulator tests
+      - name: Run simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && MSIM_TEST_NUM=30 RUSTUP_MAX_RETRIES=10 SIM_STRESS_TEST_DURATION_SECS=300 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off USE_MOCK_CRYPTO=1 NUM_CPUS=24 cd ~/sui && ./scripts/simtest/simtest-run.sh"
+  
+  notify:
+    name: Notify
+    needs: [simtest]
+    runs-on: ubuntu-latest
+    if: always() # always notify
+
+    steps:
+    - uses: technote-space/workflow-conclusion-action@v3
+
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@755da8c3cf115ac066823e79a1e1788f8940201b # pin@v3
+    
+    - name: Get sui commit
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        export sui_sha=$(git rev-parse HEAD)
+        echo "sui_sha=${sui_sha}" >> $GITHUB_ENV
+
+    - name: Get link to logs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh_job_link=$(gh api -X GET 'repos/MystenLabs/sui/actions/runs/${{ github.run_id }}/jobs' --jq '.jobs.[0].html_url')
+        echo "gh_job_link=${gh_job_link}" >> $GITHUB_ENV        
+
+    - name: Post to slack
+      uses: slackapi/slack-github-action@936158bbe252e9a6062e793ea4609642c966e302 # pin@v1.21.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        SUI_SHA: ${{ env.sui_sha }}
+        GH_JOB_LINK: ${{ env.gh_job_link }}
+      with:
+        channel-id: 'simtest-nightly'
+        payload: |
+          {
+            "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`"
                 }
-              ]
-            }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}> \nRun: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>"
+                }
+              },
+              {
+                "type": "divider"
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "To debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results"
+                }
+              }
+            ]
+          }

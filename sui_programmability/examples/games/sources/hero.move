@@ -252,7 +252,7 @@ module games::hero {
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
-        transfer::transfer(payment, game.admin);
+        transfer::public_transfer(payment, game.admin);
 
         // magic of the sword is proportional to the amount you paid, up to
         // a max. one can only imbue a sword with so much magic
@@ -270,7 +270,7 @@ module games::hero {
     ) {
         let sword = create_sword(game, payment, ctx);
         let hero = create_hero(game, sword, ctx);
-        transfer::transfer(hero, tx_context::sender(ctx))
+        transfer::public_transfer(hero, tx_context::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -299,7 +299,7 @@ module games::hero {
         check_id(game, admin.game_id);
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
-        transfer::transfer(
+        transfer::public_transfer(
             Potion { id: object::new(ctx), potency, game_id: id(game) },
             player
         )

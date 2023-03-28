@@ -1,26 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SUI_TYPE_ARG, getTransactions } from '@mysten/sui.js';
+import { SUI_TYPE_ARG, getTransactionKind } from '@mysten/sui.js';
 import { useMemo } from 'react';
 
-import { getEventsSummary, getAmount } from '_helpers';
+import { getAmount } from '_helpers';
 
-import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse, SuiAddress } from '@mysten/sui.js';
 
 export function useGetTransferAmount({
     txn,
     activeAddress,
 }: {
-    txn: SuiTransactionResponse;
+    txn: SuiTransactionBlockResponse;
     activeAddress: SuiAddress;
 }) {
-    const { effects } = txn;
-    const { coins } = getEventsSummary(effects, activeAddress);
+    const { effects, events } = txn;
+    // const { coins } = getEventsSummary(events!, activeAddress);
 
     const suiTransfer = useMemo(() => {
-        const txdetails = getTransactions(txn)[0];
-        return getAmount(txdetails, effects)?.map(
+        const txdetails = getTransactionKind(txn)!;
+        return getAmount(txdetails, effects!, events!)?.map(
             ({ amount, coinType, recipientAddress }) => {
                 return {
                     amount: amount || 0,
@@ -29,15 +29,17 @@ export function useGetTransferAmount({
                 };
             }
         );
-    }, [txn, effects]);
+    }, [txn, effects, events]);
 
-    const transferAmount = useMemo(() => {
-        return suiTransfer?.length
-            ? suiTransfer
-            : coins.filter(
-                  ({ receiverAddress }) => receiverAddress === activeAddress
-              );
-    }, [suiTransfer, coins, activeAddress]);
+    // MUSTFIX(chris)
+    // const transferAmount = useMemo(() => {
+    //     return suiTransfer?.length
+    //         ? suiTransfer
+    //         : coins.filter(
+    //               ({ receiverAddress }) => receiverAddress === activeAddress
+    //           );
+    // }, [suiTransfer, coins, activeAddress]);
 
-    return suiTransfer ?? transferAmount;
+    // return suiTransfer ?? transferAmount;
+    return suiTransfer;
 }

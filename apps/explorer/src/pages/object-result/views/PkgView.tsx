@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { getTransactionSender } from '@mysten/sui.js';
+
 import { ErrorBoundary } from '../../../components/error-boundary/ErrorBoundary';
 import PkgModulesWrapper from '../../../components/module/PkgModulesWrapper';
-import TxForID from '../../../components/transaction-card/TxForID';
+import { TransactionsForAddress } from '../../../components/transactions/TransactionsForAddress';
+import { useGetTransaction } from '../../../hooks/useGetTransaction';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
@@ -11,14 +15,28 @@ import styles from './ObjectView.module.css';
 
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
+const GENESIS_TX_DIGEST = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
 function PkgView({ data }: { data: DataType }) {
+    const { data: txnData, isLoading } = useGetTransaction(
+        data.data.tx_digest!
+    );
+
+    if (isLoading) {
+        return <LoadingSpinner text="Loading data" />;
+    }
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
+        publisherAddress:
+            data.data.tx_digest === GENESIS_TX_DIGEST
+                ? 'Genesis'
+                : getTransactionSender(txnData!),
     };
 
     const checkIsPropertyType = (value: any) =>
@@ -90,7 +108,10 @@ function PkgView({ data }: { data: DataType }) {
                 <div className={styles.txsection}>
                     <h2 className={styles.header}>Transactions</h2>
                     <ErrorBoundary>
-                        <TxForID id={viewedData.id} category="object" />
+                        <TransactionsForAddress
+                            address={viewedData.id}
+                            type="object"
+                        />
                     </ErrorBoundary>
                 </div>
             </div>

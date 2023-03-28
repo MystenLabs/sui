@@ -12,7 +12,7 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
 use tokio::time::timeout;
 use types::{
-    BatchDigest, Certificate, MockPrimaryToWorker, PreSubscribedBroadcastSender,
+    BatchDigest, Certificate, Header, MockPrimaryToWorker, PreSubscribedBroadcastSender,
     PrimaryToWorkerServer, WorkerDeleteBatchesMessage,
 };
 
@@ -26,10 +26,10 @@ async fn test_successful_blocks_delete() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND a Dag with genesis populated
@@ -47,7 +47,8 @@ async fn test_successful_blocks_delete() {
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let block_remover = BlockRemover::new(
-        name.clone(),
+        id,
+        committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),
         header_store.clone(),
@@ -70,12 +71,14 @@ async fn test_successful_blocks_delete() {
         let batch_1 = test_utils::fixture_batch_with_transactions(10);
         let batch_2 = test_utils::fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -85,19 +88,16 @@ async fn test_successful_blocks_delete() {
         dag.insert(certificate).await.unwrap();
 
         // write the header
-        header_store
-            .async_write(header.clone().digest(), header.clone())
-            .await;
+        header_store.write(&header).unwrap();
 
         header_ids.push(header.clone().digest());
 
         // write the batches to payload store
         payload_store
-            .sync_write_all(vec![
-                ((batch_1.clone().digest(), worker_id_0), 0),
-                ((batch_2.clone().digest(), worker_id_1), 0),
+            .write_all(vec![
+                (batch_1.clone().digest(), worker_id_0),
+                (batch_2.clone().digest(), worker_id_1),
             ])
-            .await
             .expect("couldn't store batches");
 
         digests.push(digest);
@@ -132,7 +132,7 @@ async fn test_successful_blocks_delete() {
         let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
         worker_networks.push(worker.new_network(routes));
 
-        let address = network::multiaddr_to_address(address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -153,7 +153,7 @@ async fn test_successful_blocks_delete() {
     // ensure that headers have been deleted from store
     for header_id in header_ids {
         assert!(
-            header_store.read(header_id).await.unwrap().is_none(),
+            header_store.read(&header_id).unwrap().is_none(),
             "Header shouldn't exist"
         );
     }
@@ -162,11 +162,7 @@ async fn test_successful_blocks_delete() {
     for (worker_id, batch_digests) in worker_batches {
         for digest in batch_digests {
             assert!(
-                payload_store
-                    .read((digest, worker_id))
-                    .await
-                    .unwrap()
-                    .is_none(),
+                !payload_store.contains(digest, worker_id).unwrap(),
                 "Payload shouldn't exist"
             );
         }
@@ -201,10 +197,10 @@ async fn test_failed_blocks_delete() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     // AND a Dag with genesis populated
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(
@@ -220,7 +216,8 @@ async fn test_failed_blocks_delete() {
 
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
     let block_remover = BlockRemover::new(
-        name.clone(),
+        id,
+        committee.clone(),
         worker_cache.clone(),
         certificate_store.clone(),
         header_store.clone(),
@@ -243,12 +240,14 @@ async fn test_failed_blocks_delete() {
         let batch_1 = test_utils::fixture_batch_with_transactions(10);
         let batch_2 = test_utils::fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -258,19 +257,16 @@ async fn test_failed_blocks_delete() {
         dag.insert(certificate).await.unwrap();
 
         // write the header
-        header_store
-            .async_write(header.clone().digest(), header.clone())
-            .await;
+        header_store.write(&header).unwrap();
 
         header_ids.push(header.clone().digest());
 
         // write the batches to payload store
         payload_store
-            .sync_write_all(vec![
-                ((batch_1.clone().digest(), worker_id_0), 0),
-                ((batch_2.clone().digest(), worker_id_1), 0),
+            .write_all(vec![
+                (batch_1.clone().digest(), worker_id_0),
+                (batch_2.clone().digest(), worker_id_1),
             ])
-            .await
             .expect("couldn't store batches");
 
         digests.push(digest);
@@ -311,7 +307,7 @@ async fn test_failed_blocks_delete() {
         let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
         worker_networks.push(worker.new_network(routes));
 
-        let address = network::multiaddr_to_address(address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(worker.keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -326,15 +322,11 @@ async fn test_failed_blocks_delete() {
         assert!(certificate_store.read(digest).unwrap().is_some());
     }
     for header_id in header_ids {
-        assert!(header_store.read(header_id).await.unwrap().is_some());
+        assert!(header_store.read(&header_id).unwrap().is_some());
     }
     for (worker_id, batch_digests) in worker_batches {
         for digest in batch_digests {
-            assert!(payload_store
-                .read((digest, worker_id))
-                .await
-                .unwrap()
-                .is_some());
+            assert!(payload_store.contains(digest, worker_id).unwrap());
         }
     }
     let mut total_deleted = 0;

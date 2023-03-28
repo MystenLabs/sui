@@ -140,13 +140,18 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
+    env:
+      MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
       - name: cargo simtest
         run: |
-          MSIM_WATCHDOG_TIMEOUT_MS=60000 scripts/simtest/cargo-simtest simtest
+          scripts/simtest/cargo-simtest simtest
+      - name: check new tests for flakiness
+        run: |
+          scripts/simtest/stress-new-tests.sh
 
   rosetta-validation:
     needs: diff
@@ -155,6 +160,7 @@ jobs:
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
 
       - name: Setup environment
         run: .github/scripts/rosetta/setup.sh
@@ -248,7 +254,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: mystenlabs/cargo-deny-action@main
 
   move-prover:
     name: move-prover
@@ -257,10 +263,10 @@ jobs:
     if: needs.diff.outputs.isMove == 'true'
     runs-on: [ubuntu-ghcloud]
 
-    steps:     
+    steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      
+
       - name: Prover Setup
         run: |
           crates/sui-move/scripts/prover_setup.sh
@@ -270,7 +276,7 @@ jobs:
           command: build
 
       - name: Prover Run
-        working-directory: crates/sui-framework
+        working-directory: crates/sui-framework/packages
         run: |
           set -o pipefail
           DOTNET_ROOT="$HOME/.dotnet"
@@ -280,4 +286,34 @@ jobs:
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          /home/runner/.cargo/bin/cargo run -p sui -- move prove
+          /home/runner/.cargo/bin/cargo run -p sui -- move prove -p sui-framework
+          /home/runner/.cargo/bin/cargo run -p sui -- move prove -p sui-system
+
+  indexer:
+    name: indexer
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: [ubuntu-ghcloud]
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgrespw
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - name: integration-test-with-postgres
+        #We only have 1 instance of postgres DB, can only run test in single thread
+        run: |
+          cargo test --package sui-indexer --test integration_tests --features pg_integration -- --test-threads=1
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432

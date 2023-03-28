@@ -12,12 +12,12 @@ genesis:
   genesis-file-location: "genesis.blob"
 
 authority-store-pruning-config:
-  objects-num-latest-versions-to-retain: 5
-  objects-pruning-period-secs: 86400
-  objects-pruning-initial-delay-secs: 3600
   num-latest-epoch-dbs-to-retain: 3
   epoch-db-pruning-period-secs: 3600
-  num-epochs-to-retain: 18446744073709551615
+  num-epochs-to-retain: 1
+  max-checkpoints-in-batch: 200
+  max-transactions-in-batch: 1000
+  use-range-deletion: true
 
 protocol-key-pair:
   path: "protocol.key"

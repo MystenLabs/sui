@@ -40,22 +40,12 @@ Error from <code>from_bytes</code> when it is supplied too many or too few bytes
 
 
 
-<a name="0x2_address_EU256TooBigToConvertToAddress"></a>
-
-Error from <code>from_u256</code> when
-
-
-<pre><code><b>const</b> <a href="address.md#0x2_address_EU256TooBigToConvertToAddress">EU256TooBigToConvertToAddress</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0x2_address_LENGTH"></a>
 
 The length of an address, in bytes
 
 
-<pre><code><b>const</b> <a href="address.md#0x2_address_LENGTH">LENGTH</a>: u64 = 20;
+<pre><code><b>const</b> <a href="address.md#0x2_address_LENGTH">LENGTH</a>: u64 = 32;
 </code></pre>
 
 
@@ -64,7 +54,7 @@ The length of an address, in bytes
 
 
 
-<pre><code><b>const</b> <a href="address.md#0x2_address_MAX">MAX</a>: u256 = 1461501637330902918203684832716283019655932542975;
+<pre><code><b>const</b> <a href="address.md#0x2_address_MAX">MAX</a>: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
 </code></pre>
 
 
@@ -148,7 +138,7 @@ Aborts if <code>n</code> > <code>MAX_ADDRESS</code>
 ## Function `from_bytes`
 
 Convert <code>bytes</code> into an address.
-Aborts with <code><a href="address.md#0x2_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>bytes</code> is not 20
+Aborts with <code><a href="address.md#0x2_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>bytes</code> is not 32
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="address.md#0x2_address_from_bytes">from_bytes</a>(bytes: <a href="">vector</a>&lt;u8&gt;): <b>address</b>

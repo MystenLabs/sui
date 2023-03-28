@@ -41,17 +41,20 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context.client.read_api().get_sui_system_state().await?;
+    let system_state = context
+        .client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?;
 
     let peers = system_state
-        .validators
         .active_validators
         .iter()
-        .map(|v| Peer {
-            peer_id: ObjectID::from(v.metadata.sui_address).into(),
+        .map(|validator| Peer {
+            peer_id: ObjectID::from(validator.sui_address).into(),
             metadata: Some(json!({
-                "public_key": Hex::from_bytes(&v.metadata.pubkey_bytes),
-                "stake_amount": v.stake_amount
+                "public_key": Hex::from_bytes(&validator.protocol_pubkey_bytes),
+                "stake_amount": validator.staking_pool_sui_balance,
             })),
         })
         .collect();

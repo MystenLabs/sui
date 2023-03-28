@@ -24,8 +24,10 @@ Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
     // TODO: Our versions don't use semver, and instead are date-based. Instead of using the semver
     // library, we can use some combination of parsing into a date + inspecting patch.
     const previousVersionSemver = coerce(previousVersion)?.version;
-
     if (reason === 'install') {
+        await Browser.storage.local.set({
+            v: -1,
+        });
         openInNewTab();
     } else if (
         reason === 'update' &&
@@ -36,6 +38,20 @@ Browser.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
         // mainly done to clear the mnemonic that was stored
         // as plain text
         await Browser.storage.local.clear();
+        await Browser.storage.local.set({
+            v: -1,
+        });
+    } else if (reason === 'update') {
+        const storageVersion = (await Browser.storage.local.get({ v: null })).v;
+        // handle address size update and include storage version
+        if (storageVersion === null) {
+            //clear permissions and active_account because currently they are using the previous address size
+            await Browser.storage.local.set({
+                permissions: {},
+                active_account: null,
+                v: -1,
+            });
+        }
     }
 });
 

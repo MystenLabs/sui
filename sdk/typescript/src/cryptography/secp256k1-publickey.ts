@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import sha3 from 'js-sha3';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bytesToHex } from '@noble/hashes/utils';
+import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../types';
 import { bytesEqual, PublicKey, PublicKeyInitData } from './publickey';
 import { SIGNATURE_SCHEME_TO_FLAG } from './signature';
 
@@ -70,6 +72,9 @@ export class Secp256k1PublicKey implements PublicKey {
     let tmp = new Uint8Array(SECP256K1_PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['Secp256k1']]);
     tmp.set(this.toBytes(), 1);
-    return sha3.sha3_256(tmp).slice(0, 40);
+    // Each hex char represents half a byte, hence hex address doubles the length
+    return normalizeSuiAddress(
+      bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
+    );
   }
 }

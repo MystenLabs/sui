@@ -53,7 +53,7 @@ module frenemies::frenemies {
     const EAlreadyMigrated: u64 = 1;
 
     fun init(ctx: &mut TxContext) {
-        transfer::share_object(Migration { id: object::new(ctx), migrated: table::new(ctx) })
+        transfer::public_share_object(Migration { id: object::new(ctx), migrated: table::new(ctx) })
     }
 
     /// Register the transaction sender for the frenemies game by sending them a 0 scorecard with
@@ -64,7 +64,7 @@ module frenemies::frenemies {
         // have to register in old contract to prevent duplicate names. can't call registry directly because of encapsulation issue
         old_frenemies::frenemies::register(name, old_registry, state, ctx);
 
-        transfer::transfer(
+        transfer::public_transfer(
              Scorecard {
                 id: object::new(ctx),
                 name: registry::register(registry, name, ctx),
@@ -102,7 +102,7 @@ module frenemies::frenemies {
 
         if (score > 0) leaderboard::emit_new_score_event(name, score, participation, epoch);
 
-        transfer::transfer(
+        transfer::public_transfer(
              Scorecard {
                 id: object::new(ctx),
                 name,

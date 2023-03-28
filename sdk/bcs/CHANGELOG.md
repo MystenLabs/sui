@@ -1,45 +1,98 @@
 # Change Log
 
-## 0.6.0
+## 0.7.0
 
 ### Minor Changes
 
-- 598f106ef: ### Adds base58 encoding support to bcs
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 5c3b00cde: Add object id to staking pool and pool id to staked sui.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- a8049d159: Fixes the issue with deep nested generics by introducing array type names
 
-  - two functions added: `fromB58` and `toB58` similar to existing encodings
-  - `Reader.toString` and `de/encodeStr` methods support new `base58` value
-  - adds a 3 built-in types "hex-string", "base58-string" and "base64-string"
-  - adds constants for the built-ins: `BCS.BASE64`, `BCS.BASE58` and `BCS.HEX`
+  - all of the methods (except for aliasing) now allow passing in arrays instead
+    of strings to allow for easier composition of generics and avoid using template
+    strings
 
   ```js
-  bcs.registerStructType("TestStruct", {
-    hex: BCS.HEX,
-    base58: BCS.BASE58,
-    base64: BCS.BASE64,
+  // new syntax
+  bcs.registerStructType(["VecMap", "K", "V"], {
+    keys: ["vector", "K"],
+    values: ["vector", "V"],
+  });
+
+  // is identical to an old string definition
+  bcs.registerStructType("VecMap<K, V>", {
+    keys: "vector<K>",
+    values: "vector<V>",
   });
   ```
 
-  ### Adds type aliasing and inline definitions
+  Similar approach applies to `bcs.ser()` and `bcs.de()` as well as to other register\* methods
 
-  - adds new `registerAlias` function which allows type aliases and tracks basic recursion
-  - adds support for inline definitions in the `.de()` and `.ser()` methods
+- a0955c479: Switch from 20 to 32-byte address. Match Secp256k1.deriveKeypair with Ed25519.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+- 77bdf907f: When parsing u64, u128, and u256 values with bcs, they are now string encoded.
 
-  ### Examples
+## 0.6.1
 
-  ```js
-  // inline definition example
-  let struct = { name: "Alice", age: 25 };
-  let bytes = bcs.ser({ name: "string", age: "u8" }, struct).toBytes();
-  let restored = bcs.de({ name: "string", age: "u8" }, bytes);
+### Patch Changes
 
-  // `restored` deeply equals `struct`
-  ```
+- 0e202a543: Remove pending delegation switches.
 
-  ```js
-  // aliases for types
-  bcs.registerAlias("Name", "string");
-  bcs.ser("Name", "Palpatine");
-  ```
+## 0.6.0
+
+```js
+// new syntax
+bcs.registerStructType(["VecMap", "K", "V"], {
+  keys: ["vector", "K"],
+  values: ["vector", "V"],
+});
+
+// is identical to an old string definition
+bcs.registerStructType("VecMap<K, V>", {
+  keys: "vector<K>",
+  values: "vector<V>",
+});
+```
+
+### Minor Changes
+
+- 598f106ef: Adds base58 encoding support to bcs
+
+- two functions added: `fromB58` and `toB58` similar to existing encodings
+- `Reader.toString` and `de/encodeStr` methods support new `base58` value
+- adds a 3 built-in types "hex-string", "base58-string" and "base64-string"
+- adds constants for the built-ins: `BCS.BASE64`, `BCS.BASE58` and `BCS.HEX`
+
+```js
+bcs.registerStructType("TestStruct", {
+  hex: BCS.HEX,
+  base58: BCS.BASE58,
+  base64: BCS.BASE64,
+});
+```
+
+### Adds type aliasing and inline definitions
+
+- adds new `registerAlias` function which allows type aliases and tracks basic recursion
+- adds support for inline definitions in the `.de()` and `.ser()` methods
+
+### Examples
+
+```js
+// inline definition example
+let struct = { name: "Alice", age: 25 };
+let bytes = bcs.ser({ name: "string", age: "u8" }, struct).toBytes();
+let restored = bcs.de({ name: "string", age: "u8" }, bytes);
+
+// `restored` deeply equals `struct`
+```
+
+```js
+// aliases for types
+bcs.registerAlias("Name", "string");
+bcs.ser("Name", "Palpatine");
+```
 
 ## 0.5.0
 

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SuiAddress, toB64, TransactionBlock } from '@mysten/sui.js';
 import {
     SUI_CHAINS,
     ReadonlyWalletAccount,
@@ -8,14 +9,15 @@ import {
     SUI_TESTNET_CHAIN,
     SUI_LOCALNET_CHAIN,
     type SuiFeatures,
-    type SuiSignAndExecuteTransactionMethod,
-    type ConnectFeature,
-    type ConnectMethod,
+    type SuiSignAndExecuteTransactionBlockMethod,
+    type StandardConnectFeature,
+    type StandardConnectMethod,
     type Wallet,
-    type EventsFeature,
-    type EventsOnMethod,
-    type EventsListeners,
-    type SuiSignTransactionMethod,
+    type StandardEventsFeature,
+    type StandardEventsOnMethod,
+    type StandardEventsListeners,
+    type SuiSignTransactionBlockMethod,
+    type SuiSignMessageMethod,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
 import { filter, map, type Observable } from 'rxjs';
@@ -31,9 +33,9 @@ import {
     ALL_PERMISSION_TYPES,
 } from '_payloads/permissions';
 import { API_ENV } from '_src/shared/api-env';
+import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
-import type { SuiAddress } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -48,7 +50,9 @@ import type {
 import type { NetworkEnvType } from '_src/background/NetworkEnv';
 
 type WalletEventsMap = {
-    [E in keyof EventsListeners]: Parameters<EventsListeners[E]>[0];
+    [E in keyof StandardEventsListeners]: Parameters<
+        StandardEventsListeners[E]
+    >[0];
 };
 
 // NOTE: Because this runs in a content script, we can't fetch the manifest.
@@ -96,8 +100,8 @@ export class SuiWallet implements Wallet {
         return SUI_CHAINS;
     }
 
-    get features(): ConnectFeature &
-        EventsFeature &
+    get features(): StandardConnectFeature &
+        StandardEventsFeature &
         SuiFeatures &
         SuiWalletStakeFeature {
         return {
@@ -109,17 +113,22 @@ export class SuiWallet implements Wallet {
                 version: '1.0.0',
                 on: this.#on,
             },
-            'sui:signTransaction': {
+            'sui:signTransactionBlock': {
                 version: '1.0.0',
-                signTransaction: this.#signTransaction,
+                signTransactionBlock: this.#signTransactionBlock,
             },
-            'sui:signAndExecuteTransaction': {
-                version: '1.1.0',
-                signAndExecuteTransaction: this.#signAndExecuteTransaction,
+            'sui:signAndExecuteTransactionBlock': {
+                version: '1.0.0',
+                signAndExecuteTransactionBlock:
+                    this.#signAndExecuteTransactionBlock,
             },
             'suiWallet:stake': {
                 version: '0.0.1',
                 stake: this.#stake,
+            },
+            'sui:signMessage': {
+                version: '1.0.0',
+                signMessage: this.#signMessage,
             },
         };
     }
@@ -180,7 +189,7 @@ export class SuiWallet implements Wallet {
         this.#connected();
     }
 
-    #on: EventsOnMethod = (event, listener) => {
+    #on: StandardEventsOnMethod = (event, listener) => {
         this.#events.on(event, listener);
         return () => this.#events.off(event, listener);
     };
@@ -197,7 +206,7 @@ export class SuiWallet implements Wallet {
         }
     };
 
-    #connect: ConnectMethod = async (input) => {
+    #connect: StandardConnectMethod = async (input) => {
         if (!input?.silent) {
             await mapToPromise(
                 this.#send<
@@ -216,37 +225,84 @@ export class SuiWallet implements Wallet {
         return { accounts: this.accounts };
     };
 
-    #signTransaction: SuiSignTransactionMethod = async (input) => {
+    #signTransactionBlock: SuiSignTransactionBlockMethod = async (input) => {
+        if (!TransactionBlock.is(input.transactionBlock)) {
+            throw new Error(
+                'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+            );
+        }
+
         return mapToPromise(
             this.#send<SignTransactionRequest, SignTransactionResponse>({
                 type: 'sign-transaction-request',
-                transaction: input,
-            }),
-            (response) => response.result
-        );
-    };
-
-    #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (
-        input
-    ) => {
-        return mapToPromise(
-            this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
-                type: 'execute-transaction-request',
                 transaction: {
-                    type: 'v2',
-                    data: input.transaction,
-                    options: input.options,
+                    ...input,
+                    // account might be undefined if previous version of adapters is used
+                    // in that case use the first account address
+                    account:
+                        input.account?.address ||
+                        this.#accounts[0]?.address ||
+                        '',
+                    transaction: input.transactionBlock.serialize(),
                 },
             }),
             (response) => response.result
         );
     };
 
+    #signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod =
+        async (input) => {
+            if (!TransactionBlock.is(input.transactionBlock)) {
+                throw new Error(
+                    'Unexpect transaction format found. Ensure that you are using the `Transaction` class.'
+                );
+            }
+
+            return mapToPromise(
+                this.#send<
+                    ExecuteTransactionRequest,
+                    ExecuteTransactionResponse
+                >({
+                    type: 'execute-transaction-request',
+                    transaction: {
+                        type: 'transaction',
+                        data: input.transactionBlock.serialize(),
+                        options: input.options,
+                        // account might be undefined if previous version of adapters is used
+                        // in that case use the first account address
+                        account:
+                            input.account?.address ||
+                            this.#accounts[0]?.address ||
+                            '',
+                    },
+                }),
+                (response) => response.result
+            );
+        };
+
     #stake = async (input: StakeInput) => {
         this.#send<StakeRequest, void>({
             type: 'stake-request',
             validatorAddress: input.validatorAddress,
         });
+    };
+
+    #signMessage: SuiSignMessageMethod = async ({ message, account }) => {
+        return mapToPromise(
+            this.#send<SignMessageRequest, SignMessageRequest>({
+                type: 'sign-message-request',
+                args: {
+                    message: toB64(message),
+                    accountAddress: account.address,
+                },
+            }),
+            (response) => {
+                if (!response.return) {
+                    throw new Error('Invalid sign message response');
+                }
+                return response.return;
+            }
+        );
     };
 
     #hasPermissions(permissions: HasPermissionsRequest['permissions']) {

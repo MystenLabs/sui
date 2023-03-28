@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    base_types::SuiAddress, crypto::Signature, error::SuiError, intent::IntentMessage,
-    multisig::MultiSig,
-};
+use crate::{base_types::SuiAddress, crypto::Signature, error::SuiError, multisig::MultiSig};
 use crate::{
     crypto::{SignatureScheme, SuiSignature},
     serde_to_from_bytes,
@@ -16,6 +13,7 @@ use fastcrypto::{
 };
 use schemars::JsonSchema;
 use serde::Serialize;
+use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 
 /// A lightweight trait that all members of [enum GenericSignature] implement.
@@ -56,6 +54,7 @@ impl ToFromBytes for GenericSignature {
                     Signature::from_bytes(bytes).map_err(|_| FastCryptoError::InvalidSignature)?,
                 )),
                 SignatureScheme::MultiSig => {
+                    // The flag is added to the bytes representation of MultiSig in MultiSig::as_ref().
                     let multisig: MultiSig =
                         bcs::from_bytes(bytes.get(1..).ok_or(FastCryptoError::InvalidInput)?)
                             .map_err(|_| FastCryptoError::InvalidSignature)?;

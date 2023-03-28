@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-  CoinStruct,
+  CoinStruct, getEvents,
   getTransactionEffects,
   SUI_TYPE_ARG,
 } from "@mysten/sui.js";
@@ -14,7 +14,7 @@ export function useGetLatestCoins() {
   return async () => {
     if (!currentAccount) throw new Error("Wallet not connected");
     const { data } = await provider.getCoins(
-      currentAccount,
+      currentAccount.address,
       SUI_TYPE_ARG,
       undefined,
       1000
@@ -59,23 +59,25 @@ export function useManageCoin() {
     const inputCoins = getCoins(coins, totalAmount);
 
     const result = await signAndExecuteTransaction({
-      kind: "paySui",
-      data: {
-        inputCoins: inputCoins.map((coin) => coin.coinObjectId),
-        recipients: [currentAccount, currentAccount],
-        // TODO: Update SDK to accept bigint
-        amounts: [Number(amount), Number(gasFee)],
-        gasBudget: computeGasBudgetForPay(inputCoins.length),
+      transaction: {
+        kind: "paySui",
+        data: {
+          inputCoins: inputCoins.map((coin) => coin.coinObjectId),
+          recipients: [currentAccount.address, currentAccount.address],
+          // TODO: Update SDK to accept bigint
+          amounts: [Number(amount), Number(gasFee)],
+          gasBudget: computeGasBudgetForPay(inputCoins.length),
+        },
       },
     });
 
-    const effects = getTransactionEffects(result);
+    const events = getEvents(result);
 
-    if (!effects || !effects.events) {
+    if (!events) {
       throw new Error("Missing effects or events");
     }
 
-    const changeEvent = effects.events.find((event) => {
+    const changeEvent = events.find((event) => {
       if ("coinBalanceChange" in event) {
         return event.coinBalanceChange.amount === Number(amount);
       }

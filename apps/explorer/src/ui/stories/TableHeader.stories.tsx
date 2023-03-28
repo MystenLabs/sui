@@ -15,3 +15,11 @@ export const Default: StoryObj<TableHeaderProps> = {
         after: 'After Content',
     },
 };
+
+export const WithSubtext: StoryObj<TableHeaderProps> = {
+    args: {
+        children: 'Table Header',
+        subText: 'Subtext',
+        after: 'After Content',
+    },
+};

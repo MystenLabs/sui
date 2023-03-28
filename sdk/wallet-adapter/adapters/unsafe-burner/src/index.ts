@@ -3,20 +3,16 @@
 
 import {
   Ed25519Keypair,
-  ExecuteTransactionRequestType,
-  getCertifiedTransaction,
-  getTransactionEffects,
   JsonRpcProvider,
-  LocalTxnDataSerializer,
   RawSigner,
-  SignableTransaction,
   Connection,
-  devnetConnection,
+  localnetConnection,
 } from "@mysten/sui.js";
 import {
   WalletAdapter,
   WalletAdapterEvents,
 } from "@mysten/wallet-adapter-base";
+import { ReadonlyWalletAccount } from "@mysten/wallet-standard";
 
 export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   name = "Unsafe Burner Wallet";
@@ -29,15 +25,21 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   #provider: JsonRpcProvider;
   #keypair: Ed25519Keypair;
   #signer: RawSigner;
+  #account: ReadonlyWalletAccount;
 
-  constructor(network: Connection = devnetConnection) {
+  constructor(network: Connection = localnetConnection) {
     this.#keypair = new Ed25519Keypair();
     this.#provider = new JsonRpcProvider(network);
-    this.#signer = new RawSigner(
-      this.#keypair,
-      this.#provider,
-      new LocalTxnDataSerializer(this.#provider)
-    );
+    this.#account = new ReadonlyWalletAccount({
+      address: this.#keypair.getPublicKey().toSuiAddress(),
+      chains: ["sui:unknown"],
+      features: [
+        "sui:signAndExecuteTransactionBlock",
+        "sui:signTransactionBlock",
+      ],
+      publicKey: this.#keypair.getPublicKey().toBytes(),
+    });
+    this.#signer = new RawSigner(this.#keypair, this.#provider);
     this.connecting = false;
     this.connected = false;
 
@@ -47,29 +49,29 @@ export class UnsafeBurnerWalletAdapter implements WalletAdapter {
   }
 
   async getAccounts() {
-    return [this.#keypair.getPublicKey().toSuiAddress()];
+    return [this.#account];
   }
 
-  async signTransaction(transaction: SignableTransaction) {
-    return this.#signer.signTransaction(transaction);
-  }
+  signMessage: WalletAdapter["signMessage"] = async (messageInput) => {
+    return this.#signer.signMessage({ message: messageInput.message });
+  };
 
-  async signAndExecuteTransaction(
-    transaction: SignableTransaction,
-    options?: { requestType?: ExecuteTransactionRequestType }
-  ) {
-    const response = await this.#signer.signAndExecuteTransaction(
-      transaction,
-      options?.requestType
-    );
+  signTransactionBlock: WalletAdapter["signTransactionBlock"] = async (
+    transactionInput
+  ) => {
+    return this.#signer.signTransactionBlock({
+      transactionBlock: transactionInput.transactionBlock,
+    });
+  };
 
-    return {
-      certificate: getCertifiedTransaction(response)!,
-      effects: getTransactionEffects(response)!,
-      timestamp_ms: null,
-      parsed_data: null,
+  signAndExecuteTransactionBlock: WalletAdapter["signAndExecuteTransactionBlock"] =
+    async (transactionInput) => {
+      return await this.#signer.signAndExecuteTransactionBlock({
+        transactionBlock: transactionInput.transactionBlock,
+        options: transactionInput.options,
+        requestType: transactionInput.requestType,
+      });
     };
-  }
 
   async connect() {
     this.connecting = true;

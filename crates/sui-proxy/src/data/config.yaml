@@ -1,0 +1,12 @@
+network: joenet
+listen-address: 192.168.0.2:8080
+remote-write:
+  url: http://unittest.abcd.io/api/v1/push
+  username: foo
+  password: fooman
+json-rpc:
+  url: http://127.0.0.1:9000
+  interval: 30
+  certificate-file: /opt/joeman/fullchain.pem
+  private-key: /opt/joeman/privkey.pem
+metrics-address: 192.168.0.2:9184

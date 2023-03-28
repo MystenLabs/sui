@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useQuery } from '@tanstack/react-query';
-import { ParentSizeModern } from '@visx/responsive';
+import { ParentSize } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { type ReactNode, useCallback, useMemo } from 'react';
 
@@ -170,7 +170,7 @@ export default function NodeMap({ minHeight }: Props) {
 
                 <div className="absolute inset-0 z-0 overflow-hidden">
                     <div className="pointer-events-none absolute inset-0 md:pointer-events-auto">
-                        <ParentSizeModern>
+                        <ParentSize>
                             {(parent) => (
                                 <WorldMap
                                     nodes={data}
@@ -180,7 +180,7 @@ export default function NodeMap({ minHeight }: Props) {
                                     onMouseOut={hideTooltip}
                                 />
                             )}
-                        </ParentSizeModern>
+                        </ParentSize>
                     </div>
                 </div>
 

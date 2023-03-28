@@ -1,19 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiEventEnvelope, type MoveEvent } from '@mysten/sui.js';
+import { type SuiEvent } from '@mysten/sui.js';
 
 export function getValidatorMoveEvent(
-    validatorsEvent: SuiEventEnvelope[],
+    validatorsEvent: SuiEvent[],
     validatorAddress: string
 ) {
-    const event = validatorsEvent.find(({ event }) => {
-        if ('moveEvent' in event) {
-            const { moveEvent } = event as { moveEvent: MoveEvent };
-            return moveEvent.fields.validator_address === validatorAddress;
-        }
-        return false;
-    });
+    const event = validatorsEvent.find(
+        ({ parsedJson }) => parsedJson!.validator_address === validatorAddress
+    );
 
-    return event && 'moveEvent' in event.event ? event.event.moveEvent : null;
+    return event && event.parsedJson;
 }

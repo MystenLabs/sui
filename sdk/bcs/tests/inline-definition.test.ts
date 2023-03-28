@@ -4,12 +4,12 @@
 import { describe, it, expect } from "vitest";
 import { BCS, getSuiMoveConfig } from "../src/index";
 
-describe("de/ser of inline struct definitions", () => {
+describe("BCS: Inline struct definitions", () => {
   it("should de/serialize inline definition", () => {
     const bcs = new BCS(getSuiMoveConfig());
     const value = {
       t1: "Adam",
-      t2: 1000n,
+      t2: "1000",
       t3: ["aabbcc", "00aa00", "00aaffcc"],
     };
 
@@ -38,7 +38,7 @@ describe("de/ser of inline struct definitions", () => {
   it("should avoid duplicate key", () => {
     const bcs = new BCS(getSuiMoveConfig());
 
-    bcs.registerStructType("temp-struct", { a0: 'u8' });
+    bcs.registerStructType("temp-struct", { a0: "u8" });
 
     const sr = serde(bcs, { b0: "temp-struct" }, { b0: { a0: 0 } });
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::base_types::{SuiAddress, TransactionDigest};
+use sui_types::error::UserInputError;
 use thiserror::Error;
 
 pub type SuiRpcResult<T = ()> = Result<T, Error>;
@@ -12,6 +13,8 @@ pub enum Error {
     RpcError(#[from] jsonrpsee::core::Error),
     #[error(transparent)]
     PcsSerialisationError(#[from] bcs::Error),
+    #[error(transparent)]
+    UserInputError(#[from] UserInputError),
     #[error("Subscription error : {0}")]
     Subscription(String),
     #[error("Encountered error when confirming tx status for {0:?}, err: {1:?}")]

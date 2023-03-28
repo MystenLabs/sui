@@ -8,11 +8,12 @@ import { NetworkContext } from '../../context';
 import { Network } from '../../utils/api/DefaultRpcClient';
 import { GROWTHBOOK_FEATURES } from '../../utils/growthbook';
 
+import { useGetSystemObject } from '~/hooks/useGetObject';
 import { NetworkSelect, type NetworkOption } from '~/ui/header/NetworkSelect';
 
 export default function WrappedNetworkSelect() {
     const [network, setNetwork] = useContext(NetworkContext);
-
+    const { data } = useGetSystemObject();
     const showTestNet = useFeature(
         GROWTHBOOK_FEATURES.USE_TEST_NET_ENDPOINT
     ).on;
@@ -28,6 +29,7 @@ export default function WrappedNetworkSelect() {
             value={network}
             onChange={setNetwork}
             networks={networks}
+            version={data?.protocolVersion}
         />
     );
 }

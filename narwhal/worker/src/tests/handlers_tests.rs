@@ -14,15 +14,15 @@ async fn synchronize() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let worker_cache = fixture.worker_cache();
+    let authority_id = fixture.authorities().next().unwrap().id();
     let id = 0;
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
 
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id,
         id,
         committee,
         worker_cache,
@@ -38,7 +38,8 @@ async fn synchronize() {
     let digest = batch.digest();
     let message = WorkerSynchronizeMessage {
         digests: vec![digest],
-        target: target_primary.public_key(),
+        target: target_primary.id(),
+        is_certified: false,
     };
 
     let mut mock_server = MockWorkerToWorker::new();
@@ -56,14 +57,18 @@ async fn synchronize() {
     let _recv_network = target_worker.new_network(routes);
 
     // Check not in store
-    assert!(store.read(digest).await.unwrap().is_none());
+    assert!(store.get(&digest).unwrap().is_none());
 
     // Send a sync request.
     let mut request = anemo::Request::new(message);
     let send_network = test_utils::random_network();
     send_network
         .connect_with_peer_id(
-            network::multiaddr_to_address(&target_worker.info().worker_address).unwrap(),
+            target_worker
+                .info()
+                .worker_address
+                .to_anemo_address()
+                .unwrap(),
             anemo::PeerId(target_worker.info().name.0.to_bytes()),
         )
         .await
@@ -75,7 +80,7 @@ async fn synchronize() {
     handler.synchronize(request).await.unwrap();
 
     // Check its now stored
-    assert!(store.notify_read(digest).await.unwrap().is_some())
+    assert!(store.get(&digest).unwrap().is_some())
 }
 
 #[tokio::test]
@@ -84,15 +89,15 @@ async fn synchronize_when_batch_exists() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let worker_cache = fixture.worker_cache();
+    let authority_id = fixture.authorities().next().unwrap().id();
     let id = 0;
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
 
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id,
         id,
         committee,
         worker_cache,
@@ -106,13 +111,14 @@ async fn synchronize_when_batch_exists() {
     let batch = test_utils::batch();
     let batch_id = batch.digest();
     let missing = vec![batch_id];
-    store.async_write(batch_id, batch).await;
+    store.insert(&batch_id, &batch).unwrap();
 
     // Set up mock behavior for child RequestBatches RPC.
     let target_primary = fixture.authorities().nth(1).unwrap();
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
-        target: target_primary.public_key(),
+        target: target_primary.id(),
+        is_certified: false,
     };
 
     // Send a sync request.
@@ -129,19 +135,19 @@ async fn delete_batches() {
 
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
+    let worker_cache = fixture.worker_cache();
+    let authority_id = fixture.authorities().next().unwrap().id();
     let id = 0;
 
     // Create a new test store.
     let store = test_utils::open_batch_store();
     let batch = test_utils::batch();
     let digest = batch.digest();
-    store.async_write(digest, batch.clone()).await;
+    store.insert(&digest, &batch).unwrap();
 
     // Send a delete request.
     let handler = PrimaryReceiverHandler {
-        name,
+        authority_id,
         id,
         committee,
         worker_cache,
@@ -158,5 +164,5 @@ async fn delete_batches() {
         .await
         .unwrap();
 
-    assert!(store.read(digest).await.unwrap().is_none());
+    assert!(store.get(&digest).unwrap().is_none());
 }

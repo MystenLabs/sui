@@ -53,19 +53,19 @@ mod test {
     use types::{CertificateDigest, Header, Round};
 
     pub fn create_header_for_round(round: Round) -> Header {
-        let builder = types::HeaderBuilder::default();
+        let builder = types::HeaderV1Builder::default();
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
         let primary = fixture.authorities().next().unwrap();
-        let name = primary.public_key();
+        let id = primary.id();
         let header = builder
-            .author(name)
+            .author(id)
             .round(round)
             .epoch(0)
             .parents([CertificateDigest::default()].iter().cloned().collect())
             .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-            .build(primary.keypair())
+            .build()
             .unwrap();
-        header
+        Header::V1(header)
     }
 
     #[tokio::test]

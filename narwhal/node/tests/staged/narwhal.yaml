@@ -1,17 +1,36 @@
 ---
+AuthorityIdentifier:
+  NEWTYPESTRUCT: U16
 Batch:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: BatchV1
+BatchDigest:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+BatchV1:
   STRUCT:
     - transactions:
         SEQ:
           SEQ: U8
     - metadata:
         TYPENAME: Metadata
-BatchDigest:
+Certificate:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: CertificateV1
+CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Certificate:
+CertificateV1:
   STRUCT:
     - header:
         TYPENAME: Header
@@ -22,17 +41,21 @@ Certificate:
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata
-CertificateDigest:
+Header:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: HeaderV1
+HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-Header:
+HeaderV1:
   STRUCT:
     - author:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 96
+        TYPENAME: AuthorityIdentifier
     - round: U64
     - epoch: U64
     - created_at: U64
@@ -46,22 +69,9 @@ Header:
     - parents:
         SEQ:
           TYPENAME: CertificateDigest
-    - signature:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
-HeaderDigest:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
 Metadata:
   STRUCT:
     - created_at: U64
-ReconfigureNotification:
-  ENUM:
-    0:
-      Shutdown: UNIT
 WorkerIndex:
   NEWTYPESTRUCT:
     MAP:
@@ -74,8 +84,8 @@ WorkerInfo:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
-    - transactions: BYTES
-    - worker_address: BYTES
+    - transactions: STR
+    - worker_address: STR
 WorkerOthersBatchMessage:
   STRUCT:
     - digest:
@@ -88,17 +98,12 @@ WorkerOurBatchMessage:
     - worker_id: U32
     - metadata:
         TYPENAME: Metadata
-WorkerReconfigureMessage:
-  STRUCT:
-    - message:
-        TYPENAME: ReconfigureNotification
 WorkerSynchronizeMessage:
   STRUCT:
     - digests:
         SEQ:
           TYPENAME: BatchDigest
     - target:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 96
+        TYPENAME: AuthorityIdentifier
+    - is_certified: BOOL
 

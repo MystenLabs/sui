@@ -2,22 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use config::{Epoch, Parameters};
+use config::{AuthorityIdentifier, CommitteeBuilder, Epoch, Parameters};
+use consensus::consensus::ConsensusRound;
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::PublicKey;
+use crypto::KeyPair;
 use fastcrypto::{
     hash::Hash,
-    traits::{InsecureDefault, KeyPair as _, ToFromBytes},
+    traits::{KeyPair as _, ToFromBytes},
 };
 use narwhal_primary as primary;
 use narwhal_primary::NUM_SHUTDOWN_RECEIVERS;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-    time::Duration,
-};
+use rand::thread_rng;
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::NodeStorage;
 use test_utils::{
     make_optimal_certificates, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
@@ -34,12 +32,15 @@ async fn test_rounds_errors() {
     // GIVEN keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
     let network_keypair = author.network_keypair().copy();
+    let authority_id = author.id();
     let name = keypair.public().clone();
+
+    let other_keypair = KeyPair::generate(&mut thread_rng());
 
     struct TestCase {
         public_key: Bytes,
@@ -56,7 +57,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(PublicKey::insecure_default().as_bytes().to_vec()),
+            public_key: Bytes::from(other_keypair.public().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },
@@ -73,32 +74,39 @@ async fn test_rounds_errors() {
     };
 
     // AND create separate data stores
-    let store_primary = NodeStorage::reopen(temp_dir());
+    let store_primary = NodeStorage::reopen(temp_dir(), None);
 
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
     // In this way, the genesis certificate is not run for that authority and is absent when we try to fetch it
-    let no_name_committee = config::Committee {
-        epoch: Epoch::default(),
-        authorities: committee
-            .authorities
-            .iter()
-            .filter_map(|(pk, a)| (*pk != name).then_some((pk.clone(), a.clone())))
-            .collect::<BTreeMap<_, _>>(),
-    };
+    let mut builder = CommitteeBuilder::new(Epoch::default());
+
+    for authority in fixture.authorities().map(|a| a.authority()) {
+        if authority.id() != authority_id {
+            builder = builder.add_authority(
+                authority.protocol_key().clone(),
+                authority.stake(),
+                authority.primary_address(),
+                authority.network_key(),
+            );
+        }
+    }
+
+    let no_name_committee = builder.build();
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     Primary::spawn(
-        name.clone(),
+        author.authority().clone(),
         keypair.copy(),
         network_keypair,
         committee.clone(),
@@ -163,11 +171,11 @@ async fn test_rounds_return_successful_response() {
     // GIVEN keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
-    let name = keypair.public().clone();
+    let public_key = author.keypair().public().clone();
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -175,14 +183,15 @@ async fn test_rounds_return_successful_response() {
     };
 
     // AND create separate data stores
-    let store_primary = NodeStorage::reopen(temp_dir());
+    let store_primary = NodeStorage::reopen(temp_dir(), None);
 
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -199,7 +208,7 @@ async fn test_rounds_return_successful_response() {
     );
 
     Primary::spawn(
-        name.clone(),
+        author.authority().clone(),
         keypair.copy(),
         author.network_keypair().copy(),
         committee.clone(),
@@ -236,10 +245,9 @@ async fn test_rounds_return_successful_response() {
         1..=4,
         &genesis,
         &committee
-            .authorities
-            .keys()
-            .cloned()
-            .collect::<Vec<PublicKey>>(),
+            .authorities()
+            .map(|authority| authority.id())
+            .collect::<Vec<AuthorityIdentifier>>(),
     );
 
     // Feed the certificates to the Dag
@@ -255,7 +263,7 @@ async fn test_rounds_return_successful_response() {
 
     // WHEN we retrieve the rounds
     let request = tonic::Request::new(RoundsRequest {
-        public_key: Some(PublicKeyProto::from(name)),
+        public_key: Some(PublicKeyProto::from(public_key)),
     });
     let response = client.rounds(request).await;
 
@@ -270,14 +278,14 @@ async fn test_rounds_return_successful_response() {
 async fn test_node_read_causal_signed_certificates() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
 
     let authority_1 = fixture.authorities().next().unwrap();
     let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 
@@ -317,7 +325,7 @@ async fn test_node_read_causal_signed_certificates() {
 
     let keys = fixture
         .authorities()
-        .map(|a| a.keypair().copy())
+        .map(|a| (a.id(), a.keypair().copy()))
         .collect::<Vec<_>>();
     let (certificates, _next_parents) =
         make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
@@ -349,18 +357,19 @@ async fn test_node_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) =
         test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
     let keypair_1 = authority_1.keypair().copy();
-    let name_1 = keypair_1.public().clone();
+    let public_key_1 = authority_1.public_key();
 
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
-        name_1.clone(),
+        authority_1.authority().clone(),
         keypair_1.copy(),
         authority_1.network_keypair().copy(),
         committee.clone(),
@@ -385,7 +394,8 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_new_certificates_2, rx_new_certificates_2) =
         test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = test_utils::test_channel!(CHANNEL_CAPACITY);
-    let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) = watch::channel(0);
+    let (_tx_consensus_round_updates_2, rx_consensus_round_updates_2) =
+        watch::channel(ConsensusRound::default());
 
     let mut tx_shutdown_2 = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
 
@@ -394,12 +404,11 @@ async fn test_node_read_causal_signed_certificates() {
         ..Parameters::default()
     };
     let keypair_2 = authority_2.keypair().copy();
-    let name_2 = keypair_2.public().clone();
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
     // Spawn Primary 2
     Primary::spawn(
-        name_2.clone(),
+        authority_2.authority().clone(),
         keypair_2.copy(),
         authority_2.network_keypair().copy(),
         committee.clone(),
@@ -439,7 +448,7 @@ async fn test_node_read_causal_signed_certificates() {
     // Test node read causal for existing round in Primary 1
     // Genesis aka round 0 so we expect BFT 1 + 0 * 4 vertices
     let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        public_key: Some(PublicKeyProto::from(public_key_1.clone())),
         round: 0,
     });
 
@@ -449,7 +458,7 @@ async fn test_node_read_causal_signed_certificates() {
     // Test node read causal for existing round in Primary 1
     // Round 1 so we expect BFT 1 + 0 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        public_key: Some(PublicKeyProto::from(public_key_1.clone())),
         round: 1,
     });
 
@@ -459,7 +468,7 @@ async fn test_node_read_causal_signed_certificates() {
     // Test node read causal for round 4 (we ack all of the prior round),
     // we expect BFT 1 + 3 * 4 vertices (genesis round elided)
     let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        public_key: Some(PublicKeyProto::from(public_key_1.clone())),
         round: 4,
     });
 
@@ -468,7 +477,7 @@ async fn test_node_read_causal_signed_certificates() {
 
     // Test node read causal for removed round
     let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        public_key: Some(PublicKeyProto::from(public_key_1.clone())),
         round: 0,
     });
 
@@ -480,7 +489,7 @@ async fn test_node_read_causal_signed_certificates() {
     // Test node read causal for round 4 (we ack all of the prior round),
     // we expect BFT 1 + 3 * 4 vertices with round 0 removed. (genesis round elided)
     let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        public_key: Some(PublicKeyProto::from(public_key_1.clone())),
         round: 4,
     });
 
@@ -489,7 +498,7 @@ async fn test_node_read_causal_signed_certificates() {
 
     // Test node read causal for round 5 which does not exist.
     let request = tonic::Request::new(NodeReadCausalRequest {
-        public_key: Some(PublicKeyProto::from(name_1.clone())),
+        public_key: Some(PublicKeyProto::from(public_key_1.clone())),
         round: 5,
     });
 

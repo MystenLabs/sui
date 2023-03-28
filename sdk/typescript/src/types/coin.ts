@@ -3,6 +3,7 @@
 
 import {
   array,
+  boolean,
   Infer,
   literal,
   nullable,
@@ -16,13 +17,13 @@ import { ObjectId, TransactionDigest } from './common';
 
 export const CoinStruct = object({
   coinType: string(),
+  // TODO(chris): rename this to objectId
   coinObjectId: ObjectId,
   version: number(),
   digest: TransactionDigest,
   balance: number(),
   lockedUntilEpoch: nullable(number()),
-  // TODO: remove optional when it is supported from all deployed networks
-  previousTransaction: optional(TransactionDigest),
+  previousTransaction: TransactionDigest,
 });
 
 export type CoinStruct = Infer<typeof CoinStruct>;
@@ -30,6 +31,7 @@ export type CoinStruct = Infer<typeof CoinStruct>;
 export const PaginatedCoins = object({
   data: array(CoinStruct),
   nextCursor: union([ObjectId, literal(null)]),
+  hasNextPage: boolean(),
 });
 
 export type PaginatedCoins = Infer<typeof PaginatedCoins>;

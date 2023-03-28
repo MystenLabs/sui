@@ -5,8 +5,8 @@
 
 //# consensus-commit-prologue --timestamp-ms 43
 
-//# view-object 102
+//# view-object 6
 
 //# consensus-commit-prologue --timestamp-ms 45
 
-//# view-object 102
+//# view-object 6

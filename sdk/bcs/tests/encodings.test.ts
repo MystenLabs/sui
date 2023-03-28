@@ -13,7 +13,7 @@ import {
   toHEX,
 } from "./../src/index";
 
-describe("Move bcs", () => {
+describe("BCS: Encodings", () => {
   it("should de/ser hex, base58 and base64", () => {
     const bcs = new BCS(getSuiMoveConfig());
 

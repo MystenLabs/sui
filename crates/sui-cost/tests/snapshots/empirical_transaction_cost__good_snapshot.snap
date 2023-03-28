@@ -4,48 +4,57 @@ expression: common_costs_actual
 ---
 {
   "MergeCoin": {
-    "computation_cost": 163,
-    "storage_cost": 32,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 26,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   },
   "Publish": {
-    "computation_cost": 326,
-    "storage_cost": 119,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 176,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   },
   "SharedCounterAssertValue": {
-    "computation_cost": 196,
-    "storage_cost": 31,
-    "storage_rebate": 15
+    "computationCost": 1000,
+    "storageCost": 34,
+    "storageRebate": 21,
+    "nonRefundableStorageFee": 0
   },
   "SharedCounterCreate": {
-    "computation_cost": 202,
-    "storage_cost": 31,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 34,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   },
   "SharedCounterIncrement": {
-    "computation_cost": 196,
-    "storage_cost": 31,
-    "storage_rebate": 15
+    "computationCost": 1000,
+    "storageCost": 34,
+    "storageRebate": 21,
+    "nonRefundableStorageFee": 0
   },
   "SplitCoin": {
-    "computation_cost": 273,
-    "storage_cost": 80,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 65,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   },
   "TransferPortionSuiCoin": {
-    "computation_cost": 145,
-    "storage_cost": 48,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 26,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   },
   "TransferWholeCoin": {
-    "computation_cost": 141,
-    "storage_cost": 32,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 26,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   },
   "TransferWholeSuiCoin": {
-    "computation_cost": 139,
-    "storage_cost": 32,
-    "storage_rebate": 0
+    "computationCost": 1000,
+    "storageCost": 13,
+    "storageRebate": 0,
+    "nonRefundableStorageFee": 0
   }
 }

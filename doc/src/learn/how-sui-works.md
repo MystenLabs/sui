@@ -2,7 +2,7 @@
 title: How Sui Works
 ---
 
-This document is written for engineers, developers, and technical readers knowledgeable about the blockchain. It does not assume deep programming language or distributed systems expertise. See the [Sui white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for a much deeper explanation of how Sui works. See [How Sui Differs from Other Blockchains](sui-compared.md) for a high-level overview of the differences between Sui and other blockchain systems.
+This document is written for engineers, developers, and technical readers knowledgeable about blockchain. It does not assume deep programming language or distributed systems expertise. See the [Sui white paper](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) for a much deeper explanation of how Sui works. See [How Sui Differs from Other Blockchains](sui-compared.md) for a high-level overview of the differences between Sui and other blockchain systems.
 
 ## Overview
 
@@ -10,7 +10,7 @@ The Sui blockchain is reshaping the industry by achieving unprecedented speed an
 
 Unlike traditional blockchains which rely on fire-and-forget broadcasts, Sui's design enables requestors or proxies to proactively communicate with validators to finalize transactions, resulting in near-instant finality. With such low latency, Sui is a key enabler to incorporating transactions into games and other settings that require real-time completion.
 
-Sui also supports smart contracts written in Move, a language designed for blockchains with strong inherent security and a more understandable programming model.
+Sui also supports smart contracts written in Sui Move, a dialect of the Move programming language designed for blockchains with strong inherent security and a more understandable programming model.
 
 In a world where the cost of bandwidth is diminishing steadily, we are creating an ecosystem of services that will find it easy, fun, and perhaps profitable to ensure transaction voting on behalf of users.
 
@@ -28,24 +28,7 @@ Sui is a distributed ledger that stores a collection of programmable [objects](.
 
 The ledger is updated via a [transaction](../learn/transactions.md) sent by a particular address. A transaction can create, destroy, and write objects, as well as transfer them to other addresses.
 
-Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owner addresses. A transaction with address *A* as a sender can accept either (a) objects owned by *A*, (b) shared objects, or (c) objects that are owned by other objects which satisfy case (a) or case (b).
-
-```mermaid
-flowchart LR
-    CC(CLI Client) --> ClientService
-    RC(Rest Client) --> ClientService
-    RPCC(RPC Client) --> ClientService
-    ClientService --> AuthorityAggregator
-    AuthorityAggregator --> AC1[AuthorityClient] & AC2[AuthorityClient]
-    subgraph Authority1
-      AS[AuthorityState]
-    end
-    subgraph Authority2
-      AS2[AuthorityState]
-    end
-    AC1 <==>|Network TCP| Authority1
-    AC2 <==>|Network TCP| Authority2
-```
+Structurally, a transaction contains a set of input object references and a pointer to a Sui Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owner addresses. A transaction with address *A* as a sender can accept either (a) objects owned by *A*, (b) shared objects, or (c) objects that are owned by other objects which satisfy case (a) or case (b).
 
 The validators on the Sui blockchain do not require consensus to process transactions involving exclusively owned objects. Instead, they execute transactions in parallel at high throughput, utilizing [Byzantine Consistent Broadcast](https://en.wikipedia.org/wiki/Byzantine_fault). For objects that involve shared objects, the validators employ [Bullshark](https://arxiv.org/abs/2209.05633), a high-throughput DAG-base consensus protocol.
 
@@ -66,7 +49,7 @@ Sui guarantees transaction processing obeys [eventual consistency](https://en.wi
 * Eventual delivery - if one honest validator processes a transaction, all other honest validators will eventually do the same.
 * Convergence - two validators that have seen the same set of transactions share the same view of the system (reach the same state).
 
-But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence until the end of an epoch.
+But contrary to a typical blockchain, Sui does not stop the flow of transactions in order to witness the convergence until the end of an epoch.
 
 ## Transactions on single-owner objects
 
@@ -74,17 +57,17 @@ But contrary to a blockchain, Sui does not stop the flow of transactions in orde
 
 Our single-owner object protocol is based on the [FastPay](https://arxiv.org/abs/2003.11506) design that comes with peer-reviewed security guarantees. In a nutshell, Sui takes the approach of taking a lock (or "stopping the world") only for the relevant piece of data rather than the whole chain. This enables parallel transaction submission and execution on a massive scale.
 
-Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using Move’s object model and leveraging Move's strong ownership model. By requiring that dependencies be explicit, Sui applies a _multi-lane_ approach to transaction validation, making sure those independent transaction flows can progress without interference or synchronization.
+Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using Sui Move’s object model and leveraging Sui Move's strong ownership model. By requiring that dependencies be explicit, Sui applies a _multi-lane_ approach to transaction validation, making sure those independent transaction flows can progress without interference or synchronization.
 
 Sui validates transactions individually, rather than batching them into traditional blocks. The key advantage of this approach is low latency; each successful transaction quickly obtains a certificate of finality that proves to anyone that the transaction will be processed by the Sui network.
 
 Submitting a Sui transaction involves the following steps. These are transparent to the transaction sender, but it's worth understanding what happens behind the scenes:
 
-1. Users send transactions to a *quorum driver*, such as a Full node, that broadcasts the transactions to a set of validators.
-2. Each Sui validator performs validity checks on transactions and adds a signature to valid ones. Each signature is weighted proportionally to the amount staked with the validator. 
-3. The quorum driver collects signatures with a combined weight greater than or equal to 2/3 of the total stake (quorum of stake) into a _certificate_ and broadcasts it to all Sui validators.
-4. When a validator receives a certificate, the validator verifies the certificate. If the certificate is valid, the validator then executes the embedded transaction and returns signed _transaction effects_ to the quorum driver. A transaction becomes _final_ after a quorum of validators receive and execute the corresponding certificate.
-5. Optionally, the quorum driver can collect an _effects certificate_ based on the previous step and return it to the sender as proof of finality.
+ 1. Users send transactions to a *quorum driver*, such as a Full node, that broadcasts the transactions to a set of validators.
+ 1. Each Sui validator performs validity checks on transactions and adds a signature to valid ones. Each signature is weighted proportionally to the amount staked with the validator. 
+ 1. The quorum driver collects signatures with a combined weight greater than or equal to 2/3 of the total stake (quorum of stake) into a _certificate_ and broadcasts it to all Sui validators.
+ 1. When a validator receives a certificate, the validator verifies the certificate. If the certificate is valid, the validator then executes the embedded transaction and returns signed _transaction effects_ to the quorum driver. A transaction becomes _final_ after a quorum of validators receive and execute the corresponding certificate.
+ 1. Optionally, the quorum driver can collect an _effects certificate_ based on the previous step and return it to the sender as proof of finality.
 
 While this may sound like a lot of steps, this process allows each validator to perform the operations above in parallel without coordination--observe that none of the preceding steps require validators to communicate with each other! This significantly reduces the communication cost of committing a transaction compared to a conventional blockchain that requires O(n^2) communication among validators before achieving transaction finality.
 
@@ -96,7 +79,7 @@ Many use-cases require *shared* objects that can be manipulated by two or more a
 
 For transactions involving one or more shared objects, the process is as described above up to step (4), where instead:
 1. When a validator receives a certificate and validates it, the validator uses Narwhal to submit the certificate to Bullshark for sequencing.
-2. After Sui sequences the transaction, it executes it to produce effects using the same flow as (5) above.
+1. After Sui sequences the transaction, it executes it to produce effects using the same flow as (5) above.
 
 ## Scalability
 
@@ -106,7 +89,7 @@ Sui employs the [state-of-the-art Bullshark consensus protocol](https://arxiv.or
 
 ## Smart contract programming
 
-Sui smart contracts are written in the [Move language](https://github.com/MystenLabs/awesome-move/blob/main/README.md). Move is safe and expressive, and its type system and data model naturally support the parallel agreement/execution strategies that make Sui scalable. Move is an open-source programming language for building smart contracts originally developed at [Meta](http://meta.com) for the [Diem blockchain](https://www.diem.com). The language is platform-agnostic, and in addition to being adopted by Sui, it has been gaining popularity on other platforms (e.g., [0L](https://0l.network), [StarCoin](https://starcoin.org/en/)).
+Sui smart contracts are written in Sui Move, a dialect of the [Move language](https://github.com/MystenLabs/awesome-move/blob/main/README.md). Sui Move is safe and expressive, and its type system and data model naturally support the parallel agreement/execution strategies that make Sui scalable. Move is an open-source programming language for building smart contracts originally developed at [Meta](http://meta.com) for the [Diem blockchain](https://www.diem.com).
 
 Find a more thorough explanation of Move’s features in:
 

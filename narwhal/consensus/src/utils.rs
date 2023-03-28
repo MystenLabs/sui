@@ -5,7 +5,7 @@ use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
 use std::collections::HashSet;
 use tracing::debug;
-use types::{Certificate, CertificateDigest, Round};
+use types::{Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 
 /// Order the past leaders that we didn't already commit.
 pub fn order_leaders<'a, LeaderElector>(
@@ -20,7 +20,7 @@ where
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
     assert_eq!(leader.round() % 2, 0);
-    for r in (state.last_committed_round + 2..=leader.round() - 2)
+    for r in (state.last_round.committed_round + 2..=leader.round() - 2)
         .rev()
         .step_by(2)
     {
@@ -47,7 +47,11 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
             .get(&r)
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(digest, _)| parents.iter().any(|x| x.header.parents.contains(digest)))
+            .filter(|(digest, _)| {
+                parents
+                    .iter()
+                    .any(|x| x.header().parents().contains(digest))
+            })
             .map(|(_, certificate)| certificate)
             .collect();
     }
@@ -55,13 +59,12 @@ fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
 }
 
 /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
-/// https://en.wikipedia.org/wiki/Tree_traversal#Pre-order
-pub fn order_dag(
-    gc_depth: Round,
-    leader: &Certificate,
-    state: &ConsensusState,
-) -> Vec<Certificate> {
+/// <https://en.wikipedia.org/wiki/Tree_traversal#Pre-order>
+pub fn order_dag(leader: &Certificate, state: &ConsensusState) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
+    assert!(leader.round() > 0);
+    let gc_round = leader.round().saturating_sub(state.gc_depth);
+
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();
 
@@ -69,14 +72,18 @@ pub fn order_dag(
     while let Some(x) = buffer.pop() {
         debug!("Sequencing {:?}", x);
         ordered.push(x.clone());
-        for parent in &x.header.parents {
+        if x.round() == gc_round + 1 {
+            // Do not try to order parents of the certificate, since they have been GC'ed.
+            continue;
+        }
+        for parent in x.header().parents() {
             let (digest, certificate) = match state
                 .dag
                 .get(&(x.round() - 1))
                 .and_then(|x| x.values().find(|(x, _)| x == parent))
             {
                 Some(x) => x,
-                None => continue, // We already ordered or GC up to here.
+                None => panic!("Parent digest {parent:?} not found for {x:?}!"),
             };
 
             // We skip the certificate if we (1) already processed it or (2) we reached a round that we already
@@ -93,10 +100,12 @@ pub fn order_dag(
         }
     }
 
-    // Ensure we do not commit garbage collected certificates.
-    ordered.retain(|x| x.round() + gc_depth >= state.last_committed_round);
-
     // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
     ordered.sort_by_key(|x| x.round());
     ordered
+}
+
+/// Calculates the GC round given a commit round and the gc_depth
+pub fn gc_round(commit_round: Round, gc_depth: Round) -> Round {
+    commit_round.saturating_sub(gc_depth)
 }

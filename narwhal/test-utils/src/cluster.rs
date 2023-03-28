@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{temp_dir, CommitteeFixture};
-use config::{Committee, Parameters, SharedWorkerCache, WorkerId};
+use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::SerializedTransaction;
 use fastcrypto::traits::KeyPair as _;
 use itertools::Itertools;
-use multiaddr::Multiaddr;
 use mysten_metrics::RegistryService;
+use mysten_network::multiaddr::Multiaddr;
 use node::primary_node::PrimaryNode;
 use node::worker_node::WorkerNode;
 use node::{execution_state::SimpleExecutionState, metrics::worker_metrics_registry};
@@ -32,8 +32,8 @@ pub struct Cluster {
     #[allow(unused)]
     fixture: CommitteeFixture,
     authorities: HashMap<usize, AuthorityDetails>,
-    pub committee_shared: Committee,
-    pub worker_cache_shared: SharedWorkerCache,
+    pub committee: Committee,
+    pub worker_cache: WorkerCache,
     #[allow(dead_code)]
     parameters: Parameters,
 }
@@ -52,9 +52,8 @@ impl Cluster {
     /// DAG externally.
     pub fn new(parameters: Option<Parameters>, internal_consensus_enabled: bool) -> Self {
         let fixture = CommitteeFixture::builder().randomize_ports(true).build();
-        let c = fixture.committee();
-        let shared_worker_cache = fixture.shared_worker_cache();
-        let shared_committee = c;
+        let committee = fixture.committee();
+        let worker_cache = fixture.worker_cache();
         let params = parameters.unwrap_or_else(Self::parameters);
 
         info!("###### Creating new cluster ######");
@@ -66,12 +65,13 @@ impl Cluster {
 
             let authority = AuthorityDetails::new(
                 id,
+                authority_fixture.id(),
                 authority_fixture.keypair().copy(),
                 authority_fixture.network_keypair().copy(),
                 authority_fixture.worker_keypairs(),
                 params.with_available_ports(),
-                shared_committee.clone(),
-                shared_worker_cache.clone(),
+                committee.clone(),
+                worker_cache.clone(),
                 internal_consensus_enabled,
             );
             nodes.insert(id, authority);
@@ -80,8 +80,8 @@ impl Cluster {
         Self {
             fixture,
             authorities: nodes,
-            committee_shared: shared_committee,
-            worker_cache_shared: shared_worker_cache,
+            committee,
+            worker_cache,
             parameters: params,
         }
     }
@@ -105,7 +105,7 @@ impl Cluster {
         workers_per_authority: Option<usize>,
         boot_wait_time: Option<Duration>,
     ) {
-        let max_authorities = self.committee_shared.authorities.len();
+        let max_authorities = self.committee.size();
         let authorities = authorities_number.unwrap_or(max_authorities);
 
         if authorities > max_authorities {
@@ -273,6 +273,7 @@ impl Cluster {
 #[derive(Clone)]
 pub struct PrimaryNodeDetails {
     pub id: usize,
+    pub name: AuthorityIdentifier,
     pub key_pair: Arc<KeyPair>,
     pub network_key_pair: Arc<NetworkKeyPair>,
     pub tx_transaction_confirmation: Sender<SerializedTransaction>,
@@ -280,7 +281,7 @@ pub struct PrimaryNodeDetails {
     store_path: PathBuf,
     parameters: Parameters,
     committee: Committee,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     handlers: Rc<RefCell<Vec<JoinHandle<()>>>>,
     internal_consensus_enabled: bool,
 }
@@ -288,11 +289,12 @@ pub struct PrimaryNodeDetails {
 impl PrimaryNodeDetails {
     fn new(
         id: usize,
+        name: AuthorityIdentifier,
         key_pair: KeyPair,
         network_key_pair: NetworkKeyPair,
         parameters: Parameters,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
         // used just to initialise the struct value
@@ -308,6 +310,7 @@ impl PrimaryNodeDetails {
 
         Self {
             id,
+            name,
             key_pair: Arc::new(key_pair),
             network_key_pair: Arc::new(network_key_pair),
             store_path: temp_dir(),
@@ -353,7 +356,7 @@ impl PrimaryNodeDetails {
         let (tx_transaction_confirmation, mut rx_transaction_confirmation) = channel(100);
 
         // Primary node
-        let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone());
+        let primary_store: NodeStorage = NodeStorage::reopen(store_path.clone(), None);
 
         self.node
             .start(
@@ -405,21 +408,23 @@ pub struct WorkerNodeDetails {
     pub id: WorkerId,
     pub transactions_address: Multiaddr,
     pub registry: Registry,
-    name: PublicKey,
+    name: AuthorityIdentifier,
+    primary_key: PublicKey,
     node: WorkerNode,
     committee: Committee,
-    worker_cache: SharedWorkerCache,
+    worker_cache: WorkerCache,
     store_path: PathBuf,
 }
 
 impl WorkerNodeDetails {
     fn new(
         id: WorkerId,
-        name: PublicKey,
+        name: AuthorityIdentifier,
+        primary_key: PublicKey,
         parameters: Parameters,
         transactions_address: Multiaddr,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
     ) -> Self {
         let registry_service = RegistryService::new(Registry::new());
         let node = WorkerNode::new(id, parameters, registry_service);
@@ -427,6 +432,7 @@ impl WorkerNodeDetails {
         Self {
             id,
             name,
+            primary_key,
             registry: Registry::new(),
             store_path: temp_dir(),
             transactions_address,
@@ -445,7 +451,7 @@ impl WorkerNodeDetails {
             );
         }
 
-        let registry = worker_metrics_registry(self.id, self.name.clone());
+        let registry = worker_metrics_registry(self.id, self.name);
 
         // Make the data store.
         let store_path = if preserve_store {
@@ -454,10 +460,10 @@ impl WorkerNodeDetails {
             temp_dir()
         };
 
-        let worker_store = NodeStorage::reopen(store_path.clone());
+        let worker_store = NodeStorage::reopen(store_path.clone(), None);
         self.node
             .start(
-                self.name.clone(),
+                self.primary_key.clone(),
                 keypair,
                 self.committee.clone(),
                 self.worker_cache.clone(),
@@ -497,7 +503,8 @@ impl WorkerNodeDetails {
 #[derive(Clone)]
 pub struct AuthorityDetails {
     pub id: usize,
-    pub name: PublicKey,
+    pub name: AuthorityIdentifier,
+    pub public_key: PublicKey,
     internal: Arc<RwLock<AuthorityDetailsInternal>>,
 }
 
@@ -510,18 +517,20 @@ struct AuthorityDetailsInternal {
 impl AuthorityDetails {
     pub fn new(
         id: usize,
+        name: AuthorityIdentifier,
         key_pair: KeyPair,
         network_key_pair: NetworkKeyPair,
         worker_keypairs: Vec<NetworkKeyPair>,
         parameters: Parameters,
         committee: Committee,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         internal_consensus_enabled: bool,
     ) -> Self {
         // Create all the nodes we have in the committee
-        let name = key_pair.public().clone();
+        let public_key = key_pair.public().clone();
         let primary = PrimaryNodeDetails::new(
             id,
+            name,
             key_pair,
             network_key_pair,
             parameters.clone(),
@@ -534,10 +543,11 @@ impl AuthorityDetails {
         // act as place holder setups. That gives us the power in a clear way manage
         // the nodes independently.
         let mut workers = HashMap::new();
-        for (worker_id, addresses) in worker_cache.load().workers.get(&name).unwrap().0.clone() {
+        for (worker_id, addresses) in worker_cache.workers.get(&public_key).unwrap().0.clone() {
             let worker = WorkerNodeDetails::new(
                 worker_id,
-                name.clone(),
+                name,
+                public_key.clone(),
                 parameters.clone(),
                 addresses.transactions.clone(),
                 committee.clone(),
@@ -554,6 +564,7 @@ impl AuthorityDetails {
 
         Self {
             id,
+            public_key,
             name,
             internal: Arc::new(RwLock::new(internal)),
         }

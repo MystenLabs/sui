@@ -39,7 +39,7 @@ export function Card({ header, footer, children, ...styleProps }: CardProps) {
             }
         >
             {header && (
-                <div className="bg-gray-40 flex justify-center items-center">
+                <div className="bg-gray-40 flex items-center justify-center">
                     {header}
                 </div>
             )}

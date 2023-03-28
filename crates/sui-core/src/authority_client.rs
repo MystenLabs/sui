@@ -4,18 +4,14 @@
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use fastcrypto::traits::ToFromBytes;
-use multiaddr::Multiaddr;
 use mysten_network::config::Config;
 use std::collections::BTreeMap;
 use std::time::Duration;
-use sui_config::genesis::Genesis;
-use sui_config::ValidatorInfo;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
-use sui_types::committee::CommitteeWithNetAddresses;
-use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
@@ -52,10 +48,12 @@ pub trait AuthorityAPI {
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
 
-    async fn handle_committee_info_request(
+    // This API is exclusively used by the benchmark code.
+    // Hence it's OK to return a fixed system state type.
+    async fn handle_system_state_object(
         &self,
-        request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError>;
+        request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError>;
 }
 
 #[derive(Clone)]
@@ -149,50 +147,33 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map_err(Into::into)
     }
 
-    async fn handle_committee_info_request(
+    async fn handle_system_state_object(
         &self,
-        request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
+        request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
         self.client()
-            .committee_info(request)
+            .get_system_state_object(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
 }
 
-// This function errs on URL parsing error. This may happen
-// when a validator provides a bad URL.
-pub fn make_network_authority_client_sets_from_system_state(
-    sui_system_state: &SuiSystemState,
-    network_config: &Config,
-) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
-    let mut authority_clients = BTreeMap::new();
-    for validator in &sui_system_state.validators.active_validators {
-        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
-        let channel = network_config
-            .connect_lazy(&address)
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
-        let name: &[u8] = &validator.metadata.pubkey_bytes;
-        let public_key_bytes = AuthorityName::from_bytes(name)?;
-        authority_clients.insert(public_key_bytes, client);
-    }
-    Ok(authority_clients)
-}
-
-pub fn make_network_authority_client_sets_from_committee(
-    committee: &CommitteeWithNetAddresses,
+pub fn make_network_authority_clients_with_network_config(
+    committee: &CommitteeWithNetworkMetadata,
     network_config: &Config,
 ) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for (name, _stakes) in &committee.committee.voting_rights {
-        let address = committee.net_addresses.get(name).ok_or_else(|| {
-            SuiError::from("Missing network address in CommitteeWithNetAddresses")
-        })?;
-        let address = Multiaddr::try_from(address.clone())?;
+        let address = &committee
+            .network_metadata
+            .get(name)
+            .ok_or_else(|| {
+                SuiError::from("Missing network metadata in CommitteeWithNetworkMetadata")
+            })?
+            .network_address;
         let channel = network_config
-            .connect_lazy(&address)
+            .connect_lazy(address)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(*name, client);
@@ -200,36 +181,13 @@ pub fn make_network_authority_client_sets_from_committee(
     Ok(authority_clients)
 }
 
-pub fn make_network_authority_client_sets_from_genesis(
-    genesis: &Genesis,
-    network_config: &Config,
-) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
-    let mut authority_clients = BTreeMap::new();
-    for validator in genesis.validator_set() {
-        let channel = network_config
-            .connect_lazy(validator.network_address())
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
-        authority_clients.insert(validator.protocol_key(), client);
-    }
-    Ok(authority_clients)
-}
-
-pub fn make_authority_clients(
-    validator_set: &[ValidatorInfo],
+pub fn make_authority_clients_with_timeout_config(
+    committee: &CommitteeWithNetworkMetadata,
     connect_timeout: Duration,
     request_timeout: Duration,
-) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
-    let mut authority_clients = BTreeMap::new();
+) -> anyhow::Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
     let mut network_config = mysten_network::config::Config::new();
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);
-    for authority in validator_set {
-        let channel = network_config
-            .connect_lazy(authority.network_address())
-            .unwrap();
-        let client = NetworkAuthorityClient::new(channel);
-        authority_clients.insert(authority.protocol_key(), client);
-    }
-    authority_clients
+    make_network_authority_clients_with_network_config(committee, &network_config)
 }

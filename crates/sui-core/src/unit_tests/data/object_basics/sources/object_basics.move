@@ -25,22 +25,22 @@ module examples::object_basics {
     }
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             Object { id: object::new(ctx), value },
             recipient
         )
     }
 
     public entry fun share(ctx: &mut TxContext) {
-        transfer::share_object(Object { id: object::new(ctx), value: 0 })
+        transfer::public_share_object(Object { id: object::new(ctx), value: 0 })
     }
 
     public entry fun transfer(o: Object, recipient: address) {
-        transfer::transfer(o, recipient)
+        transfer::public_transfer(o, recipient)
     }
 
     public entry fun freeze_object(o: Object) {
-        transfer::freeze_object(o)
+        transfer::public_freeze_object(o)
     }
 
     public entry fun set_value(o: &mut Object, value: u64) {
@@ -60,13 +60,17 @@ module examples::object_basics {
     }
 
     public entry fun wrap(o: Object, ctx: &mut TxContext) {
-        transfer::transfer(Wrapper { id: object::new(ctx), o }, tx_context::sender(ctx))
+        transfer::transfer(wrap_object(o, ctx), tx_context::sender(ctx))
     }
 
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         object::delete(id);
-        transfer::transfer(o, tx_context::sender(ctx))
+        transfer::public_transfer(o, tx_context::sender(ctx))
+    }
+
+    public fun wrap_object(o: Object, ctx: &mut TxContext): Wrapper {
+        Wrapper { id: object::new(ctx), o }
     }
 
     public entry fun add_ofield(o: &mut Object, v: Object) {
@@ -74,7 +78,7 @@ module examples::object_basics {
     }
 
     public entry fun remove_ofield(o: &mut Object, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             ofield::remove<bool, Object>(&mut o.id, true),
             tx_context::sender(ctx),
         );
@@ -101,7 +105,7 @@ module examples::object_basics {
     }
 
     public entry fun remove_field(o: &mut Object, ctx: &mut TxContext) {
-        transfer::transfer(
+        transfer::public_transfer(
             sui::dynamic_field::remove<bool, Object>(&mut o.id, true),
             tx_context::sender(ctx),
         );

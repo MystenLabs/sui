@@ -19,8 +19,8 @@ use tokio::{
     time::{sleep, timeout},
 };
 use types::{
-    GetCertificatesResponse, MockPrimaryToPrimary, PayloadAvailabilityResponse,
-    PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
+    CertificateAPI, GetCertificatesResponse, Header, HeaderAPI, MockPrimaryToPrimary,
+    PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimaryServer,
 };
 
 use fastcrypto::traits::KeyPair as _;
@@ -36,10 +36,10 @@ async fn test_successful_headers_synchronization() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -57,19 +57,25 @@ async fn test_successful_headers_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -79,7 +85,7 @@ async fn test_successful_headers_synchronization() {
 
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -96,7 +102,7 @@ async fn test_successful_headers_synchronization() {
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
     let mut primary_networks = Vec::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let address = committee.primary(&primary.public_key()).unwrap();
         let certificates = certificates.clone();
         let mut mock_server = MockPrimaryToPrimary::new();
@@ -117,7 +123,7 @@ async fn test_successful_headers_synchronization() {
         primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
 
-        let address = network::multiaddr_to_address(&address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -178,10 +184,10 @@ async fn test_successful_payload_synchronization() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -198,19 +204,25 @@ async fn test_successful_payload_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -220,7 +232,7 @@ async fn test_successful_payload_synchronization() {
 
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -237,7 +249,7 @@ async fn test_successful_payload_synchronization() {
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
     let mut primary_networks = Vec::new();
-    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+    for primary in fixture.authorities().filter(|a| a.id() != id) {
         let address = committee.primary(&primary.public_key()).unwrap();
         let certificates = certificates.clone();
         let mut mock_server = MockPrimaryToPrimary::new();
@@ -257,7 +269,7 @@ async fn test_successful_payload_synchronization() {
         primary_networks.push(primary.new_network(routes));
         println!("New primary added: {:?}", address);
 
-        let address = network::multiaddr_to_address(&address).unwrap();
+        let address = address.to_anemo_address().unwrap();
         let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -279,7 +291,7 @@ async fn test_successful_payload_synchronization() {
         let handler = worker_listener(-1, worker_address.clone(), network_key);
         handlers_workers.push(handler);
 
-        let address = network::multiaddr_to_address(worker_address).unwrap();
+        let address = worker_address.to_anemo_address().unwrap();
         let peer_id = PeerId(worker_name.0.to_bytes());
         network
             .connect_with_peer_id(address, peer_id)
@@ -302,14 +314,12 @@ async fn test_successful_payload_synchronization() {
     {
         assert!(result.is_ok(), "Error returned");
 
-        for ((_primary_messages, sync_messages), worker) in
-            result.unwrap().into_iter().zip(workers.into_iter())
-        {
+        for (sync_messages, worker) in result.unwrap().into_iter().zip(workers.into_iter()) {
             for m in sync_messages {
                 // Assume that the request is the correct one and just immediately
                 // store the batch to the payload store.
                 for digest in m.digests {
-                    payload_store.async_write((digest, worker), 1).await;
+                    payload_store.write(&digest, &worker).unwrap();
                 }
             }
         }
@@ -358,10 +368,10 @@ async fn test_timeout_while_waiting_for_certificates() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
@@ -371,17 +381,23 @@ async fn test_timeout_while_waiting_for_certificates() {
     let digests: Vec<CertificateDigest> = (0..10)
         .into_iter()
         .map(|_| {
-            let header = author
-                .header_builder(&committee)
-                .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
-                .build(author.keypair())
-                .unwrap();
+            let header = Header::V1(
+                author
+                    .header_builder(&committee)
+                    .with_payload_batch(fixture_batch_with_transactions(10), 0, 0)
+                    .build()
+                    .unwrap(),
+            );
 
             fixture.certificate(&header).digest()
         })
         .collect();
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     println!("New primary added: {:?}", own_address);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
@@ -398,7 +414,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         ..Default::default()
     };
     let _synchronizer_handle = BlockSynchronizer::spawn(
-        name.clone(),
+        id,
         committee.clone(),
         worker_cache.clone(),
         tx_shutdown.subscribe(),
@@ -466,17 +482,20 @@ async fn test_reply_with_certificates_already_in_storage() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let authority_id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
-
+    let own_address = committee
+        .primary_by_id(&authority_id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -484,7 +503,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         .unwrap();
 
     let synchronizer = BlockSynchronizer {
-        name,
+        authority_id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),
@@ -506,11 +525,13 @@ async fn test_reply_with_certificates_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -566,24 +587,27 @@ async fn test_reply_with_payload_already_in_storage() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let name = primary.public_key();
+    let id = primary.id();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
-
+    let own_address = committee
+        .primary_by_id(&id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
-        name,
+        authority_id: id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),
@@ -605,11 +629,13 @@ async fn test_reply_with_payload_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build(author.keypair())
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 
@@ -619,8 +645,8 @@ async fn test_reply_with_payload_already_in_storage() {
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload {
-                payload_store.async_write((digest, worker_id), 1).await;
+            for (digest, (worker_id, _)) in certificate.header().payload() {
+                payload_store.write(digest, worker_id).unwrap();
             }
         }
     }
@@ -668,26 +694,29 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     // AND the necessary keys
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
-    let worker_cache = fixture.shared_worker_cache();
+    let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
     let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     // AND make sure the key used for our "own" primary is the one that will
     // be used to create the headers.
-    let name = primary.public_key();
+    let authority_id = primary.id();
 
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (_, rx_block_synchronizer_commands) = test_utils::test_channel!(10);
 
-    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
-
+    let own_address = committee
+        .primary_by_id(&authority_id)
+        .unwrap()
+        .to_anemo_address()
+        .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
-        name: name.clone(),
+        authority_id,
         committee: committee.clone(),
         worker_cache: worker_cache.clone(),
         rx_shutdown: tx_shutdown.subscribe(),
@@ -708,11 +737,13 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     for _ in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = primary
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), 0, 0)
-            .build(primary.keypair())
-            .unwrap();
+        let header = Header::V1(
+            primary
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
 

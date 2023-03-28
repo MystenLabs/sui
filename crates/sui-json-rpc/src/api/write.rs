@@ -4,7 +4,10 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
-use sui_json_rpc_types::{DevInspectResults, SuiTransactionEffects, SuiTransactionResponse};
+use sui_json_rpc_types::{
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
+};
 
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -22,58 +25,40 @@ pub trait WriteApi {
     ///     makes sure this node is aware of this transaction when client fires subsequent queries.
     ///     However if the node fails to execute the transaction locally in a timely manner,
     ///     a bool type in the response is set to false to indicated the case.
-    // TODO(joyqvq): remove this and rename executeTransactionSerializedSig to executeTransaction
-    #[method(name = "executeTransaction", deprecated)]
-    async fn execute_transaction(
-        &self,
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
-        tx_bytes: Base64,
-        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
-        signature: Base64,
-        /// The request type
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse>;
-
-    #[method(name = "executeTransactionSerializedSig", deprecated)]
-    async fn execute_transaction_serialized_sig(
-        &self,
-        /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
-        tx_bytes: Base64,
-        /// `flag || signature || pubkey` bytes, as base-64 encoded string, signature is committed to the intent message of the transaction data, as base-64 encoded string.
-        signature: Base64,
-        /// The request type
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse>;
-
-    // TODO: migrate above two rpc calls to this one eventually.
-    #[method(name = "submitTransaction")]
-    async fn submit_transaction(
+    /// request_type is default to be `WaitForEffectsCert` unless options.show_events or options.show_effects is true
+    #[method(name = "executeTransactionBlock")]
+    async fn execute_transaction_block(
         &self,
         /// BCS serialized transaction data bytes without its type tag, as base-64 encoded string.
         tx_bytes: Base64,
         /// A list of signatures (`flag || signature || pubkey` bytes, as base-64 encoded string). Signature is committed to the intent message of the transaction data, as base-64 encoded string.
         signatures: Vec<Base64>,
-        /// The request type
-        request_type: ExecuteTransactionRequestType,
-    ) -> RpcResult<SuiTransactionResponse>;
+        /// options for specifying the content to be returned
+        options: Option<SuiTransactionBlockResponseOptions>,
+        /// The request type, derived from `SuiTransactionBlockResponseOptions` if None
+        request_type: Option<ExecuteTransactionRequestType>,
+    ) -> RpcResult<SuiTransactionBlockResponse>;
 
     /// Runs the transaction in dev-inspect mode. Which allows for nearly any
     /// transaction (or Move call) with any arguments. Detailed results are
     /// provided, including both the transaction effects and any return values.
-    #[method(name = "devInspectTransaction")]
-    async fn dev_inspect_transaction(
+    #[method(name = "devInspectTransactionBlock")]
+    async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
         /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
         tx_bytes: Base64,
         /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
-        gas_price: Option<u64>,
+        gas_price: Option<BigInt>,
         /// The epoch to perform the call. Will be set from the system state object if not provided
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,
     /// while the effects are not committed to the chain.
-    #[method(name = "dryRunTransaction")]
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects>;
+    #[method(name = "dryRunTransactionBlock")]
+    async fn dry_run_transaction_block(
+        &self,
+        tx_bytes: Base64,
+    ) -> RpcResult<DryRunTransactionBlockResponse>;
 }

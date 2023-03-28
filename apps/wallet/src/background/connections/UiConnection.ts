@@ -27,7 +27,7 @@ import type { LoadedFeaturesPayload } from '_payloads/feature-gating';
 import type { KeyringPayload } from '_payloads/keyring';
 import type { Permission, PermissionRequests } from '_payloads/permissions';
 import type { UpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
-import type { TransactionRequest } from '_payloads/transactions';
+import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import type { Runtime } from 'webextension-polyfill';
 
@@ -103,7 +103,10 @@ export class UiConnection extends Connection {
                     id
                 );
             } else if (isDisconnectApp(payload)) {
-                await Permissions.delete(payload.origin);
+                await Permissions.delete(
+                    payload.origin,
+                    payload.specificAccounts
+                );
                 this.send(createMessage({ type: 'done' }, id));
             } else if (isBasePayload(payload) && payload.type === 'keyring') {
                 await Keyring.handleUiMessage(msg, this);
@@ -164,7 +167,7 @@ export class UiConnection extends Connection {
     }
 
     private sendTransactionRequests(
-        txRequests: TransactionRequest[],
+        txRequests: ApprovalRequest[],
         requestID: string
     ) {
         this.send(

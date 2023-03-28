@@ -31,7 +31,7 @@
 /// The former is free because this functionality is meant to be available to
 /// everyone. While the latter gives additional profits to the liquidity pool by
 /// charging extensive (and potentially slowing) usage.
-/// 
+///
 module defi::dev_pass {
     use sui::tx_context::{TxContext};
     use sui::object::{Self, UID};
@@ -164,6 +164,6 @@ module defi::smart_swapper {
         let _b = some_amm::dev_swap<BTC, KTS>(dev_pass::use_pass(s) /*, _a */);
 
         // do something with swapped values ?
-        // transfer::transfer( ... )
+        // transfer::public_transfer( ... )
     }
 }

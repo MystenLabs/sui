@@ -11,12 +11,12 @@ const DEC = 9;
 export function useBalance() {
   const { currentAccount } = useWalletKit();
   return useQuery(
-    ["account-balance", currentAccount],
+    ["account-balance", currentAccount?.address],
     async () => {
-      const { totalBalance } = await provider.getBalance(
-        currentAccount!,
-        SUI_TYPE_ARG
-      );
+      const { totalBalance } = await provider.getBalance({
+        owner: currentAccount?.address!,
+        coinType: SUI_TYPE_ARG,
+      });
 
       return {
         balance: BigInt(totalBalance),
@@ -24,7 +24,7 @@ export function useBalance() {
       };
     },
     {
-      enabled: !!currentAccount,
+      enabled: !!currentAccount?.address,
       refetchInterval: 60 * 1000,
       staleTime: 2000,
     }

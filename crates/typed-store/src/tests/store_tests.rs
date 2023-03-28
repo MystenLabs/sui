@@ -98,7 +98,7 @@ async fn read_raw_write_value() {
     assert!(result.is_ok());
     let read_value = result.unwrap();
     assert!(read_value.is_some());
-    assert_eq!(read_value, Some(bincode::serialize(&value).unwrap()));
+    assert_eq!(read_value, Some(bcs::to_bytes(&value).unwrap()));
 }
 
 #[tokio::test]

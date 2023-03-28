@@ -5,7 +5,6 @@ use crate::genesis;
 use crate::p2p::P2pConfig;
 use crate::Config;
 use anyhow::Result;
-use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
@@ -18,15 +17,15 @@ use std::sync::Arc;
 use std::usize;
 use sui_keys::keypair_file::{read_authority_keypair_from_file, read_keypair_from_file};
 use sui_protocol_config::SupportedProtocolVersions;
+use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::SuiAddress;
-use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::NetworkPublicKey;
-use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
+use sui_types::multiaddr::Multiaddr;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -61,13 +60,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_event_processing: bool,
 
-    // TODO: It will be removed down the road.
-    /// Epoch duration in ms.
-    /// u64::MAX means reconfiguration is disabled
-    /// Exposing this in config to allow easier testing with shorter epoch.
-    #[serde(default = "default_epoch_duration_ms")]
-    pub epoch_duration_ms: u64,
-
     #[serde(default)]
     pub grpc_load_shed: Option<bool>,
 
@@ -99,6 +91,12 @@ pub struct NodeConfig {
     /// order to test protocol upgrades.
     #[serde(skip)]
     pub supported_protocol_versions: Option<SupportedProtocolVersions>,
+
+    #[serde(default)]
+    pub db_checkpoint_config: DBCheckpointConfig,
+
+    #[serde(default)]
+    pub indirect_objects_threshold: usize,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
@@ -106,8 +104,7 @@ fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
 }
 
 fn default_grpc_address() -> Multiaddr {
-    use multiaddr::multiaddr;
-    multiaddr!(Ip4([0, 0, 0, 0]), Tcp(8080u16))
+    "/ip4/0.0.0.0/tcp/8080".parse().unwrap()
 }
 fn default_authority_key_pair() -> AuthorityKeyPairWithPath {
     AuthorityKeyPairWithPath::new(get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut OsRng).1)
@@ -142,11 +139,6 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 
 pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
-}
-
-pub fn default_epoch_duration_ms() -> u64 {
-    // 24 Hrs
-    24 * 60 * 60 * 1000
 }
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
@@ -196,8 +188,12 @@ impl NodeConfig {
         (&self.account_key_pair().public()).into()
     }
 
-    pub fn db_path(&self) -> &Path {
-        &self.db_path
+    pub fn db_path(&self) -> PathBuf {
+        self.db_path.join("live")
+    }
+
+    pub fn db_checkpoint_path(&self) -> PathBuf {
+        self.db_path.join("db_checkpoints")
     }
 
     pub fn network_address(&self) -> &Multiaddr {
@@ -223,9 +219,11 @@ pub struct ConsensusConfig {
     // For example, this could be used to connect to co-located workers over a private LAN address.
     pub internal_worker_address: Option<Multiaddr>,
 
-    // Timeout to retry sending transaction to consensus internally.
-    // Default to 60s.
-    pub timeout_secs: Option<u64>,
+    // Maximum number of pending transactions to submit to consensus, including those
+    // in submission wait.
+    // Assuming 10_000 txn tps * 10 sec consensus latency = 100_000 inflight consensus txns,
+    // Default to 100_000.
+    pub max_pending_transactions: Option<usize>,
 
     pub narwhal_config: ConsensusParameters,
 }
@@ -237,6 +235,10 @@ impl ConsensusConfig {
 
     pub fn db_path(&self) -> &Path {
         &self.db_path
+    }
+
+    pub fn max_pending_transactions(&self) -> usize {
+        self.max_pending_transactions.unwrap_or(100_000)
     }
 
     pub fn narwhal_config(&self) -> &ConsensusParameters {
@@ -279,26 +281,26 @@ impl Default for CheckpointExecutorConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AuthorityStorePruningConfig {
-    pub objects_num_latest_versions_to_retain: u64,
-    pub objects_pruning_period_secs: u64,
-    pub objects_pruning_initial_delay_secs: u64,
     pub num_latest_epoch_dbs_to_retain: usize,
     pub epoch_db_pruning_period_secs: u64,
     pub num_epochs_to_retain: u64,
+    pub max_checkpoints_in_batch: usize,
+    pub max_transactions_in_batch: usize,
+    pub use_range_deletion: bool,
 }
 
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
-            objects_num_latest_versions_to_retain: u64::MAX,
-            objects_pruning_period_secs: 24 * 60 * 60,
-            objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: usize::MAX,
             epoch_db_pruning_period_secs: u64::MAX,
-            num_epochs_to_retain: u64::MAX,
+            num_epochs_to_retain: 1,
+            max_checkpoints_in_batch: 200,
+            max_transactions_in_batch: 1000,
+            use_range_deletion: true,
         }
     }
 }
@@ -306,24 +308,22 @@ impl Default for AuthorityStorePruningConfig {
 impl AuthorityStorePruningConfig {
     pub fn validator_config() -> Self {
         Self {
-            // TODO: Temporarily disable the pruner, since we are not sure if it properly maintains
-            // most recent 2 versions with lamport versioning.
-            objects_num_latest_versions_to_retain: 2,
-            objects_pruning_period_secs: 24 * 60 * 60,
-            objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
+            num_epochs_to_retain: 1,
+            max_checkpoints_in_batch: 200,
+            max_transactions_in_batch: 1000,
+            use_range_deletion: true,
         }
     }
     pub fn fullnode_config() -> Self {
         Self {
-            objects_num_latest_versions_to_retain: 5,
-            objects_pruning_period_secs: 24 * 60 * 60,
-            objects_pruning_initial_delay_secs: 60 * 60,
             num_latest_epoch_dbs_to_retain: 3,
             epoch_db_pruning_period_secs: 60 * 60,
-            num_epochs_to_retain: if cfg!(msim) { 1 } else { u64::MAX },
+            num_epochs_to_retain: 1,
+            max_checkpoints_in_batch: 200,
+            max_transactions_in_batch: 1000,
+            use_range_deletion: true,
         }
     }
 }
@@ -337,6 +337,17 @@ pub struct MetricsConfig {
     pub push_url: Option<String>,
 }
 
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct DBCheckpointConfig {
+    #[serde(default)]
+    pub perform_db_checkpoints_at_epoch_end: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_store_config: Option<ObjectStoreConfig>,
+}
+
 /// Publicly known information about a validator
 /// TODO read most of this from on-chain
 #[serde_as]
@@ -344,12 +355,10 @@ pub struct MetricsConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub account_key: AccountsPublicKey,
+    pub account_address: SuiAddress,
     pub protocol_key: AuthorityPublicKeyBytes,
     pub worker_key: NetworkPublicKey,
     pub network_key: NetworkPublicKey,
-    pub stake: StakeUnit,
-    pub delegation: StakeUnit,
     pub gas_price: u64,
     pub commission_rate: u64,
     pub network_address: Multiaddr,
@@ -367,7 +376,7 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        self.account_key().into()
+        self.account_address
     }
 
     pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
@@ -380,18 +389,6 @@ impl ValidatorInfo {
 
     pub fn network_key(&self) -> &NetworkPublicKey {
         &self.network_key
-    }
-
-    pub fn account_key(&self) -> &AccountsPublicKey {
-        &self.account_key
-    }
-
-    pub fn stake(&self) -> StakeUnit {
-        self.stake
-    }
-
-    pub fn delegation(&self) -> StakeUnit {
-        self.delegation
     }
 
     pub fn gas_price(&self) -> u64 {
@@ -418,15 +415,11 @@ impl ValidatorInfo {
         &self.p2p_address
     }
 
+    //TODO remove this
     pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {
         validator_set
             .iter()
-            .map(|validator| {
-                (
-                    validator.protocol_key(),
-                    validator.stake() + validator.delegation(),
-                )
-            })
+            .map(|validator| (validator.protocol_key(), 1))
             .collect()
     }
 }
@@ -643,11 +636,21 @@ mod tests {
 
         let mut s = serde_yaml::to_string(&g).unwrap();
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        loaded_genesis
+            .genesis()
+            .unwrap()
+            .checkpoint_contents()
+            .digest(); // cache digest before comparing.
         assert_eq!(g, loaded_genesis);
 
         // If both in-place and file location are provided, prefer the in-place variant
         s.push_str("\ngenesis-file-location: path/to/file");
         let loaded_genesis: Genesis = serde_yaml::from_str(&s).unwrap();
+        loaded_genesis
+            .genesis()
+            .unwrap()
+            .checkpoint_contents()
+            .digest(); // cache digest before comparing.
         assert_eq!(g, loaded_genesis);
     }
 
@@ -662,6 +665,7 @@ mod tests {
         genesis.save(file.path()).unwrap();
 
         let loaded_genesis = genesis_config.genesis().unwrap();
+        loaded_genesis.checkpoint_contents().digest(); // cache digest before comparing.
         assert_eq!(&genesis, loaded_genesis);
     }
 

@@ -3,10 +3,14 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::{
+    fold::{fold_expr, Fold},
+    parse2, parse_macro_input, BinOp, Expr, UnOp,
+};
 
 #[proc_macro_attribute]
 pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenStream {
-    let mut input = syn::parse_macro_input!(item as syn::ItemFn);
+    let mut input = parse_macro_input!(item as syn::ItemFn);
 
     let body = &input.block;
     input.block = syn::parse2(quote! {
@@ -27,19 +31,29 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
             // be very important for being able to reproduce a failure that occurs in the Nth
             // iteration of a multi-iteration test run.
             std::thread::spawn(|| {
+                use sui_simulator::sui_framework::SystemPackage;
                 ::sui_simulator::telemetry_subscribers::init_for_testing();
-                ::sui_simulator::sui_framework::get_move_stdlib();
-                ::sui_simulator::sui_framework::get_sui_framework();
+                ::sui_simulator::sui_framework::MoveStdlib::as_modules();
+                ::sui_simulator::sui_framework::SuiFramework::as_modules();
+                ::sui_simulator::sui_framework::SuiSystem::as_modules();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
+
+                // For reasons I can't understand, LruCache causes divergent behavior the second
+                // time one is constructed and inserted into, so construct one before the first
+                // test run for determinism.
+                let mut cache = ::sui_simulator::lru::LruCache::new(1.try_into().unwrap());
+                cache.put(1, 1);
 
                 {
                     // Initialize the static initializers here:
                     // https://github.com/move-language/move/blob/652badf6fd67e1d4cc2aa6dc69d63ad14083b673/language/tools/move-package/src/package_lock.rs#L12
                     use std::path::PathBuf;
-                    use sui_simulator::sui_framework_build::compiled_package::BuildConfig;
+                    use sui_simulator::sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
                     use sui_simulator::sui_framework::build_move_package;
                     use sui_simulator::tempfile::TempDir;
+		    use sui_simulator::move_package::package_hooks::register_package_hooks;
 
+		    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                     path.push("../../sui_programmability/examples/basics");
                     let mut build_config = BuildConfig::default();
@@ -138,8 +152,8 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 /// This should be used for tests that can meaningfully run in either environment.
 #[proc_macro_attribute]
 pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    let input = parse_macro_input!(item as syn::ItemFn);
+    let args = parse_macro_input!(args as syn::AttributeArgs);
 
     let header = if cfg!(msim) {
         quote! {
@@ -170,8 +184,8 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
 /// `check_determinism`, which is not understood by tokio.
 #[proc_macro_attribute]
 pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(item as syn::ItemFn);
-    let args = syn::parse_macro_input!(args as syn::AttributeArgs);
+    let input = parse_macro_input!(item as syn::ItemFn);
+    let args = parse_macro_input!(args as syn::AttributeArgs);
 
     let result = if cfg!(msim) {
         quote! {
@@ -211,4 +225,69 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     result.into()
+}
+
+#[proc_macro_attribute]
+pub fn use_checked_arithmetic(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_item = parse_macro_input!(item as syn::Item);
+
+    match input_item {
+        syn::Item::Fn(input_fn) => {
+            let transformed_fn = CheckArithmetic.fold_item_fn(input_fn);
+            TokenStream::from(quote! { #transformed_fn })
+        }
+        syn::Item::Impl(input_impl) => {
+            let transformed_impl = CheckArithmetic.fold_item_impl(input_impl);
+            TokenStream::from(quote! { #transformed_impl })
+        }
+        _ => panic!(
+            "The use_checked_arithmetic attribute can only be applied to functions and impl blocks"
+        ),
+    }
+}
+
+struct CheckArithmetic;
+
+impl Fold for CheckArithmetic {
+    fn fold_expr(&mut self, expr: Expr) -> Expr {
+        let expr = fold_expr(self, expr);
+        let expr = match expr {
+            Expr::Binary(expr_binary) => {
+                let op = &expr_binary.op;
+                let lhs = &expr_binary.left;
+                let rhs = &expr_binary.right;
+                match op {
+                    BinOp::Add(_) => {
+                        quote!(#lhs.checked_add(#rhs).expect("Overflow or underflow in addition"))
+                    }
+                    BinOp::Sub(_) => {
+                        quote!(#lhs.checked_sub(#rhs).expect("Overflow or underflow in subtraction"))
+                    }
+                    BinOp::Mul(_) => {
+                        quote!(#lhs.checked_mul(#rhs).expect("Overflow or underflow in multiplication"))
+                    }
+                    BinOp::Div(_) => {
+                        quote!(#lhs.checked_div(#rhs).expect("Overflow or underflow in division"))
+                    }
+                    BinOp::Rem(_) => {
+                        quote!(#lhs.checked_rem(#rhs).expect("Overflow or underflow in remainder"))
+                    }
+                    _ => quote!(#expr_binary),
+                }
+            }
+            Expr::Unary(expr_unary) => {
+                let op = &expr_unary.op;
+                let operand = &expr_unary.expr;
+                match op {
+                    UnOp::Neg(_) => {
+                        quote!(#operand.checked_neg().expect("Overflow or underflow in negation"))
+                    }
+                    _ => quote!(#expr_unary),
+                }
+            }
+            _ => quote!(#expr),
+        };
+
+        parse2(expr).unwrap()
+    }
 }

@@ -26,7 +26,7 @@ pub fn process_certificates(c: &mut Criterion) {
 
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
 
     for size in &BATCH_SIZES {
         let gc_depth = 12;
@@ -44,22 +44,22 @@ pub fn process_certificates(c: &mut Criterion) {
         let store = make_consensus_store(&store_path);
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state = ConsensusState::new(metrics.clone());
+        let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
 
         let data_size: usize = certificates
             .iter()
-            .map(|cert| bincode::serialize(&cert).unwrap().len())
+            .map(|cert| bcs::to_bytes(&cert).unwrap().len())
             .sum();
         consensus_group.throughput(Throughput::Bytes(data_size as u64));
 
         let mut ordering_engine = Bullshark {
             committee: committee.clone(),
             store,
-            gc_depth,
             metrics,
             last_successful_leader_election_timestamp: Instant::now(),
             last_leader_election: Default::default(),
             max_inserted_certificate_round: 0,
+            num_sub_dags_per_schedule: 100,
         };
         consensus_group.bench_with_input(
             BenchmarkId::new("batched", certificates.len()),

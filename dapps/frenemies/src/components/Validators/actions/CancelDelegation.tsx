@@ -20,11 +20,11 @@ const GAS_BUDGET = 100000n;
  * Can only be called if the Delegation and StakedSui objects are present.
  */
 export function CancelDelegation({ stake }: Props) {
-  const { signAndExecuteTransaction } = useWalletKit();
+  const { signAndExecuteTransactionBlock } = useWalletKit();
 
   const withdrawDelegation = useMutation(["unstake-validator"], async () => {
-    await signAndExecuteTransaction(
-      {
+    await signAndExecuteTransactionBlock({
+      transaction: {
         kind: "moveCall",
         data: {
           packageObjectId: SUI_FRAMEWORK_ADDRESS,
@@ -38,10 +38,10 @@ export function CancelDelegation({ stake }: Props) {
           ],
         },
       },
-      {
-        // requestType: "WaitForEffectsCert",
-      }
-    );
+      // options: {
+      // requestType: "WaitForEffectsCert",
+      // },
+    });
   });
 
   return (

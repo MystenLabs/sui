@@ -11,8 +11,12 @@ import {
     useNavigate,
 } from 'react-router-dom';
 
+import { ConnectLedgerModalContainer } from '../../ledger/ConnectLedgerModalContainer';
+import { ImportLedgerAccounts } from '../../ledger/ImportLedgerAccounts';
 import { AccountsSettings } from './AccountsSettings';
 import { AutoLockSettings } from './AutoLockSettings';
+import { ExportAccount } from './ExportAccount';
+import { ImportPrivateKey } from './ImportPrivateKey';
 import MenuList from './MenuList';
 import { NetworkSettings } from './NetworkSettings';
 import { ErrorBoundary } from '_components/error-boundary';
@@ -46,12 +50,18 @@ function MenuContent() {
         [isOpen, navigate, closeMenuUrl]
     );
     useOnKeyboardEvent('keydown', CLOSE_KEY_CODES, handleOnCloseMenu, isOpen);
+
     const isMultiAccountsEnabled = useFeature(
         FEATURES.WALLET_MULTI_ACCOUNTS
     ).on;
+    const { on: isLedgerIntegrationEnabled } = useFeature(
+        FEATURES.WALLET_LEDGER_INTEGRATION
+    );
+
     if (!isOpen) {
         return null;
     }
+
     return (
         <div className="absolute flex flex-col justify-items-stretch inset-0 bg-white pb-8 px-2.5 z-50 rounded-tl-20 rounded-tr-20 overflow-y-auto">
             <ErrorBoundary>
@@ -59,10 +69,29 @@ function MenuContent() {
                     <Routes location={menuUrl || ''}>
                         <Route path="/" element={<MenuList />} />
                         {isMultiAccountsEnabled ? (
-                            <Route
-                                path="/accounts"
-                                element={<AccountsSettings />}
-                            />
+                            <>
+                                <Route
+                                    path="/accounts"
+                                    element={<AccountsSettings />}
+                                >
+                                    {isLedgerIntegrationEnabled && (
+                                        <Route
+                                            path="connect-ledger-modal"
+                                            element={
+                                                <ConnectLedgerModalContainer />
+                                            }
+                                        />
+                                    )}
+                                </Route>
+                                <Route
+                                    path="/export/:account"
+                                    element={<ExportAccount />}
+                                />
+                                <Route
+                                    path="/import-private-key"
+                                    element={<ImportPrivateKey />}
+                                />
+                            </>
                         ) : null}
                         <Route path="/network" element={<NetworkSettings />} />
                         <Route
@@ -75,6 +104,12 @@ function MenuContent() {
                                 <Navigate to={menuHomeUrl} replace={true} />
                             }
                         />
+                        {isLedgerIntegrationEnabled && (
+                            <Route
+                                path="/import-ledger-accounts"
+                                element={<ImportLedgerAccounts />}
+                            />
+                        )}
                     </Routes>
                 </MainLocationContext.Provider>
             </ErrorBoundary>

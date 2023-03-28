@@ -2,25 +2,34 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::authority::authority_store::LockDetails;
+use crate::authority::authority_store::LockDetailsWrapper;
 use rocksdb::Options;
 use std::path::Path;
-use sui_storage::default_db_options;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
+use sui_types::digests::TransactionEventsDigest;
+use sui_types::storage::ObjectStore;
 use typed_store::metrics::SamplingInterval;
-use typed_store::rocks::{DBMap, DBOptions, MetricConf, ReadWriteOptions};
+use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
+use typed_store::rocks::{
+    point_lookup_db_options, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
+};
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
 
+use crate::authority::authority_store_types::{
+    MigratedStoreObjectPair, ObjectContentDigest, StoreData, StoreMoveObjectWrapper, StoreObject,
+    StoreObjectValue, StoreObjectWrapper,
+};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store_derive::DBMapUtils;
-
-const CURRENT_EPOCH_KEY: u64 = 0;
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
+    /// State is represented by `StoreObject` enum, which is either a move module, a move object, or
+    /// a pointer to an object stored in the `indirect_move_objects` table.
     ///
     /// Note that while this map can store all versions of an object, we will eventually
     /// prune old object versions from the db.
@@ -31,7 +40,10 @@ pub struct AuthorityPerpetualTables {
     /// been written out, and which must be retried. But, they cannot be retried unless their input
     /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
-    pub(crate) objects: DBMap<ObjectKey, Object>,
+    pub(crate) objects: DBMap<ObjectKey, StoreObjectWrapper>,
+
+    #[default_options_override_fn = "indirect_move_objects_table_default_config"]
+    pub(crate) indirect_move_objects: DBMap<ObjectContentDigest, StoreMoveObjectWrapper>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -40,20 +52,13 @@ pub struct AuthorityPerpetualTables {
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
     #[default_options_override_fn = "owned_object_transaction_locks_table_default_config"]
-    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetails>>,
+    pub(crate) owned_object_transaction_locks: DBMap<ObjectRef, Option<LockDetailsWrapper>>,
 
     /// This is a map between the transaction digest and the corresponding transaction that's known to be
     /// executable. This means that it may have been executed locally, or it may have been synced through
     /// state-sync but hasn't been executed yet.
     #[default_options_override_fn = "transactions_table_default_config"]
     pub(crate) transactions: DBMap<TransactionDigest, TrustedTransaction>,
-
-    /// The map between the object ref of objects processed at all versions and the transaction
-    /// digest of the certificate that lead to the creation of this version of the object.
-    ///
-    /// When an object is deleted we include an entry into this table for its next version and
-    /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
-    pub(crate) parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate to the effects of its execution.
     /// We store effects into this table in two different cases:
@@ -71,7 +76,14 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
+    // Currently this is needed in the validator for returning events during process certificates.
+    // We could potentially remove this if we decided not to provide events in the execution path.
+    // TODO: Figure out what to do with this table in the long run.
+    // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
+    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+
     /// When transaction is executed via checkpoint executor, we store association here
+    /// TODO: Eventually be able to prune this table.
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, (EpochId, CheckpointSequenceNumber)>,
 
@@ -80,11 +92,11 @@ pub struct AuthorityPerpetualTables {
     // and never changed
     pub(crate) root_state_hash_by_epoch: DBMap<EpochId, (CheckpointSequenceNumber, Accumulator)>,
 
-    /// A singleton table that stores the current epoch number. This is used only for the purpose of
-    /// crash recovery so that when we restart we know which epoch we are at. This is needed because
-    /// there will be moments where the on-chain epoch doesn't match with the per-epoch table epoch.
-    /// This number should match the epoch of the per-epoch table in the authority store.
-    current_epoch: DBMap<u64, u64>,
+    /// Parameters of the system fixed at the epoch start
+    pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
+
+    /// A singleton table that stores latest pruned checkpoint. Used to keep objects pruner progress
+    pub(crate) pruned_checkpoint: DBMap<(), CheckpointSequenceNumber>,
 }
 
 impl AuthorityPerpetualTables {
@@ -105,44 +117,6 @@ impl AuthorityPerpetualTables {
         Self::get_read_only_handle(Self::path(parent_path), None, None, MetricConf::default())
     }
 
-    /// Read an object and return it, or Ok(None) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        let obj_entry = self
-            .objects
-            .iter()
-            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
-
-        let obj = match obj_entry {
-            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => obj,
-            _ => return Ok(None),
-        };
-
-        // Note that the two reads in this function are (obviously) not atomic, and the
-        // object may be deleted after we have read it. Hence we check get_latest_parent_entry
-        // last, so that the write to self.parent_sync gets the last word.
-        //
-        // TODO: verify this race is ok.
-        //
-        // I believe it is - Even if the reads were atomic, calls to this function would still
-        // race with object deletions (the object could be deleted between when the function is
-        // called and when the first read takes place, which would be indistinguishable to the
-        // caller with the case in which the object is deleted in between the two reads).
-        let parent_entry = self.get_latest_parent_entry(*object_id)?;
-
-        match parent_entry {
-            None => {
-                error!(
-                    ?object_id,
-                    "Object is missing parent_sync entry, data store is inconsistent"
-                );
-                Ok(None)
-            }
-            Some((obj_ref, _)) if obj_ref.2.is_alive() => Ok(Some(obj)),
-            _ => Ok(None),
-        }
-    }
-
     // This is used by indexer to find the correct version of dynamic field child object.
     // We do not store the version of the child object, but because of lamport timestamp,
     // we know the child must have version number less then or eq to the parent.
@@ -156,51 +130,100 @@ impl AuthorityPerpetualTables {
             .skip_prior_to(&ObjectKey(object_id, version))else {
             return None
         };
-        iter.reverse().next().map(|(_, o)| o)
+        iter.reverse()
+            .next()
+            .and_then(|(_, o)| self.object(o).ok().flatten())
     }
 
-    pub fn get_latest_parent_entry(
+    fn construct_object(&self, store_object: StoreObjectValue) -> Result<Object, SuiError> {
+        let indirect_object = match store_object.data {
+            StoreData::IndirectObject(ref metadata) => self
+                .indirect_move_objects
+                .get(&metadata.digest)?
+                .map(|o| o.migrate().into_inner()),
+            _ => None,
+        };
+        let object = MigratedStoreObjectPair(store_object, indirect_object).try_into()?;
+        Ok(object)
+    }
+
+    // Constructs `sui_types::object::Object` from `StoreObjectWrapper`.
+    // Returns `None` if object was deleted/wrapped
+    pub fn object(&self, store_object: StoreObjectWrapper) -> Result<Option<Object>, SuiError> {
+        let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {return Ok(None)};
+        Ok(Some(self.construct_object(store_object)?))
+    }
+
+    pub fn object_reference(
+        &self,
+        object_key: &ObjectKey,
+        store_object: StoreObjectWrapper,
+    ) -> Result<ObjectRef, SuiError> {
+        let obj_ref = match store_object.migrate().into_inner() {
+            StoreObject::Value(object) => self.construct_object(object)?.compute_object_reference(),
+            StoreObject::Deleted => (
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            ),
+            StoreObject::Wrapped => (
+                object_key.0,
+                object_key.1,
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            ),
+        };
+        Ok(obj_ref)
+    }
+
+    pub fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
+    ) -> Result<Option<ObjectRef>, SuiError> {
         let mut iterator = self
-            .parent_sync
+            .objects
             .iter()
-            // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
+            .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
 
-        Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
-            if obj_ref.0 == object_id {
-                Some((obj_ref, tx_digest))
-            } else {
-                None
+        if let Some((object_key, value)) = iterator.next() {
+            if object_key.0 == object_id {
+                return Ok(Some(self.object_reference(&object_key, value)?));
             }
-        }))
-    }
-
-    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
-        let sui_system_object = self
-            .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
-            .expect("Sui System State object must always exist");
-        let move_object = sui_system_object
-            .data
-            .try_as_move()
-            .expect("Sui System State object must be a Move object");
-        let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
-            .expect("Sui System State object deserialization cannot fail");
-        Ok(result)
+        }
+        Ok(None)
     }
 
     pub fn get_recovery_epoch_at_restart(&self) -> SuiResult<EpochId> {
         Ok(self
-            .current_epoch
-            .get(&CURRENT_EPOCH_KEY)?
-            .expect("Must have current epoch."))
+            .epoch_start_configuration
+            .get(&())?
+            .expect("Must have current epoch.")
+            .epoch_start_state()
+            .epoch())
     }
 
-    pub fn set_recovery_epoch(&self, epoch: EpochId) -> SuiResult {
-        self.current_epoch.insert(&CURRENT_EPOCH_KEY, &epoch)?;
+    pub async fn set_epoch_start_configuration(
+        &self,
+        epoch_start_configuration: &EpochStartConfiguration,
+    ) -> SuiResult {
+        let mut wb = self.epoch_start_configuration.batch();
+        wb = wb.insert_batch(
+            &self.epoch_start_configuration,
+            std::iter::once(((), epoch_start_configuration)),
+        )?;
+        wb.write()?;
         Ok(())
+    }
+
+    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
+        Ok(self.pruned_checkpoint.get(&())?.unwrap_or_default())
+    }
+
+    pub fn set_highest_pruned_checkpoint(
+        &self,
+        wb: DBBatch,
+        checkpoint_number: CheckpointSequenceNumber,
+    ) -> SuiResult<DBBatch> {
+        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
@@ -214,15 +237,41 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.parent_sync.keys(),
+            iter: self.objects.iter(),
+            tables: self,
             prev: None,
+        }
+    }
+
+    pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
+        // This checkpoints the entire db and not just objects table
+        self.objects
+            .checkpoint_db(path)
+            .map_err(SuiError::StorageError)
+    }
+}
+
+impl ObjectStore for AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        let obj_entry = self
+            .objects
+            .iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        match obj_entry {
+            Some((ObjectKey(obj_id, _), obj)) if obj_id == *object_id => Ok(self.object(obj)?),
+            _ => Ok(None),
         }
     }
 }
 
 pub struct LiveSetIter<'a> {
-    iter: <DBMap<ObjectRef, TransactionDigest> as Map<'a, ObjectRef, TransactionDigest>>::Keys,
-    prev: Option<ObjectRef>,
+    iter:
+        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
+    tables: &'a AuthorityPerpetualTables,
+    prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
 
 impl Iterator for LiveSetIter<'_> {
@@ -230,33 +279,43 @@ impl Iterator for LiveSetIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(next) = self.iter.next() {
-                let prev = self.prev;
-                self.prev = Some(next);
+            if let Some((next_key, next_value)) = self.iter.next() {
+                let prev = self.prev.take();
+                self.prev = Some((next_key, next_value));
 
-                match prev {
-                    Some(prev) if prev.0 != next.0 && prev.2.is_alive() => return Some(prev),
-                    _ => continue,
+                if let Some((prev_key, prev_value)) = prev {
+                    if prev_key.0 != next_key.0 {
+                        let obj_ref = self.tables.object_reference(&prev_key, prev_value).expect(
+                            "Couldn't construct an object reference in the live set iterator",
+                        );
+                        if !obj_ref.2.is_deleted() {
+                            return Some(obj_ref);
+                        }
+                    }
+                }
+                continue;
+            }
+            if let Some((key, value)) = self.prev.take() {
+                let obj_ref = self
+                    .tables
+                    .object_reference(&key, value)
+                    .expect("Couldn't construct an object reference in the live set iterator");
+                if !obj_ref.2.is_deleted() {
+                    return Some(obj_ref);
                 }
             }
-
-            return match self.prev {
-                Some(prev) if prev.2.is_alive() => {
-                    self.prev = None;
-                    Some(prev)
-                }
-                _ => None,
-            };
+            return None;
         }
     }
 }
 
 // These functions are used to initialize the DB tables
 fn owned_object_transaction_locks_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
+
 fn objects_table_default_config() -> DBOptions {
-    let db_options = default_db_options(None, None).1;
+    let db_options = point_lookup_db_options();
     DBOptions {
         options: db_options.options,
         rw_options: ReadWriteOptions {
@@ -264,9 +323,24 @@ fn objects_table_default_config() -> DBOptions {
         },
     }
 }
+
 fn transactions_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
 }
+
 fn effects_table_default_config() -> DBOptions {
-    default_db_options(None, None).1
+    point_lookup_db_options()
+}
+
+fn indirect_move_objects_table_default_config() -> DBOptions {
+    let mut options = point_lookup_db_options();
+    options.options.set_merge_operator(
+        "refcount operator",
+        reference_count_merge_operator,
+        reference_count_merge_operator,
+    );
+    options
+        .options
+        .set_compaction_filter("empty filter", empty_compaction_filter);
+    options
 }

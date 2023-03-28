@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Disclosure } from '@headlessui/react';
+import { useFormatCoin } from '@mysten/core';
 import { Coin } from '@mysten/sui.js';
 import { useState } from 'react';
 
@@ -9,7 +10,6 @@ import { ReactComponent as ClosedIcon } from '../../../assets/SVGIcons/12px/Show
 import Pagination from '../../pagination/Pagination';
 import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 
-import { useFormatCoin } from '~/hooks/useFormatCoin';
 import { ObjectLink } from '~/ui/InternalLink';
 import { Text } from '~/ui/Text';
 
@@ -63,10 +63,7 @@ function SingleCoinView({
     const totalBalance =
         subObjList[0]._isCoin &&
         subObjList.every((el) => el.balance !== undefined)
-            ? subObjList.reduce(
-                  (prev, current) => prev + current.balance!,
-                  Coin.getZero()
-              )
+            ? subObjList.reduce((prev, current) => prev + current.balance!, 0n)
             : null;
 
     const extractedCoinType = Coin.getCoinType(coinType);

@@ -14,6 +14,7 @@
 -  [Function `pop`](#0x2_vec_map_pop)
 -  [Function `get_mut`](#0x2_vec_map_get_mut)
 -  [Function `get`](#0x2_vec_map_get)
+-  [Function `try_get`](#0x2_vec_map_try_get)
 -  [Function `contains`](#0x2_vec_map_contains)
 -  [Function `size`](#0x2_vec_map_size)
 -  [Function `is_empty`](#0x2_vec_map_is_empty)
@@ -310,6 +311,37 @@ Aborts if <code>key</code> is not bound in <code>self</code>.
     <b>let</b> idx = <a href="vec_map.md#0x2_vec_map_get_idx">get_idx</a>(self, key);
     <b>let</b> entry = <a href="_borrow">vector::borrow</a>(&self.contents, idx);
     &entry.value
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_map_try_get"></a>
+
+## Function `try_get`
+
+Safely try borrow a value bound to <code>key</code> in <code>self</code>.
+Return Some(V) if the value exists, None otherwise.
+Only works for a "copyable" value as references cannot be stored in <code><a href="">vector</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_map.md#0x2_vec_map_try_get">try_get</a>&lt;K: <b>copy</b>, V: <b>copy</b>&gt;(self: &<a href="vec_map.md#0x2_vec_map_VecMap">vec_map::VecMap</a>&lt;K, V&gt;, key: &K): <a href="_Option">option::Option</a>&lt;V&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="vec_map.md#0x2_vec_map_try_get">try_get</a>&lt;K: <b>copy</b>, V: <b>copy</b>&gt;(self: &<a href="vec_map.md#0x2_vec_map_VecMap">VecMap</a>&lt;K,V&gt;, key: &K): Option&lt;V&gt; {
+    <b>if</b> (<a href="vec_map.md#0x2_vec_map_contains">contains</a>(self, key)) {
+        <a href="_some">option::some</a>(*<a href="vec_map.md#0x2_vec_map_get">get</a>(self, key))
+    } <b>else</b> {
+        <a href="_none">option::none</a>()
+    }
 }
 </code></pre>
 

@@ -44,17 +44,19 @@ export function Migrate() {
     ["migrate-scorecard"],
     async () => {
       await signAndExecuteTransaction({
-        kind: "moveCall",
-        data: {
-          packageObjectId: config.VITE_PKG,
-          module: "frenemies",
-          function: "migrate",
-          typeArguments: [],
-          arguments: [
-            legacyScorecard.data!.reference.objectId,
-            config.VITE_MIGRATION,
-          ],
-          gasBudget: GAS_BUDGET,
+        transaction: {
+          kind: "moveCall",
+          data: {
+            packageObjectId: config.VITE_PKG,
+            module: "frenemies",
+            function: "migrate",
+            typeArguments: [],
+            arguments: [
+              legacyScorecard.data!.reference.objectId,
+              config.VITE_MIGRATION,
+            ],
+            gasBudget: GAS_BUDGET,
+          },
         },
       });
     },

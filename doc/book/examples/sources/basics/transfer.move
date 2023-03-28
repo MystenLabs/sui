@@ -74,6 +74,6 @@ module examples::profile {
         }, ctx);
 
         // `Wrapper` type is freely transferable
-        transfer::transfer(container, tx_context::sender(ctx))
+        transfer::public_transfer(container, tx_context::sender(ctx))
     }
 }

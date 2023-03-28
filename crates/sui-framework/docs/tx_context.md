@@ -9,7 +9,8 @@
 -  [Constants](#@Constants_0)
 -  [Function `sender`](#0x2_tx_context_sender)
 -  [Function `epoch`](#0x2_tx_context_epoch)
--  [Function `new_object`](#0x2_tx_context_new_object)
+-  [Function `epoch_timestamp_ms`](#0x2_tx_context_epoch_timestamp_ms)
+-  [Function `fresh_object_address`](#0x2_tx_context_fresh_object_address)
 -  [Function `ids_created`](#0x2_tx_context_ids_created)
 -  [Function `derive_id`](#0x2_tx_context_derive_id)
 
@@ -53,7 +54,13 @@ the VM and passed in to the entrypoint of the transaction as <code>&<b>mut</b> <
 <code>epoch: u64</code>
 </dt>
 <dd>
- The current epoch number.
+ The current epoch number
+</dd>
+<dt>
+<code>epoch_timestamp_ms: u64</code>
+</dt>
+<dd>
+ Timestamp that the epoch started at
 </dd>
 <dt>
 <code>ids_created: u64</code>
@@ -143,14 +150,14 @@ Return the current epoch
 
 </details>
 
-<a name="0x2_tx_context_new_object"></a>
+<a name="0x2_tx_context_epoch_timestamp_ms"></a>
 
-## Function `new_object`
+## Function `epoch_timestamp_ms`
 
-Generate a new, globally unique object ID with version 0
+Return the epoch start time as a unix timestamp in milliseconds.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="tx_context.md#0x2_tx_context_new_object">new_object</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <b>address</b>
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -159,7 +166,34 @@ Generate a new, globally unique object ID with version 0
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="tx_context.md#0x2_tx_context_new_object">new_object</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_epoch_timestamp_ms">epoch_timestamp_ms</a>(self: &<a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): u64 {
+   self.epoch_timestamp_ms
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_tx_context_fresh_object_address"></a>
+
+## Function `fresh_object_address`
+
+Create an <code><b>address</b></code> that has not been used. As it is an object address, it will never
+occur as the address for a user.
+In other words, the generated address is a globally unique object ID.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_fresh_object_address">fresh_object_address</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="tx_context.md#0x2_tx_context_fresh_object_address">fresh_object_address</a>(ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">TxContext</a>): <b>address</b> {
     <b>let</b> ids_created = ctx.ids_created;
     <b>let</b> id = <a href="tx_context.md#0x2_tx_context_derive_id">derive_id</a>(*&ctx.tx_hash, ids_created);
     ctx.ids_created = ids_created + 1;

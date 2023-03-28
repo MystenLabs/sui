@@ -4,12 +4,12 @@
 use crate::cluster::new_wallet_context_from_cluster;
 
 use super::Cluster;
+use shared_crypto::intent::Intent;
 use sui::client_commands::WalletContext;
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
-use sui_types::intent::Intent;
 use sui_types::messages::TransactionData;
 use tracing::{info, info_span, Instrument};
 

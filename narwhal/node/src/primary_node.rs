@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
-use config::{Committee, Parameters, SharedWorkerCache};
+use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
+use consensus::consensus::ConsensusRound;
 use consensus::dag::Dag;
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
 use consensus::Consensus;
@@ -45,6 +46,10 @@ struct PrimaryNodeInner {
 impl PrimaryNodeInner {
     /// The default channel capacity.
     pub const CHANNEL_CAPACITY: usize = 1_000;
+    /// The window where the schedule change takes place in consensus. It represents number
+    /// of committed sub dags.
+    /// TODO: move this to node properties
+    const CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS: u64 = 300;
 
     // Starts the primary node with the provided info. If the node is already running then this
     // method will return an error instead.
@@ -57,7 +62,7 @@ impl PrimaryNodeInner {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.
@@ -169,7 +174,7 @@ impl PrimaryNodeInner {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's storage.
         store: &NodeStorage,
         // The configuration parameters.
@@ -210,9 +215,16 @@ impl PrimaryNodeInner {
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
+
+        // Figure out the id for this authority
+        let authority = committee
+            .authority_by_key(&name)
+            .unwrap_or_else(|| panic!("Our node with key {:?} should be in committee", name));
+
         let mut handles = Vec::new();
         let (tx_executor_network, rx_executor_network) = oneshot::channel();
-        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+        let (tx_consensus_round_updates, rx_consensus_round_updates) =
+            watch::channel(ConsensusRound::new(0, 0));
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Bullshark");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -228,7 +240,7 @@ impl PrimaryNodeInner {
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
             let consensus_handles = Self::spawn_consensus(
-                name.clone(),
+                authority.id(),
                 rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),
@@ -250,7 +262,7 @@ impl PrimaryNodeInner {
 
         // Spawn the primary.
         let primary_handles = Primary::spawn(
-            name.clone(),
+            authority.clone(),
             keypair,
             network_keypair,
             committee.clone(),
@@ -278,9 +290,9 @@ impl PrimaryNodeInner {
 
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
-        name: PublicKey,
+        authority_id: AuthorityIdentifier,
         rx_executor_network: oneshot::Receiver<anemo::Network>,
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         committee: Committee,
         store: &NodeStorage,
         parameters: Parameters,
@@ -288,7 +300,7 @@ impl PrimaryNodeInner {
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_committed_certificates: metered_channel::Sender<(Round, Vec<Certificate>)>,
-        tx_consensus_round_updates: watch::Sender<Round>,
+        tx_consensus_round_updates: watch::Sender<ConsensusRound>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
@@ -323,11 +335,12 @@ impl PrimaryNodeInner {
         let ordering_engine = Bullshark::new(
             committee.clone(),
             store.consensus_store.clone(),
-            parameters.gc_depth,
             consensus_metrics.clone(),
+            Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
         );
         let consensus_handles = Consensus::spawn(
             committee.clone(),
+            parameters.gc_depth,
             store.consensus_store.clone(),
             store.certificate_store.clone(),
             shutdown_receivers.pop().unwrap(),
@@ -342,7 +355,7 @@ impl PrimaryNodeInner {
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
-            name,
+            authority_id,
             rx_executor_network,
             worker_cache,
             committee.clone(),
@@ -393,7 +406,7 @@ impl PrimaryNode {
         // The committee information.
         committee: Committee,
         // The worker information cache.
-        worker_cache: SharedWorkerCache,
+        worker_cache: WorkerCache,
         // The node's store //TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.

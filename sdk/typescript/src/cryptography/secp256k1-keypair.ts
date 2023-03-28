@@ -12,6 +12,8 @@ import { isValidBIP32Path, mnemonicToSeed } from './mnemonics';
 import { HDKey } from '@scure/bip32';
 import { toB64 } from '@mysten/bcs';
 import { SignatureScheme } from './signature';
+import { bytesToHex } from '@noble/hashes/utils';
+import { blake2b } from '@noble/hashes/blake2b';
 
 export const DEFAULT_SECP256K1_DERIVATION_PATH = "m/54'/784'/0'/0/0";
 
@@ -90,7 +92,7 @@ export class Secp256k1Keypair implements Keypair {
     if (!options || !options.skipValidation) {
       const encoder = new TextEncoder();
       const signData = encoder.encode('sui validation');
-      const msgHash = sha256(signData);
+      const msgHash = bytesToHex(blake2b(signData, { dkLen: 32 }));
       const signature = secp.signSync(msgHash, secretKey);
       if (!secp.verify(signature, msgHash, publicKey, { strict: true })) {
         throw new Error('Provided secretKey is invalid');
@@ -148,7 +150,10 @@ export class Secp256k1Keypair implements Keypair {
    * If path is none, it will default to m/54'/784'/0'/0/0, otherwise the path must
    * be compliant to BIP-32 in form m/54'/784'/{account_index}'/{change_index}/{address_index}.
    */
-  static deriveKeypair(path: string, mnemonics: string): Secp256k1Keypair {
+  static deriveKeypair(mnemonics: string, path?: string): Secp256k1Keypair {
+    if (path == null) {
+      path = DEFAULT_SECP256K1_DERIVATION_PATH;
+    }
     if (!isValidBIP32Path(path)) {
       throw new Error('Invalid derivation path');
     }

@@ -33,7 +33,7 @@ async fn test_response_error_after_shutdown_external_consensus() {
 
     // send a sample rounds request
     let request = tonic::Request::new(RoundsRequest {
-        public_key: Some(PublicKeyProto::from(authority.name.clone())),
+        public_key: Some(PublicKeyProto::from(authority.public_key.clone())),
     });
     let response = client.rounds(request).await;
 
@@ -67,7 +67,7 @@ async fn test_response_error_after_shutdown_internal_consensus() {
 
     // Create a fake transaction
     let tx_str = "test transaction".to_string();
-    let tx = bincode::serialize(&tx_str).unwrap();
+    let tx = bcs::to_bytes(&tx_str).unwrap();
     let txn = TransactionProto {
         transaction: Bytes::from(tx),
     };

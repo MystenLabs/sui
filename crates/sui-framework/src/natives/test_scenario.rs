@@ -70,7 +70,7 @@ pub fn end_transaction(
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
     // We pass an empty map as we do not expose dynamic field objects in the system
-    let results = object_runtime_state.finish(BTreeSet::new(), BTreeMap::new());
+    let results = object_runtime_state.finish(BTreeSet::new(), BTreeSet::new(), BTreeMap::new());
     let RuntimeResults {
         writes,
         deletions,

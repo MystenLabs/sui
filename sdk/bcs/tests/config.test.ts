@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { BCS, getRustConfig, getSuiMoveConfig } from "../src/index";
 
-describe("serde", () => {
+describe("BCS: Config", () => {
   it("should work with Rust config", () => {
     const bcs = new BCS(getRustConfig());
     const value = ["beep", "boop", "beep"];

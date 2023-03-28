@@ -3,12 +3,12 @@
 
 import { ArrowRight12 } from '@mysten/icons';
 import {
+    type ColumnDef,
     flexRender,
     getCoreRowModel,
     getSortedRowModel,
-    useReactTable,
-    type ColumnDef,
     type SortingState,
+    useReactTable,
 } from '@tanstack/react-table';
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
@@ -94,7 +94,7 @@ export function TableCard<DataType extends object>({
                                         key={id}
                                         colSpan={colSpan}
                                         scope="col"
-                                        className="h-7.5 px-1 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                        className="h-7.5 text-left text-subtitle font-semibold uppercase text-steel-dark"
                                         onClick={
                                             column.columnDef.enableSorting
                                                 ? column.getToggleSortingHandler()
@@ -140,7 +140,7 @@ export function TableCard<DataType extends object>({
                                 .map(({ column, id, getContext }) => (
                                     <td
                                         key={id}
-                                        className="h-7.5 px-1 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
+                                        className="h-7.5 text-body text-gray-75 group-hover:bg-gray-40 group-hover:text-gray-90 group-hover:first:rounded-l group-hover:last:rounded-r"
                                     >
                                         {flexRender(
                                             column.columnDef.cell,

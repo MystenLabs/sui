@@ -1,12 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::storage::get_module_by_id;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, DeleteKind, ParentSync, WriteKind},
+    storage::{
+        BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectStore, ParentSync, WriteKind,
+    },
 };
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
 
@@ -19,7 +24,7 @@ pub struct InMemoryStorage {
 }
 
 impl BackingPackageStore for InMemoryStorage {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         Ok(self.persistent.get(package_id).cloned())
     }
 }
@@ -54,15 +59,11 @@ impl ParentSync for InMemoryStorage {
 impl ModuleResolver for InMemoryStorage {
     type Error = SuiError;
 
-    // TODO: duplicated code with ModuleResolver for SuiDataStore in authority_store.rs.
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
             .get_package(&ObjectID::from(*module_id.address()))?
             .and_then(|package| {
                 package
-                    .data
-                    .try_as_package()
-                    .unwrap()
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
@@ -75,6 +76,27 @@ impl ModuleResolver for &mut InMemoryStorage {
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         (**self).get_module(module_id)
+    }
+}
+
+impl ObjectStore for InMemoryStorage {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.persistent.get(object_id).cloned())
+    }
+}
+
+impl ObjectStore for &mut InMemoryStorage {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        Ok(self.persistent.get(object_id).cloned())
+    }
+}
+
+impl GetModule for InMemoryStorage {
+    type Error = SuiError;
+    type Item = CompiledModule;
+
+    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
+        get_module_by_id(self, id)
     }
 }
 

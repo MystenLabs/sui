@@ -1,4 +1,4 @@
 packages:
   - "sdk/**"
   - "apps/**"
-  - "dapps/**"
+  - "dapps/sponsored-transactions"

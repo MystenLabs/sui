@@ -4,11 +4,11 @@ expression: natives_calib
 ---
 // Move bytecode v6
 module 2.natives_calibration_tests {
-use 0000000000000000000000000000000000000001::unit_test;
-use 0000000000000000000000000000000000000002::event;
-use 0000000000000000000000000000000000000002::object;
-use 0000000000000000000000000000000000000002::test_scenario;
-use 0000000000000000000000000000000000000002::tx_context;
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000002::event;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+use 0000000000000000000000000000000000000000000000000000000000000002::test_scenario;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
 
 
 struct StructSimple has copy, drop, store {
@@ -91,7 +91,7 @@ B1:
 B2:
 	6: Branch(7)
 B3:
-	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
+	7: LdConst[1](Vector(U8): [32, 50, 134, 111, 1, 9, 250, 27, 169, 17, 57, 45, 205, 45, 66, 96, 241, 216, 36, 49, 51, 22, 245, 70, 122, 191, 100, 24, 123, 62, 239, 165, 85])
 	8: Call object::calibrate_address_from_bytes(vector<u8>)
 	9: MoveLoc[0](trials#1#0: u64)
 	10: LdU64(1)
@@ -114,7 +114,7 @@ B1:
 B2:
 	6: Branch(7)
 B3:
-	7: LdConst[1](Vector(U8): [20, 58, 152, 93, 167, 79, 226, 37, 178, 4, 92, 23, 45, 107, 211, 144, 189, 133, 95, 8, 110])
+	7: LdConst[1](Vector(U8): [32, 50, 134, 111, 1, 9, 250, 27, 169, 17, 57, 45, 205, 45, 66, 96, 241, 216, 36, 49, 51, 22, 245, 70, 122, 191, 100, 24, 123, 62, 239, 165, 85])
 	8: Call object::calibrate_address_from_bytes_nop(vector<u8>)
 	9: MoveLoc[0](trials#1#0: u64)
 	10: LdU64(1)
@@ -132,7 +132,7 @@ L3:	trials#1#0: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[3](trials#1#0: u64)
-	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	3: Call test_scenario::begin(address): Scenario
 	4: StLoc[2](scenario_val#1#0: Scenario)
 	5: MutBorrowLoc[2](scenario_val#1#0: Scenario)
@@ -176,7 +176,7 @@ L3:	trials#1#0: u64
 B0:
 	0: LdConst[0](U64: [1, 0, 0, 0, 0, 0, 0, 0])
 	1: StLoc[3](trials#1#0: u64)
-	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	2: LdConst[2](Address: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	3: Call test_scenario::begin(address): Scenario
 	4: StLoc[2](scenario_val#1#0: Scenario)
 	5: MutBorrowLoc[2](scenario_val#1#0: Scenario)

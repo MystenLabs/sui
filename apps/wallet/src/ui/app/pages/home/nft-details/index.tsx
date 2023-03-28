@@ -1,79 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatAddress, hasPublicTransfer } from '@mysten/sui.js';
+import { ArrowRight16 } from '@mysten/icons';
+import { hasPublicTransfer, formatAddress } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useMemo } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
-import Button from '_app/shared/button';
+import { LabelValueItem } from './LabelValueItem';
+import { LabelValuesContainer } from './LabelValuesContainer';
+import { useActiveAddress } from '_app/hooks/useActiveAddress';
+import { Button } from '_app/shared/ButtonUI';
+import { Link } from '_app/shared/Link';
 import { Collapse } from '_app/shared/collapse';
-import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
-import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
-import NFTDisplayCard from '_components/nft-display';
-import { useAppSelector, useNFTBasicData, useObjectsState } from '_hooks';
-import { createAccountNftByIdSelector } from '_redux/slices/account';
-import ExternalLink from '_src/ui/app/components/external-link';
+import { NFTDisplayCard } from '_components/nft-display';
+import { useGetNFTMeta, useNFTBasicData, useOwnedNFT } from '_hooks';
+import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import PageTitle from '_src/ui/app/shared/PageTitle';
-
-import type { ReactNode } from 'react';
-
-function LabelValueItems({
-    items,
-}: {
-    items: { label: string; value: ReactNode; key?: string }[];
-}) {
-    return (
-        <div className="flex flex-col flex-nowrap gap-3 text-body font-medium">
-            {items.map(({ label, value, key }) => (
-                <div
-                    className="flex flex-row flex-nowrap gap-1"
-                    key={key || label}
-                >
-                    <div className="flex-1 text-gray-80 truncate">{label}</div>
-                    <div className="max-w-[60%] text-gray-90 truncate">
-                        {typeof value === 'string' &&
-                        (value.startsWith('http://') ||
-                            value.startsWith('https://')) ? (
-                            <ExternalLink
-                                href={value}
-                                className="text-steel-darker no-underline"
-                            >
-                                {value}
-                            </ExternalLink>
-                        ) : (
-                            value
-                        )}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-const FILTER_PROPERTIES = ['id', 'url', 'name'];
 
 function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
     const nftId = searchParams.get('objectId');
-    const nftSelector = useMemo(
-        () => createAccountNftByIdSelector(nftId || ''),
-        [nftId]
+    const accountAddress = useActiveAddress();
+    const { data: objectData, isLoading } = useOwnedNFT(
+        nftId || '',
+        accountAddress
     );
-    const selectedNft = useAppSelector(nftSelector);
-    const isTransferable = !!selectedNft && hasPublicTransfer(selectedNft);
+    const isTransferable = !!objectData && hasPublicTransfer(objectData);
     const { nftFields, fileExtensionType, filePath } =
-        useNFTBasicData(selectedNft);
-    const { loading } = useObjectsState();
-
+        useNFTBasicData(objectData);
     // Extract either the attributes, or use the top-level NFT fields:
     const metaFields =
         nftFields?.metadata?.fields?.attributes?.fields ||
         Object.entries(nftFields ?? {})
-            .filter(([key]) => !FILTER_PROPERTIES.includes(key))
+            .filter(([key]) => key !== 'id')
             .reduce(
                 (acc, [key, value]) => {
                     acc.keys.push(key);
@@ -82,121 +43,162 @@ function NFTDetailsPage() {
                 },
                 { keys: [] as string[], values: [] as string[] }
             );
-
     const metaKeys: string[] = metaFields ? metaFields.keys : [];
     const metaValues = metaFields ? metaFields.values : [];
+    const { data: nftDisplayData, isLoading: isLoadingDisplay } = useGetNFTMeta(
+        nftId || ''
+    );
+    const objectExplorerLink = useExplorerLink({
+        type: ExplorerLinkType.object,
+        objectID: nftId || '',
+    });
+    const ownerAddress =
+        (typeof objectData?.owner === 'object' &&
+            'AddressOwner' in objectData.owner &&
+            objectData.owner.AddressOwner) ||
+        '';
+    const ownerExplorerLink = useExplorerLink({
+        type: ExplorerLinkType.address,
+        address: ownerAddress,
+    });
     return (
         <div
-            className={cl('flex flex-col flex-nowrap flex-1 gap-5', {
-                'items-center': loading,
+            className={cl('flex flex-1 flex-col flex-nowrap gap-5', {
+                'items-center': isLoading || isLoadingDisplay,
             })}
         >
-            <Loading loading={loading}>
-                {selectedNft ? (
+            <Loading loading={isLoading || isLoadingDisplay}>
+                {objectData ? (
                     <>
                         <PageTitle back="/nfts" />
-                        <div className="flex flex-col flex-nowrap flex-1 items-stretch overflow-y-auto overflow-x-hidden gap-7">
-                            <div className="self-center gap-3 flex flex-col flex-nowrap items-center">
+                        <div className="flex flex-1 flex-col flex-nowrap items-stretch gap-8">
+                            <div className="flex flex-col flex-nowrap items-center gap-3 self-center">
                                 <NFTDisplayCard
-                                    nftobj={selectedNft}
+                                    objectId={nftId!}
                                     size="lg"
+                                    borderRadius="xl"
                                 />
                                 {nftId ? (
-                                    <ExplorerLink
-                                        type={ExplorerLinkType.object}
-                                        objectID={nftId}
-                                        className={cl(
-                                            'text-steel-dark no-underline flex flex-nowrap gap-2 items-center',
-                                            'text-captionSmall font-semibold uppercase hover:text-hero duration-100',
-                                            'ease-ease-in-out-cubic'
-                                        )}
-                                        showIcon={false}
-                                    >
-                                        VIEW ON EXPLORER{' '}
-                                        <Icon
-                                            icon={SuiIcons.ArrowLeft}
-                                            className="rotate-135 text-subtitleSmallExtra"
-                                        />
-                                    </ExplorerLink>
+                                    <Link
+                                        color="steelDark"
+                                        weight="semibold"
+                                        size="captionSmall"
+                                        href={objectExplorerLink || ''}
+                                        text="VIEW ON EXPLORER"
+                                        after={
+                                            <ArrowRight16 className="-rotate-45" />
+                                        }
+                                    />
                                 ) : null}
                             </div>
-                            <div className="flex-1">
-                                <Collapse title="Details" initialIsOpen>
-                                    <LabelValueItems
-                                        items={[
-                                            {
-                                                label: 'Object Id',
-                                                value: nftId ? (
-                                                    <ExplorerLink
-                                                        type={
-                                                            ExplorerLinkType.object
-                                                        }
-                                                        objectID={nftId}
-                                                        title="View on Sui Explorer"
-                                                        className="text-sui-dark no-underline font-mono"
-                                                        showIcon={false}
-                                                    >
-                                                        {formatAddress(nftId)}
-                                                    </ExplorerLink>
-                                                ) : null,
-                                            },
-                                            {
-                                                label: 'Media Type',
-                                                value:
-                                                    filePath &&
-                                                    fileExtensionType.name &&
-                                                    fileExtensionType.type
-                                                        ? `${fileExtensionType.name} ${fileExtensionType.type}`
-                                                        : '-',
-                                            },
-                                        ]}
+                            <LabelValuesContainer>
+                                {ownerExplorerLink ? (
+                                    <LabelValueItem
+                                        label="Owner"
+                                        value={
+                                            <Link
+                                                color="suiDark"
+                                                weight="medium"
+                                                size="body"
+                                                mono
+                                                href={ownerExplorerLink}
+                                                text={formatAddress(
+                                                    ownerAddress
+                                                )}
+                                                title="View on Sui Explorer"
+                                            />
+                                        }
                                     />
-                                </Collapse>
-                            </div>
+                                ) : null}
+                                <LabelValueItem
+                                    label="Object Id"
+                                    value={
+                                        nftId ? (
+                                            <Link
+                                                color="suiDark"
+                                                weight="medium"
+                                                size="body"
+                                                mono
+                                                href={objectExplorerLink || ''}
+                                                text={formatAddress(nftId)}
+                                                title="View on Sui Explorer"
+                                            />
+                                        ) : null
+                                    }
+                                />
+                                <LabelValueItem
+                                    label="Media Type"
+                                    value={
+                                        filePath &&
+                                        fileExtensionType.name &&
+                                        fileExtensionType.type
+                                            ? `${fileExtensionType.name} ${fileExtensionType.type}`
+                                            : '-'
+                                    }
+                                />
+                            </LabelValuesContainer>
+                            <Collapse title="Details" initialIsOpen>
+                                <LabelValuesContainer>
+                                    <LabelValueItem
+                                        label="Name"
+                                        value={nftDisplayData?.name}
+                                    />
+                                    <LabelValueItem
+                                        label="Description"
+                                        value={nftDisplayData?.description}
+                                        multiline
+                                    />
+                                    <LabelValueItem
+                                        label="Creator"
+                                        value={nftDisplayData?.creator}
+                                        parseUrl
+                                    />
+                                    <LabelValueItem
+                                        label="Link"
+                                        value={nftDisplayData?.link}
+                                        parseUrl
+                                    />
+                                    <LabelValueItem
+                                        label="Website"
+                                        value={nftDisplayData?.projectUrl}
+                                        parseUrl
+                                    />
+                                </LabelValuesContainer>
+                            </Collapse>
                             {metaKeys.length ? (
-                                <div className="flex-1">
-                                    <Collapse title="Attributes" initialIsOpen>
-                                        <LabelValueItems
-                                            items={metaKeys.map(
-                                                (aKey, idx) => ({
-                                                    label: aKey,
-                                                    value:
-                                                        typeof metaValues[
-                                                            idx
-                                                        ] === 'object'
-                                                            ? JSON.stringify(
-                                                                  metaValues[
-                                                                      idx
-                                                                  ]
-                                                              )
-                                                            : metaValues[idx],
-                                                    key: aKey,
-                                                })
-                                            )}
-                                        />
-                                    </Collapse>
-                                </div>
+                                <Collapse title="Attributes" initialIsOpen>
+                                    <LabelValuesContainer>
+                                        {metaKeys.map((aKey, idx) => (
+                                            <LabelValueItem
+                                                key={aKey}
+                                                label={aKey}
+                                                value={
+                                                    typeof metaValues[idx] ===
+                                                    'object'
+                                                        ? JSON.stringify(
+                                                              metaValues[idx]
+                                                          )
+                                                        : metaValues[idx]
+                                                }
+                                            />
+                                        ))}
+                                    </LabelValuesContainer>
+                                </Collapse>
                             ) : null}
-                            <div className="flex-1 flex items-end mb-3">
+                            <div className="mb-3 flex flex-1 items-end">
                                 <Button
-                                    mode="primary"
-                                    className="flex-1"
+                                    variant="primary"
+                                    size="tall"
                                     disabled={!isTransferable}
+                                    to={`/nft-transfer/${nftId}`}
                                     title={
                                         isTransferable
                                             ? undefined
                                             : "Unable to send. NFT doesn't have public transfer method"
                                     }
-                                    onClick={() => {
-                                        navigate(`/nft-transfer/${nftId}`);
-                                    }}
-                                >
-                                    Send NFT
-                                    <Icon
-                                        icon={SuiIcons.ArrowLeft}
-                                        className="rotate-180 text-xs"
-                                    />
-                                </Button>
+                                    text="Send NFT"
+                                    after={<ArrowRight16 />}
+                                />
                             </div>
                         </div>
                     </>

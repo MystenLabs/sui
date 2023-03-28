@@ -11,14 +11,16 @@ use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
+use sui_types::messages::TransactionEvents;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     committee::Committee,
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages::{
-        CertifiedTransaction, CommitteeInfoRequest, CommitteeInfoResponse,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-        TransactionInfoRequest, TransactionInfoResponse, VerifiedExecutableTransaction,
+        CertifiedTransaction, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+        SystemStateRequest, Transaction, TransactionEffectsAPI, TransactionInfoRequest,
+        TransactionInfoResponse,
     },
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
 };
@@ -53,9 +55,10 @@ impl AuthorityAPI for LocalAuthorityClient {
         if self.fault_config.fail_before_handle_transaction {
             return Err(SuiError::from("Mock error before handle_transaction"));
         }
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let state = self.state.clone();
         let transaction = transaction.verify()?;
-        let result = state.handle_transaction(transaction).await;
+        let result = state.handle_transaction(&epoch_store, transaction).await;
         if self.fault_config.fail_after_handle_transaction {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_transaction".to_owned(),
@@ -101,13 +104,11 @@ impl AuthorityAPI for LocalAuthorityClient {
         state.handle_checkpoint_request(&request)
     }
 
-    async fn handle_committee_info_request(
+    async fn handle_system_state_object(
         &self,
-        request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
-        let state = self.state.clone();
-
-        state.handle_committee_info_request(&request)
+        _request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
+        Ok(self.state.database.get_sui_system_state_object()?)
     }
 }
 
@@ -145,21 +146,27 @@ impl LocalAuthorityClient {
             match state.get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store) {
                 Ok(Some(effects)) => effects,
                 _ => {
-                    let certificate = { certificate.verify(epoch_store.committee())? };
-                    let executable_tx =
-                        VerifiedExecutableTransaction::new_from_certificate(certificate);
-                    state
-                        .try_execute_immediately(&executable_tx, &epoch_store)
-                        .await?
+                    let certificate = certificate.verify(epoch_store.committee())?;
+                    state.try_execute_for_test(&certificate).await?
                 }
             }
             .into_inner();
+
+        let events = if let Some(digest) = signed_effects.events_digest() {
+            state.get_transaction_events(digest)?
+        } else {
+            TransactionEvents::default()
+        };
+
         if fault_config.fail_after_handle_confirmation {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after handle_confirmation_transaction".to_owned(),
             });
         }
-        Ok(HandleCertificateResponse { signed_effects })
+        Ok(HandleCertificateResponse {
+            signed_effects,
+            events,
+        })
     }
 }
 
@@ -167,7 +174,6 @@ impl LocalAuthorityClient {
 pub struct MockAuthorityApi {
     delay: Duration,
     count: Arc<Mutex<u32>>,
-    handle_committee_info_request_result: Option<SuiResult<CommitteeInfoResponse>>,
     handle_object_info_request_result: Option<SuiResult<ObjectInfoResponse>>,
 }
 
@@ -176,15 +182,8 @@ impl MockAuthorityApi {
         MockAuthorityApi {
             delay,
             count,
-            handle_committee_info_request_result: None,
             handle_object_info_request_result: None,
         }
-    }
-    pub fn set_handle_committee_info_request_result(
-        &mut self,
-        result: SuiResult<CommitteeInfoResponse>,
-    ) {
-        self.handle_committee_info_request_result = Some(result);
     }
 
     pub fn set_handle_object_info_request(&mut self, result: SuiResult<ObjectInfoResponse>) {
@@ -199,7 +198,7 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _transaction: Transaction,
     ) -> Result<HandleTransactionResponse, SuiError> {
-        unreachable!();
+        unimplemented!();
     }
 
     /// Execute a certificate.
@@ -207,7 +206,7 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _certificate: CertifiedTransaction,
     ) -> Result<HandleCertificateResponse, SuiError> {
-        unreachable!()
+        unimplemented!()
     }
 
     /// Handle Object information requests for this account.
@@ -243,14 +242,14 @@ impl AuthorityAPI for MockAuthorityApi {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unreachable!();
+        unimplemented!();
     }
 
-    async fn handle_committee_info_request(
+    async fn handle_system_state_object(
         &self,
-        _request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
-        self.handle_committee_info_request_result.clone().unwrap()
+        _request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
+        unimplemented!();
     }
 }
 
@@ -296,10 +295,10 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         unimplemented!()
     }
 
-    async fn handle_committee_info_request(
+    async fn handle_system_state_object(
         &self,
-        _request: CommitteeInfoRequest,
-    ) -> Result<CommitteeInfoResponse, SuiError> {
+        _request: SystemStateRequest,
+    ) -> Result<SuiSystemState, SuiError> {
         unimplemented!()
     }
 }
@@ -313,6 +312,10 @@ impl HandleTransactionTestAuthorityClient {
 
     pub fn set_tx_info_response(&mut self, resp: HandleTransactionResponse) {
         self.tx_info_resp_to_return = Ok(resp);
+    }
+
+    pub fn set_tx_info_response_error(&mut self, error: SuiError) {
+        self.tx_info_resp_to_return = Err(error);
     }
 
     pub fn reset_tx_info_response(&mut self) {

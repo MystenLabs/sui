@@ -78,9 +78,13 @@ Single-writer objects are owned by one address. In Sui, transactions affecting o
 
 A [smart contract](https://en.wikipedia.org/wiki/Smart_contract) is an agreement based upon the protocol for conducting transactions in a blockchain. In Sui, smart contracts are written in the [Move](https://github.com/MystenLabs/awesome-move) programming language.
 
-### Sui/SUI
+### Sui
 
-Sui refers to the Sui blockchain, the SUI currency, and the [Sui open source project](https://github.com/MystenLabs/sui/) as a whole.
+Sui refers to the Sui blockchain, and the [Sui open source project](https://github.com/MystenLabs/sui/) as a whole.
+
+### SUI
+
+SUI is the native token to the Sui network.
 
 ### Total order
 
@@ -96,16 +100,13 @@ More *complex transactions* affecting objects that are shared or owned by multip
 
 ### Transfer
 
-A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the
-[Sui CLI client](../build/cli-client.md) command line interface. It is one of the more common of many commands
-available in the CLI client.
+A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the [Sui CLI client](../build/cli-client.md) command line interface. It is one of the more common of many commands available in the CLI client.
 
 For more information, see [Transferring objects](../build/cli-client.md#transferring-objects).
 
 ### Validator
 
-A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui,
-validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
+A validator in Sui plays a passive role analogous to the more active role of validators and minors in other blockchains. In Sui, validators do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
 certificate.
 
 For more information, see [Validators](architecture/validators.md).

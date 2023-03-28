@@ -1,43 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    is,
-    SuiObject,
-    type GetObjectDataResponse,
-    normalizeSuiAddress,
-    type MoveSuiSystemObjectFields,
-} from '@mysten/sui.js';
+import { useRpcClient } from '@mysten/core';
+import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import { useRpc } from './useRpc';
-
 export function useGetSystemObject() {
-    // TODO: Replace with `sui_getSuiSystemState` once it's supported:
-    const { data, ...query } = useGetObject('0x5');
-
-    const systemObject =
-        data &&
-        is(data.details, SuiObject) &&
-        data.details.data.dataType === 'moveObject'
-            ? (data.details.data.fields as MoveSuiSystemObjectFields)
-            : null;
-
-    return {
-        ...query,
-        data: systemObject,
-    };
+    const rpc = useRpcClient();
+    return useQuery(['system', 'state'], () => rpc.getLatestSuiSystemState());
 }
 
 export function useGetObject(
-    objectId: string
-): UseQueryResult<GetObjectDataResponse, unknown> {
-    const rpc = useRpc();
-    const normalizedObjId = normalizeSuiAddress(objectId);
+    objectId?: string | null
+): UseQueryResult<SuiObjectResponse, unknown> {
+    const rpc = useRpcClient();
+    const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     const response = useQuery(
         ['object', normalizedObjId],
-        async () => rpc.getObject(normalizedObjId),
-        { enabled: !!objectId }
+        async () =>
+            rpc.getObject({
+                id: normalizedObjId!,
+                options: {
+                    showType: true,
+                    showContent: true,
+                    showOwner: true,
+                    showPreviousTransaction: true,
+                    showStorageRebate: true,
+                    showDisplay: true,
+                },
+            }),
+        { enabled: !!normalizedObjId }
     );
 
     return response;

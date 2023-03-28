@@ -3,16 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::{random_committee_key_pairs, sha3_hash, AuthorityKeyPair, AuthorityPublicKey};
+use crate::crypto::{random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey};
 use crate::error::{SuiError, SuiResult};
-use crate::messages::CommitteeInfo;
+use crate::multiaddr::Multiaddr;
 use fastcrypto::traits::KeyPair;
-use itertools::Itertools;
 use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -28,62 +26,75 @@ pub type StakeUnit = u64;
 
 pub type CommitteeDigest = [u8; 32];
 
+// The voting power, quorum threshold and max voting power are defined in the `voting_power.move` module.
+// We're following the very same convention in the validator binaries.
+
+/// Set total_voting_power as 10_000 by convention. Individual voting powers can be interpreted
+/// as easily understandable basis points (e.g., voting_power: 100 = 1%, voting_power: 1 = 0.01%).
+/// Fixing the total voting power allows clients to hardcode the quorum threshold and total_voting power rather
+/// than recomputing these.
+pub const TOTAL_VOTING_POWER: StakeUnit = 10_000;
+
+/// Quorum threshold for our fixed voting power--any message signed by this much voting power can be trusted
+/// up to BFT assumptions
+pub const QUORUM_THRESHOLD: StakeUnit = 6_667;
+
+/// Validity threshold defined by f+1
+pub const VALIDITY_THRESHOLD: StakeUnit = 3_334;
+
 #[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Committee {
     pub epoch: EpochId,
-    pub protocol_version: ProtocolVersion,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
-    pub total_votes: StakeUnit,
-    #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
-    #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
-    #[serde(skip)]
-    loaded: bool,
 }
 
 impl Committee {
-    pub fn new(
-        epoch: EpochId,
-        protocol_version: ProtocolVersion,
-        voting_rights: BTreeMap<AuthorityName, StakeUnit>,
-    ) -> SuiResult<Self> {
+    pub fn new(epoch: EpochId, voting_rights: BTreeMap<AuthorityName, StakeUnit>) -> Self {
         let mut voting_rights: Vec<(AuthorityName, StakeUnit)> =
             voting_rights.iter().map(|(a, s)| (*a, *s)).collect();
 
-        fp_ensure!(
-            // Actual committee size is enforced in sui_system.move.
-            // This is just to ensure that choose_multiple_weighted can't fail.
-            voting_rights.len() < u32::MAX.try_into().unwrap(),
-            SuiError::InvalidCommittee("committee has too many members".into())
-        );
-
-        fp_ensure!(
-            !voting_rights.is_empty(),
-            SuiError::InvalidCommittee("committee has 0 members".into())
-        );
-
-        fp_ensure!(
-            voting_rights.iter().any(|(_, s)| *s != 0),
-            SuiError::InvalidCommittee(
-                "at least one committee member must have non-zero stake.".into()
-            )
-        );
+        assert!(!voting_rights.is_empty());
+        assert!(voting_rights.iter().any(|(_, s)| *s != 0));
 
         voting_rights.sort_by_key(|(a, _)| *a);
-        let total_votes = voting_rights.iter().map(|(_, votes)| *votes).sum();
+        let total_votes: StakeUnit = voting_rights.iter().map(|(_, votes)| *votes).sum();
+        assert_eq!(total_votes, TOTAL_VOTING_POWER);
 
         let (expanded_keys, index_map) = Self::load_inner(&voting_rights);
 
-        Ok(Committee {
+        Committee {
             epoch,
-            protocol_version,
             voting_rights,
-            total_votes,
             expanded_keys,
             index_map,
-            loaded: true,
-        })
+        }
+    }
+
+    /// Normalize the given weights to TOTAL_VOTING_POWER and create the committee.
+    /// Used for testing only: a production system is using the voting weights
+    /// of the Sui System object.
+    pub fn new_for_testing_with_normalized_voting_power(
+        epoch: EpochId,
+        mut voting_weights: BTreeMap<AuthorityName, StakeUnit>,
+    ) -> Self {
+        let num_nodes = voting_weights.len();
+        let total_votes: StakeUnit = voting_weights.iter().map(|(_, votes)| *votes).sum();
+
+        let normalization_coef = TOTAL_VOTING_POWER as f64 / total_votes as f64;
+        let mut total_sum = 0;
+        for (idx, (_auth, weight)) in voting_weights.iter_mut().enumerate() {
+            if idx < num_nodes - 1 {
+                *weight = (*weight as f64 * normalization_coef).floor() as u64; // adjust the weights following the normalization coef
+                total_sum += *weight;
+            } else {
+                // the last element is taking all the rest
+                *weight = TOTAL_VOTING_POWER - total_sum;
+            }
+        }
+
+        Self::new(epoch, voting_weights)
     }
 
     // We call this if these have not yet been computed
@@ -95,9 +106,14 @@ impl Committee {
     ) {
         let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
-            // TODO: Verify all code path to make sure we always have valid public keys.
-            // e.g. when a new validator is registering themself on-chain.
-            .map(|(addr, _)| (*addr, (*addr).try_into().expect("Invalid Authority Key")))
+            .map(|(addr, _)| {
+                (
+                    *addr,
+                    (*addr)
+                        .try_into()
+                        .expect("Validator pubkey is always verified on-chain"),
+                )
+            })
             .collect();
 
         let index_map: HashMap<AuthorityName, usize> = voting_rights
@@ -108,21 +124,7 @@ impl Committee {
         (expanded_keys, index_map)
     }
 
-    pub fn reload_fields(&mut self) {
-        let (expanded_keys, index_map) = Committee::load_inner(&self.voting_rights);
-        self.expanded_keys = expanded_keys;
-        self.index_map = index_map;
-        self.loaded = true;
-    }
-
     pub fn authority_index(&self, author: &AuthorityName) -> Option<u32> {
-        if !self.loaded {
-            return self
-                .voting_rights
-                .iter()
-                .position(|(a, _)| a == author)
-                .map(|i| i as u32);
-        }
         self.index_map.get(author).map(|i| *i as u32)
     }
 
@@ -134,13 +136,15 @@ impl Committee {
         self.epoch
     }
 
-    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<&AuthorityPublicKey> {
+        debug_assert_eq!(self.expanded_keys.len(), self.voting_rights.len());
         match self.expanded_keys.get(authority) {
-            // TODO: Check if this is unnecessary copying.
-            Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            Some(v) => Ok(v),
+            None => Err(SuiError::InvalidCommittee(format!(
+                "Authority #{} not found, committee size {}",
+                authority,
+                self.expanded_keys.len()
+            ))),
         }
     }
 
@@ -215,62 +219,24 @@ impl Committee {
         }
     }
 
+    pub fn total_votes(&self) -> StakeUnit {
+        TOTAL_VOTING_POWER
+    }
+
     pub fn quorum_threshold(&self) -> StakeUnit {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
-        2 * self.total_votes / 3 + 1
+        QUORUM_THRESHOLD
     }
 
     pub fn validity_threshold(&self) -> StakeUnit {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        validity_threshold(self.total_votes)
+        VALIDITY_THRESHOLD
     }
 
-    #[inline]
     pub fn threshold<const STRENGTH: bool>(&self) -> StakeUnit {
         if STRENGTH {
-            self.quorum_threshold()
+            QUORUM_THRESHOLD
         } else {
-            self.validity_threshold()
+            VALIDITY_THRESHOLD
         }
-    }
-
-    /// Given a sequence of (AuthorityName, value) for values, provide the
-    /// value at the particular threshold by stake. This orders all provided values
-    /// in ascending order and pick the appropriate value that has under it threshold
-    /// stake. You may use the function `validity_threshold` or `quorum_threshold` to
-    /// pick the f+1 (1/3 stake) or 2f+1 (2/3 stake) thresholds respectively.
-    ///
-    /// This function may be used in a number of settings:
-    /// - When we pass in a set of values produced by authorities with at least 2/3 stake
-    ///   and pick a validity_threshold it ensures that the resulting value is either itself
-    ///   or is in between values provided by an honest node.
-    /// - When we pass in values associated with the totality of stake and set a threshold
-    ///   of quorum_threshold, we ensure that at least a majority of honest nodes (ie >1/3
-    ///   out of the 2/3 threshold) have a value smaller than the value returned.
-    pub fn robust_value<A, V>(
-        &self,
-        items: impl Iterator<Item = (A, V)>,
-        threshold: StakeUnit,
-    ) -> (AuthorityName, V)
-    where
-        A: Borrow<AuthorityName> + Ord,
-        V: Ord,
-    {
-        debug_assert!(threshold < self.total_votes);
-
-        let items = items
-            .map(|(a, v)| (v, self.weight(a.borrow()), *a.borrow()))
-            .sorted();
-        let mut total = 0;
-        for (v, s, a) in items {
-            total += s;
-            if threshold <= total {
-                return (a, v);
-            }
-        }
-        unreachable!();
     }
 
     pub fn num_members(&self) -> usize {
@@ -296,44 +262,32 @@ impl Committee {
     }
 
     // ===== Testing-only methods =====
-
-    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
-    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
-        let key_pairs: Vec<_> = random_committee_key_pairs().into_iter().collect();
-        let committee = Self::new(
+    //
+    pub fn new_simple_test_committee_of_size(size: usize) -> (Self, Vec<AuthorityKeyPair>) {
+        let key_pairs: Vec<_> = random_committee_key_pairs_of_size(size)
+            .into_iter()
+            .collect();
+        let committee = Self::new_for_testing_with_normalized_voting_power(
             0,
-            ProtocolVersion::MIN,
             key_pairs
                 .iter()
                 .map(|key| {
                     (AuthorityName::from(key.public()), /* voting right */ 1)
                 })
                 .collect(),
-        )
-        .unwrap();
+        );
         (committee, key_pairs)
     }
-}
 
-impl TryFrom<CommitteeInfo> for Committee {
-    type Error = SuiError;
-    fn try_from(committee_info: CommitteeInfo) -> Result<Self, Self::Error> {
-        Self::new(
-            committee_info.epoch,
-            committee_info.protocol_version,
-            committee_info
-                .committee_info
-                .into_iter()
-                .collect::<BTreeMap<_, _>>(),
-        )
+    /// Generate a simple committee with 4 validators each with equal voting stake of 1.
+    pub fn new_simple_test_committee() -> (Self, Vec<AuthorityKeyPair>) {
+        Self::new_simple_test_committee_of_size(4)
     }
 }
 
 impl PartialEq for Committee {
     fn eq(&self, other: &Self) -> bool {
-        self.epoch == other.epoch
-            && self.voting_rights == other.voting_rights
-            && self.total_votes == other.total_votes
+        self.epoch == other.epoch && self.voting_rights == other.voting_rights
     }
 }
 
@@ -341,7 +295,6 @@ impl Hash for Committee {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.epoch.hash(state);
         self.voting_rights.hash(state);
-        self.total_votes.hash(state);
     }
 }
 
@@ -359,30 +312,30 @@ impl Display for Committee {
     }
 }
 
-pub fn validity_threshold(total_stake: StakeUnit) -> StakeUnit {
-    // If N = 3f + 1 + k (0 <= k < 3)
-    // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-    (total_stake + 2) / 3
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkMetadata {
+    pub network_address: Multiaddr,
+    pub narwhal_primary_address: Multiaddr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CommitteeWithNetAddresses {
+pub struct CommitteeWithNetworkMetadata {
     pub committee: Committee,
-    pub net_addresses: BTreeMap<AuthorityName, Vec<u8>>,
+    pub network_metadata: BTreeMap<AuthorityName, NetworkMetadata>,
 }
 
-impl CommitteeWithNetAddresses {
-    pub fn digest(&self) -> CommitteeDigest {
-        sha3_hash(self)
+impl CommitteeWithNetworkMetadata {
+    pub fn epoch(&self) -> EpochId {
+        self.committee.epoch()
     }
 }
 
-impl Display for CommitteeWithNetAddresses {
+impl Display for CommitteeWithNetworkMetadata {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "CommitteeWithNetAddresses (committee={}, net_addresses={:?})",
-            self.committee, self.net_addresses
+            "CommitteeWithNetworkMetadata (committee={}, network_metadata={:?})",
+            self.committee, self.network_metadata
         )
     }
 }
@@ -407,7 +360,7 @@ mod test {
         authorities.insert(a2, 1);
         authorities.insert(a3, 1);
 
-        let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
+        let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
 
         assert_eq!(committee.shuffle_by_stake(None, None).len(), 3);
 
@@ -440,35 +393,5 @@ mod test {
 
         let res = committee.shuffle_by_stake(None, Some(&BTreeSet::new()));
         assert_eq!(0, res.len());
-    }
-
-    #[test]
-    fn test_robust_value() {
-        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
-        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
-        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
-        let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
-        let a1: AuthorityName = sec1.public().into();
-        let a2: AuthorityName = sec2.public().into();
-        let a3: AuthorityName = sec3.public().into();
-        let a4: AuthorityName = sec4.public().into();
-
-        let mut authorities = BTreeMap::new();
-        authorities.insert(a1, 1);
-        authorities.insert(a2, 1);
-        authorities.insert(a3, 1);
-        authorities.insert(a4, 1);
-        let committee = Committee::new(0, ProtocolVersion::MIN, authorities).unwrap();
-        let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
-        assert_eq!(
-            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
-            (a3, 2)
-        );
-
-        let items = vec![(a1, "a"), (a2, "b"), (a3, "c"), (a4, "d")];
-        assert_eq!(
-            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
-            (a3, "c")
-        );
     }
 }

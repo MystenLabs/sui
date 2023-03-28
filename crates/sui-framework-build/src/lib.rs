@@ -7,5 +7,6 @@ pub mod compiled_package;
 #[path = "unit_tests/build_tests.rs"]
 mod build_tests;
 
+const SUI_SYSTEM_PACKAGE_NAME: &str = "SuiSystem";
 const SUI_PACKAGE_NAME: &str = "Sui";
 const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";

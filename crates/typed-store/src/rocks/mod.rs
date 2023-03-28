@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-mod errors;
+pub mod errors;
 pub(crate) mod iter;
 pub(crate) mod keys;
+pub mod util;
 pub(crate) mod values;
 
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::checkpoint::Checkpoint;
+use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -166,12 +167,14 @@ macro_rules! retry_transaction_forever {
 pub struct DBWithThreadModeWrapper {
     pub underlying: rocksdb::DBWithThreadMode<MultiThreaded>,
     pub metric_conf: MetricConf,
+    pub db_path: PathBuf,
 }
 
 #[derive(Debug)]
 pub struct OptimisticTransactionDBWrapper {
     pub underlying: rocksdb::OptimisticTransactionDB<MultiThreaded>,
     pub metric_conf: MetricConf,
+    pub db_path: PathBuf,
 }
 
 /// Thin wrapper to unify interface across different db types
@@ -378,17 +381,14 @@ impl RocksDB {
         delegate_call!(self.flush())
     }
 
-    pub fn checkpoint(&self, path: &Path) -> Result<(), rocksdb::Error> {
-        match self {
-            Self::DBWithThreadMode(d) => {
-                let checkpoint = Checkpoint::new(&d.underlying)?;
-                checkpoint.create_checkpoint(path)?;
-            }
-            Self::OptimisticTransactionDB(d) => {
-                let checkpoint = Checkpoint::new(&d.underlying)?;
-                checkpoint.create_checkpoint(path)?;
-            }
-        }
+    pub fn checkpoint(&self, path: &Path) -> Result<(), TypedStoreError> {
+        let checkpoint = match self {
+            Self::DBWithThreadMode(d) => Checkpoint::new(&d.underlying)?,
+            Self::OptimisticTransactionDB(d) => Checkpoint::new(&d.underlying)?,
+        };
+        checkpoint
+            .create_checkpoint(path)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
         Ok(())
     }
 
@@ -487,6 +487,14 @@ impl RocksDBBatch {
         delegate_batch_call!(self.put_cf(cf, key, value))
     }
 
+    pub fn merge_cf<K, V>(&mut self, cf: &impl AsColumnFamilyRef, key: K, value: V)
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        delegate_batch_call!(self.merge_cf(cf, key, value))
+    }
+
     pub fn delete_range_cf<K: AsRef<[u8]>>(
         &mut self,
         cf: &impl AsColumnFamilyRef,
@@ -544,7 +552,7 @@ pub struct DBMap<K, V> {
     _phantom: PhantomData<fn(K) -> V>,
     // the rocksDB ColumnFamily under which the map is stored
     cf: String,
-    opts: ReadWriteOptions,
+    pub opts: ReadWriteOptions,
     db_metrics: Arc<DBMetrics>,
     read_sample_interval: SamplingInterval,
     write_sample_interval: SamplingInterval,
@@ -684,8 +692,10 @@ impl<K, V> DBMap<K, V> {
             .iterator_cf(&self.cf(), self.opts.readopts(), IteratorMode::Start)
     }
 
-    pub fn flush(&self) -> Result<(), rocksdb::Error> {
-        self.rocksdb.flush_cf(&self.cf())
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        self.rocksdb
+            .flush_cf(&self.cf())
+            .map_err(|e| TypedStoreError::RocksDBError(e.into_string()))
     }
 
     pub fn set_options(&self, opts: &[(&str, &str)]) -> Result<(), rocksdb::Error> {
@@ -884,6 +894,10 @@ impl<K, V> DBMap<K, V> {
         DBTransaction::new_without_snapshot(&self.rocksdb)
     }
 
+    pub fn checkpoint_db(&self, path: &Path) -> Result<(), TypedStoreError> {
+        self.rocksdb.checkpoint(path)
+    }
+
     pub fn table_summary(&self) -> eyre::Result<TableSummary> {
         let mut num_keys = 0;
         let mut key_bytes_total = 0;
@@ -1065,7 +1079,7 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
                 Ok(())
             })?;
@@ -1127,8 +1141,48 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.batch.put_cf(&db.cf(), k_buf, v_buf);
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    /// merges a range of (key, value) pairs given as an iterator
+    pub fn merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
+        mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
+    ) -> Result<Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
+                self.batch.merge_cf(&db.cf(), k_buf, v_buf);
+                Ok(())
+            })?;
+        Ok(self)
+    }
+
+    /// similar to `merge_batch` but allows merge with partial values
+    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
+        mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, B)>,
+    ) -> Result<Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                self.batch.merge_cf(&db.cf(), k_buf, v);
                 Ok(())
             })?;
         Ok(self)
@@ -1168,7 +1222,7 @@ impl<'a> DBTransaction<'a> {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bincode::serialize(v.borrow())?;
+                let v_buf = bcs::to_bytes(v.borrow())?;
                 self.transaction.put_cf(&db.cf(), k_buf, v_buf)?;
                 Ok(())
             })?;
@@ -1214,7 +1268,7 @@ impl<'a> DBTransaction<'a> {
             .transaction
             .get_for_update_cf_opt(&db.cf(), k_buf, true, &db.opts.readopts())?
         {
-            Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+            Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
             None => Ok(None),
         }
     }
@@ -1228,7 +1282,7 @@ impl<'a> DBTransaction<'a> {
         self.transaction
             .get_cf_opt(&db.cf(), key_buf, &db.opts.readopts())
             .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))
-            .map(|res| res.and_then(|bytes| bincode::deserialize::<V>(&bytes).ok()))
+            .map(|res| res.and_then(|bytes| bcs::from_bytes::<V>(&bytes).ok()))
     }
 
     pub fn multi_get<J: Borrow<K>, K: Serialize + DeserializeOwned, V: DeserializeOwned>(
@@ -1249,7 +1303,7 @@ impl<'a> DBTransaction<'a> {
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {
-                Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+                Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
                 None => Ok(None),
             })
             .collect();
@@ -1435,7 +1489,7 @@ where
                 .report_metrics(&self.cf);
         }
         match res {
-            Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+            Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
             None => Ok(None),
         }
     }
@@ -1487,7 +1541,7 @@ where
             None
         };
         let key_buf = be_fix_int_ser(key)?;
-        let value_buf = bincode::serialize(value)?;
+        let value_buf = bcs::to_bytes(value)?;
         if report_metrics.is_some() {
             self.db_metrics
                 .op_metrics
@@ -1640,7 +1694,7 @@ where
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte? {
-                Some(data) => Ok(Some(bincode::deserialize(&data)?)),
+                Some(data) => Ok(Some(bcs::from_bytes(&data)?)),
                 None => Ok(None),
             })
             .collect();
@@ -1737,9 +1791,26 @@ pub struct DBOptions {
     pub rw_options: ReadWriteOptions,
 }
 
-/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
-pub fn default_db_options() -> DBOptions {
+/// Base options to be used across all rocksdb instances.
+pub fn base_db_options() -> DBOptions {
     let mut opt = rocksdb::Options::default();
+
+    // One common issue when running tests on Mac is that the default ulimit is too low,
+    // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
+    if let Some(limit) = fdlimit::raise_fd_limit() {
+        // on windows raise_fd_limit return None
+        opt.set_max_open_files((limit / 8) as i32);
+    }
+
+    let row_cache = rocksdb::Cache::new_lru_cache(300_000).expect("Cache is ok");
+    opt.set_row_cache(&row_cache);
+
+    // The table cache is locked for updates and this determines the number
+    // of shards, ie 2^10. Increase in case of lock contentions.
+    opt.set_table_cache_num_shard_bits(10);
+
+    opt.set_compression_type(rocksdb::DBCompressionType::None);
+
     // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
     // than the limits below.
     //
@@ -1765,6 +1836,39 @@ pub fn default_db_options() -> DBOptions {
         options: opt,
         rw_options: ReadWriteOptions::default(),
     }
+}
+
+/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
+pub fn default_db_options() -> DBOptions {
+    let mut opt = base_db_options();
+
+    // Set options mostly similar to those used in optimize_for_point_lookup(),
+    // except non-default binary and hash index, to hopefully reduce lookup latencies
+    // without causing any regression for scanning, with slightly more memory usages.
+    // https://github.com/facebook/rocksdb/blob/11cb6af6e5009c51794641905ca40ce5beec7fee/options/options.cc#L611-L621
+    let mut block_options = BlockBasedOptions::default();
+    // Configure a 64MiB block cache.
+    block_options.set_block_cache(&Cache::new_lru_cache(64 << 20).unwrap());
+    // Set a bloomfilter with 1% false positive rate.
+    block_options.set_bloom_filter(10.0, false);
+
+    // From https://github.com/EighteenZi/rocksdb_wiki/blob/master/Block-Cache.md#caching-index-and-filter-blocks
+    block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
+
+    opt.options.set_block_based_table_factory(&block_options);
+    // Set memtable bloomfilter.
+    opt.options.set_memtable_prefix_bloom_ratio(0.02);
+
+    opt
+}
+
+/// Creates a default RocksDB option, optimized for point lookup.
+pub fn point_lookup_db_options() -> DBOptions {
+    let mut db_options = default_db_options();
+    db_options
+        .options
+        .optimize_for_point_lookup(64 /* 64MB (default is 8) */);
+    db_options
 }
 
 /// Opens a database with options, and a number of column families that are created if they do not exist.
@@ -1841,6 +1945,7 @@ pub fn open_cf_opts<P: AsRef<Path>>(
             DBWithThreadModeWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: PathBuf::from(path),
             },
         )))
     })
@@ -1869,6 +1974,7 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
             OptimisticTransactionDBWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: PathBuf::from(path),
             },
         )))
     })
@@ -1930,6 +2036,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             DBWithThreadModeWrapper {
                 underlying: rocksdb,
                 metric_conf,
+                db_path: secondary_path,
             },
         )))
     })
