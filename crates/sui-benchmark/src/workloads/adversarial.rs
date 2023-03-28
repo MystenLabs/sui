@@ -427,7 +427,6 @@ impl Workload<dyn Payload> for AdversarialWorkload {
                 if tag.to_string().contains("::adversarial::Obj") {
                     self.df_parent_obj_ref = o.0;
                 }
-                println!("{}", tag);
             }
         }
         assert!(
