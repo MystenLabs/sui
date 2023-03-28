@@ -115,7 +115,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
-            debug!(?object_id, "Failed to get object: {:?}", e);
+            error!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
         })?;
         let options = options.unwrap_or_default();
@@ -188,7 +188,10 @@ impl ReadApiServer for ReadApi {
             .state
             .get_past_object_read(&object_id, version)
             .await
-            .map_err(|e| anyhow!("{e}"))?;
+            .map_err(|e| {
+                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?}");
+                anyhow!("{e}")
+            })?;
         let options = options.unwrap_or_default();
         match past_read {
             PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
@@ -288,7 +291,10 @@ impl ReadApiServer for ReadApi {
         if let Some((_, seq)) = self
             .state
             .get_transaction_checkpoint_sequence(&digest)
-            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| {
+                error!("Failed to get_transaction for transaction {digest:?}");
+                anyhow!("{e}")
+            })?
         {
             temp_response.checkpoint_seq = Some(seq.into());
         }
