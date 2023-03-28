@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod get_checkpoints;
+mod get_owned_objects;
 mod pay_sui;
 mod query_transactions;
 mod rpc_command_processor;
@@ -111,6 +112,16 @@ impl Command {
         }
     }
 
+    pub fn new_get_owned_objects(address: Option<String>, from_file: Option<bool>) -> Self {
+        Self {
+            data: CommandData::GetOwnedObjects(GetOwnedObjects {
+                address: address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+                from_file,
+            }),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -129,6 +140,7 @@ pub enum CommandData {
     GetCheckpoints(GetCheckpoints),
     PaySui(PaySui),
     QueryTransactions(QueryTransactions),
+    GetOwnedObjects(GetOwnedObjects),
 }
 
 impl Default for CommandData {
@@ -158,6 +170,12 @@ pub struct PaySui {}
 pub struct QueryTransactions {
     pub address: Option<SuiAddress>,
     pub address_type: Option<AddressType>,
+    pub from_file: Option<bool>,
+}
+
+#[derive(Clone, Default)]
+pub struct GetOwnedObjects {
+    pub address: Option<SuiAddress>,
     pub from_file: Option<bool>,
 }
 

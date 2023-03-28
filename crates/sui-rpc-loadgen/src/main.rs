@@ -104,6 +104,17 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
+    #[clap(name = "get-owned-objects")]
+    GetOwnedObjects {
+        #[clap(long)]
+        address: Option<String>,
+
+        #[clap(long)]
+        from_file: Option<bool>,
+
+        #[clap(flatten)]
+        common: CommonOptions,
+    },
 }
 
 fn get_keypair() -> Result<SignerInfo> {
@@ -181,6 +192,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             from_file,
         } => (
             Command::new_query_transaction_blocks(address, address_type, from_file),
+            common,
+            false,
+        ),
+        ClapCommand::GetOwnedObjects {
+            common,
+            address,
+            from_file,
+        } => (
+            Command::new_get_owned_objects(address, from_file),
             common,
             false,
         ),

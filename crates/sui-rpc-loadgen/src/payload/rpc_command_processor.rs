@@ -76,6 +76,7 @@ impl RpcCommandProcessor {
             CommandData::GetCheckpoints(ref v) => self.process(v, signer_info).await,
             CommandData::PaySui(ref v) => self.process(v, signer_info).await,
             CommandData::QueryTransactions(ref v) => self.process(v, signer_info).await,
+            CommandData::GetOwnedObjects(ref v) => self.process(v, signer_info).await,
         }
     }
 
@@ -221,6 +222,12 @@ impl Processor for RpcCommandProcessor {
     async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>> {
         let clients = self.get_clients().await?;
         if let CommandData::QueryTransactions(command_data) = &config.command.data {
+            if let Some(true) = command_data.from_file {
+                // TODO: how to generalize for other commands, flexibility beyond addresses
+                self.load_cache_from_file("addresses");
+            }
+        }
+        if let CommandData::GetOwnedObjects(command_data) = &config.command.data {
             if let Some(true) = command_data.from_file {
                 // TODO: how to generalize for other commands, flexibility beyond addresses
                 self.load_cache_from_file("addresses");
