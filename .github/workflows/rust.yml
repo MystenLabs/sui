@@ -270,11 +270,13 @@ jobs:
       - name: Prover Setup
         run: |
           crates/sui-move/scripts/prover_setup.sh
-      - name: Install Sui CLI
-        run: |
-          cargo install --locked --bin sui --path crates/sui
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
 
       - name: Prover Run
+        working-directory: crates/sui-framework/packages
         run: |
           set -o pipefail
           DOTNET_ROOT="$HOME/.dotnet"
