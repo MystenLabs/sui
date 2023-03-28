@@ -247,7 +247,7 @@ The returned value is the processed template for a type. For example, for Sui Ca
 
 ### Reading transactions
 
-The `sui_getTransaction`and `sui_multiGetTransaction` functions now take an additional optional parameter called `options`. Use `options` to specify which fields to retrieve, such as transaction, effects, or events. By default, it returns only the transaction digest.
+The `sui_getTransactionBlock`and `sui_multiGetTransaction` functions now take an additional optional parameter called `options`. Use `options` to specify which fields to retrieve, such as transaction, effects, or events. By default, it returns only the transaction digest.
 
 ```tsx
 import { JsonRpcProvider } from "@mysten/sui.js";

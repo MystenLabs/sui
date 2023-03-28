@@ -16,7 +16,7 @@
   },
   "methods": [
     {
-      "name": "sui_devInspectTransaction",
+      "name": "sui_devInspectTransactionBlock",
       "tags": [
         {
           "name": "Write API"
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "sui_dryRunTransaction",
+      "name": "sui_dryRunTransactionBlock",
       "tags": [
         {
           "name": "Write API"
@@ -90,7 +90,7 @@
       }
     },
     {
-      "name": "sui_executeTransaction",
+      "name": "sui_executeTransactionBlock",
       "tags": [
         {
           "name": "Write API"
@@ -289,8 +289,7 @@
             }
           }
         }
-      ],
-      "deprecated": true
+      ]
     },
     {
       "name": "sui_getCheckpoint",
@@ -739,7 +738,7 @@
       ]
     },
     {
-      "name": "sui_getTotalTransactionNumber",
+      "name": "sui_getTotalTransactionBlocks",
       "tags": [
         {
           "name": "Read API"
@@ -766,7 +765,7 @@
       ]
     },
     {
-      "name": "sui_getTransaction",
+      "name": "sui_getTransactionBlock",
       "tags": [
         {
           "name": "Read API"
@@ -979,7 +978,7 @@
       }
     },
     {
-      "name": "sui_multiGetTransactions",
+      "name": "sui_multiGetTransactionBlocks",
       "tags": [
         {
           "name": "Read API"
@@ -1788,7 +1787,7 @@
       }
     },
     {
-      "name": "suix_queryTransactions",
+      "name": "suix_queryTransactionBlocks",
       "tags": [
         {
           "name": "Extended API"
@@ -1834,7 +1833,56 @@
         "schema": {
           "$ref": "#/components/schemas/Page_for_TransactionBlockResponse_and_TransactionDigest"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified query criteria",
+          "params": [
+            {
+              "name": "query",
+              "value": {
+                "filter": {
+                  "InputObject": "0x93633829fcba6d6e0ccb13d3dbfe7614b81ea76b255e5d435032cd8595f37eb8"
+                },
+                "options": null
+              }
+            },
+            {
+              "name": "cursor",
+              "value": "HxidAfFfyr4kXSiWeVq1J6Tk526YUVDoSUY5PSnS4tEJ"
+            },
+            {
+              "name": "limit",
+              "value": 100
+            },
+            {
+              "name": "descending_order",
+              "value": false
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "data": [
+                {
+                  "digest": "GUPcK4cmRmgsTFr52ab9f6fnzNVg3Lz6hF2aXFcsRzaD"
+                },
+                {
+                  "digest": "B2iV1SVbBjgTKfbJKPQrvTT6F3kNdekFuBwY9tQcAxV2"
+                },
+                {
+                  "digest": "8QrPa4x9iNG5r2zQfmeH8pJoVjjtq9AGzp8rp2fxi8Sk"
+                },
+                {
+                  "digest": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F"
+                }
+              ],
+              "nextCursor": "3nek86HEjXZ7K3EtrAcBG4wMrCS21gqr8BqwwC6M6P7F",
+              "hasNextPage": false
+            }
+          }
+        }
+      ]
     },
     {
       "name": "suix_subscribeEvent",
