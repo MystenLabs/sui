@@ -6,7 +6,7 @@ use crate::{
     traits::{ReliableNetwork, UnreliableNetwork},
     CancelOnDropHandler, RetryConfig,
 };
-use anemo::PeerId;
+use anemo::{PeerId, Request};
 use anyhow::format_err;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -115,6 +115,8 @@ impl PrimaryToPrimaryRpc for anemo::Network {
         let peer = self
             .peer(peer_id)
             .ok_or_else(|| format_err!("Network has no connection with peer {peer_id}"))?;
+        let mut request = Request::new(request);
+        request.set_timeout(Duration::from_secs(15));
         let response = PrimaryToPrimaryClient::new(peer)
             .fetch_certificates(request)
             .await
