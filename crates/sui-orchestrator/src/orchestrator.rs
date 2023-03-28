@@ -361,11 +361,6 @@ impl Orchestrator {
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<MeasurementsCollection> {
-        display::action(format!(
-            "Scraping metrics (at least {}s)",
-            parameters.duration.as_secs()
-        ));
-
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
@@ -375,6 +370,19 @@ impl Orchestrator {
             SuiProtocol::CLIENT_METRICS_PORT
         );
         let ssh_command = SshCommand::new(move |_| command.clone());
+
+        // Wait until all clients and nodes are running.
+        display::action("Wait until all clients and nodes are reachable");
+        self.ssh_manager
+            .wait_for_success(instances.iter(), &ssh_command)
+            .await;
+        display::done();
+
+        // Start scraping metrics.
+        display::action(format!(
+            "Scraping metrics (at least {}s)",
+            parameters.duration.as_secs()
+        ));
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
         let mut interval = time::interval(self.scrape_interval);
@@ -512,9 +520,6 @@ impl Orchestrator {
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
-
-            // TODO: Detect when the client's binary is compiled.
-            time::sleep(Duration::from_secs(60)).await;
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.collect_metrics(&parameters).await?;

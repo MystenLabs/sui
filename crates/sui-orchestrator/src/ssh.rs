@@ -177,6 +177,7 @@ impl SshConnectionManager {
             .collect::<SshResult<_>>()
     }
 
+    /// Wait until a command running in the background returns or started.
     pub async fn wait_for_command<'a, I, C>(
         &self,
         instances: I,
@@ -200,6 +201,20 @@ impl SshConnectionManager {
             }
         }
         Ok(())
+    }
+
+    pub async fn wait_for_success<'a, I, C>(&self, instances: I, command: &SshCommand<C>)
+    where
+        I: Iterator<Item = &'a Instance> + Clone,
+        C: Fn(usize) -> String + Clone + Send + 'static,
+    {
+        loop {
+            sleep(Self::RETRY_DELAY).await;
+
+            if self.execute(instances.clone(), command).await.is_ok() {
+                break;
+            }
+        }
     }
 }
 
