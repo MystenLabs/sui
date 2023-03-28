@@ -8,6 +8,7 @@ use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
@@ -1508,7 +1509,7 @@ fn process_package(
                 .iter()
                 .zip(dependency_objects.iter())
                 .all(|(dependency, obj_opt)| obj_opt.is_some()
-                    || to_be_published_addresses.contains(dependency))
+                    || to_be_published_addresses.contains(&AccountAddress::from(*dependency)))
         );
     }
     let loaded_dependencies: Vec<_> = dependencies

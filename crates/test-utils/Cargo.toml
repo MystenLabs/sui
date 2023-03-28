@@ -19,7 +19,7 @@ serde_json = "1.0.88"
 rand = "0.8.5"
 sui = { path = "../sui" }
 sui-config = { path = "../sui-config" }
-sui-core = { path = "../sui-core" }
+sui-core = { path = "../sui-core", features = ["test-utils"] }
 sui-framework = { path = "../sui-framework" }
 sui-framework-build = { path = "../sui-framework-build" }
 sui-json-rpc = { path = "../sui-json-rpc" }
@@ -27,7 +27,7 @@ sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-node = { path = "../sui-node" }
 sui-protocol-config = { path = "../sui-protocol-config" }
 sui-swarm = { path = "../sui-swarm" }
-sui-types = { path = "../sui-types" }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 sui-keys = { path = "../sui-keys" }
 sui-sdk = { path = "../sui-sdk" }
 mysten-metrics = { path = "../mysten-metrics"}

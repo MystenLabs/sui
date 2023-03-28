@@ -27,6 +27,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 test-fuzz = "3.0.4"
 workspace-hack.workspace = true
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 
 sui-adapter = { path = "../sui-adapter" }
 sui-framework-build = { path = "../sui-framework-build" }

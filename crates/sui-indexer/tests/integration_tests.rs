@@ -753,7 +753,7 @@ pub mod pg_integration_test {
         }
 
         // Not exists
-        let obj_id = ObjectID::from([42; 32]);
+        let obj_id = ObjectID::new([42; 32]);
         let resp = indexer_rpc_client
             .get_object(obj_id, Some(show_all_content.clone()))
             .await
