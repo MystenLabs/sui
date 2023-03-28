@@ -1226,6 +1226,7 @@ subtle = { version = "2", default-features = false, features = ["i128"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full"] }
 sync_wrapper = { version = "0.1", default-features = false }
 synstructure = { version = "0.12" }
 sysinfo = { version = "0.27" }

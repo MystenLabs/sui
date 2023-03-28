@@ -60,6 +60,8 @@ use crate::{
 
 use super::{context::*, types::*};
 
+sui_macros::checked_arithmetic! {
+
 pub fn execute<S: StorageView, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     vm: &MoveVM,
@@ -1517,4 +1519,6 @@ impl fmt::Display for PrimitiveArgumentLayout {
             PrimitiveArgumentLayout::Address => write!(f, "address"),
         }
     }
+}
+
 }
