@@ -27,7 +27,7 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{
     SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -62,7 +62,6 @@ use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::{IndexerStore, TemporaryEpochStore};
-use crate::types::SuiTransactionBlockFullResponse;
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 
@@ -406,11 +405,11 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn compose_full_transaction_response(
+    async fn compose_sui_transaction_block_response(
         &self,
         tx: Transaction,
         options: Option<SuiTransactionBlockResponseOptions>,
-    ) -> Result<SuiTransactionBlockFullResponse, IndexerError> {
+    ) -> Result<SuiTransactionBlockResponse, IndexerError> {
         let transaction: SuiTransactionBlock =
             serde_json::from_str(&tx.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
@@ -462,17 +461,18 @@ impl IndexerStore for PgIndexerStore {
             /* descending_order */ false,
         )?;
 
-        Ok(SuiTransactionBlockFullResponse {
+        Ok(SuiTransactionBlockResponse {
             digest: tx_digest,
-            transaction,
+            transaction: Some(transaction),
             raw_transaction: tx.raw_transaction,
-            effects,
+            effects: Some(effects),
             confirmed_local_execution: tx.confirmed_local_execution,
-            timestamp_ms: tx.timestamp_ms as u64,
-            checkpoint: tx.checkpoint_sequence_number as u64,
-            events: SuiTransactionBlockEvents { data: events.data },
+            timestamp_ms: tx.timestamp_ms.map(|t| t as u64),
+            checkpoint: tx.checkpoint_sequence_number.map(|c| c as u64),
+            events: Some(SuiTransactionBlockEvents { data: events.data }),
             object_changes,
             balance_changes,
+            errors: vec![],
         })
     }
 
@@ -1038,6 +1038,17 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
+    fn persist_fast_path(&self, tx: Transaction) -> Result<usize, IndexerError> {
+        transactional!(&self.cp, |conn| {
+            diesel::insert_into(transactions::table)
+                .values(vec![tx])
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .map_err(IndexerError::from)
+                .context("Failed writing transactions to PostgresDB")
+        })
+    }
+
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
         let TemporaryCheckpointStore {
             checkpoint,
@@ -1056,7 +1067,13 @@ impl IndexerStore for PgIndexerStore {
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
                     .values(transaction_chunk)
-                    .on_conflict_do_nothing()
+                    .on_conflict(transactions::transaction_digest)
+                    .do_update()
+                    .set((
+                        transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
+                        transactions::checkpoint_sequence_number
+                            .eq(excluded(transactions::checkpoint_sequence_number)),
+                    ))
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;

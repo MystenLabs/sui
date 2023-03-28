@@ -37,7 +37,7 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
-use crate::types::SuiTransactionBlockFullResponse;
+use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlockResponseStore};
 use crate::utils::multi_get_full_transactions;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
@@ -202,12 +202,18 @@ where
             .iter()
             .flat_map(|tx| {
                 let effects = &tx.effects;
-                let created = effects.created().iter();
-                let created = created.map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
-                let mutated = effects.mutated().iter();
-                let mutated = mutated.map(|o: &OwnedObjectRef| (o, ObjectStatus::Mutated));
-                let unwrapped = effects.unwrapped().iter();
-                let unwrapped = unwrapped.map(|o: &OwnedObjectRef| (o, ObjectStatus::Unwrapped));
+                let created = effects
+                    .created()
+                    .iter()
+                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
+                let mutated = effects
+                    .mutated()
+                    .iter()
+                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Mutated));
+                let unwrapped = effects
+                    .unwrapped()
+                    .iter()
+                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Unwrapped));
                 created.chain(mutated).chain(unwrapped)
             })
             .fold(
@@ -276,9 +282,11 @@ where
         } = data;
 
         // Index transaction
-        let db_transactions = transactions
+        let temp_tx_store_iter = transactions
             .iter()
-            .map(|tx| tx.clone().try_into())
+            .map(|tx| TemporaryTransactionBlockResponseStore::from(tx.clone()));
+        let db_transactions: Vec<Transaction> = temp_tx_store_iter
+            .map(|tx| tx.try_into())
             .collect::<Result<Vec<Transaction>, _>>()?;
 
         // Index events
@@ -493,7 +501,7 @@ where
     }
 
     fn index_packages(
-        transactions: &[SuiTransactionBlockFullResponse],
+        transactions: &[CheckpointTransactionBlockResponse],
         changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = changed_objects
