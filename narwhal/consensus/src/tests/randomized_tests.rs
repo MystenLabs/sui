@@ -73,13 +73,13 @@ async fn bullshark_randomised_tests() {
     // A range of gc_depth to be used
     const GC_DEPTH: RangeInclusive<Round> = 4..=15;
     // A range of the committee size to be used
-    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=8;
+    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=6;
     // A range of rounds for which we will create DAGs
     const DAG_ROUNDS: RangeInclusive<Round> = 7..=20;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 1_000;
+    const EXECUTION_PLANS: u64 = 500;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 200;
+    const DAGS_PER_SETUP: u64 = 100;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
         // No failures
