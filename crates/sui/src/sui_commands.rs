@@ -379,8 +379,10 @@ async fn genesis(
 
     let mut genesis_conf = match from_config {
         Some(path) => {
-            let x = PersistedConfig::read(&path)?;
-            let y = GenesisConfig::new_for_benchmarks(&benchmark_ips.unwrap());
+            let mut x: GenesisConfig = PersistedConfig::read(&path)?;
+            x.parameters.chain_start_timestamp_ms = 0;
+            let mut y = GenesisConfig::new_for_benchmarks(&benchmark_ips.unwrap());
+            y.parameters.chain_start_timestamp_ms = 0;
             assert_eq!(x, y);
             x
         }
