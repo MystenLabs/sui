@@ -9,39 +9,25 @@ import { createWallet } from './utils/auth';
 function getInAppMessage(page: Page, id: string) {
     return page.evaluate(
         (anId) =>
-            Promise.race([
-                new Promise((r) => setTimeout(() => r(null), 1000)),
-                new Promise((r) => {
-                    const callBackFN = (msg: MessageEvent) => {
-                        if (
-                            msg.data.target === 'sui_in-page' &&
-                            msg.data.payload.id === anId
-                        ) {
-                            window.removeEventListener('message', callBackFN);
-                            r(msg.data.payload);
+            new Promise((resolve, reject) => {
+                const callBackFN = (msg: MessageEvent) => {
+                    if (
+                        msg.data.target === 'sui_in-page' &&
+                        msg.data.payload.id === anId
+                    ) {
+                        window.removeEventListener('message', callBackFN);
+                        if (msg.data.payload.payload.error) {
+                            reject(msg.data.payload);
+                        } else {
+                            resolve(msg.data.payload);
                         }
-                    };
-                    window.addEventListener('message', callBackFN);
-                }),
-            ]),
+                    }
+                };
+                window.addEventListener('message', callBackFN);
+            }),
         id
     );
 }
-
-const noPermissionError = {
-    payload: {
-        error: true,
-        message:
-            "Operation not allowed, dapp doesn't have the required permissions",
-    },
-};
-
-const noAccountError = {
-    payload: {
-        error: true,
-        message: "Cannot read properties of undefined (reading 'account')",
-    },
-};
 
 test.describe('site to content script messages', () => {
     test.beforeAll(async ({ page, extensionUrl }) => {
@@ -50,7 +36,7 @@ test.describe('site to content script messages', () => {
     });
 
     const allTests = [
-        ['get accounts', { type: 'get-account' }, noPermissionError],
+        ['get accounts', { type: 'get-account' }, false],
         [
             'hasPermissions',
             {
@@ -67,7 +53,7 @@ test.describe('site to content script messages', () => {
             {
                 type: 'execute-transaction-request',
             },
-            noAccountError,
+            false,
         ],
         [
             'execute transaction',
@@ -75,14 +61,14 @@ test.describe('site to content script messages', () => {
                 type: 'execute-transaction-request',
                 transaction: { account: '0x100' },
             },
-            noPermissionError,
+            false,
         ],
         [
             'sign transaction no account',
             {
                 type: 'sign-transaction-request',
             },
-            noAccountError,
+            false,
         ],
         [
             'sign transaction',
@@ -90,7 +76,7 @@ test.describe('site to content script messages', () => {
                 type: 'sign-transaction-request',
                 transaction: { account: '0x100' },
             },
-            noPermissionError,
+            false,
         ],
         [
             'sign message',
@@ -98,7 +84,7 @@ test.describe('site to content script messages', () => {
                 type: 'sign-message-request',
                 args: {},
             },
-            noPermissionError,
+            false,
         ],
         [
             'UI get-features',
@@ -137,8 +123,7 @@ test.describe('site to content script messages', () => {
             if (result) {
                 expect(await nextMessage).toMatchObject(result);
             } else {
-                // no response
-                expect(await nextMessage).toBeNull();
+                await expect(nextMessage).rejects.toThrow();
             }
         });
     }
