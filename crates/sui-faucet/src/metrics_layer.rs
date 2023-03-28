@@ -8,9 +8,10 @@ use std::{
 };
 
 use futures::Future;
+use http::StatusCode;
 use prometheus::{HistogramTimer, Registry};
 use tower::{load_shed::error::Overloaded, BoxError, Layer, Service, ServiceExt};
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::metrics::RequestMetrics;
 
@@ -75,10 +76,17 @@ where
         let future = Box::pin(async move {
             let resp = inner.oneshot(req).await;
             match &resp {
-                Result::Ok(resp) if !resp.status().is_success() => metrics.failed(),
+                Result::Ok(resp) if !resp.status().is_success() => {
+                    metrics.failed(None, Some(resp.status()))
+                }
                 Result::Ok(_) => metrics.succeeded(),
-                Result::Err(err) if err.is::<Overloaded>() => metrics.shed(),
-                Result::Err(_) => metrics.failed(),
+                Result::Err(err) => {
+                    if err.is::<Overloaded>() {
+                        metrics.shed();
+                    } else {
+                        metrics.failed(Some(err), None);
+                    }
+                }
             }
 
             resp
@@ -111,10 +119,21 @@ impl MetricsGuard {
         info!("Request succeeded in {:.2}s", elapsed);
     }
 
-    fn failed(mut self) {
+    fn failed(mut self, error: Option<&BoxError>, status: Option<StatusCode>) {
         let elapsed = self.timer.take().unwrap().stop_and_record();
+        let code = status
+            .map(|c| c.as_str().to_string())
+            .unwrap_or_else(|| "no_code".to_string());
         self.metrics.total_requests_failed.inc();
-        info!("Request failed in {:.2}s", elapsed);
+
+        if let Some(err) = error {
+            error!(
+                "Request failed in {:.2}s, error {:?}, code {}",
+                elapsed, err, code
+            );
+        } else {
+            warn!("Request failed in {:.2}s, code: {}", elapsed, code);
+        }
     }
 
     fn shed(mut self) {
