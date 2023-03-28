@@ -24,6 +24,7 @@ use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
+use types::CertificateAPI;
 use types::HeaderAPI;
 use types::Round;
 use types::{Certificate, CertificateDigest};
@@ -368,7 +369,7 @@ pub fn make_certificates_with_parameters(
         // Ensure each certificate's parents exist from previous processing
         parents
             .iter()
-            .flat_map(|c| c.header.parents())
+            .flat_map(|c| c.header().parents())
             .for_each(|digest| {
                 assert!(
                     certificate_digests.contains(digest),
@@ -439,7 +440,7 @@ fn generate_and_run_execution_plans(
             // A sanity check that we indeed attempt to send to Bullshark a certificate
             // whose parents have already been inserted.
             if c.round() > 1 {
-                for parent in c.header.parents() {
+                for parent in c.header().parents() {
                     assert!(inserted_certificates.contains(parent));
                 }
             }
@@ -512,7 +513,7 @@ fn create_execution_plan(
         // for the first round of certificates we don't want to include their parents, as we won't
         // have them available anyways - so we want those to be our roots.
         if certificate.round() > 1 {
-            for parent in certificate.header.parents() {
+            for parent in certificate.header().parents() {
                 adjacency_parent_to_children
                     .entry(*parent)
                     .or_default()
