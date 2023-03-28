@@ -81,16 +81,77 @@ impl Default for Metadata {
     }
 }
 
-pub type Transaction = Vec<u8>;
-#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
-pub struct Batch {
-    pub transactions: Vec<Transaction>,
-    pub metadata: Metadata,
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, Arbitrary)]
+#[enum_dispatch(BatchAPI)]
+pub enum Batch {
+    V1(BatchV1),
+}
+
+// TODO: Revisit if we should not impl Default for batch
+impl Default for Batch {
+    fn default() -> Self {
+        Self::V1(BatchV1::default())
+    }
 }
 
 impl Batch {
     pub fn new(transactions: Vec<Transaction>) -> Self {
-        Batch {
+        Self::V1(BatchV1::new(transactions))
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            Batch::V1(data) => data.size(),
+        }
+    }
+}
+
+impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
+    type TypedDigest = BatchDigest;
+
+    fn digest(&self) -> BatchDigest {
+        match self {
+            Batch::V1(data) => data.digest(),
+        }
+    }
+}
+
+#[enum_dispatch]
+pub trait BatchAPI {
+    fn transactions(&self) -> &Vec<Transaction>;
+    fn transactions_mut(&mut self) -> &mut Vec<Transaction>;
+    fn metadata(&self) -> &Metadata;
+    fn metadata_mut(&mut self) -> &mut Metadata;
+}
+
+pub type Transaction = Vec<u8>;
+#[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
+pub struct BatchV1 {
+    pub transactions: Vec<Transaction>,
+    pub metadata: Metadata,
+}
+
+impl BatchAPI for BatchV1 {
+    fn transactions(&self) -> &Vec<Transaction> {
+        &self.transactions
+    }
+
+    fn transactions_mut(&mut self) -> &mut Vec<Transaction> {
+        &mut self.transactions
+    }
+
+    fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+
+    fn metadata_mut(&mut self) -> &mut Metadata {
+        &mut self.metadata
+    }
+}
+
+impl BatchV1 {
+    pub fn new(transactions: Vec<Transaction>) -> Self {
+        Self {
             transactions,
             metadata: Metadata::default(),
         }
@@ -145,7 +206,7 @@ impl BatchDigest {
     }
 }
 
-impl Hash<{ crypto::DIGEST_LENGTH }> for Batch {
+impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV1 {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
@@ -1353,29 +1414,29 @@ impl From<&Vote> for VoteInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Batch, Metadata, Timestamp};
+    use crate::{Batch, BatchAPI, BatchV1, Metadata, Timestamp};
     use std::time::Duration;
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_elapsed() {
         let batch = Batch::new(vec![]);
-        assert!(batch.metadata.created_at > 0);
+        assert!(batch.metadata().created_at > 0);
 
         sleep(Duration::from_secs(2)).await;
 
-        assert!(batch.metadata.created_at.elapsed().as_secs_f64() >= 2.0);
+        assert!(batch.metadata().created_at.elapsed().as_secs_f64() >= 2.0);
     }
 
     #[test]
     fn test_elapsed_when_newer_than_now() {
-        let batch = Batch {
+        let batch = Batch::V1(BatchV1 {
             transactions: vec![],
             metadata: Metadata {
                 created_at: 2999309726980, // something in the future - Fri Jan 16 2065 05:35:26
             },
-        };
+        });
 
-        assert_eq!(batch.metadata.created_at.elapsed().as_secs_f64(), 0.0);
+        assert_eq!(batch.metadata().created_at.elapsed().as_secs_f64(), 0.0);
     }
 }

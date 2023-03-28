@@ -25,7 +25,7 @@ use test_utils::{
 use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
+    Batch, BatchAPI, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, PreSubscribedBroadcastSender,
     ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, Transaction, ValidatorClient,
 };
@@ -1143,7 +1143,8 @@ async fn test_get_collections_with_missing_certificates() {
 
                 if let Some(expected_batch) = batches_map.get(&id) {
                     assert_eq!(
-                        result_transactions, *expected_batch.transactions,
+                        result_transactions,
+                        *expected_batch.transactions(),
                         "Batch payload doesn't match"
                     );
                 } else {

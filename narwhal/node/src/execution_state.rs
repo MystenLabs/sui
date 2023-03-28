@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use executor::ExecutionState;
 use tokio::sync::mpsc::Sender;
-use types::ConsensusOutput;
+use types::{BatchAPI, ConsensusOutput};
 
 /// A simple/dumb execution engine.
 pub struct SimpleExecutionState {
@@ -23,8 +23,12 @@ impl ExecutionState for SimpleExecutionState {
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
         for (_, batches) in consensus_output.batches {
             for batch in batches {
-                for transaction in batch.transactions.into_iter() {
-                    if let Err(err) = self.tx_transaction_confirmation.send(transaction).await {
+                for transaction in batch.transactions().iter() {
+                    if let Err(err) = self
+                        .tx_transaction_confirmation
+                        .send(transaction.clone())
+                        .await
+                    {
                         eprintln!("Failed to send txn in SimpleExecutionState: {}", err);
                     }
                 }
