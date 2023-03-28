@@ -1,6 +1,6 @@
 {
     "name": "@mysten/ledgerjs-hw-app-sui",
-    "version": "0.0.1",
+    "version": "0.1.0",
     "description": "Ledger Hardware Wallet Sui Application API",
     "keywords": [
         "Ledger",
