@@ -1,18 +1,18 @@
 ---
-title: Sui Programmable Transaction with the TS SDK
+title: Sui Programmable Transaction Blocks with the TS SDK
 ---
 
-In Sui, all user-initiated transactions are called Programmable Transactions.
+In Sui, all user-initiated transactions are called Programmable Transactions blocks.
 
 ## Get Started
 
 First, make sure that you have the latest TypeScript SDK installed.
 
-We’ll start by constructing a transaction to send Sui. If you are familiar with the legacy transaction types, this is similar to a `paySui` transaction. You can start constructing transactions by importing the `Transaction` class, and constructing it:
+To start, construct a transaction to send Sui. If you are familiar with the legacy transaction types, this is similar to a `paySui` transaction. You can start constructing transactions by importing the `TransactionBlock` class, and constructing it:
 
 ```tsx
-import { Transaction } from "@mysten/sui.js";
-const tx = new Transaction();
+import { TransactionBlock } from "@mysten/sui.js";
+const tx = new TransactionBlock();
 ```
 
 Using this, you can then add commands to this transaction.
@@ -37,7 +37,7 @@ interface Transfer {
 // Procure a list of some Sui transfers we need to make:
 const transfers: Transfer[] = getTransfers();
 
-const tx = new Transaction();
+const tx = new TransactionBlock();
 
 // First, split the gas coin into multiple coins:
 const coins = tx.splitCoins(
@@ -54,16 +54,16 @@ transfers.forEach((transfer, index) => {
 After you have the transaction defined, you can directly execute it with a signer using `signAndExecuteTransaction`.
 
 ```tsx
-signer.signAndExecuteTransaction({ transaction: tx });
+signer.signAndExecuteTransaction({ transactionBlock: tx });
 ```
 
 ## Inputs and commands
 
-Programmable Transactions have two key concepts: inputs and commands.
+Programmable Transactions blocks have two key concepts: inputs and commands.
 
 Inputs are values that are used as arguments to the commands in the transaction. Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or a pure BCS value (for example, an encoded string used as an argument to a move call).
 
-Commands are steps of execution in the transaction. You can also use the result of previous commands as arguments to a future command. By combining multiple commands together, programmable transactions provide a flexible way to create complex transactions.
+Commands are steps of execution in the transaction. You can also use the result of previous commands as arguments to a future command. By combining multiple commands together, Programmable Transactions provide a flexible way to create complex transactions.
 
 ## Constructing inputs
 
@@ -124,7 +124,7 @@ If you need the transaction bytes, instead of signing or executing the transacti
 **Important:** You might need to explicitly call `setSender()` on the transaction to ensure that the `sender` field has been populated. This is normally done by the signer before signing the transaction, but will not be done automatically if you’re building the transaction bytes yourself.
 
 ```tsx
-const tx = new Transaction();
+const tx = new TransactionBlock();
 
 // ... add some commands...
 
@@ -133,11 +133,11 @@ await tx.build({ provider });
 
 In most cases, building requires your JSON RPC Provider to fully resolve input values.
 
-If you have transaction bytes, you can also convert them back into a `Transaction` class:
+If you have transaction bytes, you can also convert them back into a `TransactionBlock` class:
 
 ```tsx
 const bytes = getTransactionBytesFromSomewhere();
-const tx = Transaction.from(bytes);
+const tx = TransactionBlock.from(bytes);
 ```
 
 ## Building Offline
@@ -193,11 +193,11 @@ The list of coins used as gas payment will be merged down into a single gas coin
 tx.setGasPayment([coin1, coin2]);
 ```
 
-### Dapp / Wallet Integration
+### DApp / Wallet Integration
 
-The Wallet Standard interface has been updated to support the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dapps into wallets will be expected to provide a `Transaction` class. This transaction class can then be serialized and sent to your wallet for execution.
+The Wallet Standard interface has been updated to support the `TransactionBlock` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets are expected to provide a `TransactionBlock` class. This transaction class can then be serialized and sent to your wallet for execution.
 
-To serialize a transaction for sending to a wallet, we recommend using the `tx.serialize()` function, which returns an opaque string representation of the transaction that can be passed from the wallet standard dapp context to your wallet. This can then be converted back into a `Transaction` using `Transaction.from()`.
+To serialize a transaction for sending to a wallet, we recommend using the `tx.serialize()` function, which returns an opaque string representation of the transaction that can be passed from the wallet standard dApp context to your wallet. This can then be converted back into a `TransactionBlock` using `TransactionBlock.from()`.
 
 **Important:** The transaction should not be built from bytes in the dApp code. Using `serialize` instead of `build` allows you to build the transaction bytes within the wallet itself. This allows the wallet to perform gas logic and coin selection as needed.
 
@@ -229,7 +229,7 @@ const tx = new Transaction();
 const kindBytes = await tx.build({ provider, onlyTransactionKind: true });
 
 // Construct a sponsored transaction from the kind bytes:
-const sponsoredTx = Transaction.fromKind(kindBytes);
+const sponsoredTx = TransactionBlock.fromKind(kindBytes);
 
 // You can now set the sponsored transaction data that is required:
 sponsoredTx.setSender(sender);
