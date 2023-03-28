@@ -34,6 +34,9 @@ mod transaction_manager;
 pub mod transaction_orchestrator;
 
 #[cfg(test)]
+#[path = "unit_tests/move_package_publish_tests.rs"]
+mod move_package_publish_tests;
+#[cfg(test)]
 #[path = "unit_tests/move_package_tests.rs"]
 mod move_package_tests;
 #[cfg(test)]
