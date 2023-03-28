@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use prometheus::Registry;
 use tap::tap::TapFallible;
 
+use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::default::Default;
@@ -37,7 +38,7 @@ use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
 
 use super::write_ahead_log::WriteAheadLog;
 
-// 
+//
 pub struct SimpleFaucet {
     wallet: WalletContext,
     active_address: SuiAddress,
@@ -45,6 +46,13 @@ pub struct SimpleFaucet {
     consumer: Mutex<Receiver<ObjectID>>,
     metrics: FaucetMetrics,
     wal: Mutex<WriteAheadLog>,
+}
+
+struct PendingRequests {
+    uuid: Uuid,
+    recipient: SuiAddress,
+    coins: Vec<ObjectID>,
+    tx_data: TransactionData,
 }
 
 enum GasCoinResponse {
@@ -81,7 +89,8 @@ impl SimpleFaucet {
         let metrics = FaucetMetrics::new(prometheus_registry);
 
         let wal = WriteAheadLog::open(wal_path);
-        let mut pending: Vec<(Uuid, SuiAddress, Vec<ObjectID>, TransactionData)> = vec![];
+        // let mut pending: Vec<(Uuid, SuiAddress, Vec<ObjectID>, TransactionData)> = vec![];
+        let mut pending: HashMap<Uuid, PendingRequests> = HashMap::new();
 
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
@@ -95,12 +104,19 @@ impl SimpleFaucet {
                 let uuid = Uuid::from_bytes(uuid);
                 info!(?uuid, ?recipient, ?coin_id, "Retrying txn from WAL.");
 
-                let current_length = pending.len();
                 // group all coins that had the same uuid in a vector
-                if current_length != 0 && pending[current_length - 1].0 == uuid {
-                    pending[current_length - 1].2.push(coin_id);
+                if let Some(pending_req) = pending.get_mut(&uuid) {
+                    pending_req.coins.push(coin_id);
                 } else {
-                    pending.push((uuid, recipient, vec![coin_id], tx));
+                    pending.insert(
+                        uuid,
+                        PendingRequests {
+                            uuid,
+                            recipient,
+                            coins: vec![coin_id],
+                            tx_data: tx,
+                        },
+                    );
                 }
             } else {
                 producer
@@ -128,8 +144,13 @@ impl SimpleFaucet {
         // values -- if the executions failed, the pending coins will simply remain in the WAL, and
         // not recycled.
 
-        futures::future::join_all(pending.into_iter().map(|(uuid, recipient, coin_id, tx)| {
-            faucet.sign_and_execute_txn(uuid, recipient, coin_id, tx)
+        futures::future::join_all(pending.into_iter().map(|(_, request)| {
+            faucet.sign_and_execute_txn(
+                request.uuid,
+                request.recipient,
+                request.coins,
+                request.tx_data,
+            )
         }))
         .await;
 
@@ -301,12 +322,11 @@ impl SimpleFaucet {
                 // it and continue so we don't lose access to the coin -- the worst that can happen
                 // is that the WAL contains a stale entry.
 
-                while !coins.is_empty() {
-                    let coin_id = coins.pop().unwrap();
+                while let Some(coin_id) = coins.pop() {
                     if self.wal.lock().await.commit(coin_id).is_err() {
                         error!(?coin_id, "Failed to remove coin from WAL");
                     }
-                    // recycel first coin that survived the pay_sui merge
+                    // recycle first coin that survived the pay_sui merge
                     if coins.is_empty() {
                         self.recycle_gas_coin(coin_id, uuid).await;
                     }
@@ -346,11 +366,9 @@ impl SimpleFaucet {
                     // faucet fails or we give up before we get a definite response, we have a
                     // chance to retry later.
                     let mut wal = self.wal.lock().await;
-                    // lock all the coins in the id
-                    let mut coin_ids_clone = coin_ids.clone();
-                    while !coin_ids_clone.is_empty() {
-                        let coin_id = coin_ids_clone.pop().unwrap();
-                        wal.reserve(uuid, coin_id, recipient, tx_data.clone())
+
+                    for coin_id in &coin_ids {
+                        wal.reserve(uuid, *coin_id, recipient, tx_data.clone())
                             .map_err(FaucetError::internal)?;
                     }
                 }
