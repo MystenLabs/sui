@@ -1258,7 +1258,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         .execute(context)
         .await?;
 
-    let cmd_objs = if let SuiClientCommandResult::Objects(v) = os {
+    let mut cmd_objs = if let SuiClientCommandResult::Objects(v) = os {
         v
     } else {
         panic!("Command failed")
@@ -1266,7 +1266,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Check that we indeed fetched for addr1
     let client = context.get_client().await?;
-    let actual_objs = client
+    let mut actual_objs = client
         .read_api()
         .get_owned_objects(
             addr1,
@@ -1279,9 +1279,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
         .await
         .unwrap()
         .data;
-    // TODO (jian): impl Ord on SuiObjectResponse
-    // cmd_objs.sort();
-    // actual_objs.sort();
+    cmd_objs.sort();
+    actual_objs.sort();
     assert_eq!(cmd_objs, actual_objs);
 
     // Switch the address
