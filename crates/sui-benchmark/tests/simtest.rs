@@ -266,7 +266,7 @@ mod test {
 
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // tests run for ever
-        let adversarial_weight = 0;
+        let adversarial_weight = 1;
 
         let shared_counter_hotness_factor = 50;
 
