@@ -6,7 +6,7 @@ use crate::consensus::ConsensusState;
 use crate::consensus_utils::make_consensus_store;
 use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
-use config::{AuthorityIdentifier, Committee, Stake};
+use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use fastcrypto::hash::HashFunction;
 use prometheus::Registry;
@@ -30,7 +30,8 @@ use types::{Certificate, CertificateDigest};
 
 #[derive(Copy, Clone, Debug)]
 pub struct FailureModes {
-    // The probability of having failures per round. The failures should
+    // The probability of having failures per round. As a failure is defined a node that does not produce
+    // a certificate for a round (because is crashed, temporary failure or has just been slow). The failures should
     // be <=f , otherwise no DAG could be created. The provided number gives the probability of having
     // failures up to f. Ex for input `failures_probability = 0.2` it means we'll have 20% chance of
     // having failures up to 33% of the nodes.
@@ -213,30 +214,32 @@ pub fn make_certificates_with_parameters(
 ) -> (VecDeque<Certificate>, Vec<Certificate>) {
     let mut rand = StdRng::seed_from_u64(seed);
 
-    //Pick the slow nodes - ensure we don't have more than 33% of slow nodes
+    // Pick the slow nodes - ensure we don't have more than 33% of slow nodes
     assert!(modes.slow_nodes_percentage <= 0.33, "Slow nodes can't be more than 33% of total nodes - otherwise we'll basically simulate a consensus stall");
 
-    let mut ids: Vec<AuthorityIdentifier> = committee
-        .authorities()
-        .map(|authority| authority.id())
-        .collect();
+    let mut authorities: Vec<Authority> = committee.authorities().cloned().collect();
 
     // Now shuffle authorities and pick the slow nodes, if should exist
-    ids.shuffle(&mut rand);
+    authorities.shuffle(&mut rand);
 
     // Step 1 - determine the slow nodes , assuming those should exist
-    let slow_node_ids: Vec<(AuthorityIdentifier, f64)> = {
-        let num_of_slow_nodes =
+    let slow_nodes: Vec<(Authority, f64)> = {
+        let stake_of_slow_nodes =
             (committee.total_stake() as f64 * modes.slow_nodes_percentage) as Stake;
-        let s = num_of_slow_nodes.min(committee.validity_threshold() - 1);
+        let stake_of_slow_nodes = stake_of_slow_nodes.min(committee.validity_threshold() - 1);
+        let mut total_stake = 0;
 
-        ids.iter()
-            .take(s as usize)
-            .map(|k| (*k, 1.0 - modes.slow_nodes_failure_probability))
+        authorities
+            .iter()
+            .take_while(|a| {
+                total_stake += a.stake();
+                total_stake <= stake_of_slow_nodes
+            })
+            .map(|k| (k.clone(), 1.0 - modes.slow_nodes_failure_probability))
             .collect()
     };
 
-    println!("Slow nodes: {:?}", slow_node_ids);
+    println!("Slow nodes: {:?}", slow_nodes.iter().map(|(a, _)| a.id()).collect::<Vec<AuthorityIdentifier>>());
 
     let mut certificates = VecDeque::new();
     let mut parents = initial_parents;
@@ -255,10 +258,10 @@ pub fn make_certificates_with_parameters(
 
         let mut total_failures = 0;
 
-        // shuffle keys to introduce extra randomness
-        ids.shuffle(&mut rand);
+        // shuffle authorities to introduce extra randomness
+        authorities.shuffle(&mut rand);
 
-        for name in ids.iter() {
+        for authority in authorities.iter() {
             let current_parents = parents.clone();
 
             // Step 2 -- introduce failures (assuming those are enabled)
@@ -276,20 +279,26 @@ pub fn make_certificates_with_parameters(
                 continue;
             }
 
-            // Step 3 -- figure out the parents taking into account the slow nodes - assuming they
-            // are provide such.
+            // Step 3 -- to form the certificate we need to figure out the certificate's parents
+            // we are going to pick taking into account the slow nodes.
+            let ids: Vec<(AuthorityIdentifier, f64)> = slow_nodes
+                .iter()
+                .map(|(a, inclusion_probability)| (a.id(), *inclusion_probability))
+                .collect();
+
             let mut parent_digests: BTreeSet<CertificateDigest> =
                 test_utils::this_cert_parents_with_slow_nodes(
-                    name,
+                    &authority.id(),
                     current_parents.clone(),
-                    slow_node_ids.as_slice(),
+                    ids.as_slice(),
                     &mut rand,
                 );
 
             // We want to ensure that we always refer to "our" certificate of the previous round -
             // assuming that exist, so we can re-add it later.
-            let my_parent_digest = if let Some(my_previous_round) =
-                current_parents.iter().find(|c| c.origin() == *name)
+            let my_parent_digest = if let Some(my_previous_round) = current_parents
+                .iter()
+                .find(|c| c.origin() == authority.id())
             {
                 parent_digests.remove(&my_previous_round.digest());
                 Some(my_previous_round.digest())
@@ -299,7 +308,7 @@ pub fn make_certificates_with_parameters(
 
             let mut parent_digests: Vec<CertificateDigest> = parent_digests.into_iter().collect();
 
-            // Step 3 -- references to previous round
+            // Step 4 -- references to previous round
             // Now from the rest of current_parents, pick a random number - uniform - to how many
             // should create references to. It should strictly be between [2f+1..3f+1].
             let num_of_parents_to_pick =
@@ -331,7 +340,7 @@ pub fn make_certificates_with_parameters(
             // Now create the certificate with the provided parents
             let (_, certificate) = mock_certificate_with_rand(
                 committee,
-                *name,
+                authority.id(),
                 round,
                 parents_digests.clone(),
                 &mut rand,
