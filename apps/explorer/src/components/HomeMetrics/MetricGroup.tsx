@@ -17,7 +17,7 @@ export function MetricGroup({ label, children }: Props) {
                 <Text variant="caption/semibold" color="steel-darker">
                     {label}
                 </Text>
-                <div className="h-px flex-1 bg-steel/30" />
+                <div className="bg-steel/30 h-px flex-1" />
             </div>
             <div className="flex items-start gap-10 overflow-x-auto overflow-y-hidden pb-1">
                 {children}

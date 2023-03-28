@@ -10,7 +10,7 @@
     }
 
     .textdetails > tbody > tr > td:first-child {
-        @apply w-[220px]  pr-6 font-medium text-gray-80;
+        @apply text-gray-80  w-[220px] pr-6 font-medium;
     }
 
     .textdetails > tbody > tr > td:nth-child(2) {
@@ -49,13 +49,13 @@ div.metadata > h2 {
 }
 
 div.metadata > p {
-    @apply text-[13px] leading-[12px] text-gray-80;
+    @apply text-gray-80 text-[13px] leading-[12px];
 }
 
 .desktoppreviewmedia,
 .mobilepreviewmedia {
-    @apply cursor-pointer bg-inherit p-0 text-[14px] font-semibold
-  leading-[13px] tracking-[-0.02em] text-gray-80;
+    @apply text-gray-80 cursor-pointer bg-inherit p-0 text-[14px]
+  font-semibold leading-[13px] tracking-[-0.02em];
 }
 
 .desktoppreviewmedia {

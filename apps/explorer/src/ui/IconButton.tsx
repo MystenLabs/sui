@@ -14,7 +14,7 @@ export interface IconButtonProps
 export function IconButton({ icon: IconComponent, ...props }: IconButtonProps) {
     return (
         <ButtonOrLink
-            className="inline-flex cursor-pointer items-center justify-center bg-transparent px-3 py-2 text-steel-dark hover:text-steel-darker active:text-steel disabled:cursor-default disabled:text-gray-60"
+            className="text-steel-dark hover:text-steel-darker active:text-steel disabled:text-gray-60 inline-flex cursor-pointer items-center justify-center bg-transparent px-3 py-2 disabled:cursor-default"
             {...props}
         >
             <IconComponent />

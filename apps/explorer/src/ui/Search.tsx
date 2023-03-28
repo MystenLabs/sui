@@ -36,7 +36,7 @@ export interface SearchResultProps {
 function SearchItem({ value, children }: SearchResultProps) {
     return (
         <Combobox.Option
-            className="cursor-pointer rounded-md py-1.5 pl-2 ui-active:bg-sui/10 ui-active:shadow-sm"
+            className="ui-active:bg-sui/10 ui-active:shadow-sm cursor-pointer rounded-md py-1.5 pl-2"
             value={value}
             key={value.id}
         >
@@ -67,7 +67,7 @@ export function Search({
                 <Combobox.Input
                     spellCheck={false}
                     displayValue={(value: SearchResult) => value?.label}
-                    className="w-full rounded-md border border-transparent bg-search-fill/60 pl-2 text-body leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:bg-search-fill hover:placeholder:text-white/60 focus:border-sui focus:bg-search-fill focus:text-white focus:placeholder:text-white/60"
+                    className="bg-search-fill/60 text-body hover:bg-search-fill focus:border-sui focus:bg-search-fill w-full rounded-md border border-transparent pl-2 leading-9 text-white/20 outline-none placeholder:text-xs placeholder:text-white/40 hover:placeholder:text-white/60 focus:text-white focus:placeholder:text-white/60"
                     onChange={onChange}
                     placeholder={placeholder}
                     autoComplete="off"

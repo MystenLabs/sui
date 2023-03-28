@@ -62,7 +62,7 @@ function PaginationButton({
 }) {
     return (
         <button
-            className="rounded-md border border-steel px-2 py-1 text-steel shadow-xs disabled:border-gray-45 disabled:text-gray-45"
+            className="border-steel text-steel shadow-xs disabled:border-gray-45 disabled:text-gray-45 rounded-md border px-2 py-1"
             aria-label={label}
             type="button"
             disabled={disabled}

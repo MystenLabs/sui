@@ -79,8 +79,8 @@ export function TokenView({ data }: { data: DataType }) {
                 </TabList>
                 <TabPanels>
                     <TabPanel noGap>
-                        <div className="flex flex-col md:flex-row md:divide-x md:divide-gray-45">
-                            <div className="flex-1 divide-y divide-gray-45 pb-6 md:basis-2/3 md:pb-0">
+                        <div className="md:divide-gray-45 flex flex-col md:flex-row md:divide-x">
+                            <div className="divide-gray-45 flex-1 divide-y pb-6 md:basis-2/3 md:pb-0">
                                 <div className="pb-7 pr-10 pt-4">
                                     <DescriptionList>
                                         <DescriptionItem
@@ -137,7 +137,7 @@ export function TokenView({ data }: { data: DataType }) {
                                     </DescriptionList>
                                 </div>
                                 {data.display ? (
-                                    <div className="pt-2 pr-10 md:pt-2.5">
+                                    <div className="pr-10 pt-2 md:pt-2.5">
                                         <DescriptionList>
                                             <LinkOrTextDescriptionItem
                                                 title="Name"
@@ -167,9 +167,9 @@ export function TokenView({ data }: { data: DataType }) {
                                 ) : null}
                             </div>
                             {imgUrl !== '' && (
-                                <div className="border-0 border-t border-solid border-gray-45 pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
+                                <div className="border-gray-45 border-0 border-t border-solid pt-6 md:basis-1/3 md:border-t-0 md:pl-10">
                                     <div className="flex flex-row flex-nowrap gap-5">
-                                        <div className="flex w-40 justify-center md:w-50">
+                                        <div className="md:w-50 flex w-40 justify-center">
                                             <DisplayBox
                                                 display={imgUrl}
                                                 caption={

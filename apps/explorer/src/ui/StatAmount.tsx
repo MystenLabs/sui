@@ -13,7 +13,7 @@ export interface StatAmountProps extends Omit<AmountProps, 'size'> {
 
 export function StatAmount({ dollarAmount, date, ...props }: StatAmountProps) {
     return (
-        <div className="flex flex-col justify-start gap-2 text-gray-75">
+        <div className="text-gray-75 flex flex-col justify-start gap-2">
             <div className="flex flex-col items-baseline gap-2.5 text-gray-100">
                 {date && <DateCard date={date} />}
                 <div className="flex flex-col items-baseline gap-2.5">

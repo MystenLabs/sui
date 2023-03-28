@@ -77,10 +77,10 @@ function SingleCoinView({
         <Disclosure>
             <Disclosure.Button
                 data-testid="ownedcoinlabel"
-                className="grid w-full grid-cols-3 items-center justify-between rounded-none py-2 text-left hover:bg-sui-light"
+                className="hover:bg-sui-light grid w-full grid-cols-3 items-center justify-between rounded-none py-2 text-left"
             >
                 <div className="flex">
-                    <ClosedIcon className="mr-1.5 fill-gray-60 ui-open:rotate-90 ui-open:transform" />
+                    <ClosedIcon className="fill-gray-60 ui-open:rotate-90 ui-open:transform mr-1.5" />
                     <Text color="steel-darker" variant="body/medium">
                         {symbol}
                     </Text>
@@ -101,7 +101,7 @@ function SingleCoinView({
             </Disclosure.Button>
 
             <Disclosure.Panel>
-                <div className="flex flex-col gap-1 bg-gray-40 p-3">
+                <div className="bg-gray-40 flex flex-col gap-1 p-3">
                     {subObjList.map((subObj) => (
                         <CoinItem
                             key={subObj.id}
@@ -124,7 +124,7 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
     return (
         <div className="flex flex-col text-left">
             <div className="flex max-h-80 flex-col overflow-auto">
-                <div className="grid grid-cols-3 py-2 uppercase tracking-wider text-gray-80">
+                <div className="text-gray-80 grid grid-cols-3 py-2 uppercase tracking-wider">
                     <Text variant="caption/medium">Type</Text>
                     <Text variant="caption/medium">Objects</Text>
                     <Text variant="caption/medium">Balance</Text>

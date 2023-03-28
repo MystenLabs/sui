@@ -8,7 +8,7 @@ img.smallimage {
 
 div.modalcontainer,
 div.detailsbg {
-    @apply fixed top-0 left-0 z-20 h-full w-full;
+    @apply fixed left-0 top-0 z-20 h-full w-full;
 }
 
 @keyframes fadein {
@@ -31,7 +31,7 @@ div.fade {
 }
 
 .fig {
-    @apply mt-auto mb-[60px] sm:relative sm:left-[19px] sm:my-auto;
+    @apply mb-[60px] mt-auto sm:relative sm:left-[19px] sm:my-auto;
 }
 
 div.imageandcross {
@@ -45,8 +45,8 @@ img.largeimage {
 }
 
 span.cross {
-    @apply z-20 mx-auto flex h-[30px] w-[30px]
-  cursor-pointer items-center justify-center rounded-[50px] bg-gray-100  text-2xl text-offwhite;
+    @apply text-offwhite z-20 mx-auto flex h-[30px]
+  w-[30px] cursor-pointer items-center justify-center rounded-[50px]  bg-gray-100 text-2xl;
 }
 
 span.desktopcross {
@@ -59,11 +59,11 @@ div.mobilecross {
 
 div.filetype,
 div.caption {
-    @apply relative z-50 mt-5 max-w-[90vw] break-words text-center text-2xl font-semibold text-offwhite sm:text-left;
+    @apply text-offwhite relative z-50 mt-5 max-w-[90vw] break-words text-center text-2xl font-semibold sm:text-left;
 }
 
 div.filetype {
-    @apply mt-0 text-sm font-medium text-gray-60;
+    @apply text-gray-60 mt-0 text-sm font-medium;
 }
 
 div.detailsbg {
@@ -71,7 +71,7 @@ div.detailsbg {
 }
 
 .automod {
-    @apply w-1/2 border-b-2 border-gray-45;
+    @apply border-gray-45 w-1/2 border-b-2;
 
     background-color: #d8e5ea;
     position: relative;
@@ -85,5 +85,5 @@ div.detailsbg {
 }
 
 .brokenimage {
-    @apply rounded-[6px] bg-gray-45 stroke-gray-65;
+    @apply bg-gray-45 stroke-gray-65 rounded-[6px];
 }

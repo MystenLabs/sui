@@ -164,7 +164,7 @@ export default function NodeMap({ minHeight }: Props) {
                     </div>
                 </div>
 
-                <div className="absolute top-5 right-5 z-10">
+                <div className="absolute right-5 top-5 z-10">
                     <DateFilter value={dateFilter} onChange={setDateFilter} />
                 </div>
 
@@ -196,7 +196,7 @@ export default function NodeMap({ minHeight }: Props) {
                             <div>Nodes</div>
                             <div>{countryNodes[tooltipData].count}</div>
                         </div>
-                        <div className="my-1 h-px bg-gray-90" />
+                        <div className="bg-gray-90 my-1 h-px" />
                         <div>
                             {regionNamesInEnglish.of(
                                 countryNodes[tooltipData].country

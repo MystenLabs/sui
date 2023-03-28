@@ -17,7 +17,7 @@ export function PlayPause({ paused, onChange }: PlayPauseProps) {
             aria-label={paused ? 'Paused' : 'Playing'}
             icon={paused ? AutorefreshPlay24 : AutorefreshPause24}
             onClick={onChange}
-            className="cursor-pointer border-none bg-transparent text-steel hover:text-steel-darker"
+            className="text-steel hover:text-steel-darker cursor-pointer border-none bg-transparent"
         />
     );
 }

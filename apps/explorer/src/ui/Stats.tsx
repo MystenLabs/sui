@@ -26,7 +26,7 @@ export function Stats({
 }: StatsProps) {
     return (
         <div className="flex max-w-full flex-col flex-nowrap gap-1.5">
-            <div className="flex items-center justify-start gap-1 text-caption text-steel-dark hover:text-steel">
+            <div className="text-caption text-steel-dark hover:text-steel flex items-center justify-start gap-1">
                 <div className="flex-shrink-0">
                     <Text variant="caption/semibold" color="steel-dark">
                         {label}

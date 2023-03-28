@@ -16,10 +16,10 @@ export function ListItem({ active, children, onClick }: ListItemProps) {
             <button
                 type="button"
                 className={clsx(
-                    'block w-full cursor-pointer rounded-md border py-2 px-2.5 text-left text-body',
+                    'text-body block w-full cursor-pointer rounded-md border px-2.5 py-2 text-left',
                     active
-                        ? 'border-gray-50 bg-gray-45 font-semibold text-gray-90 shadow-sm'
-                        : 'border-transparent bg-white font-medium text-gray-80'
+                        ? 'bg-gray-45 text-gray-90 border-gray-50 font-semibold shadow-sm'
+                        : 'text-gray-80 border-transparent bg-white font-medium'
                 )}
                 onClick={onClick}
             >

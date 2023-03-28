@@ -74,7 +74,7 @@ export function TableCard<DataType extends object>({
     return (
         <div
             className={clsx(
-                'w-full overflow-x-auto border-b border-gray-45 pb-4',
+                'border-gray-45 w-full overflow-x-auto border-b pb-4',
                 refetching && 'opacity-50'
             )}
         >
@@ -94,7 +94,7 @@ export function TableCard<DataType extends object>({
                                         key={id}
                                         colSpan={colSpan}
                                         scope="col"
-                                        className="h-7.5 text-left text-subtitle font-semibold uppercase text-steel-dark"
+                                        className="h-7.5 text-subtitle text-steel-dark text-left font-semibold uppercase"
                                         onClick={
                                             column.columnDef.enableSorting
                                                 ? column.getToggleSortingHandler()
@@ -106,7 +106,7 @@ export function TableCard<DataType extends object>({
                                                 'flex items-center gap-1',
                                                 column.columnDef
                                                     .enableSorting &&
-                                                    'cursor-pointer text-steel-darker'
+                                                    'text-steel-darker cursor-pointer'
                                             )}
                                         >
                                             {isPlaceholder

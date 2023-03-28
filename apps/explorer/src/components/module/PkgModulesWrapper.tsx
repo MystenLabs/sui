@@ -90,10 +90,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
     };
 
     return (
-        <div className="flex flex-col gap-5 border-y border-gray-45 md:flex-row md:flex-nowrap">
+        <div className="border-gray-45 flex flex-col gap-5 border-y md:flex-row md:flex-nowrap">
             <div className="w-full md:w-1/5">
                 <Combobox value={selectedModule} onChange={onChangeModule}>
-                    <div className="mt-2.5 flex w-full justify-between rounded-md border border-gray-50 py-1 pl-3 placeholder-gray-65 shadow-sm">
+                    <div className="placeholder-gray-65 mt-2.5 flex w-full justify-between rounded-md border border-gray-50 py-1 pl-3 shadow-sm">
                         <Combobox.Input
                             onChange={(event) => setQuery(event.target.value)}
                             displayValue={() => query}
@@ -105,19 +105,19 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                             className="border-none bg-inherit pr-2"
                             type="submit"
                         >
-                            <SearchIcon className="h-4.5 w-4.5 cursor-pointer fill-steel align-middle" />
+                            <SearchIcon className="h-4.5 w-4.5 fill-steel cursor-pointer align-middle" />
                         </button>
                     </div>
-                    <Combobox.Options className="absolute left-0 z-10 flex h-fit max-h-verticalListLong w-full flex-col gap-1 overflow-auto rounded-md bg-white px-2 pb-5 pt-3 shadow-moduleOption md:left-auto md:w-1/6">
+                    <Combobox.Options className="max-h-verticalListLong shadow-moduleOption absolute left-0 z-10 flex h-fit w-full flex-col gap-1 overflow-auto rounded-md bg-white px-2 pb-5 pt-3 md:left-auto md:w-1/6">
                         {filteredModules.length > 0 ? (
-                            <div className="ml-1.5 pb-2 text-caption font-semibold uppercase text-gray-75">
+                            <div className="text-caption text-gray-75 ml-1.5 pb-2 font-semibold uppercase">
                                 {filteredModules.length}
                                 {filteredModules.length === 1
                                     ? ' Result'
                                     : ' Results'}
                             </div>
                         ) : (
-                            <div className="px-3.5 pt-2 text-center text-body italic text-gray-70">
+                            <div className="text-body text-gray-70 px-3.5 pt-2 text-center italic">
                                 No results
                             </div>
                         )}
@@ -131,10 +131,10 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     <button
                                         type="button"
                                         className={clsx(
-                                            'mt-0.5 block w-full cursor-pointer rounded-md border py-2 px-1.5 text-left text-body',
+                                            'text-body mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left',
                                             active
-                                                ? 'border-transparent bg-sui/10 text-gray-80'
-                                                : 'border-transparent bg-white font-medium text-gray-80'
+                                                ? 'bg-sui/10 text-gray-80 border-transparent'
+                                                : 'text-gray-80 border-transparent bg-white font-medium'
                                         )}
                                     >
                                         {name}
@@ -144,7 +144,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                         ))}
                     </Combobox.Options>
                 </Combobox>
-                <div className="h-verticalListShort overflow-auto pt-3 md:h-verticalListLong">
+                <div className="h-verticalListShort md:h-verticalListLong overflow-auto pt-3">
                     <VerticalList>
                         {modulenames.map((name) => (
                             <div
@@ -162,7 +162,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </VerticalList>
                 </div>
             </div>
-            <div className="grow overflow-auto border-gray-45 pt-5 md:w-2/5 md:border-l md:pl-7">
+            <div className="border-gray-45 grow overflow-auto pt-5 md:w-2/5 md:border-l md:pl-7">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Bytecode</Tab>
@@ -180,7 +180,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                     </TabPanels>
                 </TabGroup>
             </div>
-            <div className="grow overflow-auto border-gray-45 pt-5 md:w-3/5 md:border-l md:pl-7">
+            <div className="border-gray-45 grow overflow-auto pt-5 md:w-3/5 md:border-l md:pl-7">
                 <TabGroup size="md">
                     <TabList>
                         <Tab>Execute</Tab>

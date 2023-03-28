@@ -19,16 +19,16 @@ export function DisclosureBox({
     children,
 }: DisclosureBoxProps) {
     return (
-        <div className="rounded-lg bg-gray-40">
+        <div className="bg-gray-40 rounded-lg">
             <Disclosure defaultOpen={defaultOpen}>
                 <Disclosure.Button
                     as="div"
-                    className="flex cursor-pointer flex-nowrap items-center py-3.75 px-5"
+                    className="py-3.75 flex cursor-pointer flex-nowrap items-center px-5"
                 >
-                    <div className="flex-1 text-body font-semibold text-gray-90">
+                    <div className="text-body text-gray-90 flex-1 font-semibold">
                         {title}
                     </div>
-                    <ChevronDownIcon className="-rotate-90 text-gray-75 ui-open:rotate-0" />
+                    <ChevronDownIcon className="text-gray-75 ui-open:rotate-0 -rotate-90" />
                 </Disclosure.Button>
                 <Disclosure.Panel className="px-5 pb-5">
                     {children}

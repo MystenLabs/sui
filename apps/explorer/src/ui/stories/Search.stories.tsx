@@ -58,7 +58,7 @@ export const Default: StoryObj<SearchProps> = {
         }, [query]);
 
         return (
-            <div className="flex h-screen w-screen bg-headerNav p-10">
+            <div className="bg-headerNav flex h-screen w-screen p-10">
                 <div className="flex max-w-xl flex-1">
                     <Search
                         queryValue={query}

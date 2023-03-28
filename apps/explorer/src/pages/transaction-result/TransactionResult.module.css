@@ -11,11 +11,11 @@
 }
 
 .eventtitle {
-    @apply pl-2 text-gray-80;
+    @apply text-gray-80 pl-2;
 }
 
 .eventtitle:hover {
-    @apply cursor-pointer bg-gray-45;
+    @apply bg-gray-45 cursor-pointer;
 
     border-radius: 6px;
 }
@@ -36,7 +36,7 @@
 }
 
 .txcomponent {
-    @apply pt-4 pb-4;
+    @apply pb-4 pt-4;
 }
 
 .txgridcolspan2 {
@@ -55,7 +55,7 @@
 
 .itemviewtitle,
 .txtitle {
-    @apply mt-5 mb-0 text-lg  font-[500] text-gray-100;
+    @apply mb-0 mt-5 text-lg  font-[500] text-gray-100;
 }
 
 .itemviewcontentlabel {
@@ -76,20 +76,20 @@
 }
 
 .itemviewcontent .itemviewcontentitem {
-    @apply grid gap-1 py-2 text-[14px] text-gray-80 md:text-[15px];
+    @apply text-gray-80 grid gap-1 py-2 text-[14px] md:text-[15px];
 
     grid-template-columns: 1fr 3fr;
 }
 
 .itemviewcontentvalue {
-    @apply inline-flex content-center items-baseline text-sm text-gray-90 md:block;
+    @apply text-gray-90 inline-flex content-center items-baseline text-sm md:block;
 
     line-break: anywhere;
 }
 
 .itemviewcontent .itemviewcontentitem a,
 .itemviewcontent .itemviewcontentitem span {
-    @apply break-all font-mono text-sm text-sui-dark;
+    @apply text-sui-dark break-all font-mono text-sm;
 }
 
 @media (min-width: 40em) {
@@ -112,7 +112,7 @@
 }
 
 .txdetailsbg ul {
-    @apply mt-5 mb-2;
+    @apply mb-2 mt-5;
 
     border-top: none !important;
 }
@@ -128,5 +128,5 @@
 }
 
 .datetime {
-    @apply block text-bodySmall font-semibold text-gray-75 sm:inline;
+    @apply text-bodySmall text-gray-75 block font-semibold sm:inline;
 }

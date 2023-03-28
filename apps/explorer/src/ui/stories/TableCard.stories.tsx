@@ -32,7 +32,7 @@ const data = {
                     The below has a hover effect:{' '}
                     <ul>
                         <li>
-                            <i className="hover:text-red-900 cursor-pointer">
+                            <i className="cursor-pointer hover:text-red-900">
                                 Clupea harengus
                             </i>
                         </li>

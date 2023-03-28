@@ -97,7 +97,7 @@ export const genTableDataFromTxData = (
                         digest={transaction.digest}
                         before={
                             status === 'success' ? (
-                                <div className="h-2 w-2 rounded-full bg-success" />
+                                <div className="bg-success h-2 w-2 rounded-full" />
                             ) : (
                                 <X12 className="text-issue-dark" />
                             )

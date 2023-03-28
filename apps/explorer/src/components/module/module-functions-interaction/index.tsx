@@ -43,7 +43,7 @@ export function ModuleFunctionsInteraction({
                         details.
                     </Banner>
                 ) : isEmpty ? (
-                    <div className="text-body font-medium text-steel-dark">
+                    <div className="text-body text-steel-dark font-medium">
                         No public entry functions found.
                     </div>
                 ) : (

@@ -61,7 +61,7 @@ export function StakeButton() {
     if (!currentWallet) {
         return (
             <ConnectButton
-                className="!border !border-solid !border-steel-dark !bg-transparent !px-4 !py-3 !text-body !font-semibold !text-steel-dark !shadow-none"
+                className="!border-steel-dark !text-body !text-steel-dark !border !border-solid !bg-transparent !px-4 !py-3 !font-semibold !shadow-none"
                 connectText="Stake SUI"
             />
         );

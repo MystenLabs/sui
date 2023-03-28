@@ -41,7 +41,7 @@ function TxLinks({ data }: { data: Addresslist }) {
                                         objectId={obj.objectId}
                                         noTruncate
                                     />
-                                    <div className="h-4 w-4 leading-none text-gray-60 hover:text-steel">
+                                    <div className="text-gray-60 hover:text-steel h-4 w-4 leading-none">
                                         <IconTooltip
                                             tip={`VERSION ${obj.version}`}
                                         />

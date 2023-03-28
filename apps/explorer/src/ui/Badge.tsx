@@ -33,7 +33,7 @@ export function Badge({ variant, children }: BadgeProps) {
     return (
         <div className={badgeStyles({ variant })}>
             {variant === 'current' && (
-                <div className="h-2 w-2 rounded-full bg-success" />
+                <div className="bg-success h-2 w-2 rounded-full" />
             )}
             {variant === 'failure' && <XIcon />}
             {variant === 'success' && <CheckIcon />}

@@ -46,7 +46,7 @@ export function FunctionExecutionResult({
             spacing="lg"
             onDismiss={onClear}
         >
-            <div className="space-y-4 text-bodySmall">
+            <div className="text-bodySmall space-y-4">
                 <LinkGroup
                     title="Digest"
                     links={

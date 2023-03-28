@@ -87,13 +87,13 @@ function GasAmount({
 
     return (
         <div className="flex h-full items-center gap-1">
-            <div className="flex items-baseline gap-0.5 text-gray-90">
+            <div className="text-gray-90 flex items-baseline gap-0.5">
                 <Text variant="body/medium">{formattedAmount}</Text>
                 <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>
 
             <Text variant="bodySmall/medium">
-                <div className="flex items-center text-steel">
+                <div className="text-steel flex items-center">
                     (
                     <div className="flex items-baseline gap-0.5">
                         <div>{amount?.toLocaleString()}</div>
@@ -378,7 +378,7 @@ export function TransactionView({
                                             />
                                         </DescriptionItem>
 
-                                        <div className="h-px bg-gray-45" />
+                                        <div className="bg-gray-45 h-px" />
                                     </>
                                 )}
 

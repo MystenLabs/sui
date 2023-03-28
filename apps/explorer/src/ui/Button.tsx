@@ -51,7 +51,7 @@ export function Button({
             disabled={props.disabled || loading}
         >
             {loading && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                     <LoadingSpinner />
                 </div>
             )}

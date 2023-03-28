@@ -18,7 +18,7 @@ export function TableHeader({
     after,
 }: TableHeaderProps) {
     return (
-        <div className="flex items-center border-b border-gray-45 pb-5">
+        <div className="border-gray-45 flex items-center border-b pb-5">
             <div className="flex flex-1">
                 <Heading as={as} variant="heading4/semibold" color="gray-90">
                     {children}

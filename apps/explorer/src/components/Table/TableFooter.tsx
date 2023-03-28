@@ -54,7 +54,7 @@ export function TableFooter({
                         </Text>
 
                         <select
-                            className="form-select rounded-md border border-gray-45 px-3 py-2 pr-8 text-bodySmall font-medium leading-[1.2] text-steel-dark shadow-button"
+                            className="form-select border-gray-45 text-bodySmall text-steel-dark shadow-button rounded-md border px-3 py-2 pr-8 font-medium leading-[1.2]"
                             value={limit}
                             onChange={(e) => onLimitChange(+e.target.value)}
                         >

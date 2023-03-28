@@ -3,7 +3,7 @@
 }
 
 .mutatedcreatedlist ul li {
-    @apply pt-1.5 pb-1.5 font-mono;
+    @apply pb-1.5 pt-1.5 font-mono;
 }
 
 .mutatedcreatedlist ul li a,
@@ -17,7 +17,7 @@
 }
 
 .moretxbtn {
-    @apply cursor-pointer bg-transparent pl-0 pr-0 text-left text-sm font-normal text-[#636870] transition-colors duration-200 ease-in-out hover:text-gray-80;
+    @apply hover:text-gray-80 cursor-pointer bg-transparent pl-0 pr-0 text-left text-sm font-normal text-[#636870] transition-colors duration-200 ease-in-out;
 }
 
 .moretxbtn::after {

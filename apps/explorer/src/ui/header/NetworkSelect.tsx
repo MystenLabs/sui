@@ -67,7 +67,7 @@ function SelectableNetwork({
             role="button"
             onClick={onClick}
             className={clsx(
-                'flex items-start gap-3 rounded-md py-2 px-1.25 text-body font-semibold hover:bg-gray-40 ui-active:bg-gray-40',
+                'px-1.25 text-body hover:bg-gray-40 ui-active:bg-gray-40 flex items-start gap-3 rounded-md py-2 font-semibold',
                 state !== NetworkState.UNSELECTED
                     ? 'text-steel-darker'
                     : 'text-steel-dark'
@@ -129,7 +129,7 @@ function CustomRPCInput({
                 <button
                     disabled={!isDirty || !isValid}
                     type="submit"
-                    className="flex items-center justify-center rounded-full bg-gray-90 px-2 py-1 text-captionSmall font-semibold uppercase text-white transition disabled:bg-gray-45 disabled:text-gray-65"
+                    className="bg-gray-90 text-captionSmall disabled:bg-gray-45 disabled:text-gray-65 flex items-center justify-center rounded-full px-2 py-1 font-semibold uppercase text-white transition"
                 >
                     Save
                 </button>
@@ -146,7 +146,7 @@ function NetworkVersion({
     version: number | string;
 }) {
     return (
-        <div className="flex justify-between py-2 px-4">
+        <div className="flex justify-between px-4 py-2">
             <Text variant="subtitle/normal" color="steel">
                 Sui {label}
             </Text>
@@ -267,7 +267,7 @@ export function NetworkSelect({
                                         scale: 0.95,
                                     }}
                                     transition={{ duration: 0.15 }}
-                                    className="z-20 flex w-52 flex-col gap-2 rounded-lg border border-steel-dark border-opacity-10 bg-white px-3 py-4 shadow-lg focus:outline-none"
+                                    className="border-steel-dark z-20 flex w-52 flex-col gap-2 rounded-lg border border-opacity-10 bg-white px-3 py-4 shadow-lg focus:outline-none"
                                     style={{
                                         position: strategy,
                                         top: y ?? 0,
@@ -283,7 +283,7 @@ export function NetworkSelect({
                                         }}
                                     />
                                     {!!value && version ? (
-                                        <div className="-mx-3 -mb-4 mt-2 rounded-b-lg bg-gray-40">
+                                        <div className="bg-gray-40 -mx-3 -mb-4 mt-2 rounded-b-lg">
                                             <NetworkVersion
                                                 label={
                                                     selected?.label ??

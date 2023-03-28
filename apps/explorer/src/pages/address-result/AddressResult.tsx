@@ -18,7 +18,7 @@ function AddressResult() {
             <PageHeader type="Address" title={addressID!} />
 
             <div>
-                <div className="border-b border-gray-45 pb-5 md:mt-12">
+                <div className="border-gray-45 border-b pb-5 md:mt-12">
                     <Heading color="gray-90" variant="heading4/semibold">
                         Owned Objects
                     </Heading>
@@ -29,7 +29,7 @@ function AddressResult() {
             </div>
 
             <div>
-                <div className="border-b border-gray-45 pb-5">
+                <div className="border-gray-45 border-b pb-5">
                     <Heading color="gray-90" variant="heading4/semibold">
                         Transaction Blocks
                     </Heading>

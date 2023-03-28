@@ -19,7 +19,7 @@ function Home() {
     return (
         <div
             data-testid="home-page"
-            className="grid grid-cols-1 gap-y-10 gap-x-12 md:grid-cols-2"
+            className="grid grid-cols-1 gap-x-12 gap-y-10 md:grid-cols-2"
         >
             <ErrorBoundary>
                 <HomeMetrics />

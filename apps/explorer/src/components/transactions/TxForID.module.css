@@ -3,7 +3,7 @@
 }
 
 .txheader {
-    @apply hidden bg-offblack py-2 text-offwhite md:grid md:grid-cols-12;
+    @apply bg-offblack text-offwhite hidden py-2 md:grid md:grid-cols-12;
 }
 
 .txrow {

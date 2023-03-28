@@ -26,7 +26,7 @@ export function DelegationAmount({ amount, isStats }: DelegationAmountProps) {
         </div>
     ) : (
         <div className="flex h-full items-center gap-1">
-            <div className="flex items-baseline gap-0.5 break-all text-steel-darker">
+            <div className="text-steel-darker flex items-baseline gap-0.5 break-all">
                 <Text variant="body/medium">{formattedAmount}</Text>
                 <Text variant="subtitleSmall/medium">{symbol}</Text>
             </div>

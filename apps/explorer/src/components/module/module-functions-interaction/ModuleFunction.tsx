@@ -153,10 +153,10 @@ export function ModuleFunction({
                         }
                         size="md"
                         className={clsx(
-                            '!rounded-md !text-bodySmall',
+                            '!text-bodySmall !rounded-md',
                             isConnected
-                                ? '!border !border-solid !border-steel !bg-white !font-mono !text-hero-dark !shadow-sm !shadow-ebony/5'
-                                : '!flex !flex-nowrap !items-center !gap-1 !bg-sui-dark !font-sans !text-sui-light hover:!bg-sui-dark hover:!text-white'
+                                ? '!border-steel !text-hero-dark !shadow-ebony/5 !border !border-solid !bg-white !font-mono !shadow-sm'
+                                : '!bg-sui-dark !text-sui-light hover:!bg-sui-dark !flex !flex-nowrap !items-center !gap-1 !font-sans hover:!text-white'
                         )}
                     />
                 </div>

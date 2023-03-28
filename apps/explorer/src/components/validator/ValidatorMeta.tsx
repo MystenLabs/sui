@@ -25,7 +25,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
 
     return (
         <>
-            <div className="flex basis-full gap-5 border-r border-transparent border-r-gray-45 md:mr-7.5 md:basis-1/4">
+            <div className="border-r-gray-45 md:mr-7.5 flex basis-full gap-5 border-r border-transparent md:basis-1/4">
                 <ImageIcon
                     src={logo}
                     label={validatorName}
@@ -41,7 +41,7 @@ export function ValidatorMeta({ validatorData }: ValidatorMetaProps) {
                             href={projectUrl}
                             target="_blank"
                             rel="noreferrer noopener"
-                            className="mt-2.5 inline-flex items-center gap-1.5 text-body font-medium text-sui-dark no-underline"
+                            className="text-body text-sui-dark mt-2.5 inline-flex items-center gap-1.5 font-medium no-underline"
                         >
                             {projectUrl}
                             <ArrowUpRight12 className="text-steel" />

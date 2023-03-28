@@ -76,7 +76,7 @@ export function PageHeader({ title, subtitle, type, status }: PageHeaderProps) {
                             navigator.clipboard.writeText(title);
                             toast.success('Copied!');
                         }}
-                        className="m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-xl text-steel transition-colors hover:text-steel-dark"
+                        className="text-steel hover:text-steel-dark m-0 -mt-0.5 flex cursor-pointer items-center justify-center border-none bg-transparent p-0 text-xl transition-colors"
                     >
                         <span className="sr-only">Copy</span>
                         <CopyNew24 aria-hidden="true" />

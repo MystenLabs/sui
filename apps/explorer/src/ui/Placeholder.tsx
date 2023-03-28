@@ -12,7 +12,7 @@ export function Placeholder({
 }: PlaceholderProps) {
     return (
         <div
-            className="h-[1em] w-full animate-shimmer rounded-[3px] bg-placeholderShimmer bg-[length:1000px_100%]"
+            className="animate-shimmer bg-placeholderShimmer h-[1em] w-full rounded-[3px] bg-[length:1000px_100%]"
             style={{ width, height }}
         />
     );
