@@ -158,7 +158,7 @@ impl ExecutionEffects {
             crate::ExecutionEffects::CertifiedTransactionEffects(a, _) => {
                 a.data().gas_cost_summary().clone()
             }
-            crate::ExecutionEffects::SuiTransactionEffects(b) => {
+            crate::ExecutionEffects::SuiTransactionBlockEffects(b) => {
                 std::convert::Into::<GasCostSummary>::into(b.gas_cost_summary().clone())
             }
         }
