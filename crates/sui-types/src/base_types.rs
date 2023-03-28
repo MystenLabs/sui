@@ -120,12 +120,16 @@ pub fn random_object_ref() -> ObjectRef {
 }
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
-/// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win
+/// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
+/// The inner representation is private to prevent incorrectly constructing an `Other` instead of
+/// one of the specialized variants, e.g. `Other(GasCoin::type_())` instead of `GasCoin`
 #[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObjectType(MoveObjectType_);
 
+/// Even though it is declared public, it is the "private", internal representation for
+/// `MoveObjectType`
 #[derive(Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Deserialize, Serialize, Hash)]
-enum MoveObjectType_ {
+pub enum MoveObjectType_ {
     /// A type that is not 0x2::coin::Coin<T>
     Other(StructTag),
     /// A SUI coin (i.e., 0x2::coin::Coin<0x2::sui::SUI>)
