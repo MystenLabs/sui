@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use itertools::Itertools;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::time::Instant;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
@@ -16,7 +18,7 @@ use tracing::{debug, error};
 
 pub(crate) fn cross_validate_entities<U>(entities: &Vec<Vec<U>>, entity_name: &str)
 where
-    U: PartialEq + std::fmt::Debug,
+    U: PartialEq + Debug,
 {
     if entities.len() < 2 {
         error!("Unable to cross validate as {} less than 2", entity_name);
@@ -130,19 +132,45 @@ pub(crate) fn get_all_object_ids(response: &SuiTransactionBlockResponse) -> Vec<
         .collect::<Vec<_>>()
 }
 
-// todo: this and check_transactions can be generic
+pub(crate) fn chunk_entities<U>(entities: &[U], chunk_size: Option<usize>) -> Vec<Vec<U>>
+where
+    U: Clone + PartialEq + Debug,
+{
+    let chunk_size = chunk_size.unwrap_or(QUERY_MAX_RESULT_LIMIT);
+    entities
+        .iter()
+        .cloned()
+        .chunks(chunk_size)
+        .into_iter()
+        .map(|chunk| chunk.collect())
+        .collect()
+}
+
 pub(crate) async fn check_objects(
     clients: &[SuiClient],
     object_ids: &[ObjectID],
     cross_validate: bool,
 ) {
+    let chunks = chunk_entities(object_ids, None);
+    let results = join_all(chunks.iter().map(|chunk| multi_get_object(clients, chunk))).await;
+
+    if cross_validate {
+        for result in results {
+            cross_validate_entities(&result, "Objects");
+        }
+    }
+}
+
+pub(crate) async fn multi_get_object(
+    clients: &[SuiClient],
+    object_ids: &[ObjectID],
+) -> Vec<Vec<SuiObjectResponse>> {
     let objects: Vec<Vec<SuiObjectResponse>> =
         join_all(clients.iter().enumerate().map(|(i, client)| async move {
-            // TODO: support chunking so that we don't exceed query limit
             let object_ids = if object_ids.len() > QUERY_MAX_RESULT_LIMIT {
                 warn!(
                     "The input size for multi_get_object_with_options has exceed the query limit\
-             {QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
+         {QUERY_MAX_RESULT_LIMIT}: {}, time to implement chunking",
                     object_ids.len()
                 );
                 &object_ids[0..QUERY_MAX_RESULT_LIMIT]
@@ -178,8 +206,5 @@ pub(crate) async fn check_objects(
             }
         })
         .collect();
-
-    if cross_validate {
-        cross_validate_entities(&objects, "Objects");
-    }
+    objects
 }
