@@ -1518,6 +1518,9 @@ impl ProtocolConfig {
     pub fn set_package_upgrades_for_testing(&mut self, val: bool) {
         self.feature_flags.package_upgrades = val
     }
+    pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
+        self.feature_flags.commit_root_state_digest = val
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

@@ -21,6 +21,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_node::SuiNode;
+use sui_protocol_config::ProtocolConfig;
 use sui_tool::restore_from_db_checkpoint;
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
@@ -1041,6 +1042,11 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 // Test for restoring a full node from a db snapshot
 #[sim_test]
 async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
+    let _override = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_commit_root_state_digest_supported(true);
+        config
+    });
+
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10_000)

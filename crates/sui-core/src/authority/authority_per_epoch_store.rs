@@ -78,6 +78,7 @@ use super::epoch_start_configuration::EpochStartConfigTrait;
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
+const STATE_CONSISTENCY_VERIFIED_ADDR: u64 = 0;
 const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
@@ -230,6 +231,12 @@ pub struct AuthorityEpochTables {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, ExecutionIndicesWithHash>,
+
+    /// This table contains a single value - a boolean flag that indicates whether
+    /// the authority state has been verified for consistency against a state commitment
+    /// certified by the network. Initially set to true, then value carried over during
+    /// reconfiguration to the new epoch store.
+    state_consistency_verified: DBMap<u64, bool>,
 
     /// This table lists all checkpoint boundaries in the consensus sequence
     ///
@@ -602,6 +609,21 @@ impl AuthorityPerEpochStore {
             .get(&LAST_CONSENSUS_INDEX_ADDR)
             .map(|x| x.unwrap_or_default())
             .map_err(SuiError::from)
+    }
+
+    pub fn get_is_state_consistency_verified(&self) -> SuiResult<bool> {
+        self.tables
+            .state_consistency_verified
+            .get(&STATE_CONSISTENCY_VERIFIED_ADDR)
+            .map(|x| x.unwrap_or_default())
+            .map_err(SuiError::from)
+    }
+
+    pub fn set_is_state_consistency_verified(&self, is_verified: bool) -> SuiResult {
+        Ok(self
+            .tables
+            .state_consistency_verified
+            .insert(&STATE_CONSISTENCY_VERIFIED_ADDR, &is_verified)?)
     }
 
     pub fn get_accumulators_in_checkpoint_range(

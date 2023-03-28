@@ -20,6 +20,8 @@ use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
 use sui_core::consensus_adapter::LazyNarwhalClient;
+use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
@@ -235,6 +237,17 @@ impl SuiNode {
             genesis.checkpoint_contents().clone(),
             &epoch_store,
         );
+
+        let accumulator = Arc::new(StateAccumulator::new(store.clone()));
+
+        Self::verify_state_consistency(
+            accumulator.clone(),
+            epoch_store.clone(),
+            checkpoint_store.clone(),
+            cur_epoch,
+        )
+        .unwrap_or_else(|err| panic!("Failed to verify state consistency : {:?}", err));
+
         let state_sync_store = RocksDbStore::new(
             store.clone(),
             committee_store.clone(),
@@ -343,8 +356,6 @@ impl SuiNode {
             &prometheus_registry,
         )
         .await?;
-
-        let accumulator = Arc::new(StateAccumulator::new(store));
 
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_state()
@@ -950,6 +961,12 @@ impl SuiNode {
                 &new_epoch_start_state,
             );
 
+            let was_verified = cur_epoch_store
+                .get_is_state_consistency_verified()
+                .unwrap_or_else(|err| {
+                    panic!("get_is_state_consistency_verified failed: {:?}", err)
+                });
+
             // The following code handles 4 different cases, depending on whether the node
             // was a validator in the previous epoch, and whether the node is a validator
             // in the new epoch.
@@ -979,12 +996,25 @@ impl SuiNode {
 
                 #[cfg(msim)]
                 {
-                    self.check_is_consistent_state(
+                    let state_digest_commitment = self
+                        .state
+                        .database
+                        .get_root_state_hash(cur_epoch_store.epoch())
+                        .expect("Retrieving root state hash cannot fail");
+                    Self::check_is_consistent_state(
                         self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
+                        state_digest_commitment,
                         true,
                     );
                 }
+
+                // carry over flag from previous epoch so that we don't re-verify
+                // system state in the new epoch if we ever restart
+                new_epoch_store
+                    .set_is_state_consistency_verified(was_verified)
+                    .unwrap_or_else(|err| {
+                        panic!("set_is_state_consistency_verified failed: {:?}", err)
+                    });
 
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1023,6 +1053,14 @@ impl SuiNode {
                     )
                     .await;
 
+                // carry over flag from previous epoch so that we don't re-verify
+                // system state in the new epoch if we ever restart
+                new_epoch_store
+                    .set_is_state_consistency_verified(was_verified)
+                    .unwrap_or_else(|err| {
+                        panic!("set_is_state_consistency_verified failed: {:?}", err)
+                    });
+
                 if self.state.is_validator(&new_epoch_store) {
                     info!("Promoting the node from fullnode to validator, starting grpc server");
 
@@ -1043,9 +1081,14 @@ impl SuiNode {
                     )
                 } else {
                     // was a fullnode, still a fullnode
-                    let is_inconsistent = self.check_is_consistent_state(
+                    let state_digest_commitment = self
+                        .state
+                        .database
+                        .get_root_state_hash(cur_epoch_store.epoch())
+                        .expect("Retrieving root state hash cannot fail");
+                    let is_inconsistent = Self::check_is_consistent_state(
                         self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
+                        state_digest_commitment,
                         false,
                     );
                     checkpoint_executor.set_inconsistent_state(is_inconsistent);
@@ -1056,31 +1099,6 @@ impl SuiNode {
             *self.validator_components.lock().await = new_validator_components;
             info!("Reconfiguration finished");
         }
-    }
-
-    fn check_is_consistent_state(
-        &self,
-        accumulator: Arc<StateAccumulator>,
-        epoch: EpochId,
-        panic: bool,
-    ) -> bool {
-        let live_object_set_hash = accumulator.digest_live_object_set();
-
-        let root_state_hash = self
-            .state
-            .database
-            .get_root_state_hash(epoch)
-            .expect("Retrieving root state hash cannot fail");
-
-        let is_inconsistent = root_state_hash != live_object_set_hash;
-        if is_inconsistent && panic {
-            panic!(
-                "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
-                root_state_hash, live_object_set_hash
-            );
-        }
-
-        is_inconsistent
     }
 
     async fn reconfigure_state(
@@ -1114,6 +1132,73 @@ impl SuiNode {
         info!(next_epoch, "Validator State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
+    }
+
+    fn check_is_consistent_state(
+        accumulator: Arc<StateAccumulator>,
+        state_digest_commitment: ECMHLiveObjectSetDigest,
+        panic: bool,
+    ) -> bool {
+        let live_object_set_hash = accumulator.digest_live_object_set();
+        let is_inconsistent = state_digest_commitment != live_object_set_hash;
+        if is_inconsistent && panic {
+            panic!(
+                "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                state_digest_commitment, live_object_set_hash
+            );
+        }
+
+        is_inconsistent
+    }
+
+    fn verify_state_consistency(
+        accumulator: Arc<StateAccumulator>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_store: Arc<CheckpointStore>,
+        cur_epoch: EpochId,
+    ) -> SuiResult {
+        if epoch_store
+            .protocol_config()
+            .check_commit_root_state_digest_supported()
+            && !epoch_store.get_is_state_consistency_verified()?
+        {
+            // TODO(william) THERE ARE TWO ISSUES HERE!!
+            //
+            // The first is that we don't have the mapping for the last checkpoint
+            // of the epoch when restoring from snapshot, as it is not contained within
+            // the snapshot. Therefore we need another way to find the final checkpoint.
+            //
+            // The second is that we don't know how to interpret if there is no last
+            // checkpoint of the epoch in the db. Could be that we are starting from
+            // a new node (in this case, there may only be the genesis checkpoint, and
+            // we will intentionally want to skip verification and call it verified).
+            // It could also be that we are in the middle of the first epoch (in which
+            // case is_verified should be true, so we should not be here),or it could be
+            // that the snapshot is corrupted to not contain the checkpoint so that we
+            // intentionally skip verification. In this case, we would end up panicking
+            // when we attempt to add the next checkpoint and find that the previous
+            // checkpoint hash is incorrect (do we actually check this on fullnodes?)
+            let checkpoint = checkpoint_store
+                .get_epoch_last_checkpoint(cur_epoch)?
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Entry for epoch {} does not exist in epoch_last_checkpoint_map",
+                        cur_epoch
+                    )
+                });
+            let epoch_commitment = checkpoint
+                .end_of_epoch_data
+                .as_ref()
+                .expect("Checkpoint store should be at epoch boundary after restore from snapshot")
+                .epoch_commitments
+                .first();
+            if let Some(CheckpointCommitment::ECMHLiveObjectSetDigest(digest)) = epoch_commitment {
+                Self::check_is_consistent_state(accumulator, digest.clone(), true);
+                epoch_store.set_is_state_consistency_verified(true)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
