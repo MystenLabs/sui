@@ -12,7 +12,7 @@ runs:
         fetch-depth: 0
     - uses: pnpm/action-setup@v2.2.2
       with:
-        version: 7
+        version: 8
     - id: changes
       name: Detect changes
       shell: bash
