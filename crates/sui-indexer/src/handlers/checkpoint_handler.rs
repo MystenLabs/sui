@@ -474,11 +474,11 @@ where
             None
         };
 
-        let total_command = db_transactions.iter().map(|t| t.command_count).sum();
+        let total_transactions = db_transactions.iter().map(|t| t.transaction_count).sum();
 
         Ok((
             TemporaryCheckpointStore {
-                checkpoint: Checkpoint::from(checkpoint, total_command)?,
+                checkpoint: Checkpoint::from(checkpoint, total_transactions)?,
                 transactions: db_transactions,
                 events,
                 objects_changes,
