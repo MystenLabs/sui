@@ -1,5 +1,93 @@
 # @mysten/wallet-kit
 
+## 0.4.0
+
+### Minor Changes
+
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 5c3b00cde: Add object id to staking pool and pool id to staked sui.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+- c718deef4: wallet-standard: changes sui:signAndExecuteTransaction and sui:signTransaction features to support account and chain options
+  wallet-adapter-wallet-standard: change signAndExecuteTransaction and signTransaction signatures to support account and chain options
+  wallet-adapter-wallet-standard: ensure version compatibility for of the wallet signAndExecuteTransaction and signTransaction features before using them (same major version)
+  wallet-kit-core/wallet-kit: expose accounts as ReadonlyWalletAccount instead of only the address
+  wallet-kit-core: signTransaction and signAndExecuteTransaction methods mirror the ones in standard adapter
+
+### Patch Changes
+
+- bf545c7d0: Add `features` prop to wallet kit that allows dapps to define which features they require to function properly.
+- Updated dependencies [956ec28eb]
+- Updated dependencies [4adfbff73]
+- Updated dependencies [4c4573ebe]
+- Updated dependencies [acc2edb31]
+- Updated dependencies [941b03af1]
+- Updated dependencies [a6690ac7d]
+- Updated dependencies [a211dc03a]
+- Updated dependencies [4c1e331b8]
+- Updated dependencies [19b567f21]
+- Updated dependencies [7659e2e91]
+- Updated dependencies [0d3cb44d9]
+- Updated dependencies [00bb9bb66]
+- Updated dependencies [36c264ebb]
+- Updated dependencies [891abf5ed]
+- Updated dependencies [2e0ef59fa]
+- Updated dependencies [33cb357e1]
+- Updated dependencies [6bd88570c]
+- Updated dependencies [f1e42f792]
+- Updated dependencies [272389c20]
+- Updated dependencies [3de8de361]
+- Updated dependencies [be3c4f51e]
+- Updated dependencies [dbe73d5a4]
+- Updated dependencies [14ba89144]
+- Updated dependencies [c82e4b454]
+- Updated dependencies [7a2eaf4a3]
+- Updated dependencies [2ef2bb59e]
+- Updated dependencies [9b29bef37]
+- Updated dependencies [8700809b5]
+- Updated dependencies [5c3b00cde]
+- Updated dependencies [01272ab7d]
+- Updated dependencies [9822357d6]
+- Updated dependencies [bf545c7d0]
+- Updated dependencies [3d9a04648]
+- Updated dependencies [da72e73a9]
+- Updated dependencies [0672b5990]
+- Updated dependencies [a0955c479]
+- Updated dependencies [3eb3a1de8]
+- Updated dependencies [0c9047698]
+- Updated dependencies [4593333bd]
+- Updated dependencies [d5ef1b6e5]
+- Updated dependencies [0a7b42a6d]
+- Updated dependencies [3de8de361]
+- Updated dependencies [dd348cf03]
+- Updated dependencies [c718deef4]
+- Updated dependencies [57c17e02a]
+- Updated dependencies [65f1372dd]
+- Updated dependencies [a09239308]
+- Updated dependencies [fe335e6ba]
+- Updated dependencies [5dc25faad]
+- Updated dependencies [64234baaf]
+- Updated dependencies [79c2165cb]
+- Updated dependencies [d3170ba41]
+- Updated dependencies [68e60b02c]
+- Updated dependencies [a6ffb8088]
+- Updated dependencies [3304eb83b]
+- Updated dependencies [4189171ef]
+- Updated dependencies [210840114]
+- Updated dependencies [77bdf907f]
+- Updated dependencies [a74df16ec]
+- Updated dependencies [0f7aa6507]
+- Updated dependencies [9b60bf700]
+- Updated dependencies [dbe73d5a4]
+- Updated dependencies [64fb649eb]
+- Updated dependencies [a6b0c4e5f]
+  - @mysten/wallet-standard@0.5.0
+  - @mysten/sui.js@0.30.0
+  - @mysten/wallet-adapter-wallet-standard@0.7.0
+  - @mysten/wallet-adapter-unsafe-burner@0.8.0
+  - @mysten/wallet-adapter-base@0.7.0
+  - @mysten/wallet-kit-core@0.4.0
+
 ## 0.3.3
 
 ### Patch Changes

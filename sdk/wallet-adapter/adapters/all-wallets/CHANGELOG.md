@@ -1,5 +1,30 @@
 # @mysten/wallet-adapter-all-wallets
 
+## 0.5.0
+
+### Minor Changes
+
+- 19b567f21: Unified self- and delegated staking flows. Removed fields from `Validator` (`stake_amount`, `pending_stake`, and `pending_withdraw`) and renamed `delegation_staking_pool` to `staking_pool`. Additionally removed the `validator_stake` and `delegated_stake` fields in the `ValidatorSet` type and replaced them with a `total_stake` field.
+- 5c3b00cde: Add object id to staking pool and pool id to staked sui.
+- 3d9a04648: Adds `deactivation_epoch` to staking pool object, and adds `inactive_pools` to the validator set object.
+- 0a7b42a6d: This changes almost all occurences of "delegate", "delegation" (and various capitalizations/forms) to their equivalent "stake"-based name. Function names, function argument names, RPC endpoints, Move functions, and object fields have been updated with this new naming convention.
+
+### Patch Changes
+
+- Updated dependencies [19b567f21]
+- Updated dependencies [5c3b00cde]
+- Updated dependencies [bf545c7d0]
+- Updated dependencies [3d9a04648]
+- Updated dependencies [da72e73a9]
+- Updated dependencies [0a7b42a6d]
+- Updated dependencies [c718deef4]
+- Updated dependencies [68e60b02c]
+- Updated dependencies [a6ffb8088]
+- Updated dependencies [dbe73d5a4]
+- Updated dependencies [64fb649eb]
+  - @mysten/wallet-adapter-wallet-standard@0.7.0
+  - @mysten/wallet-adapter-unsafe-burner@0.8.0
+
 ## 0.4.3
 
 ### Patch Changes
