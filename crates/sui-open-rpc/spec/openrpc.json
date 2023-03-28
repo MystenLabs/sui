@@ -4290,9 +4290,7 @@
       "NetworkMetrics": {
         "type": "object",
         "required": [
-          "cps30Days",
           "currentCheckpoint",
-          "currentCps",
           "currentEpoch",
           "currentTps",
           "totalAddresses",
@@ -4301,21 +4299,11 @@
           "tps30Days"
         ],
         "properties": {
-          "cps30Days": {
-            "description": "Peak CPS in the past 30 days",
-            "type": "number",
-            "format": "double"
-          },
           "currentCheckpoint": {
             "description": "Current checkpoint number",
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
-          },
-          "currentCps": {
-            "description": "Current TPS - Sui Command per Second.",
-            "type": "number",
-            "format": "double"
           },
           "currentEpoch": {
             "description": "Current epoch number",
@@ -4324,7 +4312,7 @@
             "minimum": 0.0
           },
           "currentTps": {
-            "description": "Current TPS - Transaction per Second.",
+            "description": "Current TPS - Transaction Blocks per Second.",
             "type": "number",
             "format": "double"
           },

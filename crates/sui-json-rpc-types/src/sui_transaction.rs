@@ -326,7 +326,7 @@ impl SuiTransactionBlockKind {
         })
     }
 
-    pub fn command_count(&self) -> usize {
+    pub fn transaction_count(&self) -> usize {
         match self {
             Self::ProgrammableTransaction(p) => p.commands.len(),
             _ => 1,
