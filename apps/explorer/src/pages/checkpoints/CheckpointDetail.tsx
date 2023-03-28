@@ -6,7 +6,7 @@ import { useRpcClient, convertNumberToDate } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useParams } from 'react-router-dom';
 
-import { CheckpointTransactions } from './Transactions';
+import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
 import { Banner } from '~/ui/Banner';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
@@ -41,7 +41,8 @@ function CheckpointDetail() {
                 <TabGroup as="div" size="lg">
                     <TabList>
                         <Tab>Details</Tab>
-                        <Tab>Signatures</Tab>
+                        {/* TODO: Get validator signatures */}
+                        {/* <Tab>Signatures</Tab> */}
                     </TabList>
                     <TabPanels>
                         <TabPanel>
@@ -134,11 +135,11 @@ function CheckpointDetail() {
 
                 <TabGroup as="div" size="lg">
                     <TabList>
-                        <Tab>Checkpoint Transactions</Tab>
+                        <Tab>Checkpoint Transaction Blocks</Tab>
                     </TabList>
                     <TabPanels>
                         <div className="mt-4">
-                            <CheckpointTransactions
+                            <CheckpointTransactionBlocks
                                 digest={data.digest}
                                 transactions={data.transactions || []}
                             />
