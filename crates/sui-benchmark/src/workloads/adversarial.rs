@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use itertools::Itertools;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
+use regex::Regex;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -33,7 +34,8 @@ const NUM_VECTORS: u64 = 1_000;
 
 #[derive(Debug, EnumCountMacro, EnumIter, Clone)]
 pub enum AdversarialPayloadType {
-    LargeObjects = 1,
+    Random = 0,
+    LargeObjects,
     LargeEvents,
     DynamicFieldReads,
     LargeTransientRuntimeVectors,
@@ -50,21 +52,42 @@ impl TryFrom<u32> for AdversarialPayloadType {
     type Error = anyhow::Error;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
-        AdversarialPayloadType::iter()
-            .nth(value as usize)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Invalid adversarial workload specifier. Valid options are {} to {}",
-                    0,
-                    AdversarialPayloadType::COUNT
-                )
-            })
+        match value {
+            0 => Ok(rand::random()),
+            _ => AdversarialPayloadType::iter()
+                .nth(value as usize)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Invalid adversarial workload specifier. Valid options are {} to {}",
+                        0,
+                        AdversarialPayloadType::COUNT
+                    )
+                }),
+        }
+    }
+}
+
+impl FromStr for AdversarialPayloadType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = u32::from_str(s).map(AdversarialPayloadType::try_from);
+
+        if let Ok(Ok(q)) = v {
+            return Ok(q);
+        }
+
+        Err(anyhow!(
+            "Invalid input string. Valid values are 0 to {}",
+            AdversarialPayloadType::COUNT
+        ))
     }
 }
 
 impl Distribution<AdversarialPayloadType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AdversarialPayloadType {
-        let n = rng.gen_range(0..AdversarialPayloadType::COUNT);
+        // Excluse the "Random" variant
+        let n = rng.gen_range(1..AdversarialPayloadType::COUNT);
         AdversarialPayloadType::iter().nth(n).unwrap()
     }
 }
@@ -89,29 +112,34 @@ impl std::fmt::Display for AdversarialTestPayload {
 
 #[derive(Debug, Clone)]
 pub struct AdversarialPayloadCfg {
-    pub payload_type: Option<AdversarialPayloadType>,
-    pub load_pct: f32,
+    pub payload_type: AdversarialPayloadType,
+    pub load_factor: f32,
 }
 
 impl FromStr for AdversarialPayloadCfg {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Matches regex for two numbers delimited by a hyphen, where the left number must be positive
+        // and the right number must be a float between 0.0 inclusive and 1.0 inclusive
+        let re = Regex::new(
+            r"^(?:0|[1-9]\d*)-(?:0(?:\.\d+)?|1(?:\.0+)?|[1-9](?:\d*(?:\.\d+)?)?|\.\d+)$",
+        )
+        .unwrap();
+        if !re.is_match(s) {
+            return Err(anyhow!("invalid load config"));
+        };
         let toks = s.split('-').collect_vec();
-        if toks.len() != 2
-            || toks[0].parse::<u32>().is_err()
-            || toks[1].parse::<f32>().is_err()
-            || (0.0..1.0).contains(&toks[1].parse::<f32>().unwrap())
-        {
-            return Err(anyhow!("adversarial payload config format incorrect"));
+        let payload_type = AdversarialPayloadType::from_str(toks[0])?;
+        let load_factor = toks[1].parse::<f32>().unwrap();
+
+        if !(0.0..=1.0).contains(&load_factor) {
+            return Err(anyhow!("invalid load factor. Valid range is [0.0, 1.0]"));
         };
 
         Ok(AdversarialPayloadCfg {
-            payload_type: match toks[0].parse::<u32>().unwrap() {
-                0 => None,
-                x => Some(AdversarialPayloadType::try_from(x)?),
-            },
-            load_pct: toks[1].parse::<f32>().unwrap(),
+            payload_type,
+            load_factor,
         })
     }
 }
@@ -135,10 +163,7 @@ impl Payload for AdversarialTestPayload {
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        let payload_type = self
-            .adversarial_payload_cfg
-            .payload_type
-            .unwrap_or_else(rand::random);
+        let payload_type = self.adversarial_payload_cfg.payload_type;
 
         let gas_budget = self
             .system_state_observer
@@ -175,10 +200,10 @@ impl Payload for AdversarialTestPayload {
 }
 
 impl AdversarialTestPayload {
-    // Return a percentage based on load_pct
+    // Return a percentage based on load_factor
     fn get_pct_of(&self, x: u64) -> u64 {
         let mut x = x as f64;
-        x *= f64::from(self.adversarial_payload_cfg.load_pct);
+        x *= f64::from(self.adversarial_payload_cfg.load_factor);
         x as u64
     }
 
@@ -247,6 +272,9 @@ impl AdversarialTestPayload {
                     args,
                 }
             }
+            AdversarialPayloadType::Random => {
+                self.get_payload_args(&(rand::random()), protocol_config)
+            }
         }
     }
 }
@@ -288,15 +316,11 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
         mut init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
-        if self.adversarial_payload_cfg.payload_type.is_none() {
-            eprintln!("Using random adversarial workloads");
-        } else {
-            eprintln!(
-                "Using `{:?}` adversarial workloads at {}% load factor",
-                self.adversarial_payload_cfg.payload_type.unwrap(),
-                self.adversarial_payload_cfg.load_pct * 100.0
-            );
-        };
+        eprintln!(
+            "Using `{:?}` adversarial workloads at {}% load factor",
+            self.adversarial_payload_cfg.payload_type,
+            self.adversarial_payload_cfg.load_factor * 100.0
+        );
 
         Box::<dyn Workload<dyn Payload>>::from(Box::new(AdversarialWorkload {
             package_id: ObjectID::ZERO,
@@ -400,6 +424,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
                 if tag.to_string().contains("::adversarial::Obj") {
                     self.df_parent_obj_ref = o.0;
                 }
+                println!("{}", tag);
             }
         }
         assert!(
