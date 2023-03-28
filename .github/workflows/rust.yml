@@ -286,8 +286,8 @@ jobs:
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
-          /home/runner/.cargo/bin/cargo run -p sui -- move prove -p sui-framework
-          /home/runner/.cargo/bin/cargo run -p sui -- move prove -p sui-system
+          ../../../target/debug/sui move prove -p sui-framework
+          ../../../target/debug/sui move prove -p sui-system
 
   indexer:
     name: indexer
