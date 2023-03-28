@@ -74,7 +74,6 @@
     "eslint-config-prettier": "^8.7.0",
     "eslint-config-react-app": "^7.0.1",
     "eslint-plugin-prettier": "^4.2.1",
-    "mockttp": "^3.7.0",
     "prettier": "^2.8.4",
     "size-limit": "^8.2.4",
     "tmp": "^0.2.1",
@@ -95,6 +94,7 @@
     "@scure/bip39": "^1.1.1",
     "@suchipi/femver": "^1.0.0",
     "jayson": "^4.0.0",
+    "msw": "^1.2.1",
     "rpc-websockets": "^7.5.1",
     "superstruct": "^1.0.3",
     "tweetnacl": "^1.0.3"
