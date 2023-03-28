@@ -379,12 +379,18 @@ async fn genesis(
 
     let mut genesis_conf = match from_config {
         Some(path) => {
+            let keystore_path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
+            let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+            let gas_key = GenesisConfig::benchmark_gas_key();
+            keystore.add_key(gas_key)?;
+            keystore.save()?;
+
             let mut x: GenesisConfig = PersistedConfig::read(&path)?;
             x.parameters.chain_start_timestamp_ms = 0;
             let mut y = GenesisConfig::new_for_benchmarks(&benchmark_ips.unwrap());
             y.parameters.chain_start_timestamp_ms = 0;
             assert_eq!(x, y);
-            x
+            y
         }
         None => {
             if let Some(ips) = benchmark_ips {
