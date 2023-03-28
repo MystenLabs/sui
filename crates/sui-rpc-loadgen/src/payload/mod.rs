@@ -75,6 +75,7 @@ impl Command {
         end: Option<CheckpointSequenceNumber>,
         verify_transactions: bool,
         verify_objects: bool,
+        record: bool,
     ) -> Self {
         Self {
             data: CommandData::GetCheckpoints(GetCheckpoints {
@@ -82,6 +83,7 @@ impl Command {
                 end,
                 verify_transactions,
                 verify_objects,
+                record,
             }),
             ..Default::default()
         }
@@ -138,6 +140,7 @@ pub struct GetCheckpoints {
     pub end: Option<CheckpointSequenceNumber>,
     pub verify_transactions: bool,
     pub verify_objects: bool,
+    pub record: bool,
 }
 
 #[derive(Clone)]
@@ -156,6 +159,9 @@ pub trait Processor {
 
     /// prepare payload for each thread according to LoadTestConfig
     async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>>;
+
+    /// write results to file based on LoadTestConfig
+    fn dump_cache_to_file(&self, config: &LoadTestConfig);
 }
 
 /// all payload should implement this trait
