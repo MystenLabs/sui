@@ -292,7 +292,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     // Unfortunately event store writes seem to add some latency so this wait is needed
     sleep(Duration::from_millis(1000)).await;
 
-    /* // one event is stored, and can be looked up by digest
+    // one event is stored, and can be looked up by digest
     // query by timestamp verifies that a timestamp is inserted, within an hour
     let sender_balance_change = BalanceChange {
         change_type: BalanceChangeType::Pay,
@@ -416,7 +416,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
     assert_eq!(events_by_module.len(), 2);
     assert_eq!(events_by_module[0], sender_event);
-    assert_eq!(events_by_module[1], recipient_event);*/
+    assert_eq!(events_by_module[1], recipient_event);
 
     Ok(())
 }
