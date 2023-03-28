@@ -386,11 +386,11 @@ async fn genesis(
             keystore.save()?;
 
             //
-            let mut x: GenesisConfig = PersistedConfig::read(&path)?;
-            x.parameters.chain_start_timestamp_ms = 0;
+            // let mut x: GenesisConfig = PersistedConfig::read(&path)?;
+            // x.parameters.chain_start_timestamp_ms = 0;
             let mut y = GenesisConfig::new_for_benchmarks(&benchmark_ips.unwrap());
             y.parameters.chain_start_timestamp_ms = 0;
-            assert_eq!(x, y);
+            // assert_eq!(x, y);
             y
         }
         None => {
