@@ -10,6 +10,8 @@ pub mod sui;
 /// The minimum interface that the protocol should implement to allow benchmarks from
 /// the orchestrator.
 pub trait ProtocolCommands {
+    /// The port where the node exposes prometheus metrics.
+    const NODE_METRICS_PORT: u16;
     /// The port where the client exposes prometheus metrics.
     const CLIENT_METRICS_PORT: u16;
 

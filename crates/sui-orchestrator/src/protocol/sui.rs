@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use sui_config::genesis_config::GenesisConfig;
+use sui_config::genesis_config::{GenesisConfig, ValidatorGenesisInfo};
 use sui_types::multiaddr::Multiaddr;
 
 use crate::{benchmark::BenchmarkParameters, client::Instance, settings::Settings};
@@ -17,6 +17,7 @@ pub struct SuiProtocol {
 }
 
 impl ProtocolCommands for SuiProtocol {
+    const NODE_METRICS_PORT: u16 = ValidatorGenesisInfo::DEFAULT_METRICS_PORT;
     const CLIENT_METRICS_PORT: u16 = 8081;
 
     fn protocol_dependencies() -> Vec<&'static str> {
