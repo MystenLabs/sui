@@ -358,7 +358,7 @@ impl Orchestrator {
             let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
             let keystore = format!(
                 "~/working_dir/sui_config/{}",
-                SuiProtocol::GAS_KEYSTORE_FILE
+                sui_config::SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME
             );
 
             let run = [
@@ -547,7 +547,9 @@ impl Orchestrator {
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
-            time::sleep(Duration::from_secs(30)).await; //
+
+            // TODO: Detect when the client's binary is compiled.
+            time::sleep(Duration::from_secs(60)).await;
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.collect_metrics(&parameters).await?;
