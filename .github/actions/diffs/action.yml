@@ -23,7 +23,6 @@ runs:
         isRust:
           - 'crates/**'
           - 'narwhal/**'
-          - 'sui_programmability/**'
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
@@ -32,6 +31,9 @@ runs:
           - '*.md'
           - '.github/workflows/docs.yml'
         isMove:
-          - 'crates/sui-framework/sources/**'
-          - 'crates/sui/src/sui_move/**'
+          - 'crates/sui-framework/**'
+          - 'crates/sui-framework-build/**'
+          - 'crates/sui-framework-tests/**'
+          - 'crates/sui_move/**'
           - 'Cargo.toml'
+          - 'sui_programmability/**'
