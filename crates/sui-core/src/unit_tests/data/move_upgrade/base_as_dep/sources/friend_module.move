@@ -16,3 +16,4 @@ module base_addr::friend_module {
 
     fun non_public_fun(y: bool): u64 { if (y) 0 else 1 }
 }
+

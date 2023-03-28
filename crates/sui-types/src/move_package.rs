@@ -138,17 +138,13 @@ impl UpgradePolicy {
         new_module: &normalized::Module,
     ) -> PartialVMResult<()> {
         match self {
-            Self::Compatible => {
-                let check_struct_and_pub_function_linking = true;
-                let check_struct_layout = true;
-                let check_friend_linking = false;
-                Compatibility::new(
-                    check_struct_and_pub_function_linking,
-                    check_struct_layout,
-                    check_friend_linking,
-                )
-                .check(old_module, new_module)
+            Self::Compatible => Compatibility {
+                check_struct_and_pub_function_linking: true,
+                check_struct_layout: true,
+                check_friend_linking: false,
+                check_private_entry_linking: false,
             }
+            .check(old_module, new_module),
             Self::Additive => InclusionCheck::Subset.check(old_module, new_module),
             Self::DepOnly => InclusionCheck::Equal.check(old_module, new_module),
         }
