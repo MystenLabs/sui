@@ -14,6 +14,7 @@ use tokio::sync::watch;
 
 use crate::bullshark::Bullshark;
 use crate::consensus::ConsensusRound;
+use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use crate::Consensus;
 use crate::NUM_SHUTDOWN_RECEIVERS;
@@ -40,7 +41,6 @@ async fn test_consensus_recovery_with_bullshark() {
 
     let consensus_store = storage.consensus_store;
     let certificate_store = storage.certificate_store;
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // AND Setup consensus
     let fixture = CommitteeFixture::builder().build();

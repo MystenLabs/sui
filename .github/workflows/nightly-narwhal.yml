@@ -45,7 +45,7 @@ jobs:
       # These are considered the end-to-end "slow" tests for us
       - name: cargo nextest
         run: |
-          cargo nextest run -E 'kind(test) and package(narwhal-primary)' --profile narwhalnightly --run-ignored ignored-only
+          cargo nextest run -E 'kind(test) and package(narwhal-primary) and package(narwhal-consensus)' --profile narwhalnightly --run-ignored ignored-only
 
   report-status:
     name: Report Status
