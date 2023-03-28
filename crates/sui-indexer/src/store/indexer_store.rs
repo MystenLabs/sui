@@ -74,67 +74,67 @@ pub trait IndexerStore {
     async fn compose_sui_transaction_block_response(
         &self,
         tx: Transaction,
-        options: Option<SuiTransactionBlockResponseOptions>,
+        options: Option<&SuiTransactionBlockResponseOptions>,
     ) -> Result<SuiTransactionBlockResponse, IndexerError>;
 
-    fn get_all_transaction_digest_page(
+    fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_digest_page_by_checkpoint(
+    fn get_transaction_page_by_checkpoint(
         &self,
         checkpoint_sequence_number: i64,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_digest_page_by_transaction_kind(
+    fn get_transaction_page_by_transaction_kind(
         &self,
         kind: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_digest_page_by_mutated_object(
-        &self,
-        object_id: String,
-        start_sequence: Option<i64>,
-        limit: usize,
-        is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
-
-    fn get_transaction_digest_page_by_sender_address(
+    fn get_transaction_page_by_sender_address(
         &self,
         sender_address: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_digest_page_by_sender_recipient_address(
+    fn get_transaction_page_by_mutated_object(
+        &self,
+        object_id: String,
+        start_sequence: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> Result<Vec<Transaction>, IndexerError>;
+
+    fn get_transaction_page_by_sender_recipient_address(
         &self,
         sender_address: Option<String>,
         recipient_address: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_digest_page_by_input_object(
+    fn get_transaction_page_by_input_object(
         &self,
         object_id: String,
         version: Option<i64>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_digest_page_by_move_call(
+    fn get_transaction_page_by_move_call(
         &self,
         package: String,
         module: Option<String>,
@@ -142,7 +142,7 @@ pub trait IndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError>;
+    ) -> Result<Vec<Transaction>, IndexerError>;
 
     fn get_transaction_sequence_by_digest(
         &self,
@@ -167,12 +167,6 @@ pub trait IndexerStore {
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
-
-    fn read_transactions(
-        &self,
-        last_processed_id: i64,
-        limit: usize,
-    ) -> Result<Vec<Transaction>, IndexerError>;
 
     fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
