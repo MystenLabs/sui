@@ -106,10 +106,11 @@ impl PrimaryToPrimaryRpc for anemo::Network {
             .map_err(|e| format_err!("Network error {:?}", e))?;
         Ok(response.into_body())
     }
+
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
-        request: FetchCertificatesRequest,
+        request: impl anemo::types::request::IntoRequest<FetchCertificatesRequest> + Send,
     ) -> Result<FetchCertificatesResponse> {
         let peer_id = PeerId(peer.0.to_bytes());
         let peer = self
