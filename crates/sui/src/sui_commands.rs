@@ -378,7 +378,12 @@ async fn genesis(
     let genesis_path = sui_config_dir.join(SUI_GENESIS_FILENAME);
 
     let mut genesis_conf = match from_config {
-        Some(path) => PersistedConfig::read(&path)?,
+        Some(path) => {
+            let x = PersistedConfig::read(&path)?;
+            let y = GenesisConfig::new_for_benchmarks(&benchmark_ips.unwrap());
+            assert_eq!(x, y);
+            x
+        }
         None => {
             if let Some(ips) = benchmark_ips {
                 // Make a keystore containing the key for the genesis gas object.

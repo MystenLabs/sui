@@ -228,7 +228,7 @@ impl Orchestrator {
 
         // // TODO: There should be no need to generate these files locally; we can generate them
         // // directly on the remote machines.
-        // SuiProtocol::print_files(&instances);
+        SuiProtocol::print_files(&instances);
 
         // Generate the configuration file, genesis, and gas keystore.
         // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
@@ -384,7 +384,7 @@ impl Orchestrator {
             .join(" ");
             [
                 &format!(
-                    "mv ~/{} ~/working_dir/sui_config/{}",
+                    "(mv ~/{} ~/working_dir/sui_config/{} || true)",
                     SuiProtocol::GAS_KEYSTORE_FILE,
                     SuiProtocol::GAS_KEYSTORE_FILE
                 ),

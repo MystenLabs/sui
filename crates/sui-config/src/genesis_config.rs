@@ -26,14 +26,14 @@ use crate::Config;
 use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE};
 
 // All information needed to build a NodeConfig for a validator.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct ValidatorConfigInfo {
     pub genesis_info: ValidatorGenesisInfo,
     pub consensus_address: Multiaddr,
     pub consensus_internal_worker_address: Option<Multiaddr>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct GenesisConfig {
     pub validator_config_info: Option<Vec<ValidatorConfigInfo>>,
     pub parameters: GenesisCeremonyParameters,
@@ -103,7 +103,7 @@ impl GenesisConfig {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ValidatorGenesisInfo {
     pub key_pair: AuthorityKeyPair,
     pub worker_key_pair: NetworkKeyPair,
@@ -193,7 +193,7 @@ impl ValidatorGenesisInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct AccountConfig {
     #[serde(
         skip_serializing_if = "Option::is_none",
@@ -205,7 +205,7 @@ pub struct AccountConfig {
     pub gas_object_ranges: Option<Vec<ObjectConfigRange>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ObjectConfigRange {
     /// Starting object id
     pub offset: ObjectID,
@@ -215,7 +215,7 @@ pub struct ObjectConfigRange {
     pub gas_value: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ObjectConfig {
     #[serde(default = "ObjectID::random")]
     pub object_id: ObjectID,
