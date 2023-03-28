@@ -57,19 +57,26 @@ Suggested minimum hardware to run a Sui Full node:
 
 ### Software requirements
 
-The Sui Foundation recommends running Sui Full nodes on Linux. Sui supports the Ubuntu and
+Sui recommends running Sui Full nodes on Linux. Sui supports the Ubuntu and
 Debian distributions. You can also run a Sui Full node on macOS.
 
 Make sure to update [Rust](../build/install.md#rust).
 
 Use the following command to install additional Linux dependencies.
 ```shell
-apt-get update \
-&& apt-get install -y --no-install-recommends \
+sudo apt-get update \
+&& sudo apt-get install -y --no-install-recommends \
 tzdata \
+libprotobuf-dev \
 ca-certificates \
 build-essential \
+libssl-dev \
+libclang-dev \
 pkg-config \
+openssl \
+protobuf-compiler \
+git \
+clang \
 cmake
 ```
 
@@ -82,7 +89,7 @@ source.
 
 Follow the instructions in the [Full node Docker Readme](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
-To get the entire Full node with indexer running in Docker, follow the instructions in the [Docker Readme](https://github.com/MystenLabs/sui/blob/main/docker/fullnode-x/README.md) for `fullnode-x`.
+To get a Full node with indexer running in Docker, follow the instructions in the [Docker Readme](https://github.com/MystenLabs/sui/blob/main/docker/fullnode-x/README.md) for `fullnode-x`.
 
 ### Setting up a local Sui repository
 
@@ -149,7 +156,7 @@ After completing these steps, continue with setting up your indexer before start
 Before setting up your Sui indexer, make sure you have the following prerequisites on your system:
 
 * Local [Postgres](https://www.postgresql.org/download/) server.
-* [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli). The Diesel CLI requires the `libpq` client library for Postgres integration.
+* [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli). The Diesel CLI requires the `libpq` client library for Postgres integration. See the [Troubleshooting](#troubleshooting) section for more details.
 
 With Postgres and Diesel CLI installed, follow these steps to set up the indexer:
 
@@ -184,11 +191,24 @@ At this point, your Sui Full node and indexer are ready to connect to the Sui ne
     cargo run --bin sui-indexer -- --db-url "<DATABASE-URL>" --rpc-client-url "http://0.0.0.0:9000"
     ```
 
-**Note:** If you receive a `cannot find -lpq` error, you are missing the `libpq` library. Use `sudo apt-get install libpq-dev` to install on Linux, or `brew install libpq` on MacOS. After you install on MacOS, create a Homebrew link using `brew link --force libpq`. For further context, reference the [issue on Stack Overflow](https://stackoverflow.com/questions/70313347/ld-library-not-found-for-lpq-when-build-rust-in-macos?rq=1).
-
 If your setup is successful, your Sui Full node is now connected to the appropriate network and your indexer is processing transactions.
 
 Your Full node serves the read endpoints of the [Sui JSON-RPC API](../build/json-rpc.md#sui-json-rpc-api) at: `http://127.0.0.1:9000`.
+
+### Troubleshooting
+
+If you receive a `cannot find -lpq` error, you are missing the `libpq` library. Use `sudo apt-get install libpq-dev` to install on Linux, or `brew install libpq` on MacOS. After you install on MacOS, create a Homebrew link using `brew link --force libpq`. For further context, reference the [issue on Stack Overflow](https://stackoverflow.com/questions/70313347/ld-library-not-found-for-lpq-when-build-rust-in-macos?rq=1). 
+
+If you receive the following error:
+
+```
+panicked at 'error binding to 0.0.0.0:9184: error creating server listener: Address already in use (os error 98)
+```
+Then update the metrics address in your fullnode.yaml file to use port `9180`.
+```
+metrics-address: "0.0.0.0:9180"
+```
+
 
 ## Sui Explorer with your Full node
 
