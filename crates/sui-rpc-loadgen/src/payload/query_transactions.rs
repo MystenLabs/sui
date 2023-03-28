@@ -4,7 +4,9 @@
 use anyhow::{anyhow, Result};
 
 use crate::payload::validation::cross_validate_entities;
-use crate::payload::{ProcessPayload, QueryTransactions, RpcCommandProcessor, SignerInfo};
+use crate::payload::{
+    AddressType, ProcessPayload, QueryTransactions, RpcCommandProcessor, SignerInfo,
+};
 use async_trait::async_trait;
 use futures::future::join_all;
 use std::time::Instant;
@@ -12,7 +14,7 @@ use sui_json_rpc_types::{
     Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_sdk::SuiClient;
-use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::{SuiAddress, TransactionDigest};
 use sui_types::query::TransactionFilter;
 use tracing::debug;
 use tracing::log::warn;
@@ -25,65 +27,99 @@ impl<'a> ProcessPayload<'a, &'a QueryTransactions> for RpcCommandProcessor {
         _signer_info: &Option<SignerInfo>,
     ) -> Result<()> {
         let clients = self.get_clients().await?;
-        let filter = match (op.from_address, op.to_address) {
-            (Some(_), Some(_)) => {
-                return Err(anyhow!("Cannot specify both from_address and to_address"));
+
+        let filters: Vec<Option<TransactionFilter>> = match (
+            op.address,
+            op.address_type.as_ref(),
+            op.from_file,
+        ) {
+            (Some(address), Some(address_type), Some(false)) => match address_type {
+                AddressType::FromAddress => vec![Some(TransactionFilter::FromAddress(address))],
+                AddressType::ToAddress => vec![Some(TransactionFilter::ToAddress(address))],
+            },
+            (None, Some(address_type), Some(true)) => {
+                // TODO: actually load the addresses too
+                let addresses: Vec<SuiAddress> = self
+                    .get_addresses()
+                    .iter()
+                    .map(|address| *address)
+                    .collect();
+
+                let filters = match address_type {
+                    AddressType::FromAddress => addresses
+                        .iter()
+                        .map(|address| Some(TransactionFilter::FromAddress(*address)))
+                        .collect(),
+                    AddressType::ToAddress => addresses
+                        .iter()
+                        .map(|address| Some(TransactionFilter::ToAddress(*address)))
+                        .collect(),
+                };
+                filters
             }
-            (Some(address), None) => Some(TransactionFilter::FromAddress(address)),
-            (None, Some(address)) => Some(TransactionFilter::ToAddress(address)),
-            (None, None) => None,
-        };
-        let query = SuiTransactionBlockResponseQuery {
-            filter,
-            options: None, // not supported on indexer
+            (None, None, None) => vec![None],
+            _ => {
+                return Err(anyhow!(
+                    "Invalid combination. Provide (address, address_type, false), (None, address_type, true), or (None, None, None)"
+                ));
+            }
         };
 
-        let results: Vec<TransactionBlocksPage> = Vec::new();
+        let queries: Vec<SuiTransactionBlockResponseQuery> = filters
+            .into_iter()
+            .map(|filter| SuiTransactionBlockResponseQuery {
+                filter,
+                options: None,
+            })
+            .collect();
 
-        // Paginate results, if any
-        while results.is_empty() || results.iter().any(|r| r.has_next_page) {
-            let cursor = if results.is_empty() {
-                None
-            } else {
-                match (
-                    results.get(0).unwrap().next_cursor,
-                    results.get(1).unwrap().next_cursor,
-                ) {
-                    (Some(first_cursor), Some(second_cursor)) => {
-                        if first_cursor != second_cursor {
-                            warn!("Cursors are not the same, received {} vs {}. Selecting the first cursor to continue", first_cursor, second_cursor);
+        // todo: can map this
+        for query in queries {
+            let mut results: Vec<TransactionBlocksPage> = Vec::new();
+
+            // Paginate results, if any
+            while results.is_empty() || results.iter().any(|r| r.has_next_page) {
+                let cursor = if results.is_empty() {
+                    None
+                } else {
+                    match (
+                        results.get(0).unwrap().next_cursor,
+                        results.get(1).unwrap().next_cursor,
+                    ) {
+                        (Some(first_cursor), Some(second_cursor)) => {
+                            if first_cursor != second_cursor {
+                                warn!("Cursors are not the same, received {} vs {}. Selecting the first cursor to continue", first_cursor, second_cursor);
+                            }
+                            Some(first_cursor)
                         }
-                        Some(first_cursor)
+                        (Some(cursor), None) | (None, Some(cursor)) => Some(cursor),
+                        (None, None) => None,
                     }
-                    (Some(cursor), None) | (None, Some(cursor)) => Some(cursor),
-                    (None, None) => None,
-                }
-            };
+                };
 
-            let results = join_all(clients.iter().enumerate().map(|(i, client)| {
-                let with_query = query.clone();
-                async move {
-                    let start_time = Instant::now();
-                    let transactions = query_transaction_blocks(client, with_query, cursor, None)
-                        .await
-                        .unwrap();
-                    let elapsed_time = start_time.elapsed();
-                    debug!(
-                        "QueryTransactions Request latency {:.4} for rpc at url {i}",
-                        elapsed_time.as_secs_f64()
-                    );
-                    transactions
-                }
-            }))
-            .await;
+                results = join_all(clients.iter().enumerate().map(|(i, client)| {
+                    let with_query = query.clone();
+                    async move {
+                        let start_time = Instant::now();
+                        let transactions =
+                            query_transaction_blocks(client, with_query, cursor, None)
+                                .await
+                                .unwrap();
+                        let elapsed_time = start_time.elapsed();
+                        debug!(
+                            "QueryTransactions Request latency {:.4} for rpc at url {i}",
+                            elapsed_time.as_secs_f64()
+                        );
+                        transactions
+                    }
+                }))
+                .await;
 
-            // compare results
-            let transactions: Vec<Vec<SuiTransactionBlockResponse>> =
-                results.iter().map(|page| page.data.clone()).collect();
-
-            cross_validate_entities(&transactions, "Transactions");
+                let transactions: Vec<Vec<SuiTransactionBlockResponse>> =
+                    results.iter().map(|page| page.data.clone()).collect();
+                cross_validate_entities(&transactions, "Transactions");
+            }
         }
-
         Ok(())
     }
 }
