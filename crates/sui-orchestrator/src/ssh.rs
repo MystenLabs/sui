@@ -211,12 +211,8 @@ impl SshConnectionManager {
         loop {
             sleep(Self::RETRY_DELAY).await;
 
-            // if self.execute(instances.clone(), command).await.is_ok() {
-            //     break;
-            // }
-            match self.execute(instances.clone(), command).await {
-                Ok(_) => break,
-                Err(e) => println!("-->{e}"),
+            if self.execute(instances.clone(), command).await.is_ok() {
+                break;
             }
         }
     }
