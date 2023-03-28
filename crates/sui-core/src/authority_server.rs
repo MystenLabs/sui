@@ -133,6 +133,7 @@ pub struct ValidatorServiceMetrics {
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
     pub handle_transaction_latency: Histogram,
+    pub submit_certificate_consensus_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
 
@@ -184,6 +185,13 @@ impl ValidatorServiceMetrics {
             handle_certificate_consensus_latency: register_histogram_with_registry!(
                 "validator_service_handle_certificate_consensus_latency",
                 "Latency of handling a consensus transaction certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            submit_certificate_consensus_latency: register_histogram_with_registry!(
+                "validator_service_submit_certificate_consensus_latency",
+                "Latency of submit_certificate RPC handler",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -291,19 +299,24 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
-    ) -> Result<tonic::Response<HandleCertificateResponse>, tonic::Status> {
+        wait_for_effects: bool,
+    ) -> Result<Option<HandleCertificateResponse>, tonic::Status> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         let certificate = request.into_inner();
 
         let shared_object_tx = certificate.contains_shared_object();
 
-        let _metrics_guard = if shared_object_tx {
-            metrics.handle_certificate_consensus_latency.start_timer()
+        let _metrics_guard = if wait_for_effects {
+            if shared_object_tx {
+                metrics.handle_certificate_consensus_latency.start_timer()
+            } else {
+                metrics
+                    .handle_certificate_non_consensus_latency
+                    .start_timer()
+            }
         } else {
-            metrics
-                .handle_certificate_non_consensus_latency
-                .start_timer()
+            metrics.submit_certificate_consensus_latency.start_timer()
         };
 
         // 1) Check if cert already executed
@@ -317,7 +330,7 @@ impl ValidatorService {
                 TransactionEvents::default()
             };
 
-            return Ok(tonic::Response::new(HandleCertificateResponse {
+            return Ok(Some(HandleCertificateResponse {
                 signed_effects: signed_effects.into_inner(),
                 events,
             }));
@@ -400,23 +413,30 @@ impl ValidatorService {
             certificate
         };
 
+        if !wait_for_effects {
+            // It is useful to enqueue owned object transaction for execution locally,
+            // even when we are not returning effects to user
+            if !certificate.contains_shared_object() {
+                state
+                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+            }
+            return Ok(None);
+        }
+
         // 4) Execute the certificate if it contains only owned object transactions, or wait for
         // the execution results if it contains shared objects.
-        let res = state.execute_certificate(&certificate, &epoch_store).await;
-        match res {
-            Ok(effects) => {
-                let events = if let Some(event_digest) = effects.events_digest() {
-                    state.get_transaction_events(event_digest)?
-                } else {
-                    TransactionEvents::default()
-                };
-                Ok(tonic::Response::new(HandleCertificateResponse {
-                    signed_effects: effects.into_inner(),
-                    events,
-                }))
-            }
-            Err(e) => Err(tonic::Status::from(e)),
-        }
+        let effects = state
+            .execute_certificate(&certificate, &epoch_store)
+            .await?;
+        let events = if let Some(event_digest) = effects.events_digest() {
+            state.get_transaction_events(event_digest)?
+        } else {
+            TransactionEvents::default()
+        };
+        Ok(Some(HandleCertificateResponse {
+            signed_effects: effects.into_inner(),
+            events,
+        }))
     }
 }
 
@@ -436,6 +456,27 @@ impl Validator for ValidatorService {
             .unwrap()
     }
 
+    async fn submit_certificate(
+        &self,
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
+        let state = self.state.clone();
+        let consensus_adapter = self.consensus_adapter.clone();
+
+        // Spawns a task which handles the certificate. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        let metrics = self.metrics.clone();
+        spawn_monitored_task!(async move {
+            let span = error_span!("submit_certificate", tx_digest = ?request.get_ref().digest());
+            Self::handle_certificate(state, consensus_adapter, request, metrics, false)
+                .instrument(span)
+                .await
+        })
+        .await
+        .unwrap()
+        .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
+    }
+
     async fn handle_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
@@ -448,12 +489,17 @@ impl Validator for ValidatorService {
         let metrics = self.metrics.clone();
         spawn_monitored_task!(async move {
             let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
-            Self::handle_certificate(state, consensus_adapter, request, metrics)
+            Self::handle_certificate(state, consensus_adapter, request, metrics, true)
                 .instrument(span)
                 .await
         })
         .await
         .unwrap()
+        .map(|v| {
+            tonic::Response::new(
+                v.expect("handle_certificate should not return none with wait_for_effects=true"),
+            )
+        })
     }
 
     async fn object_info(
