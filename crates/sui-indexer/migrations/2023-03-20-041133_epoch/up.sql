@@ -1,6 +1,6 @@
 CREATE MATERIALIZED VIEW epoch_network_metrics AS
 SELECT (SELECT MAX(t1.count)::float8 / 10
-        FROM (SELECT SUM(total_commands) count
+        FROM (SELECT SUM(total_transactions) count
               FROM checkpoints
               WHERE timestamp_ms / 10000 > (EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - '30 days'::INTERVAL)) / 10)::BIGINT
               GROUP BY (timestamp_ms / 10000)) t1) AS tps_30_days;

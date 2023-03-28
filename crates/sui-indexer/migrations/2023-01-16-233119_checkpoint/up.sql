@@ -12,8 +12,8 @@ CREATE TABLE checkpoints
     total_storage_cost         BIGINT       NOT NULL,
     total_storage_rebate       BIGINT       NOT NULL,
     -- derived from transaction count from genesis
+    total_transaction_blocks   BIGINT       NOT NULL,
     total_transactions         BIGINT       NOT NULL,
-    total_commands             BIGINT       NOT NULL,
     network_total_transactions BIGINT       NOT NULL,
     -- number of milliseconds from the Unix epoch
     timestamp_ms               BIGINT       NOT NULL

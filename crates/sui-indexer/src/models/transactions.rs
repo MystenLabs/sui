@@ -26,7 +26,7 @@ pub struct Transaction {
     pub checkpoint_sequence_number: i64,
     pub timestamp_ms: i64,
     pub transaction_kind: String,
-    pub command_count: i64,
+    pub transaction_count: i64,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -105,7 +105,7 @@ impl TryFrom<SuiTransactionBlockFullResponse> for Transaction {
         let sender = transaction_data.sender().to_string();
         let checkpoint_seq_number = tx_resp.checkpoint as i64;
         let tx_kind = transaction_data.transaction().name().to_string();
-        let command_count = transaction_data.transaction().command_count() as i64;
+        let transaction_count = transaction_data.transaction().transaction_count() as i64;
 
         let recipients: Vec<String> = effects
             .mutated()
@@ -170,7 +170,7 @@ impl TryFrom<SuiTransactionBlockFullResponse> for Transaction {
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
             transaction_kind: tx_kind,
-            command_count,
+            transaction_count,
             timestamp_ms: tx_resp.timestamp_ms as i64,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),
