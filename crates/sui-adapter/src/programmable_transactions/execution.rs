@@ -60,7 +60,7 @@ use crate::{
 
 use super::{context::*, types::*};
 
-pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
+pub fn execute<S: StorageView, Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     vm: &MoveVM,
     state_view: &mut S,
@@ -82,7 +82,7 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // execute commands
     let mut mode_results = Mode::empty_results();
     for (idx, command) in commands.into_iter().enumerate() {
-        execute_command::<_, _, Mode>(&mut context, &mut mode_results, command)
+        execute_command::<_, Mode>(&mut context, &mut mode_results, command)
             .map_err(|e| e.with_command_index(idx))?
     }
     // apply changes
@@ -104,8 +104,8 @@ pub fn execute<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 }
 
 /// Execute a single command
-fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn execute_command<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     mode_results: &mut Mode::ExecutionResults,
     command: Command,
 ) -> Result<(), ExecutionError> {
@@ -161,7 +161,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             };
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty)?;
+                check_param_type::<_, Mode>(context, idx, &value, &elem_ty)?;
                 used_in_non_entry_move_call =
                     used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                 value.write_bcs_bytes(&mut res);
@@ -270,7 +270,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 arguments,
             } = *move_call;
             let module_id = ModuleId::new(package.into(), module);
-            execute_move_call::<_, _, Mode>(
+            execute_move_call::<_, Mode>(
                 context,
                 &mut argument_updates,
                 &module_id,
@@ -281,10 +281,10 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             )?
         }
         Command::Publish(modules, dep_ids) => {
-            execute_move_publish::<_, _, Mode>(context, &mut argument_updates, modules, dep_ids)?
+            execute_move_publish::<_, Mode>(context, &mut argument_updates, modules, dep_ids)?
         }
         Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
-            execute_move_upgrade::<_, _, Mode>(
+            execute_move_upgrade::<_, Mode>(
                 context,
                 modules,
                 dep_ids,
@@ -300,8 +300,8 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 }
 
 /// Execute a single Move call
-fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn execute_move_call<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_id: &ModuleId,
     function: &IdentStr,
@@ -316,7 +316,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         return_value_kinds,
         index,
         last_instr,
-    } = check_visibility_and_signature::<_, _, Mode>(
+    } = check_visibility_and_signature::<_, Mode>(
         context,
         module_id,
         function,
@@ -325,7 +325,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     )?;
     // build the arguments, storing meta data about by-mut-ref args
     let (tx_context_kind, by_mut_ref, serialized_arguments) =
-        build_move_args::<_, _, Mode>(context, module_id, function, kind, &signature, &arguments)?;
+        build_move_args::<_, Mode>(context, module_id, function, kind, &signature, &arguments)?;
     // invoke the VM
     let SerializedReturnValues {
         mutable_reference_outputs,
@@ -371,8 +371,8 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .collect()
 }
 
-fn make_value<E: fmt::Debug, S: StorageView<E>>(
-    context: &ExecutionContext<E, S>,
+fn make_value<S: StorageView>(
+    context: &ExecutionContext<S>,
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
@@ -403,8 +403,8 @@ fn make_value<E: fmt::Debug, S: StorageView<E>>(
 
 /// Publish Move modules and call the init functions.  Returns an `UpgradeCap` for the newly
 /// published package on success.
-fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     argument_updates: &mut Mode::ArgumentUpdates,
     module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
@@ -416,7 +416,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     context
         .gas_status
         .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
-    let modules = publish_and_verify_new_modules::<_, _, Mode>(context, &module_bytes)?;
+    let modules = publish_and_verify_new_modules::<_, Mode>(context, &module_bytes)?;
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
@@ -436,7 +436,7 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     // new_package also initializes type origin table in the package object
     let package_id = context.new_package(modules, &dependencies, None)?;
     for module_id in &modules_to_init {
-        let return_values = execute_move_call::<_, _, Mode>(
+        let return_values = execute_move_call::<_, Mode>(
             context,
             argument_updates,
             module_id,
@@ -470,8 +470,8 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 }
 
 /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
-fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     module_bytes: Vec<Vec<u8>>,
     dep_ids: Vec<ObjectID>,
     current_package_id: ObjectID,
@@ -496,7 +496,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             .session
             .load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
             .map_err(|e| context.convert_vm_error(e))?;
-        check_param_type::<_, _, Mode>(context, 0, &ticket_val, &ticket_type)?;
+        check_param_type::<_, Mode>(context, 0, &ticket_val, &ticket_type)?;
         ticket_val.write_bcs_bytes(&mut ticket_bytes);
         bcs::from_bytes(&ticket_bytes).map_err(|_| {
             ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
@@ -536,7 +536,7 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 
     // Run the move + sui verifier on the modules and publish them into the cache.
     // NB: this will substitute in the original package id for the `self` address in all of these modules.
-    let upgraded_package_modules = publish_and_verify_upgraded_modules::<_, _, Mode>(
+    let upgraded_package_modules = publish_and_verify_upgraded_modules::<_, Mode>(
         context,
         &module_bytes,
         current_package.original_package_id(),
@@ -574,8 +574,8 @@ fn execute_move_upgrade<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     )])
 }
 
-fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
-    context: &ExecutionContext<E, S>,
+fn check_compatibility<'a, S: StorageView>(
+    context: &ExecutionContext<S>,
     existing_package: &MovePackage,
     upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
     policy: u8,
@@ -618,8 +618,8 @@ fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
     Ok(())
 }
 
-fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
-    context: &'a ExecutionContext<E, S>,
+fn fetch_package<'a, S: StorageView>(
+    context: &'a ExecutionContext<S>,
     package_id: &ObjectID,
 ) -> Result<MovePackage, ExecutionError> {
     let mut fetched_packages = fetch_packages(context, vec![package_id])?;
@@ -635,8 +635,8 @@ fn fetch_package<'a, E: fmt::Debug, S: StorageView<E>>(
     }
 }
 
-fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
-    context: &'a ExecutionContext<E, S>,
+fn fetch_packages<'a, S: StorageView>(
+    context: &'a ExecutionContext<S>,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
 ) -> Result<Vec<MovePackage>, ExecutionError> {
     let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
@@ -667,8 +667,8 @@ fn fetch_packages<'a, E: fmt::Debug, S: StorageView<E>>(
  * Move execution
  **************************************************************************************************/
 
-fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+fn vm_move_call<S: StorageView>(
+    context: &mut ExecutionContext<S>,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: Vec<TypeTag>,
@@ -708,8 +708,8 @@ fn vm_move_call<E: fmt::Debug, S: StorageView<E>>(
     Ok(result)
 }
 
-fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn deserialize_modules<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     module_bytes: &[Vec<u8>],
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
     let modules = module_bytes
@@ -734,11 +734,11 @@ fn deserialize_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 /// - Deserializes the modules
 /// - Publishes them into the VM, which invokes the Move verifier
 /// - Run the Sui Verifier
-fn publish_and_verify_new_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn publish_and_verify_new_modules<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     module_bytes: &[Vec<u8>],
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
+    let mut modules = deserialize_modules::<_, Mode>(context, module_bytes)?;
 
     // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
     // runtime does not to know about new packages created, since Move objects and Move packages
@@ -752,18 +752,18 @@ fn publish_and_verify_new_modules<E: fmt::Debug, S: StorageView<E>, Mode: Execut
     publish_and_verify_modules(context, package_id, modules)
 }
 
-fn publish_and_verify_upgraded_modules<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn publish_and_verify_upgraded_modules<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     module_bytes: &[Vec<u8>],
     package_id: ObjectID,
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
-    let mut modules = deserialize_modules::<_, _, Mode>(context, module_bytes)?;
+    let mut modules = deserialize_modules::<_, Mode>(context, module_bytes)?;
     substitute_package_id(&mut modules, package_id)?;
     publish_and_verify_modules(context, package_id, modules)
 }
 
-fn publish_and_verify_modules<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+fn publish_and_verify_modules<S: StorageView>(
+    context: &mut ExecutionContext<S>,
     package_id: ObjectID,
     modules: Vec<CompiledModule>,
 ) -> Result<Vec<CompiledModule>, ExecutionError> {
@@ -836,8 +836,8 @@ struct LoadedFunctionInfo {
 /// - an entry function
 /// - a public function that does not return references
 /// - module init (only internal usage)
-fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn check_visibility_and_signature<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     module_id: &ModuleId,
     function: &IdentStr,
     type_arguments: &[TypeTag],
@@ -919,7 +919,7 @@ fn check_visibility_and_signature<E: fmt::Debug, S: StorageView<E>, Mode: Execut
             vec![]
         }
         FunctionKind::PrivateEntry | FunctionKind::PublicEntry | FunctionKind::NonEntry => {
-            check_non_entry_signature::<_, _, Mode>(context, module_id, function, &signature)?
+            check_non_entry_signature::<_, Mode>(context, module_id, function, &signature)?
         }
     };
     check_private_generics(context, module_id, function, &signature.type_arguments)?;
@@ -960,8 +960,8 @@ fn subst_signature(
 
 /// Checks that the non-entry function does not return references. And marks the return values
 /// as object or non-object return values
-fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn check_non_entry_signature<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     _module_id: &ModuleId,
     _function: &IdentStr,
     signature: &LoadedFunctionInstantiation,
@@ -1022,8 +1022,8 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
         .collect()
 }
 
-fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
-    _context: &mut ExecutionContext<E, S>,
+fn check_private_generics<S: StorageView>(
+    _context: &mut ExecutionContext<S>,
     module_id: &ModuleId,
     function: &IdentStr,
     _type_arguments: &[Type],
@@ -1063,8 +1063,8 @@ type ArgInfo = (
 
 /// Serializes the arguments into BCS values for Move. Performs the necessary type checking for
 /// each value
-fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn build_move_args<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     module_id: &ModuleId,
     function: &IdentStr,
     function_kind: FunctionKind,
@@ -1160,7 +1160,7 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                 idx,
             ));
         }
-        check_param_type::<_, _, Mode>(context, idx, &value, non_ref_param_ty)?;
+        check_param_type::<_, Mode>(context, idx, &value, non_ref_param_ty)?;
         let bytes = {
             let mut v = vec![];
             value.write_bcs_bytes(&mut v);
@@ -1172,8 +1172,8 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 }
 
 /// checks that the value is compatible with the specified type
-fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
-    context: &mut ExecutionContext<E, S>,
+fn check_param_type<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
     idx: usize,
     value: &Value,
     param_ty: &Type,
@@ -1235,8 +1235,8 @@ fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
 // Returns Some(kind) if the type is a reference to the TxnContext. kind being Mutable with
 // a MutableReference, and Immutable otherwise.
 // Returns None for all other types
-pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+pub fn is_tx_context<S: StorageView>(
+    context: &mut ExecutionContext<S>,
     t: &Type,
 ) -> Result<TxContextKind, ExecutionError> {
     let (is_mut, inner) = match t {
@@ -1264,8 +1264,8 @@ pub fn is_tx_context<E: fmt::Debug, S: StorageView<E>>(
 }
 
 /// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
-fn primitive_serialization_layout<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+fn primitive_serialization_layout<S: StorageView>(
+    context: &mut ExecutionContext<S>,
     param_ty: &Type,
 ) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {

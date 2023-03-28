@@ -1544,7 +1544,7 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         protocol_config,
         vm,
         &mut temporary_store,
@@ -1633,7 +1633,7 @@ pub fn generate_genesis_system_object(
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         &protocol_config,
         move_vm,
         &mut temporary_store,
