@@ -191,7 +191,7 @@ fn test_serde_roundtrip() {
         assert_eq!(generic_sig_bytes.first().unwrap(), &0x03);
     }
 
-    // Malformed multisig cannot be serialized
+    // Malformed multisig cannot be deserialized
     let multisig_pk = MultiSigPublicKey {
         pk_map: vec![(keys()[0].public(), 1)],
         threshold: 1,
@@ -207,7 +207,7 @@ fn test_serde_roundtrip() {
     let generic_sig_bytes = generic_sig.as_bytes();
     assert!(GenericSignature::from_bytes(generic_sig_bytes).is_err());
 
-    // Malformed multisig_pk cannot be serialized
+    // Malformed multisig_pk cannot be deserialized
     let multisig_pk_1 = MultiSigPublicKey {
         pk_map: vec![],
         threshold: 0,
@@ -330,11 +330,19 @@ fn test_max_sig() {
     )
     .is_err());
 
-    // multisig_pk with max weights for each pk and max threshold is ok.
+    // multisig_pk with unreachable threshold fails.
+    assert!(MultiSigPublicKey::new(
+        vec![keys[0].public(); 5],
+        vec![3; MAX_SIGNER_IN_MULTISIG],
+        16
+    )
+    .is_err());
+
+    // multisig_pk with max weights for each pk and max reachable threshold is ok.
     let high_threshold_pk = MultiSigPublicKey::new(
         vec![keys[0].public(); MAX_SIGNER_IN_MULTISIG],
-        vec![WeightUnit::MAX; 10],
-        ThresholdUnit::MAX,
+        vec![WeightUnit::MAX; MAX_SIGNER_IN_MULTISIG],
+        (WeightUnit::MAX as ThresholdUnit) * (MAX_SIGNER_IN_MULTISIG as ThresholdUnit),
     )
     .unwrap();
     let address: SuiAddress = high_threshold_pk.clone().into();

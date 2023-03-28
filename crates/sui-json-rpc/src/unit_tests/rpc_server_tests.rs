@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::api::{
+    CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, ReadApiClient,
+    TransactionBuilderClient, WriteApiClient,
+};
 use std::path::Path;
 #[cfg(not(msim))]
 use std::str::FromStr;
-
-use crate::api::{
-    CoinReadApiClient, GovernanceReadApiClient, ReadApiClient, TransactionBuilderClient,
-    WriteApiClient,
-};
+use std::time::Duration;
 use sui_config::genesis_config::DEFAULT_GAS_AMOUNT;
 use sui_config::genesis_config::DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT;
 use sui_config::SUI_KEYSTORE_FILENAME;
@@ -18,8 +18,8 @@ use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::ObjectsPage;
 use sui_json_rpc_types::{
     Balance, CoinPage, DelegatedStake, StakeStatus, SuiCoinMetadata, SuiExecutionStatus,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions, TransactionBytes,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
@@ -31,6 +31,7 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_ADDRESS};
 use test_utils::network::TestClusterBuilder;
+use tokio::time::sleep;
 
 #[sim_test]
 async fn test_get_objects() -> Result<(), anyhow::Error> {
@@ -47,7 +48,6 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
     assert_eq!(5, objects.data.len());
@@ -59,9 +59,7 @@ async fn test_get_objects() -> Result<(), anyhow::Error> {
         .map(|o| o.object().unwrap().object_id)
         .collect();
 
-    let object_resp = http_client
-        .multi_get_object_with_options(object_digests, None)
-        .await?;
+    let object_resp = http_client.multi_get_objects(object_digests, None).await?;
     assert_eq!(5, object_resp.len());
     Ok(())
 }
@@ -71,7 +69,7 @@ async fn test_get_package_with_display_should_not_fail() -> Result<(), anyhow::E
     let cluster = TestClusterBuilder::new().build().await?;
     let http_client = cluster.rpc_client();
     let response = http_client
-        .get_object_with_options(
+        .get_object(
             ObjectID::from(SUI_FRAMEWORK_ADDRESS),
             Some(SuiObjectDataOptions::new().with_display()),
         )
@@ -99,7 +97,6 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -107,7 +104,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let obj = objects.clone().first().unwrap().object().unwrap().object_id;
     let gas = objects.clone().last().unwrap().object().unwrap().object_id;
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .transfer_object(*address, obj, Some(gas), 1000, *address)
         .await?;
 
@@ -116,22 +113,31 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
     let tx_bytes1 = tx_bytes.clone();
-    let dryrun_response = http_client.dry_run_transaction(tx_bytes).await?;
+    let dryrun_response = http_client.dry_run_transaction_block(tx_bytes).await?;
 
-    let tx_response: SuiTransactionResponse = http_client
-        .execute_transaction(
+    let tx_response: SuiTransactionBlockResponse = http_client
+        .execute_transaction_block(
             tx_bytes1,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(
+                SuiTransactionBlockResponseOptions::new()
+                    .with_effects()
+                    .with_object_changes(),
+            ),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionBlockResponse {
+        effects,
+        object_changes,
+        ..
+    } = tx_response;
     assert_eq!(
         dryrun_response.effects.transaction_digest(),
         effects.unwrap().transaction_digest()
     );
+    assert_eq!(dryrun_response.object_changes, object_changes.unwrap());
     Ok(())
 }
 
@@ -152,7 +158,6 @@ async fn test_publish() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
     let gas = objects.data.first().unwrap().object().unwrap();
@@ -163,7 +168,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
             *address,
             compiled_modules_bytes,
@@ -179,14 +184,14 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
-    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 6);
+    matches!(tx_response, SuiTransactionBlockResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 6);
     Ok(())
 }
 
@@ -207,7 +212,6 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -220,7 +224,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let module = "pay".to_string();
     let function = "split".to_string();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .move_call(
             *address,
             package_id,
@@ -241,14 +245,14 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
-    matches!(tx_response, SuiTransactionResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 1);
+    matches!(tx_response, SuiTransactionBlockResponse {effects, ..} if effects.as_ref().unwrap().created().len() == 1);
     Ok(())
 }
 
@@ -268,7 +272,6 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -276,7 +279,7 @@ async fn test_get_object_info() -> Result<(), anyhow::Error> {
     for obj in objects {
         let oref = obj.into_object().unwrap();
         let result = http_client
-            .get_object_with_options(
+            .get_object(
                 oref.object_id,
                 Some(SuiObjectDataOptions::new().with_owner()),
             )
@@ -301,7 +304,6 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -309,7 +311,7 @@ async fn test_get_object_data_with_content() -> Result<(), anyhow::Error> {
     for obj in objects {
         let oref = obj.into_object().unwrap();
         let result = http_client
-            .get_object_with_options(
+            .get_object(
                 oref.object_id,
                 Some(SuiObjectDataOptions::new().with_content().with_owner()),
             )
@@ -401,7 +403,6 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -415,7 +416,7 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
             *address,
             compiled_modules_bytes,
@@ -431,11 +432,11 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_events(),
             ),
@@ -485,7 +486,6 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -498,7 +498,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
         compiled_package.get_package_base64(/* with_unpublished_deps */ false);
     let dependencies = compiled_package.get_dependency_original_package_ids();
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .publish(
             *address,
             compiled_modules_bytes,
@@ -513,12 +513,12 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-    let tx_response: SuiTransactionResponse = http_client
-        .execute_transaction(
+    let tx_response: SuiTransactionBlockResponse = http_client
+        .execute_transaction_block(
             tx_bytes,
             signatures,
             Some(
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_events(),
             ),
@@ -566,7 +566,7 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     // Mint 100000 coin
 
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .move_call(
             *address,
             SUI_FRAMEWORK_ADDRESS.into(),
@@ -586,15 +586,15 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new().with_effects()),
+            Some(SuiTransactionBlockResponseOptions::new().with_effects()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
 
-    let SuiTransactionResponse { effects, .. } = tx_response;
+    let SuiTransactionBlockResponse { effects, .. } = tx_response;
 
     assert_eq!(SuiExecutionStatus::Success, *effects.unwrap().status());
 
@@ -622,7 +622,6 @@ async fn test_staking() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
     assert_eq!(5, objects.data.len());
@@ -639,7 +638,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
 
     let coin = objects.data[0].object()?.object_id;
     // Delegate some SUI
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
@@ -649,10 +648,10 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     http_client
-        .execute_transaction(
+        .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new()),
+            Some(SuiTransactionBlockResponseOptions::new()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
@@ -672,6 +671,143 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         staked_sui[0].stakes[0].staked_sui_id,
         staked_sui_copy[0].stakes[0].staked_sui_id
     );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_unstaking() -> Result<(), anyhow::Error> {
+    let cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10000)
+        .build()
+        .await?;
+
+    let http_client = cluster.rpc_client();
+    let address = cluster.accounts.first().unwrap();
+
+    let coins: CoinPage = http_client.get_coins(*address, None, None, None).await?;
+    assert_eq!(5, coins.data.len());
+
+    // Check StakedSui object before test
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
+    assert!(staked_sui.is_empty());
+
+    let validator = http_client
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators[0]
+        .sui_address;
+
+    // Delegate some SUI
+    for i in 0..3 {
+        let transaction_bytes: TransactionBlockBytes = http_client
+            .request_add_stake(
+                *address,
+                vec![coins.data[i].coin_object_id],
+                Some(1000000),
+                validator,
+                None,
+                10000,
+            )
+            .await?;
+        let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+        let tx =
+            to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+        http_client
+            .execute_transaction_block(
+                tx_bytes,
+                signatures,
+                Some(SuiTransactionBlockResponseOptions::new()),
+                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            )
+            .await?;
+    }
+    // Check DelegatedStake object
+    let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
+    assert_eq!(1, staked_sui.len());
+    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+
+    sleep(Duration::from_millis(10000)).await;
+
+    let staked_sui_copy = http_client
+        .get_stakes_by_ids(vec![
+            staked_sui[0].stakes[0].staked_sui_id,
+            staked_sui[0].stakes[1].staked_sui_id,
+            staked_sui[0].stakes[2].staked_sui_id,
+        ])
+        .await?;
+
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[0].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[1].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[2].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+
+    let transaction_bytes: TransactionBlockBytes = http_client
+        .request_withdraw_stake(
+            *address,
+            staked_sui_copy[0].stakes[2].staked_sui_id,
+            None,
+            100000,
+        )
+        .await?;
+    let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+    let tx = to_sender_signed_transaction(transaction_bytes.to_data()?, keystore.get_key(address)?);
+
+    let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+    http_client
+        .execute_transaction_block(
+            tx_bytes,
+            signatures,
+            Some(SuiTransactionBlockResponseOptions::new()),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await?;
+
+    sleep(Duration::from_millis(20000)).await;
+
+    let staked_sui_copy = http_client
+        .get_stakes_by_ids(vec![
+            staked_sui[0].stakes[0].staked_sui_id,
+            staked_sui[0].stakes[1].staked_sui_id,
+            staked_sui[0].stakes[2].staked_sui_id,
+        ])
+        .await?;
+
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[0].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[1].status,
+        StakeStatus::Active {
+            estimated_reward: _
+        }
+    ));
+    assert!(matches!(
+        &staked_sui_copy[0].stakes[2].status,
+        StakeStatus::Unstaked
+    ));
     Ok(())
 }
 
@@ -697,7 +833,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .active_validators[0]
         .sui_address;
     // Delegate some SUI
-    let transaction_bytes: TransactionBytes = http_client
+    let transaction_bytes: TransactionBlockBytes = http_client
         .request_add_stake(
             *address,
             vec![
@@ -717,14 +853,24 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
-    http_client
-        .execute_transaction(
+    let dryrun_response = http_client
+        .dry_run_transaction_block(tx_bytes.clone())
+        .await?;
+
+    let executed_response = http_client
+        .execute_transaction_block(
             tx_bytes,
             signatures,
-            Some(SuiTransactionResponseOptions::new()),
+            Some(SuiTransactionBlockResponseOptions::new().with_balance_changes()),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;
+
+    // Check coin balance changes on dry run
+    assert_eq!(
+        dryrun_response.balance_changes,
+        executed_response.balance_changes.unwrap()
+    );
 
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;

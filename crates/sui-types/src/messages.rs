@@ -48,7 +48,7 @@ use strum::IntoStaticStr;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use thiserror::Error;
-use tracing::debug;
+use tracing::trace;
 
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
@@ -147,8 +147,10 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
-    /// The total amount of storage rebate refunded during the epoch.
+    /// The amount of storage rebate refunded to the txn senders.
     pub storage_rebate: u64,
+    /// The non-refundable storage fee.
+    pub non_refundable_storage_fee: u64,
     /// Unix timestamp when epoch started
     pub epoch_start_timestamp_ms: u64,
     /// System packages (specifically framework and move stdlib) that are written before the new
@@ -306,6 +308,13 @@ impl From<u128> for CallArg {
     fn from(n: u128) -> Self {
         // unwrap safe because every u128 value is BCS-serializable
         CallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<&Vec<u8>> for CallArg {
+    fn from(v: &Vec<u8>) -> Self {
+        // unwrap safe because every vec<u8> value is BCS-serializable
+        CallArg::Pure(bcs::to_bytes(v).unwrap())
     }
 }
 
@@ -1909,6 +1918,7 @@ impl VerifiedTransaction {
         storage_charge: u64,
         computation_charge: u64,
         storage_rebate: u64,
+        non_refundable_storage_fee: u64,
         epoch_start_timestamp_ms: u64,
         system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
     ) -> Self {
@@ -1918,6 +1928,7 @@ impl VerifiedTransaction {
             storage_charge,
             computation_charge,
             storage_rebate,
+            non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             system_packages,
         }
@@ -3077,7 +3088,7 @@ impl InputObjects {
             })
             .collect();
 
-        debug!(
+        trace!(
             num_mutable_objects = owned_objects.len(),
             "Checked locks and found mutable objects"
         );

@@ -585,11 +585,30 @@ Intended validator is not a candidate one.
 
 
 
+<a name="0x3_validator_EValidatorMetadataExceedingLengthLimit"></a>
+
+Validator Metadata is too long
+
+
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>: u64 = 9;
+</code></pre>
+
+
+
 <a name="0x3_validator_MAX_COMMISSION_RATE"></a>
 
 
 
 <pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 10000;
+</code></pre>
+
+
+
+<a name="0x3_validator_MAX_VALIDATOR_METADATA_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>: u64 = 256;
 </code></pre>
 
 
@@ -691,12 +710,15 @@ Intended validator is not a candidate one.
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x3_validator_Validator">Validator</a> {
     <b>assert</b>!(
-        // MUSTFIX: These constants are arbitrary, will adjust once we know more.
-        <a href="_length">vector::length</a>(&net_address) &lt;= 128
-            && <a href="_length">vector::length</a>(&p2p_address) &lt;= 128
-            && <a href="_length">vector::length</a>(&name) &lt;= 128
-            && <a href="_length">vector::length</a>(&description) &lt;= 150,
-        0
+        <a href="_length">vector::length</a>(&net_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&p2p_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&primary_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&worker_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&name) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&description) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&image_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && <a href="_length">vector::length</a>(&project_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
     <b>assert</b>!(<a href="validator.md#0x3_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
 
@@ -834,7 +856,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
     <b>assert</b>!(stake_amount &gt; 0, 0);
     <b>let</b> stake_epoch = <a href="_epoch">tx_context::epoch</a>(ctx) + 1;
     <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
-        &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, stake, self.metadata.sui_address, staker_address, stake_epoch, ctx
+        &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, stake, staker_address, stake_epoch, ctx
     );
     // Process stake right away <b>if</b> staking pool is preactive.
     <b>if</b> (<a href="staking_pool.md#0x3_staking_pool_is_preactive">staking_pool::is_preactive</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)) {
@@ -886,7 +908,6 @@ Request to add stake to the validator's staking pool at genesis
     <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
         &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>,
         stake,
-        self.metadata.sui_address,
         staker_address,
         0, // epoch 0 -- <a href="genesis.md#0x3_genesis">genesis</a>
         ctx
@@ -2150,7 +2171,7 @@ and registers it, thus revoking the previous cap's permission.
 Update name of the validator.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, name: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, name: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2159,8 +2180,12 @@ Update name of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, name: String) {
-    self.metadata.name = name;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, name: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&name) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    self.metadata.name = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(name));
 }
 </code></pre>
 
@@ -2175,7 +2200,7 @@ Update name of the validator.
 Update description of the validator.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, description: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, description: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2184,8 +2209,12 @@ Update description of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, description: String) {
-    self.metadata.description = description;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, description: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&description) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    self.metadata.description = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description));
 }
 </code></pre>
 
@@ -2200,7 +2229,7 @@ Update description of the validator.
 Update image url of the validator.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, image_url: <a href="_Url">url::Url</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, image_url: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2209,8 +2238,12 @@ Update image url of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, image_url: Url) {
-    self.metadata.image_url = image_url;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, image_url: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&image_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    self.metadata.image_url = <a href="_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url);
 }
 </code></pre>
 
@@ -2225,7 +2258,7 @@ Update image url of the validator.
 Update project url of the validator.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, project_url: <a href="_Url">url::Url</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, project_url: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2234,8 +2267,12 @@ Update project url of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, project_url: Url) {
-    self.metadata.project_url = project_url;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, project_url: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&project_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    self.metadata.project_url = <a href="_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url);
 }
 </code></pre>
 
@@ -2250,7 +2287,7 @@ Update project url of the validator.
 Update network address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, net_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2259,7 +2296,12 @@ Update network address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&net_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> net_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(net_address));
     self.metadata.next_epoch_net_address = <a href="_some">option::some</a>(net_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2276,7 +2318,7 @@ Update network address of this validator, taking effects from next epoch
 Update network address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, net_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2285,8 +2327,13 @@ Update network address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&net_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> net_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(net_address));
     self.metadata.net_address = net_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2303,7 +2350,7 @@ Update network address of this candidate validator
 Update p2p address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, p2p_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2312,7 +2359,12 @@ Update p2p address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&p2p_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> p2p_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address));
     self.metadata.next_epoch_p2p_address = <a href="_some">option::some</a>(p2p_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2329,7 +2381,7 @@ Update p2p address of this validator, taking effects from next epoch
 Update p2p address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, p2p_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2338,8 +2390,13 @@ Update p2p address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&p2p_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> p2p_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address));
     self.metadata.p2p_address = p2p_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2356,7 +2413,7 @@ Update p2p address of this candidate validator
 Update primary address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, primary_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2365,7 +2422,12 @@ Update primary address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&primary_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> primary_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address));
     self.metadata.next_epoch_primary_address = <a href="_some">option::some</a>(primary_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2382,7 +2444,7 @@ Update primary address of this validator, taking effects from next epoch
 Update primary address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, primary_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2391,8 +2453,13 @@ Update primary address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&primary_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> primary_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address));
     self.metadata.primary_address = primary_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2409,7 +2476,7 @@ Update primary address of this candidate validator
 Update worker address of this validator, taking effects from next epoch
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, worker_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2418,7 +2485,12 @@ Update worker address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;) {
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&worker_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> worker_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address));
     self.metadata.next_epoch_worker_address = <a href="_some">option::some</a>(worker_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2435,7 +2507,7 @@ Update worker address of this validator, taking effects from next epoch
 Update worker address of this candidate validator
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, worker_address: <a href="_String">string::String</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">validator::Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;)
 </code></pre>
 
 
@@ -2444,8 +2516,13 @@ Update worker address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: String) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
+    <b>assert</b>!(
+        <a href="_length">vector::length</a>(&worker_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
+    );
+    <b>let</b> worker_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address));
     self.metadata.worker_address = worker_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }

@@ -31,10 +31,10 @@ import { useGetTxnRecipientAddress, useGetTransferAmount } from '_hooks';
 import { TxnGasSummary } from '_src/ui/app/components/receipt-card/TxnGasSummary';
 import { Text } from '_src/ui/app/shared/text';
 
-import type { SuiTransactionResponse, SuiAddress } from '@mysten/sui.js';
+import type { SuiTransactionBlockResponse, SuiAddress } from '@mysten/sui.js';
 
 type ReceiptCardProps = {
-    txn: SuiTransactionResponse;
+    txn: SuiTransactionBlockResponse;
     activeAddress: SuiAddress;
 };
 
@@ -72,7 +72,7 @@ function ReceiptCard({ txn, activeAddress }: ReceiptCardProps) {
     const transactionSender = getTransactionSender(txn);
     const isSender = activeAddress === transactionSender;
     const isSponsoredTransaction = transactionSender !== owner;
-    const gasTotal = getTotalGasUsed(txn);
+    const gasTotal = Number(getTotalGasUsed(txn));
 
     const showGasSummary = isSuccessful && isSender && gasTotal;
     const showSponsorInfo = !isSuccessful && isSender && isSponsoredTransaction;

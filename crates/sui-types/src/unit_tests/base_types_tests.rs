@@ -124,14 +124,8 @@ fn test_object_id_conversions() {}
 #[test]
 fn test_object_id_display() {
     let hex = SAMPLE_ADDRESS;
-    let upper_hex = SAMPLE_ADDRESS.to_uppercase();
-
     let id = ObjectID::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:X}", id), upper_hex);
-    assert_eq!(format!("{:x}", id), hex);
-    assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:#X}", id), format!("0x{upper_hex}"));
 }
 
 #[test]
@@ -252,14 +246,8 @@ fn test_object_id_zero_padding() {
 #[test]
 fn test_address_display() {
     let hex = SAMPLE_ADDRESS;
-    let upper_hex = SAMPLE_ADDRESS.to_uppercase();
-
     let id = SuiAddress::from_str(hex).unwrap();
     assert_eq!(format!("{:?}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:X}", id), upper_hex);
-    assert_eq!(format!("{:x}", id), hex);
-    assert_eq!(format!("{:#x}", id), format!("0x{hex}"));
-    assert_eq!(format!("{:#X}", id), format!("0x{upper_hex}"));
 }
 
 #[test]
@@ -350,7 +338,6 @@ fn test_authority_signature_serde_human_readable() {
 
 #[test]
 fn test_object_id_from_empty_string() {
-    assert!(ObjectID::try_from("".to_string()).is_err());
     assert!(ObjectID::from_str("").is_err());
 }
 

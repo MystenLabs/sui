@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::legacy_empty_cost;
+use crate::natives::NativesCostTable;
 use move_binary_format::errors::PartialVMResult;
-use move_vm_runtime::native_functions::NativeContext;
+use move_core_types::gas_algebra::InternalGas;
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -23,21 +24,50 @@ pub const BN254: u8 = 1;
 // We need to set an upper bound on the number of public inputs to avoid a DoS attack
 pub const MAX_PUBLIC_INPUTS: usize = 8;
 
+#[derive(Clone)]
+pub struct Groth16PrepareVerifyingKeyCostParams {
+    pub groth16_prepare_verifying_key_bls12381_cost_base: InternalGas,
+    pub groth16_prepare_verifying_key_bn254_cost_base: InternalGas,
+}
 pub fn prepare_verifying_key_internal(
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
+    // Load the cost paramaters from the protocol config
+    let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table.groth16_prepare_verifying_key_cost_params.clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
     let bytes = pop_arg!(args, VectorRef);
     let verifying_key = bytes.as_bytes_ref();
 
     let curve = pop_arg!(args, u8);
 
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = legacy_empty_cost();
+    // Load the cost paramaters from the protocol config
+    let base_cost = match curve {
+        BLS12381 => {
+            groth16_prepare_verifying_key_cost_params
+                .groth16_prepare_verifying_key_bls12381_cost_base
+        }
+        BN254 => {
+            groth16_prepare_verifying_key_cost_params.groth16_prepare_verifying_key_bn254_cost_base
+        }
+        _ => {
+            // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
+            context.charge_gas(crypto_invalid_arguments_cost);
+            return Ok(NativeResult::err(context.gas_used(), INVALID_CURVE));
+        }
+    };
+    // Charge the base cost for this oper
+    native_charge_gas_early_exit!(context, base_cost);
+    let cost = context.gas_used();
 
     let result;
     if curve == BLS12381 {
@@ -62,14 +92,34 @@ pub fn prepare_verifying_key_internal(
     }
 }
 
+#[derive(Clone)]
+pub struct Groth16VerifyGroth16ProofInternalCostParams {
+    pub groth16_verify_groth16_proof_internal_bls12381_cost_base: InternalGas,
+    pub groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: InternalGas,
+
+    pub groth16_verify_groth16_proof_internal_bn254_cost_base: InternalGas,
+    pub groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: InternalGas,
+
+    pub groth16_verify_groth16_proof_internal_public_input_cost_per_byte: InternalGas,
+}
 pub fn verify_groth16_proof_internal(
-    _context: &mut NativeContext,
+    context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 7);
 
+    // Load the cost paramaters from the protocol config
+    let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
+        let cost_table = &context.extensions().get::<NativesCostTable>();
+        (
+            cost_table
+                .groth16_verify_groth16_proof_internal_cost_params
+                .clone(),
+            cost_table.crypto_invalid_arguments_cost,
+        )
+    };
     let bytes5 = pop_arg!(args, VectorRef);
     let proof_points = bytes5.as_bytes_ref();
 
@@ -90,8 +140,41 @@ pub fn verify_groth16_proof_internal(
 
     let curve = pop_arg!(args, u8);
 
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = legacy_empty_cost();
+    let (base_cost, cost_per_public_input, num_public_inputs) = match curve {
+        BLS12381 => (
+            groth16_verify_groth16_proof_internal_cost_params
+                .groth16_verify_groth16_proof_internal_bls12381_cost_base,
+            groth16_verify_groth16_proof_internal_cost_params
+                .groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input,
+            (public_proof_inputs.len() + fastcrypto_zkp::bls12381::conversions::SCALAR_SIZE - 1)
+                / fastcrypto_zkp::bls12381::conversions::SCALAR_SIZE,
+        ),
+        BN254 => (
+            groth16_verify_groth16_proof_internal_cost_params
+                .groth16_verify_groth16_proof_internal_bn254_cost_base,
+            groth16_verify_groth16_proof_internal_cost_params
+                .groth16_verify_groth16_proof_internal_bn254_cost_per_public_input,
+            (public_proof_inputs.len() + fastcrypto_zkp::bn254::api::SCALAR_SIZE - 1)
+                / fastcrypto_zkp::bn254::api::SCALAR_SIZE,
+        ),
+        _ => {
+            // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
+            context.charge_gas(crypto_invalid_arguments_cost);
+            return Ok(NativeResult::err(context.gas_budget(), INVALID_CURVE));
+        }
+    };
+    // Charge the base cost for this oper
+    native_charge_gas_early_exit!(context, base_cost);
+    // Charge the arg size dependent costs
+    native_charge_gas_early_exit!(
+        context,
+        cost_per_public_input * (num_public_inputs as u64).into()
+            + groth16_verify_groth16_proof_internal_cost_params
+                .groth16_verify_groth16_proof_internal_public_input_cost_per_byte
+                * (public_proof_inputs.len() as u64).into()
+    );
+
+    let cost = context.gas_used();
 
     let result;
     if curve == BLS12381 {

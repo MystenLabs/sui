@@ -10,9 +10,9 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
 
 use sui_json_rpc::{get_balance_changes, ObjectProvider};
-use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_json_rpc_types::{
-    BalanceChange, SuiExecutionStatus, SuiTransactionEffects, SuiTransactionEffectsAPI,
+    BalanceChange, SuiExecutionStatus, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_json_rpc_types::{ObjectChange, OwnedObjectRef, SuiObjectRef};
 use sui_sdk::apis::ReadApi as SuiReadApi;
@@ -24,7 +24,7 @@ use sui_types::object::Owner;
 use sui_types::storage::{DeleteKind, WriteKind};
 
 use crate::errors::IndexerError;
-use crate::types::SuiTransactionFullResponse;
+use crate::types::SuiTransactionBlockFullResponse;
 use crate::PgPoolConnection;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -81,12 +81,12 @@ pub fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Er
 pub async fn multi_get_full_transactions(
     read_api: &SuiReadApi,
     digests: Vec<TransactionDigest>,
-) -> Result<Vec<SuiTransactionFullResponse>, IndexerError> {
+) -> Result<Vec<SuiTransactionBlockFullResponse>, IndexerError> {
     let sui_transactions = read_api
         .multi_get_transactions_with_options(
             digests.clone(),
             // MUSTFIX(gegaowp): avoid double fetching both input and raw_input
-            SuiTransactionResponseOptions::new()
+            SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects()
                 .with_events()
@@ -100,13 +100,13 @@ pub async fn multi_get_full_transactions(
                 e
             ))
         })?;
-    let sui_full_transactions: Vec<SuiTransactionFullResponse> = sui_transactions
+    let sui_full_transactions: Vec<SuiTransactionBlockFullResponse> = sui_transactions
         .into_iter()
-        .map(SuiTransactionFullResponse::try_from)
+        .map(SuiTransactionBlockFullResponse::try_from)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| {
             IndexerError::FullNodeReadingError(format!(
-                "Unexpected None value in SuiTransactionFullResponse of digests {:?} with error {:?}",
+                "Unexpected None value in SuiTransactionBlockFullResponse of digests {:?} with error {:?}",
                 digests, e
             ))
         })?;
@@ -115,7 +115,7 @@ pub async fn multi_get_full_transactions(
 
 pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
-    effects: &SuiTransactionEffects,
+    effects: &SuiTransactionBlockEffects,
 ) -> Result<Vec<BalanceChange>, E> {
     let gas_owner = effects.gas_object().owner;
     // Only charge gas when tx fails, skip all object parsing

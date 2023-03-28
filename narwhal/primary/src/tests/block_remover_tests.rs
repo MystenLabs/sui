@@ -12,7 +12,7 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
 use tokio::time::timeout;
 use types::{
-    BatchDigest, Certificate, MockPrimaryToWorker, PreSubscribedBroadcastSender,
+    BatchDigest, Certificate, Header, MockPrimaryToWorker, PreSubscribedBroadcastSender,
     PrimaryToWorkerServer, WorkerDeleteBatchesMessage,
 };
 
@@ -71,12 +71,14 @@ async fn test_successful_blocks_delete() {
         let batch_1 = test_utils::fixture_batch_with_transactions(10);
         let batch_2 = test_utils::fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -238,12 +240,14 @@ async fn test_failed_blocks_delete() {
         let batch_1 = test_utils::fixture_batch_with_transactions(10);
         let batch_2 = test_utils::fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch_1.clone(), worker_id_0, 0)
-            .with_payload_batch(batch_2.clone(), worker_id_1, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch_1.clone(), worker_id_0, 0)
+                .with_payload_batch(batch_2.clone(), worker_id_1, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();

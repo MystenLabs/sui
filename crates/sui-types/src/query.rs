@@ -6,10 +6,13 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::base_types::SuiAddress;
+use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::ObjectID;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionFilter {
+    /// Query by checkpoint.
+    Checkpoint(CheckpointSequenceNumber),
     /// Query by move function.
     MoveFunction {
         package: ObjectID,
@@ -24,4 +27,8 @@ pub enum TransactionFilter {
     FromAddress(SuiAddress),
     /// Query by recipient address.
     ToAddress(SuiAddress),
+    /// Query by sender and recipient address.
+    FromAndToAddress { from: SuiAddress, to: SuiAddress },
+    /// Query by transaction kind
+    TransactionKind(String),
 }

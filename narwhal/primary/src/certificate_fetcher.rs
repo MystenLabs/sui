@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
-use anemo::Network;
+use anemo::{Network, Request};
 use config::{AuthorityIdentifier, Committee};
 use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
@@ -27,8 +27,8 @@ use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
     metered_channel::Receiver,
-    Certificate, ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse,
-    Round,
+    Certificate, CertificateAPI, ConditionalBroadcastReceiver, FetchCertificatesRequest,
+    FetchCertificatesResponse, HeaderAPI, Round,
 };
 
 #[cfg(test)]
@@ -36,7 +36,7 @@ use types::{
 pub mod certificate_fetcher_tests;
 
 // Maximum number of certificates to fetch with one request.
-const MAX_CERTIFICATES_TO_FETCH: usize = 10_000;
+const MAX_CERTIFICATES_TO_FETCH: usize = 2_000;
 // Seconds to wait for a response before issuing another parallel fetch request.
 const PARALLEL_FETCH_REQUEST_INTERVAL_SECS: Duration = Duration::from_secs(5);
 // The timeout for an iteration of parallel fetch requests over all peers would be
@@ -132,15 +132,15 @@ impl CertificateFetcher {
         loop {
             tokio::select! {
                 Some(certificate) = self.rx_certificate_fetcher.recv() => {
-                    let header = &certificate.header;
-                    if header.epoch != self.committee.epoch() {
+                    let header = &certificate.header();
+                    if header.epoch() != self.committee.epoch() {
                         continue;
                     }
                     // Unnecessary to validate the header and certificate further, since it has
                     // already been validated.
 
-                    if let Some(r) = self.targets.get(&header.author) {
-                        if header.round <= *r {
+                    if let Some(r) = self.targets.get(&header.author()) {
+                        if header.round() <= *r {
                             // Ignore fetch request when we already need to sync to a later
                             // certificate from the same authority. Although this certificate may
                             // not be the parent of the later certificate, this should be ok
@@ -157,9 +157,9 @@ impl CertificateFetcher {
                     // The header should have been verified as part of the certificate.
                     match self
                     .certificate_store
-                    .last_round_number(header.author) {
+                    .last_round_number(header.author()) {
                         Ok(r) => {
-                            if header.round <= r.unwrap_or(0) {
+                            if header.round() <= r.unwrap_or(0) {
                                 // Ignore fetch request. Possibly the certificate was processed
                                 // while the message is in the queue.
                                 continue;
@@ -168,13 +168,13 @@ impl CertificateFetcher {
                         }
                         Err(e) => {
                             // If this happens, it is most likely due to serialization error.
-                            error!("Failed to read latest round for {}: {}", header.author, e);
+                            error!("Failed to read latest round for {}: {}", header.author(), e);
                             continue;
                         }
                     };
 
                     // Update the target rounds for the authority.
-                    self.targets.insert(header.author, header.round);
+                    self.targets.insert(header.author(), header.round());
 
                     // Kick start a fetch task if there is no other task running.
                     if self.fetch_certificates_task.is_empty() {
@@ -340,7 +340,8 @@ async fn fetch_certificates_helper(
         // Loop until one peer returns with certificates, or no peer does.
         loop {
             if let Some(peer) = peers.pop() {
-                let request = request.clone();
+                let request = Request::new(request.clone())
+                    .with_timeout(PARALLEL_FETCH_REQUEST_INTERVAL_SECS * 2);
                 fut.push(monitored_future!(async move {
                     debug!("Sending out fetch request in parallel to {peer}");
                     let result = network.fetch_certificates(&peer, request).await;

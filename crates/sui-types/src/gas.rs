@@ -561,7 +561,7 @@ impl<'a> SuiGasStatus<'a> {
         }
     }
 
-    fn gas_used(&self) -> GasUnits {
+    pub fn gas_used(&self) -> GasUnits {
         let remaining_gas = self.gas_status.remaining_gas();
         self.init_budget
             .checked_sub(remaining_gas)
@@ -569,38 +569,33 @@ impl<'a> SuiGasStatus<'a> {
     }
 }
 
-/// Check whether the given gas_object and gas_budget is legit:
-/// 1. If the gas object has an address owner.
-/// 2. If it's enough to pay the flat minimum transaction fee
-/// 3. If it's less than the max gas budget allowed
-/// 4. If the gas_object actually has enough balance to pay for the budget
-/// 5. If total balance in gas object and extra input objects is sufficient
-/// to pay total amount of gas budget and extra amount to pay, extra input objects
-/// and extra amount to pay are only relevant in SUI payment transactions.
+// Check whether gas arguments are legit:
+// 1. Gas object has an address owner.
+// 2. Gas budget is between min and max budget allowed
 pub fn check_gas_balance(
     gas_object: &Object,
+    more_gas_objs: Vec<&Object>,
     gas_budget: u64,
     gas_price: u64,
-    more_gas_objs: Vec<Object>,
     cost_table: &SuiCostTable,
 ) -> UserInputResult {
+    // 1. Gas object has an address owner.
     if !(matches!(gas_object.owner, Owner::AddressOwner(_))) {
         return Err(UserInputError::GasObjectNotOwnedObject {
             owner: gas_object.owner,
         });
     }
 
+    // 2. Gas budget is between min and max budget allowed
     let max_gas_budget = cost_table.max_gas_budget as u128 * gas_price as u128;
     let min_gas_budget = cost_table.min_gas_budget_external() as u128 * gas_price as u128;
     let required_gas_amount = gas_budget as u128;
-
     if required_gas_amount > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
             max_budget: cost_table.max_gas_budget,
         });
     }
-
     if required_gas_amount < min_gas_budget {
         return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
@@ -608,9 +603,10 @@ pub fn check_gas_balance(
         });
     }
 
+    // 3. Gas balance (all gas coins together) is bigger or equal to budget
     let mut gas_balance = get_gas_balance(gas_object)? as u128;
     for extra_obj in more_gas_objs {
-        gas_balance += get_gas_balance(&extra_obj)? as u128;
+        gas_balance += get_gas_balance(extra_obj)? as u128;
     }
     ok_or_gas_balance_error!(gas_balance, required_gas_amount)
 }
@@ -622,15 +618,12 @@ pub fn start_gas_metering(
     storage_gas_unit_price: u64,
     cost_table: SuiCostTable,
 ) -> UserInputResult<SuiGasStatus<'static>> {
-    let mut gas_status = SuiGasStatus::new_with_budget(
+    Ok(SuiGasStatus::new_with_budget(
         gas_budget,
         computation_gas_unit_price.into(),
         storage_gas_unit_price.into(),
         cost_table,
-    );
-    // Charge the flat transaction fee.
-    gas_status.charge_min_tx_gas()?;
-    Ok(gas_status)
+    ))
 }
 
 /// Subtract the gas balance of \p gas_object by \p amount.

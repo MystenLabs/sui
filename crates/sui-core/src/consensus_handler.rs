@@ -16,7 +16,7 @@ use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::ConsensusOutput;
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -30,7 +30,6 @@ use sui_types::messages::{
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
 
-use sui_simulator::anemo::PeerId;
 use sui_types::storage::ParentSync;
 
 use tracing::{debug, error, instrument};
@@ -45,10 +44,10 @@ pub struct ConsensusHandler<T> {
     parent_sync_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-    /// Mappings used for logging and metrics
-    authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
     committee: Committee,
+    /// Mappings used for logging and metrics
+    authority_names_to_hostnames: HashMap<AuthorityName, String>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -66,7 +65,7 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         parent_sync_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        authority_names_to_peer_ids: Arc<HashMap<AuthorityName, PeerId>>,
+        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
@@ -80,7 +79,7 @@ impl<T> ConsensusHandler<T> {
             parent_sync_store,
             low_scoring_authorities,
             committee,
-            authority_names_to_peer_ids,
+            authority_names_to_hostnames,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
@@ -133,7 +132,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
         // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
-        let timestamp = consensus_output.sub_dag.leader.header.created_at;
+        let timestamp = *consensus_output.sub_dag.leader.header().created_at();
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
@@ -147,16 +146,21 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             self.low_scoring_authorities.clone(),
             &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
-            self.authority_names_to_peer_ids.clone(),
+            self.authority_names_to_hostnames.clone(),
             &self.metrics,
         );
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&consensus_output.sub_dag.leader.header.author.to_string()])
+            .with_label_values(&[&consensus_output
+                .sub_dag
+                .leader
+                .header()
+                .author()
+                .to_string()])
             .inc();
         for (cert, batches) in consensus_output.batches {
-            let author = cert.header.author;
+            let author = cert.header().author();
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
@@ -164,11 +168,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             let output_cert = Arc::new(cert);
             for batch in batches {
                 self.metrics.consensus_handler_processed_batches.inc();
-                for serialized_transaction in batch.transactions {
+                for serialized_transaction in batch.transactions() {
                     bytes += serialized_transaction.len();
 
                     let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                        &serialized_transaction,
+                        serialized_transaction,
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
@@ -185,7 +189,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                         .with_label_values(&[classify(&transaction)])
                         .inc();
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, output_cert.clone()));
+                    transactions.push((
+                        serialized_transaction.clone(),
+                        transaction,
+                        output_cert.clone(),
+                    ));
                 }
             }
         }
@@ -210,7 +218,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
             let certificate_author = AuthorityName::from_bytes(
                 self.committee
-                    .authority_safe(&output_cert.header.author)
+                    .authority_safe(&output_cert.header().author())
                     .protocol_key_bytes()
                     .0
                     .as_ref(),

@@ -50,7 +50,7 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -652,11 +652,8 @@ impl CheckpointBuilder {
         }
 
         debug!(
-            "Waiting for checkpoint user signatures for certificates {:?} to appear in consensus",
-            all_effects_and_transaction_sizes
-                .iter()
-                .map(|(effects, _)| effects)
-                .collect::<Vec<_>>()
+            "Waiting for checkpoint user signatures for {:?} certificates to appear in consensus",
+            all_effects_and_transaction_sizes.len()
         );
         let signatures = {
             let _guard = monitored_scope("CheckpointBuilder::wait_user_signatures");
@@ -737,17 +734,22 @@ impl CheckpointBuilder {
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
 
+                let epoch_commitments = if self
+                    .epoch_store
+                    .protocol_config()
+                    .check_commit_root_state_digest_supported()
+                {
+                    vec![root_state_digest.into()]
+                } else {
+                    vec![]
+                };
+
                 Some(EndOfEpochData {
                     next_epoch_committee: committee.voting_rights,
                     next_epoch_protocol_version: ProtocolVersion::new(
                         system_state_obj.protocol_version(),
                     ),
-                    // MUSTFIX: This should become
-                    //
-                    //   epoch_commitments: vec![root_state_digest.into()]
-                    //
-                    // When the accumulator is deemed stable.
-                    epoch_commitments: vec![],
+                    epoch_commitments,
                 })
             } else {
                 self.accumulator.accumulate_checkpoint(
@@ -1227,6 +1229,11 @@ impl CheckpointServiceNotify for CheckpointService {
             return Ok(());
         }
         debug!(
+            "Pending checkpoint at height {} has {} roots",
+            checkpoint.height(),
+            checkpoint.roots.len(),
+        );
+        trace!(
             "Transaction roots for pending checkpoint at height {}: {:?}",
             checkpoint.height(),
             checkpoint.roots

@@ -23,8 +23,8 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionEffects, SuiTransactionEffectsAPI,
-    SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -71,7 +71,7 @@ use futures::FutureExt;
 #[allow(clippy::large_enum_variant)]
 pub enum ExecutionEffects {
     CertifiedTransactionEffects(CertifiedTransactionEffects, TransactionEvents),
-    SuiTransactionEffects(SuiTransactionEffects),
+    SuiTransactionBlockEffects(SuiTransactionBlockEffects),
 }
 
 impl ExecutionEffects {
@@ -80,7 +80,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().mutated().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .mutated()
                 .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
@@ -93,7 +93,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().created().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .created()
                 .iter()
                 .map(|refe| (refe.reference.to_object_ref(), refe.owner))
@@ -106,7 +106,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().deleted().to_vec()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => sui_tx_effects
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => sui_tx_effects
                 .deleted()
                 .iter()
                 .map(|refe| refe.to_object_ref())
@@ -119,7 +119,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 Some(certified_effects.auth_sig())
             }
-            ExecutionEffects::SuiTransactionEffects(_) => None,
+            ExecutionEffects::SuiTransactionBlockEffects(_) => None,
         }
     }
 
@@ -128,7 +128,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 *certified_effects.data().gas_object()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 let refe = &sui_tx_effects.gas_object();
                 (refe.reference.to_object_ref(), refe.owner)
             }
@@ -147,7 +147,7 @@ impl ExecutionEffects {
             ExecutionEffects::CertifiedTransactionEffects(certified_effects, ..) => {
                 certified_effects.data().status().is_ok()
             }
-            ExecutionEffects::SuiTransactionEffects(sui_tx_effects) => {
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 sui_tx_effects.status().is_ok()
             }
         }
@@ -160,7 +160,7 @@ pub trait ValidatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     /// This function is similar to `execute_transaction` but does not check any validator's
     /// signature. It should only be used for benchmarks.
@@ -284,7 +284,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .into_sui_system_state_summary())
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         if std::env::var("BENCH_MODE").is_ok() {
             return self.execute_bench_transaction(tx).await;
         }
@@ -537,7 +537,8 @@ impl FullNodeProxy {
         let committee_vec = resp.validators;
         let committee_map =
             BTreeMap::from_iter(committee_vec.into_iter().map(|(name, stake)| (name, stake)));
-        let committee = Committee::new(epoch, committee_map);
+        let committee =
+            Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
 
         Ok(Self {
             sui_client,
@@ -572,7 +573,7 @@ impl ValidatorProxy for FullNodeProxy {
             .await?)
     }
 
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let tx = tx.verify()?;
         let mut retry_cnt = 0;
@@ -582,15 +583,15 @@ impl ValidatorProxy for FullNodeProxy {
             match self
                 .sui_client
                 .quorum_driver()
-                .execute_transaction(
+                .execute_transaction_block(
                     tx.clone(),
-                    SuiTransactionResponseOptions::new().with_effects(),
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
                     None,
                 )
                 .await
             {
                 Ok(resp) => {
-                    let effects = ExecutionEffects::SuiTransactionEffects(
+                    let effects = ExecutionEffects::SuiTransactionBlockEffects(
                         resp.effects.expect("effects field should not be None"),
                     );
                     return Ok(effects);
@@ -608,7 +609,7 @@ impl ValidatorProxy for FullNodeProxy {
     }
 
     async fn execute_bench_transaction(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        self.execute_transaction(tx).await
+        self.execute_transaction_block(tx).await
     }
 
     fn clone_committee(&self) -> Committee {

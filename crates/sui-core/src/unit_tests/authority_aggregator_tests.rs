@@ -640,7 +640,7 @@ fn get_genesis_agg<A>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
-    let committee = Committee::new(0, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
     let committee_store = Arc::new(CommitteeStore::new_for_testing(&committee));
 
     AuthorityAggregator::new_with_timeouts(
@@ -664,7 +664,7 @@ where
     A: Clone,
 {
     let mut agg = get_genesis_agg(authorities.clone(), clients);
-    let committee = Committee::new(epoch, authorities);
+    let committee = Committee::new_for_testing_with_normalized_voting_power(epoch, authorities);
     agg.committee_store
         .insert_new_committee(&committee)
         .unwrap();
@@ -836,7 +836,8 @@ async fn test_handle_transaction_response() {
     println!("Case 2 - Retryable Transaction (WrongEpoch Error)");
     // Validators return signed-tx with epoch 0, client expects 1
     // Update client to epoch 1
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -890,7 +891,8 @@ async fn test_handle_transaction_response() {
     )
     .await;
 
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1170,7 +1172,8 @@ async fn test_handle_transaction_response() {
 
     println!("Case 7.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store, now SafeClient will pass
-    let committee_1 = Committee::new(1, authorities.clone());
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_1)
         .unwrap();
@@ -1742,7 +1745,8 @@ async fn test_handle_conflicting_transaction_response() {
 
     println!("Case 5.1 - Retryable Transaction (WrongEpoch Error)");
     // Update committee store to epoch 2, now SafeClient will pass
-    let committee_2 = Committee::new(2, authorities.clone());
+    let committee_2 =
+        Committee::new_for_testing_with_normalized_voting_power(2, authorities.clone());
     agg.committee_store
         .insert_new_committee(&committee_2)
         .unwrap();
@@ -1771,15 +1775,101 @@ async fn test_handle_conflicting_transaction_response() {
 }
 
 #[tokio::test]
+async fn test_handle_overload_response() {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let txn = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        None,
+    );
+
+    let overload_error = SuiError::TooManyTransactionsPendingExecution {
+        queue_len: 100,
+        threshold: 100,
+    };
+    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+
+    // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    set_tx_info_response_with_error(&mut clients, authority_keys.iter().skip(1), overload_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::SystemOverload {
+                    overloaded_stake,
+                    ..
+                } if *overloaded_stake == 7500
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    // Change one of the valdiators' errors to RPC error so the system is considered not overloaded now and a `RetryableTransaction`
+    // should be returned.
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(rpc_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::TooManyTransactionsPendingExecution { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn test_byzantine_authority_sig_aggregation() {
     telemetry_subscribers::init_for_testing();
     // For 4 validators, we need 2f+1 = 3 for quorum for signing a sender signed tx.
     assert!(run_aggregator(1, 4).await.is_ok());
     assert!(run_aggregator(2, 4).await.is_err());
 
-    // For 6 validators, we need 2f+1 = 5 for quorum for signing a sender signed tx.
+    // For 6 validators, voting power normaliziation in test Committee construction
+    // will result in 2f+1 = 4 for quorum for signing a sender signed tx.
     assert!(run_aggregator(1, 6).await.is_ok());
-    assert!(run_aggregator(2, 6).await.is_err());
+    assert!(run_aggregator(2, 6).await.is_ok());
+    assert!(run_aggregator(3, 6).await.is_err());
 
     // For 4 validators, we need 2f+1 = 3 for quorum for signing transaction effects.
     assert!(process_with_cert(1, 4).await.is_ok());
@@ -1797,7 +1887,7 @@ async fn test_byzantine_authority_sig_aggregation() {
 #[should_panic]
 async fn test_fork_panic_process_cert_6_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(2, 6).await;
+    let _ = process_with_cert(3, 6).await;
 }
 
 #[tokio::test]
@@ -1983,6 +2073,10 @@ async fn assert_resp_err<E, F>(
             AggregatorProcessTransactionError::FatalTransaction { errors } => {
                 assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
             }
+
+            AggregatorProcessTransactionError::SystemOverload { errors, .. } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
         },
         Err(received_agg_err) => {
             assert!(
@@ -2033,13 +2127,21 @@ fn set_tx_info_response_with_signed_tx(
 
 fn set_retryable_tx_info_response_error(
     clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
-    authority_keys: &Vec<(AuthorityName, AuthorityKeyPair)>,
+    authority_keys: &[(AuthorityName, AuthorityKeyPair)],
+) {
+    let error = SuiError::RpcError("RPC".into(), "Error".into());
+    set_tx_info_response_with_error(clients, authority_keys.iter(), error);
+}
+
+fn set_tx_info_response_with_error<'a>(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: impl Iterator<Item = &'a (AuthorityName, AuthorityKeyPair)>,
+    error: SuiError,
 ) {
     for (name, _) in authority_keys {
-        let error = SuiError::RpcError("RPC".into(), "Error".into());
         clients
             .get_mut(name)
             .unwrap()
-            .set_tx_info_response_error(error);
+            .set_tx_info_response_error(error.clone());
     }
 }

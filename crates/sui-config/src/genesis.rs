@@ -8,6 +8,7 @@ use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
@@ -59,6 +60,8 @@ use sui_types::{
 };
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
+
+const MAX_VALIDATOR_METADATA_LENGTH: usize = 256;
 
 #[derive(Clone, Debug)]
 pub struct Genesis {
@@ -342,28 +345,51 @@ impl GenesisValidatorInfo {
         if !self.info.name.is_ascii() {
             bail!("name must be ascii");
         }
-        if self.info.name.len() > 128 {
-            bail!("name must be <= 128 bytes long");
+        if self.info.name.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("name must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
         }
 
         if !self.info.description.is_ascii() {
             bail!("description must be ascii");
         }
-        if self.info.description.len() > 150 {
-            bail!("description must be <= 150 bytes long");
+        if self.info.description.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("description must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
+        if self.info.image_url.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("image url must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
+        if self.info.project_url.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("project url must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
         }
 
         if !self.info.network_address.to_string().is_ascii() {
             bail!("network address must be ascii");
         }
+        if self.info.network_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("network address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
         if !self.info.p2p_address.to_string().is_ascii() {
             bail!("p2p address must be ascii");
         }
+        if self.info.p2p_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("p2p address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
         if !self.info.narwhal_primary_address.to_string().is_ascii() {
             bail!("primary address must be ascii");
         }
+        if self.info.narwhal_primary_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("primary address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
+        }
+
         if !self.info.narwhal_worker_address.to_string().is_ascii() {
             bail!("worker address must be ascii");
+        }
+        if self.info.narwhal_worker_address.len() > MAX_VALIDATOR_METADATA_LENGTH {
+            bail!("worker address must be <= {MAX_VALIDATOR_METADATA_LENGTH} bytes long");
         }
 
         if let Err(e) = self.info.p2p_address.to_anemo_address() {
@@ -377,7 +403,7 @@ impl GenesisValidatorInfo {
         }
 
         if self.info.commission_rate > 10000 {
-            bail!("commisison rate must be lower than 100%");
+            bail!("commissions rate must be lower than 100%");
         }
 
         let protocol_pubkey = AuthorityPublicKey::from_bytes(self.info.protocol_key.as_ref())?;
@@ -644,6 +670,10 @@ impl Builder {
         self
     }
 
+    pub fn validators(&self) -> &BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo> {
+        &self.validators
+    }
+
     pub fn add_validator_signature(mut self, keypair: &AuthorityKeyPair) -> Self {
         let UnsignedGenesis { checkpoint, .. } = self.build_unsigned_genesis_checkpoint();
 
@@ -739,9 +769,6 @@ impl Builder {
             CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
-        // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_sig().len(), self.validators.len() as u64);
-
         let genesis = Genesis {
             checkpoint,
             checkpoint_contents,
@@ -813,20 +840,32 @@ impl Builder {
             validator_low_stake_grace_period,
         } = self.parameters.to_genesis_chain_parameters();
 
-        let system_state = unsigned_genesis
-            .sui_system_object()
-            .into_genesis_version_for_tooling();
+        // In non-testing code, genesis type must always be V1.
+        #[cfg(not(msim))]
+        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object();
+
+        #[cfg(msim)]
+        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object() else {
+            // Types other than V1 used in simtests do not need to be validated.
+            return;
+        };
 
         assert_eq!(
             self.validators.len(),
             system_state.validators.active_validators.len()
         );
+        let mut address_to_pool_id = BTreeMap::new();
         for (validator, onchain_validator) in self
             .validators
             .values()
             .zip(system_state.validators.active_validators.iter())
         {
             let metadata = onchain_validator.verified_metadata();
+
+            // Validators should not have duplicate addresses so the result of insertion should be None.
+            assert!(address_to_pool_id
+                .insert(metadata.sui_address, onchain_validator.staking_pool.id)
+                .is_none());
             assert_eq!(validator.info.sui_address(), metadata.sui_address);
             assert_eq!(validator.info.protocol_key(), metadata.sui_pubkey_bytes());
             assert_eq!(validator.info.network_key, metadata.network_pubkey);
@@ -859,7 +898,14 @@ impl Builder {
 
         assert_eq!(system_state.epoch, 0);
         assert_eq!(system_state.protocol_version, protocol_version);
-        assert_eq!(system_state.storage_fund.value(), 0);
+        assert_eq!(system_state.storage_fund.non_refundable_balance.value(), 0);
+        assert_eq!(
+            system_state
+                .storage_fund
+                .total_object_storage_rebates
+                .value(),
+            0
+        );
 
         assert_eq!(system_state.parameters.epoch_duration_ms, epoch_duration_ms);
         assert_eq!(
@@ -938,6 +984,9 @@ impl Builder {
 
         for allocation in token_distribution_schedule.allocations {
             if let Some(staked_with_validator) = allocation.staked_with_validator {
+                let staking_pool_id = *address_to_pool_id
+                    .get(&staked_with_validator)
+                    .expect("staking pool should exist");
                 let staked_sui_object_id = staked_sui_objects
                     .iter()
                     .find(|(_k, (o, s))| {
@@ -946,7 +995,7 @@ impl Builder {
                     };
                         *owner == allocation.recipient_address
                             && s.principal() == allocation.amount_mist
-                            && s.validator_address() == staked_with_validator
+                            && s.pool_id() == staking_pool_id
                     })
                     .map(|(k, _)| *k)
                     .expect("all allocations should be present");
@@ -956,10 +1005,8 @@ impl Builder {
                     Owner::AddressOwner(allocation.recipient_address)
                 );
                 assert_eq!(staked_sui_object.1.principal(), allocation.amount_mist);
-                assert_eq!(
-                    staked_sui_object.1.validator_address(),
-                    staked_with_validator
-                );
+                assert_eq!(staked_sui_object.1.pool_id(), staking_pool_id);
+                assert_eq!(staked_sui_object.1.activation_epoch(), 0);
             } else {
                 let gas_object_id = gas_objects
                     .iter()
@@ -1043,21 +1090,6 @@ impl Builder {
             objects.insert(object.id(), object);
         }
 
-        // Load Signatures
-        let mut signatures = BTreeMap::new();
-        for entry in path.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
-            let entry = entry?;
-            if entry.file_name().starts_with('.') {
-                continue;
-            }
-
-            let path = entry.path();
-            let signature_bytes = fs::read(path)?;
-            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)
-                .with_context(|| format!("unable to load validator signatrue for {path}"))?;
-            signatures.insert(sigs.authority, sigs);
-        }
-
         // Load validator infos
         let mut committee = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
@@ -1072,6 +1104,21 @@ impl Builder {
                 serde_yaml::from_slice(&validator_info_bytes)
                     .with_context(|| format!("unable to load validator info for {path}"))?;
             committee.insert(validator_info.info.protocol_key(), validator_info);
+        }
+
+        // Load Signatures
+        let mut signatures = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_SIGNATURE_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let signature_bytes = fs::read(path)?;
+            let sigs: AuthoritySignInfo = bcs::from_bytes(&signature_bytes)
+                .with_context(|| format!("unable to load validator signatrue for {path}"))?;
+            signatures.insert(sigs.authority, sigs);
         }
 
         let mut builder = Self {
@@ -1462,7 +1509,7 @@ fn process_package(
                 .iter()
                 .zip(dependency_objects.iter())
                 .all(|(dependency, obj_opt)| obj_opt.is_some()
-                    || to_be_published_addresses.contains(dependency))
+                    || to_be_published_addresses.contains(&AccountAddress::from(*dependency)))
         );
     }
     let loaded_dependencies: Vec<_> = dependencies

@@ -12,7 +12,8 @@ use std::sync::Arc;
 use tokio::time::Instant;
 use tracing::{debug, error_span};
 use types::{
-    Certificate, CertificateDigest, CommittedSubDag, ConsensusStore, ReputationScores, Round,
+    Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConsensusStore, HeaderAPI,
+    ReputationScores, Round,
 };
 
 #[cfg(test)]
@@ -121,7 +122,7 @@ impl ConsensusProtocol for Bullshark {
             .get(&round)
             .expect("We should have the whole history by now")
             .values()
-            .filter(|(_, x)| x.header.parents.contains(leader_digest))
+            .filter(|(_, x)| x.header().parents().contains(leader_digest))
             .map(|(_, x)| self.committee.stake_by_id(x.origin()))
             .sum();
 
@@ -318,8 +319,8 @@ impl Bullshark {
             for certificate in committed_sequence {
                 // TODO: we could iterate only the certificates of the round above the previous leader's round
                 if certificate
-                    .header
-                    .parents
+                    .header()
+                    .parents()
                     .iter()
                     .any(|digest| *digest == previous_leader)
                 {

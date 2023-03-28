@@ -23,7 +23,7 @@ use node::{
 };
 use prometheus::Registry;
 use std::sync::Arc;
-use storage::NodeStorage;
+use storage::{CertificateStoreCacheMetrics, NodeStorage};
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
     write_authority_keypair_to_file, write_keypair_to_file,
@@ -273,12 +273,14 @@ async fn run(
     };
 
     // Make the data store.
-    let store = NodeStorage::reopen(store_path);
+    let registry_service = RegistryService::new(Registry::new());
+    let certificate_store_cache_metrics =
+        CertificateStoreCacheMetrics::new(&registry_service.default_registry());
+
+    let store = NodeStorage::reopen(store_path, Some(certificate_store_cache_metrics));
 
     // The channel returning the result for each transaction's execution.
     let (_tx_transaction_confirmation, _rx_transaction_confirmation) = channel(100);
-
-    let registry_service = RegistryService::new(Registry::new());
 
     // Check whether to run a primary, a worker, or an entire authority.
     let (primary, worker) = match matches.subcommand() {

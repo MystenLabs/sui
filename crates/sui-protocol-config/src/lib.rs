@@ -114,6 +114,9 @@ struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
     package_upgrades: bool,
+    // If true, validators will commit to the root state digest
+    // in end of epoch checkpoint proposals
+    commit_root_state_digest: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -146,7 +149,7 @@ pub struct ProtocolConfig {
     // sdk/typescript/src/builder/TransactionData.ts
     max_tx_size_bytes: Option<u64>,
 
-    /// Maximum number of input objects.
+    /// Maximum number of input objects to a transaction. Enforced by the transaction input checker
     max_input_objects: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
@@ -264,6 +267,7 @@ pub struct ProtocolConfig {
     max_meter_ticks_per_module: Option<u64>,
 
     // === Object runtime internal operation limits ====
+    // These affect dynamic fields
     /// Maximum number of cached objects in the object runtime ObjectStore. Enforced by object runtime during execution
     object_runtime_max_num_cached_objects: Option<u64>,
 
@@ -311,6 +315,11 @@ pub struct ProtocolConfig {
     // than a per-byte cost. checking an object lock should not require loading an
     // entire object, just consulting an ID -> tx digest map
     obj_access_cost_verify_per_byte: Option<u64>,
+
+    /// === Gas version. gas model ===
+
+    /// Gas model version, what code we are using to charge gas
+    gas_model_version: Option<u64>,
 
     /// === Storage gas costs ===
 
@@ -433,10 +442,72 @@ pub struct ProtocolConfig {
     validator_validate_metadata_data_cost_per_byte: Option<u64>,
 
     // Crypto natives
+    crypto_invalid_arguments_cost: Option<u64>,
+    // bls12381::bls12381_min_sig_verify
+    bls12381_bls12381_min_sig_verify_cost_base: Option<u64>,
+    bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Option<u64>,
+    bls12381_bls12381_min_sig_verify_msg_cost_per_block: Option<u64>,
+
+    // bls12381::bls12381_min_pk_verify
+    bls12381_bls12381_min_pk_verify_cost_base: Option<u64>,
+    bls12381_bls12381_min_pk_verify_msg_cost_per_byte: Option<u64>,
+    bls12381_bls12381_min_pk_verify_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_k1::ecrecover
+    ecdsa_k1_ecrecover_keccak256_cost_base: Option<u64>,
+    ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_k1_ecrecover_sha256_cost_base: Option<u64>,
+    ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_ecrecover_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_k1::decompress_pubkey
+    ecdsa_k1_decompress_pubkey_cost_base: Option<u64>,
+
+    // ecdsa_k1::secp256k1_verify
+    ecdsa_k1_secp256k1_verify_keccak256_cost_base: Option<u64>,
+    ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_k1_secp256k1_verify_sha256_cost_base: Option<u64>,
+    ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_r1::ecrecover
+    ecdsa_r1_ecrecover_keccak256_cost_base: Option<u64>,
+    ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_r1_ecrecover_sha256_cost_base: Option<u64>,
+    ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_ecrecover_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecdsa_r1::secp256k1_verify
+    ecdsa_r1_secp256r1_verify_keccak256_cost_base: Option<u64>,
+    ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: Option<u64>,
+    ecdsa_r1_secp256r1_verify_sha256_cost_base: Option<u64>,
+    ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Option<u64>,
+    ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Option<u64>,
+
+    // ecvrf::verify
+    ecvrf_ecvrf_verify_cost_base: Option<u64>,
+    ecvrf_ecvrf_verify_alpha_string_cost_per_byte: Option<u64>,
+    ecvrf_ecvrf_verify_alpha_string_cost_per_block: Option<u64>,
+
     // ed25519
     ed25519_ed25519_verify_cost_base: Option<u64>,
     ed25519_ed25519_verify_msg_cost_per_byte: Option<u64>,
     ed25519_ed25519_verify_msg_cost_per_block: Option<u64>,
+
+    // groth16::prepare_verifying_key
+    groth16_prepare_verifying_key_bls12381_cost_base: Option<u64>,
+    groth16_prepare_verifying_key_bn254_cost_base: Option<u64>,
+
+    // groth16::verify_groth16_proof_internal
+    groth16_verify_groth16_proof_internal_bls12381_cost_base: Option<u64>,
+    groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: Option<u64>,
+    groth16_verify_groth16_proof_internal_bn254_cost_base: Option<u64>,
+    groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: Option<u64>,
+    groth16_verify_groth16_proof_internal_public_input_cost_per_byte: Option<u64>,
 
     // hash::blake2b256
     hash_blake2b256_cost_base: Option<u64>,
@@ -446,6 +517,11 @@ pub struct ProtocolConfig {
     hash_keccak256_cost_base: Option<u64>,
     hash_keccak256_data_cost_per_byte: Option<u64>,
     hash_keccak256_data_cost_per_block: Option<u64>,
+
+    // hmac::hmac_sha3_256
+    hmac_hmac_sha3_256_cost_base: Option<u64>,
+    hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
+    hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -473,6 +549,10 @@ impl ProtocolConfig {
                 self.version
             )))
         }
+    }
+
+    pub fn check_commit_root_state_digest_supported(&self) -> bool {
+        self.feature_flags.commit_root_state_digest
     }
 }
 
@@ -654,6 +734,9 @@ impl ProtocolConfig {
         self.obj_metadata_cost_non_refundable
             .expect(CONSTANT_ERR_MSG)
     }
+    pub fn gas_model_version(&self) -> u64 {
+        self.gas_model_version.expect(CONSTANT_ERR_MSG)
+    }
     pub fn storage_rebate_rate(&self) -> u64 {
         self.storage_rebate_rate.expect(CONSTANT_ERR_MSG)
     }
@@ -832,6 +915,152 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn crypto_invalid_arguments_cost(&self) -> u64 {
+        self.crypto_invalid_arguments_cost.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_sig_verify_cost_base(&self) -> u64 {
+        self.bls12381_bls12381_min_sig_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_sig_verify_msg_cost_per_byte(&self) -> u64 {
+        self.bls12381_bls12381_min_sig_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_sig_verify_msg_cost_per_block(&self) -> u64 {
+        self.bls12381_bls12381_min_sig_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn bls12381_bls12381_min_pk_verify_cost_base(&self) -> u64 {
+        self.bls12381_bls12381_min_pk_verify_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_pk_verify_msg_cost_per_byte(&self) -> u64 {
+        self.bls12381_bls12381_min_pk_verify_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn bls12381_bls12381_min_pk_verify_msg_cost_per_block(&self) -> u64 {
+        self.bls12381_bls12381_min_pk_verify_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_k1_ecrecover_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_ecrecover_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_ecrecover_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_k1_decompress_pubkey_cost_base(&self) -> u64 {
+        self.ecdsa_k1_decompress_pubkey_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_k1_secp256k1_verify_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_r1_ecrecover_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_ecrecover_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_ecrecover_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecdsa_r1_secp256r1_verify_keccak256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_keccak256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_sha256_cost_base(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_sha256_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block(&self) -> u64 {
+        self.ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn ecvrf_ecvrf_verify_cost_base(&self) -> u64 {
+        self.ecvrf_ecvrf_verify_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecvrf_ecvrf_verify_alpha_string_cost_per_byte(&self) -> u64 {
+        self.ecvrf_ecvrf_verify_alpha_string_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn ecvrf_ecvrf_verify_alpha_string_cost_per_block(&self) -> u64 {
+        self.ecvrf_ecvrf_verify_alpha_string_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
     pub fn ed25519_ed25519_verify_cost_base(&self) -> u64 {
         self.ed25519_ed25519_verify_cost_base
             .expect(CONSTANT_ERR_MSG)
@@ -844,6 +1073,37 @@ impl ProtocolConfig {
         self.ed25519_ed25519_verify_msg_cost_per_block
             .expect(CONSTANT_ERR_MSG)
     }
+
+    pub fn groth16_prepare_verifying_key_bls12381_cost_base(&self) -> u64 {
+        self.groth16_prepare_verifying_key_bls12381_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_prepare_verifying_key_bn254_cost_base(&self) -> u64 {
+        self.groth16_prepare_verifying_key_bn254_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn groth16_verify_groth16_proof_internal_bls12381_cost_base(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bls12381_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_bn254_cost_base(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bn254_cost_base
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_bn254_cost_per_public_input(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_bn254_cost_per_public_input
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn groth16_verify_groth16_proof_internal_public_input_cost_per_byte(&self) -> u64 {
+        self.groth16_verify_groth16_proof_internal_public_input_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+
     pub fn hash_blake2b256_cost_base(&self) -> u64 {
         self.hash_blake2b256_cost_base.expect(CONSTANT_ERR_MSG)
     }
@@ -864,6 +1124,18 @@ impl ProtocolConfig {
     }
     pub fn hash_keccak256_data_cost_per_block(&self) -> u64 {
         self.hash_keccak256_data_cost_per_block
+            .expect(CONSTANT_ERR_MSG)
+    }
+
+    pub fn hmac_hmac_sha3_256_cost_base(&self) -> u64 {
+        self.hmac_hmac_sha3_256_cost_base.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hmac_hmac_sha3_256_input_cost_per_byte(&self) -> u64 {
+        self.hmac_hmac_sha3_256_input_cost_per_byte
+            .expect(CONSTANT_ERR_MSG)
+    }
+    pub fn hmac_hmac_sha3_256_input_cost_per_block(&self) -> u64 {
+        self.hmac_hmac_sha3_256_input_cost_per_block
             .expect(CONSTANT_ERR_MSG)
     }
 
@@ -1029,11 +1301,12 @@ impl ProtocolConfig {
                 obj_access_cost_verify_per_byte: Some(200),
                 obj_data_cost_refundable: Some(100),
                 obj_metadata_cost_non_refundable: Some(50),
+                gas_model_version: Some(1),
                 storage_rebate_rate: Some(9900),
                 storage_fund_reinvest_rate: Some(500),
                 reward_slashing_rate: Some(5000),
                 storage_gas_price: Some(1),
-                max_transactions_per_checkpoint: Some(1000),
+                max_transactions_per_checkpoint: Some(10_000),
                 max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
 
                 // For now, perform upgrades with a bare quorum of validators.
@@ -1051,36 +1324,36 @@ impl ProtocolConfig {
 
                 // `dynamic_field` module
                 // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
-                dynamic_field_hash_type_and_key_cost_base: Some(52),
-                dynamic_field_hash_type_and_key_type_cost_per_byte: Some(0),
-                dynamic_field_hash_type_and_key_value_cost_per_byte: Some(0),
-                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Some(0),
+                dynamic_field_hash_type_and_key_cost_base: Some(100),
+                dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
+                dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),
+                dynamic_field_hash_type_and_key_type_tag_cost_per_byte: Some(2),
                 // Cost params for the Move native function `add_child_object<Child: key>(parent: address, child: Child)`
-                dynamic_field_add_child_object_cost_base: Some(52),
-                dynamic_field_add_child_object_type_cost_per_byte: Some(0),
-                dynamic_field_add_child_object_value_cost_per_byte: Some(0),
-                dynamic_field_add_child_object_struct_tag_cost_per_byte: Some(0),
+                dynamic_field_add_child_object_cost_base: Some(100),
+                dynamic_field_add_child_object_type_cost_per_byte: Some(10),
+                dynamic_field_add_child_object_value_cost_per_byte: Some(10),
+                dynamic_field_add_child_object_struct_tag_cost_per_byte: Some(10),
                 // Cost params for the Move native function `borrow_child_object_mut<Child: key>(parent: &mut UID, id: address): &mut Child`
-                dynamic_field_borrow_child_object_cost_base: Some(52),
-                dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(0),
-                dynamic_field_borrow_child_object_type_cost_per_byte: Some(0),
+                dynamic_field_borrow_child_object_cost_base: Some(100),
+                dynamic_field_borrow_child_object_child_ref_cost_per_byte: Some(10),
+                dynamic_field_borrow_child_object_type_cost_per_byte: Some(10),
                  // Cost params for the Move native function `remove_child_object<Child: key>(parent: address, id: address): Child`
-                dynamic_field_remove_child_object_cost_base: Some(52),
-                dynamic_field_remove_child_object_child_cost_per_byte: Some(0),
-                dynamic_field_remove_child_object_type_cost_per_byte: Some(0),
+                dynamic_field_remove_child_object_cost_base: Some(100),
+                dynamic_field_remove_child_object_child_cost_per_byte: Some(2),
+                dynamic_field_remove_child_object_type_cost_per_byte: Some(2),
                 // Cost params for the Move native function `has_child_object(parent: address, id: address): bool`
-                dynamic_field_has_child_object_cost_base: Some(52),
+                dynamic_field_has_child_object_cost_base: Some(100),
                 // Cost params for the Move native function `has_child_object_with_ty<Child: key>(parent: address, id: address): bool`
-                dynamic_field_has_child_object_with_ty_cost_base: Some(52),
-                dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(0),
-                dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(0),
+                dynamic_field_has_child_object_with_ty_cost_base: Some(100),
+                dynamic_field_has_child_object_with_ty_type_cost_per_byte: Some(2),
+                dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte: Some(2),
 
                 // `event` module
                 // Cost params for the Move native function `event::emit<T: copy + drop>(event: T)`
                 event_emit_cost_base: Some(52),
-                event_emit_value_size_derivation_cost_per_byte: Some(0),
-                event_emit_tag_size_derivation_cost_per_byte: Some(0),
-                event_emit_output_cost_per_byte:Some(0),
+                event_emit_value_size_derivation_cost_per_byte: Some(2),
+                event_emit_tag_size_derivation_cost_per_byte: Some(5),
+                event_emit_output_cost_per_byte:Some(10),
 
                 //  `object` module
                 // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
@@ -1105,27 +1378,95 @@ impl ProtocolConfig {
                 // `types` module
                 // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
                 types_is_one_time_witness_cost_base: Some(52),
-                types_is_one_time_witness_type_tag_cost_per_byte: Some(0),
-                types_is_one_time_witness_type_cost_per_byte: Some(0),
+                types_is_one_time_witness_type_tag_cost_per_byte: Some(2),
+                types_is_one_time_witness_type_cost_per_byte: Some(2),
 
                 // `validator` module
                 // Cost params for the Move native function `validate_metadata_bcs(metadata: vector<u8>)`
                 validator_validate_metadata_cost_base: Some(52),
-                validator_validate_metadata_data_cost_per_byte: Some(0),
+                validator_validate_metadata_data_cost_per_byte: Some(2),
 
                 // Crypto
+                crypto_invalid_arguments_cost: Some(100),
+                // bls12381::bls12381_min_pk_verify
+                bls12381_bls12381_min_sig_verify_cost_base: Some(52),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_byte: Some(2),
+                bls12381_bls12381_min_sig_verify_msg_cost_per_block: Some(2),
+
+                // bls12381::bls12381_min_pk_verify
+                bls12381_bls12381_min_pk_verify_cost_base: Some(52),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_byte: Some(2),
+                bls12381_bls12381_min_pk_verify_msg_cost_per_block: Some(2),
+
+                // ecdsa_k1::ecrecover
+                ecdsa_k1_ecrecover_keccak256_cost_base: Some(52),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_ecrecover_keccak256_msg_cost_per_block: Some(2),
+                ecdsa_k1_ecrecover_sha256_cost_base: Some(52),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_ecrecover_sha256_msg_cost_per_block: Some(2),
+
+                // ecdsa_k1::decompress_pubkey
+                ecdsa_k1_decompress_pubkey_cost_base: Some(52),
+
+                // ecdsa_k1::secp256k1_verify
+                ecdsa_k1_secp256k1_verify_keccak256_cost_base: Some(52),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block: Some(2),
+                ecdsa_k1_secp256k1_verify_sha256_cost_base: Some(52),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block: Some(2),
+
+                // ecdsa_r1::ecrecover
+                ecdsa_r1_ecrecover_keccak256_cost_base: Some(52),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_ecrecover_keccak256_msg_cost_per_block: Some(2),
+                ecdsa_r1_ecrecover_sha256_cost_base: Some(52),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_ecrecover_sha256_msg_cost_per_block: Some(2),
+
+                // ecdsa_r1::secp256k1_verify
+                ecdsa_r1_secp256r1_verify_keccak256_cost_base: Some(52),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block: Some(2),
+                ecdsa_r1_secp256r1_verify_sha256_cost_base: Some(52),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte: Some(2),
+                ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block: Some(2),
+
+                // ecvrf::verify
+                ecvrf_ecvrf_verify_cost_base: Some(52),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_byte: Some(2),
+                ecvrf_ecvrf_verify_alpha_string_cost_per_block: Some(2),
+
                 // ed25519
                 ed25519_ed25519_verify_cost_base: Some(52),
-                ed25519_ed25519_verify_msg_cost_per_byte: Some(0),
-                ed25519_ed25519_verify_msg_cost_per_block: Some(0),
+                ed25519_ed25519_verify_msg_cost_per_byte: Some(2),
+                ed25519_ed25519_verify_msg_cost_per_block: Some(2),
+
+                // groth16::prepare_verifying_key
+                groth16_prepare_verifying_key_bls12381_cost_base: Some(52),
+                groth16_prepare_verifying_key_bn254_cost_base: Some(52),
+
+                // groth16::verify_groth16_proof_internal
+                groth16_verify_groth16_proof_internal_bls12381_cost_base: Some(52),
+                groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input: Some(2),
+                groth16_verify_groth16_proof_internal_bn254_cost_base: Some(52),
+                groth16_verify_groth16_proof_internal_bn254_cost_per_public_input: Some(2),
+                groth16_verify_groth16_proof_internal_public_input_cost_per_byte: Some(2),
+
                 // hash::blake2b256
                 hash_blake2b256_cost_base: Some(52),
-                hash_blake2b256_data_cost_per_byte: Some(0),
-                hash_blake2b256_data_cost_per_block: Some(0),
+                hash_blake2b256_data_cost_per_byte: Some(2),
+                hash_blake2b256_data_cost_per_block: Some(2),
                 // hash::keccak256
                 hash_keccak256_cost_base: Some(52),
-                hash_keccak256_data_cost_per_byte: Some(0),
-                hash_keccak256_data_cost_per_block: Some(0),
+                hash_keccak256_data_cost_per_byte: Some(2),
+                hash_keccak256_data_cost_per_block: Some(2),
+
+                // hmac::hmac_sha3_256
+                hmac_hmac_sha3_256_cost_base: Some(52),
+                hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
+                hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,

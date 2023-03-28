@@ -9,8 +9,8 @@ use jsonrpsee::RpcModule;
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    DevInspectResults, DryRunTransactionResponse, SuiTransactionResponse,
-    SuiTransactionResponseOptions,
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -30,32 +30,35 @@ impl WriteApi {
 
 #[async_trait]
 impl WriteApiServer for WriteApi {
-    async fn execute_transaction(
+    async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
-        options: Option<SuiTransactionResponseOptions>,
+        options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> RpcResult<SuiTransactionResponse> {
+    ) -> RpcResult<SuiTransactionBlockResponse> {
         self.fullnode
-            .execute_transaction(tx_bytes, signatures, options, request_type)
+            .execute_transaction_block(tx_bytes, signatures, options, request_type)
             .await
     }
 
-    async fn dev_inspect_transaction(
+    async fn dev_inspect_transaction_block(
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
-        gas_price: Option<u64>,
+        gas_price: Option<BigInt>,
         epoch: Option<EpochId>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
-            .dev_inspect_transaction(sender_address, tx_bytes, gas_price, epoch)
+            .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)
             .await
     }
 
-    async fn dry_run_transaction(&self, tx_bytes: Base64) -> RpcResult<DryRunTransactionResponse> {
-        self.fullnode.dry_run_transaction(tx_bytes).await
+    async fn dry_run_transaction_block(
+        &self,
+        tx_bytes: Base64,
+    ) -> RpcResult<DryRunTransactionBlockResponse> {
+        self.fullnode.dry_run_transaction_block(tx_bytes).await
     }
 }
 

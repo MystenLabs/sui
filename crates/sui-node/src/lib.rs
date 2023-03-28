@@ -17,7 +17,7 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
-use sui_core::consensus_adapter::{LazyNarwhalClient, SubmitToConsensus};
+use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
 use tokio::sync::broadcast;
@@ -66,8 +66,9 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
 };
 use sui_json_rpc::coin_api::CoinReadApi;
-use sui_json_rpc::event_api::EventReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
+use sui_json_rpc::indexer_api::IndexerApi;
+use sui_json_rpc::move_utils::MoveUtils;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
@@ -211,15 +212,13 @@ impl SuiNode {
             batch_verifier_metrics,
         );
 
-        if let Some(override_buffer_stake) =
-            epoch_store.get_override_protocol_upgrade_buffer_stake()
-        {
-            let default_buffer_stake = epoch_store
-                .protocol_config()
-                .buffer_stake_for_protocol_upgrade_bps();
-
+        let effective_buffer_stake = epoch_store.get_effective_buffer_stake_bps();
+        let default_buffer_stake = epoch_store
+            .protocol_config()
+            .buffer_stake_for_protocol_upgrade_bps();
+        if effective_buffer_stake != default_buffer_stake {
             warn!(
-                ?override_buffer_stake,
+                ?effective_buffer_stake,
                 ?default_buffer_stake,
                 "buffer_stake_for_protocol_upgrade_bps is currently overridden"
             );
@@ -346,6 +345,10 @@ impl SuiNode {
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
+        let authority_names_to_hostnames = epoch_store
+            .epoch_start_state()
+            .get_authority_names_to_hostnames();
+
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
 
@@ -375,6 +378,7 @@ impl SuiNode {
                 state_sync_handle.clone(),
                 accumulator.clone(),
                 connection_monitor_status.clone(),
+                authority_names_to_hostnames,
                 &registry_service,
             )
             .await?;
@@ -551,6 +555,7 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
+        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         registry_service: &RegistryService,
     ) -> Result<ValidatorComponents> {
         let consensus_config = config
@@ -595,7 +600,7 @@ impl SuiNode {
             narwhal_manager,
             narwhal_epoch_data_remover,
             accumulator,
-            connection_monitor_status,
+            authority_names_to_hostnames,
             validator_server_handle,
             checkpoint_metrics,
             sui_tx_validator_metrics,
@@ -613,7 +618,7 @@ impl SuiNode {
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
         accumulator: Arc<StateAccumulator>,
-        connection_monitor_status: Arc<ConnectionMonitorStatus>,
+        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -645,11 +650,8 @@ impl SuiNode {
             state.transaction_manager().clone(),
             state.db(),
             low_scoring_authorities,
-            connection_monitor_status
-                .authority_names_to_peer_ids
-                .load()
-                .clone(),
-            committee.clone(),
+            authority_names_to_hostnames,
+            committee,
             state.metrics.clone(),
         ));
 
@@ -662,7 +664,7 @@ impl SuiNode {
 
         narwhal_manager
             .start(
-                committee.clone(),
+                new_epoch_start_state.get_narwhal_committee(),
                 worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
@@ -875,18 +877,9 @@ impl SuiNode {
                             .await,
                     ));
                 info!(?transaction, "submitting capabilities to consensus");
-                if let Err(e) = components
+                components
                     .consensus_adapter
-                    .submit_to_consensus(&transaction, &cur_epoch_store)
-                    .await
-                {
-                    warn!(
-                        ?transaction,
-                        "failed to submit capabilities to consensus {e}"
-                    );
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
-                };
+                    .submit(transaction, None, &cur_epoch_store)?;
             }
 
             checkpoint_executor.run_epoch(cur_epoch_store.clone()).await;
@@ -895,10 +888,12 @@ impl SuiNode {
                 .get_sui_system_state_object_during_reconfig()
                 .expect("Read Sui System State object cannot fail");
             if let Err(err) = self.end_of_epoch_channel.send(latest_system_state.clone()) {
-                warn!(
-                    "Failed to send end of epoch notification to subscriber: {:?}",
-                    err
-                );
+                if self.state.is_fullnode(&cur_epoch_store) {
+                    warn!(
+                        "Failed to send end of epoch notification to subscriber: {:?}",
+                        err
+                    );
+                }
             }
 
             cur_epoch_store.record_is_safe_mode_metric(latest_system_state.safe_mode());
@@ -926,6 +921,9 @@ impl SuiNode {
                 new_epoch_start_state.get_authority_names_to_peer_ids();
             self.connection_monitor_status
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
+
+            let authority_names_to_hostnames =
+                new_epoch_start_state.get_authority_names_to_hostnames();
 
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
@@ -988,7 +986,7 @@ impl SuiNode {
                             narwhal_manager,
                             narwhal_epoch_data_remover,
                             self.accumulator.clone(),
-                            self.connection_monitor_status.clone(),
+                            authority_names_to_hostnames,
                             validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
@@ -1021,6 +1019,7 @@ impl SuiNode {
                             self.state_sync.clone(),
                             self.accumulator.clone(),
                             self.connection_monitor_status.clone(),
+                            authority_names_to_hostnames,
                             &self.registry_service,
                         )
                         .await?,
@@ -1144,7 +1143,8 @@ pub async fn build_server(
         ))?;
     }
 
-    server.register_module(EventReadApi::new(state.clone()))?;
+    server.register_module(IndexerApi::new(state.clone(), ReadApi::new(state.clone())))?;
+    server.register_module(MoveUtils::new(state.clone()))?;
 
     let rpc_server_handle = server.start(config.json_rpc_address).await?;
 

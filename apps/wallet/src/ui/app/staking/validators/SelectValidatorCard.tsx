@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY } from '@mysten/core';
+import { useGetRollingAverageApys } from '@mysten/core';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
@@ -31,6 +31,10 @@ export function SelectValidatorCard() {
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useSystemState();
 
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        data?.activeValidators.length || null
+    );
+
     const selectValidator = (address: string) => {
         setSelectedValidator((state) => (state !== address ? address : null));
     };
@@ -57,7 +61,7 @@ export function SelectValidatorCard() {
             .map((validator) => ({
                 name: validator.name,
                 address: validator.suiAddress,
-                apy: calculateAPY(validator, +data.epoch),
+                apy: rollingAverageApys?.[validator.suiAddress] || 0,
                 stakeShare: calculateStakeShare(
                     BigInt(validator.stakingPoolSuiBalance),
                     BigInt(totalStake)
@@ -73,7 +77,7 @@ export function SelectValidatorCard() {
                 return a[sortKey] - b[sortKey];
             });
         return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [sortAscending, sortKey, data, totalStake]);
+    }, [data, sortAscending, rollingAverageApys, totalStake, sortKey]);
 
     if (isLoading) {
         return (

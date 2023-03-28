@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Error};
-use derive_more::From;
+use derive_more::{AsMut, AsRef, From};
 use eyre::eyre;
 use fastcrypto::bls12381::min_sig::{
     BLS12381AggregateSignature, BLS12381AggregateSignatureAsBytes, BLS12381KeyPair,
@@ -71,10 +71,6 @@ pub type AccountSignature = Ed25519Signature;
 pub type NetworkKeyPair = Ed25519KeyPair;
 pub type NetworkPublicKey = Ed25519PublicKey;
 pub type NetworkPrivateKey = Ed25519PrivateKey;
-
-pub const DERIVATION_PATH_COIN_TYPE: u32 = 784;
-pub const DERVIATION_PATH_PURPOSE_ED25519: u32 = 44;
-pub const DERVIATION_PATH_PURPOSE_SECP256K1: u32 = 54;
 
 pub type DefaultHash = Blake2b256;
 
@@ -546,13 +542,7 @@ where
     get_key_pair_from_rng(&mut OsRng)
 }
 
-pub const TEST_COMMITTEE_SIZE: usize = 4;
-
-pub fn random_committee_key_pairs() -> Vec<AuthorityKeyPair> {
-    random_committee_key_pairs_of_size(TEST_COMMITTEE_SIZE)
-}
-
-/// Generate a random committee key pairs with size of TEST_COMMITTEE_SIZE.
+/// Generate a random committee key pairs with a given committee size
 pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..size)
@@ -762,17 +752,11 @@ impl ToFromBytes for Signature {
         match bytes.first() {
             Some(x) => {
                 if x == &Ed25519SuiSignature::SCHEME.flag() {
-                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else if x == &Secp256k1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else if x == &Secp256r1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)
-                        .map_err(|_| signature::Error::new())?
-                        .into())
+                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
                 } else {
                     Err(FastCryptoError::InvalidInput)
                 }
@@ -795,7 +779,9 @@ impl SuiPublicKey for BLS12381PublicKey {
 //
 
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Ed25519SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -820,18 +806,6 @@ impl SuiPublicKey for Ed25519PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::ED25519;
 }
 
-impl AsRef<[u8]> for Ed25519SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Ed25519SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
-}
-
 impl ToFromBytes for Ed25519SuiSignature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         if bytes.len() != Self::LENGTH {
@@ -853,7 +827,9 @@ impl Signer<Signature> for Ed25519KeyPair {
 // Secp256k1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Secp256k1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -869,18 +845,6 @@ impl SuiSignatureInner for Secp256k1SuiSignature {
 
 impl SuiPublicKey for Secp256k1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256k1;
-}
-
-impl AsRef<[u8]> for Secp256k1SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Secp256k1SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
 }
 
 impl ToFromBytes for Secp256k1SuiSignature {
@@ -904,7 +868,9 @@ impl Signer<Signature> for Secp256k1KeyPair {
 // Secp256r1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, AsRef, AsMut)]
+#[as_ref(forward)]
+#[as_mut(forward)]
 pub struct Secp256r1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -920,18 +886,6 @@ impl SuiSignatureInner for Secp256r1SuiSignature {
 
 impl SuiPublicKey for Secp256r1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256r1;
-}
-
-impl AsRef<[u8]> for Secp256r1SuiSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl AsMut<[u8]> for Secp256r1SuiSignature {
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
 }
 
 impl ToFromBytes for Secp256r1SuiSignature {

@@ -34,7 +34,7 @@ use tracing::info;
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
-    SuiTransactionEffectsAPI, SuiTypeTag,
+    SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -211,7 +211,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
 }
 
 #[tokio::test]
-async fn test_dry_run_transaction() {
+async fn test_dry_run_transaction_block() {
     let (validator, fullnode, transaction, gas_object_id, shared_object_id) =
         construct_shared_object_transaction_with_sequence_number(None).await;
     let initial_shared_object_version = validator
@@ -223,7 +223,7 @@ async fn test_dry_run_transaction() {
 
     let transaction_digest = *transaction.digest();
 
-    let response = fullnode
+    let (response, _, _) = fullnode
         .dry_exec_transaction(
             transaction.data().intent_message().value.clone(),
             transaction_digest,
@@ -257,7 +257,7 @@ async fn test_dry_run_transaction() {
         txn_data.gas_budget(),
         txn_data.gas_price(),
     );
-    let response = fullnode
+    let (response, _, _) = fullnode
         .dry_exec_transaction(txn_data, transaction_digest)
         .await
         .unwrap();
@@ -287,7 +287,7 @@ async fn test_dry_run_no_gas_big_transfer() {
 
     let signed = to_sender_signed_transaction(data, &sender_key);
 
-    let dry_run_res = fullnode
+    let (dry_run_res, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),
@@ -325,7 +325,7 @@ async fn test_dev_inspect_object_by_bytes() {
     // random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_cost_summary().computation_cost > 0);
+    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
@@ -394,7 +394,7 @@ async fn test_dev_inspect_object_by_bytes() {
     // but random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_cost_summary().computation_cost > 0);
+    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -498,7 +498,7 @@ async fn test_dev_inspect_unowned_object() {
     // random gas and input object are mutated
     assert_eq!(effects.mutated().len(), 2);
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_cost_summary().computation_cost > 0);
+    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -577,7 +577,7 @@ async fn test_dev_inspect_dynamic_field() {
     };
     let kind = TransactionKind::programmable(pt);
     let DevInspectResults { error, .. } = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await
         .unwrap();
     // produces an error
@@ -611,7 +611,7 @@ async fn test_dev_inspect_dynamic_field() {
     assert_eq!(effects.mutated().len(), 1);
     // nothing is deleted
     assert!(effects.deleted().is_empty());
-    assert!(effects.gas_cost_summary().computation_cost > 0);
+    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
     let SuiExecutionResult {
@@ -819,7 +819,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     };
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await
         .unwrap()
         .results
@@ -881,7 +881,7 @@ async fn test_dev_inspect_uses_unbound_object() {
     let kind = TransactionKind::programmable(pt);
 
     let result = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await;
     let Err(err) = result else { panic!() };
     assert!(err.to_string().contains("ObjectNotFound"));
@@ -1063,7 +1063,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_unknown_sender() {
-    let sender = get_new_address::<AccountKeyPair>();
+    let sender = dbg_addr(1);
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -3266,7 +3266,7 @@ async fn test_store_revert_transfer_sui() {
     );
     // Transaction should not be deleted on revert in case it's needed
     // to execute a future state sync checkpoint.
-    assert!(db.get_transaction(&tx_digest).unwrap().is_some());
+    assert!(db.get_transaction_block(&tx_digest).unwrap().is_some());
     assert!(!db.as_ref().is_tx_already_executed(&tx_digest).unwrap());
 }
 
@@ -4569,7 +4569,7 @@ pub async fn call_dev_inspect(
     ));
     let kind = TransactionKind::programmable(builder.finish());
     authority
-        .dev_inspect_transaction(*sender, kind, Some(1))
+        .dev_inspect_transaction_block(*sender, kind, Some(1))
         .await
 }
 
@@ -5129,7 +5129,7 @@ async fn test_for_inc_201_dev_inspect() {
     builder.command(Command::Publish(modules, system_package_ids()));
     let kind = TransactionKind::programmable(builder.finish());
     let DevInspectResults { events, .. } = fullnode
-        .dev_inspect_transaction(sender, kind, Some(1))
+        .dev_inspect_transaction_block(sender, kind, Some(1))
         .await
         .unwrap();
 
@@ -5165,7 +5165,7 @@ async fn test_for_inc_201_dry_run() {
     let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
-    let DryRunTransactionResponse { events, .. } = fullnode
+    let (DryRunTransactionBlockResponse { events, .. }, _, _) = fullnode
         .dry_exec_transaction(
             signed.data().intent_message().value.clone(),
             *signed.digest(),

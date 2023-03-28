@@ -13,9 +13,11 @@ use sui_types::messages_checkpoint::{
     CheckpointTimestamp, EndOfEpochData,
 };
 
+use crate::BigInt;
 use crate::Page;
 
-pub type CheckpointPage = Page<Checkpoint, CheckpointSequenceNumber>;
+pub type SuiCheckpointSequenceNumber = BigInt;
+pub type CheckpointPage = Page<Checkpoint, SuiCheckpointSequenceNumber>;
 
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +25,7 @@ pub struct Checkpoint {
     /// Checkpoint's epoch ID
     pub epoch: EpochId,
     /// Checkpoint sequence number
-    pub sequence_number: CheckpointSequenceNumber,
+    pub sequence_number: SuiCheckpointSequenceNumber,
     /// Checkpoint digest
     pub digest: CheckpointDigest,
     /// Total number of transactions committed since genesis, including those in this
@@ -65,7 +67,7 @@ impl From<(CheckpointSummary, CheckpointContents)> for Checkpoint {
 
         Checkpoint {
             epoch,
-            sequence_number,
+            sequence_number: sequence_number.into(),
             digest,
             network_total_transactions,
             previous_digest,
@@ -84,13 +86,13 @@ impl From<(CheckpointSummary, CheckpointContents)> for Checkpoint {
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CheckpointId {
-    SequenceNumber(CheckpointSequenceNumber),
+    SequenceNumber(SuiCheckpointSequenceNumber),
     Digest(CheckpointDigest),
 }
 
 impl From<CheckpointSequenceNumber> for CheckpointId {
     fn from(seq: CheckpointSequenceNumber) -> Self {
-        Self::SequenceNumber(seq)
+        Self::SequenceNumber(seq.into())
     }
 }
 

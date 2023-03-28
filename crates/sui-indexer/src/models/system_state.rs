@@ -46,7 +46,8 @@ impl From<SuiSystemStateSummary> for DBSystemStateSummary {
             epoch: s.epoch as i64,
             protocol_version: s.protocol_version as i64,
             system_state_version: s.system_state_version as i64,
-            storage_fund: s.storage_fund as i64,
+            storage_fund: (s.storage_fund_non_refundable_balance
+                + s.storage_fund_total_object_storage_rebates) as i64,
             reference_gas_price: s.reference_gas_price as i64,
             safe_mode: s.safe_mode,
             epoch_start_timestamp_ms: s.epoch_start_timestamp_ms as i64,

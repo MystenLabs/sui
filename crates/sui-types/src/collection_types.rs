@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::{ObjectID, SuiAddress};
+use crate::base_types::ObjectID;
 use crate::id::UID;
 
 /// Rust version of the Move sui::vec_map::VecMap type
@@ -35,7 +35,7 @@ impl Default for TableVec {
     fn default() -> Self {
         TableVec {
             contents: Table {
-                id: ObjectID::from(SuiAddress::ZERO),
+                id: ObjectID::ZERO,
                 size: 0,
             },
         }
@@ -52,7 +52,7 @@ pub struct Table {
 impl Default for Table {
     fn default() -> Self {
         Table {
-            id: ObjectID::from(SuiAddress::ZERO),
+            id: ObjectID::ZERO,
             size: 0,
         }
     }
@@ -70,7 +70,7 @@ pub struct LinkedTable<K> {
 impl<K> Default for LinkedTable<K> {
     fn default() -> Self {
         LinkedTable {
-            id: ObjectID::from(SuiAddress::ZERO),
+            id: ObjectID::ZERO,
             size: 0,
             head: None,
             tail: None,

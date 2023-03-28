@@ -13,6 +13,7 @@ use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter};
+use std::num::NonZeroU64;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Authority {
@@ -104,6 +105,12 @@ pub struct Committee {
     authorities_by_id: BTreeMap<AuthorityIdentifier, Authority>,
     /// The epoch number of this committee
     epoch: Epoch,
+    /// The quorum threshold (2f+1)
+    #[serde(skip)]
+    quorum_threshold: Stake,
+    /// The validity threshold (f+1)
+    #[serde(skip)]
+    validity_threshold: Stake,
 }
 
 // Every authority gets uniquely identified by the AuthorityIdentifier
@@ -138,12 +145,24 @@ impl Committee {
             authorities,
             epoch,
             authorities_by_id: Default::default(),
+            validity_threshold: 0,
+            quorum_threshold: 0,
         };
         committee.load();
 
+        // Some sanity checks to ensure that we'll not end up in invalid state
         assert_eq!(
             committee.authorities_by_id.len(),
             committee.authorities.len()
+        );
+
+        assert_eq!(
+            committee.validity_threshold,
+            committee.calculate_validity_threshold().get()
+        );
+        assert_eq!(
+            committee.quorum_threshold,
+            committee.calculate_quorum_threshold().get()
         );
 
         // ensure all the authorities are ordered in incremented manner with their ids - just some
@@ -155,7 +174,21 @@ impl Committee {
         committee
     }
 
-    /// Loads the committee internal secondary indexes.
+    fn calculate_quorum_threshold(&self) -> NonZeroU64 {
+        // If N = 3f + 1 + k (0 <= k < 3)
+        // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
+        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
+        NonZeroU64::new(2 * total_votes / 3 + 1).unwrap()
+    }
+
+    fn calculate_validity_threshold(&self) -> NonZeroU64 {
+        // If N = 3f + 1 + k (0 <= k < 3)
+        // then (N + 2) / 3 = f + 1 + k/3 = f + 1
+        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
+        NonZeroU64::new((total_votes + 2) / 3).unwrap()
+    }
+
+    /// Updates the committee internal secondary indexes.
     pub fn load(&mut self) {
         self.authorities_by_id = (0_u16..)
             .zip(self.authorities.iter_mut())
@@ -166,6 +199,9 @@ impl Committee {
                 (id, authority.clone())
             })
             .collect();
+
+        self.validity_threshold = self.calculate_validity_threshold().get();
+        self.quorum_threshold = self.calculate_quorum_threshold().get();
     }
 
     /// Returns the current epoch.
@@ -228,18 +264,12 @@ impl Committee {
 
     /// Returns the stake required to reach a quorum (2f+1).
     pub fn quorum_threshold(&self) -> Stake {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (2 N + 3) / 3 = 2f + 1 + (2k + 2)/3 = 2f + 1 + k = N - f
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
-        2 * total_votes / 3 + 1
+        self.quorum_threshold
     }
 
     /// Returns the stake required to reach availability (f+1).
     pub fn validity_threshold(&self) -> Stake {
-        // If N = 3f + 1 + k (0 <= k < 3)
-        // then (N + 2) / 3 = f + 1 + k/3 = f + 1
-        let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
-        (total_votes + 2) / 3
+        self.validity_threshold
     }
 
     /// Returns a leader node as a weighted choice seeded by the provided integer
@@ -456,13 +486,13 @@ mod tests {
 
         let authorities = (0..num_of_authorities)
             .into_iter()
-            .map(|i| {
+            .map(|_i| {
                 let keypair = KeyPair::generate(&mut rng);
                 let network_keypair = NetworkKeyPair::generate(&mut rng);
 
                 let a = Authority::new(
                     keypair.public().clone(),
-                    i,
+                    1,
                     Multiaddr::empty(),
                     network_keypair.public().clone(),
                 );
@@ -480,6 +510,10 @@ mod tests {
         for (identifier, authority) in committee.authorities_by_id.iter() {
             assert_eq!(*identifier, authority.id());
         }
+
+        // AND ensure thresholds are calculated correctly
+        assert_eq!(committee.quorum_threshold(), 7);
+        assert_eq!(committee.validity_threshold(), 4);
 
         // AND ensure authorities are returned in the same order
         for ((id, authority_1), (public_key, authority_2)) in committee

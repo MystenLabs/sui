@@ -8,7 +8,6 @@ use std::{
 
 use move_binary_format::{
     access::ModuleAccess,
-    compatibility::Compatibility,
     errors::{Location, PartialVMResult, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
     CompiledModule,
@@ -41,8 +40,8 @@ use sui_types::{
         ProgrammableTransaction,
     },
     move_package::{
-        is_valid_package_upgrade_policy, normalize_deserialized_modules, MovePackage, UpgradeCap,
-        UpgradeReceipt, UpgradeTicket, UPGRADE_POLICY_COMPATIBLE,
+        normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+        UpgradeTicket,
     },
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -142,8 +141,14 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             let mut res = vec![];
             leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
             let mut arg_iter = args.into_iter().enumerate();
-            let (mut used_in_non_entry_move_call, tag) = match tag_opt {
-                Some(tag) => (false, tag),
+            let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
+                Some(tag) => {
+                    let elem_ty = context
+                        .session
+                        .load_type(&tag)
+                        .map_err(|e| context.convert_vm_error(e))?;
+                    (false, elem_ty)
+                }
                 // If no tag specified, it _must_ be an object
                 None => {
                     // empty args covered above
@@ -151,13 +156,9 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     let obj: ObjectValue =
                         context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                     obj.write_bcs_bytes(&mut res);
-                    (obj.used_in_non_entry_move_call, obj.into_type().into())
+                    (obj.used_in_non_entry_move_call, obj.type_)
                 }
             };
-            let elem_ty = context
-                .session
-                .load_type(&tag)
-                .map_err(|e| context.convert_vm_error(e))?;
             for (idx, arg) in arg_iter {
                 let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
                 check_param_type::<_, _, Mode>(context, idx, &value, &elem_ty)?;
@@ -200,7 +201,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     CommandArgumentError::TypeMismatch,
                     0,
                 );
-                let msg = format!("Expected a coin but got an object of type {}", obj.type_);
+                let msg = "Expected a coin but got an non coin object".to_owned();
                 return Err(ExecutionError::new_with_source(e, msg));
             };
             let split_coins = amount_args
@@ -211,7 +212,10 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     let new_coin_id = context.fresh_id()?;
                     let new_coin = coin.split(amount, UID::new(new_coin_id))?;
                     let coin_type = obj.type_.clone();
-                    Ok(Value::Object(ObjectValue::coin(coin_type, new_coin)?))
+                    // safe because we are propagating the coin type, and relying on the internal
+                    // invariant that coin values have a coin type
+                    let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin) };
+                    Ok(Value::Object(new_coin))
                 })
                 .collect::<Result<_, ExecutionError>>()?;
             context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
@@ -224,7 +228,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     CommandArgumentError::TypeMismatch,
                     0,
                 );
-                let msg = format!("Expected a coin but got an object of type {}", target.type_);
+                let msg = "Expected a coin but got an non coin object".to_owned();
                 return Err(ExecutionError::new_with_source(e, msg));
             };
             let coins: Vec<ObjectValue> = coin_args
@@ -238,10 +242,7 @@ fn execute_command<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                         CommandArgumentError::TypeMismatch,
                         (idx + 1) as u16,
                     );
-                    let msg = format!(
-                        "Expected a coin of type {} but got an object of type {}",
-                        target.type_, coin.type_
-                    );
+                    let msg = "Coins do not have the same type".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 }
                 let ObjectContents::Coin(Coin { id, balance }) = coin.contents else {
@@ -349,7 +350,7 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         assert_invariant!(i1 == i2, "lost mutable input");
         let arg_idx = i1 as usize;
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-        let value = make_value(value_info, bytes, used_in_non_entry_move_call)?;
+        let value = make_value(context, value_info, bytes, used_in_non_entry_move_call)?;
         context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
     }
 
@@ -364,13 +365,14 @@ fn execute_move_call<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         .map(|(value_info, (bytes, _layout))| {
             // only non entry functions have return values
             make_value(
-                value_info, bytes, /* used_in_non_entry_move_call */ true,
+                context, value_info, bytes, /* used_in_non_entry_move_call */ true,
             )
         })
         .collect()
 }
 
-fn make_value(
+fn make_value<E: fmt::Debug, S: StorageView<E>>(
+    context: &ExecutionContext<E, S>,
     value_info: ValueKind,
     bytes: Vec<u8>,
     used_in_non_entry_move_call: bool,
@@ -380,6 +382,9 @@ fn make_value(
             type_,
             has_public_transfer,
         } => Value::Object(ObjectValue::new(
+            context.vm,
+            context.state_view,
+            &context.session,
             type_,
             has_public_transfer,
             used_in_non_entry_move_call,
@@ -450,11 +455,15 @@ fn execute_move_publish<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
         // no upgrade cap for genesis modules
         vec![]
     } else {
+        let cap = &UpgradeCap::new(context.fresh_id()?, package_id);
         vec![Value::Object(ObjectValue::new(
+            context.vm,
+            context.state_view,
+            &context.session,
             UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
             /* used_in_non_entry_move_call */ false,
-            &bcs::to_bytes(&UpgradeCap::new(context.fresh_id()?, package_id)).unwrap(),
+            &bcs::to_bytes(cap).unwrap(),
         )?)]
     };
     Ok(values)
@@ -571,38 +580,20 @@ fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
     upgrading_modules: impl IntoIterator<Item = &'a CompiledModule>,
     policy: u8,
 ) -> Result<(), ExecutionError> {
-    let check_struct_and_pub_function_linking = true;
-    let check_struct_layout = true;
-    let check_friend_linking = false;
-    let compatiblity_checker = Compatibility::new(
-        check_struct_and_pub_function_linking,
-        check_struct_layout,
-        check_friend_linking,
-    );
     // Make sure this is a known upgrade policy.
-    if !is_valid_package_upgrade_policy(&policy) {
+    let Ok(policy) = UpgradePolicy::try_from(policy) else {
         return Err(ExecutionError::from_kind(
             ExecutionErrorKind::PackageUpgradeError {
                 upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy },
             },
         ));
-    }
-
-    // TODO(tzakian): We currently only support compatible upgrades. Need to add in support for
-    // additive and dep-only upgrades as well.
-    if policy != UPGRADE_POLICY_COMPATIBLE {
-        return Err(ExecutionError::new_with_source(
-            ExecutionErrorKind::FeatureNotYetSupported,
-            format!("Upgrade policy {policy} not yet supported"),
-        ));
-    }
+    };
 
     let Ok(current_normalized) = existing_package.normalize(context.protocol_config.move_binary_format_version()) else {
         invariant_violation!("Tried to normalize modules in existing package but failed")
     };
 
     let mut new_normalized = normalize_deserialized_modules(upgrading_modules.into_iter());
-
     for (name, cur_module) in current_normalized {
         let msg = format!("Existing module {name} not found in next version of package");
         let Some(new_module) = new_normalized.remove(&name) else {
@@ -614,7 +605,7 @@ fn check_compatibility<'a, E: fmt::Debug, S: StorageView<E>>(
             ));
         };
 
-        if let Err(e) = compatiblity_checker.check(&cur_module, &new_module) {
+        if let Err(e) = policy.check_compatibility(&cur_module, &new_module) {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PackageUpgradeError {
                     upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
@@ -1032,10 +1023,10 @@ fn check_non_entry_signature<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMo
 }
 
 fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+    _context: &mut ExecutionContext<E, S>,
     module_id: &ModuleId,
     function: &IdentStr,
-    type_arguments: &[Type],
+    _type_arguments: &[Type],
 ) -> Result<(), ExecutionError> {
     let module_ident = (module_id.address(), module_id.name());
     if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
@@ -1048,23 +1039,18 @@ fn check_private_generics<E: fmt::Debug, S: StorageView<E>>(
     if module_ident == (&SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE)
         && PRIVATE_TRANSFER_FUNCTIONS.contains(&function)
     {
-        for ty in type_arguments {
-            let abilities = context
-                .session
-                .get_type_abilities(ty)
-                .map_err(|e| context.convert_vm_error(e))?;
-            if !abilities.has_store() {
-                let msg = format!(
-                    "Cannot directly call sui::{}::{} unless the object type has the store ability",
-                    TRANSFER_MODULE, function
-                );
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    msg,
-                ));
-            }
-        }
+        let msg = format!(
+            "Cannot directly call sui::{m}::{f}. \
+            Use the public variant instead, sui::{m}::public_{f}",
+            m = TRANSFER_MODULE,
+            f = function
+        );
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::NonEntryFunctionInvoked,
+            msg,
+        ));
     }
+
     Ok(())
 }
 
@@ -1137,8 +1123,15 @@ fn build_move_args<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
                     ..
                 }) = &value
                 {
+                    let type_tag = context
+                        .session
+                        .get_type_tag(type_)
+                        .map_err(|e| context.convert_vm_error(e))?;
+                    let TypeTag::Struct(struct_tag) = type_tag else {
+                        invariant_violation!("Struct type make a non struct type tag")
+                    };
                     ValueKind::Object {
-                        type_: type_.clone(),
+                        type_: MoveObjectType::Other(*struct_tag),
                         has_public_transfer: *has_public_transfer,
                     }
                 } else {
@@ -1185,7 +1178,6 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
     value: &Value,
     param_ty: &Type,
 ) -> Result<(), ExecutionError> {
-    let obj_ty;
     let ty = match value {
         // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
         // be violated (like for string or Option)
@@ -1218,13 +1210,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
             );
             ty
         }
-        Value::Object(obj) => {
-            obj_ty = context
-                .session
-                .load_type(&obj.type_.clone().into())
-                .map_err(|e| context.convert_vm_error(e))?;
-            &obj_ty
-        }
+        Value::Object(obj) => &obj.type_,
     };
     if ty != param_ty {
         Err(command_argument_error(
@@ -1237,7 +1223,7 @@ fn check_param_type<E: fmt::Debug, S: StorageView<E>, Mode: ExecutionMode>(
 }
 
 fn get_struct_ident(s: &StructType) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.module;
+    let module_id = &s.defining_id;
     let struct_name = &s.name;
     (
         module_id.address(),

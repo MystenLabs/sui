@@ -142,3 +142,69 @@ macro_rules! fail_point {
 macro_rules! fail_point_async {
     ($tag: expr) => {};
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    struct Test {
+        a: i32,
+        b: i32,
+    }
+
+    #[use_checked_arithmetic]
+    fn unchecked_add(a: i32, b: i32) -> i32 {
+        a + b
+    }
+
+    #[test]
+    fn test_checked_arithmetic_macro() {
+        unchecked_add(1, 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_checked_arithmetic_macro_panic() {
+        unchecked_add(i32::MAX, 1);
+    }
+
+    #[use_checked_arithmetic]
+    fn unchecked_add_hidden(a: i32, b: i32) -> i32 {
+        let inner = |a: i32, b: i32| a + b;
+        inner(a, b)
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_checked_arithmetic_macro_panic_hidden() {
+        unchecked_add_hidden(i32::MAX, 1);
+    }
+
+    #[use_checked_arithmetic]
+    fn unchecked_add_hidden_2(a: i32, b: i32) -> i32 {
+        fn inner(a: i32, b: i32) -> i32 {
+            a + b
+        }
+        inner(a, b)
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_checked_arithmetic_macro_panic_hidden_2() {
+        unchecked_add_hidden_2(i32::MAX, 1);
+    }
+
+    #[use_checked_arithmetic]
+    impl Test {
+        fn add(&self) -> i32 {
+            self.a + self.b
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_checked_arithmetic_impl() {
+        let t = Test { a: 1, b: i32::MAX };
+        t.add();
+    }
+}

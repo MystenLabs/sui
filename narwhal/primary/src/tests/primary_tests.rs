@@ -26,8 +26,8 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use storage::PayloadToken;
 use storage::{CertificateStore, VoteDigestStore};
+use storage::{CertificateStoreCache, PayloadToken};
 use storage::{NodeStorage, PayloadStore};
 use store::rocks::{DBMap, MetricConf, ReadWriteOptions};
 use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
@@ -37,9 +37,10 @@ use tokio::{
 };
 
 use types::{
-    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest,
-    MockPrimaryToWorker, PayloadAvailabilityRequest, PreSubscribedBroadcastSender,
-    PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest, Round,
+    now, BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
+    Header, HeaderAPI, MockPrimaryToWorker, PayloadAvailabilityRequest,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest,
+    Round,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -60,7 +61,7 @@ async fn get_network_peers_from_admin_server() {
     let worker_1_keypair = authority_1.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let (tx_new_certificates, rx_new_certificates) = types::metered_channel::channel(
         CHANNEL_CAPACITY,
@@ -360,20 +361,22 @@ async fn test_request_vote_send_missing_parents() {
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
     // Create a test header.
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .author(author_id)
-        .round(3)
-        .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .author(author_id)
+            .round(3)
+            .parents(round_2_certs.iter().map(|c| c.digest()).collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+            .build()
+            .unwrap(),
+    );
 
     // Write some certificates from round 2 into the store, and leave out the rest to test
     // headers with some parents but not all available. Round 1 certificates should be written
     // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
     for cert in round_2_parents {
-        for (digest, (worker_id, _)) in &cert.header.payload {
+        for (digest, (worker_id, _)) in cert.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
@@ -508,32 +511,34 @@ async fn test_request_vote_accept_missing_parents() {
     let round_2_missing = round_2_certs[(NUM_PARENTS / 2)..].to_vec();
 
     // Create a test header.
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .author(author_id)
-        .round(3)
-        .parents(round_2_certs.iter().map(|c| c.digest()).collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .author(author_id)
+            .round(3)
+            .parents(round_2_certs.iter().map(|c| c.digest()).collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+            .build()
+            .unwrap(),
+    );
 
     // Populate all round 1 certificates and some round 2 certificates into the storage.
     // The new header will have some round 2 certificates missing as parents, but these parents
     // should be able to get accepted.
     for cert in round_1_certs {
-        for (digest, (worker_id, _)) in &cert.header.payload {
+        for (digest, (worker_id, _)) in cert.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     for cert in round_2_parents {
-        for (digest, (worker_id, _)) in &cert.header.payload {
+        for (digest, (worker_id, _)) in cert.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     // Populate new header payload so they don't have to be retrieved.
-    for (digest, (worker_id, _)) in &test_header.payload {
+    for (digest, (worker_id, _)) in test_header.payload() {
         payload_store.write(digest, worker_id).unwrap();
     }
 
@@ -631,30 +636,34 @@ async fn test_request_vote_missing_batches() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != authority_id) {
-        let header = primary
-            .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            primary
+                .header_builder(&fixture.committee())
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in &certificate.header.payload {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .round(2)
-        .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .round(2)
+            .parents(certificates.keys().cloned().collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .build()
+            .unwrap(),
+    );
     let test_digests: HashSet<_> = test_header
-        .payload
+        .payload()
         .iter()
         .map(|(digest, _)| digest)
         .cloned()
@@ -756,18 +765,20 @@ async fn test_request_vote_already_voted() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != id) {
-        let header = primary
-            .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            primary
+                .header_builder(&fixture.committee())
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in &certificate.header.payload {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
@@ -790,13 +801,15 @@ async fn test_request_vote_already_voted() {
         .unwrap();
 
     // Verify Handler generates a Vote.
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .round(2)
-        .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .round(2)
+            .parents(certificates.keys().cloned().collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .build()
+            .unwrap(),
+    );
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
@@ -833,13 +846,15 @@ async fn test_request_vote_already_voted() {
     assert_eq!(vote.digest(), response.into_body().vote.unwrap().digest());
 
     // Verify a different request for the same round receives an error.
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .round(2)
-        .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .round(2)
+            .parents(certificates.keys().cloned().collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .build()
+            .unwrap(),
+    );
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
         parents: Vec::new(),
@@ -913,7 +928,7 @@ async fn test_fetch_certificates_handler() {
 
     let mut current_round: Vec<_> = Certificate::genesis(&fixture.committee())
         .into_iter()
-        .map(|cert| cert.header)
+        .map(|cert| cert.header().clone())
         .collect();
     let mut headers = vec![];
     let total_rounds = 4;
@@ -945,10 +960,10 @@ async fn test_fetch_certificates_handler() {
     // already in store. But this does not matter for testing here.
     let mut authorities = Vec::<AuthorityIdentifier>::new();
     for i in 0..total_authorities {
-        authorities.push(certificates[i].header.author);
+        authorities.push(certificates[i].header().author());
         for j in 0..=i {
             let cert = certificates[i + j * total_authorities].clone();
-            assert_eq!(&cert.header.author, authorities.last().unwrap());
+            assert_eq!(&cert.header().author(), authorities.last().unwrap());
             certificate_store
                 .write(cert)
                 .expect("Writing certificate to store failed");
@@ -1084,11 +1099,13 @@ async fn test_process_payload_availability_success() {
     let mut missing_certificates = HashSet::new();
 
     for i in 0..10 {
-        let header = author
-            .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&fixture.committee())
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
@@ -1102,7 +1119,7 @@ async fn test_process_payload_availability_success() {
             // write the certificate
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in &certificate.header.payload {
+            for (digest, (worker_id, _)) in certificate.header().payload() {
                 payload_store.write(digest, worker_id).unwrap();
             }
         } else {
@@ -1177,6 +1194,7 @@ async fn test_process_payload_availability_when_failures() {
         certificate_map,
         certificate_digest_by_round_map,
         certificate_digest_by_origin_map,
+        CertificateStoreCache::new(NonZeroUsize::new(100).unwrap(), None),
     );
     let payload_store = PayloadStore::new(payload_map);
 
@@ -1233,11 +1251,13 @@ async fn test_process_payload_availability_when_failures() {
     // AND some mock certificates
     let mut certificate_digests = Vec::new();
     for _ in 0..10 {
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
@@ -1332,18 +1352,20 @@ async fn test_request_vote_created_at_in_future() {
     // Make some mock certificates that are parents of our new header.
     let mut certificates = HashMap::new();
     for primary in fixture.authorities().filter(|a| a.id() != id) {
-        let header = primary
-            .header_builder(&fixture.committee())
-            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            primary
+                .header_builder(&fixture.committee())
+                .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 0, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in &certificate.header.payload {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
@@ -1370,14 +1392,16 @@ async fn test_request_vote_created_at_in_future() {
     // Set the creation time to be deep in the future (an hour)
     let created_at = now() + 60 * 60 * 1000;
 
-    let test_header = author
-        .header_builder(&fixture.committee())
-        .round(2)
-        .parents(certificates.keys().cloned().collect())
-        .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
-        .created_at(created_at)
-        .build()
-        .unwrap();
+    let test_header = Header::V1(
+        author
+            .header_builder(&fixture.committee())
+            .round(2)
+            .parents(certificates.keys().cloned().collect())
+            .with_payload_batch(test_utils::fixture_batch_with_transactions(10), 1, 0)
+            .created_at(created_at)
+            .build()
+            .unwrap(),
+    );
 
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
@@ -1410,7 +1434,7 @@ async fn test_request_vote_created_at_in_future() {
         .unwrap();
 
     let mut request = anemo::Request::new(RequestVoteRequest {
-        header: test_header.clone(),
+        header: Header::V1(test_header.clone()),
         parents: Vec::new(),
     });
     assert!(request

@@ -19,8 +19,7 @@ type UserApproveContainerProps = {
     rejectTitle: string;
     approveTitle: string;
     approveDisabled?: boolean;
-    onSubmit: (approved: boolean) => void;
-    isConnect?: boolean;
+    onSubmit: (approved: boolean) => Promise<void>;
     isWarning?: boolean;
     addressHidden?: boolean;
     address?: SuiAddress;
@@ -35,7 +34,6 @@ export function UserApproveContainer({
     approveTitle,
     approveDisabled = false,
     onSubmit,
-    isConnect,
     isWarning,
     addressHidden = false,
     address,

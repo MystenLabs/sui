@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use jsonrpsee::rpc_params;
 use tracing::info;
 
-use sui_json_rpc_types::SuiTransactionResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
@@ -68,7 +68,7 @@ impl TestCaseImpl for NativeTransferTest {
 impl NativeTransferTest {
     async fn examine_response(
         ctx: &TestContext,
-        response: &mut SuiTransactionResponse,
+        response: &mut SuiTransactionBlockResponse,
         signer: SuiAddress,
         recipient: SuiAddress,
         obj_to_transfer_id: ObjectID,

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { LockedDeviceError } from '@ledgerhq/errors';
 import {
     LockUnlocked16 as UnlockedLockIcon,
     Spinner16 as SpinnerIcon,
@@ -11,6 +10,7 @@ import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useNextMenuUrl } from '../menu/hooks';
 import Overlay from '../overlay';
@@ -51,11 +51,9 @@ export function ImportLedgerAccounts() {
             );
         },
         onError: (error) => {
-            if (error instanceof LockedDeviceError) {
-                toast.error('Your device is locked. Unlock it and try again.');
-            } else {
-                toast.error('Make sure the Sui app is open on your device.');
-            }
+            toast.error(
+                getSuiApplicationErrorMessage(error) || 'Something went wrong.'
+            );
             navigate(accountsUrl, { replace: true });
         },
     });

@@ -23,7 +23,7 @@ async fn test_additional_objects() {
         .unwrap();
 
     let client = cluster.rpc_client();
-    let resp = client.get_object_with_options(id, None).await.unwrap();
+    let resp = client.get_object(id, None).await.unwrap();
     assert!(matches!(resp, SuiObjectResponse { data: Some(_), .. }));
 }
 
@@ -33,10 +33,7 @@ async fn test_package_override() {
     let framework_ref = {
         let default_cluster = TestClusterBuilder::new().build().await.unwrap();
         let client = default_cluster.rpc_client();
-        let obj = client
-            .get_object_with_options(SuiSystem::ID, None)
-            .await
-            .unwrap();
+        let obj = client.get_object(SuiSystem::ID, None).await.unwrap();
 
         if let Some(obj) = obj.data {
             obj.object_ref()
@@ -71,10 +68,7 @@ async fn test_package_override() {
             .unwrap();
 
         let client = modified_cluster.rpc_client();
-        let obj = client
-            .get_object_with_options(SuiSystem::ID, None)
-            .await
-            .unwrap();
+        let obj = client.get_object(SuiSystem::ID, None).await.unwrap();
 
         if let Some(obj) = obj.data {
             obj.object_ref()

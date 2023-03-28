@@ -26,6 +26,7 @@ pub trait EpochStartSystemStateTrait {
     fn get_narwhal_committee(&self) -> NarwhalCommittee;
     fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
+    fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String>;
     fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache;
 }
 
@@ -189,6 +190,18 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
             .collect()
     }
 
+    fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String> {
+        self.active_validators
+            .iter()
+            .map(|validator| {
+                let name = validator.authority_name();
+                let hostname = validator.hostname.clone();
+
+                (name, hostname)
+            })
+            .collect()
+    }
+
     #[allow(clippy::mutable_key_type)]
     fn get_narwhal_worker_cache(&self, transactions_address: &Multiaddr) -> WorkerCache {
         let workers: BTreeMap<narwhal_crypto::PublicKey, WorkerIndex> = self
@@ -228,6 +241,7 @@ pub struct EpochStartValidatorInfoV1 {
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
     pub voting_power: StakeUnit,
+    pub hostname: String,
 }
 
 impl EpochStartValidatorInfoV1 {

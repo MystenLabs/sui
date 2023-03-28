@@ -6,23 +6,24 @@ import { type SuiObjectResponse, normalizeSuiAddress } from '@mysten/sui.js';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 export function useGetObject(
-    objectId: string
+    objectId?: string | null
 ): UseQueryResult<SuiObjectResponse, unknown> {
     const rpc = useRpcClient();
-    const normalizedObjId = normalizeSuiAddress(objectId);
+    const normalizedObjId = objectId && normalizeSuiAddress(objectId);
     const response = useQuery(
         ['object', normalizedObjId],
         async () => {
             return rpc.getObject({
-                id: normalizedObjId,
+                id: normalizedObjId!,
                 options: {
                     showType: true,
                     showContent: true,
                     showOwner: true,
+                    showDisplay: true,
                 },
             });
         },
-        { enabled: !!objectId }
+        { enabled: !!normalizedObjId }
     );
 
     return response;

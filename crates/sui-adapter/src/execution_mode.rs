@@ -243,9 +243,13 @@ fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
 ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
+            let tag = context
+                .session
+                .get_type_tag(&obj.type_)
+                .map_err(|e| context.convert_vm_error(e))?;
             let mut bytes = vec![];
             obj.write_bcs_bytes(&mut bytes);
-            (obj.type_.clone().into(), bytes)
+            (tag, bytes)
         }
         Value::Raw(RawValueType::Any, bytes) => {
             // this case shouldn't happen

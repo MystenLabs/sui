@@ -19,7 +19,7 @@ import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 
-import TxForID from '~/components/transactions/TxForID';
+import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { DescriptionList, DescriptionItem } from '~/ui/DescriptionList';
 import { Heading } from '~/ui/Heading';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
@@ -268,7 +268,7 @@ export function TokenView({ data }: { data: DataType }) {
             </div>
             <div>
                 <h2 className={styles.header}>Transactions</h2>
-                <TxForID id={data.id} category="object" />
+                <TransactionsForAddress address={data.id} type="object" />
             </div>
         </div>
     );

@@ -10,7 +10,8 @@ use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionEffectsAPI, SuiTransactionResponseOptions,
+    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::SuiAddress;
@@ -134,9 +135,9 @@ pub async fn submit(
     let response = context
         .client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             signed_tx,
-            SuiTransactionResponseOptions::new()
+            SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_effects()
                 .with_balance_changes(),
@@ -303,19 +304,23 @@ pub async fn metadata(
             coins: coins.clone(),
             objects: objects.clone(),
             total_coin_value,
-            gas_price: 1,
-            budget,
+            gas_price,
+            budget: budget * gas_price,
         })?;
 
-    let dry_run = context.client.read_api().dry_run_transaction(data).await?;
+    let dry_run = context
+        .client
+        .read_api()
+        .dry_run_transaction_block(data)
+        .await?;
     let effects = dry_run.effects;
 
     if let SuiExecutionStatus::Failure { error } = effects.status() {
         return Err(Error::TransactionDryRunError(error.to_string()));
     }
 
-    let budget =
-        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
+    let budget = <u64>::from(effects.gas_cost_summary().computation_cost)
+        + <u64>::from(effects.gas_cost_summary().storage_cost);
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {

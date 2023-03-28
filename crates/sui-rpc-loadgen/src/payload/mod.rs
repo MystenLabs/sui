@@ -1,28 +1,46 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod get_checkpoints;
+mod pay_sui;
+mod query_transactions;
 mod rpc_command_processor;
+mod validation;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use core::default::Default;
+use std::str::FromStr;
 use std::time::Duration;
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
+use crate::load_test::LoadTestConfig;
 pub use rpc_command_processor::RpcCommandProcessor;
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::SuiKeyPair;
+
+#[derive(Default, Clone)]
+pub struct SignerInfo {
+    pub encoded_keypair: String,
+    /// Different thread should use different gas_payment to avoid equivocation
+    pub gas_payment: Option<Vec<ObjectID>>,
+    pub gas_budget: Option<u64>,
+}
+
+impl SignerInfo {
+    pub fn new(encoded_keypair: String) -> Self {
+        Self {
+            encoded_keypair,
+            gas_payment: None,
+            gas_budget: None,
+        }
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct Payload {
     pub commands: Vec<Command>,
-    /// base64 encoded keypair
-    pub encoded_keypair: Option<String>,
-    // TODO(chris): we should be able to derive this from the keypair?
-    pub signer_address: Option<SuiAddress>,
-    /// Different thread should use different gas_payment to avoid equivocation
-    pub gas_payment: Option<ObjectID>,
+    pub signer_info: Option<SignerInfo>,
 }
 
 #[derive(Default, Clone)]
@@ -69,6 +87,20 @@ impl Command {
         }
     }
 
+    pub fn new_query_transaction_blocks(
+        from_address: Option<String>,
+        to_address: Option<String>,
+    ) -> Self {
+        let query_transactions = QueryTransactions {
+            from_address: from_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+            to_address: to_address.map(|addr| SuiAddress::from_str(&addr).unwrap()),
+        };
+        Self {
+            data: CommandData::QueryTransactions(query_transactions),
+            ..Default::default()
+        }
+    }
+
     pub fn with_repeat_n_times(mut self, num: usize) -> Self {
         self.repeat_n_times = num;
         self
@@ -86,6 +118,7 @@ pub enum CommandData {
     DryRun(DryRun),
     GetCheckpoints(GetCheckpoints),
     PaySui(PaySui),
+    QueryTransactions(QueryTransactions),
 }
 
 impl Default for CommandData {
@@ -110,15 +143,23 @@ pub struct GetCheckpoints {
 #[derive(Clone)]
 pub struct PaySui {}
 
+#[derive(Clone, Default)]
+pub struct QueryTransactions {
+    pub from_address: Option<SuiAddress>,
+    pub to_address: Option<SuiAddress>,
+}
+
 #[async_trait]
 pub trait Processor {
     /// process commands in order
     async fn apply(&self, payload: &Payload) -> Result<()>;
+
+    /// prepare payload for each thread according to LoadTestConfig
+    async fn prepare(&self, config: &LoadTestConfig) -> Result<Vec<Payload>>;
 }
 
 /// all payload should implement this trait
 #[async_trait]
 pub trait ProcessPayload<'a, T> {
-    // TODO: replace SuiKeyPair with signerInfo
-    async fn process(&'a self, op: T, keypair: &Option<SuiKeyPair>) -> Result<()>;
+    async fn process(&'a self, op: T, signer_info: &Option<SignerInfo>) -> Result<()>;
 }

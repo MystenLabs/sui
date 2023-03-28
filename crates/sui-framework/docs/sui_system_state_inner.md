@@ -56,14 +56,13 @@
 -  [Function `validator_staking_pool_id`](#0x3_sui_system_state_inner_validator_staking_pool_id)
 -  [Function `validator_staking_pool_mappings`](#0x3_sui_system_state_inner_validator_staking_pool_mappings)
 -  [Function `get_reporters_of`](#0x3_sui_system_state_inner_get_reporters_of)
--  [Function `get_storage_fund_balance`](#0x3_sui_system_state_inner_get_storage_fund_balance)
+-  [Function `get_storage_fund_total_balance`](#0x3_sui_system_state_inner_get_storage_fund_total_balance)
+-  [Function `get_storage_fund_object_rebates`](#0x3_sui_system_state_inner_get_storage_fund_object_rebates)
 -  [Function `extract_coin_balance`](#0x3_sui_system_state_inner_extract_coin_balance)
 -  [Module Specification](#@Module_Specification_1)
 
 
-<pre><code><b>use</b> <a href="">0x1::ascii</a>;
-<b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="">0x1::string</a>;
+<pre><code><b>use</b> <a href="">0x1::option</a>;
 <b>use</b> <a href="">0x2::bag</a>;
 <b>use</b> <a href="">0x2::balance</a>;
 <b>use</b> <a href="">0x2::coin</a>;
@@ -74,11 +73,11 @@
 <b>use</b> <a href="">0x2::table</a>;
 <b>use</b> <a href="">0x2::transfer</a>;
 <b>use</b> <a href="">0x2::tx_context</a>;
-<b>use</b> <a href="">0x2::url</a>;
 <b>use</b> <a href="">0x2::vec_map</a>;
 <b>use</b> <a href="">0x2::vec_set</a>;
 <b>use</b> <a href="stake_subsidy.md#0x3_stake_subsidy">0x3::stake_subsidy</a>;
 <b>use</b> <a href="staking_pool.md#0x3_staking_pool">0x3::staking_pool</a>;
+<b>use</b> <a href="storage_fund.md#0x3_storage_fund">0x3::storage_fund</a>;
 <b>use</b> <a href="validator.md#0x3_validator">0x3::validator</a>;
 <b>use</b> <a href="validator_cap.md#0x3_validator_cap">0x3::validator_cap</a>;
 <b>use</b> <a href="validator_set.md#0x3_validator_set">0x3::validator_set</a>;
@@ -205,7 +204,7 @@ The top-level object containing all information of the Sui system.
  Contains all information about the validators.
 </dd>
 <dt>
-<code>storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
+<code><a href="storage_fund.md#0x3_storage_fund">storage_fund</a>: <a href="storage_fund.md#0x3_storage_fund_StorageFund">storage_fund::StorageFund</a></code>
 </dt>
 <dd>
  The storage fund.
@@ -248,7 +247,9 @@ The top-level object containing all information of the Sui system.
  Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
  This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
  It can be reset once we are able to successfully execute advance_epoch.
- MUSTFIX: We need to save pending gas rewards, so that we could redistribute them.
+ The rest of the fields starting with <code>safe_mode_</code> are accmulated during safe mode
+ when advance_epoch_safe_mode is executed. They will eventually be processed once we
+ are out of safe mode.
 </dd>
 <dt>
 <code>safe_mode_storage_rewards: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;</code>
@@ -264,6 +265,12 @@ The top-level object containing all information of the Sui system.
 </dd>
 <dt>
 <code>safe_mode_storage_rebates: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>safe_mode_non_refundable_storage_fee: u64</code>
 </dt>
 <dd>
 
@@ -510,7 +517,7 @@ Create a new SuiSystemState object and make it shared.
 This function will be called only once in genesis.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">sui_system_state_inner::SystemParameters</a>, <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(validators: <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, initial_storage_fund: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, protocol_version: u64, epoch_start_timestamp_ms: u64, parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">sui_system_state_inner::SystemParameters</a>, <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>: <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
 </code></pre>
 
 
@@ -521,7 +528,7 @@ This function will be called only once in genesis.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">create</a>(
     validators: <a href="">vector</a>&lt;Validator&gt;,
-    storage_fund: Balance&lt;SUI&gt;,
+    initial_storage_fund: Balance&lt;SUI&gt;,
     protocol_version: u64,
     epoch_start_timestamp_ms: u64,
     parameters: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemParameters">SystemParameters</a>,
@@ -536,7 +543,7 @@ This function will be called only once in genesis.
         protocol_version,
         system_state_version: <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_genesis_system_state_version">genesis_system_state_version</a>(),
         validators,
-        storage_fund,
+        <a href="storage_fund.md#0x3_storage_fund">storage_fund</a>: <a href="storage_fund.md#0x3_storage_fund_new">storage_fund::new</a>(initial_storage_fund),
         parameters,
         reference_gas_price,
         validator_report_records: <a href="_empty">vec_map::empty</a>(),
@@ -545,6 +552,7 @@ This function will be called only once in genesis.
         safe_mode_storage_rewards: <a href="_zero">balance::zero</a>(),
         safe_mode_computation_rewards: <a href="_zero">balance::zero</a>(),
         safe_mode_storage_rebates: 0,
+        safe_mode_non_refundable_storage_fee: 0,
         epoch_start_timestamp_ms,
         extra_fields: <a href="_new">bag::new</a>(ctx),
     };
@@ -1192,7 +1200,8 @@ Update a validator's name.
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <a href="validator.md#0x3_validator_update_name">validator::update_name</a>(<a href="validator.md#0x3_validator">validator</a>, <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(name)));
+
+    <a href="validator.md#0x3_validator_update_name">validator::update_name</a>(<a href="validator.md#0x3_validator">validator</a>, name);
 }
 </code></pre>
 
@@ -1222,7 +1231,7 @@ Update a validator's description
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <a href="validator.md#0x3_validator_update_description">validator::update_description</a>(<a href="validator.md#0x3_validator">validator</a>, <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(description)));
+    <a href="validator.md#0x3_validator_update_description">validator::update_description</a>(<a href="validator.md#0x3_validator">validator</a>, description);
 }
 </code></pre>
 
@@ -1252,7 +1261,7 @@ Update a validator's image url
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <a href="validator.md#0x3_validator_update_image_url">validator::update_image_url</a>(<a href="validator.md#0x3_validator">validator</a>, <a href="_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url));
+    <a href="validator.md#0x3_validator_update_image_url">validator::update_image_url</a>(<a href="validator.md#0x3_validator">validator</a>, image_url);
 }
 </code></pre>
 
@@ -1282,7 +1291,7 @@ Update a validator's project url
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <a href="validator.md#0x3_validator_update_project_url">validator::update_project_url</a>(<a href="validator.md#0x3_validator">validator</a>, <a href="_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url));
+    <a href="validator.md#0x3_validator_update_project_url">validator::update_project_url</a>(<a href="validator.md#0x3_validator">validator</a>, project_url);
 }
 </code></pre>
 
@@ -1313,7 +1322,6 @@ The change will only take effects starting from the next epoch.
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> network_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(network_address));
     <a href="validator.md#0x3_validator_update_next_epoch_network_address">validator::update_next_epoch_network_address</a>(<a href="validator.md#0x3_validator">validator</a>, network_address);
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
     <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
@@ -1346,7 +1354,6 @@ Update candidate validator's network address.
     ctx: &TxContext,
 ) {
     <b>let</b> candidate = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> network_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(network_address));
     <a href="validator.md#0x3_validator_update_candidate_network_address">validator::update_candidate_network_address</a>(candidate, network_address);
 }
 </code></pre>
@@ -1378,7 +1385,6 @@ The change will only take effects starting from the next epoch.
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> p2p_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address));
     <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">validator::update_next_epoch_p2p_address</a>(<a href="validator.md#0x3_validator">validator</a>, p2p_address);
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
     <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">validator_set::assert_no_pending_or_actice_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
@@ -1411,7 +1417,6 @@ Update candidate validator's p2p address.
     ctx: &TxContext,
 ) {
     <b>let</b> candidate = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> p2p_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(p2p_address));
     <a href="validator.md#0x3_validator_update_candidate_p2p_address">validator::update_candidate_p2p_address</a>(candidate, p2p_address);
 }
 </code></pre>
@@ -1443,7 +1448,6 @@ The change will only take effects starting from the next epoch.
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> primary_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address));
     <a href="validator.md#0x3_validator_update_next_epoch_primary_address">validator::update_next_epoch_primary_address</a>(<a href="validator.md#0x3_validator">validator</a>, primary_address);
 }
 </code></pre>
@@ -1474,7 +1478,6 @@ Update candidate validator's narwhal primary address.
     ctx: &TxContext,
 ) {
     <b>let</b> candidate = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> primary_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(primary_address));
     <a href="validator.md#0x3_validator_update_candidate_primary_address">validator::update_candidate_primary_address</a>(candidate, primary_address);
 }
 </code></pre>
@@ -1506,7 +1509,6 @@ The change will only take effects starting from the next epoch.
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx">validator_set::get_validator_mut_with_ctx</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> worker_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address));
     <a href="validator.md#0x3_validator_update_next_epoch_worker_address">validator::update_next_epoch_worker_address</a>(<a href="validator.md#0x3_validator">validator</a>, worker_address);
 }
 </code></pre>
@@ -1537,7 +1539,6 @@ Update candidate validator's narwhal worker address.
     ctx: &TxContext,
 ) {
     <b>let</b> candidate = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
-    <b>let</b> worker_address = <a href="_from_ascii">string::from_ascii</a>(<a href="_string">ascii::string</a>(worker_address));
     <a href="validator.md#0x3_validator_update_candidate_worker_address">validator::update_candidate_worker_address</a>(candidate, worker_address);
 }
 </code></pre>
@@ -1750,7 +1751,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate_amount: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate_amount: u64, non_refundable_storage_fee_amount: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, epoch_start_timestamp_ms: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>): <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -1766,6 +1767,7 @@ gas coins.
     storage_reward: Balance&lt;SUI&gt;,
     computation_reward: Balance&lt;SUI&gt;,
     storage_rebate_amount: u64,
+    non_refundable_storage_fee_amount: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
                                      // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed <b>to</b> punish a <a href="validator.md#0x3_validator">validator</a>, in bps.
@@ -1789,9 +1791,11 @@ gas coins.
     <a href="_join">balance::join</a>(&<b>mut</b> computation_reward, safe_mode_computation_rewards);
     storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
     self.safe_mode_storage_rebates = 0;
+    non_refundable_storage_fee_amount = non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
+    self.safe_mode_non_refundable_storage_fee = 0;
 
     <b>let</b> total_validators_stake = <a href="validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
-    <b>let</b> storage_fund_balance = <a href="_value">balance::value</a>(&self.storage_fund);
+    <b>let</b> storage_fund_balance = <a href="storage_fund.md#0x3_storage_fund_total_balance">storage_fund::total_balance</a>(&self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>);
     <b>let</b> total_stake = storage_fund_balance + total_validators_stake;
 
     <b>let</b> storage_charge = <a href="_value">balance::value</a>(&storage_reward);
@@ -1811,8 +1815,6 @@ gas coins.
     <b>let</b> total_stake_u128 = (total_stake <b>as</b> u128);
     <b>let</b> computation_charge_u128 = (computation_charge <b>as</b> u128);
 
-    <a href="_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_reward);
-
     <b>let</b> storage_fund_reward_amount = (storage_fund_balance <b>as</b> u128) * computation_charge_u128 / total_stake_u128;
     <b>let</b> storage_fund_reward = <a href="_split">balance::split</a>(&<b>mut</b> computation_reward, (storage_fund_reward_amount <b>as</b> u64));
     <b>let</b> storage_fund_reinvestment_amount =
@@ -1821,7 +1823,6 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         (storage_fund_reinvestment_amount <b>as</b> u64),
     );
-    <a href="_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reinvestment);
 
     self.epoch = self.epoch + 1;
     // Sanity check <b>to</b> make sure we are advancing <b>to</b> the right epoch.
@@ -1842,6 +1843,8 @@ gas coins.
         ctx,
     );
 
+    <b>let</b> new_total_stake = <a href="validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
+
     <b>let</b> computation_reward_amount_after_distribution = <a href="_value">balance::value</a>(&computation_reward);
     <b>let</b> storage_fund_reward_amount_after_distribution = <a href="_value">balance::value</a>(&storage_fund_reward);
     <b>let</b> computation_reward_distributed = computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
@@ -1854,15 +1857,19 @@ gas coins.
     // Because of precision issues <b>with</b> integer divisions, we expect that there will be some
     // remaining <a href="">balance</a> in `storage_fund_reward` and `computation_reward`.
     // All of these go <b>to</b> the storage fund.
-    <b>let</b> leftover_storage_fund_inflow = <a href="_value">balance::value</a>(&storage_fund_reward) + <a href="_value">balance::value</a>(&computation_reward);
-    <a href="_join">balance::join</a>(&<b>mut</b> self.storage_fund, storage_fund_reward);
-    <a href="_join">balance::join</a>(&<b>mut</b> self.storage_fund, computation_reward);
+    <b>let</b> leftover_staking_rewards = storage_fund_reward;
+    <a href="_join">balance::join</a>(&<b>mut</b> leftover_staking_rewards, computation_reward);
+    <b>let</b> leftover_storage_fund_inflow = <a href="_value">balance::value</a>(&leftover_staking_rewards);
 
-    // Destroy the storage rebate.
-    <b>assert</b>!(<a href="_value">balance::value</a>(&self.storage_fund) &gt;= storage_rebate_amount, 0);
-    <b>let</b> storage_rebate = <a href="_split">balance::split</a>(&<b>mut</b> self.storage_fund, storage_rebate_amount);
-
-    <b>let</b> new_total_stake = <a href="validator_set.md#0x3_validator_set_total_stake">validator_set::total_stake</a>(&self.validators);
+    <b>let</b> refunded_storage_rebate =
+        <a href="storage_fund.md#0x3_storage_fund_advance_epoch">storage_fund::advance_epoch</a>(
+            &<b>mut</b> self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>,
+            storage_reward,
+            storage_fund_reinvestment,
+            leftover_staking_rewards,
+            storage_rebate_amount,
+            non_refundable_storage_fee_amount,
+        );
 
     <a href="_emit">event::emit</a>(
         <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SystemEpochInfoEvent">SystemEpochInfoEvent</a> {
@@ -1873,7 +1880,7 @@ gas coins.
             storage_charge,
             storage_fund_reinvestment: (storage_fund_reinvestment_amount <b>as</b> u64),
             storage_rebate: storage_rebate_amount,
-            storage_fund_balance: <a href="_value">balance::value</a>(&self.storage_fund),
+            storage_fund_balance: <a href="storage_fund.md#0x3_storage_fund_total_balance">storage_fund::total_balance</a>(&self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>),
             stake_subsidy_amount,
             total_gas_fees: computation_charge,
             total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
@@ -1885,7 +1892,10 @@ gas coins.
     <b>assert</b>!(self.safe_mode_storage_rebates == 0
         && <a href="_value">balance::value</a>(&self.safe_mode_storage_rewards) == 0
         && <a href="_value">balance::value</a>(&self.safe_mode_computation_rewards) == 0, <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>);
-    storage_rebate
+
+    // Return the storage rebate split from storage fund that's already refunded <b>to</b> the transaction senders.
+    // This will be burnt at the last step of epoch change programmable transaction.
+    refunded_storage_rebate
 }
 </code></pre>
 
@@ -1905,7 +1915,7 @@ system running and continue making epoch changes.
 version
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_advance_epoch_safe_mode">advance_epoch_safe_mode</a>(self: &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, computation_reward: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, storage_rebate: u64, non_refundable_storage_fee: u64, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1921,6 +1931,7 @@ version
     storage_reward: Balance&lt;SUI&gt;,
     computation_reward: Balance&lt;SUI&gt;,
     storage_rebate: u64,
+    non_refundable_storage_fee: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
@@ -1933,6 +1944,7 @@ version
     <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_storage_rewards, storage_reward);
     <a href="_join">balance::join</a>(&<b>mut</b> self.safe_mode_computation_rewards, computation_reward);
     self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
+    self.safe_mode_non_refundable_storage_fee = self.safe_mode_non_refundable_storage_fee + non_refundable_storage_fee;
 }
 </code></pre>
 
@@ -2174,13 +2186,13 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 </details>
 
-<a name="0x3_sui_system_state_inner_get_storage_fund_balance"></a>
+<a name="0x3_sui_system_state_inner_get_storage_fund_total_balance"></a>
 
-## Function `get_storage_fund_balance`
+## Function `get_storage_fund_total_balance`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>): u64
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_total_balance">get_storage_fund_total_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>): u64
 </code></pre>
 
 
@@ -2189,8 +2201,32 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_balance">get_storage_fund_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): u64 {
-    <a href="_value">balance::value</a>(&self.storage_fund)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_total_balance">get_storage_fund_total_balance</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): u64 {
+    <a href="storage_fund.md#0x3_storage_fund_total_balance">storage_fund::total_balance</a>(&self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x3_sui_system_state_inner_get_storage_fund_object_rebates"></a>
+
+## Function `get_storage_fund_object_rebates`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_object_rebates">get_storage_fund_object_rebates</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_get_storage_fund_object_rebates">get_storage_fund_object_rebates</a>(self: &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">SuiSystemStateInner</a>): u64 {
+    <a href="storage_fund.md#0x3_storage_fund_total_object_storage_rebates">storage_fund::total_object_storage_rebates</a>(&self.<a href="storage_fund.md#0x3_storage_fund">storage_fund</a>)
 }
 </code></pre>
 

@@ -3,9 +3,9 @@
 
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
 import {
-    type CommandArgument,
+    type TransactionArgument,
     formatAddress,
-    type TransactionCommand,
+    type TransactionType,
     normalizeSuiAddress,
 } from '@mysten/sui.js';
 import { useState } from 'react';
@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { Text } from '_src/ui/app/shared/text';
 
 function convertCommandArgumentToString(
-    arg: string | string[] | CommandArgument | CommandArgument[]
+    arg: string | string[] | TransactionArgument | TransactionArgument[]
 ): string {
     if (typeof arg === 'string') return arg;
 
@@ -37,7 +37,7 @@ function convertCommandArgumentToString(
     }
 }
 
-function convertCommandToString({ kind, ...command }: TransactionCommand) {
+function convertCommandToString({ kind, ...command }: TransactionType) {
     const commandArguments = Object.entries(command);
 
     return commandArguments
@@ -57,7 +57,7 @@ function convertCommandToString({ kind, ...command }: TransactionCommand) {
 }
 
 interface CommandProps {
-    command: TransactionCommand;
+    command: TransactionType;
 }
 
 export function Command({ command }: CommandProps) {

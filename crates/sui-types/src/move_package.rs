@@ -8,11 +8,16 @@ use crate::{
     id::{ID, UID},
     SUI_FRAMEWORK_ADDRESS,
 };
+use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
+use move_binary_format::{
+    access::ModuleAccess,
+    compatibility::{Compatibility, InclusionCheck},
+    errors::PartialVMResult,
+};
 use move_core_types::{
     account_address::AccountAddress,
     ident_str,
@@ -103,18 +108,63 @@ pub struct MovePackage {
     linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
+// NB: do _not_ add `Serialize` or `Deserialize` to this enum. Convert to u8 first  or use the
+// associated constants before storing in any serialization setting.
 /// Rust representation of upgrade policy constants in `sui::package`.
-pub const UPGRADE_POLICY_COMPATIBLE: u8 = 0;
-pub const UPGRADE_POLICY_ADDITIVE: u8 = 128;
-pub const UPGRADE_POLICY_DEP_ONLY: u8 = 192;
+#[repr(u8)]
+#[derive(Display, Debug, Clone, Copy)]
+pub enum UpgradePolicy {
+    #[display(fmt = "COMPATIBLE")]
+    Compatible = 0,
+    #[display(fmt = "ADDITIVE")]
+    Additive = 128,
+    #[display(fmt = "DEP_ONLY")]
+    DepOnly = 192,
+}
 
-pub fn is_valid_package_upgrade_policy(policy: &u8) -> bool {
-    [
-        UPGRADE_POLICY_COMPATIBLE,
-        UPGRADE_POLICY_ADDITIVE,
-        UPGRADE_POLICY_DEP_ONLY,
-    ]
-    .contains(policy)
+impl UpgradePolicy {
+    /// Convenience accessors to the upgrade policies as u8s.
+    pub const COMPATIBLE: u8 = Self::Compatible as u8;
+    pub const ADDITIVE: u8 = Self::Additive as u8;
+    pub const DEP_ONLY: u8 = Self::DepOnly as u8;
+
+    pub fn is_valid_policy(policy: &u8) -> bool {
+        Self::try_from(*policy).is_ok()
+    }
+
+    pub fn check_compatibility(
+        &self,
+        old_module: &normalized::Module,
+        new_module: &normalized::Module,
+    ) -> PartialVMResult<()> {
+        match self {
+            Self::Compatible => {
+                let check_struct_and_pub_function_linking = true;
+                let check_struct_layout = true;
+                let check_friend_linking = false;
+                Compatibility::new(
+                    check_struct_and_pub_function_linking,
+                    check_struct_layout,
+                    check_friend_linking,
+                )
+                .check(old_module, new_module)
+            }
+            Self::Additive => InclusionCheck::Subset.check(old_module, new_module),
+            Self::DepOnly => InclusionCheck::Equal.check(old_module, new_module),
+        }
+    }
+}
+
+impl TryFrom<u8> for UpgradePolicy {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            x if x == Self::Compatible as u8 => Ok(Self::Compatible),
+            x if x == Self::Additive as u8 => Ok(Self::Additive),
+            x if x == Self::DepOnly as u8 => Ok(Self::DepOnly),
+            _ => Err(()),
+        }
+    }
 }
 
 /// Rust representation of `sui::package::UpgradeCap`.
@@ -469,7 +519,7 @@ impl UpgradeCap {
             id: UID::new(uid),
             package: ID::new(package_id),
             version: 1,
-            policy: UPGRADE_POLICY_COMPATIBLE,
+            policy: UpgradePolicy::COMPATIBLE,
         }
     }
 }

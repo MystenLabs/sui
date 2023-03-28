@@ -431,15 +431,19 @@ impl ConsensusAdapter {
     /// negative in connectivity to another, such as in the case of a network partition.
     ///
     /// Recursively, if the authority further ahead of us in the positions is a low performing authority, we will
-    /// move our positions up one, and submit at the same time. This allows low performing
-    /// node a chance to participate in consensus and redeem their scores while maintaining performance
+    /// move our positions up one, and submit the transaction. This allows maintaining performance
     /// overall. We will only do this part for authorities that are not low performers themselves to
     /// prevent extra amplification in the case that the positions look like [low_scoring_a1, low_scoring_a2, a3]
     fn check_submission_wrt_connectivity_and_scores(
         &self,
         positions: Vec<AuthorityName>,
     ) -> (usize, bool) {
-        let mut mapped_to_low_scoring = false;
+        if self.authority_is_low_scoring(&self.authority) {
+            return (positions.len(), true);
+        }
+
+        let initial_position = get_position_in_list(self.authority, positions.clone());
+
         let filtered_positions = positions
             .into_iter()
             .filter(|authority| {
@@ -452,27 +456,13 @@ impl ConsensusAdapter {
                         == ConnectionStatus::Connected
             })
             .filter(|authority| {
-                // If we are a low scoring authority, we do not filter out ourselves from the list,
-                // nor do we filter out other low scoring authorities. If we are a high scoring
-                // authority, we will co-submit with any low scoring authorities in front of us.
-                let ourself_is_low_scoring = self.authority_is_low_scoring(&self.authority);
-                let authority_is_low_scoring = self.authority_is_low_scoring(authority);
-
-                // if we filtered anything out here, the tx was mapped to a low scoring authority
-                if !ourself_is_low_scoring && authority_is_low_scoring {
-                    mapped_to_low_scoring = true;
-                }
-
-                ourself_is_low_scoring || !authority_is_low_scoring
+                // Remove any low-scoring authority in front of us
+                !self.authority_is_low_scoring(authority)
             })
             .collect();
 
         let position = get_position_in_list(self.authority, filtered_positions);
-        (
-            position,
-            mapped_to_low_scoring
-                || (position == 0 && self.authority_is_low_scoring(&self.authority)),
-        )
+        (position, position < initial_position)
     }
 
     fn authority_is_low_scoring(&self, authority: &AuthorityName) -> bool {
@@ -579,16 +569,25 @@ impl ConsensusAdapter {
             Either::Right(((), processed_waiter)) => Some(processed_waiter),
         };
         let transaction_key = transaction.key();
-        let _monitor = CancelOnDrop(spawn_monitored_task!(async {
-            let mut i = 0u64;
-            loop {
-                i += 1;
-                const WARN_DELAY_S: u64 = 30;
-                tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
-                let total_wait = i * WARN_DELAY_S;
-                warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
-            }
-        }));
+        // Log warnings for capability or end of publish transactions that fail to get sequenced
+        let _monitor = if matches!(
+            transaction.kind,
+            ConsensusTransactionKind::EndOfPublish(_)
+                | ConsensusTransactionKind::CapabilityNotification(_)
+        ) {
+            Some(CancelOnDrop(spawn_monitored_task!(async {
+                let mut i = 0u64;
+                loop {
+                    i += 1;
+                    const WARN_DELAY_S: u64 = 30;
+                    tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
+                    let total_wait = i * WARN_DELAY_S;
+                    warn!("Still waiting {total_wait} seconds for transaction {transaction_key:?} to commit in narwhal");
+                }
+            })))
+        } else {
+            None
+        };
         if let Some(processed_waiter) = processed_waiter {
             debug!("Submitting {transaction_key:?} to consensus");
 
@@ -970,7 +969,10 @@ mod adapter_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let committee = Committee::new(0, authorities.iter().cloned().collect());
+        let committee = Committee::new_for_testing_with_normalized_voting_power(
+            0,
+            authorities.iter().cloned().collect(),
+        );
 
         // generate random transaction digests, and account for validator selection
         const NUM_TEST_TRANSACTIONS: usize = 1000;

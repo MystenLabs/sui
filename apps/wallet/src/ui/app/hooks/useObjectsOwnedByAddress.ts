@@ -12,7 +12,7 @@ export function useObjectsOwnedByAddress(
 ) {
     const rpc = useRpcClient();
     return useQuery(
-        ['objects-owned', address],
+        ['objects-owned', address, query],
         () =>
             rpc.getOwnedObjects({
                 owner: address!,

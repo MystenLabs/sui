@@ -3,8 +3,8 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    get_object, get_transaction, make_clients, restore_from_db_checkpoint, ConciseObjectOutput,
-    GroupedObjectOutput, VerboseObjectOutput,
+    get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
+    ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -225,7 +225,7 @@ impl ToolCommand {
                 }
             }
             ToolCommand::FetchTransaction { genesis, digest } => {
-                print!("{}", get_transaction(digest, genesis).await?);
+                print!("{}", get_transaction_block(digest, genesis).await?);
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);

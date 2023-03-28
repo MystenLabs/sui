@@ -4,8 +4,8 @@
 use tokio_stream::Stream;
 use tracing::{error, instrument, trace};
 
-use sui_json_rpc_types::{EventFilter, SuiTransactionEffects, SuiTransactionEvents};
-use sui_json_rpc_types::{SuiEvent, SuiTransactionEffectsAPI};
+use sui_json_rpc_types::{EventFilter, SuiTransactionBlockEffects, SuiTransactionBlockEvents};
+use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockEffectsAPI};
 use sui_types::error::SuiResult;
 
 use crate::streamer::Streamer;
@@ -33,8 +33,8 @@ impl EventHandler {
     #[instrument(level = "debug", skip_all, fields(tx_digest=?effects.transaction_digest()), err)]
     pub async fn process_events(
         &self,
-        effects: &SuiTransactionEffects,
-        events: &SuiTransactionEvents,
+        effects: &SuiTransactionBlockEffects,
+        events: &SuiTransactionBlockEvents,
     ) -> SuiResult {
         trace!(
             num_events = events.data.len(),

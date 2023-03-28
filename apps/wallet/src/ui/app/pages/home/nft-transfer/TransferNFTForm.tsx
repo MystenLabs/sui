@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowRight16 } from '@mysten/icons';
-import { getTransactionDigest, Transaction } from '@mysten/sui.js';
+import { getTransactionDigest, TransactionBlock } from '@mysten/sui.js';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Form, Field, Formik } from 'formik';
 import { toast } from 'react-hot-toast';
@@ -18,6 +18,7 @@ import BottomMenuLayout, {
 import { Text } from '_app/shared/text';
 import { AddressInput } from '_components/address-input';
 import { useSigner } from '_hooks';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 
 export function TransferNFTForm({ objectId }: { objectId: string }) {
     const activeAddress = useActiveAddress();
@@ -33,11 +34,11 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             if (!to || !signer) {
                 throw new Error('Missing data');
             }
-            const tx = new Transaction();
+            const tx = new TransactionBlock();
             tx.transferObjects([tx.object(objectId)], tx.pure(to));
 
-            return signer.signAndExecuteTransaction({
-                transaction: tx,
+            return signer.signAndExecuteTransactionBlock({
+                transactionBlock: tx,
                 options: {
                     showInput: true,
                     showEffects: true,
@@ -59,7 +60,7 @@ export function TransferNFTForm({ objectId }: { objectId: string }) {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     <small className="text-ellipsis overflow-hidden">
-                        {(error as Error).message || 'Something went wrong'}
+                        {getSignerOperationErrorMessage(error)}
                     </small>
                 </div>
             );

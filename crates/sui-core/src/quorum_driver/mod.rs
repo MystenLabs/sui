@@ -319,6 +319,17 @@ where
                 }))
             }
 
+            Err(AggregatorProcessTransactionError::SystemOverload {
+                overloaded_stake,
+                errors,
+            }) => {
+                debug!(?tx_digest, ?errors, "System overload");
+                Err(Some(QuorumDriverError::SystemOverload {
+                    overloaded_stake,
+                    errors,
+                }))
+            }
+
             Err(AggregatorProcessTransactionError::RetryableTransaction { errors }) => {
                 debug!(?tx_digest, ?errors, "Retryable transaction error");
                 Err(None)
@@ -490,7 +501,7 @@ where
         let result = self
             .validators
             .load()
-            .execute_transaction(&verified_transaction)
+            .execute_transaction_block(&verified_transaction)
             .await
             .tap_ok(|_resp| {
                 debug!(

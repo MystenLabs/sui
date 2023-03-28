@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    type SuiSignAndExecuteTransactionInput,
+    type SuiSignAndExecuteTransactionBlockInput,
     type SuiSignMessageOutput,
 } from '@mysten/wallet-standard';
 
 import type {
     SignedTransaction,
     SuiAddress,
-    SuiTransactionResponse,
+    SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 
 export type TransactionDataType = {
@@ -17,8 +17,8 @@ export type TransactionDataType = {
     data: string;
     account: SuiAddress;
     justSign?: boolean;
-    requestType?: SuiSignAndExecuteTransactionInput['requestType'];
-    options?: SuiSignAndExecuteTransactionInput['options'];
+    requestType?: SuiSignAndExecuteTransactionBlockInput['requestType'];
+    options?: SuiSignAndExecuteTransactionBlockInput['options'];
 };
 
 export type SignMessageDataType = {
@@ -32,7 +32,7 @@ export type ApprovalRequest = {
     approved: boolean | null;
     origin: string;
     originFavIcon?: string;
-    txResult?: SuiTransactionResponse | SuiSignMessageOutput;
+    txResult?: SuiTransactionBlockResponse | SuiSignMessageOutput;
     txResultError?: string;
     txSigned?: SignedTransaction;
     createdDate: string;
@@ -48,7 +48,7 @@ export interface SignMessageApprovalRequest
 export interface TransactionApprovalRequest
     extends Omit<ApprovalRequest, 'txResult' | 'tx'> {
     tx: TransactionDataType;
-    txResult?: SuiTransactionResponse;
+    txResult?: SuiTransactionBlockResponse;
 }
 
 export function isSignMessageApprovalRequest(

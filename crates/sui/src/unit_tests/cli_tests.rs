@@ -5,7 +5,6 @@ use std::io::Read;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
-use anyhow::anyhow;
 use expect_test::expect;
 use serde_json::json;
 use sui_types::object::Owner;
@@ -28,18 +27,18 @@ use sui_config::{
 use sui_framework_build::compiled_package::{BuildConfig, SuiPackageHooks};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionEffects, SuiTransactionEffectsAPI,
+    OwnedObjectRef, SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
 use sui_macros::sim_test;
-use sui_types::base_types::{ObjectType, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::error::SuiObjectResponseError;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
-use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::TestClusterBuilder;
 
@@ -224,7 +223,6 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
 
@@ -265,50 +263,6 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         "10000",
     ])
     .await
-}
-
-#[sim_test]
-async fn test_create_example_nft_command() {
-    use std::str::FromStr;
-    let mut test_cluster = TestClusterBuilder::new().build().await.unwrap();
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let result = SuiClientCommands::CreateExampleNFT {
-        name: None,
-        description: None,
-        url: None,
-        gas: None,
-        gas_budget: None,
-    }
-    .execute(context)
-    .await
-    .unwrap();
-
-    match result {
-        SuiClientCommandResult::CreateExampleNFT(response) => {
-            if let Some(obj) = response.data {
-                assert_eq!(obj.owner.unwrap().get_owner_address().unwrap(), address);
-                assert_eq!(
-                    obj.type_.clone().unwrap(),
-                    ObjectType::from_str(&sui_framework_address_concat_string(
-                        "::devnet_nft::DevNetNFT"
-                    ))
-                    .unwrap()
-                );
-                Ok(obj)
-            } else {
-                match response.error {
-                    Some(error) => Err(anyhow!("Error: {}", error)),
-                    None => Err(anyhow!("No data or error found in the response")),
-                }
-            }
-        }
-        _ => Err(anyhow!(
-            "WalletCommands::CreateExampleNFT returns wrong type"
-        )),
-    }
-    .unwrap();
 }
 
 #[sim_test]
@@ -364,7 +318,6 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -405,7 +358,6 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
             Some(SuiObjectResponseQuery::new_with_options(
                 SuiObjectDataOptions::full_content(),
             )),
-            None,
             None,
             None,
         )
@@ -469,7 +421,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -484,6 +435,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -526,7 +478,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -671,7 +622,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -690,6 +640,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -740,7 +691,6 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -757,6 +707,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -807,7 +758,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -824,6 +774,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -851,7 +802,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_owned_objects(address, None, None, None, None)
+        .get_owned_objects(address, None, None, None)
         .await?
         .data;
 
@@ -867,6 +818,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -903,7 +855,6 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -920,6 +871,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -944,7 +896,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
-        .get_owned_objects(address, None, None, None, None)
+        .get_owned_objects(address, None, None, None)
         .await?
         .data;
 
@@ -960,6 +912,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await;
@@ -994,7 +947,6 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -1013,6 +965,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         gas_budget: 20_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
+        serialize_output: false,
     }
     .execute(context)
     .await?;
@@ -1024,7 +977,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         unreachable!("Invalid response");
     };
 
-    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
     let package = effects
@@ -1092,7 +1045,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let SuiClientCommandResult::Upgrade(response) = resp else {
         unreachable!("Invalid upgrade response");
     };
-    let SuiTransactionEffects::V1(effects) = response.effects.unwrap();
+    let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
 
     assert!(effects.status.is_ok());
 
@@ -1128,7 +1081,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -1231,7 +1183,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
 
@@ -1322,7 +1273,6 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
             Some(SuiObjectResponseQuery::new_with_options(
                 SuiObjectDataOptions::full_content(),
             )),
-            None,
             None,
             None,
         )
@@ -1510,7 +1460,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?
         .data;
@@ -1564,7 +1513,6 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -1629,7 +1577,6 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
             )),
             None,
             None,
-            None,
         )
         .await?;
 
@@ -1689,7 +1636,6 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -1758,7 +1704,6 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -1869,7 +1814,6 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
                     .with_owner()
                     .with_previous_transaction(),
             )),
-            None,
             None,
             None,
         )
@@ -2001,5 +1945,79 @@ async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
         sleep(Duration::from_millis(100)).await;
     }
     out.join().unwrap().success();
+    Ok(())
+}
+
+#[sim_test]
+async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Result<(), anyhow::Error>
+{
+    let mut test_cluster = TestClusterBuilder::new().build().await?;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_responses = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new(
+                Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
+                Some(
+                    SuiObjectDataOptions::new()
+                        .with_type()
+                        .with_owner()
+                        .with_previous_transaction(),
+                ),
+            )),
+            None,
+            None,
+        )
+        .await?;
+
+    // assert that all the objects_returned are owned by the address
+    for resp in &object_responses.data {
+        let obj_owner = resp.object().unwrap().owner.unwrap();
+        assert_eq!(
+            obj_owner.get_owner_address().unwrap().to_string(),
+            address.to_string()
+        )
+    }
+    // assert that has next page is false
+    assert!(!object_responses.has_next_page);
+
+    // Pagination check
+    let mut has_next = true;
+    let mut cursor = None;
+    let mut response_data: Vec<SuiObjectResponse> = Vec::new();
+    while has_next {
+        let object_responses = client
+            .read_api()
+            .get_owned_objects(
+                address,
+                Some(SuiObjectResponseQuery::new(
+                    Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
+                    Some(
+                        SuiObjectDataOptions::new()
+                            .with_type()
+                            .with_owner()
+                            .with_previous_transaction(),
+                    ),
+                )),
+                cursor,
+                Some(1),
+            )
+            .await?;
+
+        response_data.push(object_responses.data.first().unwrap().clone());
+
+        if object_responses.has_next_page {
+            cursor = object_responses.next_cursor;
+        } else {
+            has_next = false;
+        }
+    }
+
+    assert_eq!(&response_data, &object_responses.data);
+
     Ok(())
 }

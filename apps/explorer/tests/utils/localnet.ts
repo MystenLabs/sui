@@ -10,12 +10,12 @@ import {
     RawSigner,
     type Keypair,
     localnetConnection,
-    Transaction,
+    TransactionBlock,
 } from '@mysten/sui.js';
 
 const addressToKeypair = new Map<string, Keypair>();
 
-export async function mint(address: string) {
+export async function split_coin(address: string) {
     const keypair = addressToKeypair.get(address);
     if (!keypair) {
         throw new Error('missing keypair');
@@ -25,20 +25,18 @@ export async function mint(address: string) {
     });
     const signer = new RawSigner(keypair, provider);
 
-    const tx = new Transaction();
+    const coins = await provider.getCoins({ owner: address });
+    const coin_id = coins.data[0].coinObjectId;
+
+    const tx = new TransactionBlock();
     tx.moveCall({
-        target: '0x2::devnet_nft::mint',
-        arguments: [
-            tx.pure('Example NFT'),
-            tx.pure('An example NFT.'),
-            tx.pure(
-                'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty'
-            ),
-        ],
+        target: '0x2::pay::split',
+        typeArguments: ['0x2::sui::SUI'],
+        arguments: [tx.object(coin_id), tx.pure(10)],
     });
 
-    const result = await signer.signAndExecuteTransaction({
-        transaction: tx,
+    const result = await signer.signAndExecuteTransactionBlock({
+        transactionBlock: tx,
         options: {
             showInput: true,
             showEffects: true,

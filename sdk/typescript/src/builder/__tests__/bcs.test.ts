@@ -6,15 +6,15 @@ import { it, expect } from 'vitest';
 import {
   builder,
   PROGRAMMABLE_CALL,
-  MoveCallCommand,
-  COMMAND,
-  TransferObjectsCommand,
+  MoveCallTransaction,
+  TRANSACTION,
+  TransferObjectsTransaction,
 } from '..';
 import { normalizeSuiAddress } from '../../types';
 
 // Oooh-weeee we nailed it!
 it('can serialize simplified programmable call struct', () => {
-  const moveCall: MoveCallCommand = {
+  const moveCall: MoveCallTransaction = {
     kind: 'MoveCall',
     target: '0x2::display::new',
     typeArguments: ['0x6::capy::Capy'],
@@ -31,7 +31,7 @@ it('can serialize simplified programmable call struct', () => {
   };
 
   const bytes = builder.ser(PROGRAMMABLE_CALL, moveCall).toBytes();
-  const result: MoveCallCommand = builder.de(PROGRAMMABLE_CALL, bytes);
+  const result: MoveCallTransaction = builder.de(PROGRAMMABLE_CALL, bytes);
 
   // since we normalize addresses when (de)serializing, the returned value differs
   // only check the module and the function; ignore address comparison (it's not an issue
@@ -46,16 +46,16 @@ it('can serialize simplified programmable call struct', () => {
 });
 
 it('can serialize enum with "kind" property', () => {
-  const command = {
+  const transaction: TransferObjectsTransaction = {
     kind: 'TransferObjects',
     objects: [],
     address: { kind: 'Input', index: 0 },
   };
 
-  const bytes = builder.ser(COMMAND, command).toBytes();
-  const result: TransferObjectsCommand = builder.de(COMMAND, bytes);
+  const bytes = builder.ser(TRANSACTION, transaction).toBytes();
+  const result: TransferObjectsTransaction = builder.de(TRANSACTION, bytes);
 
-  expect(result).toEqual(command);
+  expect(result).toEqual(transaction);
 });
 
 function ref(): { objectId: string; version: string; digest: string } {
@@ -114,7 +114,7 @@ it('can serialize transaction data with a programmable transaction', () => {
               ),
             },
           ],
-          commands: [
+          transactions: [
             {
               kind: 'MoveCall',
               target: `${sui}::display::new`,
@@ -129,7 +129,7 @@ it('can serialize transaction data with a programmable transaction', () => {
               target: `${sui}::display::add_multiple`,
               typeArguments: [`${sui}::capy::Capy`],
               arguments: [
-                // result of the first command
+                // result of the first transaction
                 { kind: 'Result', index: 0 },
                 // second argument - vector of names
                 { kind: 'Input', index: 1 },
@@ -142,7 +142,7 @@ it('can serialize transaction data with a programmable transaction', () => {
               target: `${sui}::display::update_version`,
               typeArguments: [`${sui}::capy::Capy`],
               arguments: [
-                // result of the first command again
+                // result of the first transaction again
                 { kind: 'Result', index: 0 },
               ],
             },

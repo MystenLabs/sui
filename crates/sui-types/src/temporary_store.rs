@@ -19,9 +19,7 @@ use crate::committee::EpochId;
 use crate::is_system_package;
 use crate::messages::TransactionEvents;
 use crate::storage::ObjectStore;
-use crate::sui_system_state::{
-    get_sui_system_state, get_sui_system_state_wrapper, SuiSystemState, SuiSystemStateWrapper,
-};
+use crate::sui_system_state::{get_sui_system_state, SuiSystemState};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -86,12 +84,8 @@ impl InnerTemporaryStore {
             .collect()
     }
 
-    pub fn get_sui_system_state_wrapper_object(&self) -> Option<SuiSystemStateWrapper> {
-        get_sui_system_state_wrapper(&self.written).ok()
-    }
-
-    pub fn get_sui_system_state_object(&self) -> Option<SuiSystemState> {
-        get_sui_system_state(&self.written).ok()
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+        get_sui_system_state(&self.written)
     }
 }
 
@@ -701,10 +695,12 @@ impl<S: ObjectStore> TemporaryStore<S> {
         execution_result: &mut Result<T, ExecutionError>,
         gas: &[ObjectRef],
     ) {
-        // at this point, we have done some charging for computation, but have not yet set the storage rebate or storage gas units
+        // at this point, we have done *all* charging for computation,
+        // but have not yet set the storage rebate or storage gas units
         assert!(gas_status.storage_rebate() == 0);
         assert!(gas_status.storage_gas_units() == 0);
 
+        // bucketize computation cost
         if let Err(err) = gas_status.bucketize_computation() {
             if execution_result.is_ok() {
                 *execution_result = Err(err);

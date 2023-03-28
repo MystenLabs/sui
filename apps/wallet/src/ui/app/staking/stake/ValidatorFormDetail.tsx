@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { calculateAPY } from '@mysten/core';
+import { useGetRollingAverageApys } from '@mysten/core';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -45,6 +45,10 @@ export function ValidatorFormDetail({
         error,
     } = useGetDelegatedStake(accountAddress || '');
 
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        system?.activeValidators.length || null
+    );
+
     const validatorData = useMemo(() => {
         if (!system) return null;
         return system.activeValidators.find(
@@ -78,10 +82,7 @@ export function ValidatorFormDetail({
         );
     }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
-    const apy = useMemo(() => {
-        if (!validatorData || !system) return 0;
-        return calculateAPY(validatorData, +system.epoch);
-    }, [validatorData, system]);
+    const apy = rollingAverageApys?.[validatorAddress] || 0;
 
     if (isLoading || loadingValidators) {
         return (

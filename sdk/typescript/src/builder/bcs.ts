@@ -5,7 +5,7 @@ import { BCS, TypeName } from '@mysten/bcs';
 import { bcs } from '../types/sui-bcs';
 import { normalizeSuiAddress, TypeTag } from '../types';
 import { TypeTagSerializer } from '../signers/txn-data-serializers/type-tag-serializer';
-import { CommandArgument, MoveCallCommand } from './Commands';
+import { TransactionArgument, MoveCallTransaction } from './Transactions';
 
 export const ARGUMENT_INNER = 'Argument';
 export const VECTOR = 'vector';
@@ -13,28 +13,28 @@ export const OPTION = 'Option';
 export const CALL_ARG = 'CallArg';
 export const TYPE_TAG = 'TypeTag';
 export const OBJECT_ARG = 'ObjectArg';
-export const PROGRAMMABLE_TX = 'ProgrammableTransaction';
+export const PROGRAMMABLE_TX_BLOCK = 'ProgrammableTransaction';
 export const PROGRAMMABLE_CALL_INNER = 'ProgrammableMoveCall';
-export const COMMAND_INNER = 'Command';
+export const TRANSACTION_INNER = 'Transaction';
 
 export const ENUM_KIND = 'EnumKind';
 
-/** Wrapper around Command Enum to support `kind` matching in TS */
-export const COMMAND: TypeName = [ENUM_KIND, COMMAND_INNER];
+/** Wrapper around transaction Enum to support `kind` matching in TS */
+export const TRANSACTION: TypeName = [ENUM_KIND, TRANSACTION_INNER];
 /** Wrapper around Argument Enum to support `kind` matching in TS */
 export const ARGUMENT: TypeName = [ENUM_KIND, ARGUMENT_INNER];
 
 /** Custom serializer for decoding package, module, function easier */
 export const PROGRAMMABLE_CALL = 'SimpleProgrammableMoveCall';
 
-/** Command types */
+/** Transaction types */
 
 export type Option<T> = { some: T } | { none: true };
 
 export const builder = new BCS(bcs)
-  .registerStructType(PROGRAMMABLE_TX, {
+  .registerStructType(PROGRAMMABLE_TX_BLOCK, {
     inputs: [VECTOR, CALL_ARG],
-    commands: [VECTOR, COMMAND],
+    transactions: [VECTOR, TRANSACTION],
   })
   .registerEnumType(ARGUMENT_INNER, {
     GasCoin: null,
@@ -49,11 +49,11 @@ export const builder = new BCS(bcs)
     type_arguments: [VECTOR, TYPE_TAG],
     arguments: [VECTOR, ARGUMENT],
   })
-  .registerEnumType(COMMAND_INNER, {
+  .registerEnumType(TRANSACTION_INNER, {
     /**
      * A Move Call - any public Move function can be called via
-     * this Command. The results can be used that instant to pass
-     * into the next Command.
+     * this transaction. The results can be used that instant to pass
+     * into the next transaction.
      */
     MoveCall: PROGRAMMABLE_CALL,
     /**
@@ -98,7 +98,7 @@ type ProgrammableCallInner = {
   module: string;
   function: string;
   type_arguments: TypeTag[];
-  arguments: CommandArgument[];
+  arguments: TransactionArgument[];
 };
 
 /**
@@ -112,7 +112,7 @@ type ProgrammableCallInner = {
  */
 builder.registerType(
   [ENUM_KIND, 'T'],
-  function encodeCommand(
+  function encode(
     this: BCS,
     writer,
     data: { kind: string },
@@ -131,7 +131,7 @@ builder.registerType(
       typeMap,
     );
   },
-  function decodeCommand(this: BCS, reader, typeParams, typeMap) {
+  function decode(this: BCS, reader, typeParams, typeMap) {
     const [enumType] = typeParams;
     const data = this.getTypeInterface(enumType as string)._decodeRaw.call(
       this,
@@ -171,7 +171,7 @@ builder.registerType(
   function encodeProgrammableTx(
     this: BCS,
     writer,
-    data: MoveCallCommand,
+    data: MoveCallTransaction,
     typeParams,
     typeMap,
   ) {
@@ -207,7 +207,7 @@ builder.registerType(
   },
   // Validation callback to error out if the data format is invalid.
   // TODO: make sure TypeTag can be parsed.
-  (data: MoveCallCommand) => {
+  (data: MoveCallTransaction) => {
     return data.target.split('::').length === 3;
   },
 );

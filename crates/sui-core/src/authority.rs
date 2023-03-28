@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
@@ -25,8 +26,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
-use tap::{TapFallible, TapOptional};
+use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -44,13 +44,14 @@ use sui_adapter::execution_engine;
 use sui_adapter::{adapter, execution_mode};
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
+use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
-    Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
-    SuiObjectDataFilter, SuiTransactionEvents,
+    Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
-use sui_storage::indexes::{ObjectIndexChanges, MAX_GET_OWNED_OBJECT_SIZE};
+use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
@@ -63,8 +64,8 @@ use sui_types::event::{Event, EventID};
 use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
+    CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
+    CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
@@ -511,6 +512,24 @@ impl AuthorityState {
         self.committee_store.clone()
     }
 
+    pub fn get_epoch_state_commitments(
+        &self,
+        epoch: EpochId,
+    ) -> SuiResult<Option<Vec<CheckpointCommitment>>> {
+        let commitments =
+            self.checkpoint_store
+                .get_epoch_last_checkpoint(epoch)?
+                .map(|checkpoint| {
+                    checkpoint
+                        .end_of_epoch_data
+                        .as_ref()
+                        .expect("Last checkpoint of epoch expected to have EndOfEpochData")
+                        .epoch_commitments
+                        .clone()
+                });
+        Ok(commitments)
+    }
+
     /// This is a private method and should be kept that way. It doesn't check whether
     /// the provided transaction is a system transaction, and hence can only be called internally.
     async fn handle_transaction_impl(
@@ -580,10 +599,7 @@ impl AuthorityState {
         );
 
         let tx_digest = *transaction.digest();
-        debug!(
-            "handle_transaction with transaction data: {:?}",
-            &transaction.data().intent_message().value
-        );
+        debug!("handle_transaction");
 
         // Ensure an idempotent answer. This is checked before the system_tx check so that
         // a validator is able to return the signed system tx if it was already signed locally.
@@ -751,7 +767,7 @@ impl AuthorityState {
 
         self.process_certificate(tx_guard, certificate, epoch_store)
             .await
-            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {e}"))
+            .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -821,7 +837,7 @@ impl AuthorityState {
         // possible that reconfiguration has happened and they no longer match.
         if *execution_guard != epoch_store.epoch() {
             tx_guard.release();
-            debug!("The epoch of the execution_guard doesn't match the epoch store");
+            info!("The epoch of the execution_guard doesn't match the epoch store");
             return Err(SuiError::WrongEpoch {
                 expected_epoch: epoch_store.epoch(),
                 actual_epoch: *execution_guard,
@@ -837,7 +853,7 @@ impl AuthorityState {
             .await
         {
             Err(e) => {
-                debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
+                info!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                 tx_guard.release();
                 return Err(e);
             }
@@ -1001,7 +1017,14 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
         transaction_digest: TransactionDigest,
-    ) -> Result<DryRunTransactionResponse, anyhow::Error> {
+    ) -> Result<
+        (
+            DryRunTransactionBlockResponse,
+            BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+            TransactionEffects,
+        ),
+        anyhow::Error,
+    > {
         let epoch_store = self.load_epoch_store_one_call_per_task();
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dry-exec is only supported on fullnodes"));
@@ -1075,19 +1098,31 @@ impl AuthorityState {
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
-        Ok(DryRunTransactionResponse {
-            effects: effects.try_into()?,
-            events: SuiTransactionEvents::try_from(
-                inner_temp_store.events.clone(),
-                tx_digest,
-                None,
-                &module_cache,
-            )?,
-        })
+        // Returning empty vector here because we recalculate changes in the rpc layer.
+        let object_changes = Vec::new();
+
+        // Returning empty vector here because we recalculate changes in the rpc layer.
+        let balance_changes = Vec::new();
+
+        Ok((
+            DryRunTransactionBlockResponse {
+                effects: effects.clone().try_into()?,
+                events: SuiTransactionBlockEvents::try_from(
+                    inner_temp_store.events.clone(),
+                    tx_digest,
+                    None,
+                    &module_cache,
+                )?,
+                object_changes,
+                balance_changes,
+            },
+            inner_temp_store.written,
+            effects,
+        ))
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
-    pub async fn dev_inspect_transaction(
+    pub async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,
@@ -1142,13 +1177,12 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let mut gas_status = SuiGasStatus::new_with_budget(
+        let gas_status = SuiGasStatus::new_with_budget(
             max_tx_gas,
             GasPrice::from(gas_price),
             storage_gas_price.into(),
             SuiCostTable::new(protocol_config),
         );
-        gas_status.charge_min_tx_gas()?;
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),
@@ -1431,7 +1465,7 @@ impl AuthorityState {
                 self.event_handler
                     .process_events(
                         &effects.clone().try_into()?,
-                        &SuiTransactionEvents::try_from(
+                        &SuiTransactionBlockEvents::try_from(
                             events.clone(),
                             *tx_digest,
                             Some(timestamp_ms),
@@ -2125,14 +2159,11 @@ impl AuthorityState {
         owner: SuiAddress,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-        limit: Option<usize>,
         filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
         let cursor_u = cursor.unwrap_or(ObjectID::ZERO);
-        let count = limit.unwrap_or(MAX_GET_OWNED_OBJECT_SIZE);
-
         if let Some(indexes) = &self.indexes {
-            indexes.get_owner_objects_iterator(owner, cursor_u, count, filter)
+            indexes.get_owner_objects_iterator(owner, cursor_u, filter)
         } else {
             Err(SuiError::IndexStoreNotAvailable)
         }
@@ -2147,9 +2178,9 @@ impl AuthorityState {
         T: DeserializeOwned,
     {
         let object_ids = self
-            .get_owner_objects_iterator(owner, None, None, None)?
+            .get_owner_objects_iterator(owner, None, None)?
             .filter(|o| match &o.type_ {
-                ObjectType::Struct(s) => type_.matches_type_fuzzy_generics(s),
+                ObjectType::Struct(s) => &type_ == s,
                 ObjectType::Package => false,
             })
             .map(|info| info.object_id);
@@ -2198,31 +2229,15 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+    pub fn get_total_transaction_blocks(&self) -> Result<u64, anyhow::Error> {
         Ok(self.get_indexes()?.next_sequence_number())
-    }
-
-    pub fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?
-            .get_transactions_in_range_deprecated(start, end)
-    }
-
-    pub fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?.get_recent_transactions(count)
     }
 
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<(VerifiedTransaction, TransactionEffects), anyhow::Error> {
-        let transaction = self.database.get_transaction(&digest)?;
+        let transaction = self.database.get_transaction_block(&digest)?;
         let effects = self.database.get_executed_effects(&digest)?;
         match (transaction, effects) {
             (Some(transaction), Some(effects)) => Ok((transaction, effects)),
@@ -2234,7 +2249,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<VerifiedTransaction, anyhow::Error> {
-        let transaction = self.database.get_transaction(&digest)?;
+        let transaction = self.database.get_transaction_block(&digest)?;
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
@@ -2250,7 +2265,7 @@ impl AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
-        Ok(self.database.multi_get_transactions(digests)?)
+        Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
     pub async fn multi_get_executed_effects(
@@ -2309,6 +2324,23 @@ impl AuthorityState {
         limit: Option<usize>,
         reverse: bool,
     ) -> Result<Vec<TransactionDigest>, anyhow::Error> {
+        if let Some(TransactionFilter::Checkpoint(sequence_number)) = filter {
+            let checkpoint_contents =
+                self.get_checkpoint_contents_by_sequence_number(sequence_number)?;
+            let iter = checkpoint_contents.iter().map(|c| c.transaction);
+            if reverse {
+                let iter = iter
+                    .rev()
+                    .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
+                    .skip(usize::from(cursor.is_some()));
+                return Ok(iter.take(limit.unwrap_or(usize::max_value())).collect());
+            } else {
+                let iter = iter
+                    .skip_while(|d| cursor.is_some() && Some(*d) != cursor)
+                    .skip(usize::from(cursor.is_some()));
+                return Ok(iter.take(limit.unwrap_or(usize::max_value())).collect());
+            }
+        }
         self.get_indexes()?
             .get_transactions(filter, cursor, limit, reverse)
     }
@@ -2550,7 +2582,7 @@ impl AuthorityState {
         let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
             return Ok(None);
         };
-        let Some(transaction) = self.database.get_transaction(tx_digest)? else {
+        let Some(transaction) = self.database.get_transaction_block(tx_digest)? else {
             return Ok(None);
         };
 
@@ -2572,7 +2604,7 @@ impl AuthorityState {
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
-            if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
+            if let Some(transaction) = self.database.get_transaction_block(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
                 let events = if let Some(digest) = effects.events_digest() {
                     self.get_transaction_events(digest)?
@@ -2755,7 +2787,7 @@ impl AuthorityState {
             )
             .await
             .tap_ok(|_| {
-                debug!(?tx_digest, "commit_certificate finished");
+                debug!("commit_certificate finished");
             })?;
 
         // todo - ideally move this metric in NotifyRead once we have metrics in AuthorityStore
@@ -3133,7 +3165,7 @@ impl AuthorityState {
 
                 let total_votes = stake_aggregator.total_votes();
                 let quorum_threshold = committee.quorum_threshold();
-                let f = committee.total_votes - committee.quorum_threshold();
+                let f = committee.total_votes() - committee.quorum_threshold();
 
                 // multiple by buffer_stake_bps / 10000, rounded up.
                 let buffer_stake = (f * buffer_stake_bps + 9999) / 10000;
@@ -3175,14 +3207,7 @@ impl AuthorityState {
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
         let next_epoch = epoch_store.epoch() + 1;
 
-        let buffer_stake_bps = epoch_store
-            .get_override_protocol_upgrade_buffer_stake()
-            .tap_some(|b| warn!("using overrided buffer stake value of {}", b))
-            .unwrap_or_else(|| {
-                epoch_store
-                    .protocol_config()
-                    .buffer_stake_for_protocol_upgrade_bps()
-            });
+        let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
             Self::choose_protocol_version_and_system_packages(
@@ -3219,6 +3244,7 @@ impl AuthorityState {
             gas_cost_summary.storage_cost,
             gas_cost_summary.computation_cost,
             gas_cost_summary.storage_rebate,
+            gas_cost_summary.non_refundable_storage_fee,
             epoch_start_timestamp_ms,
             next_epoch_system_package_bytes,
         );
@@ -3237,7 +3263,8 @@ impl AuthorityState {
             ?next_epoch_system_packages,
             computation_cost=?gas_cost_summary.computation_cost,
             storage_cost=?gas_cost_summary.storage_cost,
-            storage_rebase=?gas_cost_summary.storage_rebate,
+            storage_rebate=?gas_cost_summary.storage_rebate,
+            non_refundable_storage_fee=?gas_cost_summary.non_refundable_storage_fee,
             ?tx_digest,
             "Creating advance epoch transaction"
         );
@@ -3279,7 +3306,7 @@ impl AuthorityState {
                 err
             })?;
 
-        debug!(
+        info!(
             "Effects summary of the change epoch transaction: {:?}",
             effects.summary_for_debug()
         );
@@ -3309,7 +3336,7 @@ impl AuthorityState {
             // lock is dropped here
         }
         let pending_certificates = epoch_store.pending_consensus_certificates();
-        debug!(
+        info!(
             "Reverting {} locally executed transactions that was not included in the epoch",
             pending_certificates.len()
         );
@@ -3318,13 +3345,13 @@ impl AuthorityState {
                 .database
                 .is_transaction_executed_in_checkpoint(&digest)?
             {
-                debug!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
+                info!("Not reverting pending consensus transaction {:?} - it was included in checkpoint", digest);
                 continue;
             }
-            debug!("Reverting {:?} at the end of epoch", digest);
+            info!("Reverting {:?} at the end of epoch", digest);
             self.database.revert_state_update(&digest).await?;
         }
-        debug!("All uncommitted local transactions reverted");
+        info!("All uncommitted local transactions reverted");
         Ok(())
     }
 

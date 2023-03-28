@@ -19,7 +19,7 @@ CREATE TABLE transactions (
     checkpoint_sequence_number  BIGINT       NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,
     transaction_kind            TEXT         NOT NULL,
-    command_count               BIGINT       NOT NULL,
+    transaction_count               BIGINT       NOT NULL,
     -- object related
     created                     TEXT[]       NOT NULL,
     mutated                     TEXT[]       NOT NULL,
@@ -38,6 +38,7 @@ CREATE TABLE transactions (
     computation_cost            BIGINT       NOT NULL,
     storage_cost                BIGINT       NOT NULL,
     storage_rebate              BIGINT       NOT NULL,
+    non_refundable_storage_fee  BIGINT       NOT NULL,
     -- gas price from transaction data,
     -- not the reference gas price
     gas_price                   BIGINT       NOT NULL,

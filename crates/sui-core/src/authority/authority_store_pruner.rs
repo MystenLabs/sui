@@ -115,9 +115,9 @@ impl AuthorityStorePruner {
             DeletionMethod::PointDelete
         };
         let mut checkpoint_number = perpetual_db.get_highest_pruned_checkpoint()?;
-        let current_epoch = checkpoint_store
+        let (highest_executed_checkpoint, current_epoch) = checkpoint_store
             .get_highest_executed_checkpoint()?
-            .map(|c| c.epoch())
+            .map(|c| (c.sequence_number, c.epoch()))
             .unwrap_or_default();
         let mut checkpoints_in_batch = 0;
         let mut batch_effects = vec![];
@@ -135,8 +135,12 @@ impl AuthorityStorePruner {
 
         #[allow(clippy::explicit_counter_loop)]
         for (_, checkpoint) in iter {
-            // checkpoint's epoch is too new. Skipping for now
-            if current_epoch < checkpoint.epoch() + config.num_epochs_to_retain {
+            // Skipping because  checkpoint's epoch or checkpoint number is too new.
+            // We have to respect the highest executed checkpoint watermark because there might be
+            // parts of the system that still require access to old object versions (i.e. state accumulator)
+            if (current_epoch < checkpoint.epoch() + config.num_epochs_to_retain)
+                || (checkpoint_number > highest_executed_checkpoint)
+            {
                 break;
             }
             checkpoint_number = *checkpoint.sequence_number();

@@ -25,8 +25,8 @@ use test_utils::{
 use tokio::sync::watch;
 use tonic::transport::Channel;
 use types::{
-    Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
-    CollectionRetrievalResult, Empty, GetCollectionsRequest, PreSubscribedBroadcastSender,
+    Batch, BatchAPI, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, PreSubscribedBroadcastSender,
     ReadCausalRequest, RemoveCollectionsRequest, RetrievalResult, Transaction, ValidatorClient,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
@@ -48,7 +48,7 @@ async fn test_get_collections() {
     let worker_keypair = author.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
 
     let mut header_digests = Vec::new();
     // Blocks/Collections
@@ -59,11 +59,13 @@ async fn test_get_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), worker_id, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -243,7 +245,7 @@ async fn test_remove_collections() {
     let worker_keypair = author.worker(worker_id).keypair().copy();
 
     // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    let store = NodeStorage::reopen(temp_dir(), None);
     let mut header_digests = Vec::new();
     // Blocks/Collections
     let mut collection_digests = Vec::new();
@@ -269,11 +271,13 @@ async fn test_remove_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = author
-            .header_builder(&committee)
-            .with_payload_batch(batch.clone(), worker_id, 0)
-            .build()
-            .unwrap();
+        let header = Header::V1(
+            author
+                .header_builder(&committee)
+                .with_payload_batch(batch.clone(), worker_id, 0)
+                .build()
+                .unwrap(),
+        );
 
         let certificate = fixture.certificate(&header);
         let digest = certificate.digest();
@@ -470,8 +474,8 @@ async fn test_read_causal_signed_certificates() {
     let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
@@ -698,8 +702,8 @@ async fn test_read_causal_unsigned_certificates() {
     let network_keypair_2 = authority_2.network_keypair().copy();
 
     // Make the data store.
-    let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
+    let primary_store_1 = NodeStorage::reopen(temp_dir(), None);
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir(), None);
 
     let mut collection_digests: Vec<CertificateDigest> = Vec::new();
 
@@ -936,8 +940,8 @@ async fn test_get_collections_with_missing_certificates() {
     };
 
     // AND create separate data stores for the 2 primaries
-    let store_primary_1 = NodeStorage::reopen(temp_dir());
-    let store_primary_2 = NodeStorage::reopen(temp_dir());
+    let store_primary_1 = NodeStorage::reopen(temp_dir(), None);
+    let store_primary_2 = NodeStorage::reopen(temp_dir(), None);
 
     // The certificate_1 will be stored in primary 1
     let (certificate_1, batch_1) = fixture_certificate(
@@ -1139,7 +1143,8 @@ async fn test_get_collections_with_missing_certificates() {
 
                 if let Some(expected_batch) = batches_map.get(&id) {
                     assert_eq!(
-                        result_transactions, *expected_batch.transactions,
+                        result_transactions,
+                        *expected_batch.transactions(),
                         "Batch payload doesn't match"
                     );
                 } else {
@@ -1170,11 +1175,13 @@ async fn fixture_certificate(
     let mut payload = IndexMap::new();
     payload.insert(batch_digest, (worker_id, 0));
 
-    let header = authority
-        .header_builder(committee)
-        .payload(payload)
-        .build()
-        .unwrap();
+    let header = Header::V1(
+        authority
+            .header_builder(committee)
+            .payload(payload)
+            .build()
+            .unwrap(),
+    );
 
     let certificate = fixture.certificate(&header);
 

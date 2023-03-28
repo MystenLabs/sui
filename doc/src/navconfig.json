@@ -6,8 +6,8 @@
 				"link": "doc-updates/sui-migration-guide"
 			},
 			{
-				"label": "Sui Breaking Changes",
-				"link": "doc-updates/sui-breaking-changes"
+				"label": "Sui Doc Updates",
+				"link": "doc-updates"
 			},
 			{
 				"label": "Sui Developer Forums",
@@ -105,6 +105,33 @@
 				]
 			},
 			{
+				"label": "Sui Cryptography",
+				"fileName": "learn/cryptography/index",
+				"title": "Sui Cryptography",
+				"items": [{
+						"label": "Sui Intent Signing",
+						"fileName": "learn/cryptography/"
+					},
+					{
+						"label": "Sui Gas Pricing",
+						"fileName": "learn/tokenomics/gas-pricing"
+					},
+					{
+						"label": "Sui Storage Fund",
+						"fileName": "learn/tokenomics/storage-fund"
+					},
+					{
+						"label": "Proof-of-Stake",
+						"fileName": "learn/tokenomics/proof-of-stake"
+					},
+					{
+						"label": "Tokenomics White Paper",
+						"link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/tokenomics.pdf",
+						"external": true
+					}
+				]
+			},
+			{
 				"label": "Sui Exchange Integration Guide",
 				"fileName": "learn/exchange-integration-guide"
 			}
@@ -114,7 +141,7 @@
 				"fileName": "build/install"
 			},
 			{
-				"label": "Connect to Sui Devnet",
+				"label": "Connect to a Sui Network",
 				"fileName": "build/devnet"
 			},
 			{

@@ -5,14 +5,14 @@ use diesel::prelude::*;
 use diesel::result::Error;
 
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiObjectRef, SuiTransaction, SuiTransactionDataAPI, SuiTransactionEffects,
-    SuiTransactionEffectsAPI,
+    OwnedObjectRef, SuiObjectRef, SuiTransactionBlock, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
 use crate::schema::transactions::transaction_digest;
-use crate::types::SuiTransactionFullResponse;
+use crate::types::SuiTransactionBlockFullResponse;
 use crate::PgPoolConnection;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
@@ -26,7 +26,7 @@ pub struct Transaction {
     pub checkpoint_sequence_number: i64,
     pub timestamp_ms: i64,
     pub transaction_kind: String,
-    pub command_count: i64,
+    pub transaction_count: i64,
     pub created: Vec<Option<String>>,
     pub mutated: Vec<Option<String>>,
     pub deleted: Vec<Option<String>>,
@@ -41,6 +41,7 @@ pub struct Transaction {
     pub computation_cost: i64,
     pub storage_cost: i64,
     pub storage_rebate: i64,
+    pub non_refundable_storage_fee: i64,
     pub gas_price: i64,
     // BCS bytes of SenderSignedData
     pub raw_transaction: Vec<u8>,
@@ -51,43 +52,43 @@ pub struct Transaction {
 
 pub fn commit_transactions(
     pg_pool_conn: &mut PgPoolConnection,
-    tx_resps: Vec<SuiTransactionFullResponse>,
+    tx_resps: Vec<SuiTransactionBlockFullResponse>,
 ) -> Result<usize, IndexerError> {
-    let new_txns: Vec<Transaction> = tx_resps
+    let new_txs: Vec<Transaction> = tx_resps
         .into_iter()
         .map(|tx| tx.try_into())
         .collect::<Result<Vec<_>, _>>()?;
 
-    let txn_commit_result: Result<usize, Error> = pg_pool_conn
+    let tx_commit_result: Result<usize, Error> = pg_pool_conn
         .build_transaction()
         .read_write()
         .run::<_, Error, _>(|conn| {
-        diesel::insert_into(transactions::table)
-            .values(&new_txns)
-            .on_conflict(transaction_digest)
-            .do_nothing()
-            .execute(conn)
-    });
+            diesel::insert_into(transactions::table)
+                .values(&new_txs)
+                .on_conflict(transaction_digest)
+                .do_nothing()
+                .execute(conn)
+        });
 
-    txn_commit_result.map_err(|e| {
+    tx_commit_result.map_err(|e| {
         IndexerError::PostgresWriteError(format!(
             "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
-            new_txns, e
+            new_txs, e
         ))
     })
 }
 
-impl TryFrom<SuiTransactionFullResponse> for Transaction {
+impl TryFrom<SuiTransactionBlockFullResponse> for Transaction {
     type Error = IndexerError;
 
-    fn try_from(tx_resp: SuiTransactionFullResponse) -> Result<Self, Self::Error> {
+    fn try_from(tx_resp: SuiTransactionBlockFullResponse) -> Result<Self, Self::Error> {
         let tx_json = serde_json::to_string(&tx_resp.transaction).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction {:?} to JSON with error: {:?}",
                 tx_resp.transaction, err
             ))
         })?;
-        let txn_effect_json = serde_json::to_string(&tx_resp.effects).map_err(|err| {
+        let tx_effect_json = serde_json::to_string(&tx_resp.effects).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
                 "Failed converting transaction effects {:?} to JSON with error: {:?}",
                 tx_resp.effects.clone(),
@@ -97,14 +98,14 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
 
         let effects = tx_resp.effects;
         let transaction_data = tx_resp.transaction.data;
-        // canonical txn digest string is Base58 encoded
+        // canonical tx digest string is Base58 encoded
         let tx_digest = effects.transaction_digest().base58_encode();
         let gas_budget = transaction_data.gas_data().budget;
         let gas_price = transaction_data.gas_data().price;
         let sender = transaction_data.sender().to_string();
         let checkpoint_seq_number = tx_resp.checkpoint as i64;
-        let tx_kind = transaction_data.transaction().to_string();
-        let command_count = transaction_data.transaction().command_count() as i64;
+        let tx_kind = transaction_data.transaction().name().to_string();
+        let transaction_count = transaction_data.transaction().transaction_count() as i64;
 
         let recipients: Vec<String> = effects
             .mutated()
@@ -157,9 +158,10 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
         let gas_object_digest = gas_object_ref.digest.base58_encode();
 
         let gas_summary = effects.gas_cost_summary();
-        let computation_cost = gas_summary.computation_cost;
-        let storage_cost = gas_summary.storage_cost;
-        let storage_rebate = gas_summary.storage_rebate;
+        let computation_cost = <u64>::from(gas_summary.computation_cost);
+        let storage_cost = <u64>::from(gas_summary.storage_cost);
+        let storage_rebate = <u64>::from(gas_summary.storage_rebate);
+        let non_refundable_storage_fee = <u64>::from(gas_summary.non_refundable_storage_fee);
 
         Ok(Transaction {
             id: None,
@@ -168,7 +170,7 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             recipients: vec_string_to_vec_opt_string(recipients),
             checkpoint_sequence_number: checkpoint_seq_number,
             transaction_kind: tx_kind,
-            command_count,
+            transaction_count,
             timestamp_ms: tx_resp.timestamp_ms as i64,
             created: vec_string_to_vec_opt_string(created),
             mutated: vec_string_to_vec_opt_string(mutated),
@@ -187,33 +189,34 @@ impl TryFrom<SuiTransactionFullResponse> for Transaction {
             computation_cost: computation_cost as i64,
             storage_cost: storage_cost as i64,
             storage_rebate: storage_rebate as i64,
+            non_refundable_storage_fee: non_refundable_storage_fee as i64,
             raw_transaction: tx_resp.raw_transaction,
             transaction_content: tx_json,
-            transaction_effects_content: txn_effect_json,
+            transaction_effects_content: tx_effect_json,
             confirmed_local_execution: tx_resp.confirmed_local_execution,
         })
     }
 }
 
-impl TryInto<SuiTransactionFullResponse> for Transaction {
+impl TryInto<SuiTransactionBlockFullResponse> for Transaction {
     type Error = IndexerError;
 
-    fn try_into(self) -> Result<SuiTransactionFullResponse, Self::Error> {
-        let transaction: SuiTransaction =
+    fn try_into(self) -> Result<SuiTransactionBlockFullResponse, Self::Error> {
+        let transaction: SuiTransactionBlock =
             serde_json::from_str(&self.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
-                    "Failed converting transaction JSON {:?} to SuiTransaction with error: {:?}",
+                    "Failed converting transaction JSON {:?} to SuiTransactionBlock with error: {:?}",
                     self.transaction_content, err
                 ))
             })?;
-        let effects: SuiTransactionEffects = serde_json::from_str(&self.transaction_effects_content).map_err(|err| {
+        let effects: SuiTransactionBlockEffects = serde_json::from_str(&self.transaction_effects_content).map_err(|err| {
             IndexerError::InsertableParsingError(format!(
-                "Failed converting transaction effect JSON {:?} to SuiTransactionEffects with error: {:?}",
+                "Failed converting transaction effect JSON {:?} to SuiTransactionBlockEffects with error: {:?}",
                 self.transaction_effects_content, err
             ))
         })?;
 
-        Ok(SuiTransactionFullResponse {
+        Ok(SuiTransactionBlockFullResponse {
             digest: self.transaction_digest.parse().map_err(|e| {
                 IndexerError::InsertableParsingError(format!(
                     "Failed to parse transaction digest {} : {:?}",

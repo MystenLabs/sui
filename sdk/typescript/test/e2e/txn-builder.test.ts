@@ -9,9 +9,9 @@ import {
   getTransactionDigest,
   ObjectId,
   RawSigner,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   SUI_SYSTEM_STATE_OBJECT_ID,
-  Transaction,
+  TransactionBlock,
   SuiObjectData,
   getCreatedObjects,
   SUI_CLOCK_OBJECT_ID,
@@ -27,7 +27,7 @@ import {
 describe('Transaction Builders', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
-  let publishTxn: SuiTransactionResponse;
+  let publishTxn: SuiTransactionBlockResponse;
   let sharedObjectId: ObjectId;
 
   beforeAll(async () => {
@@ -45,7 +45,7 @@ describe('Transaction Builders', () => {
 
   it('SplitCoins + TransferObjects', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const coin_0 = coins[0].data as SuiObjectData;
 
     const coin = tx.splitCoins(tx.object(coin_0.objectId), [
@@ -59,22 +59,19 @@ describe('Transaction Builders', () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
     const coin_0 = coins[0].data as SuiObjectData;
     const coin_1 = coins[1].data as SuiObjectData;
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.mergeCoins(tx.object(coin_0.objectId), [tx.object(coin_1.objectId)]);
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('MoveCall', async () => {
-    const tx = new Transaction();
+    const coins = await toolbox.getGasObjectsOwnedByAddress();
+    const coin_0 = coins[0].data as SuiObjectData;
+    const tx = new TransactionBlock();
     tx.moveCall({
-      target: '0x2::devnet_nft::mint',
-      arguments: [
-        tx.pure('Example NFT'),
-        tx.pure('An NFT created by the wallet Command Line Tool'),
-        tx.pure(
-          'ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty',
-        ),
-      ],
+      target: '0x2::pay::split',
+      typeArguments: ['0x2::sui::SUI'],
+      arguments: [tx.object(coin_0.objectId), tx.pure(DEFAULT_GAS_BUDGET * 2)],
     });
     await validateTransaction(toolbox.signer, tx);
   });
@@ -86,7 +83,7 @@ describe('Transaction Builders', () => {
     const [{ suiAddress: validatorAddress }] =
       await toolbox.getActiveValidators();
 
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: '0x3::sui_system::request_add_stake',
       arguments: [
@@ -100,21 +97,21 @@ describe('Transaction Builders', () => {
   });
 
   it('SplitCoins from gas object + TransferObjects', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const coin = tx.splitCoins(tx.gas, [tx.pure(1)]);
     tx.transferObjects([coin], tx.pure(DEFAULT_RECIPIENT));
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObjects gas object', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
     await validateTransaction(toolbox.signer, tx);
   });
 
   it('TransferObject', async () => {
     const coins = await toolbox.getGasObjectsOwnedByAddress();
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const coin_0 = coins[2].data as SuiObjectData;
 
     tx.transferObjects(
@@ -125,7 +122,7 @@ describe('Transaction Builders', () => {
   });
 
   it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::serializer_tests::value`,
       arguments: [tx.object(sharedObjectId)],
@@ -138,7 +135,7 @@ describe('Transaction Builders', () => {
   });
 
   it('immutable clock', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::serializer_tests::use_clock`,
       arguments: [tx.object(SUI_CLOCK_OBJECT_ID)],
@@ -147,10 +144,10 @@ describe('Transaction Builders', () => {
   });
 });
 
-async function validateTransaction(signer: RawSigner, tx: Transaction) {
-  const localDigest = await signer.getTransactionDigest(tx);
-  const result = await signer.signAndExecuteTransaction({
-    transaction: tx,
+async function validateTransaction(signer: RawSigner, tx: TransactionBlock) {
+  const localDigest = await signer.getTransactionBlockDigest(tx);
+  const result = await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
     options: {
       showEffects: true,
     },

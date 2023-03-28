@@ -51,7 +51,8 @@ macro_rules! exit_main {
         match $result {
             Ok(_) => (),
             Err(err) => {
-                println!("{}", err.to_string().bold().red());
+                let err = format!("{:?}", err);
+                println!("{}", err.bold().red());
                 std::process::exit(1);
             }
         }
@@ -625,6 +626,10 @@ impl SuiError {
                 }
             }
 
+            // Overload errors
+            SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
+            SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
+
             // Non retryable error
             SuiError::ExecutionError(..) => (false, true),
             SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
@@ -632,9 +637,6 @@ impl SuiError {
                 (false, true)
             }
 
-            // Overload errors
-            SuiError::TooManyTransactionsPendingExecution { .. } => (false, true),
-            SuiError::TooManyTransactionsPendingOnObject { .. } => (false, true),
             _ => (false, false),
         }
     }
@@ -650,6 +652,14 @@ impl SuiError {
             }
             _ => false,
         }
+    }
+
+    pub fn is_overload(&self) -> bool {
+        matches!(
+            self,
+            SuiError::TooManyTransactionsPendingExecution { .. }
+                | SuiError::TooManyTransactionsPendingOnObject { .. }
+        )
     }
 }
 

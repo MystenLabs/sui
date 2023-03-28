@@ -36,10 +36,6 @@ export type DataType = {
     display?: Record<string, string>;
 };
 
-export function instanceOfDataType(object: any): object is DataType {
-    return object && ['id', 'version', 'objType'].every((x) => x in object);
-}
-
 /**
  * Translate the SDK response to the existing data format
  * TODO: We should redesign the rendering logic and data model

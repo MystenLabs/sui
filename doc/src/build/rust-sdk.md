@@ -94,11 +94,11 @@ async fn main() -> Result<(), anyhow::Error> {
     // Sign transaction
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let signature = keystore.sign_secure(&my_address, &transfer_tx, Intent::default())?;
-    
+
     // Execute the transaction
     let transaction_response = sui
         .quorum_driver()
-        .execute_transaction(Transaction::from_data(transfer_tx, Intent::default(), signature))
+        .execute_transaction_block(Transaction::from_data(transfer_tx, Intent::default(), signature))
 
     println!("{:?}", transaction_response);
 
@@ -128,4 +128,3 @@ async fn main() -> Result<(), anyhow::Error> {
 ```
 
 **Note:** The Event subscription service requires a running Sui Full node. To learn more, see [Full node setup](fullnode.md#fullnode-setup).
-

@@ -21,6 +21,7 @@ import BottomMenuLayout, {
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
 import { trackEvent } from '_src/shared/plausible';
+import { getSignerOperationErrorMessage } from '_src/ui/app/helpers/errorMessages';
 import { useSigner } from '_src/ui/app/hooks';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 
@@ -62,8 +63,8 @@ function TransferCoinPage() {
                     props: { coinType: coinType! },
                 });
 
-                return signer.signAndExecuteTransaction({
-                    transaction,
+                return signer.signAndExecuteTransactionBlock({
+                    transactionBlock: transaction,
                     options: {
                         showInput: true,
                         showEffects: true,
@@ -89,7 +90,7 @@ function TransferCoinPage() {
             toast.error(
                 <div className="max-w-xs overflow-hidden flex flex-col">
                     <small className="text-ellipsis overflow-hidden">
-                        {(error as Error).message || 'Something went wrong'}
+                        {getSignerOperationErrorMessage(error)}
                     </small>
                 </div>
             );
