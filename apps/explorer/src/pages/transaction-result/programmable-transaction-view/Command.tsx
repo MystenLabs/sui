@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    type MoveCallSuiCommand,
+    type MoveCallSuiTransaction,
     type SuiArgument,
     type SuiMovePackage,
 } from '@mysten/sui.js';
@@ -55,7 +55,7 @@ function ArrayArgument({
     );
 }
 
-function MoveCall({ type, data }: CommandProps<MoveCallSuiCommand>) {
+function MoveCall({ type, data }: CommandProps<MoveCallSuiTransaction>) {
     const {
         module,
         package: movePackage,
@@ -81,10 +81,10 @@ export function Command({
     type,
     data,
 }: CommandProps<
-    (SuiArgument | SuiArgument[])[] | MoveCallSuiCommand | SuiMovePackage
+    (SuiArgument | SuiArgument[])[] | MoveCallSuiTransaction | SuiMovePackage
 >) {
     if (type === 'MoveCall') {
-        return <MoveCall type={type} data={data as MoveCallSuiCommand} />;
+        return <MoveCall type={type} data={data as MoveCallSuiTransaction} />;
     }
 
     return (
