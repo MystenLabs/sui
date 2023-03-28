@@ -70,7 +70,11 @@ impl Display for BigInt {
 pub type SuiEpochId = BigInt;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
-#[serde(rename_all = "camelCase", rename = "TransactionResponseQuery", default)]
+#[serde(
+    rename_all = "camelCase",
+    rename = "TransactionBlockResponseQuery",
+    default
+)]
 pub struct SuiTransactionBlockResponseQuery {
     /// If None, no filter will be applied
     pub filter: Option<TransactionFilter>,
@@ -99,7 +103,7 @@ pub type TransactionBlocksPage = Page<SuiTransactionBlockResponse, TransactionDi
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Default)]
 #[serde(
     rename_all = "camelCase",
-    rename = "TransactionResponseOptions",
+    rename = "TransactionBlockResponseOptions",
     default
 )]
 pub struct SuiTransactionBlockResponseOptions {
@@ -196,7 +200,7 @@ impl SuiTransactionBlockResponseOptions {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default)]
-#[serde(rename_all = "camelCase", rename = "TransactionResponse")]
+#[serde(rename_all = "camelCase", rename = "TransactionBlockResponse")]
 pub struct SuiTransactionBlockResponse {
     pub digest: TransactionDigest,
     /// Transaction input data
@@ -253,7 +257,7 @@ impl PartialEq for SuiTransactionBlockResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename = "TransactionKind", tag = "kind")]
+#[serde(rename = "TransactionBlockKind", tag = "kind")]
 pub enum SuiTransactionBlockKind {
     /// A system transaction that will update epoch information on-chain.
     ChangeEpoch(SuiChangeEpoch),
@@ -355,7 +359,7 @@ pub struct SuiChangeEpoch {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[enum_dispatch(SuiTransactionBlockEffectsAPI)]
 #[serde(
-    rename = "TransactionEffects",
+    rename = "TransactionBlockEffects",
     rename_all = "camelCase",
     tag = "messageVersion"
 )]
@@ -390,7 +394,7 @@ pub trait SuiTransactionBlockEffectsAPI {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(
-    rename = "TransactionEffectsModifiedAtVersions",
+    rename = "TransactionBlockEffectsModifiedAtVersions",
     rename_all = "camelCase"
 )]
 pub struct SuiTransactionBlockEffectsModifiedAtVersions {
@@ -400,7 +404,7 @@ pub struct SuiTransactionBlockEffectsModifiedAtVersions {
 
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionEffectsV1", rename_all = "camelCase")]
+#[serde(rename = "TransactionBlockEffectsV1", rename_all = "camelCase")]
 pub struct SuiTransactionBlockEffectsV1 {
     /// The status of the execution
     pub status: SuiExecutionStatus,
@@ -650,7 +654,7 @@ impl Display for SuiTransactionBlockEffects {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct DryRunTransactionResponse {
+pub struct DryRunTransactionBlockResponse {
     pub effects: SuiTransactionBlockEffects,
     pub events: SuiTransactionBlockEvents,
     pub object_changes: Vec<ObjectChange>,
@@ -658,7 +662,7 @@ pub struct DryRunTransactionResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransactionEvents", transparent)]
+#[serde(rename = "TransactionBlockEvents", transparent)]
 pub struct SuiTransactionBlockEvents {
     pub data: Vec<SuiEvent>,
 }
@@ -865,7 +869,7 @@ pub struct SuiGasData {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
 #[enum_dispatch(SuiTransactionBlockDataAPI)]
 #[serde(
-    rename = "TransactionData",
+    rename = "TransactionBlockData",
     rename_all = "camelCase",
     tag = "messageVersion"
 )]
@@ -881,7 +885,7 @@ pub trait SuiTransactionBlockDataAPI {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
-#[serde(rename = "TransactionDataV1", rename_all = "camelCase")]
+#[serde(rename = "TransactionBlockDataV1", rename_all = "camelCase")]
 pub struct SuiTransactionBlockDataV1 {
     pub transaction: SuiTransactionBlockKind,
     pub sender: SuiAddress,
@@ -972,7 +976,7 @@ impl SuiTransactionBlockData {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
-#[serde(rename = "Transaction", rename_all = "camelCase")]
+#[serde(rename = "TransactionBlock", rename_all = "camelCase")]
 pub struct SuiTransactionBlock {
     pub data: SuiTransactionBlockData,
     pub tx_signatures: Vec<GenericSignature>,
@@ -1012,20 +1016,6 @@ pub struct SuiConsensusCommitPrologue {
     pub epoch: u64,
     pub round: u64,
     pub commit_timestamp_ms: u64,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransferObject", rename_all = "camelCase")]
-pub struct SuiTransferObject {
-    pub recipient: SuiAddress,
-    pub object_ref: SuiObjectRef,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename = "TransferSui", rename_all = "camelCase")]
-pub struct SuiTransferSui {
-    pub recipient: SuiAddress,
-    pub amount: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]

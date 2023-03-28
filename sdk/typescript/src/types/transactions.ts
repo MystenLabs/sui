@@ -417,13 +417,15 @@ export const PaginatedTransactionResponse = object({
 export type PaginatedTransactionResponse = Infer<
   typeof PaginatedTransactionResponse
 >;
-export const DryRunTransactionResponse = object({
+export const DryRunTransactionBlockResponse = object({
   effects: TransactionEffects,
   events: TransactionEvents,
   objectChanges: array(SuiObjectChange),
   balanceChanges: array(BalanceChange),
 });
-export type DryRunTransactionResponse = Infer<typeof DryRunTransactionResponse>;
+export type DryRunTransactionBlockResponse = Infer<
+  typeof DryRunTransactionBlockResponse
+>;
 
 /* -------------------------------------------------------------------------- */
 /*                              Helper functions                              */

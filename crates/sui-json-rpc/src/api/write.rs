@@ -5,7 +5,7 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransactionBlockResponse,
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 
@@ -60,5 +60,5 @@ pub trait WriteApi {
     async fn dry_run_transaction_block(
         &self,
         tx_bytes: Base64,
-    ) -> RpcResult<DryRunTransactionResponse>;
+    ) -> RpcResult<DryRunTransactionBlockResponse>;
 }

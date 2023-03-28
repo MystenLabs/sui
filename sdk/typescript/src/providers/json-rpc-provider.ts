@@ -38,7 +38,7 @@ import {
   CheckpointDigest,
   Checkpoint,
   CommitteeInfo,
-  DryRunTransactionResponse,
+  DryRunTransactionBlockResponse,
   SuiObjectDataOptions,
   SuiSystemStateSummary,
   SuiTransactionBlockResponseOptions,
@@ -695,7 +695,7 @@ export class JsonRpcProvider {
    */
   async dryRunTransactionBlock(input: {
     transactionBlock: Uint8Array | string;
-  }): Promise<DryRunTransactionResponse> {
+  }): Promise<DryRunTransactionBlockResponse> {
     return await this.client.requestWithType(
       'sui_dryRunTransaction',
       [
@@ -703,7 +703,7 @@ export class JsonRpcProvider {
           ? input.transactionBlock
           : toB64(input.transactionBlock),
       ],
-      DryRunTransactionResponse,
+      DryRunTransactionBlockResponse,
       this.options.skipDataValidation,
     );
   }
