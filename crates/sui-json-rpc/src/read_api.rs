@@ -785,10 +785,10 @@ pub async fn get_move_modules_by_package(
     state: &AuthorityState,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
-    let object_read = state
-        .get_object_read(&package)
-        .await
-        .map_err(|e| anyhow!("{e}"))?;
+    let object_read = state.get_object_read(&package).await.map_err(|e| {
+        error!("Failed to call get_move_modules_by_package for package: {package:?}");
+        anyhow!("{e}")
+    })?;
 
     Ok(match object_read {
         ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
@@ -799,7 +799,10 @@ pub async fn get_move_modules_by_package(
                     p.serialized_module_map().values(),
                     /* max_binary_format_version */ VERSION_MAX,
                 )
-                .map_err(|e| anyhow!("{e}"))
+                .map_err(|e| {
+                    error!("Failed to call get_move_modules_by_package for package: {package:?}");
+                    anyhow!("{e}")
+                })
             }
             _ => Err(anyhow!("Object is not a package with ID {}", package)),
         },
