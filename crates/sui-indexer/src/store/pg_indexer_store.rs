@@ -991,7 +991,7 @@ impl IndexerStore for PgIndexerStore {
 
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
         let metrics = read_only!(&self.cp, |conn| {
-            diesel::sql_query("SELECT * FROM network_metrics;")
+            diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
                 .get_results::<DBMoveCallMetrics>(conn)
         })?;
 
