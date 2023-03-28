@@ -9,7 +9,9 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
-use move_vm_runtime::{move_vm::MoveVM, session::Session};
+use move_vm_runtime::{
+    move_vm::MoveVM, native_extensions::NativeContextExtensions, session::Session,
+};
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
 use sui_protocol_config::ProtocolConfig;
@@ -23,6 +25,7 @@ use sui_types::{
     move_package::MovePackage,
     object::{MoveObject, Object, Owner},
     storage::{ObjectChange, WriteKind},
+    SUI_FRAMEWORK_OBJECT_ID,
 };
 
 use crate::{
@@ -46,8 +49,8 @@ pub struct ExecutionContext<'vm, 'state, 'a, 'b, S: StorageView> {
     pub tx_context: &'a mut TxContext,
     /// The gas status used for metering
     pub gas_status: &'a mut SuiGasStatus<'b>,
-    /// The session used for interacting with Move types and calls
-    pub session: Session<'state, 'vm, LinkageView<'state, S>>,
+    /// The native extensions to create a session for interacting with Move types and calls
+    pub extensions: Option<NativeContextExtensions<'state>>,
     /// Additional transfers not from the Move runtime
     additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
     /// Newly published packages
@@ -92,9 +95,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     ) -> Result<Self, ExecutionError> {
         // we need a new session just for loading types, which is sad
         // TODO remove this
-        let tmp_session = new_session(
+        let tmp_session = new_tmp_session(
             vm,
-            LinkageView::new(state_view),
+            LinkageView::new(state_view, SUI_FRAMEWORK_OBJECT_ID)?,
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -154,10 +157,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             res.map_err(|e| sui_types::error::convert_vm_error(e, vm, &linkage))?;
         assert_invariant!(change_set.accounts().is_empty(), "Change set must be empty");
         assert_invariant!(move_events.is_empty(), "Events must be empty");
-        // make the real session
-        let session = new_session(
-            vm,
-            linkage,
+
+        let extensions = new_native_extensions(
+            linkage.storage(),
             object_owner_map,
             !gas_status.is_unmetered(),
             protocol_config,
@@ -168,7 +170,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             state_view,
             tx_context,
             gas_status,
-            session,
+            extensions: Some(extensions),
             gas,
             inputs,
             results: vec![],
@@ -180,51 +182,40 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     }
 
     /// Create a new ID and update the state
-    pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
+    pub fn fresh_id(
+        &mut self,
+        session: &mut Session<LinkageView<S>>,
+    ) -> Result<ObjectID, ExecutionError> {
         let object_id = self.tx_context.fresh_id();
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = session.get_native_extensions().get_mut();
         object_runtime
             .new_id(object_id)
-            .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
+            .map_err(|e| self.convert_vm_error(session, e.finish(Location::Undefined)))?;
         Ok(object_id)
     }
 
     /// Delete an ID and update the state
-    pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+    pub fn delete_id(
+        &mut self,
+        session: &mut Session<LinkageView<S>>,
+        object_id: ObjectID,
+    ) -> Result<(), ExecutionError> {
+        let object_runtime: &mut ObjectRuntime = session.get_native_extensions().get_mut();
         object_runtime
             .delete_id(object_id)
-            .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
-    }
-
-    pub fn set_link_context(&mut self, package_id: ObjectID) -> Result<(), ExecutionError> {
-        match self.state_view.get_package(&package_id) {
-            Ok(Some(package)) => {
-                self.set_linkage(&package);
-                Ok(())
-            },
-            Ok(None) => invariant_violation!(format!(
-                "Link context not found or not a package: {package_id}",
-            )),
-            Err(err) => invariant_violation!(format!(
-                "Error fetching {package_id} as link context: {err}",
-            )),
-        }
-    }
-
-    pub fn set_linkage(&mut self, package: &MovePackage) {
-        *self.session.get_resolver_mut() = LinkageView::from_package(self.state_view, package);
+            .map_err(|e| self.convert_vm_error(session, e.finish(Location::Undefined)))
     }
 
     /// Takes the user events from the runtime and tags them with the Move module of the function
     /// that was invoked for the command
     pub fn take_user_events(
         &mut self,
+        session: &mut Session<LinkageView<S>>,
         module_id: &ModuleId,
         function: FunctionDefinitionIndex,
         last_offset: CodeOffset,
     ) -> Result<(), ExecutionError> {
-        let object_runtime: &mut ObjectRuntime = self.session.get_native_extensions().get_mut();
+        let object_runtime: &mut ObjectRuntime = session.get_native_extensions().get_mut();
         let events = object_runtime.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.protocol_config.max_num_event_emit();
@@ -232,19 +223,17 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             let err = max_event_error(max_events)
                 .at_code_offset(function, last_offset)
                 .finish(Location::Module(module_id.clone()));
-            return Err(self.convert_vm_error(err));
+            return Err(self.convert_vm_error(session, err));
         }
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let layout = self
-                    .session
-                    .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
+                let layout = session.get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
                 let bytes = value.simple_serialize(&layout).unwrap();
                 Ok((module_id.clone(), tag, bytes))
             })
             .collect::<Result<Vec<_>, VMError>>()
-            .map_err(|e| self.convert_vm_error(e))?;
+            .map_err(|e| self.convert_vm_error(session, e))?;
         self.user_events.extend(new_events);
         Ok(())
     }
@@ -471,7 +460,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             state_view,
             tx_context,
             gas_status,
-            session,
+            extensions,
             additional_transfers,
             new_packages,
             gas,
@@ -569,16 +558,10 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             refund_max_gas_budget(&mut additional_writes, gas_status, gas_id)?;
         }
 
-        let (res, linkage) = session.finish_with_extensions();
-        let (change_set, events, mut native_context_extensions) =
-            res.map_err(|e| convert_vm_error(e, vm, &linkage))?;
-        // Sui Move programs should never touch global state, so resources should be empty
-        assert_invariant!(
-            change_set.resources().next().is_none(),
-            "Change set must be empty"
-        );
-        // Sui Move no longer uses Move's internal event system
-        assert_invariant!(events.is_empty(), "Events must be empty");
+        let Some(mut native_context_extensions) = extensions else {
+            invariant_violation!("Native extensions must be available at the end of transaction execution")
+        };
+
         let object_runtime: ObjectRuntime = native_context_extensions.remove();
         let new_ids = object_runtime.new_ids().clone();
         // tell the object runtime what input objects were taken and which were transferred
@@ -601,9 +584,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         }
         // we need a new session just for deserializing and fetching abilities. Which is sad
         // TODO remove this
-        let tmp_session = new_session(
+        let tmp_session = new_tmp_session(
             vm,
-            LinkageView::new(state_view),
+            LinkageView::new(state_view, SUI_FRAMEWORK_OBJECT_ID)?,
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -705,12 +688,22 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     }
 
     /// Convert a VM Error to an execution one
-    pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-        sui_types::error::convert_vm_error(error, self.vm, self.session.get_resolver())
+    pub fn convert_vm_error(
+        &self,
+        session: &Session<LinkageView<S>>,
+        error: VMError,
+    ) -> ExecutionError {
+        sui_types::error::convert_vm_error(error, self.vm, session.get_resolver())
     }
 
     /// Special case errors for type arguments to Move functions
-    pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+    pub fn convert_type_argument_error(
+        &self,
+        session: &Session<LinkageView<S>>,
+
+        idx: usize,
+        error: VMError,
+    ) -> ExecutionError {
         use move_core_types::vm_status::StatusCode;
         use sui_types::messages::TypeArgumentError;
         match error.major_status() {
@@ -727,7 +720,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
                 kind: TypeArgumentError::ConstraintNotSatisfied,
             }
             .into(),
-            _ => self.convert_vm_error(error),
+            _ => self.convert_vm_error(&session, error),
         }
     }
 
@@ -792,9 +785,48 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         }
         Ok((metadata, &mut result_value.value))
     }
+
+    /// Create a session with either the default context (Sui framework) if both args are None, or
+    /// for a package with a given id if pkg is None, or with the info already available in
+    /// MovePackage.
+    pub fn create_session(
+        &mut self,
+        pkg_id: Option<ObjectID>,
+        package: Option<&MovePackage>,
+    ) -> Result<Session<'state, 'vm, LinkageView<'state, S>>, ExecutionError> {
+        let linkage = if let Some(pkg) = package {
+            LinkageView::from_package(self.state_view, &pkg)
+        } else if let Some(id) = pkg_id {
+            LinkageView::new(self.state_view, id)?
+        } else {
+            LinkageView::new(self.state_view, SUI_FRAMEWORK_OBJECT_ID)?
+        };
+        let Some(extensions) = self.extensions.take() else {
+            invariant_violation!("Attempt to create a session within a session that already exists");
+        };
+        Ok(self.vm.new_session_with_extensions(linkage, extensions))
+    }
+
+    pub fn finish_session(
+        &mut self,
+        session: Session<'state, 'vm, LinkageView<'state, S>>,
+    ) -> Result<(), ExecutionError> {
+        let (res, linkage) = session.finish_with_extensions();
+        let (change_set, events, native_context_extensions) =
+            res.map_err(|e| sui_types::error::convert_vm_error(e, self.vm, &linkage))?;
+        // Sui Move programs should never touch global state, so resources should be empty
+        assert_invariant!(
+            change_set.resources().next().is_none(),
+            "Change set must be empty"
+        );
+        // Sui Move no longer uses Move's internal event system
+        assert_invariant!(events.is_empty(), "Events must be empty");
+        self.extensions.replace(native_context_extensions);
+        Ok(())
+    }
 }
 
-fn new_session<'state, 'vm, S: StorageView>(
+fn new_tmp_session<'state, 'vm, S: StorageView>(
     vm: &'vm MoveVM,
     linkage: LinkageView<'state, S>,
     input_objects: BTreeMap<ObjectID, Owner>,

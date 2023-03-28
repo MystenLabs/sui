@@ -32,11 +32,25 @@ pub struct LinkageInfo {
 }
 
 impl<'state, S: StorageView> LinkageView<'state, S> {
-    pub fn new(state_view: &'state S) -> Self {
-        Self {
-            state_view,
-            linkage_info: None,
+    pub fn new(state_view: &'state S, pkg_id: ObjectID) -> Result<Self, ExecutionError> {
+        let packages = state_view
+            .get_packages(&[pkg_id])
+            .map_err(|err| {
+                ExecutionError::invariant_violation(format!(
+                    "Cannot retrieve package {pkg_id} from storage: {err}"
+                ))
+            })?
+            .map_err(|_| {
+                ExecutionError::invariant_violation(format!(
+                    "Object {pkg_id} exists in storage but it's not a package"
+                ))
+            })?;
+        if packages.len() != 1 {
+            return Err(ExecutionError::invariant_violation(format!(
+                "Multiple or zero packages with id {pkg_id} found in storage"
+            )));
         }
+        Ok(Self::from_package(state_view, &packages[0]))
     }
 
     pub fn from_package(state_view: &'state S, package: &MovePackage) -> Self {

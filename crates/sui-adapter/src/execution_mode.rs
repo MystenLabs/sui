@@ -240,12 +240,14 @@ fn value_to_bytes_and_tag<S: StorageView>(
     context: &mut ExecutionContext<S>,
     value: &Value,
 ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+    // TODO: let's see if we are not inside of another session already (will result in invariant
+    // violation if we are)
+    let session = context.create_session(/* pkg_id */ None, /* package */ None)?;
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
-            let tag = context
-                .session
+            let tag = session
                 .get_type_tag(&obj.type_)
-                .map_err(|e| context.convert_vm_error(e))?;
+                .map_err(|e| context.convert_vm_error(&session, e))?;
             let mut bytes = vec![];
             obj.write_bcs_bytes(&mut bytes);
             (tag, bytes)
@@ -255,12 +257,12 @@ fn value_to_bytes_and_tag<S: StorageView>(
             (TypeTag::Vector(Box::new(TypeTag::U8)), bytes.clone())
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            let tag = context
-                .session
+            let tag = session
                 .get_type_tag(ty)
-                .map_err(|e| context.convert_vm_error(e))?;
+                .map_err(|e| context.convert_vm_error(&session, e))?;
             (tag, bytes.clone())
         }
     };
+    context.finish_session(session)?;
     Ok((bytes, type_tag))
 }
