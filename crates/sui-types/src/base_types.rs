@@ -433,6 +433,11 @@ impl SuiAddress {
             .map_err(|_| SuiError::InvalidAddress)
             .map(SuiAddress)
     }
+
+    // Check the length of the Sui Address to see if it is valid.
+    pub fn is_valid_address(self) -> bool {
+        self.0.len() == SUI_ADDRESS_LENGTH
+    }
 }
 
 impl From<ObjectID> for SuiAddress {

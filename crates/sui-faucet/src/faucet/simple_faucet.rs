@@ -158,7 +158,7 @@ impl SimpleFaucet {
     /// sufficient balance).
     async fn prepare_gas_coin(&self, total_amount: u64, uuid: Uuid) -> GasCoinResponse {
         let Some(coin_id) = self.pop_gas_coin(uuid).await else {
-            warn!("Failed getting gas coin, try later!");
+            warn!("Failed getting gas coin: {uuid:?}, try later!");
             return GasCoinResponse::NoGasCoinAvailable;
         };
 

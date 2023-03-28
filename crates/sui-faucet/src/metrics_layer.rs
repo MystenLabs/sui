@@ -7,13 +7,12 @@ use std::{
     task::{Context, Poll},
 };
 
+use crate::metrics::RequestMetrics;
 use futures::Future;
 use http::StatusCode;
 use prometheus::{HistogramTimer, Registry};
 use tower::{load_shed::error::Overloaded, BoxError, Layer, Service, ServiceExt};
 use tracing::{error, info, warn};
-
-use crate::metrics::RequestMetrics;
 
 /// Tower Layer for tracking metrics in Prometheus related to number, success-rate and latency of
 /// requests running through service.

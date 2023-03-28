@@ -20,7 +20,9 @@ use std::{
 use std::{env, path::PathBuf};
 use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
-use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet};
+use sui_faucet::{
+    Faucet, FaucetError, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
+};
 use tower::{limit::RateLimitLayer, ServiceBuilder};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
@@ -154,6 +156,16 @@ async fn request_gas(
     info!(uuid = ?id, "Got new gas request.");
     let result = match payload {
         FaucetRequest::FixedAmountRequest(requests) => {
+            // Assert that the request address is a valid address
+            if !requests.recipient.is_valid_address() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(FaucetResponse::from(FaucetError::InvalidAddress(
+                        requests.recipient.to_string(),
+                    ))),
+                );
+            };
+
             // We spawn a tokio task for this such that connection drop will not interrupt
             // it and impact the reclycing of coins
             spawn_monitored_task!(async move {

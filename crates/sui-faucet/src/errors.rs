@@ -33,6 +33,9 @@ pub enum FaucetError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Invalid Address: {0}")]
+    InvalidAddress(String),
 }
 
 impl FaucetError {
