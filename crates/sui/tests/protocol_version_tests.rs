@@ -650,6 +650,39 @@ mod sim_only_tests {
         }
     }
 
+    #[sim_test]
+    async fn sui_system_state_production_upgrade_test() {
+        // Use this test to test a real sui system state upgrade. To make this test work,
+        // put the new sui system in a new path and point to it in the override.
+        // It's important to also handle the new protocol version in protocol-config/lib.rs.
+        // The MAX_PROTOCOL_VERSION must not be changed yet when testing this.
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+        // TODO: Replace the path with the new framework path when we test it for real.
+        sui_system_injection::set_override(sui_system_modules(
+            "../../../sui-framework/packages/sui-system",
+        ));
+        // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
+        // but the system state object hasn't been upgraded yet.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.protocol_version(), FINISH);
+
+        // The system state object will be upgraded next time we execute advance_epoch transaction
+        // at epoch boundary.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        if let SuiSystemState::V1(_inner) = system_state {
+            // TODO: Check _inner data integrity.
+        } else {
+            unreachable!("Unexpected sui system state version");
+        }
+    }
+
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
         assert_eq!(system_state.protocol_version(), final_version);

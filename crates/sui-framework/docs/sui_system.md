@@ -3,6 +3,42 @@
 
 # Module `0x3::sui_system`
 
+Sui System State Type Upgrade Guide
+<code><a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a></code> is a thin wrapper around <code>SuiSystemStateInner</code> that provides a versioned interface.
+The <code><a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a></code> object has a fixed ID 0x5, and the <code>SuiSystemStateInner</code> object is stored as a dynamic field.
+There are a few different ways to upgrade the <code>SuiSystemStateInner</code> type:
+
+The simplest and one that doesn't involve a real upgrade is to just add dynamic fields to the <code>extra_fields</code> field
+of <code>SuiSystemStateInner</code> or any of its sub type. This is useful when we are in a rush, or making a small change,
+or still experimenting a new field.
+
+To properly upgrade the <code>SuiSystemStateInner</code> type, we need to ship a new framework that does the following:
+1. Define a new <code>SuiSystemStateInner</code>type (e.g. <code>SuiSystemStateInnerV2</code>).
+2. Define a data migration function that migrates the old <code>SuiSystemStateInner</code> to the new one (i.e. SuiSystemStateInnerV2).
+3. Replace all uses of <code>SuiSystemStateInner</code> with <code>SuiSystemStateInnerV2</code> in both sui_system.move and sui_system_state_inner.move,
+with the exception of the <code><a href="sui_system_state_inner.md#0x3_sui_system_state_inner_create">sui_system_state_inner::create</a></code> function, which should always return the genesis type.
+4. Inside <code>load_inner_maybe_upgrade</code> function, check the current version in the wrapper, and if it's not the latest version,
+call the data migration function to upgrade the inner object. Make sure to also update the version in the wrapper.
+A detailed example can be found in sui/tests/framework_upgrades/mock_sui_systems/shallow_upgrade.
+Along with the Move change, we also need to update the Rust code to support the new type. This includes:
+1. Define a new <code>SuiSystemStateInner</code> struct type that matches the new Move type, and implement the SuiSystemStateTrait.
+2. Update the <code><a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a></code> struct to include the new version as a new enum variant.
+3. Update the <code>get_sui_system_state</code> function to handle the new version.
+To test that the upgrade will be successful, we need to modify <code>sui_system_state_production_upgrade_test</code> test in
+protocol_version_tests and trigger a real upgrade using the new framework. We will need to keep this directory as old version,
+put the new framework in a new directory, and run the test to exercise the upgrade.
+
+To upgrade Validator type, besides everything above, we also need to:
+1. Define a new Validator type (e.g. ValidatorV2).
+2. Define a data migration function that migrates the old Validator to the new one (i.e. ValidatorV2).
+3. Replace all uses of Validator with ValidatorV2 except the genesis creation function.
+4. In validator_wrapper::upgrade_to_latest, check the current version in the wrapper, and if it's not the latest version,
+call the data migration function to upgrade it.
+In Rust, we also need to add a new case in <code>get_validator_from_table</code>.
+Note that it is possible to upgrade SuiSystemStateInner without upgrading Validator, but not the other way around.
+And when we only upgrade SuiSystemStateInner, the version of Validator in the wrapper will not be updated, and hence may become
+inconsistent with the version of SuiSystemStateInner. This is fine as long as we don't use the Validator version to determine
+the SuiSystemStateInner version, or vice versa.
 
 
 -  [Resource `SuiSystemState`](#0x3_sui_system_SuiSystemState)
@@ -1344,11 +1380,17 @@ version
 
 
 <pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInner {
-    <b>let</b> version = self.version;
     // TODO: This is <b>where</b> we check the version and perform upgrade <b>if</b> necessary.
+    // <b>if</b> (self.version == 1) {
+    //   <b>let</b> v1 = <a href="_remove">dynamic_field::remove</a>(&<b>mut</b> self.id, self.version);
+    //   <b>let</b> v2 = sui_system_state_inner::v1_to_v2(v1);
+    //   <b>assert</b>!(v2.system_state_version = 2, 0);
+    //   self.version = 2;
+    //   <a href="_add">dynamic_field::add</a>(&<b>mut</b> self.id, self.version, v2);
+    // }
 
-    <b>let</b> inner: &<b>mut</b> SuiSystemStateInner = <a href="_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, version);
-    <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == version, 0);
+    <b>let</b> inner: &<b>mut</b> SuiSystemStateInner = <a href="_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
+    <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, 0);
     inner
 }
 </code></pre>
