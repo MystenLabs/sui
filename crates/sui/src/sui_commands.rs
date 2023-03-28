@@ -385,6 +385,7 @@ async fn genesis(
             keystore.add_key(gas_key)?;
             keystore.save()?;
 
+            //
             let mut x: GenesisConfig = PersistedConfig::read(&path)?;
             x.parameters.chain_start_timestamp_ms = 0;
             let mut y = GenesisConfig::new_for_benchmarks(&benchmark_ips.unwrap());
