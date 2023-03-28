@@ -168,15 +168,12 @@ module sui_system::rewards_distribution_tests {
         advance_epoch_with_reward_amounts(0, 1320, scenario);
         // V1: 440, V2: 660, V3: 660, V4: 880
         assert_validator_total_stake_amounts(validator_addrs(), vector[440 * MIST_PER_SUI, 660 * MIST_PER_SUI, 660 * MIST_PER_SUI, 880 * MIST_PER_SUI], scenario);
-        
+
         // Staker 1 rewards in the recent distribution is 0.9 x (220 / 2) = 99 SUI
         // Validator 1 rewards in the recent distribution is 220 - 99 = 121 SUI
-        
-        // Old exchange rate for validator 2: 1.0.
-        // New exchange rate for validator 2: 660/300
-        // Staker 2 amounts for 0.5 * (660/300 * 100 - 100) + 100 = 160 SUI
-        // Validator 2 amounts for 660 - 160 = 500 SUI
-        // TODO: Investigate the discrepancy
+
+        // Staker 2 amounts for 0.5 * 105 + 105 = 157.5 SUI
+        // Validator 2 amounts for 660 - 157.5 = 502.5 SUI
         assert_validator_non_self_stake_amounts(validator_addrs(), vector[209 * MIST_PER_SUI, 157500000001, 0, 0], scenario);
         assert_validator_self_stake_amounts(validator_addrs(), vector[231 * MIST_PER_SUI, 502499999999, 660 * MIST_PER_SUI, 880 * MIST_PER_SUI], scenario);
 

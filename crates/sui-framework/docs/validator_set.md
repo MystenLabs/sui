@@ -468,6 +468,15 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
+<a name="0x3_validator_set_ENotAPendingValidator"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>: u64 = 12;
+</code></pre>
+
+
+
 <a name="0x3_validator_set_ENotAValidator"></a>
 
 
@@ -495,11 +504,29 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
+<a name="0x3_validator_set_EValidatorAlreadyRemoved"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorAlreadyRemoved">EValidatorAlreadyRemoved</a>: u64 = 11;
+</code></pre>
+
+
+
 <a name="0x3_validator_set_EValidatorNotCandidate"></a>
 
 
 
 <pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x3_validator_set_EValidatorSetEmpty"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EValidatorSetEmpty">EValidatorSetEmpty</a>: u64 = 13;
 </code></pre>
 
 
@@ -740,11 +767,11 @@ Only an active validator can request to be removed.
 ) {
     <b>let</b> validator_address = <a href="_sender">tx_context::sender</a>(ctx);
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
+    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>);
     <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <b>assert</b>!(
         !<a href="_contains">vector::contains</a>(&self.pending_removals, &validator_index),
-        0
+        <a href="validator_set.md#0x3_validator_set_EValidatorAlreadyRemoved">EValidatorAlreadyRemoved</a>
     );
     <a href="_push_back">vector::push_back</a>(&<b>mut</b> self.pending_removals, validator_index);
 }
@@ -1846,7 +1873,7 @@ sender has the ability to modify the <code>Validator</code>.
     validator_address: <b>address</b>,
 ): &Validator {
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator">find_validator</a>(&self.active_validators, validator_address);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
+    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAValidator">ENotAValidator</a>);
     <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="_borrow">vector::borrow</a>(&self.active_validators, validator_index)
 }
@@ -1876,7 +1903,7 @@ sender has the ability to modify the <code>Validator</code>.
     validator_address: <b>address</b>,
 ): &Validator {
     <b>let</b> validator_index_opt = <a href="validator_set.md#0x3_validator_set_find_validator_from_table_vec">find_validator_from_table_vec</a>(&self.pending_active_validators, validator_address);
-    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), 0);
+    <b>assert</b>!(<a href="_is_some">option::is_some</a>(&validator_index_opt), <a href="validator_set.md#0x3_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>);
     <b>let</b> validator_index = <a href="_extract">option::extract</a>(&<b>mut</b> validator_index_opt);
     <a href="_borrow">table_vec::borrow</a>(&self.pending_active_validators, validator_index)
 }
@@ -2508,7 +2535,7 @@ The staking rewards are shared with the stakers while the storage fund ones are 
     ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> length = <a href="_length">vector::length</a>(validators);
-    <b>assert</b>!(length &gt; 0, 0);
+    <b>assert</b>!(length &gt; 0, <a href="validator_set.md#0x3_validator_set_EValidatorSetEmpty">EValidatorSetEmpty</a>);
     <b>let</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="_borrow_mut">vector::borrow_mut</a>(validators, i);

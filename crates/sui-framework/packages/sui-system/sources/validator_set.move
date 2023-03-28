@@ -122,6 +122,10 @@ module sui_system::validator_set {
     const ENotValidatorCandidate: u64 = 8;
     const ENotActiveOrPendingValidator: u64 = 9;
     const EStakingBelowThreshold: u64 = 10;
+    const EValidatorAlreadyRemoved: u64 = 11;
+    const ENotAPendingValidator: u64 = 12;
+    const EValidatorSetEmpty: u64 = 13;
+
     const EInvalidCap: u64 = 101;
 
 
@@ -251,11 +255,11 @@ module sui_system::validator_set {
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         assert!(
             !vector::contains(&self.pending_removals, &validator_index),
-            0
+            EValidatorAlreadyRemoved
         );
         vector::push_back(&mut self.pending_removals, validator_index);
     }
@@ -750,7 +754,7 @@ module sui_system::validator_set {
         validator_address: address,
     ): &Validator {
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         vector::borrow(&self.active_validators, validator_index)
     }
@@ -760,7 +764,7 @@ module sui_system::validator_set {
         validator_address: address,
     ): &Validator {
         let validator_index_opt = find_validator_from_table_vec(&self.pending_active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAPendingValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         table_vec::borrow(&self.pending_active_validators, validator_index)
     }
@@ -1121,7 +1125,7 @@ module sui_system::validator_set {
         ctx: &mut TxContext
     ) {
         let length = vector::length(validators);
-        assert!(length > 0, 0);
+        assert!(length > 0, EValidatorSetEmpty);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);

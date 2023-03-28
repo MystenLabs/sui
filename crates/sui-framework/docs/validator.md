@@ -465,6 +465,16 @@ Event emitted when a new unstake request is received.
 ## Constants
 
 
+<a name="0x3_validator_ECalledDuringNonGenesis"></a>
+
+Function called during non-genesis times.
+
+
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_ECalledDuringNonGenesis">ECalledDuringNonGenesis</a>: u64 = 12;
+</code></pre>
+
+
+
 <a name="0x3_validator_ECommissionRateTooHigh"></a>
 
 Commission rate set by the validator is higher than the threshold
@@ -491,6 +501,16 @@ Invalid proof_of_possession field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="validator.md#0x3_validator_EInvalidProofOfPossession">EInvalidProofOfPossession</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="0x3_validator_EInvalidStakeAmount"></a>
+
+Stake amount is invalid or wrong.
+
+
+<pre><code><b>const</b> <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>: u64 = 11;
 </code></pre>
 
 
@@ -853,7 +873,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> stake_amount = <a href="_value">balance::value</a>(&stake);
-    <b>assert</b>!(stake_amount &gt; 0, 0);
+    <b>assert</b>!(stake_amount &gt; 0, <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
     <b>let</b> stake_epoch = <a href="_epoch">tx_context::epoch</a>(ctx) + 1;
     <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
         &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, stake, staker_address, stake_epoch, ctx
@@ -901,9 +921,9 @@ Request to add stake to the validator's staking pool at genesis
     staker_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="_epoch">tx_context::epoch</a>(ctx) == 0, 0);
+    <b>assert</b>!(<a href="_epoch">tx_context::epoch</a>(ctx) == 0, <a href="validator.md#0x3_validator_ECalledDuringNonGenesis">ECalledDuringNonGenesis</a>);
     <b>let</b> stake_amount = <a href="_value">balance::value</a>(&stake);
-    <b>assert</b>!(stake_amount &gt; 0, 0);
+    <b>assert</b>!(stake_amount &gt; 0, <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
 
     <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
         &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>,
@@ -1130,7 +1150,7 @@ Process pending stakes and withdraws, called at the end of the epoch.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
     <a href="staking_pool.md#0x3_staking_pool_process_pending_stakes_and_withdraws">staking_pool::process_pending_stakes_and_withdraws</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, ctx);
-    <b>assert</b>!(<a href="validator.md#0x3_validator_stake_amount">stake_amount</a>(self) == self.next_epoch_stake, 0);
+    <b>assert</b>!(<a href="validator.md#0x3_validator_stake_amount">stake_amount</a>(self) == self.next_epoch_stake, <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
 }
 </code></pre>
 
