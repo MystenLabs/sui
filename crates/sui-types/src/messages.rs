@@ -2210,6 +2210,12 @@ pub struct HandleCertificateResponse {
     pub events: TransactionEvents,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubmitCertificateResponse {
+    /// If transaction is already executed, return same result as handle_certificate
+    pub executed: Option<HandleCertificateResponse>,
+}
+
 #[derive(Clone, Debug)]
 pub struct VerifiedHandleCertificateResponse {
     pub signed_effects: VerifiedSignedTransactionEffects,
