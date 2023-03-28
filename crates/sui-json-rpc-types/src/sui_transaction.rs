@@ -266,8 +266,8 @@ pub enum SuiTransactionBlockKind {
     /// A system transaction marking the start of a series of transactions scheduled as part of a
     /// checkpoint
     ConsensusCommitPrologue(SuiConsensusCommitPrologue),
-    /// A series of commands where the results of one command can be used in future
-    /// commands
+    /// A series of transactions where the results of one transaction can be used in future
+    /// transactions
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
     // .. more transaction types go here
 }
@@ -697,10 +697,10 @@ pub struct DevInspectResults {
     pub effects: SuiTransactionBlockEffects,
     /// Events that likely would be generated if the transaction is actually run.
     pub events: SuiTransactionBlockEvents,
-    /// Execution results (including return values) from executing the transaction commands
+    /// Execution results (including return values) from executing the transactions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<Vec<SuiExecutionResult>>,
-    /// Execution error from executing the transaction commands
+    /// Execution error from executing the transactions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -712,7 +712,7 @@ pub struct SuiExecutionResult {
     /// Non-mut borrowed values are not included
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mutable_reference_outputs: Vec<(/* argument */ SuiArgument, Vec<u8>, SuiTypeTag)>,
-    /// The return values from the command
+    /// The return values from the transaction
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub return_values: Vec<(Vec<u8>, SuiTypeTag)>,
 }
@@ -1040,8 +1040,9 @@ pub enum SuiInputObjectKind {
 pub struct SuiProgrammableTransactionBlock {
     /// Input objects or primitive values
     pub inputs: Vec<SuiCallArg>,
-    /// The commands to be executed sequentially. A failure in any command will
-    /// result in the failure of the entire transaction.
+    #[serde(rename = "transactions")]
+    /// The transactions to be executed sequentially. A failure in any transaction will
+    /// result in the failure of the entire programmable transaction block.
     pub commands: Vec<SuiCommand>,
 }
 
@@ -1136,8 +1137,9 @@ fn get_signature_types(
     }
 }
 
-/// A single command in a programmable transaction.
+/// A single transaction in a programmable transaction block.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename = "SuiTransaction")]
 pub enum SuiCommand {
     /// A call to either an entry or a public Move function
     MoveCall(Box<SuiProgrammableMoveCall>),
@@ -1249,16 +1251,16 @@ impl From<Command> for SuiCommand {
     }
 }
 
-/// An argument to a programmable transaction command
+/// An argument to a transaction in a programmable transaction block
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub enum SuiArgument {
     /// The gas coin. The gas coin can only be used by-ref, except for with
     /// `TransferObjects`, which can use it by-value.
     GasCoin,
     /// One of the input objects or primitive values (from
-    /// `ProgrammableTransaction` inputs)
+    /// `ProgrammableTransactionBlock` inputs)
     Input(u16),
-    /// The result of another command (from `ProgrammableTransaction` commands)
+    /// The result of another transaction (from `ProgrammableTransactionBlock` transactions)
     Result(u16),
     /// Like a `Result` but it accesses a nested result. Currently, the only usage
     /// of this is to access a value from a Move call with multiple return values.
@@ -1287,7 +1289,7 @@ impl From<Argument> for SuiArgument {
     }
 }
 
-/// The command for calling a Move function, either an entry function or a public
+/// The transaction for calling a Move function, either an entry function or a public
 /// function (which cannot return references).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiProgrammableMoveCall {
