@@ -4,7 +4,7 @@
 import {
     type SignedTransaction,
     type SuiAddress,
-    type SuiTransactionResponse,
+    type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import Browser from 'webextension-polyfill';
 
@@ -105,7 +105,7 @@ export class ContentScriptConnection extends Connection {
                     createMessage<ExecuteTransactionResponse>(
                         {
                             type: 'execute-transaction-response',
-                            result: result as SuiTransactionResponse,
+                            result: result as SuiTransactionBlockResponse,
                         },
                         msg.id
                     )

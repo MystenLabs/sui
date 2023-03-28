@@ -3,8 +3,8 @@
 
 import type {
   ExecuteTransactionRequestType,
-  SuiTransactionResponse,
-  SuiTransactionResponseOptions,
+  SuiTransactionBlockResponse,
+  SuiTransactionBlockResponseOptions,
 } from "@mysten/sui.js";
 import type { SuiSignTransactionBlockInput } from "./suiSignTransactionBlock";
 
@@ -38,9 +38,9 @@ export interface SuiSignAndExecuteTransactionBlockInput
    */
   requestType?: ExecuteTransactionRequestType;
   /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
-  options?: SuiTransactionResponseOptions;
+  options?: SuiTransactionBlockResponseOptions;
 }
 
 /** Output of signing and sending transactions. */
 export interface SuiSignAndExecuteTransactionBlockOutput
-  extends SuiTransactionResponse {}
+  extends SuiTransactionBlockResponse {}

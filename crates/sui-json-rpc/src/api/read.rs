@@ -7,7 +7,7 @@ use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{
     BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
@@ -22,8 +22,8 @@ pub trait ReadApi {
         /// the digest of the queried transaction
         digest: TransactionDigest,
         /// options for specifying the content to be returned
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<SuiTransactionResponse>;
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<SuiTransactionBlockResponse>;
 
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
@@ -34,8 +34,8 @@ pub trait ReadApi {
         /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
         /// config options to control which fields to fetch
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<Vec<SuiTransactionResponse>>;
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Vec<SuiTransactionBlockResponse>>;
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]

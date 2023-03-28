@@ -136,8 +136,8 @@ In most cases, building requires your JSON RPC Provider to fully resolve input v
 If you have transaction bytes, you can also convert them back into a `TransactionBlock` class:
 
 ```tsx
-const bytes = getTransactionBytesFromSomewhere();
-const tx = TransactionBlock.from(bytes);
+const bytes = getTransactionBlockBytesFromSomewhere();
+const tx = Transaction.from(bytes);
 ```
 
 ## Building Offline

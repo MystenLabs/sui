@@ -4,7 +4,7 @@
 use crate::{TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponseOptions,
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::SuiClient;
 use sui_types::{base_types::TransactionDigest, messages::ExecuteTransactionRequestType};
@@ -16,7 +16,7 @@ impl FullNodeExecuteTransactionTest {
     async fn verify_transaction(fullnode: &SuiClient, tx_digest: TransactionDigest) {
         fullnode
             .read_api()
-            .get_transaction_with_options(tx_digest, SuiTransactionResponseOptions::new())
+            .get_transaction_with_options(tx_digest, SuiTransactionBlockResponseOptions::new())
             .await
             .unwrap_or_else(|e| {
                 panic!(
@@ -59,7 +59,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             .quorum_driver()
             .execute_transaction_block(
                 txn,
-                SuiTransactionResponseOptions::new().with_effects(),
+                SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForEffectsCert),
             )
             .await?;
@@ -86,7 +86,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             .quorum_driver()
             .execute_transaction_block(
                 txn,
-                SuiTransactionResponseOptions::new().with_effects(),
+                SuiTransactionBlockResponseOptions::new().with_effects(),
                 Some(ExecuteTransactionRequestType::WaitForLocalExecution),
             )
             .await?;

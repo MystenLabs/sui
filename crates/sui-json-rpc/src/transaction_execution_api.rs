@@ -16,8 +16,8 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransaction, SuiTransactionEvents,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    BigInt, DevInspectResults, DryRunTransactionResponse, SuiTransactionBlock,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
@@ -56,9 +56,9 @@ impl TransactionExecutionApi {
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
-        opts: Option<SuiTransactionResponseOptions>,
+        opts: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> Result<SuiTransactionResponse, Error> {
+    ) -> Result<SuiTransactionBlockResponse, Error> {
         let opts = opts.unwrap_or_default();
 
         let request_type = match (request_type, opts.require_local_execution()) {
@@ -80,7 +80,7 @@ impl TransactionExecutionApi {
         }
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let txn = Transaction::from_generic_sig_data(tx_data, Intent::default(), sigs);
-        let tx = SuiTransaction::try_from(txn.data().clone(), epoch_store.module_cache())?;
+        let tx = SuiTransactionBlock::try_from(txn.data().clone(), epoch_store.module_cache())?;
         let raw_transaction = if opts.show_raw_input {
             bcs::to_bytes(txn.data())?
         } else {
@@ -100,14 +100,14 @@ impl TransactionExecutionApi {
         match response {
             ExecuteTransactionResponse::EffectsCert(cert) => {
                 let (effects, transaction_events, is_executed_locally) = *cert;
-                let mut events: Option<SuiTransactionEvents> = None;
+                let mut events: Option<SuiTransactionBlockEvents> = None;
                 if opts.show_events {
                     let module_cache = self
                         .state
                         .load_epoch_store_one_call_per_task()
                         .module_cache()
                         .clone();
-                    events = Some(SuiTransactionEvents::try_from(
+                    events = Some(SuiTransactionBlockEvents::try_from(
                         transaction_events,
                         digest,
                         None,
@@ -136,7 +136,7 @@ impl TransactionExecutionApi {
                     None
                 };
 
-                Ok(SuiTransactionResponse {
+                Ok(SuiTransactionBlockResponse {
                     digest,
                     transaction: opts.show_input.then_some(tx),
                     raw_transaction,
@@ -189,9 +189,9 @@ impl WriteApiServer for TransactionExecutionApi {
         &self,
         tx_bytes: Base64,
         signatures: Vec<Base64>,
-        opts: Option<SuiTransactionResponseOptions>,
+        opts: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
-    ) -> RpcResult<SuiTransactionResponse> {
+    ) -> RpcResult<SuiTransactionBlockResponse> {
         Ok(self
             .execute_transaction_block(tx_bytes, signatures, opts, request_type)
             .await?)

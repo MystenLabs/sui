@@ -33,7 +33,7 @@ use fastcrypto::traits::ToFromBytes;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::{
@@ -142,12 +142,12 @@ pub enum SuiValidatorCommand {
 pub enum SuiValidatorCommandResponse {
     MakeValidatorInfo,
     DisplayMetadata,
-    BecomeCandidate(SuiTransactionResponse),
-    JoinCommittee(SuiTransactionResponse),
-    LeaveCommittee(SuiTransactionResponse),
-    UpdateMetadata(SuiTransactionResponse),
-    UpdateGasPrice(SuiTransactionResponse),
-    ReportValidator(SuiTransactionResponse),
+    BecomeCandidate(SuiTransactionBlockResponse),
+    JoinCommittee(SuiTransactionBlockResponse),
+    LeaveCommittee(SuiTransactionBlockResponse),
+    UpdateMetadata(SuiTransactionBlockResponse),
+    UpdateGasPrice(SuiTransactionBlockResponse),
+    ReportValidator(SuiTransactionBlockResponse),
 }
 
 fn make_key_files(
@@ -439,7 +439,7 @@ async fn update_gas_price(
     operation_cap_id: Option<ObjectID>,
     gas_price: u64,
     gas_budget: u64,
-) -> Result<SuiTransactionResponse> {
+) -> Result<SuiTransactionBlockResponse> {
     let (_status, _summary, cap_obj_ref) = get_cap_object_ref(context, operation_cap_id).await?;
 
     // TODO: Only active/pending validators can set gas price.
@@ -457,7 +457,7 @@ async fn report_validator(
     operation_cap_id: Option<ObjectID>,
     undo_report: bool,
     gas_budget: u64,
-) -> Result<SuiTransactionResponse> {
+) -> Result<SuiTransactionBlockResponse> {
     let (status, summary, cap_obj_ref) = get_cap_object_ref(context, operation_cap_id).await?;
 
     let validator_address = summary.sui_address;
@@ -521,7 +521,7 @@ async fn call_0x5(
     function: &'static str,
     call_args: Vec<CallArg>,
     gas_budget: u64,
-) -> anyhow::Result<SuiTransactionResponse> {
+) -> anyhow::Result<SuiTransactionBlockResponse> {
     let sender = context.active_address()?;
     let sui_client = context.get_client().await?;
     let mut args = vec![SUI_SYSTEM_OBJ_CALL_ARG];
@@ -554,7 +554,7 @@ async fn call_0x5(
         .quorum_driver()
         .execute_transaction_block(
             transaction,
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -590,7 +590,9 @@ impl Display for SuiValidatorCommandResponse {
     }
 }
 
-pub fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
+pub fn write_transaction_response(
+    response: &SuiTransactionBlockResponse,
+) -> Result<String, fmt::Error> {
     // we requested with for full_content, so the following content should be available.
     let success = response.status_ok().unwrap();
     let lines = vec![
@@ -789,7 +791,7 @@ async fn update_metadata(
     context: &mut WalletContext,
     metadata: MetadataUpdate,
     gas_budget: u64,
-) -> anyhow::Result<SuiTransactionResponse> {
+) -> anyhow::Result<SuiTransactionBlockResponse> {
     use ValidatorStatus::*;
     match metadata {
         MetadataUpdate::Name { name } => {

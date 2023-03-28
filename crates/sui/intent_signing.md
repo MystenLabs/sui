@@ -1,6 +1,5 @@
 # Intent Signing
 
-
 ## Description
 
 Intent Signing is a standard used in Sui that defines _what_ the signature is committed to. We call the data that the signature commits to is an intent message. All signatures in Sui MUST commit to an intent message, instead of the message itself.
@@ -8,8 +7,9 @@ Intent Signing is a standard used in Sui that defines _what_ the signature is co
 ## Motivation
 
 Previously, Sui uses a special `Signable` trait, which attaches the Rust struct name as a prefix before the serialized data. This is not ideal because:
-   - Not compact: The prefix of `TransactionData::` is significantly larger than 1 byte.
-   - Not user-friendly: Non-Rust applications need to maintain a list of Rust-struct names.
+
+- Not compact: The prefix of `TransactionData::` is significantly larger than 1 byte.
+- Not user-friendly: Non-Rust applications need to maintain a list of Rust-struct names.
 
 The intent signing standard is proposed to provide a compact domain separator to the data being signed for both user signatures and authority signatures. It has several benefits:
 
@@ -44,7 +44,6 @@ pub struct Intent {
 
 To see detailed definition for each field, see each enum definition [here](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs).
 
-
 The serialization of an `Intent` is a 3-byte array where each field is represented by a byte.
 
 The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concatenated with the BCS serialized message.
@@ -65,8 +64,8 @@ Here is an example in Typescript:
 
 ```typescript
 const intentMessage = messageWithIntent(
-   IntentScope.TransactionData,
-   transactionBytes,
+  IntentScope.TransactionData,
+  TransactionBlockBytes
 );
 const signature = await this.signData(intentMessage);
 ```
@@ -76,6 +75,7 @@ const signature = await this.signData(intentMessage);
 Authority signature is created using the protocol key. The data that it commits to is also an intent message `intent || message`. See all available intent scopes [here](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs#L66)
 
 # Implementation
+
 1. [Struct and enum definitions](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs)
 2. [Test](https://github.com/MystenLabs/sui/blob/d009e82fa35bda4f2b3e7a86a9529d36c32a8159/crates/sui-types/src/unit_tests/intent_tests.rs)
 3. User transaction intent signing [PR 1](https://github.com/MystenLabs/sui/pull/6445), [PR 2](https://github.com/MystenLabs/sui/pull/8321)

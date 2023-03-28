@@ -10,7 +10,7 @@ use move_core_types::identifier::Identifier;
 use rand::seq::{IteratorRandom, SliceRandom};
 use serde_json::json;
 use signature::rand_core::OsRng;
-use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 use crate::operations::Operations;
@@ -22,7 +22,8 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionEffectsAPI, SuiTransactionResponse,
+    OwnedObjectRef, SuiData, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse,
 };
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -569,7 +570,7 @@ async fn test_transaction(
     gas: Vec<ObjectRef>,
     budget: u64,
     expect_fail: bool,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     let gas = if !gas.is_empty() {
         gas
     } else {
@@ -614,7 +615,7 @@ async fn test_transaction(
             Transaction::from_data(data.clone(), Intent::default(), vec![signature])
                 .verify()
                 .unwrap(),
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

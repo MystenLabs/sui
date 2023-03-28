@@ -47,7 +47,7 @@ use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
-    SuiObjectDataFilter, SuiTransactionEvents,
+    SuiObjectDataFilter, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -1107,7 +1107,7 @@ impl AuthorityState {
         Ok((
             DryRunTransactionResponse {
                 effects: effects.clone().try_into()?,
-                events: SuiTransactionEvents::try_from(
+                events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
                     tx_digest,
                     None,
@@ -1465,7 +1465,7 @@ impl AuthorityState {
                 self.event_handler
                     .process_events(
                         &effects.clone().try_into()?,
-                        &SuiTransactionEvents::try_from(
+                        &SuiTransactionBlockEvents::try_from(
                             events.clone(),
                             *tx_digest,
                             Some(timestamp_ms),

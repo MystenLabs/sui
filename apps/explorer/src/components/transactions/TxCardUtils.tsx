@@ -9,7 +9,7 @@ import {
     getTransactionSender,
     type JsonRpcProvider,
     SUI_TYPE_ARG,
-    type SuiTransactionResponse,
+    type SuiTransactionBlockResponse,
 } from '@mysten/sui.js';
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
@@ -71,7 +71,9 @@ export function TxTableCol({
 }
 
 // Generate table data from the transaction data
-export const genTableDataFromTxData = (results: SuiTransactionResponse[]) => ({
+export const genTableDataFromTxData = (
+    results: SuiTransactionBlockResponse[]
+) => ({
     data: results.map((transaction) => {
         const status = getExecutionStatusType(transaction);
         const transfer = getAmount({

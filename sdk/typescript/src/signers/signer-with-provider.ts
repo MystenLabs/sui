@@ -14,8 +14,8 @@ import {
   SuiAddress,
   DevInspectResults,
   DryRunTransactionResponse,
-  SuiTransactionResponse,
-  SuiTransactionResponseOptions,
+  SuiTransactionBlockResponse,
+  SuiTransactionBlockResponseOptions,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
@@ -82,29 +82,29 @@ export abstract class SignerWithProvider implements Signer {
   async signTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
-    let transactionBytes;
+    let transactionBlockBytes;
 
     if (TransactionBlock.is(input.transactionBlock)) {
       // If the sender has not yet been set on the transaction, then set it.
       // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
       input.transactionBlock.setSenderIfNotSet(await this.getAddress());
-      transactionBytes = await input.transactionBlock.build({
+      transactionBlockBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
     } else if (input.transactionBlock instanceof Uint8Array) {
-      transactionBytes = input.transactionBlock;
+      transactionBlockBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
 
     const intentMessage = messageWithIntent(
       IntentScope.TransactionData,
-      transactionBytes,
+      transactionBlockBytes,
     );
     const signature = await this.signData(intentMessage);
 
     return {
-      transactionBytes: toB64(transactionBytes),
+      transactionBlockBytes: toB64(transactionBlockBytes),
       signature,
     };
   }
@@ -120,18 +120,19 @@ export abstract class SignerWithProvider implements Signer {
   async signAndExecuteTransactionBlock(input: {
     transactionBlock: Uint8Array | TransactionBlock;
     /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
-    options?: SuiTransactionResponseOptions;
+    options?: SuiTransactionBlockResponseOptions;
     /** `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
      * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
      */
     requestType?: ExecuteTransactionRequestType;
-  }): Promise<SuiTransactionResponse> {
-    const { transactionBytes, signature } = await this.signTransactionBlock({
-      transactionBlock: input.transactionBlock,
-    });
+  }): Promise<SuiTransactionBlockResponse> {
+    const { transactionBlockBytes, signature } =
+      await this.signTransactionBlock({
+        transactionBlock: input.transactionBlock,
+      });
 
     return await this.provider.executeTransactionBlock({
-      transactionBlock: transactionBytes,
+      transactionBlock: transactionBlockBytes,
       signature,
       options: input.options,
       requestType: input.requestType,

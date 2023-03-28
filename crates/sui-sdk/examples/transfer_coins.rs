@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use shared_crypto::intent::Intent;
-use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::{
     types::{
@@ -43,7 +43,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .quorum_driver()
         .execute_transaction_block(
             Transaction::from_data(transfer_tx, Intent::default(), vec![signature]).verify()?,
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await?;

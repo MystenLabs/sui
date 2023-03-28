@@ -16,9 +16,9 @@ The Sui Framework (`sui-framework`) Move package contains modules central to Sui
 
 In [PR 9618](https://github.com/MystenLabs/sui/pull/9618), the `sui-framework` crate now contains three Move packages in the `packages` directory: `move-stdlib`, `sui-framework` and `sui-system`:
 
- * `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
- * `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
- * `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
+- `sui-system` contains modules that were in the `sui-framework/sources/governance` directory, including all the validator management and staking related functions, published at `0x3` with named address `sui_system`.
+- `sui-framework` contains all other modules that were not in the `governance` folder. The framework provides library and utility modules for Sui Move developers. It is still published at `0x2` with named address `sui`.
+- `move-stdlib` contains a copy of the Move standard library that used to be in the `sui-framework/deps` folder. It is still published at `0x1` with named address `std`.
 
 If you develop Sui Move code depending on `sui-framework`, the `Move.toml` file of your Move package has to change to reflect the path changes:
 
@@ -60,18 +60,18 @@ If your Sui Move code uses a module in the `governance` folder:
 
 The modules are now in the `sui-system` package. You must list `SuiSystem` as a dependency, and access these modules via `0x3` or the `sui_system` named address.
 
-
 ### Erecover and verify
 
 In this release, `ecdsa_k1::ecrecover` and `ecdsa_k1::secp256k1_verify` now require you to input the raw message instead of a hashed message.
 
- * `ecdsa_k1::ecrecover(sig, hashed_msg, hash_function)` is updated to `ecdsa_k1::secp256k1_ecrecover(sig, msg, hash_function)`
+- `ecdsa_k1::ecrecover(sig, hashed_msg, hash_function)` is updated to `ecdsa_k1::secp256k1_ecrecover(sig, msg, hash_function)`
 
- * `ecdsa_k1::secp256k1_verify(sig, pk, hashed_msg)` is updated to `ecdsa_k1::secp256k1_verify(sig, pk, msg, hash_function)`
+- `ecdsa_k1::secp256k1_verify(sig, pk, hashed_msg)` is updated to `ecdsa_k1::secp256k1_verify(sig, pk, msg, hash_function)`
 
 When you call these APIs, you must provide the raw message instead of the hashed message for verification or EC recover. You must also provide the hash_function name represented by u8. See the source code for more information:
- * [ecdsa_k1.md](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_k1.md)
- * [ecdsa_r1.md](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_r1.md)
+
+- [ecdsa_k1.md](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_k1.md)
+- [ecdsa_r1.md](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/ecdsa_r1.md)
 
 ### ID Leak
 
@@ -122,12 +122,13 @@ To read a detailed description and the motivation behind the standard, see the [
 In Sui Move, to claim a `Display` object, call `display::new<T>(&Publisher)`. As stated in the signature, it requires the `Publisher` object. Once acquired, `Display` can be modified by adding new fields (templates) to it, and when it’s ready to be published, a `display::update_version(&mut Display)` call is required to publish and make it available. All further additions / edits in the `Display` should also be applied by calling `update_version` again.
 
 Fields that we suggest to use in `Display` are:
- * **name:** a displayable name
- * **link:** a link to an object in an application / external link
- * **description:** a broader displayable description
- * **image_url:** an URL or a blob with an image
- * **project_url:** a link to a website
- * **creator:** mentions the creator in any way (text, link, address etc)
+
+- **name:** a displayable name
+- **link:** a link to an object in an application / external link
+- **description:** a broader displayable description
+- **image_url:** an URL or a blob with an image
+- **project_url:** a link to a website
+- **creator:** mentions the creator in any way (text, link, address etc)
 
 See additional information and examples in [Display](http://examples.sui.io/basics/display.html).
 
@@ -137,41 +138,40 @@ The steps in this section provide guidance on making updates related to the chan
 
 ### Reading objects
 
-The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request  explicitly specifies other data, such as `type`, `owner`, or `bcs`.
+The `sui_getObject` endpoint now takes an additional configuration parameter of type `SuiObjectDataOptions` to control which fields the endpoint retrieves. By default, the endpoint retrieves only object references unless the client request explicitly specifies other data, such as `type`, `owner`, or `bcs`.
 
 #### TypeScript Migration
 
 ```tsx
-
-import { JsonRpcProvider } from '@mysten/sui.js';
+import { JsonRpcProvider } from "@mysten/sui.js";
 const provider = new JsonRpcProvider();
 
-    // Prior to release .28
-    const txn = await provider.getObject(
-      '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
-    );
-    const txns = await provider.getObjectBatch([
-      '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
-      '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
-    ]);
+// Prior to release .28
+const txn = await provider.getObject(
+  "0xcff6ccc8707aa517b4f1b95750a2a8c666012df3"
+);
+const txns = await provider.getObjectBatch([
+  "0xcff6ccc8707aa517b4f1b95750a2a8c666012df3",
+  "0xdff6ccc8707aa517b4f1b95750a2a8c666012df3",
+]);
 
-    // Updated for release .28
-    const txn = await provider.getObject({
-      id: '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
-      // fetch the object content field and display
-      options: {
-    		showContent: true,
-    		showDisplay: true
-    	},
-    });
-    const txns = await provider.multiGetObjects({
-      ids: [
-        '0xcff6ccc8707aa517b4f1b95750a2a8c666012df3',
-        '0xdff6ccc8707aa517b4f1b95750a2a8c666012df3',
-      ],
-      // only fetch the object type
-      options: { showType: true },
-    });
+// Updated for release .28
+const txn = await provider.getObject({
+  id: "0xcff6ccc8707aa517b4f1b95750a2a8c666012df3",
+  // fetch the object content field and display
+  options: {
+    showContent: true,
+    showDisplay: true,
+  },
+});
+const txns = await provider.multiGetObjects({
+  ids: [
+    "0xcff6ccc8707aa517b4f1b95750a2a8c666012df3",
+    "0xdff6ccc8707aa517b4f1b95750a2a8c666012df3",
+  ],
+  // only fetch the object type
+  options: { showType: true },
+});
 ```
 
 #### JSON RPC Migration
@@ -227,20 +227,22 @@ const provider = new JsonRpcProvider();
 To get a `Display` for an object, pass an additional flag to the `sui_getObject` call.
 
 ```jsx
-{ showDisplay: true }
+{
+  showDisplay: true;
+}
 ```
 
 The returned value is the processed template for a type. For example, for Sui Capys it could be:
 
 ```json
-    {
-        "name": "Capy - one of many",
-        "description": "Join our Capy adventure",
-        "link": "https://capy.art/capy/0x00000000....",
-        "image_url": "https://api.capy.art/capys/0x000adadada..../svg",
-        "project_url": "https://capy.art/",
-        "creator": "Capybara Lovers"
-    }
+{
+  "name": "Capy - one of many",
+  "description": "Join our Capy adventure",
+  "link": "https://capy.art/capy/0x00000000....",
+  "image_url": "https://api.capy.art/capys/0x000adadada..../svg",
+  "project_url": "https://capy.art/",
+  "creator": "Capybara Lovers"
+}
 ```
 
 ### Reading transactions
@@ -248,93 +250,87 @@ The returned value is the processed template for a type. For example, for Sui Ca
 The `sui_getTransaction`and `sui_multiGetTransaction` functions now take an additional optional parameter called `options`. Use `options` to specify which fields to retrieve, such as transaction, effects, or events. By default, it returns only the transaction digest.
 
 ```tsx
+import { JsonRpcProvider } from "@mysten/sui.js";
+const provider = new JsonRpcProvider();
 
-    import { JsonRpcProvider } from '@mysten/sui.js';
-    const provider = new JsonRpcProvider();
+// Prior to release .28
+const provider = new JsonRpcProvider();
+const txn = await provider.getTransactionWithEffects(
+  "6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME="
+);
+// You can also fetch multiple transactions in one batch request
+const txns = await provider.getTransactionWithEffectsBatch([
+  "6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=",
+  "7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=",
+]);
 
-    // Prior to release .28
-    const provider = new JsonRpcProvider();
-    const txn = await provider.getTransactionWithEffects(
-      '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-    );
-    // You can also fetch multiple transactions in one batch request
-    const txns = await provider.getTransactionWithEffectsBatch([
-      '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-      '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-    ]);
-
-    // Updated for release .28
-    const provider = new JsonRpcProvider();
-    const txn = await provider.getTransactionBlock({
-      digest: '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-      // only fetch the effects field
-      options: { showEffects: true },
-    });
-    // You can also fetch multiple transactions in one batch request
-    const txns = await provider.multiGetTransactionBlocks({
-      digests: [
-        '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-        '7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=',
-      ],
-      // fetch both the input transaction data as well as effects
-      options: { showInput: true, showEffects: true },
-    });
+// Updated for release .28
+const provider = new JsonRpcProvider();
+const txn = await provider.getTransactionBlock({
+  digest: "6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=",
+  // only fetch the effects field
+  options: { showEffects: true },
+});
+// You can also fetch multiple transactions in one batch request
+const txns = await provider.multiGetTransactionBlocks({
+  digests: [
+    "6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=",
+    "7mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME=",
+  ],
+  // fetch both the input transaction data as well as effects
+  options: { showInput: true, showEffects: true },
+});
 ```
 
 ### Reading Events
 
 This release makes the following changes related to reading events:
 
- * Removes System events such as `Publish`, `TransferObject`, `NewObject` and keeps only `MoveEvents`.
- * Adds an `object_changes` and `balance_changes` field in `SuiTransactionResponse`
+- Removes System events such as `Publish`, `TransferObject`, `NewObject` and keeps only `MoveEvents`.
+- Adds an `object_changes` and `balance_changes` field in `SuiTransactionBlockResponse`
 
 ```tsx
-    import { JsonRpcProvider } from '@mysten/sui.js';
-    const provider = new JsonRpcProvider();
+import { JsonRpcProvider } from "@mysten/sui.js";
+const provider = new JsonRpcProvider();
 
-    // Prior to release .28
-    provider.getEvents(
-    	{ Sender: toolbox.address() },
-      null,
-      2,
-    );
+// Prior to release .28
+provider.getEvents({ Sender: toolbox.address() }, null, 2);
 
-    // Updated for release .28
-    const events = provider.queryEvents({
-      query: { Sender: toolbox.address() },
-      limit: 2,
-    });
+// Updated for release .28
+const events = provider.queryEvents({
+  query: { Sender: toolbox.address() },
+  limit: 2,
+});
 
-    // Subscribe events
+// Subscribe events
 
-    // Prior to release .28
-    const subscriptionId = await provider.subscribeEvent(
-      { SenderAddress: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
-      (event: SuiEventEnvelope) => {
-        // handle subscription notification message here. This function is called once per subscription message.
-      },
-    );
+// Prior to release .28
+const subscriptionId = await provider.subscribeEvent(
+  { SenderAddress: "0xbff6ccc8707aa517b4f1b95750a2a8c666012df3" },
+  (event: SuiEventEnvelope) => {
+    // handle subscription notification message here. This function is called once per subscription message.
+  }
+);
 
-    // later, to unsubscribe
-    // calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
-    const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
+// later, to unsubscribe
+// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
+const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
 
-    // Updated for release .28
-    // calls RPC method 'sui_subscribeEvent' with params:
-    // [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
-    const subscriptionId = await provider.subscribeEvent({
-      filter: { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' },
-      onMessage(event: SuiEvent) {
-        // handle subscription notification message here. This function is called once per subscription message.
-      },
-    });
+// Updated for release .28
+// calls RPC method 'sui_subscribeEvent' with params:
+// [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
+const subscriptionId = await provider.subscribeEvent({
+  filter: { Sender: "0xbff6ccc8707aa517b4f1b95750a2a8c666012df3" },
+  onMessage(event: SuiEvent) {
+    // handle subscription notification message here. This function is called once per subscription message.
+  },
+});
 
-    // later, to unsubscribe
-    // calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
-    const subFoundAndRemoved = await provider.unsubscribeEvent({
-      id: subscriptionId,
-    });
-
+// later, to unsubscribe
+// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
+const subFoundAndRemoved = await provider.unsubscribeEvent({
+  id: subscriptionId,
+});
 ```
 
 ### Pagination
@@ -342,6 +338,7 @@ This release makes the following changes related to reading events:
 This release changes the `Page` definition.
 
 **Prior to release .28**
+
 ```rust
 
     pub struct Page<T, C> {
@@ -361,8 +358,9 @@ This release changes the `Page` definition.
 ```
 
 Additionally:
- * `next_cursor` is no longer inclusive and now exclusive, it always points to the last item of `data` if data is not empty;
- * To check if the current page is the last page or not, instead of doing `next_cursor.is_none()`, now you can simply use `has_next_page`
+
+- `next_cursor` is no longer inclusive and now exclusive, it always points to the last item of `data` if data is not empty;
+- To check if the current page is the last page or not, instead of doing `next_cursor.is_none()`, now you can simply use `has_next_page`
 
 If you use `Page` to read pages one by one, now you do not have to manually handle the returned `None` value of `next_cursor` when the reading process hits the latest page, instead you can always use the returned `next_cursor` as the input argument of next read. Before this release, the reading process will start from genesis when it hits latest and the `None` value is not properly handled.
 
@@ -371,38 +369,38 @@ If you use `Page` to read pages one by one, now you do not have to manually hand
 The previous transaction builder methods on the `Signer`, and the `SignableTransaction` interface have been removed, and replaced with a new `Transaction` builder class. This new transaction builder takes full advantage of Programmable Transactions.
 
 ```tsx
-    // Construct a new transaction:
-    const tx = new Transaction();
+// Construct a new transaction:
+const tx = new Transaction();
 
-    // Example replacement for a SUI token transfer:
-    const [coin] = tx.splitCoins(tx.gas, [tx.pure(1000)]);
-    tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
+// Example replacement for a SUI token transfer:
+const [coin] = tx.splitCoins(tx.gas, [tx.pure(1000)]);
+tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
 
-    // Merge a list of coins into a primary coin:
-    tx.mergeCoin(tx.object('0xcoinA'), [
-      tx.object('0xcoinB'),
-      tx.object('0xcoinC'),
-    ]);
+// Merge a list of coins into a primary coin:
+tx.mergeCoin(tx.object("0xcoinA"), [
+  tx.object("0xcoinB"),
+  tx.object("0xcoinC"),
+]);
 
-    // Make a move call:
-    tx.moveCall({
-      target: `${packageObjectId}::nft::mint`,
-      arguments: [tx.pure('Example NFT')],
-    });
+// Make a move call:
+tx.moveCall({
+  target: `${packageObjectId}::nft::mint`,
+  arguments: [tx.pure("Example NFT")],
+});
 
-    // Execute a transaction:
-    const result = await signer.signAndExecuteTransaction({ transaction: tx });
+// Execute a transaction:
+const result = await signer.signAndExecuteTransaction({ transaction: tx });
 ```
 
-Transaction now support providing a list of gas coins as payment for a transaction. By default, the transaction builder automatically determines the gas budget and coins to use as payment for a transaction. You can also set these values, for example to  set your own budget, change the gas price, or do your own gas selection:
+Transaction now support providing a list of gas coins as payment for a transaction. By default, the transaction builder automatically determines the gas budget and coins to use as payment for a transaction. You can also set these values, for example to set your own budget, change the gas price, or do your own gas selection:
 
 ```tsx
-    // Set an explicit gas price. By default, uses the current reference gas price:
-    tx.setGasPrice(100);
-    // Change the gas budget (in SUI). By default, this executes a dry run and uses the gas consumed from that as the budget.
-    tx.setGasBudget(customBudgetDefined);
-    // Set the vector of gas objects to use as the gas payment.
-    tx.setGasPayment([coin1, coin2]);
+// Set an explicit gas price. By default, uses the current reference gas price:
+tx.setGasPrice(100);
+// Change the gas budget (in SUI). By default, this executes a dry run and uses the gas consumed from that as the budget.
+tx.setGasBudget(customBudgetDefined);
+// Set the vector of gas objects to use as the gas payment.
+tx.setGasPayment([coin1, coin2]);
 ```
 
 ## Staking changes
@@ -453,8 +451,9 @@ With the removal of locked coin staking and changes to the Sui staking flow, the
 ### Changes to stake deposit / withdraw APIs
 
 This release includes the following changes related to stake deposit and withdrawal requests:
- * Removes the `request_switch_delegation` function
- * Renames all delegation functions to use staking instead of delegation.
+
+- Removes the `request_switch_delegation` function
+- Renames all delegation functions to use staking instead of delegation.
 
 Prior to release .28, the function names were:
 
@@ -475,7 +474,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw a delegation from a validator's staking pool.
     #[method(name = "requestWithdrawDelegation")]
@@ -491,7 +490,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Switch delegation from the current validator to a new one.
     #[method(name = "requestSwitchDelegation")]
@@ -509,7 +508,7 @@ Prior to release .28, the function names were:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
          gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 ```
 
 Effective with release .28, the function names are:
@@ -531,7 +530,7 @@ Effective with release .28, the function names are:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 
     /// Withdraw stake from a validator's staking pool.
     #[method(name = "requestWithdrawStake")]
@@ -547,7 +546,7 @@ Effective with release .28, the function names are:
         gas: Option<ObjectID>,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes>;
+    ) -> RpcResult<TransactionBlockBytes>;
 ```
 
 ### Changes to getDelegatedStakes
@@ -605,6 +604,3 @@ With the new `getStakesByIds` it's possible to query the delegated stakes using 
 ### Secp256k1 derive keypair
 
 Match `Secp256k1.deriveKeypair` with Ed25519 on a function signature takes in a mnemonics string and an optional path string instead of a required path string and a mnemonics string. See [PR 8542](https://github.com/MystenLabs/sui/pull/8542/files#diff-66c975e3c863646441ca600b074edb151f357e471bab6a34166caaecd5f546e1L151) for details.
-
-
-
