@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Duration};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
+use sui_types::digests::ObjectDigest;
 use sui_types::messages::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::{
@@ -80,11 +81,33 @@ impl AuthorityStorePruner {
                 for (object_id, (min_version, max_version)) in updates {
                     let start_range = ObjectKey(object_id, min_version);
                     let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-                    wb = wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+                    wb = wb
+                        .delete_range(&perpetual_db.objects, &start_range, &end_range)?
+                        .delete_range(
+                            &perpetual_db.owned_object_transaction_locks,
+                            &(object_id, min_version, ObjectDigest::MIN),
+                            &(object_id, max_version, ObjectDigest::MAX),
+                        )?;
                 }
             }
             DeletionMethod::PointDelete => {
-                wb = wb.delete_batch(&perpetual_db.objects, object_keys_to_prune)?;
+                let input_version_lookup: HashMap<_, _> = object_keys_to_prune
+                    .iter()
+                    .map(|key| (key.0, key.1))
+                    .collect();
+                let locks_to_prune = transaction_effects
+                    .iter()
+                    .flat_map(|effects| {
+                        effects
+                            .mutated()
+                            .iter()
+                            .map(|owned_ref| &owned_ref.0)
+                            .chain(effects.deleted().iter())
+                    })
+                    .map(|obj_ref| (obj_ref.0, input_version_lookup[&obj_ref.0], obj_ref.2));
+                wb = wb
+                    .delete_batch(&perpetual_db.objects, object_keys_to_prune)?
+                    .delete_batch(&perpetual_db.owned_object_transaction_locks, locks_to_prune)?;
             }
         }
         if !indirect_objects.is_empty() {
