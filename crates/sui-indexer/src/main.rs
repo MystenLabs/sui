@@ -31,7 +31,7 @@ async fn main() -> Result<(), IndexerError> {
     );
 
     let registry = registry_service.default_registry();
-    let pg_connection_pool = new_pg_connection_pool(&indexer_config.db_url).await?;
+    let pg_connection_pool = new_pg_connection_pool(&indexer_config.db_url)?;
     if indexer_config.reset_db {
         let mut conn = get_pg_pool_connection(&pg_connection_pool)?;
         reset_database(&mut conn, /* drop_all */ true).map_err(|e| {

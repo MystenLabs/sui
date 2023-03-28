@@ -1318,7 +1318,7 @@ impl AuthorityStore {
         Ok(())
     }
 
-    pub fn multi_get_transactions(
+    pub fn multi_get_transaction_blocks(
         &self,
         tx_digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, SuiError> {
@@ -1329,7 +1329,7 @@ impl AuthorityStore {
             .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
     }
 
-    pub fn get_transaction(
+    pub fn get_transaction_block(
         &self,
         tx_digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, TypedStoreError> {

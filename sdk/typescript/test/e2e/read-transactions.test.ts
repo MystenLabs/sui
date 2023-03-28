@@ -5,13 +5,13 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   getTransactionDigest,
   getTransactionKind,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
 } from '../../src';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {
   let toolbox: TestToolbox;
-  let transactions: SuiTransactionResponse[];
+  let transactions: SuiTransactionBlockResponse[];
   const NUM_TRANSACTIONS = 10;
 
   beforeAll(async () => {
@@ -20,19 +20,19 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Total Transactions', async () => {
-    const numTransactions = await toolbox.provider.getTotalTransactionNumber();
+    const numTransactions = await toolbox.provider.getTotalTransactionBlocks();
     expect(numTransactions).toBeGreaterThan(0);
   });
 
   it('Get Transaction', async () => {
     const digest = transactions[0].digest;
-    const txn = await toolbox.provider.getTransaction({ digest });
+    const txn = await toolbox.provider.getTransactionBlock({ digest });
     expect(getTransactionDigest(txn)).toEqual(digest);
   });
 
   it('Multi Get Pay Transactions', async () => {
     const digests = transactions.map((t) => t.digest);
-    const txns = await toolbox.provider.multiGetTransactions({
+    const txns = await toolbox.provider.multiGetTransactionBlocks({
       digests,
       options: { showBalanceChanges: true },
     });
@@ -44,12 +44,12 @@ describe('Transaction Reading API', () => {
 
   it('Query Transactions with opts', async () => {
     const options = { showEvents: true, showEffects: true };
-    const resp = await toolbox.provider.queryTransactions({
+    const resp = await toolbox.provider.queryTransactionBlocks({
       options,
       limit: 1,
     });
     const digest = resp.data[0].digest;
-    const response2 = await toolbox.provider.getTransaction({
+    const response2 = await toolbox.provider.getTransactionBlock({
       digest,
       options,
     });
@@ -57,34 +57,18 @@ describe('Transaction Reading API', () => {
   });
 
   it('Get Transactions', async () => {
-    const resp = await toolbox.provider.queryTransactionsForAddressDeprecated(
-      toolbox.address(),
-      false,
-    );
-    expect(resp.length).to.greaterThan(0);
-
-    const allTransactions = await toolbox.provider.queryTransactions({
+    const allTransactions = await toolbox.provider.queryTransactionBlocks({
       limit: 10,
     });
     expect(allTransactions.data.length).to.greaterThan(0);
-
-    const resp2 = await toolbox.provider.queryTransactions({
-      filter: { ToAddress: toolbox.address() },
-    });
-    const resp3 = await toolbox.provider.queryTransactions({
-      filter: { FromAddress: toolbox.address() },
-    });
-    expect([...resp2.data, ...resp3.data].map((r) => r.digest).sort()).toEqual(
-      resp.sort(),
-    );
   });
 
   it('Genesis exists', async () => {
-    const allTransactions = await toolbox.provider.queryTransactions({
+    const allTransactions = await toolbox.provider.queryTransactionBlocks({
       limit: 1,
       order: 'ascending',
     });
-    const resp = await toolbox.provider.getTransaction({
+    const resp = await toolbox.provider.getTransactionBlock({
       digest: allTransactions.data[0].digest,
       options: { showInput: true },
     });

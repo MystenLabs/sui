@@ -3,4 +3,4 @@
 "@mysten/sui.js": minor
 ---
 
-Remove old `SuiExecuteTransactionResponse` interface, and `CertifiedTransaction` interface in favor of the new unified `SuiTransactionResponse` interfaces.
+Remove old `SuiExecuteTransactionResponse` interface, and `CertifiedTransaction` interface in favor of the new unified `SuiTransactionBlockResponse` interfaces.

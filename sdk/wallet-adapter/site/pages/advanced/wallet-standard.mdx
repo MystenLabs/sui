@@ -6,26 +6,26 @@ If you are building a wallet, we publish a helper library `@mysten/wallet-standa
 
 ### Creating a wallet interface
 
-You need to create a class that represents your wallet. You can use the `Wallet` interface from `@mysten/wallet-standard` to help ensure your class adheres to the standard.
+You need to create a class that represents your wallet. You can use the `Wallet` interface from `@mysten/wallet-standard` to help ensure your class adheres to the standard.
 
 ```tsx
-import { Wallet, SUI_DEVNET_CHAIN } from "@mysten/wallet-standard";
+import { Wallet, SUI_DEVNET_CHAIN } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
-  get version() {
-    // Return the version of the Wallet Standard this implements (in this case, 1.0.0).
-    return "1.0.0";
-  }
-  get name() {
-    return "Wallet Name";
-  }
-  get icon() {
-    return "some-icon-data-url";
-  }
-  // Return the Sui chains that your wallet supports.
-  get chains() {
-    return [SUI_DEVNET_CHAIN];
-  }
+    get version() {
+        // Return the version of the Wallet Standard this implements (in this case, 1.0.0).
+        return '1.0.0';
+    }
+    get name() {
+        return 'Wallet Name';
+    }
+    get icon() {
+        return 'some-icon-data-url';
+    }
+    // Return the Sui chains that your wallet supports.
+    get chains() {
+        return [SUI_DEVNET_CHAIN];
+    }
 }
 ```
 
@@ -33,13 +33,13 @@ class YourWallet implements Wallet {
 
 Features are standard methods consumers can use to interact with a wallet. To be listed in the Sui wallet adapter, you must implement the following features in your wallet:
 
-- `standard:connect` - Used to initiate a connection to the wallet.
-- `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
-- `sui:signMessage` - Used to prompt the user to sign a personal message, and return the message signature back to the dapp. This can be used to verify the user’s public key.
-- `sui:signTransaction` - Used to prompt the user to sign a transaction, and return the serialized transaction and transaction signature back to the dapp. This method does not submit the transaction for execution.
-- `sui:signAndExecuteTransaction` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
+-   `standard:connect` - Used to initiate a connection to the wallet.
+-   `standard:events` - Used to listen for changes that happen within the wallet, such as accounts being added or removed.
+-   `sui:signMessage` - Used to prompt the user to sign a personal message, and return the message signature back to the dapp. This can be used to verify the user’s public key.
+-   `sui:signTransactionBlock` - Used to prompt the user to sign a transaction block, and return the serialized transaction block and signature back to the dapp. This method does not submit the transaction block for execution.
+-   `sui:signAndExecuteTransactionBlock` - Used to prompt the user to sign a transaction, then submit it for execution to the blockchain.
 
-You can implement these features in your wallet class under the `features` property:
+You can implement these features in your wallet class under the `features` property:
 
 ```tsx
 import {
@@ -49,8 +49,8 @@ import {
   EventsOnMethod,
   SuiFeatures,
   SuiSignMessageMethod,
-  SuiSignTransactionMethod,
-  SuiSignAndExecuteTransactionMethod
+  SuiSignTransactionBlockMethod,
+  SuiSignAndExecuteTransactionBlockMethod
 } from "@mysten/wallet-standard";
 
 class YourWallet implements Wallet {
@@ -70,13 +70,13 @@ class YourWallet implements Wallet {
         version: "1.0.0",
 				signMessage: this.#signMessage,
 			},
-      "sui:signTransaction": {
-        version: "2.0.0",
-        signTransaction: this.#signTransaction,
+      "sui:signTransactionBlock": {
+        version: "1.0.0",
+        signTransactionBlock: this.#signTransactionBlock,
       },
-      "sui:signAndExecuteTransaction": {
-        version: "2.0.0",
-        signAndExecuteTransaction: this.#signAndExecuteTransaction,
+      "sui:signAndExecuteTransactionBlock": {
+        version: "1.0.0",
+        signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
       },
     };
   },
@@ -93,11 +93,11 @@ class YourWallet implements Wallet {
     // Your wallet's signTransaction implementation
   };
 
-  #signTransaction: SuiSignTransactionMethod = () => {
+  #signTransactionBlock: SuiSignTransactionBlockMethod = () => {
     // Your wallet's signTransaction implementation
   };
 
-  #signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = () => {
+  #signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = () => {
     // Your wallet's signAndExecuteTransaction implementation
   };
 }
@@ -105,43 +105,43 @@ class YourWallet implements Wallet {
 
 ### Exposing accounts
 
-The last requirement of the wallet interface is to expose an `acccounts` interface. This should expose all of the accounts that a connected dApp has access to. It can be empty prior to initiating a connection through the `standard:connect` feature.
+The last requirement of the wallet interface is to expose an `acccounts` interface. This should expose all of the accounts that a connected dApp has access to. It can be empty prior to initiating a connection through the `standard:connect` feature.
 
-The accounts can use the `ReadonlyWalletAccount` class to easily construct an account matching the required interface.
+The accounts can use the `ReadonlyWalletAccount` class to easily construct an account matching the required interface.
 
 ```tsx
-import { ReadonlyWalletAccount } from "@mysten/wallet-standard";
+import { ReadonlyWalletAccount } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
-  get accounts() {
-    // Assuming we already have some internal representation of accounts:
-    return someWalletAccounts.map(
-      (walletAccount) =>
-        // Return
-        new ReadonlyWalletAccount({
-          address: walletAccount.suiAddress,
-          publicKey: walletAccount.pubkey,
-          // The Sui chains that your wallet supports.
-          chains: [SUI_DEVNET_CHAIN],
-          // The features that this account supports. This can be a subset of the wallet's supported features.
-          // These features must exist on the wallet as well.
-          features: [
-            "sui:signMessage",
-            "sui:signTransaction",
-            "sui:signAndExecuteTransaction",
-          ],
-        })
-    );
-  }
+    get accounts() {
+        // Assuming we already have some internal representation of accounts:
+        return someWalletAccounts.map(
+            (walletAccount) =>
+                // Return
+                new ReadonlyWalletAccount({
+                    address: walletAccount.suiAddress,
+                    publicKey: walletAccount.pubkey,
+                    // The Sui chains that your wallet supports.
+                    chains: [SUI_DEVNET_CHAIN],
+                    // The features that this account supports. This can be a subset of the wallet's supported features.
+                    // These features must exist on the wallet as well.
+                    features: [
+                        'sui:signMessage',
+                        'sui:signTransactionBlock',
+                        'sui:signAndExecuteTransactionBlock',
+                    ],
+                })
+        );
+    }
 }
 ```
 
 ### Registering in the window
 
-Once you have a compatible interface for your wallet, you register it using the `registerWallet` function.
+Once you have a compatible interface for your wallet, you register it using the `registerWallet` function.
 
 ```tsx
-import { registerWallet } from "@mysten/wallet-standard";
+import { registerWallet } from '@mysten/wallet-standard';
 
 registerWallet(new YourWallet());
 ```

@@ -4,9 +4,9 @@
 import { getTransactionKind, SUI_TYPE_ARG } from '@mysten/sui.js';
 
 import type {
-    SuiTransactionKind,
+    SuiTransactionBlockKind,
     TransactionEffects,
-    SuiTransactionResponse,
+    SuiTransactionBlockResponse,
     TransactionEvents,
 } from '@mysten/sui.js';
 
@@ -35,7 +35,7 @@ type FormattedBalance = {
 
 // For TransferObject, TransferSui, Pay, PaySui, transactions get the amount from the transfer data
 export function getTransfersAmount(
-    txnData: SuiTransactionKind,
+    txnData: SuiTransactionBlockKind,
     txnEffect?: TransactionEffects,
     events?: TransactionEvents
 ): FormattedBalance[] | null {
@@ -90,7 +90,7 @@ export function getAmount({
     txnData,
     suiCoinOnly = false,
 }: {
-    txnData: SuiTransactionResponse;
+    txnData: SuiTransactionBlockResponse;
     suiCoinOnly?: boolean;
 }) {
     const { effects } = txnData;

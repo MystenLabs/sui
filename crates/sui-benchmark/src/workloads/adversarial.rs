@@ -72,7 +72,7 @@ impl Payload for AdversarialTestPayload {
         // Sometimes useful when figuring out why things failed
         let stat = match effects {
             ExecutionEffects::CertifiedTransactionEffects(e, _) => e.data().status(),
-            ExecutionEffects::SuiTransactionEffects(_) => unimplemented!("Not impl"),
+            ExecutionEffects::SuiTransactionBlockEffects(_) => unimplemented!("Not impl"),
         };
 
         debug_assert!(
@@ -298,7 +298,10 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             Some(reference_gas_price),
             gas_budget,
         );
-        let effects = proxy.execute_transaction(transaction.into()).await.unwrap();
+        let effects = proxy
+            .execute_transaction_block(transaction.into())
+            .await
+            .unwrap();
         let created = effects.created();
 
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate

@@ -15,8 +15,8 @@ pub use sui_core::test_utils::{
     compile_basics_package, compile_nfts_package, wait_for_all_txes, wait_for_tx,
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionDataAPI, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::json::SuiJsonValue;
@@ -137,9 +137,9 @@ pub async fn publish_package_with_wallet(
 
     let resp = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             transaction,
-            SuiTransactionResponseOptions::new().with_effects(),
+            SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -168,7 +168,7 @@ pub async fn submit_move_transaction(
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
     let data = client
@@ -200,9 +200,9 @@ pub async fn submit_move_transaction(
 
     let resp = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             tx,
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
@@ -250,7 +250,7 @@ pub async fn increment_counter(
     gas_object: Option<ObjectID>,
     package_id: ObjectID,
     counter_id: ObjectID,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     submit_move_transaction(
         context,
         "counter",
@@ -444,7 +444,7 @@ pub async fn delete_devnet_nft(
     sender: &SuiAddress,
     nfts_package: ObjectID,
     nft_to_delete: ObjectRef,
-) -> SuiTransactionResponse {
+) -> SuiTransactionBlockResponse {
     let gas = get_gas_object_with_wallet_context(context, sender)
         .await
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
@@ -472,9 +472,9 @@ pub async fn delete_devnet_nft(
     let client = context.get_client().await.unwrap();
     let resp = client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             tx,
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

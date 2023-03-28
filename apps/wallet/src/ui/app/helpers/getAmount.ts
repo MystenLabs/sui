@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
-    SuiTransactionKind,
+    SuiTransactionBlockKind,
     TransactionEffects,
     TransactionEvents,
 } from '@mysten/sui.js';
@@ -14,7 +14,7 @@ type FormattedBalance = {
 }[];
 
 export function getAmount(
-    _txnData: SuiTransactionKind,
+    _txnData: SuiTransactionBlockKind,
     _txnEffect: TransactionEffects,
     _events: TransactionEvents
 ): FormattedBalance | null {

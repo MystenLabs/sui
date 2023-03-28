@@ -8941,6 +8941,7 @@ dependencies = [
  "bcs",
  "chrono",
  "clap 3.2.23",
+ "criterion",
  "diesel",
  "diesel-derive-enum",
  "diesel_migrations",

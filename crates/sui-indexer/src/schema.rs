@@ -45,8 +45,8 @@ diesel::table! {
         total_computation_cost -> Int8,
         total_storage_cost -> Int8,
         total_storage_rebate -> Int8,
+        total_transaction_blocks -> Int8,
         total_transactions -> Int8,
-        total_commands -> Int8,
         network_total_transactions -> Int8,
         timestamp_ms -> Int8,
     }
@@ -226,7 +226,7 @@ diesel::table! {
         checkpoint_sequence_number -> Int8,
         timestamp_ms -> Int8,
         transaction_kind -> Text,
-        command_count -> Int8,
+        transaction_count -> Int8,
         created -> Array<Nullable<Text>>,
         mutated -> Array<Nullable<Text>>,
         deleted -> Array<Nullable<Text>>,

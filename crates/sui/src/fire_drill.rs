@@ -20,8 +20,8 @@ use sui_config::node::KeyPairWithPath;
 use sui_config::utils;
 use sui_config::{node::AuthorityKeyPairWithPath, Config, NodeConfig, PersistedConfig};
 use sui_framework::{SuiSystem, SystemPackage};
-use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponseOptions};
-use sui_sdk::{rpc_types::SuiTransactionEffectsAPI, SuiClient, SuiClientBuilder};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
+use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
 use sui_types::messages::{CallArg, ObjectArg, TransactionData};
@@ -341,9 +341,9 @@ async fn execute_tx(
     let tx_digest = *tx.digest();
     let resp = sui_client
         .quorum_driver()
-        .execute_transaction(
+        .execute_transaction_block(
             tx,
-            SuiTransactionResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::full_content(),
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

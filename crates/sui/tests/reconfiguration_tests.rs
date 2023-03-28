@@ -572,7 +572,7 @@ async fn test_inactive_validator_pool_read() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
-    let effects = execute_transaction(&authorities, transaction)
+    let effects = execute_transaction_block(&authorities, transaction)
         .await
         .unwrap();
     assert!(effects.status().is_ok());
@@ -1050,7 +1050,9 @@ async fn execute_add_validator_candidate_tx(
     .unwrap();
     let transaction =
         to_sender_signed_transaction(candidate_tx_data, node_config.account_key_pair());
-    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
     assert!(effects.status().is_ok());
     effects
 }
@@ -1093,7 +1095,9 @@ async fn execute_join_committee_txes(
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
-    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
     assert!(effects.status().is_ok());
 
     effects_ret.push(effects);
@@ -1116,7 +1120,9 @@ async fn execute_join_committee_txes(
     .unwrap();
     let transaction =
         to_sender_signed_transaction(activation_tx_data, node_config.account_key_pair());
-    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
     assert!(effects.status().is_ok());
     effects_ret.push(effects);
 
@@ -1145,7 +1151,9 @@ async fn execute_leave_committee_tx(
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, node_config.account_key_pair());
-    let effects = execute_transaction(authorities, transaction).await.unwrap();
+    let effects = execute_transaction_block(authorities, transaction)
+        .await
+        .unwrap();
     assert!(effects.status().is_ok());
     effects
 }
@@ -1198,7 +1206,7 @@ async fn trigger_reconfiguration(authorities: &[SuiNodeHandle]) {
     info!("reconfiguration complete after {:?}", start.elapsed());
 }
 
-async fn execute_transaction(
+async fn execute_transaction_block(
     authorities: &[SuiNodeHandle],
     transaction: VerifiedTransaction,
 ) -> anyhow::Result<CertifiedTransactionEffects> {
@@ -1210,7 +1218,7 @@ async fn execute_transaction(
         AuthAggMetrics::new(&registry),
     )
     .unwrap();
-    net.execute_transaction(&transaction)
+    net.execute_transaction_block(&transaction)
         .await
         .map(|e| e.into_inner())
 }

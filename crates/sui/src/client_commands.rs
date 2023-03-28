@@ -38,7 +38,8 @@ use sui_framework_build::compiled_package::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiRawData, SuiTransactionEffectsAPI, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -544,7 +545,7 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&sender, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
@@ -596,7 +597,7 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&sender, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
@@ -668,13 +669,13 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
                     .await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
-                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                    anyhow!("Effects from SuiTransactionBlockResult should not be empty")
                 })?;
                 let time_total = time_start.elapsed().as_micros();
                 if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
@@ -705,13 +706,13 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
                     .await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
-                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                    anyhow!("Effects from SuiTransactionBlockResult should not be empty")
                 })?;
                 if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring SUI: {:#?}", effects.status()));
@@ -754,13 +755,13 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&from, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
                     .await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
-                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                    anyhow!("Effects from SuiTransactionBlockResult should not be empty")
                 })?;
                 if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
@@ -805,13 +806,13 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
                     .await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
-                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                    anyhow!("Effects from SuiTransactionBlockResult should not be empty")
                 })?;
                 if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
@@ -844,13 +845,13 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
                     .await?;
                 let effects = response.effects.as_ref().ok_or_else(|| {
-                    anyhow!("Effects from SuiTransactionResult should not be empty")
+                    anyhow!("Effects from SuiTransactionBlockResult should not be empty")
                 })?;
                 if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
                     return Err(anyhow!(
@@ -939,7 +940,7 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
@@ -964,7 +965,7 @@ impl SuiClientCommands {
                         .keystore
                         .sign_secure(&signer, &data, Intent::default())?;
                 let response = context
-                    .execute_transaction(
+                    .execute_transaction_block(
                         Transaction::from_data(data, Intent::default(), vec![signature])
                             .verify()?,
                     )
@@ -1035,7 +1036,7 @@ impl SuiClientCommands {
                 let verified =
                     Transaction::from_generic_sig_data(data, Intent::default(), sigs).verify()?;
 
-                let response = context.execute_transaction(verified).await?;
+                let response = context.execute_transaction_block(verified).await?;
                 SuiClientCommandResult::ExecuteSignedTx(response)
             }
             SuiClientCommands::NewEnv { alias, rpc, ws } => {
@@ -1342,16 +1343,16 @@ impl WalletContext {
         ))
     }
 
-    pub async fn execute_transaction(
+    pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,
-    ) -> anyhow::Result<SuiTransactionResponse> {
+    ) -> anyhow::Result<SuiTransactionBlockResponse> {
         let client = self.get_client().await?;
         Ok(client
             .quorum_driver()
-            .execute_transaction(
+            .execute_transaction_block(
                 tx,
-                SuiTransactionResponseOptions::new()
+                SuiTransactionBlockResponseOptions::new()
                     .with_effects()
                     .with_events()
                     .with_input()
@@ -1564,7 +1565,7 @@ pub async fn call_move(
     gas_budget: u64,
     args: Vec<SuiJsonValue>,
     context: &mut WalletContext,
-) -> Result<SuiTransactionResponse, anyhow::Error> {
+) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
     // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
     let args = args
         .into_iter()
@@ -1597,11 +1598,11 @@ pub async fn call_move(
         .sign_secure(&sender, &data, Intent::default())?;
     let transaction = Transaction::from_data(data, Intent::default(), vec![signature]).verify()?;
 
-    let response = context.execute_transaction(transaction).await?;
+    let response = context.execute_transaction_block(transaction).await?;
     let effects = response
         .effects
         .as_ref()
-        .ok_or_else(|| anyhow!("Effects from SuiTransactionResult should not be empty"))?;
+        .ok_or_else(|| anyhow!("Effects from SuiTransactionBlockResult should not be empty"))?;
     if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
         return Err(anyhow!("Error calling module: {:#?}", effects.status()));
     }
@@ -1622,7 +1623,9 @@ fn convert_number_to_string(value: Value) -> Value {
 }
 
 // TODOD(chris): only print out the full response when `--verbose` is provided
-pub fn write_transaction_response(response: &SuiTransactionResponse) -> Result<String, fmt::Error> {
+pub fn write_transaction_response(
+    response: &SuiTransactionBlockResponse,
+) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
     writeln!(writer, "{}", response.digest)?;
@@ -1696,36 +1699,36 @@ impl SuiClientCommandResult {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
-    Upgrade(SuiTransactionResponse),
-    Publish(SuiTransactionResponse),
+    Upgrade(SuiTransactionBlockResponse),
+    Publish(SuiTransactionBlockResponse),
     VerifySource,
     Object(SuiObjectResponse),
     RawObject(SuiObjectResponse),
-    Call(SuiTransactionResponse),
+    Call(SuiTransactionBlockResponse),
     Transfer(
         // Skipping serialisation for elapsed time.
         #[serde(skip)] u128,
-        SuiTransactionResponse,
+        SuiTransactionBlockResponse,
     ),
-    TransferSui(SuiTransactionResponse),
-    Pay(SuiTransactionResponse),
-    PaySui(SuiTransactionResponse),
-    PayAllSui(SuiTransactionResponse),
+    TransferSui(SuiTransactionBlockResponse),
+    Pay(SuiTransactionBlockResponse),
+    PaySui(SuiTransactionBlockResponse),
+    PayAllSui(SuiTransactionBlockResponse),
     Addresses(Vec<SuiAddress>, Option<SuiAddress>),
     Objects(Vec<SuiObjectResponse>),
     DynamicFieldQuery(DynamicFieldPage),
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
-    SplitCoin(SuiTransactionResponse),
-    MergeCoin(SuiTransactionResponse),
+    SplitCoin(SuiTransactionBlockResponse),
+    MergeCoin(SuiTransactionBlockResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
     ActiveEnv(Option<String>),
     Envs(Vec<SuiEnv>, Option<String>),
     SerializeTransferSui(String),
     SerializePublish(String),
-    ExecuteSignedTx(SuiTransactionResponse),
+    ExecuteSignedTx(SuiTransactionBlockResponse),
     NewEnv(SuiEnv),
 }
 

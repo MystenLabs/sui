@@ -63,8 +63,8 @@ function TransferCoinPage() {
                     props: { coinType: coinType! },
                 });
 
-                return signer.signAndExecuteTransaction({
-                    transaction,
+                return signer.signAndExecuteTransactionBlock({
+                    transactionBlock: transaction,
                     options: {
                         showInput: true,
                         showEffects: true,

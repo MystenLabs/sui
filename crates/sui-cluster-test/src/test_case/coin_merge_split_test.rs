@@ -4,7 +4,7 @@
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use jsonrpsee::rpc_params;
-use sui_json_rpc_types::{SuiTransactionEffectsAPI, SuiTransactionResponse};
+use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Owner;
 use tracing::{debug, info};
@@ -117,7 +117,7 @@ impl CoinMergeSplitTest {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
-    ) -> SuiTransactionResponse {
+    ) -> SuiTransactionBlockResponse {
         let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 2000];
 
         let data = ctx
@@ -134,7 +134,7 @@ impl CoinMergeSplitTest {
         primary_coin: ObjectID,
         amounts: Vec<u64>,
         gas_obj_id: ObjectID,
-    ) -> SuiTransactionResponse {
+    ) -> SuiTransactionBlockResponse {
         let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 2000];
 
         let data = ctx

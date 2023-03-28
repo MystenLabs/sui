@@ -410,7 +410,7 @@ impl FullCheckpointContents {
         let mut transactions = Vec::with_capacity(contents.size());
         for tx in contents.iter() {
             if let (Some(t), Some(e)) = (
-                store.get_transaction(&tx.transaction)?,
+                store.get_transaction_block(&tx.transaction)?,
                 store.get_transaction_effects(&tx.effects)?,
             ) {
                 transactions.push(ExecutionData::new(t.into_inner(), e))

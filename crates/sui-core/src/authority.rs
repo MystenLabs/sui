@@ -46,8 +46,8 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityStorePruningConfig, DBCheckpointConfig};
 use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
-    Checkpoint, DevInspectResults, DryRunTransactionResponse, EventFilter, SuiEvent, SuiMoveValue,
-    SuiObjectDataFilter, SuiTransactionEvents,
+    Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
+    SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockEvents,
 };
 use sui_macros::{fail_point, fail_point_async, nondeterministic};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -1019,7 +1019,7 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
     ) -> Result<
         (
-            DryRunTransactionResponse,
+            DryRunTransactionBlockResponse,
             BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
             TransactionEffects,
         ),
@@ -1105,9 +1105,9 @@ impl AuthorityState {
         let balance_changes = Vec::new();
 
         Ok((
-            DryRunTransactionResponse {
+            DryRunTransactionBlockResponse {
                 effects: effects.clone().try_into()?,
-                events: SuiTransactionEvents::try_from(
+                events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
                     tx_digest,
                     None,
@@ -1122,7 +1122,7 @@ impl AuthorityState {
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
-    pub async fn dev_inspect_transaction(
+    pub async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,
@@ -1465,7 +1465,7 @@ impl AuthorityState {
                 self.event_handler
                     .process_events(
                         &effects.clone().try_into()?,
-                        &SuiTransactionEvents::try_from(
+                        &SuiTransactionBlockEvents::try_from(
                             events.clone(),
                             *tx_digest,
                             Some(timestamp_ms),
@@ -2229,31 +2229,15 @@ impl AuthorityState {
         }
     }
 
-    pub fn get_total_transaction_number(&self) -> Result<u64, anyhow::Error> {
+    pub fn get_total_transaction_blocks(&self) -> Result<u64, anyhow::Error> {
         Ok(self.get_indexes()?.next_sequence_number())
-    }
-
-    pub fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?
-            .get_transactions_in_range_deprecated(start, end)
-    }
-
-    pub fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        self.get_indexes()?.get_recent_transactions(count)
     }
 
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
     ) -> Result<(VerifiedTransaction, TransactionEffects), anyhow::Error> {
-        let transaction = self.database.get_transaction(&digest)?;
+        let transaction = self.database.get_transaction_block(&digest)?;
         let effects = self.database.get_executed_effects(&digest)?;
         match (transaction, effects) {
             (Some(transaction), Some(effects)) => Ok((transaction, effects)),
@@ -2265,7 +2249,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<VerifiedTransaction, anyhow::Error> {
-        let transaction = self.database.get_transaction(&digest)?;
+        let transaction = self.database.get_transaction_block(&digest)?;
         transaction.ok_or_else(|| anyhow!(SuiError::TransactionNotFound { digest }))
     }
 
@@ -2281,7 +2265,7 @@ impl AuthorityState {
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<Option<VerifiedTransaction>>, anyhow::Error> {
-        Ok(self.database.multi_get_transactions(digests)?)
+        Ok(self.database.multi_get_transaction_blocks(digests)?)
     }
 
     pub async fn multi_get_executed_effects(
@@ -2598,7 +2582,7 @@ impl AuthorityState {
         let Some(cert_sig) = epoch_store.get_transaction_cert_sig(tx_digest)? else {
             return Ok(None);
         };
-        let Some(transaction) = self.database.get_transaction(tx_digest)? else {
+        let Some(transaction) = self.database.get_transaction_block(tx_digest)? else {
             return Ok(None);
         };
 
@@ -2620,7 +2604,7 @@ impl AuthorityState {
         if let Some(effects) =
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
-            if let Some(transaction) = self.database.get_transaction(transaction_digest)? {
+            if let Some(transaction) = self.database.get_transaction_block(transaction_digest)? {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
                 let events = if let Some(digest) = effects.events_digest() {
                     self.get_transaction_events(digest)?

@@ -13,7 +13,7 @@ import Alert from '_src/ui/app/components/alert';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
-function TransactionsPage() {
+function TransactionBlocksPage() {
     const activeAddress = useActiveAddress();
     const {
         data: txns,
@@ -58,4 +58,4 @@ function TransactionsPage() {
     );
 }
 
-export default memo(TransactionsPage);
+export default memo(TransactionBlocksPage);

@@ -15,8 +15,8 @@ use serde_json::json;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::{
-    type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionEffectsAPI,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    type_and_fields_from_move_struct, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -146,7 +146,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
         ],
     );
 
-    context.execute_transaction(tx).await.unwrap();
+    context.execute_transaction_block(tx).await.unwrap();
 
     assert_eq!(sponsor, context.get_object_owner(&sent_coin).await.unwrap(),);
     Ok(())
@@ -726,7 +726,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction_block(ExecuteTransactionRequest {
             transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForLocalExecution,
         })
@@ -754,7 +754,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     let txn = txns.swap_remove(0);
     let digest = *txn.digest();
     let res = transaction_orchestrator
-        .execute_transaction(ExecuteTransactionRequest {
+        .execute_transaction_block(ExecuteTransactionRequest {
             transaction: txn.into(),
             request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
         })
@@ -819,15 +819,15 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
         let params = rpc_params![
             tx_bytes,
             signatures,
-            SuiTransactionResponseOptions::new(),
+            SuiTransactionBlockResponseOptions::new(),
             ExecuteTransactionRequestType::WaitForLocalExecution
         ];
-        let response: SuiTransactionResponse = jsonrpc_client
-            .request("sui_executeTransaction", params)
+        let response: SuiTransactionBlockResponse = jsonrpc_client
+            .request("sui_executeTransactionBlock", params)
             .await
             .unwrap();
 
-        let SuiTransactionResponse {
+        let SuiTransactionBlockResponse {
             digest,
             confirmed_local_execution,
             ..
@@ -860,15 +860,15 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let params = rpc_params![
         tx_bytes,
         signatures,
-        SuiTransactionResponseOptions::new(),
+        SuiTransactionBlockResponseOptions::new(),
         ExecuteTransactionRequestType::WaitForLocalExecution
     ];
-    let response: SuiTransactionResponse = jsonrpc_client
-        .request("sui_executeTransaction", params)
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params)
         .await
         .unwrap();
 
-    let SuiTransactionResponse {
+    let SuiTransactionBlockResponse {
         digest,
         confirmed_local_execution,
         ..
@@ -876,8 +876,8 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     assert_eq!(&digest, tx_digest);
     assert!(confirmed_local_execution.unwrap());
 
-    let _response: SuiTransactionResponse = jsonrpc_client
-        .request("sui_getTransaction", rpc_params![*tx_digest])
+    let _response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_getTransactionBlock", rpc_params![*tx_digest])
         .await
         .unwrap();
 
@@ -886,15 +886,15 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
     let params = rpc_params![
         tx_bytes,
         signatures,
-        SuiTransactionResponseOptions::new().with_effects(),
+        SuiTransactionBlockResponseOptions::new().with_effects(),
         ExecuteTransactionRequestType::WaitForEffectsCert
     ];
-    let response: SuiTransactionResponse = jsonrpc_client
-        .request("sui_executeTransaction", params)
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params)
         .await
         .unwrap();
 
-    let SuiTransactionResponse {
+    let SuiTransactionBlockResponse {
         effects,
         confirmed_local_execution,
         ..
@@ -963,7 +963,10 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         sender,
         recipient,
     );
-    context.execute_transaction(nft_transfer_tx).await.unwrap();
+    context
+        .execute_transaction_block(nft_transfer_tx)
+        .await
+        .unwrap();
     sleep(Duration::from_secs(1)).await;
 
     let (object_ref_v2, object_v2, _) = get_obj_read_from_node(&node, object_id).await?;

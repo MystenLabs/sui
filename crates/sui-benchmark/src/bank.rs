@@ -135,7 +135,10 @@ impl BenchmarkBank {
         // transferring it to recipients
         let verified_tx =
             self.make_split_coin_tx(split_amounts.clone(), Some(gas_price), &self.primary_gas.2)?;
-        let effects = self.proxy.execute_transaction(verified_tx.into()).await?;
+        let effects = self
+            .proxy
+            .execute_transaction_block(verified_tx.into())
+            .await?;
         let updated_gas = effects
             .mutated()
             .into_iter()
@@ -160,7 +163,10 @@ impl BenchmarkBank {
             &self.primary_gas.2,
             Some(gas_price),
         )?;
-        let effects = self.proxy.execute_transaction(verified_tx.into()).await?;
+        let effects = self
+            .proxy
+            .execute_transaction_block(verified_tx.into())
+            .await?;
         let address_map: HashMap<SuiAddress, Arc<AccountKeyPair>> = coin_configs
             .iter()
             .map(|c| (c.address, c.keypair.clone()))

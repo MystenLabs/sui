@@ -9,7 +9,7 @@ import {
     getTransactionSignature,
     normalizeSuiAddress,
     type SuiAddress,
-    type SuiTransactionResponse,
+    type SuiTransactionBlockResponse,
     type SignaturePubkeyPair,
 } from '@mysten/sui.js';
 
@@ -65,7 +65,7 @@ function getSignatureFromAddress(
 }
 
 interface Props {
-    transaction: SuiTransactionResponse;
+    transaction: SuiTransactionBlockResponse;
 }
 
 export function Signatures({ transaction }: Props) {
