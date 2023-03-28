@@ -17,6 +17,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
 
 use crate::programmable_transactions;
+use sui_macros::checked_arithmetic;
 use sui_protocol_config::{
     check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig, ProtocolVersion,
 };
@@ -46,6 +47,8 @@ use sui_types::{
 };
 
 use sui_types::temporary_store::TemporaryStore;
+
+checked_arithmetic! {
 
 pub struct AdvanceEpochParams {
     pub epoch: u64,
@@ -578,4 +581,6 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
         None,
         pt,
     )
+}
+
 }

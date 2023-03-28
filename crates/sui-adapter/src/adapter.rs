@@ -49,6 +49,8 @@ use sui_verifier::entry_points_verifier::{
     RESOLVED_UTF8_STR,
 };
 
+sui_macros::checked_arithmetic! {
+
 pub fn default_verifier_config(
     protocol_config: &ProtocolConfig,
     is_metered: bool,
@@ -807,4 +809,6 @@ pub fn run_metered_move_bytecode_verifier_impl(
         }
     }
     Ok(())
+}
+
 }

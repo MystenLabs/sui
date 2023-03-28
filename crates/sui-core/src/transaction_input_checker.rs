@@ -5,6 +5,7 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::AuthorityStore;
 use std::collections::{BTreeMap, HashSet};
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
+use sui_macros::checked_arithmetic;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectRef;
 use sui_types::error::{UserInputError, UserInputResult};
@@ -22,6 +23,8 @@ use sui_types::{
 };
 use sui_types::{SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use tracing::instrument;
+
+checked_arithmetic! {
 
 // Entry point for all checks related to gas.
 // Called on both signing and execution.
@@ -399,4 +402,6 @@ pub fn check_non_system_packages_to_be_published(
     }
 
     Ok(())
+}
+
 }

@@ -18,6 +18,7 @@ use move_core_types::{
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::ops::AddAssign;
 use std::{
     convert::TryFrom,
     ops::{Add, Deref, Mul},
@@ -27,6 +28,21 @@ use sui_cost_tables::{
     units_types::GasUnit,
 };
 use sui_protocol_config::*;
+
+macro_rules! ok_or_gas_balance_error {
+    ($balance:expr, $required:expr) => {
+        if $balance < $required {
+            Err(UserInputError::GasBalanceTooLow {
+                gas_balance: $balance,
+                needed_gas_amount: $required,
+            })
+        } else {
+            Ok(())
+        }
+    };
+}
+
+sui_macros::checked_arithmetic! {
 
 // A bucket defines a range of units that will be priced the same.
 // A cost for the bucket is defined to make the step function non linear.
@@ -83,19 +99,6 @@ pub type ComputeGasPricePerUnit = GasQuantity<UnitDiv<GasUnit, GasUnit>>;
 
 pub type GasPrice = GasQuantity<GasPriceUnit>;
 pub type SuiGas = GasQuantity<SuiGasUnit>;
-
-macro_rules! ok_or_gas_balance_error {
-    ($balance:expr, $required:expr) => {
-        if $balance < $required {
-            Err(UserInputError::GasBalanceTooLow {
-                gas_balance: $balance,
-                needed_gas_amount: $required,
-            })
-        } else {
-            Ok(())
-        }
-    };
-}
 
 /// Summary of the charges in a transaction.
 /// Storage is charged independently of computation.
@@ -473,7 +476,7 @@ impl<'a> SuiGasStatus<'a> {
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*self.cost_table.storage_per_byte_cost);
         self.deduct_storage_cost(&storage_cost).map(|gu| {
-            self.storage_rebate += storage_rebate;
+            self.storage_rebate.add_assign(storage_rebate);
             gu.into()
         })
     }
@@ -660,4 +663,6 @@ pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
             object_id: gas_object.id(),
         })?
         .value())
+}
+
 }

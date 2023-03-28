@@ -2457,9 +2457,9 @@ dependencies = [
 
 [[package]]
 name = "diesel_derives"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "143b758c91dbc3fe1fdcb0dba5bd13276c6a66422f2ef5795b58488248a310aa"
+checksum = "0ad74fdcf086be3d4fdd142f67937678fe60ed431c3b2f08599e7687269410c4"
 dependencies = [
  "proc-macro-error",
  "proc-macro2 1.0.54",
@@ -8588,6 +8588,7 @@ dependencies = [
  "move-vm-types",
  "serde 1.0.152",
  "sui-framework",
+ "sui-macros",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier",
@@ -9717,6 +9718,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
+ "sui-macros",
  "sui-protocol-config",
  "tap",
  "test-utils",
