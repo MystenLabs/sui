@@ -1918,7 +1918,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
         "--args",
         "0x5",
         &format!("[{}]", coins.first().unwrap().coin_object_id),
-        "[10000]",
+        "[1000000000]",
         &validator_addr.to_string(),
         "--gas-budget",
         "10000",
@@ -1929,7 +1929,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
 
     assert_eq!(1, stake.len());
     assert_eq!(
-        10000,
+        1000000000,
         stake.first().unwrap().stakes.first().unwrap().principal
     );
     Ok(())

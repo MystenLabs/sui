@@ -351,6 +351,15 @@ The epoch value corresponds to the first epoch this change takes place.
 ## Constants
 
 
+<a name="0x3_validator_set_MIN_STAKING_THRESHOLD"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
+</code></pre>
+
+
+
 <a name="0x3_validator_set_EInvalidCap"></a>
 
 
@@ -473,6 +482,15 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 <pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: u64 = 9;
+</code></pre>
+
+
+
+<a name="0x3_validator_set_EStakingBelowThreshold"></a>
+
+
+
+<pre><code><b>const</b> <a href="validator_set.md#0x3_validator_set_EStakingBelowThreshold">EStakingBelowThreshold</a>: u64 = 10;
 </code></pre>
 
 
@@ -743,6 +761,7 @@ Only an active validator can request to be removed.
 Called by <code><a href="sui_system.md#0x3_sui_system">sui_system</a></code>, to add a new stake to the validator.
 This request is added to the validator's staking pool's pending stake entries, processed at the end
 of the epoch.
+Aborts in case the staking amount is smaller than MIN_STAKING_THRESHOLD
 
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_request_add_stake">request_add_stake</a>(self: &<b>mut</b> <a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, validator_address: <b>address</b>, stake: <a href="_Balance">balance::Balance</a>&lt;<a href="_SUI">sui::SUI</a>&gt;, ctx: &<b>mut</b> <a href="_TxContext">tx_context::TxContext</a>)
@@ -760,6 +779,8 @@ of the epoch.
     stake: Balance&lt;SUI&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
+    <b>let</b> sui_amount = <a href="_value">balance::value</a>(&stake);
+    <b>assert</b>!(sui_amount &gt;= <a href="validator_set.md#0x3_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>, <a href="validator_set.md#0x3_validator_set_EStakingBelowThreshold">EStakingBelowThreshold</a>);
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_candidate_or_active_validator_mut">get_candidate_or_active_validator_mut</a>(self, validator_address);
     <a href="validator.md#0x3_validator_request_add_stake">validator::request_add_stake</a>(<a href="validator.md#0x3_validator">validator</a>, stake, <a href="_sender">tx_context::sender</a>(ctx), ctx);
 }
