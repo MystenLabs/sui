@@ -77,7 +77,7 @@ pub enum Operation {
         duration: Duration,
 
         /// The interval between measurements collection in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "15", global = true)]
+        #[clap(long, value_parser = parse_duration, default_value = "30", global = true)]
         scrape_interval: Duration,
 
         /// Whether to skip testbed updates before running benchmarks.

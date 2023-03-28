@@ -3,8 +3,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    fs::{self, File},
-    io::Read,
+    fs::{self},
     path::PathBuf,
     time::Duration,
 };
@@ -228,49 +227,47 @@ impl Orchestrator {
 
         // // TODO: There should be no need to generate these files locally; we can generate them
         // // directly on the remote machines.
-        SuiProtocol::print_files(&instances);
+        // SuiProtocol::print_files(&instances);
 
-        // Generate the configuration file, genesis, and gas keystore.
-        // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
-        for (i, instance) in instances.iter().enumerate() {
-            display::status(format!("{}/{}", i + 1, instances.len()));
+        // // Generate the configuration file, genesis, and gas keystore.
+        // // NOTE: Our ssh library does not seem to be able to transfers files in parallel reliably.
+        // for (i, instance) in instances.iter().enumerate() {
+        //     display::status(format!("{}/{}", i + 1, instances.len()));
 
-            // Connect to the instance.
-            let connection = self
-                .ssh_manager
-                .connect(instance.ssh_address())
-                .await?
-                .with_timeout(&Some(Duration::from_secs(180)));
+        //     // Connect to the instance.
+        //     let connection = self
+        //         .ssh_manager
+        //         .connect(instance.ssh_address())
+        //         .await?
+        //         .with_timeout(&Some(Duration::from_secs(180)));
 
-            // Upload all configuration files.
-            for source in SuiProtocol::configuration_files() {
-                let destination = source.file_name().expect("Config file is directory");
-                let mut file = File::open(&source).expect("Cannot open config file");
-                let mut buf = Vec::new();
-                file.read_to_end(&mut buf).expect("Cannot read config file");
-                connection.upload(destination, &buf)?;
-            }
+        //     // Upload all configuration files.
+        //     for source in SuiProtocol::configuration_files() {
+        //         let destination = source.file_name().expect("Config file is directory");
+        //         let mut file = File::open(&source).expect("Cannot open config file");
+        //         let mut buf = Vec::new();
+        //         file.read_to_end(&mut buf).expect("Cannot read config file");
+        //         connection.upload(destination, &buf)?;
+        //     }
 
-            // Generate the genesis files.
-            let command = [
-                "source $HOME/.cargo/env",
-                &self.protocol_commands.genesis_config_command(),
-            ]
-            .join(" && ");
-            let repo_name = self.settings.repository_name();
-            connection.execute_from_path(command, repo_name)?;
-        }
+        //     // Generate the genesis files.
+        //     let command = [
+        //         "source $HOME/.cargo/env",
+        //         &self.protocol_commands.genesis_config_command(&instances),
+        //     ]
+        //     .join(" && ");
+        //     let repo_name = self.settings.repository_name();
+        //     connection.execute_from_path(command, repo_name)?;
+        //}
 
-        // TMP
         // Generate the genesis configuration file and the keystore allowing access to gas objects.
-        // let command = self.protocol_commands.genesis_command(instances.iter());
-        // let repo_name = self.settings.repository_name();
-        // let ssh_command =
-        //     SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
-        // self.ssh_manager
-        //     .execute(instances.iter(), &ssh_command)
-        //     .await?;
-        // TMP
+        let command = self.protocol_commands.genesis_command(instances.iter());
+        let repo_name = self.settings.repository_name();
+        let ssh_command =
+            SshCommand::new(move |_| command.clone()).with_execute_from_path(repo_name.into());
+        self.ssh_manager
+            .execute(instances.iter(), &ssh_command)
+            .await?;
 
         display::done();
         Ok(())
@@ -323,8 +320,6 @@ impl Orchestrator {
             ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
-        // let command = self.protocol_commands.node_command(instances.iter());
-
         let repo = self.settings.repository_name();
         let ssh_command = SshCommand::new(command)
             .run_background("node".into())
@@ -360,11 +355,9 @@ impl Orchestrator {
             let mut genesis = working_dir.clone();
             genesis.push("sui_config");
             genesis.push("genesis.blob");
-            // let gas_id = SuiProtocol::gas_object_id_offsets(committee_size)[i].clone();
             let gas_id = GenesisConfig::benchmark_gas_object_id_offsets(committee_size)[i].clone();
             let keystore = format!(
                 "~/working_dir/sui_config/{}",
-                // "~/{}",
                 SuiProtocol::GAS_KEYSTORE_FILE
             );
 
@@ -382,16 +375,7 @@ impl Orchestrator {
                 &format!("--client-metric-port {}", SuiProtocol::CLIENT_METRICS_PORT),
             ]
             .join(" ");
-            [
-                &format!(
-                    "(mv ~/{} ~/working_dir/sui_config/{} || true)",
-                    SuiProtocol::GAS_KEYSTORE_FILE,
-                    SuiProtocol::GAS_KEYSTORE_FILE
-                ),
-                "source $HOME/.cargo/env",
-                &run,
-            ]
-            .join(" && ")
+            ["source $HOME/.cargo/env", &run].join(" && ")
         };
 
         let repo = self.settings.repository_name();
@@ -563,6 +547,7 @@ impl Orchestrator {
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
+            time::sleep(Duration::from_secs(30)).await; //
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
             let aggregator = self.collect_metrics(&parameters).await?;

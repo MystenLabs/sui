@@ -221,16 +221,25 @@ impl SuiProtocol {
     pub fn configuration_files() -> Vec<PathBuf> {
         vec![
             Self::GENESIS_CONFIG_FILE.into(),
-            Self::GAS_KEYSTORE_FILE.into(),
+            // Self::GAS_KEYSTORE_FILE.into(),
         ]
     }
 
-    pub fn genesis_config_command(&self) -> String {
+    pub fn genesis_config_command(&self, instances: &[Instance]) -> String {
+        let ips = instances
+            .iter()
+            .map(|x| x.main_ip.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
         let genesis_file = format!("~/{}", Self::GENESIS_CONFIG_FILE);
         let genesis = [
             "cargo run --release --bin sui --",
+            // &format!(
+            //     "genesis -f --from-config {genesis_file} --working-dir {} --benchmark-ips {ips}",
+            //     self.working_dir.display()
+            // ),
             &format!(
-                "genesis -f --from-config {genesis_file} --working-dir {}",
+                "genesis -f  --working-dir {} --benchmark-ips {ips}",
                 self.working_dir.display()
             ),
         ]
