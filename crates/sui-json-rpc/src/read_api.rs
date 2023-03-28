@@ -292,7 +292,11 @@ impl ReadApiServer for ReadApi {
             .state
             .get_transaction_checkpoint_sequence(&digest)
             .map_err(|e| {
+<<<<<<< HEAD
                 error!("Failed to get_transaction for transaction {digest:?} with error: {e:?}");
+=======
+                error!("Failed to call get transaction checkpoint sequence for digest: {digest:?}");
+>>>>>>> 57a48f60b (adding logging on transactions digest and checkpoint ids)
                 anyhow!("{e}")
             })?
         {
@@ -300,11 +304,14 @@ impl ReadApiServer for ReadApi {
         }
 
         if temp_response.checkpoint_seq.is_some() {
+            let checkpoint_id = temp_response.checkpoint_seq.unwrap().into();
             let checkpoint = self
                 .state
                 // safe to unwrap because we have checked `is_some` above
-                .get_checkpoint_by_sequence_number(temp_response.checkpoint_seq.unwrap().into())
-                .map_err(|e| anyhow!("{e}"))?;
+                .get_checkpoint_by_sequence_number(checkpoint_id)
+                .map_err(|e| {
+                    error!("Failed to get checkpoint by sequence number: {checkpoint_id:?}");
+                    anyhow!("{e}")})?;
             // TODO(chris): we don't need to fetch the whole checkpoint summary
             temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
         }
@@ -315,7 +322,11 @@ impl ReadApiServer for ReadApi {
                 let events = self
                     .state
                     .get_transaction_events(event_digest)
-                    .map_err(Error::from)?;
+                    .map_err(|e| 
+                        {
+                            error!("Failed to call get transaction events for events digest: {event_digest:?}");
+                            Error::from(e)
+                        })?;
                 match to_sui_transaction_events(self, digest, events) {
                     Ok(e) => temp_response.events = Some(e),
                     Err(e) => temp_response.errors.push(e.to_string()),
@@ -446,7 +457,9 @@ impl ReadApiServer for ReadApi {
         let timestamps = self
             .state
             .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
-            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| {
+                error!("Failed to fetch checkpoint summarys by these checkpoint ids: {unique_checkpoint_numbers:?}");
+                anyhow!("{e}")})?
             .into_iter()
             .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
 
@@ -603,7 +616,12 @@ impl ReadApiServer for ReadApi {
         let events = if let Some(event_digest) = effect.events_digest() {
             self.state
                 .get_transaction_events(event_digest)
-                .map_err(Error::SuiError)?
+                .map_err(
+                    |e| {
+                        error!("Failed to get transaction events for event digest {event_digest:?}");
+                        Error::SuiError(e)
+                    }    
+                )?
                 .data
                 .into_iter()
                 .enumerate()
