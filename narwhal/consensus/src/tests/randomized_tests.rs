@@ -4,6 +4,7 @@ use crate::bullshark::Bullshark;
 use crate::consensus::ConsensusProtocol;
 use crate::consensus::ConsensusState;
 use crate::consensus_utils::make_consensus_store;
+use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::metrics::ConsensusMetrics;
 use config::{AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
@@ -419,8 +420,6 @@ fn generate_and_run_execution_plans(
         }
 
         // Now create a new Bullshark engine
-        const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
-
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
         let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
         let mut bullshark = Bullshark::new(
