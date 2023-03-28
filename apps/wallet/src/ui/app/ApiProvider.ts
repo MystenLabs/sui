@@ -41,8 +41,7 @@ export const ENV_TO_API: Record<API_ENV, Connection | null> = {
     [API_ENV.customRPC]: null,
     [API_ENV.testNet]: new Connection({
         fullnode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
-        // NOTE: Faucet is currently disabled for testnet:
-        // faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
+        faucet: process.env.API_ENDPOINT_TEST_NET_FAUCET || '',
     }),
 };
 
