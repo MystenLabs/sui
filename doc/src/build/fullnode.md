@@ -179,12 +179,12 @@ At this point, your Sui Full node and indexer are ready to connect to the Sui ne
     ```
  1. Optional: [Publish/subscribe](event_api.md#subscribe-to-sui-events) to notifications using JSON-RPC via websocket.
  1. To start the Sui indexer binary, open a new Terminal or Console to the `sui/crates/sui-indexer` directory.
- 1. Using the database connection URL you used when setting up the Sui indexer, run the following command:
+ 1. Using the database connection URL you used when setting up the indexer, run the following command:
     ```sh
     cargo run --bin sui-indexer -- --db-url "<DATABASE-URL>" --rpc-client-url "http://0.0.0.0:9000"
     ```
 
-**Note:** If you receive a `cannot find -lpq` error, you are missing the `libpq` library. Use `sudo apt-get install libpq-dev` to install on Linux, or `brew install libpq` on MacOS. 
+**Note:** If you receive a `cannot find -lpq` error, you are missing the `libpq` library. Use `sudo apt-get install libpq-dev` to install on Linux, or `brew install libpq` on MacOS. After you install on MacOS, create a Homebrew link using `brew link --force libpq`. For further context, reference the [issue on Stack Overflow](https://stackoverflow.com/questions/70313347/ld-library-not-found-for-lpq-when-build-rust-in-macos?rq=1).
 
 If your setup is successful, your Sui Full node is now connected to the appropriate network and your indexer is processing transactions.
 
