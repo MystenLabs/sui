@@ -306,11 +306,11 @@ impl ReadApiServer for ReadApi {
         if temp_response.checkpoint_seq.is_some() {
             let checkpoint_id = temp_response.checkpoint_seq.unwrap().into();
             let checkpoint = self
-                .state
+                .stateFailed to fetch checkpoint summarys
                 // safe to unwrap because we have checked `is_some` above
                 .get_checkpoint_by_sequence_number(checkpoint_id)
                 .map_err(|e| {
-                    error!("Failed to get checkpoint by sequence number: {checkpoint_id:?}");
+                    error!("Failed to get checkpoint by sequence number: {checkpoint_id:?} with error: {e:?}");
                     anyhow!("{e}")})?;
             // TODO(chris): we don't need to fetch the whole checkpoint summary
             temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
@@ -324,7 +324,7 @@ impl ReadApiServer for ReadApi {
                     .get_transaction_events(event_digest)
                     .map_err(|e| 
                         {
-                            error!("Failed to call get transaction events for events digest: {event_digest:?}");
+                            error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
                             Error::from(e)
                         })?;
                 match to_sui_transaction_events(self, digest, events) {
@@ -458,7 +458,7 @@ impl ReadApiServer for ReadApi {
             .state
             .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
             .map_err(|e| {
-                error!("Failed to fetch checkpoint summarys by these checkpoint ids: {unique_checkpoint_numbers:?}");
+                error!("Failed to fetch checkpoint summarys by these checkpoint ids: {unique_checkpoint_numbers:?} with error: {e:?}");
                 anyhow!("{e}")})?
             .into_iter()
             .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
@@ -618,7 +618,7 @@ impl ReadApiServer for ReadApi {
                 .get_transaction_events(event_digest)
                 .map_err(
                     |e| {
-                        error!("Failed to get transaction events for event digest {event_digest:?}");
+                        error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
                         Error::SuiError(e)
                     }    
                 )?
