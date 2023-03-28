@@ -1243,7 +1243,7 @@ pub mod pg_integration_test {
         let config = IndexerConfig {
             db_url,
             rpc_client_url: test_cluster.rpc_url().to_string(),
-            migrated_methods: IndexerConfig::all_migrated_methods(),
+            migrated_methods: IndexerConfig::all_implemented_methods(),
             reset_db: true,
             ..Default::default()
         };
