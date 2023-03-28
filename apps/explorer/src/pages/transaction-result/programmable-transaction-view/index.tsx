@@ -23,7 +23,7 @@ export function ProgrammableTransactionView({ transaction }: Props) {
                 data-testid="programmable-transactions-commands"
                 className="py-12"
             >
-                <Commands commands={transaction.commands} />
+                <Commands transactions={transaction.transactions} />
             </section>
         </>
     );

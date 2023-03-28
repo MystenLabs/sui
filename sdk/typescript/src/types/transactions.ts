@@ -67,17 +67,17 @@ export const SuiArgument = union([
 ]);
 export type SuiArgument = Infer<typeof SuiArgument>;
 
-export const MoveCallSuiCommand = object({
+export const MoveCallSuiTransaction = object({
   arguments: optional(array(SuiArgument)),
   type_arguments: optional(array(string())),
   package: ObjectId,
   module: string(),
   function: string(),
 });
-export type MoveCallSuiCommand = Infer<typeof MoveCallSuiCommand>;
+export type MoveCallSuiTransaction = Infer<typeof MoveCallSuiTransaction>;
 
-export const SuiCommand = union([
-  object({ MoveCall: MoveCallSuiCommand }),
+export const SuiTransaction = union([
+  object({ MoveCall: MoveCallSuiTransaction }),
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
   object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
@@ -109,11 +109,11 @@ export const SuiCallArg = union([
 export type SuiCallArg = Infer<typeof SuiCallArg>;
 
 export const ProgrammableTransaction = object({
-  commands: array(SuiCommand),
+  transactions: array(SuiTransaction),
   inputs: array(SuiCallArg),
 });
 export type ProgrammableTransaction = Infer<typeof ProgrammableTransaction>;
-export type ProgrammableTransactionCommand = Infer<typeof SuiCommand>;
+export type SuiTransaction = Infer<typeof SuiTransaction>;
 
 /**
  * 1. WaitForEffectsCert: waits for TransactionEffectsCert and then returns to the client.
