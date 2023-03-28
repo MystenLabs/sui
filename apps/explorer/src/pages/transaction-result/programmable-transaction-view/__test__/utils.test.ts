@@ -46,7 +46,7 @@ describe('utils.ts', () => {
                 '[Result(0), Result(1), Result(2), Result(3), Result(4)], Input(0)'
             );
         });
-        it('should flatten MergeCoinsSuiCommand data', () => {
+        it('should flatten MergeCoinsSuiTransaction data', () => {
             expect(
                 flattenSuiArguments([
                     {

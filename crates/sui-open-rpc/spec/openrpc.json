@@ -192,7 +192,7 @@
                         "digest": "Cv7n2YaM7Am1ssZGu4khsFkcKHnpgVhwFCSs4kLjrtLW"
                       }
                     ],
-                    "commands": [
+                    "transactions": [
                       {
                         "TransferObjects": [
                           [
@@ -839,7 +839,7 @@
                         "digest": "GK4NxEKSrK88XkPNeuBqtJYPmU9yMTWMD7K9TdU4ybKN"
                       }
                     ],
-                    "commands": [
+                    "transactions": [
                       {
                         "TransferObjects": [
                           [
@@ -3202,7 +3202,7 @@
             ]
           },
           "error": {
-            "description": "Execution error from executing the transaction commands",
+            "description": "Execution error from executing the transactions",
             "type": [
               "string",
               "null"
@@ -3216,7 +3216,7 @@
             }
           },
           "results": {
-            "description": "Execution results (including return values) from executing the transaction commands",
+            "description": "Execution results (including return values) from executing the transactions",
             "type": [
               "array",
               "null"
@@ -5588,7 +5588,7 @@
         "$ref": "#/components/schemas/Hex"
       },
       "SuiArgument": {
-        "description": "An argument to a programmable transaction command",
+        "description": "An argument to a transaction in a programmable transaction block",
         "oneOf": [
           {
             "description": "The gas coin. The gas coin can only be used by-ref, except for with `TransferObjects`, which can use it by-value.",
@@ -5598,7 +5598,7 @@
             ]
           },
           {
-            "description": "One of the input objects or primitive values (from `ProgrammableTransaction` inputs)",
+            "description": "One of the input objects or primitive values (from `ProgrammableTransactionBlock` inputs)",
             "type": "object",
             "required": [
               "Input"
@@ -5613,7 +5613,7 @@
             "additionalProperties": false
           },
           {
-            "description": "The result of another command (from `ProgrammableTransaction` commands)",
+            "description": "The result of another transaction (from `ProgrammableTransactionBlock` transactions)",
             "type": "object",
             "required": [
               "Result"
@@ -5800,189 +5800,6 @@
           }
         }
       },
-      "SuiCommand": {
-        "description": "A single command in a programmable transaction.",
-        "oneOf": [
-          {
-            "description": "A call to either an entry or a public Move function",
-            "type": "object",
-            "required": [
-              "MoveCall"
-            ],
-            "properties": {
-              "MoveCall": {
-                "$ref": "#/components/schemas/SuiProgrammableMoveCall"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "`(Vec<forall T:key+store. T>, address)` It sends n-objects to the specified address. These objects must have store (public transfer) and either the previous owner must be an address or the object must be newly created.",
-            "type": "object",
-            "required": [
-              "TransferObjects"
-            ],
-            "properties": {
-              "TransferObjects": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SuiArgument"
-                    }
-                  },
-                  {
-                    "$ref": "#/components/schemas/SuiArgument"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "`(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>` It splits off some amounts into a new coins with those amounts",
-            "type": "object",
-            "required": [
-              "SplitCoins"
-            ],
-            "properties": {
-              "SplitCoins": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/SuiArgument"
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SuiArgument"
-                    }
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "`(&mut Coin<T>, Vec<Coin<T>>)` It merges n-coins into the first coin",
-            "type": "object",
-            "required": [
-              "MergeCoins"
-            ],
-            "properties": {
-              "MergeCoins": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/SuiArgument"
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SuiArgument"
-                    }
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
-            "type": "object",
-            "required": [
-              "Publish"
-            ],
-            "properties": {
-              "Publish": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/MovePackage"
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/ObjectID"
-                    }
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Upgrades a Move package",
-            "type": "object",
-            "required": [
-              "Upgrade"
-            ],
-            "properties": {
-              "Upgrade": {
-                "type": "array",
-                "items": [
-                  {
-                    "$ref": "#/components/schemas/MovePackage"
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/ObjectID"
-                    }
-                  },
-                  {
-                    "$ref": "#/components/schemas/ObjectID"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SuiArgument"
-                  }
-                ],
-                "maxItems": 4,
-                "minItems": 4
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
-            "type": "object",
-            "required": [
-              "MakeMoveVec"
-            ],
-            "properties": {
-              "MakeMoveVec": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/SuiArgument"
-                    }
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "SuiExecutionResult": {
         "type": "object",
         "properties": {
@@ -6012,7 +5829,7 @@
             }
           },
           "returnValues": {
-            "description": "The return values from the command",
+            "description": "The return values from the transaction",
             "type": "array",
             "items": {
               "type": "array",
@@ -6500,7 +6317,7 @@
         }
       },
       "SuiProgrammableMoveCall": {
-        "description": "The command for calling a Move function, either an entry function or a public function (which cannot return references).",
+        "description": "The transaction for calling a Move function, either an entry function or a public function (which cannot return references).",
         "type": "object",
         "required": [
           "function",
@@ -6843,6 +6660,189 @@
             "minimum": 0.0
           }
         }
+      },
+      "SuiTransaction": {
+        "description": "A single transaction in a programmable transaction block.",
+        "oneOf": [
+          {
+            "description": "A call to either an entry or a public Move function",
+            "type": "object",
+            "required": [
+              "MoveCall"
+            ],
+            "properties": {
+              "MoveCall": {
+                "$ref": "#/components/schemas/SuiProgrammableMoveCall"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(Vec<forall T:key+store. T>, address)` It sends n-objects to the specified address. These objects must have store (public transfer) and either the previous owner must be an address or the object must be newly created.",
+            "type": "object",
+            "required": [
+              "TransferObjects"
+            ],
+            "properties": {
+              "TransferObjects": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>` It splits off some amounts into a new coins with those amounts",
+            "type": "object",
+            "required": [
+              "SplitCoins"
+            ],
+            "properties": {
+              "SplitCoins": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`(&mut Coin<T>, Vec<Coin<T>>)` It merges n-coins into the first coin",
+            "type": "object",
+            "required": [
+              "MergeCoins"
+            ],
+            "properties": {
+              "MergeCoins": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Publishes a Move package. It takes the package bytes and a list of the package's transitive dependencies to link against on-chain.",
+            "type": "object",
+            "required": [
+              "Publish"
+            ],
+            "properties": {
+              "Publish": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Upgrades a Move package",
+            "type": "object",
+            "required": [
+              "Upgrade"
+            ],
+            "properties": {
+              "Upgrade": {
+                "type": "array",
+                "items": [
+                  {
+                    "$ref": "#/components/schemas/MovePackage"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ObjectID"
+                    }
+                  },
+                  {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SuiArgument"
+                  }
+                ],
+                "maxItems": 4,
+                "minItems": 4
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "`forall T: Vec<T> -> vector<T>` Given n-values of the same type, it constructs a vector. For non objects or an empty vector, the type tag must be specified.",
+            "type": "object",
+            "required": [
+              "MakeMoveVec"
+            ],
+            "properties": {
+              "MakeMoveVec": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiArgument"
+                    }
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "SuiTransactionBlockBuilderMode": {
         "oneOf": [
@@ -7457,21 +7457,14 @@
             }
           },
           {
-            "description": "A series of commands where the results of one command can be used in future commands",
+            "description": "A series of transactions where the results of one transaction can be used in future transactions",
             "type": "object",
             "required": [
-              "commands",
               "inputs",
-              "kind"
+              "kind",
+              "transactions"
             ],
             "properties": {
-              "commands": {
-                "description": "The commands to be executed sequentially. A failure in any command will result in the failure of the entire transaction.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SuiCommand"
-                }
-              },
               "inputs": {
                 "description": "Input objects or primitive values",
                 "type": "array",
@@ -7484,6 +7477,13 @@
                 "enum": [
                   "ProgrammableTransaction"
                 ]
+              },
+              "transactions": {
+                "description": "The transactions to be executed sequentially. A failure in any transaction will result in the failure of the entire programmable transaction block.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiTransaction"
+                }
               }
             }
           }
