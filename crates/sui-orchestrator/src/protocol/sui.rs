@@ -17,7 +17,8 @@ pub struct SuiProtocol {
 }
 
 impl ProtocolCommands for SuiProtocol {
-    const NODE_METRICS_PORT: u16 = ValidatorGenesisInfo::DEFAULT_METRICS_PORT;
+    const NODE_METRICS_PORT: u16 =
+        ValidatorGenesisInfo::DEFAULT_METRICS_PORT + GenesisConfig::BENCHMARKS_PORT_OFFSET as u16;
     const CLIENT_METRICS_PORT: u16 = 8081;
 
     fn protocol_dependencies() -> Vec<&'static str> {
