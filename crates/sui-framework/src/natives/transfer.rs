@@ -14,10 +14,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::{
-    base_types::{MoveObjectType, SequenceNumber},
-    object::Owner,
-};
+use sui_types::{base_types::SequenceNumber, object::Owner};
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
 
@@ -150,15 +147,13 @@ fn object_runtime_transfer(
     ty: Type,
     obj: Value,
 ) -> PartialVMResult<TransferResult> {
-    let tag = match context.type_to_type_tag(&ty)? {
-        TypeTag::Struct(s) => *s,
-        _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            )
-        }
-    };
+    if !matches!(context.type_to_type_tag(&ty)?, TypeTag::Struct(_)) {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Sui verifier guarantees this is a struct".to_string()),
+        );
+    }
+
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    obj_runtime.transfer(owner, ty, MoveObjectType::from(tag), obj)
+    obj_runtime.transfer(owner, ty, obj)
 }

@@ -28,7 +28,6 @@ pub(crate) struct ChildObjectEffect {
     // none if it was an input object
     pub(super) loaded_version: Option<SequenceNumber>,
     pub(super) ty: Type,
-    pub(super) move_type: MoveObjectType,
     pub(super) effect: Op<Value>,
 }
 
@@ -363,7 +362,7 @@ impl<'a> ObjectStore<'a> {
                 let ChildObject {
                     owner,
                     ty,
-                    move_type,
+                    move_type: _,
                     value,
                 } = child_object;
                 let loaded_version = self
@@ -376,7 +375,6 @@ impl<'a> ObjectStore<'a> {
                     owner,
                     loaded_version,
                     ty,
-                    move_type,
                     effect,
                 };
                 Some((id, child_effect))

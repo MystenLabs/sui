@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use move_core_types::{
     account_address::AccountAddress,
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
@@ -28,6 +29,7 @@ pub struct LinkageView<'state, S: StorageView> {
 
 pub struct LinkageInfo {
     link_context: AccountAddress,
+    original_package_id: AccountAddress,
     linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
@@ -55,6 +57,7 @@ impl From<&MovePackage> for LinkageInfo {
     fn from(package: &MovePackage) -> Self {
         Self {
             link_context: package.id().into(),
+            original_package_id: package.original_package_id().into(),
             linkage_table: package.linkage_table().clone(),
         }
     }
@@ -72,14 +75,20 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
-        let runtime_id = ObjectID::from_address(*module_id.address());
-
         let Some(linkage) = &self.linkage_info else {
-            return Err(ExecutionError::invariant_violation(
-                "Missing linkage context"
-            ).into());
+            return Ok(module_id.clone());
         };
 
+        // The request is to relocate a module in the package that the link context is from.  This
+        // entry will not be stored in the linkage table, so must be handled specially.
+        if module_id.address() == &linkage.original_package_id {
+            return Ok(ModuleId::new(
+                linkage.link_context.clone(),
+                module_id.name().to_owned(),
+            ));
+        }
+
+        let runtime_id = ObjectID::from_address(*module_id.address());
         let Some(upgrade) = linkage.linkage_table.get(&runtime_id) else {
             return Err(ExecutionError::invariant_violation(format!(
                 "Missing linkage for {runtime_id} in context {}",
@@ -96,7 +105,7 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
     fn defining_module(
         &self,
         module_id: &ModuleId,
-        _struct: &move_core_types::identifier::IdentStr,
+        _struct: &IdentStr,
     ) -> Result<ModuleId, Self::Error> {
         Ok(module_id.clone())
     }
