@@ -467,7 +467,7 @@ pub struct GenesisChainParameters {
 }
 
 /// Initial set of parameters for a chain.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct GenesisCeremonyParameters {
     #[serde(default = "GenesisCeremonyParameters::default_timestamp_ms")]
     pub chain_start_timestamp_ms: u64,
