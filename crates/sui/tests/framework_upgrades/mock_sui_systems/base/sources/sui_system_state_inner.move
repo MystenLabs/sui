@@ -11,6 +11,9 @@ module sui_system::sui_system_state_inner {
 
     use sui_system::validator::Validator;
     use sui_system::validator_wrapper::ValidatorWrapper;
+    use sui_system::validator_wrapper;
+    use sui_system::validator;
+    use sui::object;
 
     friend sui_system::sui_system;
 
@@ -64,6 +67,8 @@ module sui_system::sui_system_state_inner {
             epoch_start_timestamp_ms,
             extra_fields: bag::new(ctx),
         };
+        // Add a dummy inactive validator so that we could test validator upgrade through wrapper latter.
+        add_dummy_inactive_validator_for_testing(&mut system_state, ctx);
         system_state
     }
 
@@ -108,6 +113,15 @@ module sui_system::sui_system_state_inner {
     public(friend) fun system_state_version(self: &SuiSystemStateInner): u64 { self.system_state_version }
     public(friend) fun genesis_system_state_version(): u64 {
         SYSTEM_STATE_VERSION_V1
+    }
+
+    public(friend) fun add_dummy_inactive_validator_for_testing(self: &mut SuiSystemStateInner, ctx: &mut TxContext) {
+        // Add a new entry to the inactive validator table for upgrade testing.
+        let dummy_inactive_validator = validator_wrapper::create_v1(
+            validator::new_dummy_inactive_validator(ctx),
+            ctx,
+        );
+        table::add(&mut self.validators.inactive_validators, object::id_from_address(@0x0), dummy_inactive_validator);
     }
 
     fun new_validator_set(init_active_validators: vector<Validator>, ctx: &mut TxContext): ValidatorSet {

@@ -3,9 +3,10 @@
 Releases for the Sui Devnet network are based on the `devnet` branch.
 
 ## Current Release
-* 23-02-22: [0.27.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.27.0)
+* 23-03-27: [0.29.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.29.0)
 
 ## Past Releases
+* 23-02-22: [0.27.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.27.0)
 * 23-02-15: [0.26.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.26.0)
 * 23-02-08: [0.25.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.25.0)
 * 23-02-01: [0.24.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.24.0)

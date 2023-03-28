@@ -77,10 +77,10 @@ fn to_clauses(filter: &SuiObjectDataFilter) -> Option<String> {
         )),
         SuiObjectDataFilter::StructType(s) => Some(format!("o.object_type = '{s}'")),
         SuiObjectDataFilter::AddressOwner(a) => {
-            Some(format!("(o.owner_type = 'address_owner' AND o.owner_address = '{a}') OR (o.old_owner_type = 'address_owner' AND o.old_owner_address = '{a}')"))
+            Some(format!("((o.owner_type = 'address_owner' AND o.owner_address = '{a}') OR (o.old_owner_type = 'address_owner' AND o.old_owner_address = '{a}'))"))
         }
         SuiObjectDataFilter::ObjectOwner(o) => {
-            Some(format!("(o.owner_type = 'object_owner' AND o.owner_address = '{o}') OR (o.old_owner_type = 'object_owner' AND o.old_owner_address = '{o}')"))
+            Some(format!("((o.owner_type = 'object_owner' AND o.owner_address = '{o}') OR (o.old_owner_type = 'object_owner' AND o.old_owner_address = '{o}'))"))
         }
         SuiObjectDataFilter::ObjectId(id) => {
             Some(format!("o.object_id = '{id}'"))
@@ -158,7 +158,7 @@ mod test {
 FROM (SELECT DISTINCT ON (o.object_id) *
       FROM objects_history o
       WHERE o.checkpoint <= $1
-      AND (o.owner_type = 'address_owner' AND o.owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381') OR (o.old_owner_type = 'address_owner' AND o.old_owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381')
+      AND ((o.owner_type = 'address_owner' AND o.owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381') OR (o.old_owner_type = 'address_owner' AND o.old_owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381'))
       ORDER BY o.object_id, version DESC) AS t1
 WHERE t1.object_status NOT IN ('deleted', 'wrapped', 'unwrapped_then_deleted')
 AND t1.owner_address = '0x92dd4d9b0150c251661d821583ef078024ae9e9ee11063e216500861eec7f381'

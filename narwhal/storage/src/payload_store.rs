@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{NodeStorage, NotifySubscribers, PayloadToken};
+use crate::{NodeStorage, PayloadToken};
 use config::WorkerId;
+use mysten_common::sync::notify_read::NotifyRead;
+use std::sync::Arc;
 use store::reopen;
 use store::rocks::{open_cf, MetricConf, ReadWriteOptions};
 use store::{rocks::DBMap, Map, TypedStoreError};
@@ -14,14 +16,14 @@ pub struct PayloadStore {
     store: DBMap<(BatchDigest, WorkerId), PayloadToken>,
 
     /// Senders to notify for a write that happened for the specified batch digest and worker id
-    notify_subscribers: NotifySubscribers<(BatchDigest, WorkerId), ()>,
+    notify_subscribers: Arc<NotifyRead<(BatchDigest, WorkerId), ()>>,
 }
 
 impl PayloadStore {
     pub fn new(payload_store: DBMap<(BatchDigest, WorkerId), PayloadToken>) -> Self {
         Self {
             store: payload_store,
-            notify_subscribers: NotifySubscribers::new(),
+            notify_subscribers: Arc::new(NotifyRead::new()),
         }
     }
 
@@ -78,7 +80,7 @@ impl PayloadStore {
         digest: BatchDigest,
         worker_id: WorkerId,
     ) -> Result<(), TypedStoreError> {
-        let receiver = self.notify_subscribers.subscribe(&(digest, worker_id));
+        let receiver = self.notify_subscribers.register_one(&(digest, worker_id));
 
         // let's read the value because we might have missed the opportunity
         // to get notified about it
@@ -91,9 +93,7 @@ impl PayloadStore {
         }
 
         // now wait to hear back the result
-        receiver
-            .await
-            .expect("Irrecoverable error while waiting to receive the notify_contains result");
+        receiver.await;
 
         Ok(())
     }

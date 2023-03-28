@@ -2,7 +2,7 @@
 title: Connect to a Sui Network
 ---
 
-Sui has Testnet and Devnet networks available. Use one of the on-chain networks to experiment with the version of Sui running on that network. Youi can also spin up a [local Sui network](sui-local-network.md) for local development. 
+Sui has Testnet and Devnet networks available. Use one of the on-chain networks to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](sui-local-network.md) for local development. 
 
 The Sui networks consist of:
 
@@ -126,56 +126,6 @@ In the following sections, the object IDs, addresses, and authority signatures u
    If you try to join the Sui Discord channel using a newly created Discord account you may need to wait a few days for validation. 
  1. Get your Sui client address: `sui client active-address`
  1. Request test SUI tokens in the Sui [#devnet-faucet](https://discord.com/channels/916379725201563759/971488439931392130) or [#testnet-faucet]() Discord channel. Send the following message to the relevant channel with your client address: `!faucet <YOUR-CLIENT-ADDRESS>`. If you have a local network, programmatically request tokens from your [local faucet](sui-local-network.md#use-the-local-faucet).
-
-## Mint an example NFT
-
-To create a Non-Fungible Token (NFT), run:
-```shell
-sui client create-example-nft
-```
-
-The command returns a response similar to the following:
-```
-Successfully created an ExampleNFT:
-
------ 0x2::devnet_nft::DevNetNFT (0xbacc053ad6e55084bd400cb0479533805ad2cfac33e085a3cc6b7364fcbde953[0x2]) -----
-Owner: Account Address ( 0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442 )
-Version: 0x2
-Storage Rebate: 29
-Previous Transaction: TransactionDigest(B5gTaoPCTef4rDjVRoD8C7QpJebiWtfc9eigHxqHNShb)
------ Data -----
-type: 0x2::devnet_nft::DevNetNFT
-description: An NFT created by the Sui Command Line Tool
-id: 0xbacc053ad6e55084bd400cb0479533805ad2cfac33e085a3cc6b7364fcbde953
-name: Example NFT
-url: ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty
-```
-
-To view the created object in [Sui Explorer](https://explorer.sui.io), append the object ID to the following URL https://explorer.sui.io/objects/.
-
-The following command demonstrates how to customize the name, description, or image of the NFT:
-```shell
-sui client create-example-nft --url=https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png --description="The greatest chef in the world" --name="Greatest Chef"
-```
-
-The command returns a new object ID:
-```
-Successfully created an ExampleNFT:
-
------ 0x2::devnet_nft::DevNetNFT (0xa80a070133bfe7330eb8c02f5d91aaa9a6afe630eeb8b9ef9be08725642a02e1[0x3]) -----
-Owner: Account Address ( 0xb9c83a8b40d3263c9ba40d551514fbac1f8c12e98a4005a0dac072d3549c2442 )
-Version: 0x3
-Storage Rebate: 32
-Previous Transaction: TransactionDigest(9hTv1Nme1C1PLw7kXhaksJfRFX65VovJm78xaDkp7c4R)
------ Data -----
-type: 0x2::devnet_nft::DevNetNFT
-description: The greatest chef in the world
-id: 0xa80a070133bfe7330eb8c02f5d91aaa9a6afe630eeb8b9ef9be08725642a02e1
-name: Greatest Chef
-url: https://user-images.githubusercontent.com/76067158/166136286-c60fe70e-b982-4813-932a-0414d0f55cfb.png
-```
-
-To view details about the object in Sui Explorer, copy the object ID and search for it in the Explorer search field.
 
 ## Publish a Move module
 

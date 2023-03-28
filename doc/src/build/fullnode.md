@@ -1,17 +1,23 @@
 ---
-title: Run a Sui Full node
+title: Run a Sui Full Node with Indexer
 ---
+
+**Note:** These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in [Create a Local Sui Network](sui-local-network.md) to create a local Full node, validators, and faucet.
 
 Sui Full nodes validate blockchain activities, including transactions, checkpoints, and epoch changes. Each Full node stores and services the queries for the blockchain state and history.
 
 This role enables [validators](../learn/architecture/validators.md) to focus on servicing and processing transactions. When a validator commits a new set of transactions (or a block of transactions), the validator pushes that block to all connected Full nodes that then service the queries from clients.
 
+The Sui Full node indexer offloads functions from the Sui Full node, processing most API endpoints to lessen the computational burden of the Full node. Without the indexer running, you might not have all available RPC functions available to optimize transaction processing on the network.        
+
 ## Features
 
-Sui Full nodes:
+Sui Full nodes with indexer:
 
  * Track and verify the state of the blockchain, independently and locally.
  * Serve read requests from clients.
+ * Maximize Sui network throughput.
+ * Offer scalable data retention and processing capabilities.
 
 ## State synchronization
 
@@ -29,10 +35,9 @@ This synchronization process requires listening to at a minimum 2f+1 validators 
 
 ## Architecture
 
-A Sui Full node is essentially a read-only view of the network state. Unlike
-validator nodes, full nodes cannot sign transactions, although they can validate
-the integrity of the chain by re-executing transactions that were previously
-committed by a quorum of validators.
+A Sui Full node is essentially a read-only view of the network state. Unlike validator nodes, Full nodes cannot sign transactions, although they can validate the integrity of the chain by re-executing transactions that a quorum of validators previously committed.
+
+Complete instances of a Sui Full node include an indexer with Postgres database integration that adds support for all JSON-RPC endpoints. The indexer processes transactions that don't require immediate validation, allowing the Full node to more effectively interact with the network.  
 
 Today, a Sui Full node maintains the full history of the chain.
 
@@ -40,7 +45,7 @@ Validator nodes store only the latest transactions on the *frontier* of the obje
 
 ## Full node setup
 
-Follow the instructions here to run your own Sui Full node.
+Follow the instructions here to run your own Sui Full node with indexer.
 
 ### Hardware requirements
 
@@ -52,19 +57,26 @@ Suggested minimum hardware to run a Sui Full node:
 
 ### Software requirements
 
-We recommend running Sui Full nodes on Linux. Sui supports the Ubuntu and
+Sui recommends running Sui Full nodes on Linux. Sui supports the Ubuntu and
 Debian distributions. You can also run a Sui Full node on macOS.
 
 Make sure to update [Rust](../build/install.md#rust).
 
 Use the following command to install additional Linux dependencies.
 ```shell
-apt-get update \
-&& apt-get install -y --no-install-recommends \
+sudo apt-get update \
+&& sudo apt-get install -y --no-install-recommends \
 tzdata \
+libprotobuf-dev \
 ca-certificates \
 build-essential \
+libssl-dev \
+libclang-dev \
 pkg-config \
+openssl \
+protobuf-compiler \
+git \
+clang \
 cmake
 ```
 
@@ -75,18 +87,21 @@ source.
 
 ### Using Docker Compose
 
-Follow the instructions in the [Full node Docker README](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
+Follow the instructions in the [Full node Docker Readme](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme) to run a Sui Full node using Docker, including [resetting the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment).
 
-### Building from source
+To get a Full node with indexer running in Docker, follow the instructions in the [Docker Readme](https://github.com/MystenLabs/sui/blob/main/docker/fullnode-x/README.md) for `fullnode-x`.
 
- 1. Install the required [Prerequisites](../build/install.md#prerequisites).
- 1. Set up your fork of the Sui repository:
+### Setting up a local Sui repository
+
+You must get the latest source files from the Sui GitHub repository.
+
+1. Set up your fork of the Sui repository:
      1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
        and click the *Fork* button in the top right-hand corner of the screen.
      1. Clone your personal fork of the Sui repository to your local machine
        (ensure that you insert your GitHub username into the URL):
        ```shell
-       $ git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
+       git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
        ```
  1. `cd` into your `sui` repository:
     ```shell
@@ -100,10 +115,16 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
     ```shell
     git fetch upstream
     ```
- 1. Check out the `devnet` branch:
+ 1. Check out the branch associated with the network version you want to run (for example, `devnet` to run a Devnet Full node):
     ```shell
-    git checkout --track upstream/devnet
+    git checkout --track upstream/<BRANCH-NAME>
     ```
+
+### Setting up a Full node from source
+
+Open a Terminal or Console to the `sui` directory you downloaded in the previous steps to complete the following:
+
+ 1. Install the required [Prerequisites](../build/install.md#prerequisites).
  1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
    ```shell
    cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
@@ -127,14 +148,67 @@ Follow the instructions in the [Full node Docker README](https://github.com/Myst
        genesis:
        genesis-file-location: "/sui-fullnode/genesis.blob"
        ```
- 1. Start your Sui Full node:
+ 
+After completing these steps, continue with setting up your indexer before starting the Full node.
+
+### Setting up a Sui indexer from source
+
+Before setting up your Sui indexer, make sure you have the following prerequisites on your system:
+
+* Local [Postgres](https://www.postgresql.org/download/) server.
+* [Diesel CLI](https://diesel.rs/guides/getting-started#installing-diesel-cli). The Diesel CLI requires the `libpq` client library for Postgres integration. See the [Troubleshooting](#troubleshooting) section for more details.
+
+With Postgres and Diesel CLI installed, follow these steps to set up the indexer:
+
+ 1. Create a Postgres database to use for the indexer. 
+ 1. Open a Terminal or Console to the `sui/crates/sui-indexer` directory. 
+ 1. Pass your database connection URL to the `diesel setup` command. The connection URL is in the form of `postgres://<POSTGRES-USER>/<POSTGRES-USER-PASSWORD>@localhost/<DATABASE-NAME>`. 
+   ```sh
+   diesel setup --database-url="<DATABASE-URL>"
+   ```
+ 1. Run the Diesel migration with the following command:
+   ```sh
+   diesel migration run --database-url="<DATABASE-URL>"
+   ```
+
+Refer to the `sui-indexer` module [Readme file](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer/README.md) for additional information and troubleshooting.
+
+After completing these steps, you're ready to start your Sui Full node and indexer. 
+
+### Starting services
+
+At this point, your Sui Full node and indexer are ready to connect to the Sui network.
+
+ 1. Open a Terminal or Console to the `sui` directory.
+ 1. Start the Sui Full node:
     ```shell
     cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
- 1. Optional: [Publish / subscribe](event_api.md#subscribe-to-sui-events) to notifications using JSON-RPC via websocket.
+ 1. Optional: [Publish/subscribe](event_api.md#subscribe-to-sui-events) to notifications using JSON-RPC via websocket.
+ 1. To start the Sui indexer binary, open a new Terminal or Console to the `sui/crates/sui-indexer` directory.
+ 1. Using the database connection URL you used when setting up the indexer, run the following command:
+    ```sh
+    cargo run --bin sui-indexer -- --db-url "<DATABASE-URL>" --rpc-client-url "http://0.0.0.0:9000"
+    ```
 
-Your Full node serves the read endpoints of the [Sui JSON-RPC
-API](../build/json-rpc.md#sui-json-rpc-api) at: `http://127.0.0.1:9000`
+If your setup is successful, your Sui Full node is now connected to the appropriate network and your indexer is processing transactions.
+
+Your Full node serves the read endpoints of the [Sui JSON-RPC API](../build/json-rpc.md#sui-json-rpc-api) at: `http://127.0.0.1:9000`.
+
+### Troubleshooting
+
+If you receive a `cannot find -lpq` error, you are missing the `libpq` library. Use `sudo apt-get install libpq-dev` to install on Linux, or `brew install libpq` on MacOS. After you install on MacOS, create a Homebrew link using `brew link --force libpq`. For further context, reference the [issue on Stack Overflow](https://stackoverflow.com/questions/70313347/ld-library-not-found-for-lpq-when-build-rust-in-macos?rq=1). 
+
+If you receive the following error:
+
+```
+panicked at 'error binding to 0.0.0.0:9184: error creating server listener: Address already in use (os error 98)
+```
+Then update the metrics address in your fullnode.yaml file to use port `9180`.
+```
+metrics-address: "0.0.0.0:9180"
+```
+
 
 ## Sui Explorer with your Full node
 
@@ -142,22 +216,18 @@ API](../build/json-rpc.md#sui-json-rpc-api) at: `http://127.0.0.1:9000`
 transactions it syncs from the network. To make this change:
 
  1. Open a browser and go to: https://explorer.sui.io/
- 1. Click the **Devnet** button in the top right-hand corner of Sui Explorer and select
-   **Local** or **Testnet** from the drop-down menu.
- 1. Close the **Choose a Network** menu to see the latest transactions.
-
-Sui Explorer now uses your local Full node to explore the state of the chain.
+ 1. Click the **Devnet** button in the top right-hand corner of Sui Explorer (or menu icon on smaller screens) and select **Local** or **Testnet** from the drop-down menu.
+ 1. Close the **Choose a Network** menu to see the latest transactions. If you chose the **Local** network, Sui Explorer now uses your local Full node to explore the state of the chain.
 
 ## Monitoring
 
-Monitor your Full node using the instructions at [Logging, Tracing, Metrics, and
-Observability](../contribute/observability.md).
+Monitor your Full node using the instructions at [Logging, Tracing, Metrics, and Observability](../contribute/observability.md).
 
-Note the default metrics port is 9184. To change the port, edit your `fullnode.yaml` file.
+Note the default metrics port is `9184`. To change the port, edit your `fullnode.yaml` file.
 
-## Update your Full node
+## Update your Full node and indexer
 
-Whenever Sui releases a new version, the network resets and restarts as a new network with no data. You must update your Full node with each Sui release to ensure compatibility with the network.
+Whenever Sui releases a new version, the network resets and restarts as a new network with no data. You must update your Full node and indexer with each Sui release to ensure compatibility with the network.
 
 ### Update with Docker Compose
 
@@ -169,10 +239,9 @@ docker-compose down --volumes
 
 ### Update from source
 
-If you followed the instructions for [Building from
-Source](#building-from-source), update your Full node as follows:
+If you followed the instructions for [Building from Source](#building-from-source), update your Full node as follows:
 
- 1. Shut down your running Full node.
+ 1. Shut down your running Full node and indexer.
  1. `cd` into your local Sui repository:
     ```shell
     cd sui
@@ -187,7 +256,7 @@ Source](#building-from-source), update your Full node as follows:
     ```
  1. Reset your branch:
     ```shell
-    git checkout -B devnet --track upstream/devnet
+    git checkout -B <BRANCH-NAME> --track upstream/<BRANCH-NAME>
     ```
  1. Download the latest genesis blob:
      * [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
@@ -203,6 +272,9 @@ Source](#building-from-source), update your Full node as follows:
     ```shell
     cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
+ 1. Restart your indexer:
+    ```sh
+    cargo run --bin sui-indexer -- --db-url "<DATABASE-URL>" --rpc-client-url "http://0.0.0.0:9000"
+    ```
 
-Your Full node starts on: `http://127.0.0.1:9000`
-
+Your Full node starts on: `http://127.0.0.1:9000`.

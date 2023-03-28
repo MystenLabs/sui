@@ -59,8 +59,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &sig)?;
 
     // ObjectID and SuiAddress are the same length
-    let addr_bytes: [u8; ObjectID::LENGTH] = addr.as_ref().try_into().unwrap();
-    let oid = ObjectID::from(addr_bytes);
+    let oid: ObjectID = addr.into();
     tracer.trace_value(&mut samples, &oid)?;
 
     // ObjectDigest and Transaction digest use the `serde_as`speedup for ser/de => trace them

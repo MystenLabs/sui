@@ -5,7 +5,7 @@ import {
     getPureSerializationType,
     getExecutionStatusType,
     getExecutionStatusError,
-    Transaction,
+    TransactionBlock,
 } from '@mysten/sui.js';
 import { useWalletKit, ConnectButton } from '@mysten/wallet-kit';
 import { useMutation } from '@tanstack/react-query';
@@ -47,7 +47,7 @@ export function ModuleFunction({
     functionName,
     functionDetails,
 }: ModuleFunctionProps) {
-    const { isConnected, signAndExecuteTransaction } = useWalletKit();
+    const { isConnected, signAndExecuteTransactionBlock } = useWalletKit();
     const { handleSubmit, formState, register, control } = useZodForm({
         schema: argsSchema,
     });
@@ -71,7 +71,7 @@ export function ModuleFunction({
 
     const execute = useMutation({
         mutationFn: async ({ params, types }: TypeOf<typeof argsSchema>) => {
-            const tx = new Transaction();
+            const tx = new TransactionBlock();
             tx.moveCall({
                 target: `${packageId}::${moduleName}::${functionName}`,
                 typeArguments: types ?? [],
@@ -85,8 +85,8 @@ export function ModuleFunction({
                             : tx.object(param)
                     ) ?? [],
             });
-            const result = await signAndExecuteTransaction({
-                transaction: tx,
+            const result = await signAndExecuteTransactionBlock({
+                transactionBlock: tx,
                 options: {
                     showEffects: true,
                     showEvents: true,

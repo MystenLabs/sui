@@ -669,7 +669,7 @@ fn test_sponsored_transaction_message() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .transfer_object(dbg_addr(1), random_object_ref())
             .unwrap();
         builder.finish()
     };
@@ -785,7 +785,7 @@ fn test_sponsored_transaction_validity_check() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(get_new_address::<AccountKeyPair>(), random_object_ref())
+            .transfer_object(dbg_addr(1), random_object_ref())
             .unwrap();
         builder.finish()
     };

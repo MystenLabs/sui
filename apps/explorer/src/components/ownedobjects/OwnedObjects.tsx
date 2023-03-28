@@ -5,6 +5,8 @@ import { useRpcClient } from '@mysten/core';
 import {
     Coin,
     getObjectId,
+    getObjectType,
+    getObjectOwner,
     PaginatedObjectsResponse,
     is,
 } from '@mysten/sui.js';
@@ -65,7 +67,25 @@ function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
                 .then((results) => {
                     setResults(
                         results
-                            .filter(({ data }) => data !== undefined)
+                            .filter((resp) => {
+                                if (
+                                    byAddress &&
+                                    getObjectType(resp) === 'moveObject'
+                                ) {
+                                    const owner = getObjectOwner(resp);
+                                    const addressOwner =
+                                        owner &&
+                                        owner !== 'Immutable' &&
+                                        'AddressOwner' in owner
+                                            ? owner.AddressOwner
+                                            : null;
+                                    return (
+                                        resp !== undefined &&
+                                        addressOwner === id
+                                    );
+                                }
+                                return resp !== undefined;
+                            })
                             .map(
                                 (resp) => {
                                     const displayMeta =

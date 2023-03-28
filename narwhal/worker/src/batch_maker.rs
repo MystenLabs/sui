@@ -25,7 +25,7 @@ use tokio::{
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    now, Batch, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction,
+    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction,
     TxResponse, WorkerOurBatchMessage,
 };
 
@@ -114,7 +114,7 @@ impl BatchMaker {
                 // condition will be met eventually if the store and network are functioning.
                 Some((transaction, response_sender)) = self.rx_batch_maker.recv(), if batch_pipeline.len() < MAX_PARALLEL_BATCH => {
                     current_batch_size += transaction.len();
-                    current_batch.transactions.push(transaction);
+                    current_batch.transactions_mut().push(transaction);
                     current_responses.push(response_sender);
                     if current_batch_size >= self.batch_size_limit {
                         if let Some(seal) = self.seal(false, current_batch, current_batch_size, current_responses).await{
@@ -133,7 +133,7 @@ impl BatchMaker {
 
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
-                    if !current_batch.transactions.is_empty() {
+                    if !current_batch.transactions().is_empty() {
                         if let Some(seal) = self.seal(true, current_batch, current_batch_size, current_responses).await {
                             batch_pipeline.push(seal);
                         }
@@ -179,7 +179,7 @@ impl BatchMaker {
 
             // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
             let tx_ids: Vec<_> = batch
-                .transactions
+                .transactions()
                 .iter()
                 .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
                 .filter_map(|tx| tx[1..9].try_into().ok())
@@ -200,7 +200,7 @@ impl BatchMaker {
                 // that's useful for debugging and tracking the lifetime of messages between
                 // Narwhal and clients.
                 let tracking_ids: Vec<_> = batch
-                    .transactions
+                    .transactions()
                     .iter()
                     .map(|tx| {
                         let len = tx.len();
@@ -265,8 +265,8 @@ impl BatchMaker {
 
         // The batch has been sealed so we can officially set its creation time
         // for latency calculations.
-        batch.metadata.created_at = now();
-        let metadata = batch.metadata.clone();
+        batch.metadata_mut().created_at = now();
+        let metadata = batch.metadata().clone();
 
         Some(async move {
             // Now save it to disk

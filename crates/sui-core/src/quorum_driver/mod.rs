@@ -501,7 +501,7 @@ where
         let result = self
             .validators
             .load()
-            .execute_transaction(&verified_transaction)
+            .execute_transaction_block(&verified_transaction)
             .await
             .tap_ok(|_resp| {
                 debug!(

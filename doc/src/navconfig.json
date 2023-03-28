@@ -6,8 +6,8 @@
 				"link": "doc-updates/sui-migration-guide"
 			},
 			{
-				"label": "Sui Breaking Changes",
-				"link": "doc-updates/sui-breaking-changes"
+				"label": "Sui Doc Updates",
+				"link": "doc-updates"
 			},
 			{
 				"label": "Sui Developer Forums",
@@ -105,6 +105,24 @@
 				]
 			},
 			{
+				"label": "Sui Cryptography",
+				"fileName": "learn/cryptography/index",
+				"title": "Sui Cryptography",
+				"items": [{
+						"label": "Sui Intent Signing",
+						"fileName": "learn/cryptography/sui-intent-signing"
+					},
+					{
+						"label": "Sui Offline Signing",
+						"fileName": "learn/cryptography/sui-offline-signing"
+					},
+					{
+						"label": "Sui Multi-Signature",
+						"fileName": "learn/cryptography/sui-multisig"
+					}
+				]
+			},
+			{
 				"label": "Sui Exchange Integration Guide",
 				"fileName": "learn/exchange-integration-guide"
 			}
@@ -114,7 +132,7 @@
 				"fileName": "build/install"
 			},
 			{
-				"label": "Connect to Sui Devnet",
+				"label": "Connect to a Sui Network",
 				"fileName": "build/devnet"
 			},
 			{

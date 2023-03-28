@@ -9,9 +9,9 @@ use consensus::dag::Dag;
 use tokio::time::timeout;
 use tonic::{Request, Response, Status};
 use types::{
-    BlockError, CertificateDigest, CertificateDigestProto, Collection, CollectionRetrievalResult,
-    Empty, GetCollectionsRequest, GetCollectionsResponse, ReadCausalRequest, ReadCausalResponse,
-    RemoveCollectionsRequest, TransactionProto, Validator,
+    BatchAPI, BlockError, CertificateDigest, CertificateDigestProto, Collection,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, GetCollectionsResponse,
+    ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest, TransactionProto, Validator,
 };
 
 pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static> {
@@ -146,7 +146,8 @@ fn get_collection_retrieval_results(
                 transactions.extend(
                     batch
                         .batch
-                        .transactions
+                        .transactions()
+                        .clone()
                         .into_iter()
                         .map(Into::into)
                         .collect::<Vec<TransactionProto>>(),

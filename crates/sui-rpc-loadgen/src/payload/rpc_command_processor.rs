@@ -1,41 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
+use dashmap::DashMap;
 use futures::future::join_all;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    BigInt, CheckpointId, ObjectChange, Page, SuiObjectDataOptions, SuiTransactionResponse,
-    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionsPage,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_types::digests::TransactionDigest;
-use sui_types::query::TransactionFilter;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
-use tracing::log::warn;
-use tracing::{debug, error, info};
+use tracing::debug;
 
 use crate::load_test::LoadTestConfig;
-use sui_json_rpc_types::SuiTransactionEffectsAPI;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::{EncodeDecodeBase64, Signature, SuiKeyPair};
-use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair};
+use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
 use crate::payload::{
-    Command, CommandData, DryRun, GetCheckpoints, PaySui, Payload, ProcessPayload, Processor,
-    QueryTransactions, SignerInfo,
+    Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
 };
 
-const DEFAULT_GAS_BUDGET: u64 = 100_000;
+pub(crate) const DEFAULT_GAS_BUDGET: u64 = 10_000;
+pub(crate) const DEFAULT_LARGE_GAS_BUDGET: u64 = 100_000_000;
+pub(crate) const MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION: usize = 2000;
 
 #[derive(Clone)]
 pub struct RpcCommandProcessor {
     clients: Arc<RwLock<Vec<SuiClient>>>,
+    // for equivocation prevention in `WaitForEffectsCert` mode
+    object_ref_cache: Arc<DashMap<ObjectID, ObjectRef>>,
 }
 
 impl RpcCommandProcessor {
@@ -43,7 +42,7 @@ impl RpcCommandProcessor {
         let clients = join_all(urls.iter().map(|url| async {
             SuiClientBuilder::default()
                 .max_concurrent_requests(usize::MAX)
-                .request_timeout(Duration::from_secs(10))
+                .request_timeout(Duration::from_secs(60))
                 .build(url.clone())
                 .await
                 .unwrap()
@@ -52,6 +51,7 @@ impl RpcCommandProcessor {
 
         Self {
             clients: Arc::new(RwLock::new(clients)),
+            object_ref_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -68,9 +68,63 @@ impl RpcCommandProcessor {
         }
     }
 
-    async fn get_clients(&self) -> Result<Vec<SuiClient>> {
+    pub(crate) async fn get_clients(&self) -> Result<Vec<SuiClient>> {
         let read = self.clients.read().await;
         Ok(read.clone())
+    }
+
+    /// sign_and_execute transaction and update `object_ref_cache`
+    pub(crate) async fn sign_and_execute(
+        &self,
+        client: &SuiClient,
+        keypair: &SuiKeyPair,
+        txn_data: TransactionData,
+        request_type: ExecuteTransactionRequestType,
+    ) -> SuiTransactionBlockResponse {
+        let resp = sign_and_execute(client, keypair, txn_data, request_type).await;
+        let effects = resp.effects.as_ref().unwrap();
+        let object_ref_cache = self.object_ref_cache.clone();
+        // NOTE: for now we don't need to care about deleted objects
+        for (owned_object_ref, _) in effects.all_changed_objects() {
+            let id = owned_object_ref.object_id();
+            let current = object_ref_cache.get_mut(&id);
+            match current {
+                Some(mut c) => {
+                    if c.1 < owned_object_ref.version() {
+                        *c = owned_object_ref.reference.to_object_ref();
+                    }
+                }
+                None => {
+                    object_ref_cache.insert(id, owned_object_ref.reference.to_object_ref());
+                }
+            };
+        }
+        resp
+    }
+
+    /// get the latest object ref from local cache, and if not exist, fetch from fullnode
+    pub(crate) async fn get_object_ref(
+        &self,
+        client: &SuiClient,
+        object_id: &ObjectID,
+    ) -> ObjectRef {
+        let object_ref_cache = self.object_ref_cache.clone();
+        let current = object_ref_cache.get_mut(object_id);
+        match current {
+            Some(c) => *c,
+            None => {
+                let resp = client
+                    .read_api()
+                    .get_object_with_options(*object_id, SuiObjectDataOptions::new())
+                    .await
+                    .unwrap_or_else(|_| panic!("Unable to fetch object reference {object_id}"));
+                let object_ref = resp.object_ref_if_exists().unwrap_or_else(|| {
+                    panic!("Unable to extract object reference {object_id} from response {resp:?}")
+                });
+                object_ref_cache.insert(*object_id, object_ref);
+                object_ref
+            }
+        }
     }
 }
 
@@ -110,24 +164,33 @@ impl Processor for RpcCommandProcessor {
             _ => vec![config.command.clone(); config.num_threads],
         };
 
-        let mut signer_infos = vec![config.signer_info.clone(); config.num_threads];
-
-        if let Some(info) = &config.signer_info {
-            let coins = get_coin_ids(clients.first().unwrap(), info, config.num_threads).await;
-            signer_infos
-                .iter_mut()
-                .zip(coins.into_iter())
-                .for_each(|(info, coin)| {
-                    info.as_mut().unwrap().gas_payment = Some(coin);
-                });
+        let coins_and_keys = if config.signer_info.is_some() {
+            Some(
+                prepare_new_signer_and_coins(
+                    clients.first().unwrap(),
+                    config.signer_info.as_ref().unwrap(),
+                    config.num_threads * config.num_chunks_per_thread,
+                    config.max_repeat as u64 + 1,
+                )
+                .await,
+            )
+        } else {
+            None
         };
 
+        let num_chunks = config.num_chunks_per_thread;
         Ok(command_payloads
             .into_iter()
             .enumerate()
             .map(|(i, command)| Payload {
                 commands: vec![command], // note commands is also a vector
-                signer_info: signer_infos[i].clone(),
+                signer_info: coins_and_keys
+                    .as_ref()
+                    .map(|(coins, encoded_keypair)| SignerInfo {
+                        encoded_keypair: encoded_keypair.clone(),
+                        gas_payment: Some(coins[num_chunks * i..(i + 1) * num_chunks].to_vec()),
+                        gas_budget: None,
+                    }),
             })
             .collect())
     }
@@ -138,203 +201,6 @@ impl<'a> ProcessPayload<'a, &'a DryRun> for RpcCommandProcessor {
     async fn process(&'a self, _op: &'a DryRun, _signer_info: &Option<SignerInfo>) -> Result<()> {
         debug!("DryRun");
         Ok(())
-    }
-}
-
-#[async_trait]
-impl<'a> ProcessPayload<'a, &'a GetCheckpoints> for RpcCommandProcessor {
-    async fn process(
-        &'a self,
-        op: &'a GetCheckpoints,
-        _signer_info: &Option<SignerInfo>,
-    ) -> Result<()> {
-        let clients = self.get_clients().await?;
-
-        let end_checkpoints: Vec<CheckpointSequenceNumber> =
-            join_all(clients.iter().map(|client| async {
-                match op.end {
-                    Some(e) => e,
-                    None => client
-                        .read_api()
-                        .get_latest_checkpoint_sequence_number()
-                        .await
-                        .expect("get_latest_checkpoint_sequence_number should not fail"),
-                }
-            }))
-            .await;
-
-        // The latest `latest_checkpoint` among all rpc servers
-        let max_checkpoint = end_checkpoints
-            .iter()
-            .max()
-            .expect("get_latest_checkpoint_sequence_number should not return empty");
-
-        debug!("GetCheckpoints({}, {:?})", op.start, max_checkpoint);
-
-        // TODO(chris): read `cross_validate` from config
-        let cross_validate = true;
-
-        for seq in op.start..=*max_checkpoint {
-            let checkpoints = join_all(clients.iter().enumerate().map(|(i, client)| {
-                let end_checkpoint_for_clients = end_checkpoints.clone();
-                async move {
-                    if end_checkpoint_for_clients[i] < seq {
-                        // TODO(chris) log actual url
-                        warn!(
-                            "The RPC server corresponding to the {i}th url has a outdated checkpoint number {}.\
-                            The latest checkpoint number is {seq}",
-                            end_checkpoint_for_clients[i]
-                        );
-                        return None;
-                    }
-
-                    match client
-                        .read_api()
-                        .get_checkpoint(CheckpointId::SequenceNumber(<BigInt>::from(seq)))
-                        .await {
-                        Ok(t) => {
-                            if t.sequence_number != <BigInt>::from(seq) {
-                                error!("The RPC server corresponding to the {i}th url has unexpected checkpoint sequence number {}, expected {seq}", t.sequence_number,);
-                            }
-                            if op.verify_transactions {
-                                check_transactions(&self.clients, &t.transactions, cross_validate, op.verify_objects).await;
-                            }
-                            Some(t)
-                        },
-                        Err(err) => {
-                            error!("Failed to fetch checkpoint {seq} on the {i}th url: {err}");
-                            None
-                        }
-                    }
-                }
-            }))
-                .await;
-
-            if cross_validate {
-                let valid_checkpoint = checkpoints.iter().enumerate().find_map(|(i, x)| {
-                    if x.is_some() {
-                        Some((i, x.clone().unwrap()))
-                    } else {
-                        None
-                    }
-                });
-
-                if valid_checkpoint.is_none() {
-                    error!("none of the urls are returning valid checkpoint for seq {seq}");
-                    continue;
-                }
-                // safe to unwrap because we check some above
-                let (valid_checkpoint_idx, valid_checkpoint) = valid_checkpoint.unwrap();
-                for (i, x) in checkpoints.iter().enumerate() {
-                    if i == valid_checkpoint_idx {
-                        continue;
-                    }
-                    // ignore the None value because it's warned above
-                    let eq = x.is_none() || x.as_ref().unwrap() == &valid_checkpoint;
-                    if !eq {
-                        error!("getCheckpoint {seq} has a different result between the {valid_checkpoint_idx}th and {i}th URL {:?} {:?}", x, checkpoints[valid_checkpoint_idx])
-                    }
-                }
-            }
-
-            if seq % 10000 == 0 {
-                info!("Finished processing checkpoint {seq}");
-            }
-        }
-
-        Ok(())
-    }
-}
-
-pub async fn check_transactions(
-    clients: &Arc<RwLock<Vec<SuiClient>>>,
-    digests: &[TransactionDigest],
-    cross_validate: bool,
-    verify_objects: bool,
-) {
-    let read = clients.read().await;
-    let cloned_clients = read.clone();
-
-    let transactions = join_all(
-        cloned_clients
-            .iter()
-            .enumerate()
-            .map(|(i, client)| async move {
-                let start_time = Instant::now();
-                let transactions = client
-                    .read_api()
-                    .multi_get_transactions_with_options(
-                        digests.to_vec(),
-                        SuiTransactionResponseOptions::full_content(), // todo(Will) support options for this
-                    )
-                    .await;
-                let elapsed_time = start_time.elapsed();
-                debug!(
-                    "MultiGetTransactions Request latency {:.4} for rpc at url {i}",
-                    elapsed_time.as_secs_f64()
-                );
-                transactions
-            }),
-    )
-    .await;
-
-    // TODO: support more than 2 transactions
-    if cross_validate && transactions.len() == 2 {
-        if let (Some(t1), Some(t2)) = (transactions.get(0), transactions.get(1)) {
-            let first = match t1 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!("Error unwrapping first vec of transactions: {:?}", err);
-                    error!("Logging digests, {:?}", digests);
-                    return;
-                }
-            };
-            let second = match t2 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!("Error unwrapping second vec of transactions: {:?}", err);
-                    error!("Logging digests, {:?}", digests);
-                    return;
-                }
-            };
-
-            cross_validate_entities(digests, first, second, "TransactionDigest", "Transaction");
-
-            if verify_objects {
-                // todo: this can be written better
-                for response in first {
-                    let object_changes: Vec<ObjectID> = response
-                        .object_changes
-                        .clone()
-                        .unwrap()
-                        .iter()
-                        .filter_map(get_object_id)
-                        .collect();
-                    check_objects(clients, object_changes.as_slice(), cross_validate).await;
-                }
-                for response in second {
-                    let object_changes: Vec<ObjectID> = response
-                        .object_changes
-                        .clone()
-                        .unwrap()
-                        .iter()
-                        .filter_map(get_object_id)
-                        .collect();
-                    check_objects(clients, object_changes.as_slice(), cross_validate).await;
-                }
-            }
-        }
-    }
-}
-
-fn get_object_id(object_change: &ObjectChange) -> Option<ObjectID> {
-    match object_change {
-        ObjectChange::Transferred { object_id, .. } => Some(*object_id),
-        ObjectChange::Mutated { object_id, .. } => Some(*object_id),
-        ObjectChange::Created { object_id, .. } => Some(*object_id),
-        // TODO(gegaowp): needs separate checks for packages and modules publishing
-        // TODO(gegaowp): ?? needs separate checks for deleted and wrapped objects
-        _ => None,
     }
 }
 
@@ -377,302 +243,345 @@ async fn divide_checkpoint_tasks(
         .collect()
 }
 
-async fn get_coin_ids(
+async fn prepare_new_signer_and_coins(
     client: &SuiClient,
     signer_info: &SignerInfo,
     num_coins: usize,
-) -> Vec<ObjectID> {
-    let sender = signer_info.signer_address;
-    let coin_page = client
-        .coin_read_api()
-        .get_coins(sender, None, None, None)
-        .await
-        .expect("Did you give gas coins to this address?");
-    let coin_object_id = coin_page
-        .data
-        .first()
-        .expect("Did you give gas coins to this address?")
-        .coin_object_id;
+    num_transactions_per_coin: u64,
+) -> (Vec<ObjectID>, String) {
+    // TODO(chris): consider reference gas price
+    let amount_per_coin = num_transactions_per_coin * DEFAULT_GAS_BUDGET;
+    let pay_amount = amount_per_coin * num_coins as u64;
+    let num_split_txns =
+        num_transactions_needed(num_coins, MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION);
+    let (gas_fee_for_split, gas_fee_for_pay_sui) = (
+        DEFAULT_LARGE_GAS_BUDGET * num_split_txns as u64,
+        DEFAULT_GAS_BUDGET,
+    );
 
+    let primary_keypair = SuiKeyPair::decode_base64(&signer_info.encoded_keypair)
+        .expect("Decoding keypair should not fail");
+    let sender = SuiAddress::from(&primary_keypair.public());
+    let (coin, balance) = get_coin_with_max_balance(client, sender).await;
+    // The balance needs to cover `pay_amount` plus
+    // 1. gas fee for pay_sui from the primary address to the burner address
+    // 2. gas fee for splitting the primary coin into `num_coins`
+    let required_balance = pay_amount + gas_fee_for_split + gas_fee_for_pay_sui;
+    if required_balance > balance {
+        panic!("Current balance {balance} is smaller than require amount of MIST to fund the operation {required_balance}");
+    }
+
+    // There is a limit for the number of new objects in a transactions, therefore we need
+    // multiple split transactions if the `num_coins` is large
+    let split_amounts = calculate_split_amounts(
+        num_coins,
+        amount_per_coin,
+        MAX_NUM_NEW_OBJECTS_IN_SINGLE_TRANSACTION,
+    );
+
+    debug!("split_amounts {split_amounts:?}");
+
+    // We don't want to split coins in our primary address because we want to avoid having
+    // a million coin objects in our address. We can also fetch directly from the faucet, but in
+    // some environment that might not be possible when faucet resource is scarce
+    let (burner_address, burner_keypair): (_, AccountKeyPair) = get_key_pair();
+    let burner_keypair = SuiKeyPair::Ed25519(burner_keypair);
+    let pay_amounts = split_amounts
+        .iter()
+        .map(|(amount, _)| *amount)
+        .chain(std::iter::once(gas_fee_for_split))
+        .collect::<Vec<_>>();
+
+    debug!("pay_amounts {pay_amounts:?}");
+
+    pay_sui(
+        client,
+        &primary_keypair,
+        vec![coin],
+        DEFAULT_GAS_BUDGET,
+        vec![burner_address; pay_amounts.len()],
+        pay_amounts,
+    )
+    .await;
+
+    let coins = get_sui_coin_ids(client, burner_address).await;
+    let gas_coin_id = get_coin_with_balance(&coins, gas_fee_for_split);
+    let primary_coin = get_coin_with_balance(&coins, split_amounts[0].0);
+    assert!(!coins.is_empty());
+    let mut results: Vec<ObjectID> = vec![];
+    assert!(!split_amounts.is_empty());
+    if split_amounts.len() == 1 && split_amounts[0].1 == 0 {
+        results.push(get_coin_with_balance(&coins, split_amounts[0].0));
+    } else if split_amounts.len() == 1 {
+        results.extend(
+            split_coins(
+                client,
+                &burner_keypair,
+                primary_coin,
+                gas_coin_id,
+                split_amounts[0].1 as u64,
+            )
+            .await,
+        );
+    } else {
+        let (max_amount, max_split) = &split_amounts[0];
+        let (remainder_amount, remainder_split) = split_amounts.last().unwrap();
+        let primary_coins = coins
+            .iter()
+            .filter(|(_, balance)| balance == max_amount)
+            .map(|(id, _)| (*id, *max_split as u64))
+            .chain(
+                coins
+                    .iter()
+                    .filter(|(_, balance)| balance == remainder_amount)
+                    .map(|(id, _)| (*id, *remainder_split as u64)),
+            )
+            .collect::<Vec<_>>();
+
+        for (coin_id, splits) in primary_coins {
+            results
+                .extend(split_coins(client, &burner_keypair, coin_id, gas_coin_id, splits).await);
+        }
+    }
+    assert_eq!(results.len(), num_coins as usize);
+    debug!("Split off {} coins for gas payment {results:?}", num_coins);
+    (results, burner_keypair.encode_base64())
+}
+
+/// Calculate the number of transactions needed to split the given number of coins.
+/// new_coins_per_txn must be greater than 0
+fn num_transactions_needed(num_coins: usize, new_coins_per_txn: usize) -> usize {
+    assert!(new_coins_per_txn > 0);
+    if num_coins == 1 {
+        return 0;
+    }
+    ((num_coins + new_coins_per_txn - 1) / new_coins_per_txn) as usize
+}
+
+/// Calculate the split amounts for a given number of coins, amount per coin, and maximum number of coins per transaction.
+/// Returns a Vec of (primary_coin_amount, split_into_n_coins)
+fn calculate_split_amounts(
+    num_coins: usize,
+    amount_per_coin: u64,
+    max_coins_per_txn: usize,
+) -> Vec<(u64, usize)> {
+    let total_amount = amount_per_coin * num_coins as u64;
+    let num_transactions = num_transactions_needed(num_coins, max_coins_per_txn);
+
+    if num_transactions == 0 {
+        return vec![(total_amount, 0)];
+    }
+
+    let amount_per_transaction = max_coins_per_txn as u64 * amount_per_coin;
+    let remaining_amount = total_amount - amount_per_transaction * (num_transactions as u64 - 1);
+    let mut split_amounts: Vec<(u64, usize)> =
+        vec![(amount_per_transaction, max_coins_per_txn); num_transactions - 1];
+    split_amounts.push((
+        remaining_amount,
+        num_coins - max_coins_per_txn * (num_transactions - 1),
+    ));
+    split_amounts
+}
+
+async fn get_coin_with_max_balance(client: &SuiClient, address: SuiAddress) -> (ObjectID, u64) {
+    let coins = get_sui_coin_ids(client, address).await;
+    assert!(!coins.is_empty());
+    coins.into_iter().max_by(|a, b| a.1.cmp(&b.1)).unwrap()
+}
+
+fn get_coin_with_balance(coins: &[(ObjectID, u64)], target: u64) -> ObjectID {
+    coins.iter().find(|(_, b)| b == &target).unwrap().0
+}
+
+// TODO: move this to the Rust SDK
+async fn get_sui_coin_ids(client: &SuiClient, address: SuiAddress) -> Vec<(ObjectID, u64)> {
+    match client
+        .coin_read_api()
+        .get_coins(address, None, None, None)
+        .await
+    {
+        Ok(page) => page
+            .data
+            .into_iter()
+            .map(|c| (c.coin_object_id, c.balance))
+            .collect::<Vec<_>>(),
+        Err(e) => {
+            panic!("get_sui_coin_ids error for address {address} {e}")
+        }
+    }
+    // TODO: implement iteration over next page
+}
+
+async fn pay_sui(
+    client: &SuiClient,
+    keypair: &SuiKeyPair,
+    input_coins: Vec<ObjectID>,
+    gas_budget: u64,
+    recipients: Vec<SuiAddress>,
+    amounts: Vec<u64>,
+) -> SuiTransactionBlockResponse {
+    let sender = SuiAddress::from(&keypair.public());
+    let tx = client
+        .transaction_builder()
+        .pay(sender, input_coins, recipients, amounts, None, gas_budget)
+        .await
+        .expect("Failed to construct pay sui transaction");
+    sign_and_execute(
+        client,
+        keypair,
+        tx,
+        ExecuteTransactionRequestType::WaitForLocalExecution,
+    )
+    .await
+}
+
+async fn split_coins(
+    client: &SuiClient,
+    keypair: &SuiKeyPair,
+    coin_to_split: ObjectID,
+    gas_payment: ObjectID,
+    num_coins: u64,
+) -> Vec<ObjectID> {
+    let sender = SuiAddress::from(&keypair.public());
     let split_coin_tx = client
         .transaction_builder()
         .split_coin_equal(
             sender,
-            coin_object_id,
-            num_coins as u64,
-            None,
-            signer_info.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET),
+            coin_to_split,
+            num_coins,
+            Some(gas_payment),
+            DEFAULT_LARGE_GAS_BUDGET,
         )
         .await
         .expect("Failed to construct split coin transaction");
-    debug!("split_coin_tx {:?}", split_coin_tx);
-    let keypair = SuiKeyPair::decode_base64(&signer_info.encoded_keypair)
-        .expect("Decoding keypair should not fail");
-    let signature = Signature::new_secure(
-        &IntentMessage::new(Intent::default(), &split_coin_tx),
-        &keypair,
-    );
-    debug!("signature {:?}", signature);
+    sign_and_execute(
+        client,
+        keypair,
+        split_coin_tx,
+        ExecuteTransactionRequestType::WaitForLocalExecution,
+    )
+    .await
+    .effects
+    .unwrap()
+    .created()
+    .iter()
+    .map(|owned_object_ref| owned_object_ref.reference.object_id)
+    .chain(std::iter::once(coin_to_split))
+    .collect::<Vec<_>>()
+}
 
-    let transaction_response = client
+pub(crate) async fn sign_and_execute(
+    client: &SuiClient,
+    keypair: &SuiKeyPair,
+    txn_data: TransactionData,
+    request_type: ExecuteTransactionRequestType,
+) -> SuiTransactionBlockResponse {
+    let signature =
+        Signature::new_secure(&IntentMessage::new(Intent::default(), &txn_data), keypair);
+
+    let transaction_response = match client
         .quorum_driver()
-        .execute_transaction(
-            Transaction::from_data(split_coin_tx, Intent::default(), vec![signature])
+        .execute_transaction_block(
+            Transaction::from_data(txn_data, Intent::default(), vec![signature])
                 .verify()
                 .expect("signature error"),
-            SuiTransactionResponseOptions::full_content(),
-            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+            Some(request_type),
         )
         .await
-        .expect("Splitcoin transaction failed");
-    debug!("split coin transaction response {transaction_response:?}");
-    let mut results: Vec<ObjectID> = transaction_response
-        .effects
-        .unwrap_or_else(|| {
-            panic!(
-                "split coin transaction should have effects {}",
-                transaction_response.digest
-            )
-        })
-        .created()
-        .iter()
-        .map(|owned_object_ref| owned_object_ref.reference.object_id)
-        .collect();
-    results.push(coin_object_id);
-    debug!("Split {coin_object_id} into {results:?} for gas payment");
-    assert_eq!(results.len(), num_coins);
-    results
-}
-
-async fn query_transactions(
-    client: &SuiClient,
-    query: SuiTransactionResponseQuery,
-    cursor: Option<TransactionDigest>,
-    limit: Option<usize>, // TODO: we should probably set a limit and paginate
-) -> Result<Page<SuiTransactionResponse, TransactionDigest>> {
-    let transactions = client
-        .read_api()
-        .query_transactions(query, cursor, limit, true)
-        .await
-        .unwrap();
-    Ok(transactions)
-}
-
-// todo: this and check_transactions can be generic
-pub async fn check_objects(
-    clients: &Arc<RwLock<Vec<SuiClient>>>,
-    object_ids: &[ObjectID],
-    cross_validate: bool,
-) {
-    let read = clients.read().await;
-    let clients = read.clone();
-
-    let objects = join_all(clients.iter().enumerate().map(|(i, client)| async move {
-        let start_time = Instant::now();
-        let transactions = client
-            .read_api()
-            .multi_get_object_with_options(
-                object_ids.to_vec(),
-                SuiObjectDataOptions::full_content(), // todo(Will) support options for this
-            )
-            .await;
-        let elapsed_time = start_time.elapsed();
-        debug!(
-            "MultiGetObject Request latency {:.4} for rpc at url {i}",
-            elapsed_time.as_secs_f64()
-        );
-        transactions
-    }))
-    .await;
-
-    // TODO: support more than 2 transactions
-    if cross_validate && objects.len() == 2 {
-        if let (Some(t1), Some(t2)) = (objects.get(0), objects.get(1)) {
-            let first = match t1 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!(
-                        "Error unwrapping first vec of objects: {:?} for objectIDs {:?}",
-                        err, object_ids
-                    );
-                    return;
-                }
-            };
-            let second = match t2 {
-                Ok(vec) => vec.as_slice(),
-                Err(err) => {
-                    error!(
-                        "Error unwrapping second vec of objects: {:?} for objectIDs {:?}",
-                        err, object_ids
-                    );
-                    return;
-                }
-            };
-
-            cross_validate_entities(object_ids, first, second, "ObjectID", "Object");
+    {
+        Ok(response) => response,
+        Err(e) => {
+            panic!("sign_and_execute error {e}")
         }
-    }
-}
+    };
 
-fn cross_validate_entities<T, U>(
-    keys: &[T],
-    first: &[U],
-    second: &[U],
-    key_name: &str,
-    entity_name: &str,
-) where
-    T: std::fmt::Debug,
-    U: PartialEq + std::fmt::Debug,
-{
-    if first.len() != second.len() {
-        error!(
-            "Entity: {} lengths do not match: {} vs {}",
-            entity_name,
-            first.len(),
-            second.len()
-        );
-        return;
-    }
-
-    for (i, (a, b)) in first.iter().zip(second.iter()).enumerate() {
-        if a != b {
-            error!(
-                "Entity: {} mismatch with index {}: {}: {:?}, first: {:?}, second: {:?}",
-                entity_name, i, key_name, keys[i], a, b
-            );
-        }
-    }
-}
-
-#[async_trait]
-impl<'a> ProcessPayload<'a, &'a QueryTransactions> for RpcCommandProcessor {
-    async fn process(
-        &'a self,
-        op: &'a QueryTransactions,
-        _signer_info: &Option<SignerInfo>,
-    ) -> Result<()> {
-        let clients = self.get_clients().await?;
-        let filter = match (op.from_address, op.to_address) {
-            (Some(_), Some(_)) => {
-                return Err(anyhow!("Cannot specify both from_address and to_address"));
+    match &transaction_response.effects {
+        Some(effects) => {
+            if let SuiExecutionStatus::Failure { error } = effects.status() {
+                panic!(
+                    "Transaction {} failed with error: {}. Transaction Response: {:?}",
+                    transaction_response.digest, error, &transaction_response
+                );
             }
-            (Some(address), None) => Some(TransactionFilter::FromAddress(address)),
-            (None, Some(address)) => Some(TransactionFilter::ToAddress(address)),
-            (None, None) => None,
-        };
-        let query = SuiTransactionResponseQuery {
-            filter,
-            options: None, // not supported on indexer
-        };
-
-        let results: Vec<TransactionsPage> = Vec::new();
-
-        // Paginate results, if any
-        while results.is_empty() || results.iter().any(|r| r.has_next_page) {
-            let cursor = if results.is_empty() {
-                None
-            } else {
-                match (
-                    results.get(0).unwrap().next_cursor,
-                    results.get(1).unwrap().next_cursor,
-                ) {
-                    (Some(first_cursor), Some(second_cursor)) => {
-                        if first_cursor != second_cursor {
-                            warn!("Cursors are not the same, received {} vs {}. Selecting the first cursor to continue", first_cursor, second_cursor);
-                        }
-                        Some(first_cursor)
-                    }
-                    (Some(cursor), None) | (None, Some(cursor)) => Some(cursor),
-                    (None, None) => None,
-                }
-            };
-
-            let results = join_all(clients.iter().enumerate().map(|(i, client)| {
-                let with_query = query.clone();
-                async move {
-                    let start_time = Instant::now();
-                    let transactions = query_transactions(client, with_query, cursor, None)
-                        .await
-                        .unwrap();
-                    let elapsed_time = start_time.elapsed();
-                    debug!(
-                        "QueryTransactions Request latency {:.4} for rpc at url {i}",
-                        elapsed_time.as_secs_f64()
-                    );
-                    transactions
-                }
-            }))
-            .await;
-
-            // compare results
-            let digests = results[0]
-                .data
-                .iter()
-                .map(|transaction| transaction.digest)
-                .collect::<Vec<TransactionDigest>>();
-
-            cross_validate_entities(
-                &digests,
-                &results[0].data,
-                &results[1].data,
-                "TransactionDigest",
-                "Transaction",
+        }
+        None => {
+            panic!(
+                "Transaction {} has no effects. Response {:?}",
+                transaction_response.digest, &transaction_response
             );
         }
-
-        Ok(())
-    }
+    };
+    transaction_response
 }
 
-#[async_trait]
-impl<'a> ProcessPayload<'a, &'a PaySui> for RpcCommandProcessor {
-    async fn process(&'a self, _op: &'a PaySui, signer_info: &Option<SignerInfo>) -> Result<()> {
-        let clients = self.get_clients().await?;
-        let SignerInfo {
-            encoded_keypair,
-            signer_address,
-            gas_budget,
-            gas_payment,
-        } = signer_info.clone().unwrap();
-        let recipient = SuiAddress::random_for_testing_only();
-        let amount = 11;
-        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{assert_eq, vec};
 
-        let keypair =
-            SuiKeyPair::decode_base64(&encoded_keypair).expect("Decoding keypair should not fail");
+    #[test]
+    fn test_calculate_split_amounts_no_split_needed() {
+        let num_coins = 10;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 20;
+        let expected = vec![(1000, 10)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
 
-        debug!("Pay Sui to {recipient} with {amount} MIST with {gas_payment:?}");
-        for client in clients.iter() {
-            let transfer_tx = client
-                .transaction_builder()
-                .transfer_sui(
-                    signer_address,
-                    gas_payment.unwrap(),
-                    gas_budget,
-                    recipient,
-                    Some(amount),
-                )
-                .await?;
-            debug!("transfer_tx {:?}", transfer_tx);
-            let signature = Signature::new_secure(
-                &IntentMessage::new(Intent::default(), &transfer_tx),
-                &keypair,
-            );
-            debug!("signature {:?}", signature);
+        assert_eq!(expected, result);
+    }
 
-            let transaction_response = client
-                .quorum_driver()
-                .execute_transaction(
-                    Transaction::from_data(transfer_tx, Intent::default(), vec![signature])
-                        .verify()?,
-                    SuiTransactionResponseOptions::full_content(),
-                    Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-                )
-                .await?;
+    #[test]
+    fn test_calculate_split_amounts_exact_split() {
+        let num_coins = 10;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5), (500, 5)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
 
-            debug!("transaction_response {transaction_response:?}");
-        }
+        assert_eq!(expected, result);
+    }
 
-        Ok(())
+    #[test]
+    fn test_calculate_split_amounts_with_remainder() {
+        let num_coins = 12;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5), (500, 5), (200, 2)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_single_coin() {
+        let num_coins = 1;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(100, 0)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_calculate_split_amounts_max_coins_equals_num_coins() {
+        let num_coins = 5;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 5;
+        let expected = vec![(500, 5)];
+        let result = calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
+
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed: new_coins_per_txn > 0")]
+    fn test_calculate_split_amounts_zero_max_coins() {
+        let num_coins = 5;
+        let amount_per_coin = 100;
+        let max_coins_per_txn = 0;
+
+        calculate_split_amounts(num_coins, amount_per_coin, max_coins_per_txn);
     }
 }

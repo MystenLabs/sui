@@ -22,7 +22,7 @@ pub use swarm::FullnodeConfigBuilder;
 pub use swarm::NetworkConfig;
 
 const SUI_DIR: &str = ".sui";
-const SUI_CONFIG_DIR: &str = "sui_config";
+pub const SUI_CONFIG_DIR: &str = "sui_config";
 pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";

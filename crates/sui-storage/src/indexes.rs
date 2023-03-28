@@ -15,14 +15,11 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::debug;
 
 use sui_json_rpc_types::SuiObjectDataFilter;
-use sui_types::base_types::{
-    ObjectID, ObjectType, SuiAddress, TransactionDigest, TxSequenceNumber,
-};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TxSequenceNumber};
 use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::fp_ensure;
 use sui_types::messages::TransactionEvents;
 use sui_types::object::Owner;
 use sui_types::query::TransactionFilter;
@@ -354,6 +351,8 @@ impl IndexStore {
             Some(TransactionFilter::ToAddress(address)) => {
                 Ok(self.get_transactions_to_addr(address, cursor, limit, reverse)?)
             }
+            // NOTE: filter via checkpoint sequence number is implemented in
+            // `get_transactions` of authority.rs.
             Some(_) => Err(anyhow!("Unsupported filter: {:?}", filter)),
             None => {
                 let iter = self.tables.transaction_order.iter();
@@ -382,70 +381,6 @@ impl IndexStore {
                 }
             }
         }
-    }
-
-    pub fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            start <= end,
-            SuiError::FullNodeInvalidTxRangeQuery {
-                error: format!(
-                    "start must not exceed end, (start={}, end={}) given",
-                    start, end
-                ),
-            }
-            .into()
-        );
-        fp_ensure!(
-            end - start <= MAX_TX_RANGE_SIZE,
-            SuiError::FullNodeInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE,
-                    end - start
-                ),
-            }
-            .into()
-        );
-        let res = self.transactions_in_seq_range(start, end)?;
-        debug!(?start, ?end, ?res, "Fetched transactions");
-        Ok(res)
-    }
-
-    fn transactions_in_seq_range(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> SuiResult<Vec<(TxSequenceNumber, TransactionDigest)>> {
-        Ok(self
-            .tables
-            .transaction_order
-            .iter()
-            .skip_to(&start)?
-            .take_while(|(seq, _tx)| *seq < end)
-            .collect())
-    }
-
-    pub fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> Result<Vec<(TxSequenceNumber, TransactionDigest)>, anyhow::Error> {
-        fp_ensure!(
-            count <= MAX_TX_RANGE_SIZE,
-            SuiError::FullNodeInvalidTxRangeQuery {
-                error: format!(
-                    "Number of transactions queried must not exceed {}, {} queried",
-                    MAX_TX_RANGE_SIZE, count
-                ),
-            }
-            .into()
-        );
-        let end = self.next_sequence_number();
-        let start = if end >= count { end - count } else { 0 };
-        self.get_transactions_in_range_deprecated(start, end)
     }
 
     /// Returns unix timestamp for a transaction if it exists
@@ -861,9 +796,9 @@ impl IndexStore {
             Some(cursor) => cursor,
             None => ObjectID::ZERO,
         };
-
         Ok(self
-            .get_owner_objects_iterator(owner, cursor, limit, filter)?
+            .get_owner_objects_iterator(owner, cursor, filter)?
+            .take(limit)
             .collect())
     }
 
@@ -873,63 +808,24 @@ impl IndexStore {
         &self,
         owner: SuiAddress,
         starting_object_id: ObjectID,
-        count: usize,
         filter: Option<SuiObjectDataFilter>,
     ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
-        // We use +1 to grab the next cursor
-        let count = min(count, MAX_GET_OWNED_OBJECT_SIZE + 1);
-        debug!(?owner, ?count, ?starting_object_id, "get_owner_objects");
-        let iter = self
+        Ok(self
             .tables
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
-            .filter(move |((object_owner, _), obj_info)| {
-                let to_include: bool = match &filter {
-                    Some(SuiObjectDataFilter::StructType(struct_tag)) => {
-                        let obj_tag: StructTag = match obj_info.type_.clone().try_into() {
-                            Ok(tag) => tag,
-                            Err(_) => {
-                                return false;
-                            }
-                        };
-                        // If people do not provide type_params, we will match all type_params
-                        // e.g. `0x2::coin::Coin` can match `0x2::coin::Coin<0x2::sui::SUI>`
-                        if !struct_tag.type_params.is_empty()
-                            && struct_tag.type_params != obj_tag.type_params
-                        {
-                            return false;
-                        }
-                        return obj_tag.address == struct_tag.address
-                            && obj_tag.module == struct_tag.module
-                            && obj_tag.name == struct_tag.name;
-                    }
-                    Some(SuiObjectDataFilter::MoveModule { package, module }) => {
-                        if let ObjectType::Struct(o) = obj_info.clone().type_ {
-                            o.address().to_string() == package.to_string()
-                                && o.module().to_string() == module.to_string()
-                        } else {
-                            false
-                        }
-                    }
-                    Some(SuiObjectDataFilter::Package(package_id)) => {
-                        if let ObjectType::Struct(o) = obj_info.clone().type_ {
-                            o.address().to_string() == package_id.to_string()
-                        } else {
-                            false
-                        }
-                    }
-                    None => true,
-                    // TODO (jian): have a better way of ignoring unsupported filters on FN side.
-                    _ => true,
-                };
-                (object_owner == &owner) && to_include
+            .filter(move |(_, o)| {
+                if let Some(filter) = filter.as_ref() {
+                    filter.matches(o)
+                } else {
+                    true
+                }
             })
             .take_while(move |((address_owner, _), _)| address_owner == &owner)
-            .map(|(_, object_info)| object_info);
-        Ok(iter.take(count))
+            .map(|(_, object_info)| object_info))
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {

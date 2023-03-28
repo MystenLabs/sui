@@ -8,6 +8,7 @@ use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
@@ -768,9 +769,6 @@ impl Builder {
             CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
         };
 
-        // Ensure we have signatures from all validators
-        assert_eq!(checkpoint.auth_sig().len(), self.validators.len() as u64);
-
         let genesis = Genesis {
             checkpoint,
             checkpoint_contents,
@@ -1511,7 +1509,7 @@ fn process_package(
                 .iter()
                 .zip(dependency_objects.iter())
                 .all(|(dependency, obj_opt)| obj_opt.is_some()
-                    || to_be_published_addresses.contains(dependency))
+                    || to_be_published_addresses.contains(&AccountAddress::from(*dependency)))
         );
     }
     let loaded_dependencies: Vec<_> = dependencies
@@ -1546,7 +1544,7 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         protocol_config,
         vm,
         &mut temporary_store,
@@ -1635,7 +1633,7 @@ pub fn generate_genesis_system_object(
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         &protocol_config,
         move_vm,
         &mut temporary_store,

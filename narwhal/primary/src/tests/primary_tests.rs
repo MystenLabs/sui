@@ -37,9 +37,10 @@ use tokio::{
 };
 
 use types::{
-    now, BatchDigest, Certificate, CertificateDigest, FetchCertificatesRequest, Header, HeaderAPI,
-    MockPrimaryToWorker, PayloadAvailabilityRequest, PreSubscribedBroadcastSender,
-    PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest, Round,
+    now, BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
+    Header, HeaderAPI, MockPrimaryToWorker, PayloadAvailabilityRequest,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest,
+    Round,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -375,7 +376,7 @@ async fn test_request_vote_send_missing_parents() {
     // headers with some parents but not all available. Round 1 certificates should be written
     // into the storage as parents of round 2 certificates. But to test phase 2 they are left out.
     for cert in round_2_parents {
-        for (digest, (worker_id, _)) in cert.header.payload() {
+        for (digest, (worker_id, _)) in cert.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
@@ -525,13 +526,13 @@ async fn test_request_vote_accept_missing_parents() {
     // The new header will have some round 2 certificates missing as parents, but these parents
     // should be able to get accepted.
     for cert in round_1_certs {
-        for (digest, (worker_id, _)) in cert.header.payload() {
+        for (digest, (worker_id, _)) in cert.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
     }
     for cert in round_2_parents {
-        for (digest, (worker_id, _)) in cert.header.payload() {
+        for (digest, (worker_id, _)) in cert.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
         certificate_store.write(cert.clone()).unwrap();
@@ -648,7 +649,7 @@ async fn test_request_vote_missing_batches() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload() {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
@@ -777,7 +778,7 @@ async fn test_request_vote_already_voted() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload() {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }
@@ -927,7 +928,7 @@ async fn test_fetch_certificates_handler() {
 
     let mut current_round: Vec<_> = Certificate::genesis(&fixture.committee())
         .into_iter()
-        .map(|cert| cert.header)
+        .map(|cert| cert.header().clone())
         .collect();
     let mut headers = vec![];
     let total_rounds = 4;
@@ -959,10 +960,10 @@ async fn test_fetch_certificates_handler() {
     // already in store. But this does not matter for testing here.
     let mut authorities = Vec::<AuthorityIdentifier>::new();
     for i in 0..total_authorities {
-        authorities.push(certificates[i].header.author());
+        authorities.push(certificates[i].header().author());
         for j in 0..=i {
             let cert = certificates[i + j * total_authorities].clone();
-            assert_eq!(&cert.header.author(), authorities.last().unwrap());
+            assert_eq!(&cert.header().author(), authorities.last().unwrap());
             certificate_store
                 .write(cert)
                 .expect("Writing certificate to store failed");
@@ -1118,7 +1119,7 @@ async fn test_process_payload_availability_success() {
             // write the certificate
             certificate_store.write(certificate.clone()).unwrap();
 
-            for (digest, (worker_id, _)) in certificate.header.payload() {
+            for (digest, (worker_id, _)) in certificate.header().payload() {
                 payload_store.write(digest, worker_id).unwrap();
             }
         } else {
@@ -1364,7 +1365,7 @@ async fn test_request_vote_created_at_in_future() {
 
         certificates.insert(digest, certificate.clone());
         certificate_store.write(certificate.clone()).unwrap();
-        for (digest, (worker_id, _)) in certificate.header.payload() {
+        for (digest, (worker_id, _)) in certificate.header().payload() {
             payload_store.write(digest, worker_id).unwrap();
         }
     }

@@ -12,7 +12,7 @@ use fastcrypto::hash::Hash;
 use std::{collections::HashSet, time::Duration};
 use test_utils::{fixture_payload, CommitteeFixture};
 use tokio::sync::mpsc;
-use types::{CertificateDigest, Header, HeaderAPI};
+use types::{CertificateAPI, CertificateDigest, Header, HeaderAPI};
 
 #[tokio::test]
 async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
@@ -289,7 +289,7 @@ async fn test_synchronize_block_payload() {
             .unwrap(),
     );
     let cert_stored = fixture.certificate(&header);
-    for (digest, (worker_id, _)) in cert_stored.clone().header.payload() {
+    for (digest, (worker_id, _)) in cert_stored.clone().header().payload() {
         payload_store.write(digest, worker_id).unwrap();
     }
 

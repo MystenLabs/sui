@@ -132,7 +132,7 @@ const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc32fast = { version = "1" }
-criterion = { version = "0.4", features = ["async_tokio"] }
+criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
 criterion-plot = { version = "0.5", default-features = false }
 crossbeam-channel = { version = "0.5" }
 crossbeam-deque = { version = "0.8" }
@@ -761,7 +761,7 @@ convert_case-3b31131e45eafb45 = { package = "convert_case", version = "0.6", def
 convert_case-9fbad63c4bcf4a8f = { package = "convert_case", version = "0.4", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc32fast = { version = "1" }
-criterion = { version = "0.4", features = ["async_tokio"] }
+criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
 criterion-plot = { version = "0.5", default-features = false }
 crossbeam-channel = { version = "0.5" }
 crossbeam-deque = { version = "0.8" }

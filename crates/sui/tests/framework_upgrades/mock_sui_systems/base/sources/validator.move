@@ -64,4 +64,27 @@ module sui_system::validator {
             extra_fields: bag::new(ctx),
         }
     }
+
+    public(friend) fun new_dummy_inactive_validator(
+        ctx: &mut TxContext
+    ): Validator {
+        let metadata = ValidatorMetadata {
+            sui_address: @0x0,
+            protocol_pubkey_bytes: vector[],
+            network_pubkey_bytes: vector[],
+            worker_pubkey_bytes: vector[],
+            net_address: string::utf8(vector[]),
+            p2p_address: string::utf8(vector[]),
+            primary_address: string::utf8(vector[]),
+            worker_address: string::utf8(vector[]),
+            extra_fields: bag::new(ctx),
+        };
+
+        Validator {
+            metadata,
+            voting_power: 0,
+            stake: balance::zero(),
+            extra_fields: bag::new(ctx),
+        }
+    }
 }

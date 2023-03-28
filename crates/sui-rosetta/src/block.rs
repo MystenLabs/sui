@@ -11,7 +11,7 @@ use crate::types::{
     TransactionIdentifier,
 };
 use crate::{Error, OnlineServerContext, SuiEnv};
-use sui_json_rpc_types::SuiTransactionResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 
 /// This module implements the [Rosetta Block API](https://www.rosetta-api.org/docs/BlockApi.html)
 
@@ -48,7 +48,7 @@ pub async fn transaction(
         .read_api()
         .get_transaction_with_options(
             digest,
-            SuiTransactionResponseOptions::new()
+            SuiTransactionBlockResponseOptions::new()
                 .with_input()
                 .with_events()
                 .with_effects()

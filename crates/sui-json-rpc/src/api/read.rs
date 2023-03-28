@@ -7,46 +7,35 @@ use jsonrpsee_proc_macros::rpc;
 use sui_json_rpc_types::{
     BigInt, Checkpoint, CheckpointId, CheckpointPage, SuiCheckpointSequenceNumber, SuiEvent,
     SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait ReadApi {
-    /// Return list of transaction digests within the queried range.
-    /// This method will be removed before April 2023, please use `queryTransactions` instead
-    #[method(name = "getTransactionsInRangeDeprecated", deprecated)]
-    async fn get_transactions_in_range_deprecated(
-        &self,
-        /// the matching transactions' sequence number will be greater than or equals to the starting sequence number
-        start: TxSequenceNumber,
-        /// the matching transactions' sequence number will be less than the ending sequence number
-        end: TxSequenceNumber,
-    ) -> RpcResult<Vec<TransactionDigest>>;
-
     /// Return the transaction response object.
-    #[method(name = "getTransaction")]
-    async fn get_transaction(
+    #[method(name = "getTransactionBlock")]
+    async fn get_transaction_block(
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
         /// options for specifying the content to be returned
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<SuiTransactionResponse>;
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<SuiTransactionBlockResponse>;
 
     /// Returns an ordered list of transaction responses
     /// The method will throw an error if the input contains any duplicate or
     /// the input size exceeds QUERY_MAX_RESULT_LIMIT
-    #[method(name = "multiGetTransactions")]
-    async fn multi_get_transactions(
+    #[method(name = "multiGetTransactionBlocks")]
+    async fn multi_get_transaction_blocks(
         &self,
         /// A list of transaction digests.
         digests: Vec<TransactionDigest>,
         /// config options to control which fields to fetch
-        options: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<Vec<SuiTransactionResponse>>;
+        options: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Vec<SuiTransactionBlockResponse>>;
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]
@@ -125,8 +114,8 @@ pub trait ReadApi {
     ) -> RpcResult<Vec<SuiEvent>>;
 
     /// Return the total number of transactions known to the server.
-    #[method(name = "getTotalTransactionNumber")]
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt>;
+    #[method(name = "getTotalTransactionBlocks")]
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]

@@ -107,7 +107,7 @@ If the inner version is old, we upgrade it lazily in-place.
 
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_load_validator_maybe_upgrade">load_validator_maybe_upgrade</a>(self: &<b>mut</b> <a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): &<b>mut</b> Validator {
     <a href="validator_wrapper.md#0x3_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self);
-    <a href="_load_value_mut">versioned::load_value_mut</a>&lt;Validator&gt;(&<b>mut</b> self.inner)
+    <a href="_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner)
 }
 </code></pre>
 
@@ -134,7 +134,7 @@ Destroy the wrapper and retrieve the inner validator object.
 <pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_wrapper.md#0x3_validator_wrapper_destroy">destroy</a>(self: <a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): Validator {
     <a href="validator_wrapper.md#0x3_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(&<b>mut</b> self);
     <b>let</b> <a href="validator_wrapper.md#0x3_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> { inner } = self;
-    <a href="_destroy">versioned::destroy</a>&lt;Validator&gt;(inner)
+    <a href="_destroy">versioned::destroy</a>(inner)
 }
 </code></pre>
 

@@ -47,7 +47,10 @@ pub mod utils;
 pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
-pub const MIGRATED_METHODS: [&str; 7] = [
+/// Returns all endpoints for which we have implemented on the indexer,
+/// some of them are not validated yet.
+/// NOTE: we only use this for integration testing
+const IMPLEMENTED_METHODS: [&str; 7] = [
     "get_checkpoint",
     "get_latest_checkpoint_sequence_number",
     "get_object_with_options",
@@ -96,10 +99,8 @@ impl IndexerConfig {
         )
     }
 
-    /// returns all endpoints for which we have implemented on the indexer
-    /// NOTE: we only use this for integration testing
-    pub fn all_migrated_methods() -> Vec<String> {
-        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
+    pub fn all_implemented_methods() -> Vec<String> {
+        IMPLEMENTED_METHODS.iter().map(|&s| s.to_string()).collect()
     }
 }
 
@@ -175,7 +176,7 @@ pub fn establish_connection(db_url: String) -> PgConnection {
     PgConnection::establish(&db_url).unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
 }
 
-pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
     Pool::builder().build(manager).map_err(|e| {
@@ -231,7 +232,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         event_handler,
         config.migrated_methods.clone(),
     ))?;
-    builder.register_module(WriteApi::new(http_client.clone()))?;
+    builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;
     builder.register_module(ExtendedApi::new(state.clone()))?;
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(

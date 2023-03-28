@@ -47,6 +47,7 @@ mime = "0.3"
 serde_json = "1.0"
 tower = { version = "0.4", features = ["util"] }
 axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 
 [build-dependencies]
 prost-build = "0.11.8"

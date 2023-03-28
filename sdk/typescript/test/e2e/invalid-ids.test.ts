@@ -17,11 +17,6 @@ describe('Object id/Address/Transaction digest validation', () => {
     expect(
       toolbox.provider.getOwnedObjects({ owner: '' }),
     ).rejects.toThrowError(/Invalid Sui address/);
-
-    //wrong id
-    expect(
-      toolbox.provider.queryTransactionsForAddressDeprecated('Wrong'),
-    ).rejects.toThrowError(/Invalid Sui address/);
   });
 
   it('Test all functions with invalid Object Id', async () => {
@@ -37,11 +32,6 @@ describe('Object id/Address/Transaction digest validation', () => {
           '0x0000000000000000000000004ce52ee7b659b610d59a1ced129291b3d0d4216322',
       }),
     ).rejects.toThrowError(/Invalid Sui Object id/);
-    expect(
-      toolbox.provider.queryTransactionsForObjectDeprecated(
-        '0000000000000000000000004ce52ee7b659b610d59a1ced129291b3d0d421632',
-      ),
-    ).rejects.toThrowError(/Invalid Sui Object id/);
 
     //wrong batch request
     let objectIds = ['0xBABE', '0xCAFE', '0xWRONG', '0xFACE'];
@@ -53,13 +43,13 @@ describe('Object id/Address/Transaction digest validation', () => {
   it('Test all functions with invalid Transaction Digest', async () => {
     //empty digest
     expect(
-      toolbox.provider.getTransaction({ digest: '' }),
+      toolbox.provider.getTransactionBlock({ digest: '' }),
     ).rejects.toThrowError(/Invalid Transaction digest/);
 
     //wrong batch request
     let digests = ['AQ7FA8JTGs368CvMkXj2iFz2WUWwzP6AAWgsLpPLxUmr', 'wrong'];
     expect(
-      toolbox.provider.multiGetTransactions({ digests }),
+      toolbox.provider.multiGetTransactionBlocks({ digests }),
     ).rejects.toThrowError(/Invalid Transaction digest wrong/);
   });
 });

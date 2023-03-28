@@ -10,17 +10,17 @@ import {
   isSharedObjectInput,
   ObjectId,
   SuiObjectData,
-  SuiTransactionResponse,
+  SuiTransactionBlockResponse,
   SUI_SYSTEM_STATE_OBJECT_ID,
-  Transaction,
+  TransactionBlock,
 } from '../../src';
-import { TransactionDataBuilder } from '../../src/builder/TransactionData';
+import { TransactionBlockDataBuilder } from '../../src/builder/TransactionBlockData';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Serialization and deserialization', () => {
   let toolbox: TestToolbox;
   let packageId: ObjectId;
-  let publishTxn: SuiTransactionResponse;
+  let publishTxn: SuiTransactionBlockResponse;
   let sharedObjectId: ObjectId;
 
   beforeAll(async () => {
@@ -33,18 +33,24 @@ describe('Transaction Serialization and deserialization', () => {
     sharedObjectId = getObjectId(sharedObject);
   });
 
-  async function serializeAndDeserialize(tx: Transaction, mutable: boolean[]) {
+  async function serializeAndDeserialize(
+    tx: TransactionBlock,
+    mutable: boolean[],
+  ) {
     tx.setSender(await toolbox.address());
-    const transactionBytes = await tx.build({ provider: toolbox.provider });
-    const deserializedTxnBuilder =
-      TransactionDataBuilder.fromBytes(transactionBytes);
+    const transactionBlockBytes = await tx.build({
+      provider: toolbox.provider,
+    });
+    const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(
+      transactionBlockBytes,
+    );
     expect(
       deserializedTxnBuilder.inputs
         .filter((i) => isSharedObjectInput(i.value))
         .map((i) => isMutableSharedObjectInput(i.value)),
     ).toStrictEqual(mutable);
     const reserializedTxnBytes = await deserializedTxnBuilder.build();
-    expect(reserializedTxnBytes).toEqual(transactionBytes);
+    expect(reserializedTxnBytes).toEqual(transactionBlockBytes);
   }
 
   it('Move Shared Object Call with mutable reference', async () => {
@@ -53,7 +59,7 @@ describe('Transaction Serialization and deserialization', () => {
     const [{ suiAddress: validatorAddress }] =
       await toolbox.getActiveValidators();
 
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     const coin = coins[2].data as SuiObjectData;
     tx.moveCall({
       target: '0x3::sui_system::request_add_stake',
@@ -67,7 +73,7 @@ describe('Transaction Serialization and deserialization', () => {
   });
 
   it('Move Shared Object Call with immutable reference', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::serializer_tests::value`,
       arguments: [tx.object(sharedObjectId)],
@@ -76,7 +82,7 @@ describe('Transaction Serialization and deserialization', () => {
   });
 
   it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
-    const tx = new Transaction();
+    const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::serializer_tests::value`,
       arguments: [tx.object(sharedObjectId)],

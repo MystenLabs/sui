@@ -3,32 +3,32 @@
 
 import { toB58 } from '@mysten/bcs';
 import { describe, it, expect } from 'vitest';
-import { Transaction, Commands, builder } from '..';
+import { TransactionBlock, Transactions, builder } from '..';
 import { Inputs } from '../Inputs';
 
 it('can construct and serialize an empty tranaction', () => {
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   expect(() => tx.serialize()).not.toThrow();
 });
 
 it('can be serialized and deserialized to the same values', () => {
-  const tx = new Transaction();
-  tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+  const tx = new TransactionBlock();
+  tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
   const serialized = tx.serialize();
-  const tx2 = Transaction.from(serialized);
+  const tx2 = TransactionBlock.from(serialized);
   expect(serialized).toEqual(tx2.serialize());
 });
 
-it('allows transfer with the result of split commands', () => {
-  const tx = new Transaction();
-  const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
-  tx.add(Commands.TransferObjects([coin], tx.object('0x2')));
+it('allows transfer with the result of split transactions', () => {
+  const tx = new TransactionBlock();
+  const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+  tx.add(Transactions.TransferObjects([coin], tx.object('0x2')));
 });
 
 it('supports nested results through either array index or destructuring', () => {
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   const registerResult = tx.add(
-    Commands.MoveCall({
+    Transactions.MoveCall({
       target: '0x2::game::register',
     }),
   );
@@ -52,15 +52,15 @@ describe('offline build', () => {
     await tx.build();
   });
 
-  it('builds a split command', async () => {
+  it('builds a split transaction', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
+    tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(100, 'u64'))]));
     await tx.build();
   });
 
-  it('can determine the type of inputs for built-in commands', async () => {
+  it('can determine the type of inputs for built-in transactions', async () => {
     const tx = setup();
-    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+    tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
     await tx.build();
   });
 
@@ -68,20 +68,23 @@ describe('offline build', () => {
     const tx = setup();
     const inputBytes = builder.ser('u64', 100n).toBytes();
     // Use bytes directly in pure value:
-    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
+    tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
     // Use bytes in input helper:
-    tx.add(Commands.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(inputBytes))]));
+    tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(Inputs.Pure(inputBytes))]));
     await tx.build();
   });
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+    const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
     tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
+      Transactions.MergeCoins(tx.gas, [
+        coin,
+        tx.object(Inputs.ObjectRef(ref())),
+      ]),
     );
     tx.add(
-      Commands.MoveCall({
+      Transactions.MoveCall({
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
@@ -96,12 +99,15 @@ describe('offline build', () => {
 
   it('builds a more complex interaction', async () => {
     const tx = setup();
-    const coin = tx.add(Commands.SplitCoins(tx.gas, [tx.pure(100)]));
+    const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
     tx.add(
-      Commands.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]),
+      Transactions.MergeCoins(tx.gas, [
+        coin,
+        tx.object(Inputs.ObjectRef(ref())),
+      ]),
     );
     tx.add(
-      Commands.MoveCall({
+      Transactions.MoveCall({
         target: '0x2::devnet_nft::mint',
         typeArguments: [],
         arguments: [
@@ -113,7 +119,7 @@ describe('offline build', () => {
     );
 
     const bytes = await tx.build();
-    const tx2 = Transaction.from(bytes);
+    const tx2 = TransactionBlock.from(bytes);
     const bytes2 = await tx2.build();
 
     expect(bytes).toEqual(bytes2);
@@ -133,7 +139,7 @@ function ref(): { objectId: string; version: string; digest: string } {
 }
 
 function setup() {
-  const tx = new Transaction();
+  const tx = new TransactionBlock();
   tx.setSender('0x2');
   tx.setGasPrice(5);
   tx.setGasBudget(100);

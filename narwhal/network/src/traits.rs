@@ -68,7 +68,7 @@ pub trait PrimaryToPrimaryRpc {
     async fn fetch_certificates(
         &self,
         peer: &NetworkPublicKey,
-        request: FetchCertificatesRequest,
+        request: impl anemo::types::request::IntoRequest<FetchCertificatesRequest> + Send,
     ) -> Result<FetchCertificatesResponse>;
 }
 

@@ -19,7 +19,7 @@ export { StandardWalletAdapter };
 
 // These are the default features that the adapter will check for:
 export const DEFAULT_FEATURES: (keyof StandardWalletAdapterWallet["features"])[] =
-  ["sui:signAndExecuteTransaction"];
+  ["sui:signAndExecuteTransactionBlock"];
 
 export class WalletStandardAdapterProvider implements WalletAdapterProvider {
   #wallets: Wallets;

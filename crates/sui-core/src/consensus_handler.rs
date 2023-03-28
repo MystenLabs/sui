@@ -16,7 +16,7 @@ use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{ConsensusOutput, HeaderAPI};
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -132,7 +132,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
         // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
-        let timestamp = *consensus_output.sub_dag.leader.header.created_at();
+        let timestamp = *consensus_output.sub_dag.leader.header().created_at();
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
@@ -152,10 +152,15 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&consensus_output.sub_dag.leader.header.author().to_string()])
+            .with_label_values(&[&consensus_output
+                .sub_dag
+                .leader
+                .header()
+                .author()
+                .to_string()])
             .inc();
         for (cert, batches) in consensus_output.batches {
-            let author = cert.header.author();
+            let author = cert.header().author();
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
@@ -163,11 +168,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             let output_cert = Arc::new(cert);
             for batch in batches {
                 self.metrics.consensus_handler_processed_batches.inc();
-                for serialized_transaction in batch.transactions {
+                for serialized_transaction in batch.transactions() {
                     bytes += serialized_transaction.len();
 
                     let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                        &serialized_transaction,
+                        serialized_transaction,
                     ) {
                         Ok(transaction) => transaction,
                         Err(err) => {
@@ -184,7 +189,11 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                         .with_label_values(&[classify(&transaction)])
                         .inc();
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
-                    transactions.push((serialized_transaction, transaction, output_cert.clone()));
+                    transactions.push((
+                        serialized_transaction.clone(),
+                        transaction,
+                        output_cert.clone(),
+                    ));
                 }
             }
         }
@@ -209,7 +218,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
             let certificate_author = AuthorityName::from_bytes(
                 self.committee
-                    .authority_safe(&output_cert.header.author())
+                    .authority_safe(&output_cert.header().author())
                     .protocol_key_bytes()
                     .0
                     .as_ref(),

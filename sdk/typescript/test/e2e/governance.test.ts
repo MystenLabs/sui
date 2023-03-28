@@ -68,8 +68,8 @@ async function addStake(signer: RawSigner) {
     validators[0].suiAddress,
   );
 
-  return await signer.signAndExecuteTransaction({
-    transaction: tx,
+  return await signer.signAndExecuteTransactionBlock({
+    transactionBlock: tx,
     options: {
       showEffects: true,
     },

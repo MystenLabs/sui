@@ -14,8 +14,8 @@ use test_utils::{
     fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
 };
 use types::{
-    Batch, BatchMessage, Certificate, CertificateDigest, Header, HeaderAPI, MockWorkerToWorker,
-    RequestBatchResponse, WorkerToWorkerServer,
+    Batch, BatchAPI, BatchMessage, Certificate, CertificateDigest, Header, HeaderAPI,
+    MockWorkerToWorker, RequestBatchResponse, WorkerToWorkerServer,
 };
 
 #[tokio::test]
@@ -97,7 +97,7 @@ async fn test_successfully_retrieve_block() {
     assert_eq!(block.batches.len(), expected_block_count);
     assert_eq!(block.digest, digest.clone());
     for batch in block.batches {
-        assert_eq!(batch.batch.transactions.len(), 2);
+        assert_eq!(batch.batch.transactions().len(), 2);
     }
 }
 

@@ -16,10 +16,10 @@ CREATE TABLE transactions (
     transaction_digest          base58digest NOT NULL,
     sender                      VARCHAR(255) NOT NULL,
     recipients                  TEXT[]       NOT NULL,
-    checkpoint_sequence_number  BIGINT       NOT NULL,
-    timestamp_ms                BIGINT       NOT NULL,
+    checkpoint_sequence_number  BIGINT,
+    timestamp_ms                BIGINT,
     transaction_kind            TEXT         NOT NULL,
-    command_count               BIGINT       NOT NULL,
+    transaction_count               BIGINT       NOT NULL,
     -- object related
     created                     TEXT[]       NOT NULL,
     mutated                     TEXT[]       NOT NULL,

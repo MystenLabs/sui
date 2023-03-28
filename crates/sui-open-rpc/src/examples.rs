@@ -22,9 +22,10 @@ use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
     RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
     SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransaction,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionEffectsV1, SuiTransactionResponse,
-    SuiTransactionResponseOptions, SuiTransactionResponseQuery, TransactionBytes, TransactionsPage,
+    SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
+    SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseQuery, TransactionBlockBytes, TransactionBlocksPage,
     TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
@@ -80,9 +81,9 @@ impl RpcExampleProvider {
             self.get_object_example(),
             self.get_past_object_example(),
             self.get_owned_objects(),
-            self.get_total_transaction_number(),
-            self.get_transaction(),
-            self.query_transactions(),
+            self.get_total_transaction_blocks(),
+            self.get_transaction_block(),
+            self.query_transaction_blocks(),
             self.get_events(),
             self.execute_transaction_example(),
             self.get_checkpoint_example(),
@@ -154,7 +155,7 @@ impl RpcExampleProvider {
             1000,
         );
 
-        let result = TransactionBytes::from_data(data).unwrap();
+        let result = TransactionBlockBytes::from_data(data).unwrap();
 
         Examples::new(
             "sui_batchTransaction",
@@ -174,10 +175,10 @@ impl RpcExampleProvider {
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signatures, _, _, result) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data).unwrap();
+        let tx_bytes = TransactionBlockBytes::from_data(data).unwrap();
 
         Examples::new(
-            "sui_executeTransaction",
+            "sui_executeTransactionBlock",
             vec![ExamplePairing::new(
                 "Execute an transaction with serialized signatures",
                 vec![
@@ -191,7 +192,7 @@ impl RpcExampleProvider {
                     ),
                     (
                         "options",
-                        json!(SuiTransactionResponseOptions::full_content()),
+                        json!(SuiTransactionBlockResponseOptions::full_content()),
                     ),
                     (
                         "request_type",
@@ -352,9 +353,9 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_total_transaction_number(&mut self) -> Examples {
+    fn get_total_transaction_blocks(&mut self) -> Examples {
         Examples::new(
-            "sui_getTotalTransactionNumber",
+            "sui_getTotalTransactionBlocks",
             vec![ExamplePairing::new(
                 "Get total number of transactions",
                 vec![],
@@ -363,17 +364,17 @@ impl RpcExampleProvider {
         )
     }
 
-    fn get_transaction(&mut self) -> Examples {
+    fn get_transaction_block(&mut self) -> Examples {
         let (_, _, _, _, result) = self.get_transfer_data_response();
         Examples::new(
-            "sui_getTransaction",
+            "sui_getTransactionBlock",
             vec![ExamplePairing::new(
                 "Return the transaction response object for specified transaction digest",
                 vec![
                     ("digest", json!(result.digest)),
                     (
                         "options",
-                        json!(SuiTransactionResponseOptions::new()
+                        json!(SuiTransactionBlockResponseOptions::new()
                             .with_input()
                             .with_effects()
                             .with_events()),
@@ -384,26 +385,29 @@ impl RpcExampleProvider {
         )
     }
 
-    fn query_transactions(&mut self) -> Examples {
+    fn query_transaction_blocks(&mut self) -> Examples {
         let mut data = self.get_transaction_digests(5..9);
         let has_next_page = data.len() > (9 - 5);
         data.truncate(9 - 5);
         let next_cursor = data.last().cloned();
-        let data = data.into_iter().map(SuiTransactionResponse::new).collect();
+        let data = data
+            .into_iter()
+            .map(SuiTransactionBlockResponse::new)
+            .collect();
 
-        let result = TransactionsPage {
+        let result = TransactionBlocksPage {
             data,
             next_cursor,
             has_next_page,
         };
         Examples::new(
-            "sui_queryTransactions",
+            "suix_queryTransactionBlocks",
             vec![ExamplePairing::new(
                 "Return the transaction digest for specified query criteria",
                 vec![
                     (
                         "query",
-                        json!(SuiTransactionResponseQuery {
+                        json!(SuiTransactionBlockResponseQuery {
                             filter: Some(TransactionFilter::InputObject(ObjectID::new(
                                 self.rng.gen()
                             ))),
@@ -433,7 +437,7 @@ impl RpcExampleProvider {
         Vec<GenericSignature>,
         SuiAddress,
         ObjectID,
-        SuiTransactionResponse,
+        SuiTransactionBlockResponse,
     ) {
         let (signer, kp): (_, AccountKeyPair) = get_key_pair_from_rng(&mut self.rng);
         let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
@@ -476,48 +480,50 @@ impl RpcExampleProvider {
                 Ok(None)
             }
         }
-        let result = SuiTransactionResponse {
+        let result = SuiTransactionBlockResponse {
             digest: *tx_digest,
-            effects: Some(SuiTransactionEffects::V1(SuiTransactionEffectsV1 {
-                status: SuiExecutionStatus::Success,
-                executed_epoch: 0.into(),
-                modified_at_versions: vec![],
-                gas_used: SuiGasCostSummary {
-                    computation_cost: 100.into(),
-                    storage_cost: 100.into(),
-                    storage_rebate: 10.into(),
-                    non_refundable_storage_fee: 0.into(),
-                },
-                shared_objects: vec![],
-                transaction_digest: TransactionDigest::new(self.rng.gen()),
-                created: vec![],
-                mutated: vec![
-                    OwnedObjectRef {
-                        owner: Owner::AddressOwner(signer),
-                        reference: gas_ref.into(),
+            effects: Some(SuiTransactionBlockEffects::V1(
+                SuiTransactionBlockEffectsV1 {
+                    status: SuiExecutionStatus::Success,
+                    executed_epoch: 0.into(),
+                    modified_at_versions: vec![],
+                    gas_used: SuiGasCostSummary {
+                        computation_cost: 100.into(),
+                        storage_cost: 100.into(),
+                        storage_rebate: 10.into(),
+                        non_refundable_storage_fee: 0.into(),
                     },
-                    OwnedObjectRef {
-                        owner: Owner::AddressOwner(recipient),
-                        reference: object_ref.into(),
+                    shared_objects: vec![],
+                    transaction_digest: TransactionDigest::new(self.rng.gen()),
+                    created: vec![],
+                    mutated: vec![
+                        OwnedObjectRef {
+                            owner: Owner::AddressOwner(signer),
+                            reference: gas_ref.into(),
+                        },
+                        OwnedObjectRef {
+                            owner: Owner::AddressOwner(recipient),
+                            reference: object_ref.into(),
+                        },
+                    ],
+                    unwrapped: vec![],
+                    deleted: vec![],
+                    unwrapped_then_deleted: vec![],
+                    wrapped: vec![],
+                    gas_object: OwnedObjectRef {
+                        owner: Owner::ObjectOwner(signer),
+                        reference: SuiObjectRef::from(gas_ref),
                     },
-                ],
-                unwrapped: vec![],
-                deleted: vec![],
-                unwrapped_then_deleted: vec![],
-                wrapped: vec![],
-                gas_object: OwnedObjectRef {
-                    owner: Owner::ObjectOwner(signer),
-                    reference: SuiObjectRef::from(gas_ref),
+                    events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
+                    dependencies: vec![],
                 },
-                events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
-                dependencies: vec![],
-            })),
+            )),
             events: None,
             object_changes: Some(vec![object_change]),
             balance_changes: None,
             timestamp_ms: None,
-            transaction: Some(SuiTransaction {
-                data: SuiTransactionData::try_from(data1, &&mut NoOpsModuleResolver).unwrap(),
+            transaction: Some(SuiTransactionBlock {
+                data: SuiTransactionBlockData::try_from(data1, &&mut NoOpsModuleResolver).unwrap(),
                 tx_signatures: signatures.clone(),
             }),
             raw_transaction,

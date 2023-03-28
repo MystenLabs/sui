@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt};
+use std::collections::BTreeMap;
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
@@ -15,33 +15,33 @@ use serde::Deserialize;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{convert_vm_error, ExecutionError, ExecutionErrorKind},
+    error::{convert_vm_error, ExecutionError, ExecutionErrorKind, SuiError},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
     TypeTag,
 };
 
-pub trait StorageView<E: std::fmt::Debug>:
-    ResourceResolver<Error = E>
-    + ModuleResolver<Error = E>
-    + LinkageResolver<Error = E>
+pub trait StorageView:
+    ResourceResolver<Error = SuiError>
+    + ModuleResolver<Error = SuiError>
+    + LinkageResolver<Error = SuiError>
     + BackingPackageStore
     + Storage
     + ParentSync
     + ChildObjectResolver
 {
 }
+
 impl<
-        E: std::fmt::Debug,
-        T: ResourceResolver<Error = E>
-            + ModuleResolver<Error = E>
-            + LinkageResolver<Error = E>
+        T: ResourceResolver<Error = SuiError>
+            + ModuleResolver<Error = SuiError>
+            + LinkageResolver<Error = SuiError>
             + BackingPackageStore
             + Storage
             + ParentSync
             + ChildObjectResolver,
-    > StorageView<E> for T
+    > StorageView for T
 {
 }
 
@@ -188,7 +188,7 @@ impl Value {
 }
 
 impl ObjectValue {
-    pub fn new<E: fmt::Debug, S: StorageView<E>>(
+    pub fn new<S: StorageView>(
         vm: &MoveVM,
         state_view: &S,
         session: &Session<S>,
@@ -217,7 +217,7 @@ impl ObjectValue {
         })
     }
 
-    pub fn from_object<E: fmt::Debug, S: StorageView<E>>(
+    pub fn from_object<S: StorageView>(
         vm: &MoveVM,
         state_view: &S,
         session: &Session<S>,
@@ -230,7 +230,7 @@ impl ObjectValue {
         }
     }
 
-    pub fn from_move_object<E: fmt::Debug, S: StorageView<E>>(
+    pub fn from_move_object<S: StorageView>(
         vm: &MoveVM,
         state_view: &S,
         session: &Session<S>,

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import { Transaction } from '../builder';
-import { TransactionDataBuilder } from '../builder/TransactionData';
+import { TransactionBlock } from '../builder';
+import { TransactionBlockDataBuilder } from '../builder/TransactionBlockData';
 import { SerializedSignature } from '../cryptography/signature';
 import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { HttpHeaders } from '../rpc/client';
@@ -13,9 +13,9 @@ import {
   getTotalGasUsedUpperBound,
   SuiAddress,
   DevInspectResults,
-  DryRunTransactionResponse,
-  SuiTransactionResponse,
-  SuiTransactionResponseOptions,
+  DryRunTransactionBlockResponse,
+  SuiTransactionBlockResponse,
+  SuiTransactionBlockResponseOptions,
 } from '../types';
 import { IntentScope, messageWithIntent } from '../utils/intent';
 import { Signer } from './signer';
@@ -79,59 +79,60 @@ export abstract class SignerWithProvider implements Signer {
   /**
    * Sign a transaction.
    */
-  async signTransaction(input: {
-    transaction: Uint8Array | Transaction;
+  async signTransactionBlock(input: {
+    transactionBlock: Uint8Array | TransactionBlock;
   }): Promise<SignedTransaction> {
-    let transactionBytes;
+    let transactionBlockBytes;
 
-    if (Transaction.is(input.transaction)) {
+    if (TransactionBlock.is(input.transactionBlock)) {
       // If the sender has not yet been set on the transaction, then set it.
       // NOTE: This allows for signing transactions with mis-matched senders, which is important for sponsored transactions.
-      input.transaction.setSenderIfNotSet(await this.getAddress());
-      transactionBytes = await input.transaction.build({
+      input.transactionBlock.setSenderIfNotSet(await this.getAddress());
+      transactionBlockBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
-    } else if (input.transaction instanceof Uint8Array) {
-      transactionBytes = input.transaction;
+    } else if (input.transactionBlock instanceof Uint8Array) {
+      transactionBlockBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
 
     const intentMessage = messageWithIntent(
       IntentScope.TransactionData,
-      transactionBytes,
+      transactionBlockBytes,
     );
     const signature = await this.signData(intentMessage);
 
     return {
-      transactionBytes: toB64(transactionBytes),
+      transactionBlockBytes: toB64(transactionBlockBytes),
       signature,
     };
   }
 
   /**
-   * Sign a transaction and submit to the Fullnode for execution.
+   * Sign a transaction block and submit to the Fullnode for execution.
    *
    * @param options specify which fields to return (e.g., transaction, effects, events, etc).
    * By default, only the transaction digest will be returned.
    * @param requestType WaitForEffectsCert or WaitForLocalExecution, see details in `ExecuteTransactionRequestType`.
    * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
    */
-  async signAndExecuteTransaction(input: {
-    transaction: Uint8Array | Transaction;
+  async signAndExecuteTransactionBlock(input: {
+    transactionBlock: Uint8Array | TransactionBlock;
     /** specify which fields to return (e.g., transaction, effects, events, etc). By default, only the transaction digest will be returned. */
-    options?: SuiTransactionResponseOptions;
+    options?: SuiTransactionBlockResponseOptions;
     /** `WaitForEffectsCert` or `WaitForLocalExecution`, see details in `ExecuteTransactionRequestType`.
      * Defaults to `WaitForLocalExecution` if options.show_effects or options.show_events is true
      */
     requestType?: ExecuteTransactionRequestType;
-  }): Promise<SuiTransactionResponse> {
-    const { transactionBytes, signature } = await this.signTransaction({
-      transaction: input.transaction,
-    });
+  }): Promise<SuiTransactionBlockResponse> {
+    const { transactionBlockBytes, signature } =
+      await this.signTransactionBlock({
+        transactionBlock: input.transactionBlock,
+      });
 
-    return await this.provider.executeTransaction({
-      transaction: transactionBytes,
+    return await this.provider.executeTransactionBlock({
+      transactionBlock: transactionBlockBytes,
       signature,
       options: input.options,
       requestType: input.requestType,
@@ -143,12 +144,14 @@ export abstract class SignerWithProvider implements Signer {
    * @param tx BCS serialized transaction data or a `Transaction` object
    * @returns transaction digest
    */
-  async getTransactionDigest(tx: Uint8Array | Transaction): Promise<string> {
-    if (Transaction.is(tx)) {
+  async getTransactionBlockDigest(
+    tx: Uint8Array | TransactionBlock,
+  ): Promise<string> {
+    if (TransactionBlock.is(tx)) {
       tx.setSenderIfNotSet(await this.getAddress());
       return tx.getDigest({ provider: this.provider });
     } else if (tx instanceof Uint8Array) {
-      return TransactionDataBuilder.getDigestFromBytes(tx);
+      return TransactionBlockDataBuilder.getDigestFromBytes(tx);
     } else {
       throw new Error('Unknown transaction format.');
     }
@@ -159,37 +162,42 @@ export abstract class SignerWithProvider implements Signer {
    * transaction (or Move call) with any arguments. Detailed results are
    * provided, including both the transaction effects and any return values.
    */
-  async devInspectTransaction(
+  async devInspectTransactionBlock(
     input: Omit<
-      Parameters<JsonRpcProvider['devInspectTransaction']>[0],
+      Parameters<JsonRpcProvider['devInspectTransactionBlock']>[0],
       'sender'
     >,
   ): Promise<DevInspectResults> {
     const address = await this.getAddress();
-    return this.provider.devInspectTransaction({ sender: address, ...input });
+    return this.provider.devInspectTransactionBlock({
+      sender: address,
+      ...input,
+    });
   }
 
   /**
    * Dry run a transaction and return the result.
    */
-  async dryRunTransaction(input: {
-    transaction: Transaction | string | Uint8Array;
-  }): Promise<DryRunTransactionResponse> {
+  async dryRunTransactionBlock(input: {
+    transactionBlock: TransactionBlock | string | Uint8Array;
+  }): Promise<DryRunTransactionBlockResponse> {
     let dryRunTxBytes: Uint8Array;
-    if (Transaction.is(input.transaction)) {
-      input.transaction.setSenderIfNotSet(await this.getAddress());
-      dryRunTxBytes = await input.transaction.build({
+    if (TransactionBlock.is(input.transactionBlock)) {
+      input.transactionBlock.setSenderIfNotSet(await this.getAddress());
+      dryRunTxBytes = await input.transactionBlock.build({
         provider: this.provider,
       });
-    } else if (typeof input.transaction === 'string') {
-      dryRunTxBytes = fromB64(input.transaction);
-    } else if (input.transaction instanceof Uint8Array) {
-      dryRunTxBytes = input.transaction;
+    } else if (typeof input.transactionBlock === 'string') {
+      dryRunTxBytes = fromB64(input.transactionBlock);
+    } else if (input.transactionBlock instanceof Uint8Array) {
+      dryRunTxBytes = input.transactionBlock;
     } else {
       throw new Error('Unknown transaction format');
     }
 
-    return this.provider.dryRunTransaction({ transaction: dryRunTxBytes });
+    return this.provider.dryRunTransactionBlock({
+      transactionBlock: dryRunTxBytes,
+    });
   }
 
   /**
@@ -199,9 +207,9 @@ export abstract class SignerWithProvider implements Signer {
    * @throws whens fails to estimate the gas cost
    */
   async getGasCostEstimation(
-    ...args: Parameters<SignerWithProvider['dryRunTransaction']>
+    ...args: Parameters<SignerWithProvider['dryRunTransactionBlock']>
   ) {
-    const txEffects = await this.dryRunTransaction(...args);
+    const txEffects = await this.dryRunTransactionBlock(...args);
     const gasEstimation = getTotalGasUsedUpperBound(txEffects.effects);
     if (typeof gasEstimation === 'undefined') {
       throw new Error('Failed to estimate the gas cost from transaction');

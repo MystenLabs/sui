@@ -66,12 +66,12 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{channel_with_total, Receiver, Sender},
-    now, Certificate, CertificateDigest, FetchCertificatesRequest, FetchCertificatesResponse,
-    GetCertificatesRequest, GetCertificatesResponse, HeaderAPI, PayloadAvailabilityRequest,
-    PayloadAvailabilityResponse, PreSubscribedBroadcastSender, PrimaryToPrimary,
-    PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round, SendCertificateRequest,
-    SendCertificateResponse, Vote, WorkerInfoResponse, WorkerOthersBatchMessage,
-    WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
+    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse, HeaderAPI,
+    PayloadAvailabilityRequest, PayloadAvailabilityResponse, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerInfoResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -811,7 +811,7 @@ impl PrimaryReceiverHandler {
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
-                parent_authorities.insert(parent.header.author()),
+                parent_authorities.insert(parent.header().author()),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
             stake += committee.stake_by_id(parent.origin());
@@ -869,8 +869,8 @@ impl PrimaryReceiverHandler {
             .map_err(DagError::StoreError)?;
 
         if let Some(vote_info) = result {
-            if header.epoch() < vote_info.epoch
-                || (header.epoch() == vote_info.epoch && header.round() < vote_info.round)
+            if header.epoch() < vote_info.epoch()
+                || (header.epoch() == vote_info.epoch() && header.round() < vote_info.round())
             {
                 // Already voted on a newer Header for this publicKey.
                 return Err(DagError::TooOld(
@@ -879,11 +879,11 @@ impl PrimaryReceiverHandler {
                     narwhal_round,
                 ));
             }
-            if header.epoch() == vote_info.epoch && header.round() == vote_info.round {
+            if header.epoch() == vote_info.epoch() && header.round() == vote_info.round() {
                 // Make sure we don't vote twice for the same authority in the same epoch/round.
                 let temp_vote =
                     Vote::new(header, &self.authority_id, &self.signature_service).await;
-                if temp_vote.digest() != vote_info.vote_digest {
+                if temp_vote.digest() != vote_info.vote_digest() {
                     info!(
                         "Authority {} submitted duplicate header for votes at epoch {}, round {}",
                         header.author(),
@@ -892,7 +892,7 @@ impl PrimaryReceiverHandler {
                     );
                     self.metrics.votes_dropped_equivocation_protection.inc();
                     return Err(DagError::AlreadyVoted(
-                        vote_info.vote_digest,
+                        vote_info.vote_digest(),
                         header.round(),
                     ));
                 }
@@ -1111,7 +1111,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             if let Some(certificate) = certificate_option {
                 let payload_available = match self.payload_store.read_all(
                     certificate
-                        .header
+                        .header()
                         .payload()
                         .iter()
                         .map(|(batch, (worker_id, _))| (*batch, *worker_id)),

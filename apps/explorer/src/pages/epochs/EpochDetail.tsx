@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
+import { useGetValidatorsEvents, useGetRollingAverageApys } from '@mysten/core';
 import { Navigate } from 'react-router-dom';
 
 import { validatorsTableData } from '../validators/Validators';
@@ -10,7 +11,6 @@ import { EpochStats } from './stats/EpochStats';
 
 import { SuiAmount } from '~/components/transactions/TxCardUtils';
 import { useGetSystemObject } from '~/hooks/useGetObject';
-import { useGetValidatorsEvents } from '~/hooks/useGetValidatorsEvents';
 import { EpochProgress } from '~/pages/epochs/stats/EpochProgress';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
@@ -26,6 +26,9 @@ function EpochDetail() {
         getMockEpochData();
 
     const { data, isError, isLoading } = useGetSystemObject();
+    const { data: rollingAverageApys } = useGetRollingAverageApys(
+        data?.activeValidators.length || null
+    );
 
     const { data: validatorEvents, isLoading: validatorsEventsLoading } =
         useGetValidatorsEvents({
@@ -43,7 +46,11 @@ function EpochDetail() {
     if (isLoading || validatorsEventsLoading) return <LoadingSpinner />;
     if (!data || !validatorEvents) return null;
 
-    const validatorsTable = validatorsTableData(data, validatorEvents.data);
+    const validatorsTable = validatorsTableData(
+        data,
+        validatorEvents.data,
+        rollingAverageApys
+    );
 
     return (
         <div className="flex flex-col space-y-16">

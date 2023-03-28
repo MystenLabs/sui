@@ -25,7 +25,7 @@ use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, trace, warn};
 use tracing::{info, instrument};
 use types::{
-    metered_channel, Batch, BatchDigest, Certificate, CommittedSubDag,
+    metered_channel, Batch, BatchAPI, BatchDigest, Certificate, CertificateAPI, CommittedSubDag,
     ConditionalBroadcastReceiver, ConsensusOutput, HeaderAPI, RequestBatchesResponse, Timestamp,
 };
 
@@ -237,7 +237,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         > = HashMap::new();
 
         for cert in &sub_dag.certificates {
-            for (digest, (worker_id, _)) in cert.header.payload().iter() {
+            for (digest, (worker_id, _)) in cert.header().payload().iter() {
                 let workers = self.network.workers_for_certificate(cert, worker_id);
                 batch_digests_and_workers
                     .entry(*worker_id)
@@ -270,7 +270,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
         // Map all fetched batches to their respective certificates and submit as
         // consensus output
         for cert in &sub_dag.certificates {
-            let mut output_batches = Vec::with_capacity(cert.header.payload().len());
+            let mut output_batches = Vec::with_capacity(cert.header().payload().len());
             let output_cert = cert.clone();
 
             self.metrics
@@ -279,9 +279,9 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
 
             self.metrics
                 .subscriber_certificate_latency
-                .observe(cert.metadata.created_at.elapsed().as_secs_f64());
+                .observe(cert.metadata().created_at.elapsed().as_secs_f64());
 
-            for (digest, (_, _)) in cert.header.payload().iter() {
+            for (digest, (_, _)) in cert.header().payload().iter() {
                 self.metrics.subscriber_processed_batches.inc();
                 let batch = fetched_batches
                     .get(digest)
@@ -330,7 +330,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
             for (local_batch_digest, local_batch) in local_batches {
                 if remaining_digests.remove(&local_batch_digest) {
                     let batch_fetch_duration =
-                        local_batch.metadata.created_at.elapsed().as_secs_f64();
+                        local_batch.metadata().created_at.elapsed().as_secs_f64();
                     self.metrics
                         .batch_execution_latency
                         .observe(batch_fetch_duration);
@@ -360,7 +360,7 @@ impl<Network: SubscriberNetwork> Fetcher<Network> {
                 for (remote_batch_digest, remote_batch) in remote_batches {
                     if remaining_digests.remove(&remote_batch_digest) {
                         let batch_fetch_duration =
-                            remote_batch.metadata.created_at.elapsed().as_secs_f64();
+                            remote_batch.metadata().created_at.elapsed().as_secs_f64();
                         self.metrics
                             .batch_execution_latency
                             .observe(batch_fetch_duration);
@@ -715,20 +715,20 @@ mod tests {
                 0,
                 (
                     HashSet::from_iter(vec![batch2.digest()]),
-                    HashSet::from_iter(test_pks(&[3, 4])),
+                    HashSet::from_iter(test_pks(&[4, 5])),
                 ),
             ),
             (
                 1,
                 (
                     HashSet::from_iter(vec![batch1.digest()]),
-                    HashSet::from_iter(test_pks(&[1, 2])),
+                    HashSet::from_iter(test_pks(&[1, 2, 3])),
                 ),
             ),
         ]);
         // one batch available locally on worker 1
         network.put(1, &[1, 2, 3], batch1.clone());
-        // othe batch available remotely on worker 0
+        // other batch available remotely on worker 0
         network.put(0, &[4, 5], batch2.clone());
         let fetcher = Fetcher {
             network,
@@ -949,7 +949,7 @@ mod tests {
             certificate: &Certificate,
             worker_id: &WorkerId,
         ) -> Vec<NetworkPublicKey> {
-            let payload = certificate.header.payload().to_owned();
+            let payload = certificate.header().payload().to_owned();
             let digest = payload.keys().next().unwrap();
             self.data
                 .get(worker_id)

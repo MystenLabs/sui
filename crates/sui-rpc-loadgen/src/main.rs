@@ -45,6 +45,10 @@ pub struct CommonOptions {
 
     #[clap(short, long, default_value_t = 0)]
     pub interval_in_ms: u64,
+
+    /// different chunks will be executed concurrently on the same thread
+    #[clap(long, default_value_t = 1)]
+    num_chunks_per_thread: usize,
 }
 
 #[derive(Parser)]
@@ -100,7 +104,7 @@ fn get_keypair() -> Result<SignerInfo> {
     let active_address = keystore.addresses().pop().unwrap();
     let keypair: &SuiKeyPair = keystore.get_key(&active_address)?;
     println!("using address {active_address} for signing");
-    Ok(SignerInfo::new(keypair.encode_base64(), active_address))
+    Ok(SignerInfo::new(keypair.encode_base64()))
 }
 
 fn get_sui_config_directory() -> PathBuf {
@@ -161,7 +165,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             from_address,
             to_address,
         } => (
-            Command::new_query_transactions(from_address, to_address),
+            Command::new_query_transaction_blocks(from_address, to_address),
             common,
             false,
         ),
@@ -183,6 +187,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             // TODO: pass in from config
             divide_tasks: true,
             signer_info,
+            num_chunks_per_thread: common.num_chunks_per_thread,
+            max_repeat: common.repeat,
         },
     };
     load_test.run().await?;

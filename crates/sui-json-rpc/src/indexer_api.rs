@@ -16,9 +16,9 @@ use tracing::{debug, warn};
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-    CheckpointId, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionResponse,
-    SuiTransactionResponseQuery, TransactionsPage,
+    CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
+    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -69,32 +69,40 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<ObjectID>,
+        cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
     ) -> RpcResult<ObjectsPage> {
-        if at_checkpoint.is_some() {
+        if let Some(CheckpointedObjectID {
+            at_checkpoint: Some(_),
+            ..
+        }) = cursor
+        {
             return Err(anyhow!(UserInputError::Unsupported(
                 "at_checkpoint param currently not supported".to_string()
             ))
             .into());
         }
+
+        let object_id_cursor = cursor.as_ref().map(|c| c.object_id);
+
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
         let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
         let options = options.unwrap_or_default();
 
         let mut objects = self
             .state
-            .get_owner_objects(address, cursor, limit + 1, filter)
+            .get_owner_objects(address, object_id_cursor, limit + 1, filter)
             .map_err(|e| anyhow!("{e}"))?;
 
         // objects here are of size (limit + 1), where the last one is the cursor for the next page
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
-        let next_cursor = objects
-            .last()
-            .cloned()
-            .map_or(cursor, |o_info| Some(o_info.object_id));
+        let next_cursor = objects.last().cloned().map_or(cursor, |o_info| {
+            Some(CheckpointedObjectID {
+                at_checkpoint: None,
+                object_id: o_info.object_id,
+            })
+        });
 
         let data = match options.is_not_in_object_info() {
             true => {
@@ -116,14 +124,14 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         })
     }
 
-    async fn query_transactions(
+    async fn query_transaction_blocks(
         &self,
-        query: SuiTransactionResponseQuery,
+        query: SuiTransactionBlockResponseQuery,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<TransactionDigest>,
         limit: Option<usize>,
         descending_order: Option<bool>,
-    ) -> RpcResult<TransactionsPage> {
+    ) -> RpcResult<TransactionBlocksPage> {
         let limit = cap_page_limit(limit);
         let descending = descending_order.unwrap_or_default();
         let opts = query.options.unwrap_or_default();
@@ -138,14 +146,14 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         digests.truncate(limit);
         let next_cursor = digests.last().cloned().map_or(cursor, Some);
 
-        let data: Vec<SuiTransactionResponse> = if opts.only_digest() {
+        let data: Vec<SuiTransactionBlockResponse> = if opts.only_digest() {
             digests
                 .into_iter()
-                .map(SuiTransactionResponse::new)
+                .map(SuiTransactionBlockResponse::new)
                 .collect()
         } else {
             self.read_api
-                .multi_get_transactions(digests, Some(opts))
+                .multi_get_transaction_blocks(digests, Some(opts))
                 .await?
         };
 

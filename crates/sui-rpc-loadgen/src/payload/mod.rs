@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod get_checkpoints;
+mod pay_sui;
+mod query_transactions;
 mod rpc_command_processor;
+mod validation;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -18,18 +22,15 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 #[derive(Default, Clone)]
 pub struct SignerInfo {
     pub encoded_keypair: String,
-    // TODO(chris): we should be able to derive this from the keypair?
-    pub signer_address: SuiAddress,
     /// Different thread should use different gas_payment to avoid equivocation
-    pub gas_payment: Option<ObjectID>,
+    pub gas_payment: Option<Vec<ObjectID>>,
     pub gas_budget: Option<u64>,
 }
 
 impl SignerInfo {
-    pub fn new(encoded_keypair: String, signer_address: SuiAddress) -> Self {
+    pub fn new(encoded_keypair: String) -> Self {
         Self {
             encoded_keypair,
-            signer_address,
             gas_payment: None,
             gas_budget: None,
         }
@@ -86,7 +87,7 @@ impl Command {
         }
     }
 
-    pub fn new_query_transactions(
+    pub fn new_query_transaction_blocks(
         from_address: Option<String>,
         to_address: Option<String>,
     ) -> Self {

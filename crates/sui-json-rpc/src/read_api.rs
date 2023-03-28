@@ -17,18 +17,18 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::debug;
+use tracing::{debug, error};
 
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, EventFilter, ObjectChange,
     SuiCheckpointSequenceNumber, SuiEvent, SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransaction,
-    SuiTransactionEvents, SuiTransactionResponse, SuiTransactionResponseOptions,
+    SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlock,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest, TxSequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionEventsDigest;
@@ -67,7 +67,7 @@ struct IntermediateTransactionResponse {
     digest: TransactionDigest,
     transaction: Option<VerifiedTransaction>,
     effects: Option<TransactionEffects>,
-    events: Option<SuiTransactionEvents>,
+    events: Option<SuiTransactionBlockEvents>,
     checkpoint_seq: Option<SuiCheckpointSequenceNumber>,
     balance_changes: Option<Vec<BalanceChange>>,
     object_changes: Option<Vec<ObjectChange>>,
@@ -257,28 +257,15 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn get_total_transaction_number(&self) -> RpcResult<BigInt> {
-        Ok(self.state.get_total_transaction_number()?.into())
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+        Ok(self.state.get_total_transaction_blocks()?.into())
     }
 
-    async fn get_transactions_in_range_deprecated(
-        &self,
-        start: TxSequenceNumber,
-        end: TxSequenceNumber,
-    ) -> RpcResult<Vec<TransactionDigest>> {
-        Ok(self
-            .state
-            .get_transactions_in_range_deprecated(start, end)?
-            .into_iter()
-            .map(|(_, digest)| digest)
-            .collect())
-    }
-
-    async fn get_transaction(
+    async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
-        opts: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<SuiTransactionResponse> {
+        opts: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<SuiTransactionBlockResponse> {
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
@@ -330,7 +317,7 @@ impl ReadApiServer for ReadApi {
             } else {
                 // events field will be Some if and only if `show_events` is true and
                 // there is no error in converting fetching events
-                temp_response.events = Some(SuiTransactionEvents::default());
+                temp_response.events = Some(SuiTransactionBlockEvents::default());
             }
         }
 
@@ -369,11 +356,11 @@ impl ReadApiServer for ReadApi {
         ))
     }
 
-    async fn multi_get_transactions(
+    async fn multi_get_transaction_blocks(
         &self,
         digests: Vec<TransactionDigest>,
-        opts: Option<SuiTransactionResponseOptions>,
-    ) -> RpcResult<Vec<SuiTransactionResponse>> {
+        opts: Option<SuiTransactionBlockResponseOptions>,
+    ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         let num_digests = digests.len();
         if num_digests > QUERY_MAX_RESULT_LIMIT {
             return Err(anyhow!(UserInputError::SizeLimitExceeded {
@@ -493,17 +480,21 @@ impl ReadApiServer for ReadApi {
             let events = self
                 .state
                 .multi_get_events(&event_digests_list)
-                .map_err(|e| anyhow!("{e}"))?
+                .map_err(|e| {
+                    error!("Failed to call multi_get_events for transactions {digests:?} with event digests {event_digests_list:?}");
+                    anyhow!("{e}")
+                })?
                 .into_iter();
 
             // construct a hashmap of event digests -> events for fast lookup
-            let mut event_digest_to_events = event_digests_list
+            let event_digest_to_events = event_digests_list
                 .into_iter()
                 .zip(events)
                 .collect::<HashMap<_, _>>();
 
             // fill cache with the events
             for (_, cache_entry) in temp_response.iter_mut() {
+                let transaction_digest = cache_entry.digest;
                 let event_digest: Option<Option<TransactionEventsDigest>> = cache_entry
                     .effects
                     .as_ref()
@@ -511,22 +502,26 @@ impl ReadApiServer for ReadApi {
                 let event_digest = event_digest.flatten();
                 if event_digest.is_some() {
                     // safe to unwrap because `is_some` is checked
-                    let events: Option<RpcResult<SuiTransactionEvents>> = event_digest_to_events
-                        .remove(event_digest.as_ref().unwrap())
-                        .expect("This can only happen if there are two or more transaction digests sharing the same event digests, which should never happen")
-                        .map(|e| to_sui_transaction_events(self, cache_entry.digest, e));
+                    let event_digest = event_digest.as_ref().unwrap();
+                    let events: Option<RpcResult<SuiTransactionBlockEvents>> = event_digest_to_events
+                        .get(event_digest)
+                        .cloned()
+                        .unwrap_or_else(|| panic!("Expect event digest {event_digest:?} to be found in cache for transaction {transaction_digest}"))
+                        .map(|events| to_sui_transaction_events(self, cache_entry.digest, events));
                     match events {
                         Some(Ok(e)) => cache_entry.events = Some(e),
                         Some(Err(e)) => cache_entry.errors.push(e.to_string()),
-                        None => cache_entry.errors.push(format!(
-                            "Failed to fetch events with event digest {:?}",
-                            event_digest.unwrap()
-                        )),
+                        None => {
+                            error!("Failed to fetch events with event digest {event_digest:?} for txn {transaction_digest}");
+                            cache_entry.errors.push(format!(
+                                "Failed to fetch events with event digest {event_digest:?}",
+                            ))
+                        }
                     }
                 } else {
                     // events field will be Some if and only if `show_events` is true and
                     // there is no error in converting fetching events
-                    cache_entry.events = Some(SuiTransactionEvents::default());
+                    cache_entry.events = Some(SuiTransactionBlockEvents::default());
                 }
             }
         }
@@ -685,8 +680,8 @@ fn to_sui_transaction_events(
     fullnode_api: &ReadApi,
     tx_digest: TransactionDigest,
     events: TransactionEvents,
-) -> RpcResult<SuiTransactionEvents> {
-    Ok(SuiTransactionEvents::try_from(
+) -> RpcResult<SuiTransactionBlockEvents> {
+    Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,
         None,
@@ -929,10 +924,10 @@ fn get_value_from_move_struct(move_struct: &SuiMoveStruct, var_name: &str) -> Rp
 
 fn convert_to_response(
     cache: IntermediateTransactionResponse,
-    opts: &SuiTransactionResponseOptions,
+    opts: &SuiTransactionBlockResponseOptions,
     module_cache: &impl GetModule,
-) -> SuiTransactionResponse {
-    let mut response = SuiTransactionResponse::new(cache.digest);
+) -> SuiTransactionBlockResponse {
+    let mut response = SuiTransactionBlockResponse::new(cache.digest);
     response.errors = cache.errors;
 
     if opts.show_raw_input && cache.transaction.is_some() {
@@ -944,7 +939,8 @@ fn convert_to_response(
     }
 
     if opts.show_input && cache.transaction.is_some() {
-        match SuiTransaction::try_from(cache.transaction.unwrap().into_message(), module_cache) {
+        match SuiTransactionBlock::try_from(cache.transaction.unwrap().into_message(), module_cache)
+        {
             Ok(t) => {
                 response.transaction = Some(t);
             }

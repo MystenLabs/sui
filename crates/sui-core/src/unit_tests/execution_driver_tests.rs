@@ -95,7 +95,7 @@ async fn pending_exec_notify_ready_certificates() {
         let mut certs = Vec::new();
         while let Some(t) = transactions.pop() {
             let (_cert, effects) = sender_aggregator
-                .execute_transaction(&t)
+                .execute_transaction_block(&t)
                 .await
                 .expect("All ok.");
 
@@ -185,7 +185,7 @@ async fn pending_exec_full() {
         let mut certs = Vec::new();
         while let Some(t) = transactions.pop() {
             let (_cert, effects) = sender_aggregator
-                .execute_transaction(&t)
+                .execute_transaction_block(&t)
                 .await
                 .expect("All ok.");
 

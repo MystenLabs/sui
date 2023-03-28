@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
+use narwhal_types::BatchAPI;
 use narwhal_worker::TransactionValidator;
 use sui_types::messages::{ConsensusTransaction, ConsensusTransactionKind};
 use tap::TapFallible;
@@ -58,7 +59,7 @@ impl TransactionValidator for SuiTxValidator {
     async fn validate_batch(&self, b: &narwhal_types::Batch) -> Result<(), Self::Error> {
         let _scope = monitored_scope("ValidateBatch");
         let txs = b
-            .transactions
+            .transactions()
             .iter()
             .map(|tx| tx_from_bytes(tx))
             .collect::<Result<Vec<_>, _>>()?;

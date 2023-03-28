@@ -9,7 +9,7 @@ export function useGetTransaction(transactionId: string) {
     return useQuery(
         ['transactions-by-id', transactionId],
         async () =>
-            rpc.getTransaction({
+            rpc.getTransactionBlock({
                 digest: transactionId,
                 options: {
                     showInput: true,

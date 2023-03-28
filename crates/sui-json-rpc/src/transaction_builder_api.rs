@@ -1,32 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::{validate_limit, TransactionBuilderServer};
-use crate::SuiRpcModule;
-use async_trait::async_trait;
-use jsonrpsee::core::RpcResult;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use fastcrypto::encoding::Base64;
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::RpcModule;
+use move_core_types::language_storage::StructTag;
+
+use sui_adapter::execution_mode::{DevInspect, Normal};
 use sui_core::authority::AuthorityState;
+use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    BigInt, CheckpointId, ObjectsPage, Page, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBuilderMode, SuiTypeTag, TransactionBytes,
+    BigInt, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlockBuilderMode, SuiTypeTag,
+    TransactionBlockBytes,
 };
+use sui_json_rpc_types::{RPCTransactionRequestParams, SuiObjectDataFilter};
 use sui_open_rpc::Module;
 use sui_transaction_builder::{DataReader, TransactionBuilder};
+use sui_types::base_types::ObjectInfo;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     messages::TransactionData,
 };
 
-use fastcrypto::encoding::Base64;
-use jsonrpsee::RpcModule;
-use sui_adapter::execution_mode::{DevInspect, Normal};
-
-use crate::api::QUERY_MAX_RESULT_LIMIT_OBJECTS;
-use crate::error::Error;
-use anyhow::anyhow;
-use sui_json::SuiJsonValue;
-use sui_json_rpc_types::RPCTransactionRequestParams;
+use crate::api::TransactionBuilderServer;
+use crate::SuiRpcModule;
 
 pub struct TransactionBuilderApi {
     builder: TransactionBuilder<Normal>,
@@ -56,42 +56,17 @@ impl DataReader for AuthorityStateDataReader {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        query: Option<SuiObjectResponseQuery>,
-        cursor: Option<ObjectID>,
-        limit: Option<usize>,
-        at_checkpoint: Option<CheckpointId>,
-    ) -> Result<ObjectsPage, anyhow::Error> {
-        if at_checkpoint.is_some() {
-            return Err(anyhow!("at_checkpoint param currently not supported"));
-        }
-
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
-        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
-
-        let options = options.unwrap_or_default();
-
-        let mut objects = self
+        object_type: StructTag,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
+        Ok(self
             .0
-            .get_owner_objects(address, cursor, limit + 1, filter)?;
-
-        // objects here are of size (limit + 1), where the last one is the cursor for the next page
-        let has_next_page = objects.len() > limit;
-        objects.truncate(limit);
-        let next_cursor = objects
-            .last()
-            .cloned()
-            .map_or(cursor, |o_info| Some(o_info.object_id));
-
-        let data = objects.into_iter().try_fold(vec![], |mut acc, o_info| {
-            let o_resp = SuiObjectResponse::try_from((o_info, options.clone()))?;
-            acc.push(o_resp);
-            Ok::<Vec<SuiObjectResponse>, Error>(acc)
-        })?;
-        Ok(Page {
-            data,
-            next_cursor,
-            has_next_page,
-        })
+            // DataReader is used internally, don't need a limit
+            .get_owner_objects_iterator(
+                address,
+                None,
+                Some(SuiObjectDataFilter::StructType(object_type)),
+            )?
+            .collect())
     }
 
     async fn get_object_with_options(
@@ -118,12 +93,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         gas: Option<ObjectID>,
         gas_budget: u64,
         recipient: SuiAddress,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .transfer_object(signer, object_id, gas, gas_budget, recipient)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn transfer_sui(
@@ -133,12 +108,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         gas_budget: u64,
         recipient: SuiAddress,
         amount: Option<u64>,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .transfer_sui(signer, sui_object_id, gas_budget, recipient, amount)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn pay(
@@ -149,7 +124,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         amounts: Vec<BigInt>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .pay(
@@ -161,7 +136,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 gas_budget,
             )
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn pay_sui(
@@ -171,7 +146,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         recipients: Vec<SuiAddress>,
         amounts: Vec<BigInt>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .pay_sui(
@@ -182,7 +157,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                 gas_budget,
             )
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn pay_all_sui(
@@ -191,12 +166,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .pay_all_sui(signer, input_coins, recipient, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn publish(
@@ -206,7 +181,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
             .map(|data| data.to_vec().map_err(|e| anyhow::anyhow!(e)))
@@ -215,7 +190,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
             .builder
             .publish(sender, compiled_modules, dependencies, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn split_coin(
@@ -225,12 +200,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         split_amounts: Vec<u64>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn split_coin_equal(
@@ -240,12 +215,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         split_count: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .split_coin_equal(signer, coin_object_id, split_count, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn merge_coin(
@@ -255,12 +230,12 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
+    ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
             .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
             .await?;
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn move_call(
@@ -273,11 +248,11 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
-    ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
+    ) -> RpcResult<TransactionBlockBytes> {
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
         let data: TransactionData = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
+            SuiTransactionBlockBuilderMode::DevInspect => {
                 self.dev_inspect_builder
                     .move_call(
                         signer,
@@ -291,7 +266,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     )
                     .await?
             }
-            SuiTransactionBuilderMode::Commit => {
+            SuiTransactionBlockBuilderMode::Commit => {
                 self.builder
                     .move_call(
                         signer,
@@ -306,7 +281,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
                     .await?
             }
         };
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn batch_transaction(
@@ -315,22 +290,22 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
         gas_budget: u64,
-        txn_builder_mode: Option<SuiTransactionBuilderMode>,
-    ) -> RpcResult<TransactionBytes> {
-        let mode = txn_builder_mode.unwrap_or(SuiTransactionBuilderMode::Commit);
+        txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
+    ) -> RpcResult<TransactionBlockBytes> {
+        let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
         let data = match mode {
-            SuiTransactionBuilderMode::DevInspect => {
+            SuiTransactionBlockBuilderMode::DevInspect => {
                 self.dev_inspect_builder
                     .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
-            SuiTransactionBuilderMode::Commit => {
+            SuiTransactionBlockBuilderMode::Commit => {
                 self.builder
                     .batch_transaction(signer, params, gas, gas_budget)
                     .await?
             }
         };
-        Ok(TransactionBytes::from_data(data)?)
+        Ok(TransactionBlockBytes::from_data(data)?)
     }
 
     async fn request_add_stake(
@@ -341,8 +316,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         validator: SuiAddress,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
-        Ok(TransactionBytes::from_data(
+    ) -> RpcResult<TransactionBlockBytes> {
+        Ok(TransactionBlockBytes::from_data(
             self.builder
                 .request_add_stake(signer, coins, amount, validator, gas, gas_budget)
                 .await?,
@@ -355,8 +330,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
         gas_budget: u64,
-    ) -> RpcResult<TransactionBytes> {
-        Ok(TransactionBytes::from_data(
+    ) -> RpcResult<TransactionBlockBytes> {
+        Ok(TransactionBlockBytes::from_data(
             self.builder
                 .request_withdraw_stake(signer, staked_sui, gas, gas_budget)
                 .await?,

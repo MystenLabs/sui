@@ -297,7 +297,7 @@ fn execution_loop<
             Ok(Mode::empty_results())
         }
         TransactionKind::ProgrammableTransaction(pt) => {
-            programmable_transactions::execution::execute::<_, _, Mode>(
+            programmable_transactions::execution::execute::<_, Mode>(
                 protocol_config,
                 move_vm,
                 temporary_store,
@@ -471,7 +471,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
     };
     let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
-    let result = programmable_transactions::execution::execute::<_, _, execution_mode::System>(
+    let result = programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
         move_vm,
         temporary_store,
@@ -490,7 +490,7 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         );
         temporary_store.drop_writes();
         let advance_epoch_safe_mode_pt = construct_advance_epoch_safe_mode_pt(&params)?;
-        programmable_transactions::execution::execute::<_, _, execution_mode::System>(
+        programmable_transactions::execution::execute::<_, execution_mode::System>(
             protocol_config,
             move_vm,
             temporary_store,
@@ -569,7 +569,7 @@ fn setup_consensus_commit<S: BackingPackageStore + ParentSync + ChildObjectResol
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::System>(
+    programmable_transactions::execution::execute::<_, execution_mode::System>(
         protocol_config,
         move_vm,
         temporary_store,

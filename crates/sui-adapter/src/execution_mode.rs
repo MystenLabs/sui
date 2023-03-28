@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::language_storage::TypeTag;
-use std::fmt;
 use sui_types::{error::ExecutionError, messages::Argument};
 
 use crate::programmable_transactions::{
@@ -33,15 +32,15 @@ pub trait ExecutionMode {
 
     fn empty_results() -> Self::ExecutionResults;
 
-    fn add_argument_update<E: fmt::Debug, S: StorageView<E>>(
-        context: &mut ExecutionContext<E, S>,
+    fn add_argument_update<S: StorageView>(
+        context: &mut ExecutionContext<S>,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         _new_value: &Value,
     ) -> Result<(), ExecutionError>;
 
-    fn finish_command<E: fmt::Debug, S: StorageView<E>>(
-        context: &mut ExecutionContext<E, S>,
+    fn finish_command<S: StorageView>(
+        context: &mut ExecutionContext<S>,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
@@ -71,8 +70,8 @@ impl ExecutionMode for Normal {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<E: fmt::Debug, S: StorageView<E>>(
-        _context: &mut ExecutionContext<E, S>,
+    fn add_argument_update<S: StorageView>(
+        _context: &mut ExecutionContext<S>,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
@@ -80,8 +79,8 @@ impl ExecutionMode for Normal {
         Ok(())
     }
 
-    fn finish_command<E: fmt::Debug, S: StorageView<E>>(
-        _context: &mut ExecutionContext<E, S>,
+    fn finish_command<S: StorageView>(
+        _context: &mut ExecutionContext<S>,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
@@ -113,8 +112,8 @@ impl ExecutionMode for Genesis {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<E: fmt::Debug, S: StorageView<E>>(
-        _context: &mut ExecutionContext<E, S>,
+    fn add_argument_update<S: StorageView>(
+        _context: &mut ExecutionContext<S>,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
@@ -122,8 +121,8 @@ impl ExecutionMode for Genesis {
         Ok(())
     }
 
-    fn finish_command<E: fmt::Debug, S: StorageView<E>>(
-        _context: &mut ExecutionContext<E, S>,
+    fn finish_command<S: StorageView>(
+        _context: &mut ExecutionContext<S>,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
@@ -158,8 +157,8 @@ impl ExecutionMode for System {
 
     fn empty_results() -> Self::ExecutionResults {}
 
-    fn add_argument_update<E: fmt::Debug, S: StorageView<E>>(
-        _context: &mut ExecutionContext<E, S>,
+    fn add_argument_update<S: StorageView>(
+        _context: &mut ExecutionContext<S>,
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
@@ -167,8 +166,8 @@ impl ExecutionMode for System {
         Ok(())
     }
 
-    fn finish_command<E: fmt::Debug, S: StorageView<E>>(
-        _context: &mut ExecutionContext<E, S>,
+    fn finish_command<S: StorageView>(
+        _context: &mut ExecutionContext<S>,
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
@@ -211,8 +210,8 @@ impl ExecutionMode for DevInspect {
         vec![]
     }
 
-    fn add_argument_update<E: fmt::Debug, S: StorageView<E>>(
-        context: &mut ExecutionContext<E, S>,
+    fn add_argument_update<S: StorageView>(
+        context: &mut ExecutionContext<S>,
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         new_value: &Value,
@@ -222,8 +221,8 @@ impl ExecutionMode for DevInspect {
         Ok(())
     }
 
-    fn finish_command<E: fmt::Debug, S: StorageView<E>>(
-        context: &mut ExecutionContext<E, S>,
+    fn finish_command<S: StorageView>(
+        context: &mut ExecutionContext<S>,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
@@ -237,8 +236,8 @@ impl ExecutionMode for DevInspect {
     }
 }
 
-fn value_to_bytes_and_tag<E: fmt::Debug, S: StorageView<E>>(
-    context: &mut ExecutionContext<E, S>,
+fn value_to_bytes_and_tag<S: StorageView>(
+    context: &mut ExecutionContext<S>,
     value: &Value,
 ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
     let (type_tag, bytes) = match value {

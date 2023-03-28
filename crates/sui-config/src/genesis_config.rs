@@ -134,6 +134,14 @@ fn default_multiaddr_address() -> Multiaddr {
 }
 
 impl ValidatorGenesisInfo {
+    pub const DEFAULT_NETWORK_PORT: u16 = 1000;
+    pub const DEFAULT_P2P_PORT: u16 = 2000;
+    pub const DEFAULT_P2P_LISTEN_PORT: u16 = 3000;
+    pub const DEFAULT_METRICS_PORT: u16 = 4000;
+    pub const DEFAULT_NARWHAL_METRICS_PORT: u16 = 5000;
+    pub const DEFAULT_NARWHAL_PRIMARY_PORT: u16 = 6000;
+    pub const DEFAULT_NARWHAL_WORKER_PORT: u16 = 7000;
+
     pub fn from_localhost_for_testing(
         key_pair: AuthorityKeyPair,
         worker_key_pair: NetworkKeyPair,
@@ -171,24 +179,33 @@ impl ValidatorGenesisInfo {
         assert!(port_offset < 1000);
         let port_offset: u16 = port_offset.try_into().unwrap();
         let make_tcp_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/{}/tcp/{}/http", ip, port).parse().unwrap() };
+            |port: u16| -> Multiaddr { format!("/ip4/{ip}/tcp/{port}/http").parse().unwrap() };
         let make_udp_addr =
-            |port: u16| -> Multiaddr { format!("/ip4/{}/udp/{}", ip, port).parse().unwrap() };
+            |port: u16| -> Multiaddr { format!("/ip4/{ip}/udp/{port}").parse().unwrap() };
+        let make_tcp_zero_addr =
+            |port: u16| -> Multiaddr { format!("/ip4/0.0.0.0/tcp/{port}/http").parse().unwrap() };
 
         ValidatorGenesisInfo {
             key_pair,
             worker_key_pair,
             account_key_pair,
             network_key_pair,
-            network_address: make_tcp_addr(1000 + port_offset),
-            p2p_address: make_udp_addr(5000 + port_offset),
-            p2p_listen_address: p2p_listen_address.map(|x| SocketAddr::new(x, 4000 + port_offset)),
-            metrics_address: format!("127.0.0.1:{}", 6000 + port_offset).parse().unwrap(),
-            narwhal_metrics_address: make_tcp_addr(7000 + port_offset),
+            network_address: make_tcp_addr(Self::DEFAULT_NETWORK_PORT + port_offset),
+            p2p_address: make_udp_addr(Self::DEFAULT_P2P_PORT + port_offset),
+            p2p_listen_address: p2p_listen_address
+                .map(|x| SocketAddr::new(x, Self::DEFAULT_P2P_LISTEN_PORT + port_offset)),
+            metrics_address: format!("0.0.0.0:{}", Self::DEFAULT_METRICS_PORT + port_offset)
+                .parse()
+                .unwrap(),
+            narwhal_metrics_address: make_tcp_zero_addr(
+                Self::DEFAULT_NARWHAL_METRICS_PORT + port_offset,
+            ),
             gas_price: DEFAULT_GAS_PRICE,
             commission_rate: DEFAULT_COMMISSION_RATE,
-            narwhal_primary_address: make_udp_addr(2000 + port_offset),
-            narwhal_worker_address: make_udp_addr(3000 + port_offset),
+            narwhal_primary_address: make_udp_addr(
+                Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,
+            ),
+            narwhal_worker_address: make_udp_addr(Self::DEFAULT_NARWHAL_WORKER_PORT + port_offset),
         }
     }
 }
@@ -236,6 +253,8 @@ impl GenesisConfig {
     /// A predictable rng seed used to generate benchmark configs. This seed may also be needed
     /// by other crates (e.g. the load generators).
     pub const BENCHMARKS_RNG_SEED: u64 = 0;
+    /// Port offset for benchmarks' genesis configs.
+    pub const BENCHMARKS_PORT_OFFSET: usize = 500;
 
     pub fn for_local_testing() -> Self {
         Self::custom_genesis(
@@ -337,7 +356,7 @@ impl GenesisConfig {
                         NetworkKeyPair::generate(&mut rng),   // network_key_pair
                         Some(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))), // p2p_listen_address
                         ip.to_string(),
-                        500, // port_offset
+                        Self::BENCHMARKS_PORT_OFFSET,
                     ),
                 }
             })
@@ -365,10 +384,17 @@ impl GenesisConfig {
             gas_object_ranges: Some(genesis_gas_objects),
         };
 
+        // Benchmarks require a deterministic genesis. Every validator locally generates it own
+        // genesis; it is thus important they have the same parameters.
+        let parameters = GenesisCeremonyParameters {
+            chain_start_timestamp_ms: 0,
+            ..GenesisCeremonyParameters::new()
+        };
+
         // Make a new genesis configuration.
         GenesisConfig {
             validator_config_info: Some(validator_config_info),
-            parameters: GenesisCeremonyParameters::new(),
+            parameters,
             committee_size: ips.len(),
             grpc_load_shed: None,
             grpc_concurrency_limit: None,

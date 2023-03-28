@@ -235,7 +235,7 @@ pub trait ReadStore {
 
     fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error>;
 
-    fn get_transaction(
+    fn get_transaction_block(
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Self::Error>;
@@ -287,11 +287,11 @@ impl<T: ReadStore> ReadStore for &T {
         ReadStore::get_committee(*self, epoch)
     }
 
-    fn get_transaction(
+    fn get_transaction_block(
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        ReadStore::get_transaction(*self, digest)
+        ReadStore::get_transaction_block(*self, digest)
     }
 
     fn get_transaction_effects(
@@ -482,7 +482,10 @@ impl InMemoryStore {
         }
     }
 
-    pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
+    pub fn get_transaction_block(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<&VerifiedTransaction> {
         self.transactions.get(digest)
     }
 
@@ -574,11 +577,11 @@ impl ReadStore for SharedInMemoryStore {
             .pipe(Ok)
     }
 
-    fn get_transaction(
+    fn get_transaction_block(
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        self.inner().get_transaction(digest).cloned().pipe(Ok)
+        self.inner().get_transaction_block(digest).cloned().pipe(Ok)
     }
 
     fn get_transaction_effects(
