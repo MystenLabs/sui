@@ -9,7 +9,7 @@ module adversarial::adversarial {
     use sui::transfer;
     use sui::event;
     use sui::dynamic_field::{add, borrow};
-    use std::string::{Self, String};
+    use std::string::Self;
     use std::ascii;
 
     const NUM_DYNAMIC_FIELDS: u64 = 1_000;

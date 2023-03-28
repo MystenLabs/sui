@@ -1,10 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::in_memory_wallet::InMemoryWallet;
+use crate::system_state_observer::{SystemState, SystemStateObserver};
+use crate::workloads::payload::Payload;
+use crate::workloads::{Gas, GasCoinConfig};
+use crate::{ExecutionEffects, ValidatorProxy};
+use anyhow::anyhow;
 use async_trait::async_trait;
+use itertools::Itertools;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
+use regex::Regex;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
@@ -15,23 +24,18 @@ use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
 use test_utils::messages::create_publish_move_package_transaction_with_budget;
 
-use crate::in_memory_wallet::InMemoryWallet;
-use crate::system_state_observer::{SystemState, SystemStateObserver};
-use crate::workloads::payload::Payload;
-use crate::workloads::{Gas, GasCoinConfig};
-use crate::{ExecutionEffects, ValidatorProxy};
-
 use super::{
     workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
     WorkloadBuilderInfo, WorkloadParams,
 };
 
-/// Number of max size objects to create in the max object payload
-const NUM_OBJECTS: u64 = 2048;
+/// Number of vectors to create in LargeTransientRuntimeVectors workload
+const NUM_VECTORS: u64 = 1_000;
 
 #[derive(Debug, EnumCountMacro, EnumIter, Clone)]
-enum AdversarialPayloadType {
-    LargeObjects = 1,
+pub enum AdversarialPayloadType {
+    Random = 0,
+    LargeObjects,
     LargeEvents,
     DynamicFieldReads,
     LargeTransientRuntimeVectors,
@@ -42,10 +46,48 @@ enum AdversarialPayloadType {
     // - MaxCommands (by created the maximum number of PT commands)
     // ...
 }
+impl Copy for AdversarialPayloadType {}
+
+impl TryFrom<u32> for AdversarialPayloadType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(rand::random()),
+            _ => AdversarialPayloadType::iter()
+                .nth(value as usize)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Invalid adversarial workload specifier. Valid options are {} to {}",
+                        0,
+                        AdversarialPayloadType::COUNT
+                    )
+                }),
+        }
+    }
+}
+
+impl FromStr for AdversarialPayloadType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = u32::from_str(s).map(AdversarialPayloadType::try_from);
+
+        if let Ok(Ok(q)) = v {
+            return Ok(q);
+        }
+
+        Err(anyhow!(
+            "Invalid input string. Valid values are 0 to {}",
+            AdversarialPayloadType::COUNT
+        ))
+    }
+}
 
 impl Distribution<AdversarialPayloadType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> AdversarialPayloadType {
-        let n = rng.gen_range(0..AdversarialPayloadType::COUNT);
+        // Excluse the "Random" variant
+        let n = rng.gen_range(1..AdversarialPayloadType::COUNT);
         AdversarialPayloadType::iter().nth(n).unwrap()
     }
 }
@@ -59,6 +101,7 @@ pub struct AdversarialTestPayload {
     sender: SuiAddress,
     state: InMemoryWallet,
     system_state_observer: Arc<SystemStateObserver>,
+    adversarial_payload_cfg: AdversarialPayloadCfg,
 }
 
 impl std::fmt::Display for AdversarialTestPayload {
@@ -66,6 +109,41 @@ impl std::fmt::Display for AdversarialTestPayload {
         write!(f, "adversarial")
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct AdversarialPayloadCfg {
+    pub payload_type: AdversarialPayloadType,
+    pub load_factor: f32,
+}
+
+impl FromStr for AdversarialPayloadCfg {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Matches regex for two numbers delimited by a hyphen, where the left number must be positive
+        // and the right number must be a float between 0.0 inclusive and 1.0 inclusive
+        let re = Regex::new(
+            r"^(?:0|[1-9]\d*)-(?:0(?:\.\d+)?|1(?:\.0+)?|[1-9](?:\d*(?:\.\d+)?)?|\.\d+)$",
+        )
+        .unwrap();
+        if !re.is_match(s) {
+            return Err(anyhow!("invalid load config"));
+        };
+        let toks = s.split('-').collect_vec();
+        let payload_type = AdversarialPayloadType::from_str(toks[0])?;
+        let load_factor = toks[1].parse::<f32>().unwrap();
+
+        if !(0.0..=1.0).contains(&load_factor) {
+            return Err(anyhow!("invalid load factor. Valid range is [0.0, 1.0]"));
+        };
+
+        Ok(AdversarialPayloadCfg {
+            payload_type,
+            load_factor,
+        })
+    }
+}
+impl Copy for AdversarialPayloadCfg {}
 
 impl Payload for AdversarialTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
@@ -85,7 +163,8 @@ impl Payload for AdversarialTestPayload {
     }
 
     fn make_transaction(&mut self) -> VerifiedTransaction {
-        let payload_type: AdversarialPayloadType = rand::random();
+        let payload_type = self.adversarial_payload_cfg.payload_type;
+
         let gas_budget = self
             .system_state_observer
             .state
@@ -121,6 +200,13 @@ impl Payload for AdversarialTestPayload {
 }
 
 impl AdversarialTestPayload {
+    // Return a percentage based on load_factor
+    fn get_pct_of(&self, x: u64) -> u64 {
+        let mut x = x as f64;
+        x *= f64::from(self.adversarial_payload_cfg.load_factor);
+        x as u64
+    }
+
     fn get_payload_args(
         &self,
         payload_type: &AdversarialPayloadType,
@@ -130,10 +216,11 @@ impl AdversarialTestPayload {
             AdversarialPayloadType::LargeObjects => AdversarialPayloadArgs {
                 fn_name: "create_shared_objects".to_owned(),
                 args: [
-                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                    (NUM_OBJECTS / 10).into(),
-                    // TODO: Raise this. Using a smaller value here as full value locks up local machine
-                    (protocol_config.max_move_object_size() / 10).into(),
+                    // Use the maximum number of new ids which can be created
+                    protocol_config.max_num_new_move_object_ids().into(),
+                    // Raise this. Using a smaller value here as full value locks up local machine
+                    self.get_pct_of(protocol_config.max_move_object_size())
+                        .into(),
                 ]
                 .to_vec(),
             },
@@ -141,7 +228,8 @@ impl AdversarialTestPayload {
                 fn_name: "emit_events".to_owned(),
                 args: [
                     protocol_config.max_num_event_emit().into(),
-                    protocol_config.max_event_emit_size().into(),
+                    self.get_pct_of(protocol_config.max_event_emit_size())
+                        .into(),
                 ]
                 .to_vec(),
             },
@@ -153,19 +241,24 @@ impl AdversarialTestPayload {
                         initial_shared_version: self.df_parent_obj_ref.1,
                         mutable: true,
                     }),
-                    protocol_config
-                        .object_runtime_max_num_store_entries()
+                    self.get_pct_of(protocol_config.object_runtime_max_num_store_entries())
                         .into(),
                 ]
                 .to_vec(),
             },
             AdversarialPayloadType::LargeTransientRuntimeVectors => AdversarialPayloadArgs {
                 fn_name: "create_vectors_with_size".to_owned(),
-                args: [100u64.into(), 100_000u64.into()].to_vec(),
+                args: [
+                    NUM_VECTORS.into(),
+                    self.get_pct_of(protocol_config.max_move_vector_len())
+                        .into(),
+                ]
+                .to_vec(),
             },
             AdversarialPayloadType::LargePureFunctionArgs => {
                 let max_fn_params = protocol_config.max_function_parameters();
-                let max_pure_arg_size = protocol_config.max_pure_argument_size();
+                let max_pure_arg_size =
+                    self.get_pct_of(protocol_config.max_pure_argument_size().into());
                 let mut args: Vec<CallArg> = vec![];
                 (0..max_fn_params).for_each(|_| {
                     let mut v = vec![0u8; max_pure_arg_size as usize];
@@ -179,6 +272,9 @@ impl AdversarialTestPayload {
                     args,
                 }
             }
+            AdversarialPayloadType::Random => {
+                self.get_payload_args(&(rand::random()), protocol_config)
+            }
         }
     }
 }
@@ -186,6 +282,7 @@ impl AdversarialTestPayload {
 #[derive(Debug)]
 pub struct AdversarialWorkloadBuilder {
     num_payloads: u64,
+    adversarial_payload_cfg: AdversarialPayloadCfg,
 }
 
 #[async_trait]
@@ -219,6 +316,12 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
         mut init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
+        eprintln!(
+            "Using `{:?}` adversarial workloads at {}% load factor",
+            self.adversarial_payload_cfg.payload_type,
+            self.adversarial_payload_cfg.load_factor * 100.0
+        );
+
         Box::<dyn Workload<dyn Payload>>::from(Box::new(AdversarialWorkload {
             package_id: ObjectID::ZERO,
             df_parent_obj_ref: {
@@ -228,6 +331,7 @@ impl WorkloadBuilder<dyn Payload> for AdversarialWorkloadBuilder {
             },
             init_gas: init_gas.pop().unwrap(),
             payload_gas,
+            adversarial_payload_cfg: self.adversarial_payload_cfg,
         }))
     }
 }
@@ -238,6 +342,7 @@ impl AdversarialWorkloadBuilder {
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
+        adversarial_payload_cfg: AdversarialPayloadCfg,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -253,6 +358,7 @@ impl AdversarialWorkloadBuilder {
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 AdversarialWorkloadBuilder {
                     num_payloads: max_ops,
+                    adversarial_payload_cfg,
                 },
             ));
             let builder_info = WorkloadBuilderInfo {
@@ -272,6 +378,7 @@ pub struct AdversarialWorkload {
     df_parent_obj_ref: ObjectRef,
     pub init_gas: Gas,
     pub payload_gas: Vec<Gas>,
+    pub adversarial_payload_cfg: AdversarialPayloadCfg,
 }
 
 #[async_trait]
@@ -343,6 +450,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
                 sender: gas.1,
                 state: InMemoryWallet::new(gas),
                 system_state_observer: system_state_observer.clone(),
+                adversarial_payload_cfg: self.adversarial_payload_cfg,
             })
         }
         payloads

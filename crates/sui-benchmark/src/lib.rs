@@ -28,7 +28,6 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::error::SuiError;
 use sui_types::messages::TransactionEvents;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::{
@@ -50,6 +49,7 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
+use sui_types::{error::SuiError, gas::GasCostSummary};
 use tokio::{task::JoinSet, time::timeout};
 use tracing::{error, info};
 
@@ -151,6 +151,25 @@ impl ExecutionEffects {
                 sui_tx_effects.status().is_ok()
             }
         }
+    }
+
+    pub fn gas_cost_summary(&self) -> GasCostSummary {
+        match self {
+            crate::ExecutionEffects::CertifiedTransactionEffects(a, _) => {
+                a.data().gas_cost_summary().clone()
+            }
+            crate::ExecutionEffects::SuiTransactionBlockEffects(b) => {
+                std::convert::Into::<GasCostSummary>::into(b.gas_cost_summary().clone())
+            }
+        }
+    }
+
+    pub fn gas_used(&self) -> u64 {
+        self.gas_cost_summary().gas_used()
+    }
+
+    pub fn net_gas_used(&self) -> i64 {
+        self.gas_cost_summary().net_gas_usage()
     }
 }
 
