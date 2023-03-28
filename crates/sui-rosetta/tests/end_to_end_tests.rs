@@ -92,7 +92,7 @@ async fn test_get_staked_sui() {
         .request_add_stake(
             address,
             vec![coins[0].coin_object_id],
-            Some(100000),
+            Some(1_000_000_000),
             validator,
             None,
             10000,
@@ -118,7 +118,7 @@ async fn test_get_staked_sui() {
         )
         .await;
     assert_eq!(1, response.balances.len());
-    assert_eq!(100000, response.balances[0].value);
+    assert_eq!(1_000_000_000, response.balances[0].value);
 
     println!("{}", serde_json::to_string_pretty(&response).unwrap());
 }
@@ -146,7 +146,7 @@ async fn test_stake() {
             "operation_identifier":{"index":0},
             "type":"Stake",
             "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-1000000" , "currency": { "symbol": "SUI", "decimals": 9}},
+            "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}},
             "metadata": { "Stake" : {"validator": validator.to_string()} }
         }]
     ))
@@ -274,7 +274,7 @@ async fn test_withdraw_stake() {
             "operation_identifier":{"index":0},
             "type":"Stake",
             "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-1000000" , "currency": { "symbol": "SUI", "decimals": 9}},
+            "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}},
             "metadata": { "Stake" : {"validator": validator.to_string()} }
         }]
     ))
@@ -315,7 +315,7 @@ async fn test_withdraw_stake() {
         .await;
 
     assert_eq!(1, response.balances.len());
-    assert_eq!(1000000, response.balances[0].value);
+    assert_eq!(1000000000, response.balances[0].value);
 
     // wait for epoch.
     tokio::time::sleep(Duration::from_millis(15000)).await;
@@ -390,12 +390,12 @@ async fn test_pay_sui() {
             "operation_identifier":{"index":0},
             "type":"PaySui",
             "account": { "address" : recipient.to_string() },
-            "amount" : { "value": "1000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+            "amount" : { "value": "1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
         },{
             "operation_identifier":{"index":1},
             "type":"PaySui",
             "account": { "address" : sender.to_string() },
-            "amount" : { "value": "-1000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+            "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
         }]
     ))
     .unwrap();
@@ -451,12 +451,12 @@ async fn test_pay_sui_multiple_times() {
                 "operation_identifier":{"index":0},
                 "type":"PaySui",
                 "account": { "address" : recipient.to_string() },
-                "amount" : { "value": "1000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+                "amount" : { "value": "1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
             },{
                 "operation_identifier":{"index":1},
                 "type":"PaySui",
                 "account": { "address" : sender.to_string() },
-                "amount" : { "value": "-1000000" , "currency": { "symbol": "SUI", "decimals": 9}}
+                "amount" : { "value": "-1000000000" , "currency": { "symbol": "SUI", "decimals": 9}}
             }]
         ))
         .unwrap();

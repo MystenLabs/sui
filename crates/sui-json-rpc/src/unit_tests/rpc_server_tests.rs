@@ -639,7 +639,14 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     let coin = objects.data[0].object()?.object_id;
     // Delegate some SUI
     let transaction_bytes: TransactionBlockBytes = http_client
-        .request_add_stake(*address, vec![coin], Some(1000000), validator, None, 10000)
+        .request_add_stake(
+            *address,
+            vec![coin],
+            Some(1000000000),
+            validator,
+            None,
+            10000,
+        )
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -659,7 +666,7 @@ async fn test_staking() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert_eq!(1000000000, staked_sui[0].stakes[0].principal);
     assert!(matches!(
         staked_sui[0].stakes[0].status,
         StakeStatus::Pending
@@ -703,7 +710,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
             .request_add_stake(
                 *address,
                 vec![coins.data[i].coin_object_id],
-                Some(1000000),
+                Some(1000000000),
                 validator,
                 None,
                 10000,
@@ -728,7 +735,7 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert_eq!(1000000000, staked_sui[0].stakes[0].principal);
 
     sleep(Duration::from_millis(10000)).await;
 
@@ -841,7 +848,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
                 coins.data[1].coin_object_id,
                 coins.data[2].coin_object_id,
             ],
-            Some(1000000),
+            Some(1000000000),
             validator,
             None,
             10000,
@@ -875,7 +882,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
     // Check DelegatedStake object
     let staked_sui: Vec<DelegatedStake> = http_client.get_stakes(*address).await?;
     assert_eq!(1, staked_sui.len());
-    assert_eq!(1000000, staked_sui[0].stakes[0].principal);
+    assert_eq!(1000000000, staked_sui[0].stakes[0].principal);
     assert!(matches!(
         staked_sui[0].stakes[0].status,
         StakeStatus::Pending
@@ -891,7 +898,7 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .iter()
         .find(|coin| coin.balance > genesis_coin_amount)
         .unwrap();
-    assert_eq!((genesis_coin_amount * 3) - 1000000, new_coin.balance);
+    assert_eq!((genesis_coin_amount * 3) - 1000000000, new_coin.balance);
 
     Ok(())
 }
