@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::types::SubscriptionResult;
@@ -16,7 +17,7 @@ use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
-    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
     SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
@@ -62,7 +63,7 @@ impl<S: IndexerStore> IndexerApi<S> {
             .get_events(query, cursor, limit, descending_order.unwrap_or_default())
     }
 
-    fn query_transactions_internal(
+    async fn query_transaction_blocks_internal(
         &self,
         query: SuiTransactionBlockResponseQuery,
         cursor: Option<TransactionDigest>,
@@ -72,31 +73,19 @@ impl<S: IndexerStore> IndexerApi<S> {
         let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT)?;
         let is_descending = descending_order.unwrap_or_default();
         let cursor_str = cursor.map(|digest| digest.to_string());
-
-        let opts = query.options.unwrap_or_default();
-        if !opts.only_digest() {
-            // TODO(chris): implement this as a separate PR
-            return Err(IndexerError::NotImplementedError(
-                "options has not been implemented on indexer for queryTransactions".to_string(),
-            ));
-        }
-
-        let digests_from_db = match query.filter {
+        let mut tx_vec_from_db = match query.filter {
             None => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_all_transaction_digest_page(
-                    indexer_seq_number,
-                    limit + 1,
-                    is_descending,
-                )
+                self.state
+                    .get_all_transaction_page(indexer_seq_number, limit + 1, is_descending)
             }
             Some(TransactionFilter::Checkpoint(checkpoint_id)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_digest_page_by_checkpoint(
+                self.state.get_transaction_page_by_checkpoint(
                     checkpoint_id as i64,
                     indexer_seq_number,
                     limit + 1,
@@ -111,7 +100,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                 let move_call_seq_number = self
                     .state
                     .get_move_call_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_digest_page_by_move_call(
+                self.state.get_transaction_page_by_move_call(
                     package.to_string(),
                     module,
                     function,
@@ -124,7 +113,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                 let input_obj_seq = self
                     .state
                     .get_input_object_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_digest_page_by_input_object(
+                self.state.get_transaction_page_by_input_object(
                     input_obj_id.to_string(),
                     /* version */ None,
                     input_obj_seq,
@@ -136,7 +125,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_digest_page_by_mutated_object(
+                self.state.get_transaction_page_by_mutated_object(
                     mutated_obj_id.to_string(),
                     indexer_seq_number,
                     limit + 1,
@@ -148,7 +137,7 @@ impl<S: IndexerStore> IndexerApi<S> {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_digest_page_by_sender_address(
+                self.state.get_transaction_page_by_sender_address(
                     sender_address.to_string(),
                     indexer_seq_number,
                     limit + 1,
@@ -159,33 +148,31 @@ impl<S: IndexerStore> IndexerApi<S> {
                 let recipient_seq_number = self
                     .state
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
-                self.state
-                    .get_transaction_digest_page_by_sender_recipient_address(
-                        /* from */ None,
-                        recipient_address.to_string(),
-                        recipient_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
+                self.state.get_transaction_page_by_sender_recipient_address(
+                    /* from */ None,
+                    recipient_address.to_string(),
+                    recipient_seq_number,
+                    limit + 1,
+                    is_descending,
+                )
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let recipient_seq_number = self
                     .state
                     .get_recipient_sequence_by_digest(cursor_str, is_descending)?;
-                self.state
-                    .get_transaction_digest_page_by_sender_recipient_address(
-                        Some(from.to_string()),
-                        to.to_string(),
-                        recipient_seq_number,
-                        limit + 1,
-                        is_descending,
-                    )
+                self.state.get_transaction_page_by_sender_recipient_address(
+                    Some(from.to_string()),
+                    to.to_string(),
+                    recipient_seq_number,
+                    limit + 1,
+                    is_descending,
+                )
             }
             Some(TransactionFilter::TransactionKind(tx_kind_name)) => {
                 let indexer_seq_number = self
                     .state
                     .get_transaction_sequence_by_digest(cursor_str, is_descending)?;
-                self.state.get_transaction_digest_page_by_transaction_kind(
+                self.state.get_transaction_page_by_transaction_kind(
                     tx_kind_name,
                     indexer_seq_number,
                     limit + 1,
@@ -194,11 +181,14 @@ impl<S: IndexerStore> IndexerApi<S> {
             }
         }?;
 
-        // digests here are of size (limit + 1), where the last one is the cursor for the next page
-        let mut tx_digests = digests_from_db
-            .iter()
-            .map(|digest| {
-                let tx_digest: Result<TransactionDigest, _> = digest.clone().parse();
+        let has_next_page = tx_vec_from_db.len() > limit;
+        tx_vec_from_db.truncate(limit);
+        let next_cursor = tx_vec_from_db
+            .last()
+            .cloned()
+            .map(|tx| {
+                let digest = tx.transaction_digest;
+                let tx_digest: Result<TransactionDigest, _> = digest.parse();
                 tx_digest.map_err(|e| {
                     IndexerError::SerdeError(format!(
                         "Failed to deserialize transaction digest: {:?} with error {:?}",
@@ -206,17 +196,20 @@ impl<S: IndexerStore> IndexerApi<S> {
                     ))
                 })
             })
-            .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
+            .transpose()?
+            .map_or(cursor, Some);
 
-        let has_next_page = tx_digests.len() > limit;
-        tx_digests.truncate(limit);
-        let next_cursor = tx_digests.last().cloned().map_or(cursor, Some);
+        let tx_resp_futures = tx_vec_from_db.into_iter().map(|tx| {
+            self.state
+                .compose_sui_transaction_block_response(tx, query.options.as_ref())
+        });
+        let sui_tx_resp_vec = join_all(tx_resp_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Page {
-            data: tx_digests
-                .into_iter()
-                .map(SuiTransactionBlockResponse::new)
-                .collect(),
+            data: sui_tx_resp_vec,
             next_cursor,
             has_next_page,
         })
@@ -299,7 +292,9 @@ where
                 .query_transaction_blocks(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.query_transactions_internal(query, cursor, limit, descending_order)?)
+        Ok(self
+            .query_transaction_blocks_internal(query, cursor, limit, descending_order)
+            .await?)
     }
 
     async fn query_events(

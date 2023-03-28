@@ -53,7 +53,7 @@ impl<S: IndexerStore> ReadApi<S> {
             .get_transaction_by_digest(&digest.base58_encode())?;
         let sui_tx_resp = self
             .state
-            .compose_sui_transaction_block_response(tx, options.clone())
+            .compose_sui_transaction_block_response(tx, options.as_ref())
             .await?;
         let sui_transaction_response = SuiTransactionBlockResponseWithOptions {
             response: sui_tx_resp,
@@ -89,7 +89,7 @@ impl<S: IndexerStore> ReadApi<S> {
         }
         let sui_tx_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
             self.state
-                .compose_sui_transaction_block_response(tx, options.clone())
+                .compose_sui_transaction_block_response(tx, options.as_ref())
         });
         let sui_tx_resp_vec = join_all(sui_tx_resp_futures)
             .await
