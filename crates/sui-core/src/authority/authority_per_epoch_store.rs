@@ -1611,6 +1611,7 @@ impl AuthorityPerEpochStore {
                         authority.concise()
                     );
                 }
+                self.record_consensus_transaction_processed(&transaction, consensus_index)?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
