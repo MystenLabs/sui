@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::mem;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -142,18 +143,22 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         ));
 
         // TODO: spawn a separate task for this as an optimization
-        update_low_scoring_authorities(
-            self.low_scoring_authorities.clone(),
-            &self.committee,
-            consensus_output.sub_dag.reputation_score.clone(),
-            self.authority_names_to_hostnames.clone(),
-            &self.metrics,
-        );
+        {
+            let _scope = monitored_scope("HandleConsensusOutput::update_low_scoring_authorities");
+            update_low_scoring_authorities(
+                self.low_scoring_authorities.clone(),
+                &self.committee,
+                consensus_output.sub_dag.reputation_score.clone(),
+                self.authority_names_to_hostnames.clone(),
+                &self.metrics,
+            );
+        }
 
         self.metrics
             .consensus_committed_subdags
             .with_label_values(&[&consensus_output.sub_dag.leader.header.author().to_string()])
             .inc();
+        let _deser_scope = monitored_scope("HandleConsensusOutput::deserialize");
         for (cert, batches) in consensus_output.batches {
             let author = cert.header.author();
             self.metrics
@@ -188,7 +193,9 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 }
             }
         }
+        mem::drop(_deser_scope);
 
+        let _hash_scope = monitored_scope("HandleConsensusOutput::update_hash");
         for (seq, (serialized, transaction, output_cert)) in transactions.into_iter().enumerate() {
             let index = ExecutionIndices {
                 last_committed_round: round,
@@ -223,11 +230,13 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 transaction,
             });
         }
+        mem::drop(_hash_scope);
 
         self.metrics
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
+        let _process_scope = monitored_scope("HandleConsensusOutput::process");
         let mut transactions_to_schedule = vec![];
         for sequenced_transaction in sequenced_transactions {
             // todo if we can make handle_consensus_transaction into sync function,
@@ -262,11 +271,14 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 transactions_to_schedule.push(transaction);
             }
         }
+        mem::drop(_process_scope);
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
 
+        let _handle_commit_boundary_scope =
+            monitored_scope("HandleConsensusOutput::handle_commit_boundary");
         self.epoch_store
             .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
             .expect("Unrecoverable error in consensus handler when processing commit boundary")
