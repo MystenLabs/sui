@@ -1416,7 +1416,7 @@ fn create_genesis_transaction(
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
-                SuiGasStatus::new_unmetered(),
+                SuiGasStatus::new_unmetered(protocol_config),
                 epoch_data,
                 protocol_config,
             );
@@ -1529,7 +1529,7 @@ fn process_package(
         ctx.digest(),
         protocol_config,
     );
-    let mut gas_status = SuiGasStatus::new_unmetered();
+    let mut gas_status = SuiGasStatus::new_unmetered(protocol_config);
     let module_bytes = modules
         .into_iter()
         .map(|m| {
@@ -1638,7 +1638,7 @@ pub fn generate_genesis_system_object(
         move_vm,
         &mut temporary_store,
         genesis_ctx,
-        &mut SuiGasStatus::new_unmetered(),
+        &mut SuiGasStatus::new_unmetered(&protocol_config),
         None,
         pt,
     )?;
@@ -1917,7 +1917,7 @@ mod test {
                 *genesis_transaction.digest(),
                 Default::default(),
                 &move_vm,
-                SuiGasStatus::new_unmetered(),
+                SuiGasStatus::new_unmetered(&protocol_config),
                 &EpochData::new_test(),
                 &protocol_config,
             );

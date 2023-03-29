@@ -27,7 +27,7 @@ use crate::{
     error::{ExecutionError, SuiError, SuiResult},
     event::Event,
     fp_bail, gas,
-    gas::{GasCostSummary, SuiGasStatus},
+    gas::{GasCostSummary, SuiGasStatus, SuiGasStatusAPI},
     messages::{ExecutionStatus, InputObjects, TransactionEffects},
     object::Owner,
     object::{Data, Object},
@@ -834,7 +834,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
             };
             let new_object_size = object.object_size_for_gas_metering();
             let new_storage_rebate =
-                gas_status.charge_storage_mutation(new_object_size, old_storage_rebate.into())?;
+                gas_status.charge_storage_mutation(new_object_size, old_storage_rebate)?;
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
@@ -847,7 +847,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
                 DeleteKind::Wrap | DeleteKind::Normal => {
                     let (storage_rebate, object_size) =
                         self.get_input_storage_rebate_and_size(object_id, *version)?;
-                    gas_status.charge_storage_mutation(0, storage_rebate.into())?;
+                    gas_status.charge_storage_mutation(0, storage_rebate)?;
                     total_bytes_written_deleted += object_size;
                 }
                 DeleteKind::UnwrapThenDelete => {

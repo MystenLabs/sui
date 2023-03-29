@@ -24,7 +24,7 @@ use sui_protocol_config::{
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
-use sui_types::gas::GasCostSummary;
+use sui_types::gas::{GasCostSummary, SuiGasStatusAPI};
 use sui_types::messages::{
     Argument, ConsensusCommitPrologue, GenesisTransaction, ObjectArg, ProgrammableTransaction,
     TransactionKind,
@@ -175,7 +175,7 @@ fn execute_transaction<
     let is_system = transaction_kind.is_system_tx();
     // At this point no charge has been applied yet
     debug_assert!(
-        u64::from(gas_status.gas_used()) == 0
+        gas_status.gas_used() == 0
             && gas_status.storage_rebate() == 0
             && gas_status.storage_gas_units() == 0,
         "No gas charges must be applied yet"
@@ -226,18 +226,23 @@ fn execute_transaction<
         };
         execution_result
     });
-    if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
-    }
-    if !is_system {
-        #[cfg(debug_assertions)]
-        {
-            if !Mode::allow_arbitrary_values() {
-                // ensure that this transaction did not create or destroy SUI
-                temporary_store.check_sui_conserved().unwrap();
+    #[allow(clippy::collapsible_if)]
+    if protocol_config.gas_model_version() > 1 {
+        if !is_system {
+            temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
+            if protocol_config.conservation_checks() {
+                if !Mode::allow_arbitrary_values() {
+                    // ensure that this transaction did not create or destroy SUI
+                    temporary_store.check_sui_conserved().unwrap();
+                }
+                // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
+                // objects (including coins). this can violate conservation, but it's expected
             }
-            // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
-            // objects (including coins). this can violate conservation, but it's expected
+        }
+    } else {
+        #[allow(clippy::collapsible-else-if)]
+        if !gas_status.is_unmetered() {
+            temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
         }
     }
     let cost_summary = gas_status.summary();
