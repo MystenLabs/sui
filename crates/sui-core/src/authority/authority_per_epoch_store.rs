@@ -1496,11 +1496,29 @@ impl AuthorityPerEpochStore {
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
-    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrapper,
-    /// - Verify and initialize the state to execute the certificate.
-    ///   Returns a VerifiedCertificate only if this succeeds.
-    /// - Or update the state for checkpoint or epoch change protocol. Returns None.
-    pub(crate) async fn process_consensus_transaction<C: CheckpointServiceNotify>(
+    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
+    /// - Verify and initialize the state to execute the certificates.
+    ///   Return VerifiedCertificates for each executable certificate
+    /// - Or update the state for checkpoint or epoch change protocol.
+    pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
+        &self,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        checkpoint_service: &Arc<C>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+        let mut verified_certificates = Vec::new();
+        for tx in transactions {
+            if let Some(cert) = self
+                .process_consensus_transaction(tx, checkpoint_service, &parent_sync_store)
+                .await?
+            {
+                verified_certificates.push(cert);
+            }
+        }
+        Ok(verified_certificates)
+    }
+
+    async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         transaction: VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,

@@ -4234,21 +4234,20 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
-        if let Some(cert) = authority
+        let certs = authority
             .epoch_store_for_testing()
-            .process_consensus_transaction(
-                transaction,
+            .process_consensus_transactions(
+                vec![transaction],
                 &Arc::new(CheckpointServiceNoop {}),
                 authority.db(),
             )
             .await
-            .unwrap()
-        {
-            authority
-                .transaction_manager()
-                .enqueue(vec![cert], &authority.epoch_store_for_testing())
-                .unwrap();
-        }
+            .unwrap();
+
+        authority
+            .transaction_manager()
+            .enqueue(certs, &authority.epoch_store_for_testing())
+            .unwrap();
     } else {
         warn!("Failed to verify certificate: {:?}", cert);
     }
@@ -4271,8 +4270,8 @@ pub(crate) async fn send_consensus_no_execution(
         // This allows testing cert execution independently.
         authority
             .epoch_store_for_testing()
-            .process_consensus_transaction(
-                transaction,
+            .process_consensus_transactions(
+                vec![transaction],
                 &Arc::new(CheckpointServiceNoop {}),
                 &authority.db(),
             )

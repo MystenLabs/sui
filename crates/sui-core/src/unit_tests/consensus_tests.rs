@@ -112,8 +112,10 @@ async fn submit_transaction_to_consensus_adapter() {
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
             epoch_store
-                .process_consensus_transaction(
-                    VerifiedSequencedConsensusTransaction::new_test(transaction.clone()),
+                .process_consensus_transactions(
+                    vec![VerifiedSequencedConsensusTransaction::new_test(
+                        transaction.clone(),
+                    )],
                     &Arc::new(CheckpointServiceNoop {}),
                     self.0.db(),
                 )
