@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+#[cfg(msim)]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -134,6 +136,9 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_node: sui_simulator::runtime::NodeHandle,
+
+    #[cfg(msim)]
+    sim_safe_mode_expected: AtomicBool,
 }
 
 impl fmt::Debug for SuiNode {
@@ -409,6 +414,8 @@ impl SuiNode {
             _db_checkpoint_handle: db_checkpoint_handle,
             #[cfg(msim)]
             sim_node: sui_simulator::runtime::NodeHandle::current(),
+            #[cfg(msim)]
+            sim_safe_mode_expected: AtomicBool::new(false),
         };
 
         info!("SuiNode started!");
@@ -421,6 +428,12 @@ impl SuiNode {
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
+    }
+
+    #[cfg(msim)]
+    pub fn set_safe_mode_expected(&self, new_value: bool) {
+        self.sim_safe_mode_expected
+            .store(new_value, Ordering::Relaxed);
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -902,8 +915,12 @@ impl SuiNode {
             let next_epoch = next_epoch_committee.epoch();
             assert_eq!(cur_epoch_store.epoch() + 1, next_epoch);
 
-            // If we eventually add tests that exercise safe mode, we will need a configurable way of
-            // guarding against unexpected safe_mode.
+            #[cfg(msim)]
+            if !self.sim_safe_mode_expected.load(Ordering::Relaxed) {
+                debug_assert!(!new_epoch_start_state.safe_mode());
+            }
+
+            #[cfg(not(msim))]
             debug_assert!(!new_epoch_start_state.safe_mode());
 
             info!(

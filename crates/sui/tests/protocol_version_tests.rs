@@ -550,6 +550,41 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    async fn test_safe_mode_recovery() {
+        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/base"));
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            // Overrides with a sui system package that would abort during epoch change txn
+            .with_objects([sui_system_package_object("mock_sui_systems/safe_mode")])
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        // We are going to enter safe mode so set the expectation right.
+        test_cluster.set_safe_mode_expected(true);
+
+        // Wait for epoch change to happen. This epoch we should also experience a framework
+        // upgrade that upgrades the framework to the base one (which doesn't abort), and thus
+        // a protocol version increment.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.epoch(), 1);
+        assert_eq!(system_state.protocol_version(), 2); // protocol version increments
+        assert!(system_state.safe_mode()); // enters safe mode
+
+        // We are getting out of safe mode soon.
+        test_cluster.set_safe_mode_expected(false);
+
+        // This epoch change should execute successfully without any upgrade and get us out of safe mode.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        assert_eq!(system_state.epoch(), 2);
+        assert_eq!(system_state.protocol_version(), 2); // protocol version stays the same
+        assert!(!system_state.safe_mode()); // out of safe mode
+    }
+
+    #[sim_test]
     async fn sui_system_mock_smoke_test() {
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
