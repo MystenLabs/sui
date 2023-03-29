@@ -271,7 +271,7 @@ impl ValidatorService {
             .tap_err(|_| {
                 metrics.signature_errors.inc();
             })?;
-        let transaction = VerifiedTransaction::new_from_verified(transaction);
+        let transaction = transaction.verify()?;
 
         tx_verif_metrics_guard.stop_and_record();
 

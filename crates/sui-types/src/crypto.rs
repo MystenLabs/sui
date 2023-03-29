@@ -1515,6 +1515,7 @@ impl<'a> VerificationObligation<'a> {
         self.messages.len() - 1
     }
 
+    #[cfg(test)]
     // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
     pub fn add_signature_and_public_key(
         &mut self,

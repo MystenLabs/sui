@@ -7,7 +7,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,22 +17,19 @@ use sui_config::ValidatorInfo;
 use sui_framework_build::compiled_package::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::messages::{
     SignedTransaction, TransactionData, VerifiedTransaction, DUMMY_GAS_PRICE,
 };
 use sui_types::object::OBJECT_START_VERSION;
-use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, ObjectRef, SuiAddress, TransactionDigest},
+    base_types::{ObjectRef, SuiAddress, TransactionDigest},
     committee::Committee,
-    crypto::{AuthoritySignInfo, AuthoritySignature},
-    message_envelope::Message,
     messages::{CertifiedTransaction, Transaction, TransactionEffects},
     object::Object,
 };
@@ -92,41 +89,8 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
     }
 }
 
-pub fn create_fake_cert_and_effect_digest<'a>(
-    signers: impl Iterator<
-        Item = (
-            &'a AuthorityName,
-            &'a (dyn Signer<AuthoritySignature> + Send + Sync),
-        ),
-    >,
-    committee: &Committee,
-) -> (ExecutionDigests, CertifiedTransaction) {
-    let transaction = create_fake_transaction();
-    let cert = CertifiedTransaction::new(
-        transaction.data().clone(),
-        signers
-            .map(|(name, signer)| {
-                AuthoritySignInfo::new(
-                    committee.epoch,
-                    transaction.data(),
-                    Intent::default().with_scope(IntentScope::SenderSignedTransaction),
-                    *name,
-                    signer,
-                )
-            })
-            .collect(),
-        committee,
-    )
-    .unwrap();
-    let effects = dummy_transaction_effects(&transaction);
-    (
-        ExecutionDigests::new(*transaction.digest(), effects.digest()),
-        cert,
-    )
-}
-
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects::new_with_tx(tx)
+    TransactionEffects::new_with_tx_for_testing(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
