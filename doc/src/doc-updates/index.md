@@ -11,16 +11,16 @@ This topic lists the significant updates to the [Sui documentation](https://docs
 | Numerous topics. | Updates to reflect the changes included in Sui releases .28 and .29. |
 | [Sui Local Network](../build/sui-local-network.md) | Updated installation instructions to include the sui-test-validator, which lets you use a local faucet, wallet, and explorer on your local network. |
 | [Connect to a Sui Network](../build/devnet.md) | Updated the topic to include instructions for connecting to Sui Testnet. Topic title changed from "Connect to Sui Devnet". |
-| [Sui Full Node](../build/fullnode.md) | Updated to include instructions for using Sui Indexer |
-| [Sui Object Display Standard](../build/sui-object-display.md) | New topic. |
-| [Sui Programmable Transaction Blocks](../build/prog-trans-ts-sdk.md) | New topic. |
-| [Sui Cryptography](../learn/cryptography/index.md) | New section of topics. |
-| [Object and Package Versioning](../learn/object-package-versions.md) | New topic. |
-| [Move.toml File](../build/move/manifest.md) | New topic. |
-| [Move.lock File](../build/move/lock-file.md) | New topic. |
-| [Accessing Time in Sui Move](../build/move/time.md) | New topic. |
-| [Sui Validator Node](../build/validator-node.md) | New topic. |
-| [Database Snapshots](../build/snapshot.md) | New topic. |
+| [Sui Full Node](../build/fullnode.md) | Updated to include instructions for using Sui Indexer. |
+| [Sui Object Display Standard](../build/sui-object-display.md) | New topic about using the Sui Object Display standard. |
+| [Sui Programmable Transaction Blocks](../build/prog-trans-ts-sdk.md) | New topic about how to use the new Programmable Transaction blocks. |
+| [Sui Cryptography](../learn/cryptography/index.md) | New section of topics about creating signatures for Sui. |
+| [Object and Package Versioning](../learn/object-package-versions.md) | New topic that describes versioning in Sui. |
+| [Move.toml File](../build/move/manifest.md) | New topic about Move manifest files. |
+| [Move.lock File](../build/move/lock-file.md) | New topic about Move lock files. |
+| [Accessing Time in Sui Move](../build/move/time.md) | New topic that describes how to access time in Sui Move. |
+| [Sui Validator Node](../build/validator-node.md) | New topic about running a Sui Validator node. |
+| [Database Snapshots](../build/snapshot.md) | New topic that describes how to use snapshots to restore transaction history for an epoch. |
 
 
 
