@@ -1179,10 +1179,10 @@ impl CheckpointServiceNotify for CheckpointService {
     ) -> SuiResult {
         let sequence = info.summary.sequence_number;
         let signer = info.summary.auth_sig().authority.concise();
-        if let Some((last_certified, _)) = self
+        if let Some(last_certified) = self
             .tables
             .certified_checkpoints
-            .iter()
+            .keys()
             .skip_to_last()
             .next()
         {
