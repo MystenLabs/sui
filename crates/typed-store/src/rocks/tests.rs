@@ -655,11 +655,9 @@ async fn test_transactional() {
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
     let mut tx2 = db.transaction().expect("failed to initiate transaction");
 
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
-    tx2 = tx2
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx2.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
 
     tx1.commit().expect("failed to commit first transaction");
@@ -684,8 +682,7 @@ async fn test_transaction_snapshot() {
         .expect("failed to initiate transaction");
     // write occurs after transaction is created but before first write
     db.insert(&key, &"1".to_string()).unwrap();
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     tx1.commit().expect("failed to commit first transaction");
     assert_eq!(db.get(&key).unwrap().unwrap(), "2".to_string());
@@ -695,8 +692,7 @@ async fn test_transaction_snapshot() {
     let mut tx1 = db
         .transaction_without_snapshot()
         .expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     db.insert(&key, &"1".to_string()).unwrap();
     assert!(matches!(
@@ -709,8 +705,7 @@ async fn test_transaction_snapshot() {
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
     // write occurs after transaction is created, so the conflict is detected
     db.insert(&key, &"1".to_string()).unwrap();
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     assert!(matches!(
         tx1.commit(),
@@ -718,8 +713,7 @@ async fn test_transaction_snapshot() {
     ));
 
     let mut tx1 = db.transaction().expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     // no conflicting writes, should succeed this time.
     tx1.commit().unwrap();
@@ -732,11 +726,9 @@ async fn test_transaction_snapshot() {
     let mut tx2 = db
         .transaction_without_snapshot()
         .expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
-    tx2 = tx2
-        .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+    tx2.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
         .unwrap();
     // which ever tx is committed first will succeed.
     tx1.commit().expect("failed to commit");
@@ -752,12 +744,11 @@ async fn test_transaction_snapshot() {
     let mut tx2 = db
         .transaction_without_snapshot()
         .expect("failed to initiate transaction");
-    tx1 = tx1
-        .insert_batch(&db, vec![(key.to_string(), "1".to_string())])
+    tx1.insert_batch(&db, vec![(key.to_string(), "1".to_string())])
         .unwrap();
     tx1.commit().expect("failed to commit");
 
-    tx2 = tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
+    tx2.insert_batch(&db, vec![(key, "2".to_string())]).unwrap();
     tx2.commit().expect("failed to commit");
 }
 
@@ -776,8 +767,7 @@ async fn test_retry_transaction() {
         let mut tx1 = db
             .transaction_without_snapshot()
             .expect("failed to initiate transaction");
-        tx1 = tx1
-            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
             .unwrap();
         if conflicts < 3 {
             db.insert(&key, &"1".to_string()).unwrap();
@@ -792,8 +782,7 @@ async fn test_retry_transaction() {
         let mut tx1 = db
             .transaction_without_snapshot()
             .expect("failed to initiate transaction");
-        tx1 = tx1
-            .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+        tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
             .unwrap();
         db.insert(&key, &"1".to_string()).unwrap();
         tx1.commit()
@@ -808,8 +797,7 @@ async fn test_retry_transaction() {
             let mut tx1 = db
                 .transaction_without_snapshot()
                 .expect("failed to initiate transaction");
-            tx1 = tx1
-                .insert_batch(&db, vec![(key.to_string(), "2".to_string())])
+            tx1.insert_batch(&db, vec![(key.to_string(), "2".to_string())])
                 .unwrap();
             db.insert(&key, &"1".to_string()).unwrap();
             tx1.commit()
@@ -835,15 +823,14 @@ async fn test_transaction_read_your_write() {
         .expect("Failed to re-open storage");
     db.insert(&key1.to_string(), &"1".to_string()).unwrap();
     let mut tx = db.transaction().expect("failed to initiate transaction");
-    tx = tx
-        .insert_batch(
-            &db,
-            vec![
-                (key1.to_string(), "11".to_string()),
-                (key2.to_string(), "2".to_string()),
-            ],
-        )
-        .unwrap();
+    tx.insert_batch(
+        &db,
+        vec![
+            (key1.to_string(), "11".to_string()),
+            (key2.to_string(), "2".to_string()),
+        ],
+    )
+    .unwrap();
     assert_eq!(db.get(&key1.to_string()).unwrap(), Some("1".to_string()));
     assert_eq!(db.get(&key2.to_string()).unwrap(), None);
 
@@ -856,7 +843,7 @@ async fn test_transaction_read_your_write() {
         Some("2".to_string())
     );
 
-    tx = tx.delete_batch(&db, vec![(key2.to_string())]).unwrap();
+    tx.delete_batch(&db, vec![(key2.to_string())]).unwrap();
 
     assert_eq!(
         tx.multi_get(&db, vec![key1.to_string(), key2.to_string()])

@@ -1152,10 +1152,10 @@ impl<'a> DBTransaction<'a> {
     }
 
     pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        self,
+        &mut self,
         db: &DBMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1173,10 +1173,10 @@ impl<'a> DBTransaction<'a> {
 
     /// Deletes a set of keys given as an iterator
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
-        self,
+        &mut self,
         db: &DBMap<K, V>,
         purged_vals: impl IntoIterator<Item = J>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }

@@ -51,19 +51,18 @@ impl WritePathPendingTransactionLog {
         tx: &VerifiedTransaction,
     ) -> SuiResult<IsFirstRecord> {
         let tx_digest = tx.digest();
-        let transaction = self.pending_transactions.logs.transaction()?;
+        let mut transaction = self.pending_transactions.logs.transaction()?;
         if transaction
             .get(&self.pending_transactions.logs, tx_digest)?
             .is_some()
         {
             return Ok(false);
         }
-        let result = transaction
-            .insert_batch(
-                &self.pending_transactions.logs,
-                [(tx_digest, tx.serializable_ref())],
-            )?
-            .commit();
+        transaction.insert_batch(
+            &self.pending_transactions.logs,
+            [(tx_digest, tx.serializable_ref())],
+        )?;
+        let result = transaction.commit();
         Ok(result.is_ok())
     }
 

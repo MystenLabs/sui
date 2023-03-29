@@ -736,7 +736,7 @@ impl AuthorityPerEpochStore {
         retry_transaction_forever!({
             // This code may still be correct without using a transaction snapshot, but I couldn't
             // convince myself of that.
-            let db_transaction = self.tables.next_shared_object_versions.transaction()?;
+            let mut db_transaction = self.tables.next_shared_object_versions.transaction()?;
 
             let next_versions = db_transaction.multi_get(
                 &self.tables.next_shared_object_versions,
@@ -790,8 +790,8 @@ impl AuthorityPerEpochStore {
                 "initializing next_shared_object_versions"
             );
             db_transaction
-                .insert_batch(&self.tables.next_shared_object_versions, versions_to_write)?
-                .commit()
+                .insert_batch(&self.tables.next_shared_object_versions, versions_to_write)?;
+            db_transaction.commit()
         })?;
 
         // this case only occurs when there were uninitialized versions, which is rare, so its much
