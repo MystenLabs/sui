@@ -1,18 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use colored::Colorize;
-use itertools::Itertools;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use serde_with::{serde_as, DisplayFromStr};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter, Write};
-use sui_types::base_types::{ObjectID, SuiAddress};
-use tracing::warn;
 
+use colored::Colorize;
+use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
 use move_binary_format::normalized::{
     Field as NormalizedField, Function as SuiNormalizedFunction, Module as NormalizedModule,
@@ -21,6 +15,14 @@ use move_binary_format::normalized::{
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveValue};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use serde_with::serde_as;
+use tracing::warn;
+
+use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::sui_serde::SuiStructTag;
 
 pub type SuiMoveTypeParameterIndex = u16;
 
@@ -387,7 +389,7 @@ pub enum SuiMoveStruct {
     WithTypes {
         #[schemars(with = "String")]
         #[serde(rename = "type")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         type_: StructTag,
         fields: BTreeMap<String, SuiMoveValue>,
     },

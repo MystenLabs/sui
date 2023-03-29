@@ -30,6 +30,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
 use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::sui_serde::SuiStructTag;
 
 use crate::{Page, SuiMoveStruct, SuiMoveValue};
 
@@ -789,7 +790,7 @@ pub trait SuiMoveObject: Sized {
 #[serde(rename = "MoveObject", rename_all = "camelCase")]
 pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     #[schemars(with = "String")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
@@ -841,7 +842,7 @@ pub fn type_and_fields_from_move_struct(
 pub struct SuiRawMoveObject {
     #[schemars(with = "String")]
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
@@ -1029,7 +1030,7 @@ pub enum SuiObjectDataFilter {
     /// Query by type
     StructType(
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
     AddressOwner(SuiAddress),

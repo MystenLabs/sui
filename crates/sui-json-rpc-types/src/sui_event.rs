@@ -16,7 +16,7 @@ use sui_types::error::SuiResult;
 use sui_types::event::{Event, EventEnvelope, EventID};
 
 use crate::{type_and_fields_from_move_struct, Page};
-
+use sui_types::sui_serde::SuiStructTag;
 pub type EventPage = Page<SuiEvent, EventID>;
 
 #[serde_as]
@@ -38,7 +38,7 @@ pub struct SuiEvent {
     /// Sender's Sui address.
     pub sender: SuiAddress,
     #[schemars(with = "String")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     /// Move event type.
     pub type_: StructTag,
     /// Parsed json value of the event
@@ -131,7 +131,7 @@ pub enum EventFilter {
     /// Return events with the given move event struct name
     MoveEventType(
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
     MoveEventField {
