@@ -108,7 +108,7 @@ The `Sword` struct represents a game asset that digitally mimics a real-world it
 One of the solutions (as suggested in the error message), is to add the `drop` ability to the definition of the `Sword` struct, which would allow instances of this struct to disappear (be *dropped*). The ability to drop a valuable asset is not a desirable asset property in this case, so another solution is needed. Another way to solve this problem is to transfer ownership of the sword.
 
 To get the test to work, add the following line to the beginning of the testing function to import the
-[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ``` rust
         use sui::transfer;
