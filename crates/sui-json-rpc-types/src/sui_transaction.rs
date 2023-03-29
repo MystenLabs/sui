@@ -38,6 +38,7 @@ use sui_types::storage::{DeleteKind, WriteKind};
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
+use sui_types::sui_serde::SuiTypeTag as AsSuiTypeTag;
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, PartialEq, Eq, Copy)]
@@ -1544,7 +1545,7 @@ impl SuiCallArg {
 #[serde(rename_all = "camelCase")]
 pub struct SuiPureValue {
     #[schemars(with = "Option<String>")]
-    #[serde_as(as = "Option<DisplayFromStr>")]
+    #[serde_as(as = "Option<AsSuiTypeTag>")]
     value_type: Option<TypeTag>,
     value: SuiJsonValue,
 }

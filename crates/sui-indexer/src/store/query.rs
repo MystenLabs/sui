@@ -139,10 +139,10 @@ mod test {
     use std::str::FromStr;
 
     use move_core_types::ident_str;
-    use move_core_types::parser::parse_struct_tag;
 
     use sui_json_rpc_types::SuiObjectDataFilter;
     use sui_types::base_types::{ObjectID, SuiAddress};
+    use sui_types::parse_sui_struct_tag;
 
     use crate::store::query::DBFilter;
 
@@ -222,7 +222,7 @@ LIMIT 100;";
                 )
                 .unwrap(),
             ),
-            SuiObjectDataFilter::StructType(parse_struct_tag("0x2::test::Test").unwrap()),
+            SuiObjectDataFilter::StructType(parse_sui_struct_tag("0x2::test::Test").unwrap()),
         ]);
 
         let expected_sql = "SELECT t1.*
