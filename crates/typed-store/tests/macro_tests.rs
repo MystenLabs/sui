@@ -261,7 +261,7 @@ async fn macro_transactional_test() {
         .table1
         .transaction()
         .expect("failed to init transaction");
-    transaction = transaction
+    transaction
         .insert_batch(&tables.table1, vec![(key.to_string(), "1".to_string())])
         .unwrap();
     transaction

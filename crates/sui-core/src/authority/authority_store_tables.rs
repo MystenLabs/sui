@@ -206,7 +206,7 @@ impl AuthorityPerpetualTables {
         epoch_start_configuration: &EpochStartConfiguration,
     ) -> SuiResult {
         let mut wb = self.epoch_start_configuration.batch();
-        wb = wb.insert_batch(
+        wb.insert_batch(
             &self.epoch_start_configuration,
             std::iter::once(((), epoch_start_configuration)),
         )?;
@@ -220,10 +220,11 @@ impl AuthorityPerpetualTables {
 
     pub fn set_highest_pruned_checkpoint(
         &self,
-        wb: DBBatch,
+        wb: &mut DBBatch,
         checkpoint_number: CheckpointSequenceNumber,
-    ) -> SuiResult<DBBatch> {
-        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
+    ) -> SuiResult {
+        wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {

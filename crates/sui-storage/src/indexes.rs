@@ -181,36 +181,36 @@ impl IndexStore {
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
 
-        let batch = self.tables.transactions_from_addr.batch();
+        let mut batch = self.tables.transactions_from_addr.batch();
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transaction_order,
             std::iter::once((sequence, *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_seq,
             std::iter::once((*digest, sequence)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_from_addr,
             std::iter::once(((sender, sequence), *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_by_input_object_id,
             active_inputs.map(|id| ((id, sequence), *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_by_mutated_object_id,
             mutated_objects
                 .clone()
                 .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_by_move_function,
             move_functions.map(|(obj_id, module, function)| {
                 (
@@ -220,7 +220,7 @@ impl IndexStore {
             }),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.transactions_to_addr,
             mutated_objects.filter_map(|(_, owner)| {
                 owner
@@ -230,32 +230,32 @@ impl IndexStore {
             }),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.timestamps,
             std::iter::once((*digest, timestamp_ms)),
         )?;
 
         // Owner index
-        let batch = batch.delete_batch(
+        batch.delete_batch(
             &self.tables.owner_index,
             object_index_changes.deleted_owners.into_iter(),
         )?;
-        let batch = batch.delete_batch(
+        batch.delete_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.deleted_dynamic_fields.into_iter(),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.owner_index,
             object_index_changes.new_owners.into_iter(),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
         )?;
 
         // events
         let event_digest = events.digest();
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_order,
             events
                 .data
@@ -263,7 +263,7 @@ impl IndexStore {
                 .enumerate()
                 .map(|(i, _)| ((sequence, i), (event_digest, *digest, timestamp_ms))),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_move_module,
             events
                 .data
@@ -277,7 +277,7 @@ impl IndexStore {
                 })
                 .map(|(i, m)| ((m, (sequence, i)), (event_digest, *digest, timestamp_ms))),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_sender,
             events.data.iter().enumerate().map(|(i, e)| {
                 (
@@ -286,7 +286,7 @@ impl IndexStore {
                 )
             }),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_move_event,
             events.data.iter().enumerate().map(|(i, e)| {
                 (
@@ -296,7 +296,7 @@ impl IndexStore {
             }),
         )?;
 
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.event_by_time,
             events.data.iter().enumerate().map(|(i, _)| {
                 (
@@ -829,12 +829,12 @@ impl IndexStore {
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
-        let batch = self.tables.owner_index.batch();
-        let batch = batch.insert_batch(
+        let mut batch = self.tables.owner_index.batch();
+        batch.insert_batch(
             &self.tables.owner_index,
             object_index_changes.new_owners.into_iter(),
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.dynamic_field_index,
             object_index_changes.new_dynamic_fields.into_iter(),
         )?;
