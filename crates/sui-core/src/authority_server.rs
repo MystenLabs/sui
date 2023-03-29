@@ -133,6 +133,8 @@ pub struct ValidatorServiceMetrics {
     pub cert_verification_latency: Histogram,
     pub consensus_latency: Histogram,
     pub handle_transaction_latency: Histogram,
+    pub handle_transaction_bytes: IntCounter,
+    pub handle_certificate_bytes: IntCounter,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
 
@@ -178,6 +180,18 @@ impl ValidatorServiceMetrics {
                 "validator_service_handle_transaction_latency",
                 "Latency of handling a transaction",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_transaction_bytes: register_int_counter_with_registry!(
+                "handle_transaction_bytes",
+                "handle_transaction bytes",
+                registry,
+            )
+            .unwrap(),
+            handle_certificate_bytes: register_int_counter_with_registry!(
+                "handle_certificate_bytes",
+                "handle_certificate bytes",
                 registry,
             )
             .unwrap(),
@@ -254,6 +268,7 @@ impl ValidatorService {
             ))
         );
 
+        metrics.handle_transaction_bytes.inc_by(tx_size as u64);
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
@@ -297,6 +312,7 @@ impl ValidatorService {
         let certificate = request.into_inner();
 
         let shared_object_tx = certificate.contains_shared_object();
+        metrics.handle_certificate_bytes.inc_by(bcs::serialized_size(&certificate).unwrap() as u64);
 
         let _metrics_guard = if shared_object_tx {
             metrics.handle_certificate_consensus_latency.start_timer()
