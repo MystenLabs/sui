@@ -538,6 +538,12 @@ impl<S> TemporaryStore<S> {
             self.input_objects.len(),
         )
     }
+
+    pub fn written_objects_size(&self) -> usize {
+        self.written
+            .iter()
+            .fold(0, |sum, obj| sum + obj.1 .0.object_size_for_gas_metering())
+    }
 }
 
 impl<S: ObjectStore> TemporaryStore<S> {

@@ -10,11 +10,12 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 2;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
+// Version 2: Adds `max_size_written_objects`.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -522,6 +523,10 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
+
+    // Config introduced in V2
+    max_size_written_objects: Option<u64>,
+    max_size_written_objects_system_tx: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";
@@ -1139,6 +1144,14 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    pub fn max_size_written_objects(&self) -> u64 {
+        self.max_size_written_objects.expect(CONSTANT_ERR_MSG)
+    }
+    pub fn max_size_written_objects_system_tx(&self) -> u64 {
+        self.max_size_written_objects_system_tx
+            .expect(CONSTANT_ERR_MSG)
+    }
+
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
@@ -1468,6 +1481,10 @@ impl ProtocolConfig {
                 hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
                 hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
+
+                max_size_written_objects: None,
+                max_size_written_objects_system_tx: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1488,6 +1505,11 @@ impl ProtocolConfig {
             //     // changes.
             //     ..Self::get_for_version_impl(version - 1)
             // },
+            2 => Self {
+                max_size_written_objects: Some(5 * 1000 * 1000),
+                max_size_written_objects_system_tx: Some(50 * 1000 * 1000),
+                ..Self::get_for_version_impl(version - 1)
+            },
             _ => panic!("unsupported version {:?}", version),
         }
     }
