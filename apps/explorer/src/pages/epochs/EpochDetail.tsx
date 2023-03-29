@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
-import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
@@ -14,6 +13,7 @@ import { EpochStats } from './stats/EpochStats';
 import { ValidatorStatus } from './stats/ValidatorStatus';
 
 import { SuiAmount } from '~/components/transactions/TxCardUtils';
+import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Banner } from '~/ui/Banner';
 import { Card } from '~/ui/Card';
 import { LoadingSpinner } from '~/ui/LoadingSpinner';
@@ -24,9 +24,9 @@ import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 function EpochDetail() {
     const { id } = useParams();
-    const rpc = useRpcClient();
+    const enhancedRpc = useEnhancedRpcClient();
     const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
-        rpc.getEpochs({
+    enhancedRpc.getEpochs({
             // todo: endpoint returns no data for epoch 0
             cursor: id === '0' ? undefined : +id! - 1,
             limit: 1,

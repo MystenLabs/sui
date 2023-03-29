@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useRpcClient } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { TableFooter } from '~/components/Table/TableFooter';
 import { SuiAmount, TxTableCol } from '~/components/transactions/TxCardUtils';
 import { TxTimeType } from '~/components/tx-time/TxTimeType';
+import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { CheckpointSequenceLink, EpochLink } from '~/ui/InternalLink';
 import { usePaginationStack } from '~/ui/Pagination';
 import { PlaceholderTable } from '~/ui/PlaceholderTable';
@@ -23,12 +23,15 @@ export function EpochsTable({
     disablePagination,
     refetchInterval,
 }: EpochsTableProps) {
-    const enhancedRpc = useRpcClient();
+    const enhancedRpc = useEnhancedRpcClient();
     const [limit, setLimit] = useState(initialLimit);
 
     const countQuery = useQuery(
-        ['epochs', 'count'],
-        async () => (await enhancedRpc.getCurrentEpoch()).epoch + 1
+        ['epochs', 'current'],
+        async () => enhancedRpc.getCurrentEpoch(),
+        {
+            select: (epoch) => epoch.epoch + 1
+        }
     );
 
     const pagination = usePaginationStack<number>();
@@ -109,7 +112,7 @@ export function EpochsTable({
                               accessorKey: 'epoch',
                           },
                           {
-                              header: 'Transactions',
+                              header: 'Transaction Blocks',
                               accessorKey: 'transactions',
                           },
                           {
@@ -150,12 +153,14 @@ export function EpochsTable({
                     rowCount={limit}
                     rowHeight="16px"
                     colHeadings={[
-                        'Digest',
-                        'Sequence Number',
+                        'Epoch',
+                        'Transaction Blocks',
+                        'Stake Rewards',
+                        'Checkpoint Set',
+                        'Storage Revenue',
                         'Time',
-                        'Transaction Count',
                     ]}
-                    colWidths={['100px', '120px', '204px', '90px', '38px']}
+                    colWidths={['100px', '120px', '40px', '204px', '90px', '38px']}
                 />
             )}
             <div className="py-3">
