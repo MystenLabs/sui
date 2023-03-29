@@ -41,6 +41,7 @@ pub mod processors;
 pub mod schema;
 pub mod store;
 pub mod test_utils;
+mod type_tag_parser;
 pub mod types;
 pub mod utils;
 

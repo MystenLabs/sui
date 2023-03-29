@@ -138,8 +138,8 @@ fn to_outer_clauses(filter: &SuiObjectDataFilter) -> Option<String> {
 mod test {
     use std::str::FromStr;
 
+    use crate::type_tag_parser::parse_struct_tag;
     use move_core_types::ident_str;
-    use move_core_types::parser::parse_struct_tag;
 
     use sui_json_rpc_types::SuiObjectDataFilter;
     use sui_types::base_types::{ObjectID, SuiAddress};

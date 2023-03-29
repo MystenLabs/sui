@@ -3,9 +3,9 @@
 
 use crate::errors::IndexerError;
 use crate::schema::events;
+use crate::type_tag_parser::parse_struct_tag;
 use diesel::prelude::*;
 use move_core_types::identifier::Identifier;
-use move_core_types::parser::parse_struct_tag;
 use serde_json::Value;
 use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;

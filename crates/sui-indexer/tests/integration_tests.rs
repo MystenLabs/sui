@@ -17,7 +17,6 @@ pub mod pg_integration_test {
     use move_core_types::ident_str;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
-    use move_core_types::parser::parse_struct_tag;
     use sui_config::SUI_KEYSTORE_FILENAME;
     use sui_indexer::errors::IndexerError;
     use sui_indexer::models::objects::{
@@ -28,6 +27,7 @@ pub mod pg_integration_test {
     use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
     use sui_indexer::test_utils::{start_test_indexer, SuiTransactionBlockResponseBuilder};
+    use sui_indexer::type_tag_parser::parse_struct_tag;
     use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
     use sui_json_rpc::api::ExtendedApiClient;
     use sui_json_rpc::api::IndexerApiClient;
