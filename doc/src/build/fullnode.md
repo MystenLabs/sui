@@ -95,30 +95,27 @@ To get a Full node with indexer running in Docker, follow the instructions in th
 
 You must get the latest source files from the Sui GitHub repository.
 
-1. Set up your fork of the Sui repository:
-     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
-       and click the *Fork* button in the top right-hand corner of the screen.
-     1. Clone your personal fork of the Sui repository to your local machine
-       (ensure that you insert your GitHub username into the URL):
-       ```shell
-       git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
-       ```
- 1. `cd` into your `sui` repository:
-    ```shell
-    cd sui
-    ```
- 1. Set up the Sui repository as a git remote:
-    ```shell
-    git remote add upstream https://github.com/MystenLabs/sui
-    ```
- 1. Sync your fork:
-    ```shell
-    git fetch upstream
-    ```
- 1. Check out the branch associated with the network version you want to run (for example, `devnet` to run a Devnet Full node):
-    ```shell
-    git checkout --track upstream/<BRANCH-NAME>
-    ```
+1. To set up your fork of the Sui repository, go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub and click the **Fork** button in the top right-hand corner of the screen.
+1. Clone your personal fork of the Sui repository to your local machine (ensure that you insert your GitHub username into the URL):
+   ```shell
+   git clone https://github.com/<YOUR-GITHUB-USERNAME>/sui.git
+   ```
+1. `cd` into your `sui` repository:
+   ```shell
+   cd sui
+   ```
+1. Set up the Sui repository as a git remote:
+   ```shell
+   git remote add upstream https://github.com/MystenLabs/sui
+   ```
+1. Sync your fork:
+   ```shell
+   git fetch upstream
+   ```
+1. Check out the branch associated with the network version you want to run (for example, `devnet` to run a Devnet Full node):
+   ```shell
+   git checkout --track upstream/<BRANCH-NAME>
+   ```
 
 ### Setting up a Full node from source
 
