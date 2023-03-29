@@ -82,7 +82,7 @@ debug = 1
 # Write debug info into a separate file.
 split-debuginfo = 'packed'
 # Without stripping, sui binary size would be > 1GB.
-strip = 'debuginfo'
+strip = 'none'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
 
