@@ -34,6 +34,7 @@ use crate::signature::GenericSignature;
 use crate::sui_serde::HexAccountAddress;
 use crate::sui_serde::Readable;
 use crate::SUI_FRAMEWORK_ADDRESS;
+use crate::SUI_SYSTEM_ADDRESS;
 use anyhow::anyhow;
 use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
@@ -138,9 +139,8 @@ pub enum MoveObjectType {
 impl MoveObjectType {
     pub fn address(&self) -> AccountAddress {
         match self {
-            MoveObjectType::GasCoin | MoveObjectType::StakedSui | MoveObjectType::Coin(_) => {
-                SUI_FRAMEWORK_ADDRESS
-            }
+            MoveObjectType::GasCoin | MoveObjectType::Coin(_) => SUI_FRAMEWORK_ADDRESS,
+            MoveObjectType::StakedSui => SUI_SYSTEM_ADDRESS,
             MoveObjectType::Other(s) => s.address,
         }
     }
