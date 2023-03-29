@@ -20,7 +20,7 @@ use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -239,13 +239,20 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         let verified_transactions = {
             let mut processed_cache = self.processed_cache.lock();
+            // We need a set here as well, since the processed_cache is a LRU cache and can drop
+            // entries while we're iterating over the sequenced transactions.
+            let mut processed_set = HashSet::new();
+
             sequenced_transactions
                 .into_iter()
                 .filter_map(|sequenced_transaction| {
-                    if processed_cache
+                    let key = sequenced_transaction.key();
+                    let in_set = !processed_set.insert(key);
+                    let in_cache = processed_cache
                         .put(sequenced_transaction.key(), ())
-                        .is_some()
-                    {
+                        .is_some();
+
+                    if in_set || in_cache {
                         self.metrics.skipped_consensus_txns_cache_hit.inc();
                         return None;
                     }
