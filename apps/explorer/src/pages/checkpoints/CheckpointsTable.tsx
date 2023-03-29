@@ -75,7 +75,7 @@ export function CheckpointsTable({
                                   </Text>
                               </TxTableCol>
                           ),
-                          transactionCount: (
+                          transactionBlockCount: (
                               <TxTableCol>
                                   <Text
                                       variant="bodySmall/medium"
@@ -100,8 +100,8 @@ export function CheckpointsTable({
                               accessorKey: 'time',
                           },
                           {
-                              header: 'Transaction Count',
-                              accessorKey: 'transactionCount',
+                              header: 'Transaction Block Count',
+                              accessorKey: 'transactionBlockCount',
                           },
                       ],
                   }

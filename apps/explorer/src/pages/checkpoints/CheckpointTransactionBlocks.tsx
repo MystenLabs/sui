@@ -10,7 +10,7 @@ import {
 } from '~/components/transactions/TxCardUtils';
 import { TableCard } from '~/ui/TableCard';
 
-export function CheckpointTransactions({
+export function CheckpointTransactionBlocks({
     digest,
     transactions,
 }: {
