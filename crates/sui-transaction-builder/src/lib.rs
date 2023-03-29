@@ -11,10 +11,11 @@ use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
 use move_binary_format::file_format::SignatureToken;
+use move_binary_format::file_format_common::VERSION_MAX;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 
-use sui_adapter::adapter::CheckCallArg;
+use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
@@ -412,18 +413,17 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        // FIXME: uncomment once we figure out what is going on.
-        // let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
+        let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
 
-        // // TODO set the Mode from outside?
-        // resolve_and_type_check::<Mode>(
-        //     &objects,
-        //     &compiled_module,
-        //     function,
-        //     type_args,
-        //     check_args.clone(),
-        //     false,
-        // )?;
+        // TODO set the Mode from outside?
+        resolve_and_type_check::<Mode>(
+            &objects,
+            &compiled_module,
+            function,
+            type_args,
+            check_args.clone(),
+            false,
+        )?;
         let args = check_args
             .into_iter()
             .map(|check_arg| match check_arg {

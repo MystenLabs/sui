@@ -415,7 +415,7 @@ fn move_object_type_consistency() {
     fn assert_consistent(tag: &StructTag) -> MoveObjectType {
         let ty: MoveObjectType = tag.clone().into();
         // check into/out of the tag works
-        assert!(ty.is(&tag));
+        assert!(ty.is(tag));
         let ty_as_tag: StructTag = ty.clone().into();
         assert_eq!(&ty_as_tag, tag);
         // test same type information
