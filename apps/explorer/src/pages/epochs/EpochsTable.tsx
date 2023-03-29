@@ -30,7 +30,7 @@ export function EpochsTable({
         ['epochs', 'current'],
         async () => enhancedRpc.getCurrentEpoch(),
         {
-            select: (epoch) => epoch.epoch + 1
+            select: (epoch) => epoch.epoch + 1,
         }
     );
 
@@ -160,7 +160,14 @@ export function EpochsTable({
                         'Storage Revenue',
                         'Time',
                     ]}
-                    colWidths={['100px', '120px', '40px', '204px', '90px', '38px']}
+                    colWidths={[
+                        '100px',
+                        '120px',
+                        '40px',
+                        '204px',
+                        '90px',
+                        '38px',
+                    ]}
                 />
             )}
             <div className="py-3">

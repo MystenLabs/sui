@@ -1,4 +1,5 @@
 build/
+storybook-static/
 coverage/
 playwright-report/
 package-lock.json

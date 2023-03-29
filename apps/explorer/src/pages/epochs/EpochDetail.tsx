@@ -26,7 +26,7 @@ function EpochDetail() {
     const { id } = useParams();
     const enhancedRpc = useEnhancedRpcClient();
     const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
-    enhancedRpc.getEpochs({
+        enhancedRpc.getEpochs({
             // todo: endpoint returns no data for epoch 0
             cursor: id === '0' ? undefined : +id! - 1,
             limit: 1,
