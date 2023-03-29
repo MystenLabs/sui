@@ -35,8 +35,6 @@ export async function loadFeatures() {
 }
 
 export enum GROWTHBOOK_FEATURES {
-    EXPLORER_METRICS = 'explorer-metrics',
     USE_TEST_NET_ENDPOINT = 'testnet-selection',
     VALIDATOR_PAGE_STAKING = 'validator-page-staking',
-    EPOCHS_CHECKPOINTS = 'explorer-epochs-checkpoints',
 }

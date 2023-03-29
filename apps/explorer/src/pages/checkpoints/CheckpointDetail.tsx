@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
 import { useRpcClient, convertNumberToDate } from '@mysten/core';
 import { useQuery } from '@tanstack/react-query';
-import { Navigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { CheckpointTransactionBlocks } from './CheckpointTransactionBlocks';
 
@@ -14,9 +13,8 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { PageHeader } from '~/ui/PageHeader';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 import { Text } from '~/ui/Text';
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
-function CheckpointDetail() {
+export default function CheckpointDetail() {
     const { id } = useParams<{ id: string }>();
     const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
@@ -149,13 +147,4 @@ function CheckpointDetail() {
             </div>
         </div>
     );
-}
-
-export default function CheckpointDetailFeatureFlagged() {
-    const gb = useGrowthBook();
-    const enabled = useFeature(GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS).on;
-    if (gb?.ready) {
-        return enabled ? <CheckpointDetail /> : <Navigate to="/" />;
-    }
-    return <LoadingSpinner />;
 }
