@@ -514,12 +514,13 @@ impl AuthorityPerEpochStore {
     fn store_reconfig_state_batch(
         &self,
         new_state: &ReconfigState,
-        batch: DBBatch,
-    ) -> SuiResult<DBBatch> {
-        Ok(batch.insert_batch(
+        batch: &mut DBBatch,
+    ) -> SuiResult {
+        batch.insert_batch(
             &self.tables.reconfig_state,
             [(&RECONFIG_STATE_INDEX, new_state)],
-        )?)
+        )?;
+        Ok(())
     }
 
     pub fn insert_signed_transaction(&self, transaction: VerifiedSignedTransaction) -> SuiResult {
@@ -553,13 +554,13 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult {
         let mut batch = self.tables.effects_signatures.batch();
         if let Some(cert_sig) = cert_sig {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.transaction_cert_signatures,
                 [(tx_digest, cert_sig)],
             )?;
         }
         if let Some(effects_signature) = effects_signature {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.effects_signatures,
                 [(tx_digest, effects_signature)],
             )?;
@@ -907,7 +908,8 @@ impl AuthorityPerEpochStore {
         &self,
         certs: &[TrustedExecutableTransaction],
     ) -> Result<(), TypedStoreError> {
-        let batch = self.tables.pending_execution.batch().insert_batch(
+        let mut batch = self.tables.pending_execution.batch();
+        batch.insert_batch(
             &self.tables.pending_execution,
             certs
                 .iter()
@@ -1057,8 +1059,7 @@ impl AuthorityPerEpochStore {
             .get_reconfig_state_read_lock_guard()
             .should_accept_consensus_certs()
         {
-            write_batch =
-                write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
+            write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
             self.end_of_publish.try_lock()
                 .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
                 .insert_generic(authority, ()).is_quorum_reached()
@@ -1075,8 +1076,8 @@ impl AuthorityPerEpochStore {
             let mut lock = self.get_reconfig_state_write_lock_guard();
             lock.close_all_certs();
             // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
-            write_batch = self.store_reconfig_state_batch(&lock, write_batch)?;
-            write_batch = write_batch.insert_batch(
+            self.store_reconfig_state_batch(&lock, &mut write_batch)?;
+            write_batch.insert_batch(
                 &self.tables.final_epoch_checkpoint,
                 [(
                     &FINAL_EPOCH_CHECKPOINT_INDEX,
@@ -1218,13 +1219,12 @@ impl AuthorityPerEpochStore {
             ?assigned_versions,
             "finish_assign_shared_object_versions"
         );
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(
             &self.tables.assigned_shared_object_versions,
             iter::once((tx_digest, assigned_versions)),
         )?;
 
-        write_batch =
-            write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
+        write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
 
         self.finish_consensus_certificate_process_with_batch(
             write_batch,
@@ -1242,15 +1242,15 @@ impl AuthorityPerEpochStore {
     /// Self::consensus_message_processed returns true after this call for given certificate
     fn finish_consensus_transaction_process_with_batch(
         &self,
-        batch: DBBatch,
+        mut batch: DBBatch,
         key: SequencedConsensusTransactionKey,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.last_consensus_index,
             [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
         )?;
-        let batch = batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
+        batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
         batch.write()?;
         self.consensus_notify_read.notify(&key, &());
         Ok(())
@@ -1276,17 +1276,17 @@ impl AuthorityPerEpochStore {
 
     fn finish_consensus_certificate_process_with_batch(
         &self,
-        batch: DBBatch,
+        mut batch: DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: ExecutionIndicesWithHash,
     ) -> SuiResult {
         let transaction_digest = *certificate.digest();
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.consensus_message_order,
             [(consensus_index.index, transaction_digest)],
         )?;
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.pending_execution,
             [(*certificate.digest(), certificate.clone().serializable())],
         )?;
@@ -1296,7 +1296,7 @@ impl AuthorityPerEpochStore {
             .tables
             .user_signatures_for_checkpoints
             .contains_key(certificate.digest())?);
-        let batch = batch.insert_batch(
+        batch.insert_batch(
             &self.tables.user_signatures_for_checkpoints,
             [(*certificate.digest(), certificate.tx_signatures().to_vec())],
         )?;
@@ -1728,13 +1728,13 @@ impl AuthorityPerEpochStore {
         content_info: &[(CheckpointSummary, CheckpointContents)],
     ) -> Result<(), TypedStoreError> {
         let mut batch = self.tables.pending_checkpoints.batch();
-        batch = batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
+        batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
         for (summary, transactions) in content_info {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.builder_checkpoint_summary,
                 [(&summary.sequence_number, summary)],
             )?;
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.builder_digest_to_checkpoint,
                 transactions
                     .iter()

@@ -268,9 +268,8 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        let mut batch = self
-            .certified_checkpoints
-            .batch()
+        let mut batch = self.certified_checkpoints.batch();
+        batch
             .insert_batch(
                 &self.certified_checkpoints,
                 [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
@@ -280,7 +279,7 @@ impl CheckpointStore {
                 [(checkpoint.digest(), checkpoint.serializable_ref())],
             )?;
         if checkpoint.next_epoch_committee().is_some() {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.epoch_last_checkpoint_map,
                 [(&checkpoint.epoch(), checkpoint.sequence_number())],
             )?;
@@ -538,7 +537,7 @@ impl CheckpointBuilder {
                 .last_constructed_checkpoint
                 .set(sequence_number as i64);
 
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.checkpoint_content,
                 [(contents.digest(), contents)],
             )?;

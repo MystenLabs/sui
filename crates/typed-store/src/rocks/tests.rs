@@ -355,8 +355,8 @@ async fn test_try_extend_from_slice(#[values(true, false)] is_transactional: boo
 async fn test_insert_batch(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut insert_batch = db.batch();
+    insert_batch
         .insert_batch(&db, keys_vals.clone())
         .expect("Failed to batch insert");
     insert_batch.write().expect("Failed to execute batch");
@@ -379,8 +379,8 @@ async fn test_insert_batch_across_cf(#[values(true, false)] is_transactional: bo
         .expect("Failed to open storage");
     let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 
-    let batch = db_cf_1
-        .batch()
+    let mut batch = db_cf_1.batch();
+    batch
         .insert_batch(&db_cf_1, keys_vals_1.clone())
         .expect("Failed to batch insert")
         .insert_batch(&db_cf_2, keys_vals_2.clone())
@@ -434,18 +434,18 @@ async fn test_delete_batch() {
     .expect("Failed to open storage");
 
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut batch = db.batch();
+    batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
     // delete the odd-index keys
     let deletion_keys = (1..100).step_by(2);
-    let delete_batch = insert_batch
+    batch
         .delete_batch(&db, deletion_keys)
         .expect("Failed to batch delete");
 
-    delete_batch.write().expect("Failed to execute batch");
+    batch.write().expect("Failed to execute batch");
 
     for k in db.keys() {
         assert_eq!(k % 2, 0);
@@ -465,16 +465,16 @@ async fn test_delete_range() {
 
     // Note that the last element is (100, "100".to_owned()) here
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut batch = db.batch();
+    batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
-    let delete_range_batch = insert_batch
+    batch
         .delete_range(&db, &50, &100)
         .expect("Failed to delete range");
 
-    delete_range_batch.write().expect("Failed to execute batch");
+    batch.write().expect("Failed to execute batch");
 
     for k in 0..50 {
         assert!(db.contains_key(&k).expect("Failed to query legal key"),);
@@ -501,8 +501,8 @@ async fn test_clear() {
     let _ = db.clear();
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut insert_batch = db.batch();
+    insert_batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
@@ -539,8 +539,8 @@ async fn test_is_empty() {
     assert!(db.is_empty());
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let insert_batch = db
-        .batch()
+    let mut insert_batch = db.batch();
+    insert_batch
         .insert_batch(&db, keys_vals)
         .expect("Failed to batch insert");
 
@@ -932,8 +932,8 @@ struct ObjectWithRefCount {
 }
 
 fn increment_counter(db: &DBMap<String, ObjectWithRefCount>, key: &str, value: i64) {
-    let batch = db
-        .batch()
+    let mut batch = db.batch();
+    batch
         .partial_merge_batch(db, [(key.to_string(), value.to_le_bytes())])
         .unwrap();
     batch.write().unwrap();
@@ -963,11 +963,9 @@ async fn refcount_test() {
     // increment value 10 times
     let iterations = 10;
     for _ in 0..iterations {
-        db.batch()
-            .merge_batch(&db, [(key.to_string(), object)])
-            .unwrap()
-            .write()
-            .unwrap();
+        let mut batch = db.batch();
+        batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
+        batch.write().unwrap();
     }
     let value = db
         .get(&key)
@@ -1005,10 +1003,8 @@ async fn refcount_with_compaction_test() {
         value: 3,
         ref_count: 1,
     };
-    let batch = db
-        .batch()
-        .merge_batch(&db, [(key.to_string(), object)])
-        .unwrap();
+    let mut batch = db.batch();
+    batch.merge_batch(&db, [(key.to_string(), object)]).unwrap();
     batch.write().unwrap();
     // increment value once
     increment_counter(&db, &key, 1);
