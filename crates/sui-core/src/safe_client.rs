@@ -6,7 +6,7 @@ use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
-use prometheus::{register_int_counter_vec_with_registry, IntCounter, IntCounterVec, Registry};
+use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -38,8 +38,6 @@ pub struct SafeClientMetricsBase {
     total_requests_by_address_method: IntCounterVec,
     total_responses_by_address_method: IntCounterVec,
     latency: HistogramVec,
-    handle_system_state_object_bytes: IntCounterVec,
-    handle_system_state_object_count: IntCounterVec,
 }
 
 impl SafeClientMetricsBase {
@@ -65,20 +63,6 @@ impl SafeClientMetricsBase {
                 &["address", "method"],
                 registry,
             ),
-            handle_system_state_object_bytes: register_int_counter_vec_with_registry!(
-                "safe_client_handle_system_state_object_bytes",
-                "handle_system_state_object_bytes",
-                &["address"],
-                registry,
-            )
-            .unwrap(),
-            handle_system_state_object_count: register_int_counter_vec_with_registry!(
-                "safe_client_handle_system_state_object_count",
-                "handle_system_state_object_count",
-                &["address"],
-                registry,
-            )
-            .unwrap(),
         }
     }
 }
@@ -94,8 +78,6 @@ pub struct SafeClientMetrics {
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
     handle_tx_info_latency: Histogram,
-    handle_system_state_object_bytes: IntCounter,
-    handle_system_state_object_count: IntCounter,
 }
 
 impl SafeClientMetrics {
@@ -137,12 +119,6 @@ impl SafeClientMetrics {
             handle_certificate_latency,
             handle_obj_info_latency,
             handle_tx_info_latency,
-            handle_system_state_object_bytes: metrics_base
-                .handle_system_state_object_bytes
-                .with_label_values(&[&validator_address]),
-            handle_system_state_object_count: metrics_base
-                .handle_system_state_object_count
-                .with_label_values(&[&validator_address]),
         }
     }
 
@@ -497,7 +473,7 @@ where
             .await;
         self.metrics
             .handle_system_state_object_bytes
-            .inc_by(bincode::serialized_size(&r).unwrap() as u64);
+            .inc_by(bcs::serialized_size(&r).unwrap() as u64);
         self.metrics.handle_system_state_object_count.inc();
         r
     }
