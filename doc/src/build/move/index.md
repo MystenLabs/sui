@@ -43,7 +43,7 @@ It's now time to look at some Sui Move code. You can either keep reading for an 
 
 ## First look at Move source code
 
-The Sui platform includes the Sui Framework, which includes the core on-chain libraries that Sui Move developers  need to bootstrap Sui operations. In particular, Sui supports multiple user-defined coin types, which are custom assets the Sui Move language defines. Sui Framework code contains the `Coin` module supporting creation and management of custom coins. The `Coin` module is located in the [coin.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/coin.move) file. As you might expect, the manifest file describing how to build the package containing the `Coin` module is located in the corresponding
+The Sui platform includes the Sui Framework, which includes the core on-chain libraries that Sui Move developers  need to bootstrap Sui operations. In particular, Sui supports multiple user-defined coin types, which are custom assets the Sui Move language defines. Sui Framework code contains the `Coin` module supporting creation and management of custom coins. The `Coin` module is located in the [coin.move](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/coin.move) file. As you might expect, the manifest file describing how to build the package containing the `Coin` module is located in the corresponding
 [Move.toml](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/Move.toml) file.
 
 Let's see how module definition appears in the `Coin` module file:

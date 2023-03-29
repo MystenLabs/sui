@@ -306,7 +306,6 @@ git clone https://github.com/MystenLabs/sui.git --branch devnet
 
 The following primary directories offer a good starting point for exploring Sui's source code:
  * [sui](https://github.com/MystenLabs/sui/tree/main/crates/sui) - Sui, including the Sui CLI Client
- * [sui_framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/sources) - Sui Move core smart contracts (e.g., coin.move, object.move, test_scenario.move, ...)
  * [sui_programmability](https://github.com/MystenLabs/sui/tree/main/sui_programmability) - Sui Move code examples (games, defi, nfts, ...)
  * [sui_core](https://github.com/MystenLabs/sui/tree/main/crates/sui-core) - Core Sui components
  * [sui-types](https://github.com/MystenLabs/sui/tree/main/crates/sui-types) - Sui object types, such as coins and gas

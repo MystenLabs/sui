@@ -8,7 +8,7 @@ Objects in Sui can have different types of [ownership](../objects.md#object-owne
 
 ### Create immutable object
 
-To convert an object into an immutable object, call the following function in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
+To convert an object into an immutable object, call the following function in the [transfer module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ```rust
 public native fun freeze_object<T: key>(obj: T);
