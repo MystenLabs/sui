@@ -238,6 +238,9 @@ pub enum SuiError {
     #[error("There are already {queue_len} transactions pending, above threshold of {threshold}")]
     TooManyTransactionsPendingExecution { queue_len: usize, threshold: usize },
 
+    #[error("There are too many transactions pending in consensus")]
+    TooManyTransactionsPendingConsensus,
+
     #[error("Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}")]
     TooManyTransactionsPendingOnObject {
         object_id: ObjectID,
@@ -395,6 +398,8 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
+    #[error("Failure serializing transaction in the requested format: {:?}", error)]
+    TransactionSerializationError { error: String },
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
     #[error("Failure deserializing object in the requested format: {:?}", error)]
@@ -432,6 +437,10 @@ pub enum SuiError {
     KeyConversionError(String),
     #[error("Invalid Private Key provided")]
     InvalidPrivateKey,
+
+    // Unsupported Operations on Fullnode
+    #[error("Fullnode does not support handle_certificate")]
+    FullNodeCantHandleCertificate,
 
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
@@ -629,6 +638,7 @@ impl SuiError {
             // Overload errors
             SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
             SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
+            SuiError::TooManyTransactionsPendingConsensus => (true, true),
 
             // Non retryable error
             SuiError::ExecutionError(..) => (false, true),
@@ -659,6 +669,7 @@ impl SuiError {
             self,
             SuiError::TooManyTransactionsPendingExecution { .. }
                 | SuiError::TooManyTransactionsPendingOnObject { .. }
+                | SuiError::TooManyTransactionsPendingConsensus
         )
     }
 }
