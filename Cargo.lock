@@ -8728,6 +8728,7 @@ dependencies = [
  "arc-swap",
  "async-trait",
  "bcs",
+ "bincode",
  "bytes",
  "chrono",
  "clap 3.2.23",
