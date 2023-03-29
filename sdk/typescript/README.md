@@ -237,12 +237,13 @@ const compiledModulesAndDependencies = JSON.parse(
   ),
 );
 const tx = new TransactionBlock();
-tx.publish(
+const [upgradeCap] = tx.publish(
   compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
   compiledModulesAndDeps.dependencies.map((addr: string) =>
     normalizeSuiObjectId(addr),
   ),
 );
+tx.transferObjects([upgradeCap], tx.pure(await signer.getAddress()));
 const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
 console.log({ result });
 ```
