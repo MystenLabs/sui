@@ -7,10 +7,8 @@ import {
     getObjectId,
     getObjectType,
     getObjectOwner,
-    PaginatedObjectsResponse,
-    is,
 } from '@mysten/sui.js';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import {
     parseImageURL,
@@ -18,106 +16,72 @@ import {
     extractName,
 } from '../../utils/objectUtils';
 import { transformURL } from '../../utils/stringUtils';
-import { type DataType } from './OwnedObjectConstants';
 import OwnedObjectView from './views/OwnedObjectView';
 
-import styles from './styles/OwnedObjects.module.css';
-
-const DATATYPE_DEFAULT: DataType = [
-    {
-        id: '',
-        Type: '',
-        _isCoin: false,
-    },
-];
-
-function NoOwnedObjects() {
-    return <div className={styles.fail}>Failed to find Owned Objects</div>;
-}
+import { useMultiGetObjects } from '~/hooks/useMultiGetObject';
+import { Banner } from '~/ui/Banner';
+import { LoadingSpinner } from '~/ui/LoadingSpinner';
 
 function OwnedObject({ id, byAddress }: { id: string; byAddress: boolean }) {
-    const [results, setResults] = useState(DATATYPE_DEFAULT);
-    const [isLoaded, setIsLoaded] = useState(false);
-    const [isFail, setIsFail] = useState(false);
     const rpc = useRpcClient();
+    const { data, isLoading, isError } = useQuery(
+        ['owned-object', id],
+        async () =>
+            byAddress
+                ? rpc.getOwnedObjects({ owner: id })
+                : rpc.getDynamicFields({ parentId: id }),
+        { enabled: !!id }
+    );
 
-    useEffect(() => {
-        setIsFail(false);
-        setIsLoaded(false);
-        const req = byAddress
-            ? rpc.getOwnedObjects({ owner: id })
-            : rpc.getDynamicFields({ parentId: id });
+    let ids: string[];
+    ids = data?.data.map(getObjectId) || [];
 
-        req.then((objects) => {
-            let ids: string[];
-            if (is(objects, PaginatedObjectsResponse)) {
-                ids = objects.data.map((resp) => getObjectId(resp));
-            } else {
-                ids = objects.data.map(({ objectId }) => objectId);
+    const {
+        data: multiGetObjects,
+        isLoading: loadingGetMultiObjects,
+        isError: errorGetMultiObject,
+    } = useMultiGetObjects(ids);
+
+    // TODO: change this view model
+    const results = multiGetObjects
+        ?.filter((resp) => {
+            if (byAddress && getObjectType(resp) === 'moveObject') {
+                const owner = getObjectOwner(resp);
+                const addressOwner =
+                    owner && owner !== 'Immutable' && 'AddressOwner' in owner
+                        ? owner.AddressOwner
+                        : null;
+                return resp !== undefined && addressOwner === id;
             }
-            return rpc
-                .multiGetObjects({
-                    ids,
-                    options: {
-                        showType: true,
-                        showContent: true,
-                        showDisplay: true,
-                    },
-                })
-                .then((results) => {
-                    setResults(
-                        results
-                            .filter((resp) => {
-                                if (
-                                    byAddress &&
-                                    getObjectType(resp) === 'moveObject'
-                                ) {
-                                    const owner = getObjectOwner(resp);
-                                    const addressOwner =
-                                        owner &&
-                                        owner !== 'Immutable' &&
-                                        'AddressOwner' in owner
-                                            ? owner.AddressOwner
-                                            : null;
-                                    return (
-                                        resp !== undefined &&
-                                        addressOwner === id
-                                    );
-                                }
-                                return resp !== undefined;
-                            })
-                            .map(
-                                (resp) => {
-                                    const displayMeta =
-                                        typeof resp.data === 'object' &&
-                                        'display' in resp.data
-                                            ? resp.data.display
-                                            : undefined;
-                                    const url = parseImageURL(displayMeta);
-                                    return {
-                                        id: getObjectId(resp),
-                                        Type: parseObjectType(resp),
-                                        _isCoin: Coin.isCoin(resp),
-                                        display: url
-                                            ? transformURL(url)
-                                            : undefined,
-                                        balance: Coin.getBalance(resp),
-                                        name: extractName(displayMeta) || '',
-                                    };
-                                }
-                                // TODO - add back version
-                            )
-                    );
-                    setIsLoaded(true);
-                });
-        }).catch(() => setIsFail(true));
-    }, [id, byAddress, rpc]);
+            return resp !== undefined;
+        })
+        .map((resp) => {
+            const displayMeta =
+                typeof resp.data === 'object' && 'display' in resp.data
+                    ? resp.data.display
+                    : undefined;
+            const url = parseImageURL(displayMeta);
+            return {
+                id: getObjectId(resp),
+                Type: parseObjectType(resp),
+                _isCoin: Coin.isCoin(resp),
+                display: url ? transformURL(url) : undefined,
+                balance: Coin.getBalance(resp),
+                name: extractName(displayMeta) || '',
+            };
+        });
 
-    if (isFail) return <NoOwnedObjects />;
+    if (isLoading || loadingGetMultiObjects) {
+        return <LoadingSpinner text="Loading data" />;
+    }
 
-    if (isLoaded) return <OwnedObjectView results={results} />;
+    if (isError || errorGetMultiObject) {
+        <Banner variant="error" spacing="lg" fullWidth>
+            Failed to find Owned Objects
+        </Banner>;
+    }
 
-    return <div className={styles.gray}>loading...</div>;
+    return results ? <OwnedObjectView results={results} /> : null;
 }
 
 export default OwnedObject;
