@@ -715,8 +715,8 @@ mod sim_only_tests {
         // The system state object will be upgraded next time we execute advance_epoch transaction
         // at epoch boundary.
         let system_state = test_cluster.wait_for_epoch(Some(2)).await;
-        if let SuiSystemState::V1(_inner) = system_state {
-            // TODO: Check _inner data integrity.
+        if let SuiSystemState::V2(inner) = system_state {
+            assert_eq!(inner.parameters.min_validator_count, 4);
         } else {
             unreachable!("Unexpected sui system state version");
         }

@@ -1348,7 +1348,7 @@ version
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1357,7 +1357,7 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInner {
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state">load_system_state</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
     <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self)
 }
 </code></pre>
@@ -1372,7 +1372,7 @@ version
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1381,7 +1381,7 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInner {
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
     <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self)
 }
 </code></pre>
@@ -1396,7 +1396,7 @@ version
 
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInner">sui_system_state_inner::SuiSystemStateInner</a>
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">sui_system::SuiSystemState</a>): &<b>mut</b> <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_SuiSystemStateInnerV2">sui_system_state_inner::SuiSystemStateInnerV2</a>
 </code></pre>
 
 
@@ -1405,17 +1405,15 @@ version
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInner {
-    // TODO: This is <b>where</b> we check the version and perform upgrade <b>if</b> necessary.
-    // <b>if</b> (self.version == 1) {
-    //   <b>let</b> v1 = <a href="_remove">dynamic_field::remove</a>(&<b>mut</b> self.id, self.version);
-    //   <b>let</b> v2 = sui_system_state_inner::v1_to_v2(v1);
-    //   <b>assert</b>!(v2.system_state_version = 2, <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
-    //   self.version = 2;
-    //   <a href="_add">dynamic_field::add</a>(&<b>mut</b> self.id, self.version, v2);
-    // }
+<pre><code><b>fun</b> <a href="sui_system.md#0x3_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="sui_system.md#0x3_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
+    <b>if</b> (self.version == 1) {
+      <b>let</b> v1 = <a href="_remove">dynamic_field::remove</a>(&<b>mut</b> self.id, self.version);
+      <b>let</b> v2 = <a href="sui_system_state_inner.md#0x3_sui_system_state_inner_v1_to_v2">sui_system_state_inner::v1_to_v2</a>(v1);
+      self.version = 2;
+      <a href="_add">dynamic_field::add</a>(&<b>mut</b> self.id, self.version, v2);
+    };
 
-    <b>let</b> inner: &<b>mut</b> SuiSystemStateInner = <a href="_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
+    <b>let</b> inner = <a href="_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> self.id, self.version);
     <b>assert</b>!(<a href="sui_system_state_inner.md#0x3_sui_system_state_inner_system_state_version">sui_system_state_inner::system_state_version</a>(inner) == self.version, <a href="sui_system.md#0x3_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
