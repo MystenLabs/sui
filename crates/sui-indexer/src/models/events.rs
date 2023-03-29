@@ -5,12 +5,12 @@ use crate::errors::IndexerError;
 use crate::schema::events;
 use diesel::prelude::*;
 use move_core_types::identifier::Identifier;
-use move_core_types::parser::parse_struct_tag;
 use serde_json::Value;
 use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::TransactionDigest;
 use sui_types::event::EventID;
+use sui_types::parse_sui_struct_tag;
 
 #[derive(Queryable, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
@@ -63,7 +63,7 @@ impl TryInto<SuiEvent> for Event {
             package_id,
             transaction_module: Identifier::from_str(&self.module)?,
             sender,
-            type_: parse_struct_tag(&self.event_type)?,
+            type_: parse_sui_struct_tag(&self.event_type)?,
             bcs: self.event_bcs,
             parsed_json: self.parsed_json,
             timestamp_ms: self.event_time_ms.map(|t| t as u64),
