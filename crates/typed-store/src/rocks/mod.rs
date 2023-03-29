@@ -1780,7 +1780,8 @@ pub fn base_db_options() -> DBOptions {
         read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
     );
 
-    opt.increase_parallelism(4);
+    opt.set_max_background_jobs(3);
+    opt.increase_parallelism(3);
     opt.set_enable_pipelined_write(true);
 
     DBOptions {

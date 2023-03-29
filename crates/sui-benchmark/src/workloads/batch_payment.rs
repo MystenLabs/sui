@@ -8,6 +8,7 @@ use sui_types::object::Owner;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::error;
 
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
@@ -28,7 +29,7 @@ use super::workload::{Workload, MAX_GAS_FOR_TESTING};
 /// Value of each address's "primary coin" in mist. The first transaction gives
 /// each address a coin worth PRIMARY_COIN_VALUE, and all subsequent transfers
 /// send TRANSFER_AMOUNT coins each time
-const PRIMARY_COIN_VALUE: u64 = 100_000_000;
+const PRIMARY_COIN_VALUE: u64 = 100_000_000_000;
 
 /// Number of mist sent to each address on each batch transfer
 const TRANSFER_AMOUNT: u64 = 1;
@@ -54,6 +55,9 @@ impl std::fmt::Display for BatchPaymentTestPayload {
 
 impl Payload for BatchPaymentTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
+        if !effects.is_ok() {
+            error!("Failed: {:?}", &effects);
+        }
         self.state.update(effects);
         if self.num_payments == 0 {
             for (coin_obj, owner) in effects.created().into_iter().chain(effects.mutated()) {
@@ -84,6 +88,14 @@ impl Payload for BatchPaymentTestPayload {
         } else {
             TRANSFER_AMOUNT
         };
+        let gas_budget = self
+            .system_state_observer
+            .state
+            .borrow()
+            .protocol_config
+            .as_ref()
+            .expect("Protocol config not in system state")
+            .max_tx_gas();
         // pay everything from the gas object, no other coins
         let coins = Vec::new();
         // create a sender -> all transfer, using all of the sender's coins
@@ -101,6 +113,7 @@ impl Payload for BatchPaymentTestPayload {
                     .borrow()
                     .reference_gas_price,
             ),
+            Some(gas_budget),
         )
     }
 }
