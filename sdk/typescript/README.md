@@ -230,7 +230,7 @@ const { execSync } = require('child_process');
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const compiledModulesAndDependencies = JSON.parse(
+const compiledModulesAndDeps = JSON.parse(
   execSync(
     `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
     { encoding: 'utf-8' },
