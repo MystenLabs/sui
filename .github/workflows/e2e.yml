@@ -52,7 +52,14 @@ jobs:
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
+        # usage https://github.com/marketplace/actions/retry-step
+        # TODO: remove this after https://mysten-labs.slack.com/archives/C04FG4Q7YJ3/p1679676070896019 is resolved
+        # retry is added because of flakiness in sui-test-validator dry-run
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 5
+          timeout_minutes: 30
+          command: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm sdk test:e2e'
 
       - name: Run Explorer e2e tests
         # need to run Explorer e2e when its upstream(TS SDK and Rust) or itself is changed
