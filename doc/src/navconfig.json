@@ -222,7 +222,7 @@
 				"title": "Connect to Sui",
 				"items": [
 					{
-						"label": "Programmable Transactions with TypeScript SDK",
+						"label": "Programmable Transaction Blocks with TypeScript SDK",
 						"fileName": "build/prog-trans-ts-sdk"
 					},
 					{
@@ -239,12 +239,16 @@
 						"external": true
 					},
 					{
-						"label": "Sui Full node",
+						"label": "Sui Full Node",
 						"fileName": "build/fullnode"
 					},
 					{
-						"label": "Sui Validator node",
+						"label": "Sui Validator Node",
 						"fileName": "build/validator-node"
+					},
+					{
+						"label": "Database Snapshots",
+						"fileName": "build/snapshot"
 					},
 					{
 						"label": "Event Query and Subscription",
