@@ -99,7 +99,7 @@ export const SuiRawMovePackage = object({
 });
 export type SuiRawMovePackage = Infer<typeof SuiRawMovePackage>;
 
-// TODO(chris): consolidate SuiRawParsedData and SuiRawObject using generics
+// TODO(Chris): consolidate SuiRawParsedData and SuiRawObject using generics
 export const SuiRawData = union([
   assign(SuiMoveObject, object({ dataType: literal('moveObject') })),
   assign(SuiRawMovePackage, object({ dataType: literal('package') })),
