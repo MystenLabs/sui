@@ -17,7 +17,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, TxContext},
     coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
-    gas::SuiGasStatus,
+    gas::{SuiGasStatus, SuiGasStatusAPI},
     messages::{Argument, CallArg, CommandArgumentError, ObjectArg},
     move_package::MovePackage,
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
@@ -130,7 +130,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             })) = &mut gas.inner.value else {
                 invariant_violation!("Gas object should be a populated coin")
             };
-            let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
+            let max_gas_in_balance = gas_status.gas_budget();
             let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
                 invariant_violation!(
                     "Transaction input checker should check that there is enough gas"
@@ -904,7 +904,7 @@ fn refund_max_gas_budget(
     let Some(new_balance) = coin
         .balance
         .value()
-        .checked_add(gas_status.max_gax_budget_in_balance()) else {
+        .checked_add(gas_status.gas_budget()) else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::CoinBalanceOverflow,
                 "Gas coin too large after returning the max gas budget",

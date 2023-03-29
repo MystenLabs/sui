@@ -15,6 +15,7 @@ const MAX_PROTOCOL_VERSION: u64 = 1;
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
+// Version 2: Increment gas model version and add feature flag for conservation
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -117,6 +118,8 @@ struct FeatureFlags {
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     commit_root_state_digest: bool,
+    // Allow conservation checks when true
+    conservation_checks: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -553,6 +556,10 @@ impl ProtocolConfig {
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
         self.feature_flags.commit_root_state_digest
+    }
+
+    pub fn conservation_checks(&self) -> bool {
+        self.feature_flags.conservation_checks
     }
 }
 
@@ -1323,7 +1330,7 @@ impl ProtocolConfig {
                 address_from_u256_cost_base: Some(52),
 
                 // `dynamic_field` module
-                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
                 dynamic_field_hash_type_and_key_cost_base: Some(100),
                 dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
                 dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),
@@ -1488,6 +1495,12 @@ impl ProtocolConfig {
             //     // changes.
             //     ..Self::get_for_version_impl(version - 1)
             // },
+            2 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.gas_model_version = Some(2);
+                cfg.feature_flags.conservation_checks = true;
+                cfg
+            }
             _ => panic!("unsupported version {:?}", version),
         }
     }
