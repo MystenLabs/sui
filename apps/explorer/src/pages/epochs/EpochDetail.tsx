@@ -40,7 +40,12 @@ function EpochDetail() {
         if (!epochData?.validators) return null;
         // todo: enrich this historical validator data when we have
         // at-risk / pending validators for historical epochs
-        return validatorsTableData(epochData.validators, [], [], null);
+        return validatorsTableData(
+            [...epochData.validators].sort(() => 0.5 - Math.random()),
+            [],
+            [],
+            null
+        );
     }, [epochData]);
 
     if (isError || !epochData)
@@ -138,7 +143,6 @@ function EpochDetail() {
                                 data={validatorsTable.data}
                                 columns={validatorsTable.columns}
                                 sortTable
-                                defaultSorting={[{ id: 'stake', desc: false }]}
                             />
                         ) : null}
                     </TabPanel>
