@@ -135,6 +135,7 @@ pub struct ValidatorServiceMetrics {
     pub handle_transaction_latency: Histogram,
     pub handle_transaction_bytes: IntCounter,
     pub handle_certificate_bytes: IntCounter,
+    pub handle_certificate_response_bytes: IntCounter,
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
 
@@ -192,6 +193,12 @@ impl ValidatorServiceMetrics {
             handle_certificate_bytes: register_int_counter_with_registry!(
                 "handle_certificate_bytes",
                 "handle_certificate bytes",
+                registry,
+            )
+            .unwrap(),
+            handle_certificate_response_bytes: register_int_counter_with_registry!(
+                "handle_certificate_response_bytes",
+                "handle_certificate_response bytes",
                 registry,
             )
             .unwrap(),
@@ -312,7 +319,9 @@ impl ValidatorService {
         let certificate = request.into_inner();
 
         let shared_object_tx = certificate.contains_shared_object();
-        metrics.handle_certificate_bytes.inc_by(bcs::serialized_size(&certificate).unwrap() as u64);
+        metrics
+            .handle_certificate_bytes
+            .inc_by(bcs::serialized_size(&certificate).unwrap() as u64);
 
         let _metrics_guard = if shared_object_tx {
             metrics.handle_certificate_consensus_latency.start_timer()
@@ -426,10 +435,14 @@ impl ValidatorService {
                 } else {
                     TransactionEvents::default()
                 };
-                Ok(tonic::Response::new(HandleCertificateResponse {
+                let response = HandleCertificateResponse {
                     signed_effects: effects.into_inner(),
                     events,
-                }))
+                };
+                metrics
+                    .handle_certificate_response_bytes
+                    .inc_by(bcs::serialized_size(&response).unwrap() as u64);
+                Ok(tonic::Response::new(response))
             }
             Err(e) => Err(tonic::Status::from(e)),
         }
