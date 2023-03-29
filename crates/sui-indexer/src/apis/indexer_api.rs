@@ -257,7 +257,7 @@ where
 
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
-        let next_cursor = objects.get(limit).and_then(|o| {
+        let next_cursor = objects.last().and_then(|o| {
             o.object().ok().map(|o| CheckpointedObjectID {
                 object_id: o.id(),
                 at_checkpoint: Some(at_checkpoint),
