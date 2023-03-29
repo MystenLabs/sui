@@ -854,8 +854,16 @@ impl AuthorityPerEpochStore {
         .await
     }
 
-    pub fn insert_checkpoint_boundary(&self, index: u64, height: u64) -> SuiResult {
-        self.tables.checkpoint_boundary.insert(&index, &height)?;
+    pub fn insert_checkpoint_boundary(
+        &self,
+        batch: &mut DBBatch,
+        index: u64,
+        height: u64,
+    ) -> SuiResult {
+        batch.insert_batch(
+            &self.tables.checkpoint_boundary,
+            std::iter::once((index, height)),
+        )?;
         Ok(())
     }
 
@@ -1048,11 +1056,11 @@ impl AuthorityPerEpochStore {
     /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
     pub fn record_end_of_publish(
         &self,
+        write_batch: &mut DBBatch,
         authority: AuthorityName,
         key: SequencedConsensusTransactionKey,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let mut write_batch = self.tables.last_consensus_index.batch();
         // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
         // And this function itself is always executed from consensus task
         let collected_end_of_publish = if self
@@ -1076,7 +1084,7 @@ impl AuthorityPerEpochStore {
             let mut lock = self.get_reconfig_state_write_lock_guard();
             lock.close_all_certs();
             // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
-            self.store_reconfig_state_batch(&lock, &mut write_batch)?;
+            self.store_reconfig_state_batch(&lock, write_batch)?;
             write_batch.insert_batch(
                 &self.tables.final_epoch_checkpoint,
                 [(
@@ -1098,12 +1106,13 @@ impl AuthorityPerEpochStore {
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
+        batch: &mut DBBatch,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         let key = transaction.key();
-        self.finish_consensus_certificate_process(key, certificate, consensus_index)
+        self.finish_consensus_certificate_process(batch, key, certificate, consensus_index)
     }
 
     /// Locks a sequence number for the shared objects of the input transaction. Also updates the
@@ -1113,9 +1122,10 @@ impl AuthorityPerEpochStore {
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_shared_object_cert_from_consensus(
         &self,
+        batch: &mut DBBatch,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
         parent_sync_store: impl ParentSync,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
@@ -1166,6 +1176,7 @@ impl AuthorityPerEpochStore {
                "locking shared objects");
 
         self.finish_assign_shared_object_versions(
+            batch,
             transaction.key(),
             certificate,
             consensus_index,
@@ -1176,23 +1187,23 @@ impl AuthorityPerEpochStore {
 
     pub fn record_consensus_transaction_processed(
         &self,
+        write_batch: &mut DBBatch,
         transaction: &SequencedConsensusTransactionKind,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         // executable transactions need to use record_(shared|owned)_object_cert_from_consensus
         assert!(!transaction.is_executable_transaction());
         let key = transaction.key();
-        let write_batch = self.tables.last_consensus_index.batch();
         self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
     }
 
     pub fn finish_consensus_certificate_process(
         &self,
+        write_batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let write_batch = self.tables.last_consensus_index.batch();
         self.finish_consensus_certificate_process_with_batch(
             write_batch,
             key,
@@ -1203,15 +1214,13 @@ impl AuthorityPerEpochStore {
 
     fn finish_assign_shared_object_versions(
         &self,
+        write_batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
         assigned_versions: Vec<(ObjectID, SequenceNumber)>,
         next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
-        // Atomically store all elements.
-        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
-
         let tx_digest = *certificate.digest();
 
         debug!(
@@ -1242,17 +1251,16 @@ impl AuthorityPerEpochStore {
     /// Self::consensus_message_processed returns true after this call for given certificate
     fn finish_consensus_transaction_process_with_batch(
         &self,
-        mut batch: DBBatch,
+        batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
         batch.insert_batch(
             &self.tables.last_consensus_index,
             [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
         )?;
         batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
-        batch.write()?;
-        self.consensus_notify_read.notify(&key, &());
+
         Ok(())
     }
 
@@ -1276,10 +1284,10 @@ impl AuthorityPerEpochStore {
 
     fn finish_consensus_certificate_process_with_batch(
         &self,
-        mut batch: DBBatch,
+        batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
         let transaction_digest = *certificate.digest();
         batch.insert_batch(
@@ -1340,7 +1348,7 @@ impl AuthorityPerEpochStore {
 
         Ok(Some((index, roots)))
     }
-    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
+    pub fn record_checkpoint_boundary(&self, batch: &mut DBBatch, commit_round: u64) -> SuiResult {
         let (index, height) = self.get_last_checkpoint_boundary();
 
         if let Some(height) = height {
@@ -1356,7 +1364,7 @@ impl AuthorityPerEpochStore {
             "Recording checkpoint boundary {} at {}",
             index, commit_round
         );
-        self.insert_checkpoint_boundary(index, commit_round)?;
+        self.insert_checkpoint_boundary(batch, index, commit_round)?;
         Ok(())
     }
 
@@ -1496,31 +1504,81 @@ impl AuthorityPerEpochStore {
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
+    pub(crate) fn db_batch(&self) -> DBBatch {
+        self.tables.last_consensus_index.batch()
+    }
+
+    /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
+    /// - Verify and initialize the state to execute the certificates.
+    ///   Return VerifiedCertificates for each executable certificate
+    /// - Or update the state for checkpoint or epoch change protocol.
+    pub(crate) async fn process_consensus_transactions_and_record_commit_boundary<
+        C: CheckpointServiceNotify,
+    >(
+        &self,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        round: Round,
+        timestamp: u64,
+        checkpoint_service: &Arc<C>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+        let mut batch = self.db_batch();
+        let res = self
+            .process_consensus_transactions(
+                &mut batch,
+                transactions,
+                checkpoint_service,
+                parent_sync_store,
+            )
+            .await?;
+        let checkpoint = self.handle_commit_boundary(&mut batch, round, timestamp)?;
+        batch.write()?;
+
+        if let Some(checkpoint) = checkpoint {
+            let is_final_checkpoint = checkpoint.details.last_of_epoch;
+            checkpoint_service.notify_checkpoint(self, checkpoint)?;
+            if is_final_checkpoint {
+                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                self.record_end_of_message_quorum_time_metric();
+            }
+        }
+
+        Ok(res)
+    }
+
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
     /// - Verify and initialize the state to execute the certificates.
     ///   Return VerifiedCertificates for each executable certificate
     /// - Or update the state for checkpoint or epoch change protocol.
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
+        batch: &mut DBBatch,
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut verified_certificates = Vec::new();
-        for tx in transactions {
+        for tx in &transactions {
             if let Some(cert) = self
-                .process_consensus_transaction(tx, checkpoint_service, &parent_sync_store)
+                .process_consensus_transaction(batch, tx, checkpoint_service, &parent_sync_store)
                 .await?
             {
                 verified_certificates.push(cert);
             }
         }
+
+        for tx in &transactions {
+            let key = tx.0.key();
+            self.consensus_notify_read.notify(&key, &());
+        }
+
         Ok(verified_certificates)
     }
 
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
-        transaction: VerifiedSequencedConsensusTransaction,
+        batch: &mut DBBatch,
+        transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
@@ -1532,7 +1590,7 @@ impl AuthorityPerEpochStore {
             transaction,
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
-        match &transaction {
+        match transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(certificate),
                 ..
@@ -1546,7 +1604,7 @@ impl AuthorityPerEpochStore {
                     );
                     return Ok(None);
                 }
-                if self.has_sent_end_of_publish(&certificate_author)? {
+                if self.has_sent_end_of_publish(certificate_author)? {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
@@ -1576,7 +1634,8 @@ impl AuthorityPerEpochStore {
 
                 if certificate.contains_shared_object() {
                     self.record_shared_object_cert_from_consensus(
-                        &transaction,
+                        batch,
+                        transaction,
                         &certificate,
                         consensus_index,
                         parent_sync_store,
@@ -1584,7 +1643,8 @@ impl AuthorityPerEpochStore {
                     .await?;
                 } else {
                     self.record_owned_object_cert_from_consensus(
-                        &transaction,
+                        batch,
+                        transaction,
                         &certificate,
                         consensus_index,
                     )
@@ -1598,7 +1658,7 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
-                self.record_consensus_transaction_processed(&transaction, consensus_index)?;
+                self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -1606,7 +1666,7 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 debug!("Received EndOfPublish from {:?}", authority.concise());
-                self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
+                self.record_end_of_publish(batch, *authority, transaction.key(), consensus_index)?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -1629,7 +1689,7 @@ impl AuthorityPerEpochStore {
                         authority.concise()
                     );
                 }
-                self.record_consensus_transaction_processed(&transaction, consensus_index)?;
+                self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
@@ -1647,7 +1707,8 @@ impl AuthorityPerEpochStore {
                 // If needed we can support owned object system transactions as well...
                 assert!(system_transaction.contains_shared_object());
                 self.record_shared_object_cert_from_consensus(
-                    &transaction,
+                    batch,
+                    transaction,
                     system_transaction,
                     consensus_index,
                     parent_sync_store,
@@ -1659,12 +1720,13 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
+    pub fn handle_commit_boundary(
         &self,
+        batch: &mut DBBatch,
         round: Round,
         timestamp_ms: CheckpointTimestamp,
-        checkpoint_service: &Arc<C>,
-    ) -> SuiResult {
+    ) -> SuiResult<Option<PendingCheckpoint>> {
+        let mut checkpoint = None;
         debug!("Commit boundary at {}", round);
         // This exchange is restart safe because of following:
         //
@@ -1680,27 +1742,23 @@ impl AuthorityPerEpochStore {
                         "Not forming checkpoint for round {} above final checkpoint round {:?}",
                         round, final_checkpoint_round
                     );
-                    return Ok(());
+                    return Ok(None);
                 }
                 Some(CmpOrdering::Equal) => true,
                 Some(CmpOrdering::Greater) => false,
                 None => false,
             };
-            let checkpoint = PendingCheckpoint {
+            checkpoint = Some(PendingCheckpoint {
                 roots,
                 details: PendingCheckpointInfo {
                     timestamp_ms,
                     last_of_epoch: final_checkpoint,
                     commit_height: index,
                 },
-            };
-            checkpoint_service.notify_checkpoint(self, checkpoint)?;
-            if final_checkpoint {
-                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-                self.record_end_of_message_quorum_time_metric();
-            }
+            });
         }
-        self.record_checkpoint_boundary(round)
+        self.record_checkpoint_boundary(batch, round)?;
+        Ok(checkpoint)
     }
 
     pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {

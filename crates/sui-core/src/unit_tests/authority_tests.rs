@@ -4234,15 +4234,19 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
         .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
-        let certs = authority
-            .epoch_store_for_testing()
+        let epoch_store = authority.epoch_store_for_testing();
+        let mut batch = epoch_store.db_batch();
+        let certs = epoch_store
             .process_consensus_transactions(
+                &mut batch,
                 vec![transaction],
                 &Arc::new(CheckpointServiceNoop {}),
                 authority.db(),
             )
             .await
             .unwrap();
+
+        batch.write().unwrap();
 
         authority
             .transaction_manager()
@@ -4266,17 +4270,21 @@ pub(crate) async fn send_consensus_no_execution(
         .epoch_store_for_testing()
         .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
     {
+        let epoch_store = authority.epoch_store_for_testing();
+        let mut batch = epoch_store.db_batch();
         // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
         // This allows testing cert execution independently.
-        authority
-            .epoch_store_for_testing()
+        epoch_store
             .process_consensus_transactions(
+                &mut batch,
                 vec![transaction],
                 &Arc::new(CheckpointServiceNoop {}),
                 &authority.db(),
             )
             .await
             .unwrap();
+
+        batch.write().unwrap();
     } else {
         warn!("Failed to verify certificate: {:?}", cert);
     }

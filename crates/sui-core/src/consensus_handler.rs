@@ -268,10 +268,16 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 .collect()
         };
 
+        // Note: verified_transactions must be free of duplicates at this point, because we are
+        // using a single DBBatch (which does not support read-your-own-writes) for the whole
+        // narwhal commit. Therefore, is_consensus_message_processed will only return true for
+        // duplicate messages from previous commits.
         let transactions_to_schedule = self
             .epoch_store
-            .process_consensus_transactions(
+            .process_consensus_transactions_and_record_commit_boundary(
                 verified_transactions,
+                round,
+                timestamp,
                 &self.checkpoint_service,
                 &self.parent_sync_store,
             )
@@ -281,10 +287,6 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
-
-        self.epoch_store
-            .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
-            .expect("Unrecoverable error in consensus handler when processing commit boundary")
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {

@@ -111,8 +111,11 @@ async fn submit_transaction_to_consensus_adapter() {
             transaction: &ConsensusTransaction,
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
+            let mut batch = epoch_store.db_batch();
+
             epoch_store
                 .process_consensus_transactions(
+                    &mut batch,
                     vec![VerifiedSequencedConsensusTransaction::new_test(
                         transaction.clone(),
                     )],
