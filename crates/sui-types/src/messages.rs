@@ -1509,6 +1509,9 @@ pub trait TransactionDataAPI {
     fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool;
+
     #[cfg(test)]
     fn sender_mut(&mut self) -> &mut SuiAddress;
 
@@ -1611,6 +1614,11 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
         self.check_sponsorship()
+    }
+
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool {
+        self.gas_owner() != self.sender
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -1854,6 +1862,10 @@ impl<S> Envelope<SenderSignedData, S> {
 
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
+    }
+
+    pub fn is_sponsored_tx(&self) -> bool {
+        self.data().intent_message().value.is_sponsored_tx()
     }
 }
 
