@@ -3,13 +3,14 @@
 
 use crate::admin::ReqwestClient;
 use crate::prom_to_mimir::Mimir;
+use crate::remote_write::WriteRequest;
 use anyhow::Result;
 use axum::body::Bytes;
 use axum::http::StatusCode;
-use bytes::{buf::Reader, Buf};
+use bytes::buf::Reader;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use multiaddr::Multiaddr;
-use prometheus::proto;
+use prometheus::proto::{self, MetricFamily};
 use prost::Message;
 use protobuf::CodedInputStream;
 use std::io::Read;
@@ -18,11 +19,11 @@ use tracing::{debug, error};
 /// NodeMetric holds metadata and a metric payload from the calling node
 #[derive(Debug)]
 pub struct NodeMetric {
-    pub name: String,                 // the sui node name from the blockchain
+    pub host: String,                 // the sui node name from the blockchain
     pub network: String,              // the sui blockchain name, mainnet
     pub peer_addr: Multiaddr,         // the sockaddr source address from the incoming request
     pub public_key: Ed25519PublicKey, // the public key from the sui blockchain
-    pub data: Bytes,                  // raw post data from node
+    pub data: Vec<MetricFamily>,      // decoded protobuf of prometheus data
 }
 
 /// The ProtobufDecoder will decode message delimited protobuf messages from prom_model.proto types
@@ -52,64 +53,109 @@ impl ProtobufDecoder {
     }
 }
 
-pub async fn convert_to_remote_write(
-    rc: ReqwestClient,
-    nm: NodeMetric,
-) -> (StatusCode, &'static str) {
-    let mut decoder = ProtobufDecoder::new(nm.data.reader());
-    let mut decoded = match decoder.parse::<proto::MetricFamily>() {
-        Ok(metrics) => metrics,
-        Err(error) => {
-            error!("unable to decode Vec<MetricFamily> from bytes provided by node; {error}");
-            return (
-                StatusCode::BAD_REQUEST,
-                "unable to decode Vec<MetricFamily> from bytes provided by node",
-            );
-        }
-    };
-
+// populate labels in place for our given metric family data
+fn populate_labels(node_metric: NodeMetric) -> Vec<MetricFamily> {
     // proto::LabelPair doesn't have pub fields so we can't use
     // struct literals to construct
-    let mut network = proto::LabelPair::default();
-    network.set_name("network".into());
-    network.set_value(nm.network);
+    let mut network_label = proto::LabelPair::default();
+    network_label.set_name("network".into());
+    network_label.set_value(node_metric.network);
 
-    let mut host = proto::LabelPair::default();
-    host.set_name("host".into());
-    host.set_value(nm.name);
+    let mut host_label = proto::LabelPair::default();
+    host_label.set_name("host".into());
+    host_label.set_value(node_metric.host);
 
-    let labels = vec![network, host];
+    let labels = vec![network_label, host_label];
 
+    let mut data = node_metric.data;
     // add our extra labels to our incoming metric data
-    for mf in decoded.iter_mut() {
+    for mf in data.iter_mut() {
         for m in mf.mut_metric() {
             m.mut_label().extend(labels.clone());
         }
     }
+    data
+}
 
-    for timeseries in Mimir::from(decoded) {
-        let mut buf = Vec::new();
-        buf.reserve(timeseries.encoded_len());
-        let Ok(()) = timeseries.encode(&mut buf) else {
-            error!("unable to encode prompb to mimirpb");
-            return (
+fn encode_compress(request: &WriteRequest) -> Result<Vec<u8>, (StatusCode, &'static str)> {
+    let mut buf = Vec::new();
+    buf.reserve(request.encoded_len());
+    let Ok(()) = request.encode(&mut buf) else {
+        error!("unable to encode prompb to mimirpb");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unable to encode prompb to remote_write pb",
+        ));
+    };
+
+    let mut s = snap::raw::Encoder::new();
+    let compressed = match s.compress_vec(&buf) {
+        Ok(compressed) => compressed,
+        Err(error) => {
+            error!("unable to compress to snappy block format; {error}");
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to encode prompb to remote_write pb",
-            );
-        };
+                "unable to compress to snappy block format",
+            ));
+        }
+    };
+    Ok(compressed)
+}
 
-        let mut s = snap::raw::Encoder::new();
-        let compressed = match s.compress_vec(&buf) {
-            Ok(compressed) => compressed,
-            Err(error) => {
-                error!("unable to compress to snappy block format; {error}");
-                return (
+async fn check_response(
+    request: WriteRequest,
+    response: reqwest::Response,
+) -> Result<(), (StatusCode, &'static str)> {
+    match response.status() {
+        reqwest::StatusCode::OK => {
+            debug!("({}) SUCCESS: {:?}", reqwest::StatusCode::OK, request);
+            Ok(())
+        }
+        reqwest::StatusCode::BAD_REQUEST => {
+            error!("TRIED: {:?}", request);
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "response body cannot be decoded".into());
+
+            if body.contains("err-mimir-sample-out-of-order") {
+                error!("({}) ERROR: {:?}", reqwest::StatusCode::BAD_REQUEST, body);
+                return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "unable to compress to snappy block format",
-                );
+                    "IGNORNING METRICS due to err-mimir-sample-out-of-order",
+                ));
             }
-        };
+            error!("({}) ERROR: {:?}", reqwest::StatusCode::BAD_REQUEST, body);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "unknown bad request error encountered in remote_push",
+            ))
+        }
+        code => {
+            error!("TRIED: {:?}", request);
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "response body cannot be decoded".into());
+            error!("({}) ERROR: {:?}", code, body);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "unknown error encountered in remote_push",
+            ))
+        }
+    }
+}
 
+pub async fn convert_to_remote_write(
+    rc: ReqwestClient,
+    node_metric: NodeMetric,
+) -> (StatusCode, &'static str) {
+    let data = populate_labels(node_metric);
+    for request in Mimir::from(data) {
+        let compressed = match encode_compress(&request) {
+            Ok(compressed) => compressed,
+            Err(error) => return error,
+        };
         let response = match rc
             .client
             .post(rc.settings.url.to_owned())
@@ -133,43 +179,9 @@ pub async fn convert_to_remote_write(
                 );
             }
         };
-
-        match response.status() {
-            reqwest::StatusCode::OK => {
-                debug!("({}) SUCCESS: {:?}", reqwest::StatusCode::OK, timeseries);
-            }
-            reqwest::StatusCode::BAD_REQUEST => {
-                error!("TRIED: {:?}", timeseries);
-                let body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "response body cannot be decoded".into());
-
-                if body.contains("err-mimir-sample-out-of-order") {
-                    error!("({}) ERROR: {:?}", reqwest::StatusCode::BAD_REQUEST, body);
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "IGNORNING METRICS due to err-mimir-sample-out-of-order",
-                    );
-                }
-                error!("({}) ERROR: {:?}", reqwest::StatusCode::BAD_REQUEST, body);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "unknown bad request error encountered in remote_push",
-                );
-            }
-            code => {
-                error!("TRIED: {:?}", timeseries);
-                let body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "response body cannot be decoded".into());
-                error!("({}) ERROR: {:?}", code, body);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "unknown error encountered in remote_push",
-                );
-            }
+        match check_response(request, response).await {
+            Ok(_) => (),
+            Err(error) => return error,
         }
     }
     (StatusCode::CREATED, "created")

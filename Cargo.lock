@@ -9296,6 +9296,7 @@ dependencies = [
  "const-str",
  "fastcrypto",
  "git-version",
+ "http-body",
  "hyper",
  "itertools",
  "mime",
