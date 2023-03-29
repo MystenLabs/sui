@@ -55,7 +55,8 @@ use sui_storage::indexes::ObjectIndexChanges;
 use sui_storage::IndexStore;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
-    default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
+    default_hash, AggregateAuthoritySignature, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair,
+    Signer,
 };
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
@@ -2384,6 +2385,38 @@ impl AuthorityState {
         }
     }
 
+    pub fn get_verified_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_sequence_number(sequence_number)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for sequence number {}",
+                sequence_number
+            )),
+        }
+    }
+
+    pub fn get_verified_checkpoint_summary_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<VerifiedCheckpoint, anyhow::Error> {
+        let verified_checkpoint = self
+            .get_checkpoint_store()
+            .get_checkpoint_by_digest(&digest)?;
+        match verified_checkpoint {
+            Some(verified_checkpoint) => Ok(verified_checkpoint),
+            None => Err(anyhow!(
+                "Verified checkpoint not found for digest: {}",
+                Base58::encode(digest)
+            )),
+        }
+    }
+
     pub fn get_checkpoint_contents(
         &self,
         digest: CheckpointContentsDigest,
@@ -2427,17 +2460,25 @@ impl AuthorityState {
             .get_checkpoint_store()
             .multi_get_checkpoint_by_sequence_number(&checkpoint_numbers)?;
 
-        let checkpoint_summaries: Vec<CheckpointSummary> = verified_checkpoints
+        let checkpoint_summaries_and_signatures: Vec<(
+            CheckpointSummary,
+            AggregateAuthoritySignature,
+        )> = verified_checkpoints
             .into_iter()
             .flatten()
-            .map(|check| check.into_summary_and_sequence().1)
+            .map(|check| {
+                (
+                    check.clone().into_summary_and_sequence().1,
+                    check.get_validator_signature(),
+                )
+            })
             .collect();
 
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> = checkpoint_summaries
-            .iter()
-            .map(|summary| summary.content_digest)
-            .collect();
-
+        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
+            checkpoint_summaries_and_signatures
+                .iter()
+                .map(|summary| summary.0.content_digest)
+                .collect();
         let checkpoint_contents = self
             .get_checkpoint_store()
             .multi_get_checkpoint_content(checkpoint_contents_digest.as_slice())?;
@@ -2445,8 +2486,15 @@ impl AuthorityState {
 
         let mut checkpoints: Vec<Checkpoint> = vec![];
 
-        for (summary, content) in checkpoint_summaries.into_iter().zip(contents.into_iter()) {
-            checkpoints.push(Checkpoint::from((summary, content)));
+        for (summary_and_sig, content) in checkpoint_summaries_and_signatures
+            .into_iter()
+            .zip(contents.into_iter())
+        {
+            checkpoints.push(Checkpoint::from((
+                summary_and_sig.0,
+                content,
+                summary_and_sig.1,
+            )));
         }
 
         Ok(checkpoints)

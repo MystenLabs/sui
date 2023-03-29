@@ -21,6 +21,7 @@ use sui_indexer::store::{
 use sui_indexer::utils::reset_database;
 use sui_json_rpc_types::CheckpointId;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
+use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::TransactionData;
@@ -60,6 +61,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             transactions: vec![],
             previous_checkpoint_digest: Some(CheckpointDigest::random().base58_encode()),
             end_of_epoch: false,
+            validator_signature: AggregateAuthoritySignature::default().to_string(),
             total_gas_cost: i64::MAX,
             total_computation_cost: i64::MAX,
             total_storage_cost: i64::MAX,
