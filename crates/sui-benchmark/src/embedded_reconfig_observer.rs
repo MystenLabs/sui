@@ -80,7 +80,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for EmbeddedReconfigObserver {
 
     async fn run(&mut self, quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>) {
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(180)).await;
             let auth_agg = quorum_driver.authority_aggregator().load();
             match self.get_committee(auth_agg.clone()).await {
                 Ok(new_auth_agg) => quorum_driver.update_validators(new_auth_agg).await,
