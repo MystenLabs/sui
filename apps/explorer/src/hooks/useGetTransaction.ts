@@ -15,6 +15,8 @@ export function useGetTransaction(transactionId: string) {
                     showInput: true,
                     showEffects: true,
                     showEvents: true,
+                    showBalanceChanges: true,
+                    showObjectChanges: true,
                 },
             }),
         { enabled: !!transactionId }
