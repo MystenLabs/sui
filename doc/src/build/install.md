@@ -24,7 +24,7 @@ The Sui repository includes two primary branches, `devnet` and `main`.
 
 ## Documentation in the Sui repository
 
-The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the latest Sui updates, use the **Latest build** version of the documentation.
+The source for the documentation published on this site also resides in the Sui repository. The content differs between the branches of the repository just like the Sui source code. Use the version of the documentation that corresponds to the Sui network you plan to use. For example, to use the Sui Devnet network, use the **Devnet** version of the documentation. To use the Sui Testnet network, use the **Testnet** version of the documentation.
 
 
 ## Supported operating systems
