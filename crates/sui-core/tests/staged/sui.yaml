@@ -311,6 +311,9 @@ MoveObject:
         TYPENAME: SequenceNumber
     - contents: BYTES
 MoveObjectType:
+  NEWTYPESTRUCT:
+    TYPENAME: MoveObjectType_
+MoveObjectType_:
   ENUM:
     0:
       Other:
