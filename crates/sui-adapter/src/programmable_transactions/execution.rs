@@ -115,7 +115,8 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
-            let elem_ty = context.load_type(&tag)?;
+            let elem_ty = context.load_type(&tag)
+                .map_err(|e| context.convert_vm_error(e))?;
             let ty = Type::Vector(Box::new(elem_ty));
             let abilities = context
                 .session
@@ -138,7 +139,8 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
             let mut arg_iter = args.into_iter().enumerate();
             let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                 Some(tag) => {
-                    let elem_ty = context.load_type(&tag)?;
+                    let elem_ty = context.load_type(&tag)
+                        .map_err(|e| context.convert_vm_error(e))?;
                     (false, elem_ty)
                 }
                 // If no tag specified, it _must_ be an object
@@ -263,10 +265,12 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
             } = *move_call;
 
             // Convert type arguments to `Type`s
-            let type_arguments = type_arguments
-                .into_iter()
-                .map(|type_arg| context.load_type(&type_arg))
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
+            for (ix, type_arg) in type_arguments.into_iter().enumerate() {
+                let ty = context.load_type(&type_arg)
+                    .map_err(|e| context.convert_type_argument_error(ix, e))?;
+                loaded_type_arguments.push(ty);
+            }
 
             context.set_link_context(package)?;
 
@@ -276,7 +280,7 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                 &mut argument_updates,
                 &module_id,
                 &function,
-                type_arguments,
+                loaded_type_arguments,
                 arguments,
                 /* is_init */ false,
             );
@@ -518,9 +522,11 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
     );
 
     let upgrade_ticket_type =
-        context.load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))?;
+        context.load_type(&TypeTag::Struct(Box::new(UpgradeTicket::type_())))
+            .map_err(|e| context.convert_vm_error(e))?;
     let upgrade_receipt_type =
-        context.load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))?;
+        context.load_type(&TypeTag::Struct(Box::new(UpgradeReceipt::type_())))
+            .map_err(|e| context.convert_vm_error(e))?;
 
     let upgrade_ticket: UpgradeTicket = {
         let mut ticket_bytes = Vec::new();

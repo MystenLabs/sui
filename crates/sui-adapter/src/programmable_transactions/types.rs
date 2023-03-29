@@ -205,7 +205,8 @@ impl ObjectValue {
             ObjectContents::Raw(contents.to_vec())
         };
         let tag: StructTag = type_.into();
-        let type_ = load_type(vm, session, &TypeTag::Struct(Box::new(tag)))?;
+        let type_ = load_type(session, &TypeTag::Struct(Box::new(tag)))
+            .map_err(|e| sui_types::error::convert_vm_error(e, vm, session.get_resolver()))?;
         Ok(Self {
             type_,
             has_public_transfer,
