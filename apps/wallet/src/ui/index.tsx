@@ -4,7 +4,7 @@
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Fragment } from 'react';
+import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { IntlProvider } from 'react-intl';
 import { Provider } from 'react-redux';
@@ -46,9 +46,11 @@ function renderApp() {
     }
     const root = createRoot(rootDom);
     root.render(
-        <Provider store={store}>
-            <AppWrapper />
-        </Provider>
+        <StrictMode>
+            <Provider store={store}>
+                <AppWrapper />
+            </Provider>
+        </StrictMode>
     );
 }
 
