@@ -108,7 +108,7 @@ The `Sword` struct represents a game asset that digitally mimics a real-world it
 One of the solutions (as suggested in the error message), is to add the `drop` ability to the definition of the `Sword` struct, which would allow instances of this struct to disappear (be *dropped*). The ability to drop a valuable asset is not a desirable asset property in this case, so another solution is needed. Another way to solve this problem is to transfer ownership of the sword.
 
 To get the test to work, add the following line to the beginning of the testing function to import the
-[Transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
 
 ``` rust
         use sui::transfer;
@@ -156,7 +156,7 @@ The previous testing example is largely *pure Move* and isn't specific to Sui be
 [transaction](../transactions.md), and you might want to test interactions between different transactions within a single test (for example, one transaction creating an
 object and the other one transferring it).
 
-Sui-specific testing is supported through the [test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test/test_scenario.move)
+Sui-specific testing is supported through the [test_scenario module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move)
 that provides Sui-related testing functionality otherwise unavailable in pure Move and its [testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
 
 The `test_scenario` module provides a scenario that emulates a series of Sui transactions, each with a potentially different user executing them. A test using this module typically starts the first transaction using the `test_scenario::begin` function. This function takes an address of the user executing the transaction as its argument and returns an instance of the `Scenario` struct representing a scenario.
