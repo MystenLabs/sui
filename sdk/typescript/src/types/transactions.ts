@@ -395,6 +395,8 @@ export type SuiTransactionBlockResponse = Infer<
 export const SuiTransactionBlockResponseOptions = object({
   /* Whether to show transaction input data. Default to be false. */
   showInput: optional(boolean()),
+  /* Whether to show transaction raw input data. Default to be false. */
+  showRawInput: optional(boolean()),
   /* Whether to show transaction effects. Default to be false. */
   showEffects: optional(boolean()),
   /* Whether to show transaction events. Default to be false. */
