@@ -64,7 +64,7 @@ Sui Move supports *field punning*, which allows you to skip the field values if 
 
 You now have a constructor for the `ColorObject`. If you call this constructor, it puts the value in a local variable. The local variable can be returned from the current function, passed to other functions, or stored inside another struct. The object can be placed in persistent global storage, be read by anyone, and accessed in subsequent transactions.
 
-All of the APIs for adding objects to persistent storage are defined in the [`transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module. One key API is:
+All of the APIs for adding objects to persistent storage are defined in the [`transfer`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/transfer.move) module. One key API is:
 
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)

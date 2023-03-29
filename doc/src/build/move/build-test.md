@@ -156,7 +156,7 @@ The previous testing example is largely *pure Move* and isn't specific to Sui be
 [transaction](../transactions.md), and you might want to test interactions between different transactions within a single test (for example, one transaction creating an
 object and the other one transferring it).
 
-Sui-specific testing is supported through the [test_scenario module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test/test_scenario.move)
+Sui-specific testing is supported through the [test_scenario module](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move)
 that provides Sui-related testing functionality otherwise unavailable in pure Move and its [testing framework](https://github.com/move-language/move/blob/main/language/documentation/book/src/unit-testing.md).
 
 The `test_scenario` module provides a scenario that emulates a series of Sui transactions, each with a potentially different user executing them. A test using this module typically starts the first transaction using the `test_scenario::begin` function. This function takes an address of the user executing the transaction as its argument and returns an instance of the `Scenario` struct representing a scenario.

@@ -102,7 +102,7 @@ There are two ways to handle a pass-by-value Sui object in Move:
 
 If the intention is to actually delete the object, unpack it. You can do this only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). If any field is also of struct type, you must use recursive unpacking and deletion when you unpack the object.
 
-However, the `id` field of a Sui object requires special handling. You must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
+However, the `id` field of a Sui object requires special handling. You must call the following API in the [object](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
 
 ```rust
 public fun delete(id: UID) { ... }
