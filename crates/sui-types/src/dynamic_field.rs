@@ -7,6 +7,7 @@ use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
 use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
+use crate::sui_serde::SuiTypeTag;
 use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base58;
 use fastcrypto::hash::HashFunction;
@@ -51,7 +52,7 @@ pub struct DynamicFieldInfo {
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldName {
     #[schemars(with = "String")]
-    #[serde_as(as = "Readable<DisplayFromStr, _>")]
+    #[serde_as(as = "Readable<SuiTypeTag, _>")]
     pub type_: TypeTag,
     // Bincode does not like serde_json::Value, rocksdb will not insert the value without serializing value as string.
     // TODO: investigate if this can be removed after switch to BCS.

@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::language_storage::StructTag;
-use serde_with::DisplayFromStr;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::object::Owner;
+use sui_types::sui_serde::SuiStructTag;
 
 /// ObjectChange are derived from the object mutations in the TransactionEffect to provide richer object information.
 #[serde_as]
@@ -29,7 +28,7 @@ pub enum ObjectChange {
         sender: SuiAddress,
         recipient: Owner,
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -41,7 +40,7 @@ pub enum ObjectChange {
         sender: SuiAddress,
         owner: Owner,
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -53,7 +52,7 @@ pub enum ObjectChange {
     Deleted {
         sender: SuiAddress,
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -63,7 +62,7 @@ pub enum ObjectChange {
     Wrapped {
         sender: SuiAddress,
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -74,7 +73,7 @@ pub enum ObjectChange {
         sender: SuiAddress,
         owner: Owner,
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
         version: SequenceNumber,
