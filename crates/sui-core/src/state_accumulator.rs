@@ -3,14 +3,14 @@
 
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::storage::ObjectKey;
 use tracing::debug;
 use typed_store::Map;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
@@ -78,20 +78,87 @@ impl StateAccumulator {
 
     /// Accumulates given effects and returns the accumulator without side effects.
     pub fn accumulate_effects(&self, effects: Vec<TransactionEffects>) -> Accumulator {
+        // prefetch all objects that may need to be looked up
+
+        // get all unwrapped ObjectRefs
+        let all_unwrapped = effects
+            .iter()
+            .flat_map(|fx| {
+                fx.unwrapped()
+                    .iter()
+                    .map(|(oref, _owner)| *oref)
+                    .chain(fx.unwrapped_then_deleted().iter().cloned())
+                    .collect::<Vec<ObjectRef>>()
+            })
+            .collect::<Vec<ObjectRef>>();
+
+        let all_wrapped: Vec<ObjectRef> = all_unwrapped
+            .iter()
+            .filter_map(|(id, seq_num, _digest)| {
+                self.authority_store
+                    .get_object_ref_prior_to_key(id, *seq_num)
+                    .expect("read cannot fail")
+            })
+            .collect();
+
+        let modified_at_version_keys: Vec<ObjectKey> = effects
+            .iter()
+            .flat_map(|fx| {
+                fx.modified_at_versions()
+                    .iter()
+                    .map(|(id, seq_num)| ObjectKey(*id, *seq_num))
+            })
+            .collect();
+
+        let all_modified_at: HashMap<ObjectKey, ObjectRef> = self
+            .authority_store
+            .multi_get_object_by_key(&modified_at_version_keys.clone())
+            .expect("Failed to get modified_at_versions object from object table")
+            .into_iter()
+            .zip(modified_at_version_keys)
+            // it's safe to filter missing objects here, as they could be unwrapped objects
+            // that did not exist previously. If they should be there, but are not, they will
+            // be caught in accumulate_per_tx_effects.
+            .filter_map(|(obj, key)| obj.map(|obj| (key, obj.compute_object_reference())))
+            .collect();
+
+        let lookup_cache: HashMap<ObjectKey, ObjectRef> = all_wrapped
+            .iter()
+            .map(|oref| (ObjectKey(oref.0, oref.1), *oref))
+            .chain(all_modified_at)
+            .collect();
+
+        let effects_accumulators: Vec<Accumulator> = effects
+            .into_iter()
+            .map(|fx| self.accumulate_per_tx_effects(fx, &lookup_cache))
+            .collect();
+
+        let mut accumulator = Accumulator::default();
+        for acc in effects_accumulators {
+            accumulator.union(&acc);
+        }
+
+        accumulator
+    }
+
+    /// Separately accumulates the effects of a single transaction. This is used to
+    /// ensure that we are correctly considering incremental tx side effects, where
+    /// they might otherwise interfere across transactions and lead to bugs.
+    fn accumulate_per_tx_effects(
+        &self,
+        effects: TransactionEffects,
+        lookup_cache: &HashMap<ObjectKey, ObjectRef>,
+    ) -> Accumulator {
         let mut acc = Accumulator::default();
 
         // process insertions to the set
         acc.insert_all(
             effects
+                .created()
                 .iter()
-                .flat_map(|fx| {
-                    fx.created()
-                        .iter()
-                        .map(|(oref, _)| oref.2)
-                        .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
-                        .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
-                        .collect::<Vec<ObjectDigest>>()
-                })
+                .map(|(oref, _)| oref.2)
+                .chain(effects.unwrapped().iter().map(|(oref, _)| oref.2))
+                .chain(effects.mutated().iter().map(|(oref, _)| oref.2))
                 .collect::<Vec<ObjectDigest>>(),
         );
 
@@ -99,67 +166,56 @@ impl StateAccumulator {
         // against the object id and sequence number, as the tombstone by itself is not unique.
         acc.insert_all(
             effects
+                .wrapped()
                 .iter()
-                .flat_map(|fx| {
-                    fx.wrapped()
-                        .iter()
-                        .map(|oref| {
-                            bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
-                                .unwrap()
-                                .to_vec()
-                        })
-                        .collect::<Vec<Vec<u8>>>()
+                .map(|oref| {
+                    bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
+                        .unwrap()
+                        .to_vec()
                 })
                 .collect::<Vec<Vec<u8>>>(),
         );
 
         let all_unwrapped = effects
+            .unwrapped()
             .iter()
-            .flat_map(|fx| {
-                fx.unwrapped()
+            .map(|(oref, _owner)| (oref.0, oref.1))
+            .chain(
+                effects
+                    .unwrapped_then_deleted()
                     .iter()
-                    .map(|(oref, _owner)| (oref.0, oref.1))
-                    .collect::<Vec<(ObjectID, SequenceNumber)>>()
-            })
-            .chain(effects.iter().flat_map(|fx| {
-                fx.unwrapped_then_deleted()
-                    .iter()
-                    .map(|oref| (oref.0, oref.1))
-                    .collect::<Vec<(ObjectID, SequenceNumber)>>()
-            }))
+                    .map(|oref| (oref.0, oref.1)),
+            )
             .collect::<Vec<(ObjectID, SequenceNumber)>>();
 
         let unwrapped_ids: HashSet<ObjectID> =
             all_unwrapped.iter().map(|(id, _)| id).cloned().collect();
 
-        // Collect keys from modified_at_versions to remove from the accumulator.
+        // Collect modified_at_versions to remove from the accumulator.
         // Filter all unwrapped objects (from unwrapped or unwrapped_then_deleted effects)
         // as these were inserted into the accumulator as a WrappedObject. Will handle these
         // separately.
-        let modified_at_version_keys: Vec<ObjectKey> = effects
+        let modified_at_digests: Vec<ObjectDigest> = effects
+            .modified_at_versions()
             .iter()
-            .flat_map(|fx| fx.modified_at_versions())
             .filter_map(|(id, seq_num)| {
                 if unwrapped_ids.contains(id) {
                     None
                 } else {
-                    Some(ObjectKey(*id, *seq_num))
+                    let digest = lookup_cache
+                        .get(&ObjectKey(*id, *seq_num))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "id {} seq_num {} expected to exist in accumulator lookup cache",
+                                id, seq_num
+                            )
+                        })
+                        .2;
+                    Some(digest)
                 }
             })
             .collect();
 
-        let modified_at_digests: Vec<_> = self
-            .authority_store
-            .multi_get_object_by_key(&modified_at_version_keys.clone())
-            .expect("Failed to get modified_at_versions object from object table")
-            .into_iter()
-            .zip(modified_at_version_keys)
-            .map(|(obj, key)| {
-                obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
-                .compute_object_reference()
-                .2
-            })
-            .collect();
         acc.remove_all(modified_at_digests);
 
         // Process unwrapped and unwrapped_then_deleted effects, which need to be
@@ -172,14 +228,11 @@ impl StateAccumulator {
         let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
             .iter()
             .filter_map(|(id, seq_num)| {
-                let objref = self
-                    .authority_store
-                    .get_object_ref_prior_to_key(id, *seq_num)
-                    .expect("read cannot fail");
+                let objref = lookup_cache.get(&ObjectKey(*id, *seq_num));
 
                 objref.map(|(id, version, digest)| {
                     assert!(digest.is_wrapped(), "{:?}", id);
-                    WrappedObject::new(id, version)
+                    WrappedObject::new(*id, *version)
                 })
             })
             .collect();
