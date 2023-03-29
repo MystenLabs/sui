@@ -8,7 +8,11 @@ use move_binary_format::{
     file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
     CompiledModule,
 };
-use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, StructTag, TypeTag},
+    resolver::LinkageResolver,
+};
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_framework::natives::object_runtime::{max_event_error, ObjectRuntime, RuntimeResults};
@@ -92,7 +96,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     ) -> Result<Self, ExecutionError> {
         // we need a new session just for loading types, which is sad
         // TODO remove this
-        let tmp_session = new_session(
+        let mut tmp_session = new_session(
             vm,
             LinkageView::new(state_view),
             BTreeMap::new(),
@@ -106,7 +110,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
                 load_call_arg(
                     vm,
                     state_view,
-                    &tmp_session,
+                    &mut tmp_session,
                     &mut object_owner_map,
                     call_arg,
                 )
@@ -116,7 +120,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             let mut gas = load_object(
                 vm,
                 state_view,
-                &tmp_session,
+                &mut tmp_session,
                 &mut object_owner_map,
                 /* imm override */ false,
                 gas_coin,
@@ -197,27 +201,33 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
     }
 
+    /// Set the link context for the session from the linkage information in the MovePackage found
+    /// at `package_id`.
     pub fn set_link_context(&mut self, package_id: ObjectID) -> Result<(), ExecutionError> {
-        match self.state_view.get_package(&package_id) {
-            Ok(Some(package)) => {
-                self.set_linkage(&package);
-                Ok(())
-            }
-            Ok(None) => invariant_violation!(format!(
-                "Link context not found or not a package: {package_id}",
-            )),
-            Err(err) => invariant_violation!(format!(
-                "Error fetching {package_id} as link context: {err}",
-            )),
+        if self.session.get_resolver().link_context() == *package_id {
+            // Setting same context again, can skip.
+            return Ok(());
         }
+
+        let package = package_for_linkage(&self.session, package_id)?;
+        set_linkage(&mut self.session, &package);
+        Ok(())
     }
 
+    /// Set the link context for the session from the linkage information in the `package`.
     pub fn set_linkage(&mut self, package: &MovePackage) {
-        *self.session.get_resolver_mut() = LinkageView::from_package(self.state_view, package);
+        set_linkage(&mut self.session, package)
     }
 
+    /// Turn off linkage information, so that the next use of the session will need to set linkage
+    /// information to succeed.
     pub fn reset_linkage(&mut self) {
-        *self.session.get_resolver_mut() = LinkageView::new(self.state_view);
+        reset_linkage(&mut self.session);
+    }
+
+    /// Load a type using the context's current session.
+    pub fn load_type(&mut self, type_tag: &TypeTag) -> Result<Type, ExecutionError> {
+        load_type(self.vm, &mut self.session, type_tag)
     }
 
     /// Takes the user events from the runtime and tags them with the Move module of the function
@@ -240,10 +250,8 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         }
         let new_events = events
             .into_iter()
-            .map(|(tag, value)| {
-                let layout = self
-                    .session
-                    .get_type_layout(&TypeTag::Struct(Box::new(tag.clone())))?;
+            .map(|(ty, tag, value)| {
+                let layout = self.session.type_to_type_layout(&ty)?;
                 let bytes = value.simple_serialize(&layout).unwrap();
                 Ok((module_id.clone(), tag, bytes))
             })
@@ -652,13 +660,13 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
             object_changes.insert(id, change);
         }
 
-        for (id, (write_kind, recipient, ty, move_type, value)) in writes {
+        for (id, (write_kind, recipient, ty, value)) in writes {
             let abilities = tmp_session
                 .get_type_abilities(&ty)
                 .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
             let has_public_transfer = abilities.has_store();
             let layout = tmp_session
-                .get_type_layout(&move_type.clone().into())
+                .type_to_type_layout(&ty)
                 .map_err(|e| convert_vm_error(e, vm, tmp_session.get_resolver()))?;
             let bytes = value.simple_serialize(&layout).unwrap();
             // safe because has_public_transfer has been determined by the abilities
@@ -812,11 +820,140 @@ fn new_session<'state, 'vm, S: StorageView>(
     )
 }
 
-/// Load an input object from the state_view
-fn load_object<S: StorageView>(
-    vm: &MoveVM,
-    state_view: &S,
+/// Set the link context for the session from the linkage information in the `package`.
+pub fn set_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>, package: &MovePackage) {
+    let resolver = session.get_resolver_mut();
+    *resolver = LinkageView::from_package(resolver.storage(), package);
+}
+
+/// Turn off linkage information, so that the next use of the session will need to set linkage
+/// information to succeed.
+pub fn reset_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>) {
+    let resolver = session.get_resolver_mut();
+    *resolver = LinkageView::new(resolver.storage());
+}
+
+/// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
+/// if the object at that ID does not exist, or is not a package.
+fn package_for_linkage<S: StorageView>(
     session: &Session<LinkageView<S>>,
+    package_id: ObjectID,
+) -> Result<MovePackage, ExecutionError> {
+    let storage = session.get_resolver().storage();
+    match storage.get_package(&package_id) {
+        Ok(Some(package)) => Ok(package),
+        Ok(None) => invariant_violation!(format!(
+            "Link context not found or not a package: {package_id}",
+        )),
+        Err(err) => invariant_violation!(format!(
+            "Error fetching {package_id} as link context: {err}",
+        )),
+    }
+}
+
+/// Load `type_tag` to get a `Type` in the provided `session`.  `session`'s linkage context will be
+/// reset after this operation, because during the operation, it may change when loading a struct.
+pub fn load_type<'vm, 'state, S: StorageView>(
+    vm: &'vm MoveVM,
+    session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
+    type_tag: &TypeTag,
+) -> Result<Type, ExecutionError> {
+    fn load_type_<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
+        type_tag: &TypeTag,
+    ) -> Result<Type, ExecutionError> {
+        use sui_types::error::convert_vm_error;
+        use sui_types::messages::TypeArgumentError;
+
+        Ok(match type_tag {
+            TypeTag::Bool => Type::Bool,
+            TypeTag::U8 => Type::U8,
+            TypeTag::U16 => Type::U16,
+            TypeTag::U32 => Type::U32,
+            TypeTag::U64 => Type::U64,
+            TypeTag::U128 => Type::U128,
+            TypeTag::U256 => Type::U256,
+            TypeTag::Address => Type::Address,
+            TypeTag::Signer => Type::Signer,
+
+            TypeTag::Vector(inner) => Type::Vector(Box::new(load_type_(vm, session, inner)?)),
+            TypeTag::Struct(struct_tag) => {
+                let StructTag {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = struct_tag.as_ref();
+
+                // Load the package that the struct is defined in, in storage
+                let defining_id = ObjectID::from_address(*address);
+                let package = package_for_linkage(session, defining_id)?;
+                let original_address = AccountAddress::from(package.original_package_id());
+                let runtime_id = ModuleId::new(original_address, module.clone());
+
+                // Set the defining package as the link context on the session while loading the
+                // struct
+                set_linkage(session, &package);
+                let (idx, struct_type) = session
+                    .load_struct(&runtime_id, name)
+                    .map_err(|e| convert_vm_error(e, vm, session.get_resolver()))?;
+
+                // Recursively load type parameters, if necessary
+                let type_param_constraints = struct_type.type_param_constraints();
+                if type_param_constraints.len() != type_params.len() {
+                    return Err(ExecutionErrorKind::TypeArityMismatch.into());
+                }
+
+                if type_params.is_empty() {
+                    Type::Struct(idx)
+                } else {
+                    let mut loaded_type_params = Vec::with_capacity(type_params.len());
+                    for (ix, type_param) in type_params.iter().enumerate() {
+                        let Ok(typ) = load_type_(vm, session, type_param) else {
+                            return Err(ExecutionErrorKind::TypeArgumentError {
+                                argument_idx: ix as u16,
+                                kind: TypeArgumentError::TypeNotFound,
+                            }
+                            .into());
+                        };
+
+                        loaded_type_params.push(typ);
+                    }
+
+                    // Verify that the type parameter constraints on the struct are met
+                    for (ix, (constraint, param)) in
+                        type_param_constraints.zip(&loaded_type_params).enumerate()
+                    {
+                        let abilities = session
+                            .get_type_abilities(param)
+                            .map_err(|e| convert_vm_error(e, vm, session.get_resolver()))?;
+
+                        if !constraint.is_subset(abilities) {
+                            return Err(ExecutionErrorKind::TypeArgumentError {
+                                argument_idx: ix as u16,
+                                kind: TypeArgumentError::ConstraintNotSatisfied,
+                            }
+                            .into());
+                        }
+                    }
+
+                    Type::StructInstantiation(idx, loaded_type_params)
+                }
+            }
+        })
+    }
+
+    let res = load_type_(vm, session, type_tag);
+    reset_linkage(session);
+    res
+}
+
+/// Load an input object from the state_view
+fn load_object<'vm, 'state, S: StorageView>(
+    vm: &'vm MoveVM,
+    state_view: &'state S,
+    session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     override_as_immutable: bool,
     id: ObjectID,
@@ -853,10 +990,10 @@ fn load_object<S: StorageView>(
 }
 
 /// Load an a CallArg, either an object or a raw set of BCS bytes
-fn load_call_arg<S: StorageView>(
-    vm: &MoveVM,
-    state_view: &S,
-    session: &Session<LinkageView<S>>,
+fn load_call_arg<'vm, 'state, S: StorageView>(
+    vm: &'vm MoveVM,
+    state_view: &'state S,
+    session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     call_arg: CallArg,
 ) -> Result<InputValue, ExecutionError> {
@@ -869,10 +1006,10 @@ fn load_call_arg<S: StorageView>(
 }
 
 /// Load an ObjectArg from state view, marking if it can be treated as mutable or not
-fn load_object_arg<S: StorageView>(
-    vm: &MoveVM,
-    state_view: &S,
-    session: &Session<LinkageView<S>>,
+fn load_object_arg<'vm, 'state, S: StorageView>(
+    vm: &'vm MoveVM,
+    state_view: &'state S,
+    session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
     object_owner_map: &mut BTreeMap<ObjectID, Owner>,
     obj_arg: ObjectArg,
 ) -> Result<InputValue, ExecutionError> {
