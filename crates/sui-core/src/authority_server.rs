@@ -27,9 +27,17 @@ use tracing::{error_span, info, Instrument};
 
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, LazyNarwhalClient};
 use crate::{
-    authority::{AuthorityState, MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH},
+    authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
+
+// Reject a transaction if the number of certificates pending execution is above this threshold.
+// 20000 = 10k TPS * 2s resident time in transaction manager.
+pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
+
+// Reject a transaction if the number of pending transactions depending on the object
+// is above the threshold.
+pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -243,8 +251,68 @@ impl ValidatorService {
         })
     }
 
+    pub(crate) fn check_execution_overload(
+        state: Arc<AuthorityState>,
+        msg: &SenderSignedData,
+    ) -> Result<(), tonic::Status> {
+        // Too many transactions are pending execution.
+        let execution_queue_len = state.transaction_manager().execution_queue_len();
+        if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
+            return Err(SuiError::TooManyTransactionsPendingExecution {
+                queue_len: execution_queue_len,
+                threshold: MAX_EXECUTION_QUEUE_LENGTH,
+            }
+            .into());
+        }
+
+        for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
+            msg.intent_message()
+                .value
+                .kind()
+                .input_objects()
+                .map_err(SuiError::from)?
+                .into_iter()
+                .map(|r| r.object_id())
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
+                return Err(SuiError::TooManyTransactionsPendingOnObject {
+                    object_id,
+                    queue_len,
+                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
+                }
+                .into());
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_consensus_overload(
+        consensus_adapter: Arc<ConsensusAdapter>,
+    ) -> Result<(), tonic::Status> {
+        if !consensus_adapter.check_limits() {
+            return Err(tonic::Status::resource_exhausted(
+                "Reached maximum transactions pending in consensus. Consensus is overloaded."
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_system_overload(
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
+        msg: &SenderSignedData,
+    ) -> Result<(), tonic::Status> {
+        Self::check_execution_overload(state, msg)?;
+        Self::check_consensus_overload(consensus_adapter)?;
+        Ok(())
+    }
+
     async fn handle_transaction(
         state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
@@ -261,7 +329,11 @@ impl ValidatorService {
                 "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size_bytes}"
             ))
         );
-
+        Self::check_system_overload(
+            Arc::clone(&state),
+            Arc::clone(&consensus_adapter),
+            transaction.data(),
+        )?;
         let _metrics_guard = metrics.handle_transaction_latency.start_timer();
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
 
@@ -348,28 +420,13 @@ impl ValidatorService {
                 "Cannot execute system certificate via RPC interface! {certificate:?}"
             )));
         }
-        for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
-            certificate
-                .data()
-                .intent_message()
-                .value
-                .kind()
-                .input_objects()
-                .map_err(SuiError::from)?
-                .into_iter()
-                .map(|r| r.object_id())
-                .collect(),
-        ) {
-            // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
-                return Err(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len,
-                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
-                }
-                .into());
-            }
-        }
+
+        // Check system overload
+        Self::check_system_overload(
+            Arc::clone(&state),
+            Arc::clone(&consensus_adapter),
+            certificate.data(),
+        )?;
         // code block within reconfiguration lock
         let certificate = {
             let certificate = {
@@ -391,11 +448,6 @@ impl ValidatorService {
             // For owned objects this will return without waiting for certificate to be sequenced
             // First do quick dirty non-async check
             if !epoch_store.is_tx_cert_consensus_message_processed(&certificate)? {
-                if !consensus_adapter.check_limits() {
-                    return Err(tonic::Status::resource_exhausted(
-                        "Reached maximum transactions pending in consensus. Consensus is overloaded.".to_string()
-                    ));
-                }
                 let _metrics_guard = if shared_object_tx {
                     Some(metrics.consensus_latency.start_timer())
                 } else {
@@ -447,13 +499,19 @@ impl Validator for ValidatorService {
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
         let state = self.state.clone();
+        let consensus_adapter = self.consensus_adapter.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
         let metrics = self.metrics.clone();
-        spawn_monitored_task!(Self::handle_transaction(state, request, metrics))
-            .await
-            .unwrap()
+        spawn_monitored_task!(Self::handle_transaction(
+            state,
+            consensus_adapter,
+            request,
+            metrics
+        ))
+        .await
+        .unwrap()
     }
 
     async fn submit_certificate(

@@ -135,14 +135,6 @@ pub mod epoch_start_configuration;
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
-// Reject a transaction if the number of certificates pending execution is above this threshold.
-// 20000 = 10k TPS * 2s resident time in transaction manager.
-pub(crate) const MAX_EXECUTION_QUEUE_LENGTH: usize = 20_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH: usize = 1000;
-
 pub type ReconfigConsensusMessage = (
     AuthorityKeyPair,
     NetworkKeyPair,
@@ -546,36 +538,12 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        let execution_queue_len = self.transaction_manager.execution_queue_len();
-        if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
-            return Err(SuiError::TooManyTransactionsPendingExecution {
-                queue_len: execution_queue_len,
-                threshold: MAX_EXECUTION_QUEUE_LENGTH,
-            });
-        }
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
             epoch_store.as_ref(),
             &transaction.data().intent_message().value,
         )
         .await?;
-
-        for (object_id, queue_len) in self.transaction_manager.objects_queue_len(
-            input_objects
-                .mutable_inputs()
-                .into_iter()
-                .map(|r| r.0)
-                .collect(),
-        ) {
-            // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH {
-                return Err(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len,
-                    threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
-                });
-            }
-        }
 
         let owned_objects = input_objects.filter_owned_objects();
 
