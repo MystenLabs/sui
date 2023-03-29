@@ -166,19 +166,21 @@ impl StateAccumulator {
         // removed as WrappedObject using the last sequence number it was tombstoned
         // against. Since this happened in a past transaction, and the child object may
         // have been modified since (and hence its sequence number incremented), we
-        // seek the version prior to the unwrapped version from the objects table directly
+        // seek the version prior to the unwrapped version from the objects table directly.
+        // If the tombstone is not found, then assume this is a newly created wrapped object hence
+        // we don't expect to find it in the table.
         let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
             .iter()
-            .map(|(id, seq_num)| {
+            .filter_map(|(id, seq_num)| {
                 let objref = self
                     .authority_store
                     .get_object_ref_prior_to_key(id, *seq_num)
-                    .expect("read cannot fail")
-                    .expect("wrapped tombstone must precede unwrapped object");
+                    .expect("read cannot fail");
 
-                assert!(objref.2.is_wrapped(), "{:?}", objref);
-
-                WrappedObject::new(objref.0, objref.1)
+                objref.map(|(id, version, digest)| {
+                    assert!(digest.is_wrapped(), "{:?}", id);
+                    WrappedObject::new(id, version)
+                })
             })
             .collect();
 

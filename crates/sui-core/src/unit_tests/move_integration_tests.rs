@@ -580,6 +580,101 @@ async fn test_create_then_delete_parent_child_wrap() {
     );
 }
 
+/// We are explicitly testing the case where a parent and child object are created together - where
+/// no prior child version exists - and then we remove the child successfully.
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_remove_child_when_no_prior_version_exists() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "object_owner",
+        /* with_unpublished_deps */ false,
+    )
+    .await;
+
+    // Create a parent and a child together
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_owner",
+        "create_parent_and_child_wrapped",
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status().is_ok());
+    // Modifies the gas object
+    assert_eq!(effects.mutated().len(), 1);
+    // Creates 3 objects, the parent, a field, and the child
+    assert_eq!(effects.created().len(), 2);
+    // not wrapped as it wasn't first created
+    assert_eq!(effects.wrapped().len(), 0);
+
+    let gas_ref = effects.mutated()[0].0;
+
+    let parent = effects
+        .created()
+        .iter()
+        .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+        .unwrap()
+        .0;
+
+    let field = effects
+        .created()
+        .iter()
+        .find(|((id, _, _), _)| id != &parent.0)
+        .unwrap()
+        .0;
+
+    // Delete the child only
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package.0,
+        "object_owner",
+        "remove_wrapped_child",
+        vec![],
+        vec![TestCallArg::Object(parent.0)],
+    )
+    .await
+    .unwrap();
+
+    assert!(effects.status().is_ok());
+
+    // The field is considered deleted. The child doesn't count because it wasn't
+    // considered created in the first place.
+    assert_eq!(effects.deleted().len(), 1);
+    // The child was never created so it is not unwrapped.
+    assert_eq!(effects.unwrapped_then_deleted().len(), 0);
+
+    assert_eq!(
+        effects
+            .modified_at_versions()
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>(),
+        HashSet::from([
+            (gas_ref.0, gas_ref.1),
+            (parent.0, parent.1),
+            (field.0, field.1)
+        ]),
+    );
+}
+
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
 async fn test_create_then_delete_parent_child_wrap_separate() {
