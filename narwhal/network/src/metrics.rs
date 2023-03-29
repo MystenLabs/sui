@@ -9,12 +9,42 @@ use prometheus::{
 use std::sync::Arc;
 use tracing::warn;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct NetworkConnectionMetrics {
     /// The connection status of known peers. 0 if not connected, 1 if connected.
     pub network_peer_connected: IntGaugeVec,
     /// The number of connected peers
     pub network_peers: IntGauge,
+
+    /// PathStats
+    /// The rtt for a peer connection.
+    pub network_peer_rtt: HistogramVec,
+    /// The total number of lost packets for a peer connection.
+    pub network_peer_lost_packets: IntGaugeVec,
+    /// The total number of lost bytes for a peer connection.
+    pub network_peer_lost_bytes: IntGaugeVec,
+    /// The total number of packets sent for a peer connection.
+    pub network_peer_sent_packets: IntGaugeVec,
+    /// The total number of congestion events for a peer connection.
+    pub network_peer_congestion_events: IntGaugeVec,
+    /// The congestion window for a peer connection.
+    pub network_peer_congestion_window: HistogramVec,
+
+    /// FrameStats
+    /// The number of max data frames for a peer connection.
+    pub network_peer_max_data: IntGaugeVec,
+    /// The number of closed connections frames for a peer connection.
+    pub network_peer_closed_connections: IntGaugeVec,
+    /// The number of data blocked frames for a peer connection.
+    pub network_peer_data_blocked: IntGaugeVec,
+
+    /// UDPStats
+    /// The total number datagrams observed by the UDP peer connection.
+    pub network_peer_udp_datagrams: IntGaugeVec,
+    /// The total number bytes observed by the UDP peer connection.
+    pub network_peer_udp_bytes: IntGaugeVec,
+    /// The total number transmits observed by the UDP peer connection.
+    pub network_peer_udp_transmits: IntGaugeVec,
 }
 
 impl NetworkConnectionMetrics {
@@ -30,6 +60,98 @@ impl NetworkConnectionMetrics {
             network_peers: register_int_gauge_with_registry!(
                 format!("{node}_network_peers"),
                 "The number of connected peers.",
+                registry
+            )
+            .unwrap(),
+
+            // PathStats
+            network_peer_rtt: register_histogram_vec_with_registry!(
+                format!("{node}_network_peer_rtt"),
+                "The rtt for a peer connection.",
+                &["peer_id"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            network_peer_lost_packets: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_lost_packets"),
+                "The total number of lost packets for a peer connection.",
+                &["peer_id"],
+                registry
+            )
+            .unwrap(),
+            network_peer_lost_bytes: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_lost_bytes"),
+                "The total number of lost bytes for a peer connection.",
+                &["peer_id"],
+                registry
+            )
+            .unwrap(),
+            network_peer_sent_packets: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_sent_packets"),
+                "The total number of sent packets for a peer connection.",
+                &["peer_id"],
+                registry
+            )
+            .unwrap(),
+            network_peer_congestion_events: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_congestion_events"),
+                "The total number of congestion events for a peer connection.",
+                &["peer_id"],
+                registry
+            )
+            .unwrap(),
+            network_peer_congestion_window: register_histogram_vec_with_registry!(
+                format!("{node}_network_peer_congestion_window"),
+                "The congestion window for a peer connection.",
+                &["peer_id"],
+                SIZE_BYTE_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+
+            // FrameStats
+            network_peer_closed_connections: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_closed_connections"),
+                "The number of closed connections for a peer connection.",
+                &["peer_id", "direction"],
+                registry
+            )
+            .unwrap(),
+            network_peer_max_data: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_max_data"),
+                "The number of max data frames for a peer connection.",
+                &["peer_id", "direction"],
+                registry
+            )
+            .unwrap(),
+            network_peer_data_blocked: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_data_blocked"),
+                "The number of data blocked frames for a peer connection.",
+                &["peer_id", "direction"],
+                registry
+            )
+            .unwrap(),
+
+            // UDPStats
+            network_peer_udp_datagrams: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_udp_datagrams"),
+                "The total number datagrams observed by the UDP peer connection.",
+                &["peer_id", "direction"],
+                registry
+            )
+            .unwrap(),
+            network_peer_udp_bytes: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_udp_bytes"),
+                "The total number bytes observed by the UDP peer connection.",
+                &["peer_id", "direction"],
+                registry
+            )
+            .unwrap(),
+            network_peer_udp_transmits: register_int_gauge_vec_with_registry!(
+                format!("{node}_network_peer_udp_transmits"),
+                "The total number transmits observed by the UDP peer connection.",
+                &["peer_id", "direction"],
                 registry
             )
             .unwrap(),

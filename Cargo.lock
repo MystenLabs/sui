@@ -153,9 +153,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "anemo"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e#82875616a86f94652b1c8d374b839917791d805e"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bytes",
+ "ed25519",
+ "futures",
+ "hex",
+ "http",
+ "matchit 0.5.0",
+ "pin-project-lite",
+ "pkcs8",
+ "quinn",
+ "quinn-proto",
+ "rand 0.8.5",
+ "rcgen",
+ "ring",
+ "rustls",
+ "serde 1.0.152",
+ "serde_json",
+ "tap",
+ "tokio",
+ "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tower",
+ "tracing",
+ "webpki",
+ "x509-parser",
+]
+
+[[package]]
 name = "anemo-build"
 version = "0.0.0"
 source = "git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9#4ebf4a86952827ff0fcce6a2d8a80f42f34efed9"
+dependencies = [
+ "prettyplease",
+ "proc-macro2 1.0.54",
+ "quote 1.0.26",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "anemo-build"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e#82875616a86f94652b1c8d374b839917791d805e"
 dependencies = [
  "prettyplease",
  "proc-macro2 1.0.54",
@@ -168,8 +212,24 @@ name = "anemo-cli"
 version = "0.0.0"
 source = "git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9#4ebf4a86952827ff0fcce6a2d8a80f42f34efed9"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
+ "bytes",
+ "clap 4.1.4",
+ "dashmap",
+ "rand 0.8.5",
+ "tokio",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "anemo-cli"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e#82875616a86f94652b1c8d374b839917791d805e"
+dependencies = [
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "bytes",
  "clap 4.1.4",
  "dashmap",
@@ -184,7 +244,25 @@ name = "anemo-tower"
 version = "0.0.0"
 source = "git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9#4ebf4a86952827ff0fcce6a2d8a80f42f34efed9"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
+ "bytes",
+ "dashmap",
+ "futures",
+ "governor",
+ "nonzero_ext",
+ "pin-project-lite",
+ "tokio",
+ "tower",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "anemo-tower"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e#82875616a86f94652b1c8d374b839917791d805e"
+dependencies = [
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "bytes",
  "dashmap",
  "futures",
@@ -5452,7 +5530,7 @@ dependencies = [
 name = "mysten-network"
 version = "0.2.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "bcs",
  "bytes",
  "eyre",
@@ -5625,7 +5703,7 @@ dependencies = [
 name = "narwhal-executor"
 version = "0.1.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "async-trait",
  "bcs",
@@ -5663,8 +5741,8 @@ dependencies = [
 name = "narwhal-network"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "async-trait",
  "axum",
@@ -5682,6 +5760,7 @@ dependencies = [
  "narwhal-types",
  "parking_lot 0.12.1",
  "prometheus",
+ "quinn-proto",
  "rand 0.8.5",
  "tokio",
  "tower",
@@ -5693,7 +5772,7 @@ dependencies = [
 name = "narwhal-node"
 version = "0.1.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "arc-swap",
  "async-trait",
  "axum",
@@ -5739,8 +5818,8 @@ dependencies = [
 name = "narwhal-primary"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -5816,7 +5895,7 @@ dependencies = [
 name = "narwhal-test-utils"
 version = "0.1.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "fastcrypto",
  "fdlimit",
  "indexmap",
@@ -5848,8 +5927,8 @@ dependencies = [
 name = "narwhal-types"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-build",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-build 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "async-trait",
  "base64 0.13.1",
  "bcs",
@@ -5894,8 +5973,8 @@ dependencies = [
 name = "narwhal-worker"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -8556,7 +8635,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 name = "sui"
 version = "0.30.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "assert_cmd",
  "async-trait",
@@ -8742,7 +8821,7 @@ dependencies = [
 name = "sui-config"
 version = "0.0.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "bcs",
  "camino",
@@ -9207,9 +9286,9 @@ dependencies = [
 name = "sui-network"
 version = "0.0.0"
 dependencies = [
- "anemo",
- "anemo-build",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-build 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "ed25519-consensus",
  "fastcrypto",
@@ -9236,8 +9315,8 @@ dependencies = [
 name = "sui-node"
 version = "0.30.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "arc-swap",
  "axum",
@@ -9509,8 +9588,8 @@ dependencies = [
 name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
- "anemo",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "fastcrypto",
  "lru",
  "move-package",
@@ -9661,8 +9740,8 @@ dependencies = [
 name = "sui-tool"
 version = "0.30.0"
 dependencies = [
- "anemo",
- "anemo-cli",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
+ "anemo-cli 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "clap 4.1.4",
  "colored",
@@ -9736,7 +9815,7 @@ dependencies = [
 name = "sui-types"
 version = "0.1.0"
 dependencies = [
- "anemo",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=82875616a86f94652b1c8d374b839917791d805e)",
  "anyhow",
  "bcs",
  "bincode",
@@ -11316,10 +11395,10 @@ dependencies = [
  "aliasable",
  "alloc-no-stdlib",
  "alloc-stdlib",
- "anemo",
- "anemo-build",
- "anemo-cli",
- "anemo-tower",
+ "anemo 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
+ "anemo-build 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
+ "anemo-cli 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
+ "anemo-tower 0.0.0 (git+https://github.com/mystenlabs/anemo.git?rev=4ebf4a86952827ff0fcce6a2d8a80f42f34efed9)",
  "anes",
  "ansi_term",
  "anyhow",
