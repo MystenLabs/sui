@@ -22,6 +22,6 @@ export function useMultiGetObjects(ids: string[]) {
             });
         },
 
-        { enabled: !!ids.length }
+        { enabled: !!ids }
     );
 }
