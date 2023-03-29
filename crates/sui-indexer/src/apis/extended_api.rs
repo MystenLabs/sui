@@ -96,9 +96,7 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
 
         let has_next_page = epochs.len() > limit;
         epochs.truncate(limit);
-        let next_cursor = has_next_page
-            .then_some(epochs.last().map(|e| e.epoch))
-            .flatten();
+        let next_cursor = epochs.last().map(|e| e.epoch);
         Ok(Page {
             data: epochs,
             next_cursor,
