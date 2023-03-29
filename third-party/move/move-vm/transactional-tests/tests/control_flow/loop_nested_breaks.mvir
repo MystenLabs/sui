@@ -1,0 +1,14 @@
+//# run
+main() {
+label outer_loop:
+label inner_loop:
+    jump inner_loop_cont;
+    assert(false, 42);
+    jump inner_loop;
+label inner_loop_cont:
+    jump outer_loop_cont;
+    assert(false, 42);
+    jump outer_loop;
+label outer_loop_cont:
+    return;
+}

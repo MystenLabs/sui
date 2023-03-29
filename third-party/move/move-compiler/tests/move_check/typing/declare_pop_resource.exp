@@ -1,0 +1,33 @@
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/declare_pop_resource.move:5:13
+  │
+2 │     struct R {f: u64}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         let _: R;
+  │             ^  - The type '0x8675309::M::R' does not have the ability 'drop'
+  │             │   
+  │             Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/declare_pop_resource.move:9:14
+  │
+2 │     struct R {f: u64}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+9 │         let (_, _):(R, R);
+  │              ^      - The type '0x8675309::M::R' does not have the ability 'drop'
+  │              │       
+  │              Cannot ignore values without the 'drop' ability. The value must be used
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/declare_pop_resource.move:9:17
+  │
+2 │     struct R {f: u64}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+9 │         let (_, _):(R, R);
+  │                 ^      - The type '0x8675309::M::R' does not have the ability 'drop'
+  │                 │       
+  │                 Cannot ignore values without the 'drop' ability. The value must be used
+

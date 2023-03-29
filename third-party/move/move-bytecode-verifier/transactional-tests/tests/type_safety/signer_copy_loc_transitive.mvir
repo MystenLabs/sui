@@ -1,0 +1,11 @@
+//# publish
+module 0x42.M {
+    struct S<T> has copy { s: T }
+    t(s: signer): Self.S<signer> {
+        let x: Self.S<signer>;
+    label b0:
+        x = S<signer> { s: move(s) };
+        // error signer does not have copy
+        return copy(x);
+    }
+}

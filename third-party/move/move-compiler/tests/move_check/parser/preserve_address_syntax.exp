@@ -1,0 +1,12 @@
+error[E03002]: unbound module
+  ┌─ tests/move_check/parser/preserve_address_syntax.move:5:9
+  │
+5 │         0x00042::M::foo();
+  │         ^^^^^^^^^^ Unbound module '0x42::M'
+
+error[E03002]: unbound module
+  ┌─ tests/move_check/parser/preserve_address_syntax.move:6:9
+  │
+6 │         000112::N::bar();
+  │         ^^^^^^^^^ Unbound module '112::N'
+

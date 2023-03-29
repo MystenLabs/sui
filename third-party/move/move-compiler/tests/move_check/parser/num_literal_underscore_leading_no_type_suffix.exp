@@ -1,0 +1,6 @@
+error[E03009]: unbound variable
+  ┌─ tests/move_check/parser/num_literal_underscore_leading_no_type_suffix.move:4:17
+  │
+4 │         let _ = _76;
+  │                 ^^^ Invalid variable usage. Unbound variable '_76'
+

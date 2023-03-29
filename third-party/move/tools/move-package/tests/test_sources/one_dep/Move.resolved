@@ -1,0 +1,136 @@
+ResolvedGraph {
+    graph: DependencyGraph {
+        root_path: "tests/test_sources/one_dep",
+        root_package: "Root",
+        package_graph: {
+            "Root": [
+                (
+                    "OtherDep",
+                    Outgoing,
+                ),
+            ],
+            "OtherDep": [
+                (
+                    "Root",
+                    Incoming,
+                ),
+            ],
+        },
+        package_table: {
+            "OtherDep": Package {
+                kind: Local(
+                    "deps_only/other_dep",
+                ),
+                version: None,
+                resolver: None,
+            },
+        },
+        always_deps: {
+            "OtherDep",
+            "Root",
+        },
+    },
+    build_options: BuildConfig {
+        dev_mode: true,
+        test_mode: false,
+        generate_docs: false,
+        generate_abis: false,
+        install_dir: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        force_recompilation: false,
+        lock_file: Some(
+            "ELIDED_FOR_TEST",
+        ),
+        additional_named_addresses: {},
+        architecture: None,
+        fetch_deps_only: false,
+        skip_fetch_latest_git_deps: false,
+    },
+    package_table: {
+        "OtherDep": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "OtherDep",
+                    version: (
+                        0,
+                        0,
+                        0,
+                    ),
+                    authors: [],
+                    license: None,
+                    custom_properties: {},
+                },
+                addresses: Some(
+                    {
+                        "B": None,
+                    },
+                ),
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {},
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {},
+            resolved_table: {
+                "B": 00000000000000000000000000000001,
+            },
+            source_digest: "ELIDED_FOR_TEST",
+        },
+        "Root": Package {
+            source_package: SourceManifest {
+                package: PackageInfo {
+                    name: "Root",
+                    version: (
+                        0,
+                        0,
+                        0,
+                    ),
+                    authors: [],
+                    license: None,
+                    custom_properties: {},
+                },
+                addresses: Some(
+                    {
+                        "A": Some(
+                            00000000000000000000000000000001,
+                        ),
+                    },
+                ),
+                dev_address_assignments: None,
+                build: None,
+                dependencies: {
+                    "OtherDep": Internal(
+                        InternalDependency {
+                            kind: Local(
+                                "./deps_only/other_dep",
+                            ),
+                            subst: Some(
+                                {
+                                    "A": RenameFrom(
+                                        "B",
+                                    ),
+                                },
+                            ),
+                            version: None,
+                            digest: None,
+                        },
+                    ),
+                },
+                dev_dependencies: {},
+            },
+            package_path: "ELIDED_FOR_TEST",
+            renaming: {
+                "A": (
+                    "OtherDep",
+                    "B",
+                ),
+            },
+            resolved_table: {
+                "A": 00000000000000000000000000000001,
+            },
+            source_digest: "ELIDED_FOR_TEST",
+        },
+    },
+}

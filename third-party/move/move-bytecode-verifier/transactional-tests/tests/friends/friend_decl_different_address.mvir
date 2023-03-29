@@ -1,0 +1,9 @@
+//# publish
+module 0x43.M {
+}
+
+//# publish
+module 0x44.N {
+    // friends must be in the same address
+    friend 0x43.M;
+}

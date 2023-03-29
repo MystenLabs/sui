@@ -1,0 +1,12 @@
+
+//# publish
+module 0x42.m {
+foo() {
+    let x: u64;
+    let r: &u64;
+    label l0:
+    x = 0;
+    r = &x;
+    jump l0;
+}
+}

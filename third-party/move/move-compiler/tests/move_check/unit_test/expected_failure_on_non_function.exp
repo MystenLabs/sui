@@ -1,0 +1,27 @@
+error[E02015]: invalid attribute
+  ┌─ tests/move_check/unit_test/expected_failure_on_non_function.move:3:7
+  │
+3 │     #[expected_failure]
+  │       ^^^^^^^^^^^^^^^^
+  │       │
+  │       Known attribute 'expected_failure' is not expected with a struct
+  │       Expected to be used with one of the following: function
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_check/unit_test/expected_failure_on_non_function.move:6:7
+  │
+6 │     #[expected_failure]
+  │       ^^^^^^^^^^^^^^^^
+  │       │
+  │       Known attribute 'expected_failure' is not expected with a use
+  │       Expected to be used with one of the following: function
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_check/unit_test/expected_failure_on_non_function.move:9:7
+  │
+9 │     #[expected_failure]
+  │       ^^^^^^^^^^^^^^^^
+  │       │
+  │       Known attribute 'expected_failure' is not expected with a constant
+  │       Expected to be used with one of the following: function
+

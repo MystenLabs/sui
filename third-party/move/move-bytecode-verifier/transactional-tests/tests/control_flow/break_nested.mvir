@@ -1,0 +1,21 @@
+//# run
+// check valid breaks in control flow check
+main() {
+    let x: u64;
+    let y: u64;
+label b0:
+    x = 0;
+    y = 0;
+label while:
+    jump_if (false) while_cont;
+label loop:
+    y = 5;
+    jump loop_cont;
+label loop_cont:
+    x = 3;
+    jump while_cont;
+label while_cont:
+    assert(move(x) == 3, 42);
+    assert(move(y) == 5, 42);
+    return;
+}

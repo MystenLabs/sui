@@ -1,0 +1,11 @@
+error: property `bar` is not valid in this context
+  ┌─ tests/sources/pragmas_err.move:7:9
+  │
+7 │         pragma bar = true;
+  │         ^^^^^^^^^^^^^^^^^^
+
+error: property `verify` specified more than once in the same pragma declaration
+   ┌─ tests/sources/pragmas_err.move:19:24
+   │
+19 │         pragma verify, verify;
+   │                        ^^^^^^

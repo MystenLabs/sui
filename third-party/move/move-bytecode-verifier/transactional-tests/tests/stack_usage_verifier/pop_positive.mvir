@@ -1,0 +1,14 @@
+//# publish
+module 0x1.A {
+    three(): u64 * u64 * u64 {
+    label b0:
+        return 0, 1, 2;
+    }
+
+    pop() {
+    label b0:
+        // positive stack size, missing pop
+        _, _ = Self.three();
+        return;
+    }
+}

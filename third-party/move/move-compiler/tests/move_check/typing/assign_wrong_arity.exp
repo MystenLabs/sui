@@ -1,0 +1,61 @@
+error[E04005]: expected a single type
+  ┌─ tests/move_check/typing/assign_wrong_arity.move:5:13
+  │
+5 │         let x;
+  │             ^ Invalid type for local
+6 │         x = ();
+  │             -- Expected a single type, but found expression list type: '()'
+
+error[E04005]: expected a single type
+  ┌─ tests/move_check/typing/assign_wrong_arity.move:6:9
+  │
+6 │         x = ();
+  │         ^   -- Expected a single type, but found expression list type: '()'
+  │         │    
+  │         Invalid type for local
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
+  │
+6 │         x = ();
+  │             -- Expected: '()'
+7 │         x = (0, 1, 2);
+  │         ^   --------- Given: '({integer}, {integer}, {integer})'
+  │         │    
+  │         Invalid assignment to local 'x'
+
+error[E04005]: expected a single type
+  ┌─ tests/move_check/typing/assign_wrong_arity.move:7:9
+  │
+7 │         x = (0, 1, 2);
+  │         ^   --------- Expected a single type, but found expression list type: '(u64, u64, u64)'
+  │         │    
+  │         Invalid type for local
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/assign_wrong_arity.move:8:9
+  │
+8 │         () = 0;
+  │         ^^   - Given: integer
+  │         │     
+  │         Invalid value for assignment
+  │         Expected: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/assign_wrong_arity.move:11:9
+   │
+11 │         (x, b, R{f}) = (0, false, R{f: 0}, R{f: 0});
+   │         ^^^^^^^^^^^^   ---------------------------- Given expression list of length 4: '({integer}, bool, 0x8675309::M::R, 0x8675309::M::R)'
+   │         │               
+   │         Invalid value for assignment
+   │         Expected expression list of length 3: '(_, _, _)'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/assign_wrong_arity.move:12:9
+   │
+12 │         (x, b, R{f}) = (0, false);
+   │         ^^^^^^^^^^^^   ---------- Given expression list of length 2: '({integer}, bool)'
+   │         │               
+   │         Invalid value for assignment
+   │         Expected expression list of length 3: '(_, _, _)'
+

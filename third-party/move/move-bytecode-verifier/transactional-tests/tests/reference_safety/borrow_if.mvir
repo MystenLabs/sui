@@ -1,0 +1,14 @@
+//# run
+main() {
+    let x: u64;
+    let ref: &u64;
+label b0:
+    x = 5;
+    jump_if_false (true) b2;
+label b1:
+    ref = &x;
+label b2:
+    // cannot use reference as it was not assigned in all control flow paths
+    assert(*move(ref) == 5, 42);
+    return;
+}

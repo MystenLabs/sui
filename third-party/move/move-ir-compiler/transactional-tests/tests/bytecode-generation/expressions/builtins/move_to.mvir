@@ -1,0 +1,49 @@
+//# print-bytecode --input=module
+// Moving a type defined as part of the same module is valid.
+module 0x2d6.M {
+    struct T has key { b: bool }
+
+    public new(): Self.T {
+    label b0:
+        return T { b: true };
+    }
+
+    f(account: signer) {
+    label b0:
+        move_to<T>(&account, Self.new());
+        return;
+    }
+}
+
+//# publish
+module 0x3d6.M {
+    struct T has key { b: bool }
+
+    public new(): Self.T {
+    label b0:
+        return T { b: true };
+    }
+}
+
+
+//# print-bytecode --input=module
+// Moving a type defined in a different module is invalid.
+module 0x3d6.N {
+    import 0x3d6.M;
+
+    f(account: signer) {
+    label b0:
+        move_to<T>(&account, M.new());
+        return;
+    }
+}
+
+//# print-bytecode
+// Moving a struct type within a script (which cannot define its own struct types) is invalid.
+import 0x3d6.M;
+
+main(account: signer) {
+label b0:
+    move_to<T>(&account, M.new());
+    return;
+}

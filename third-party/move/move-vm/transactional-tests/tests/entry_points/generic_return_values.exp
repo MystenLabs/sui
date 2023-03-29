@@ -1,0 +1,49 @@
+processed 17 tasks
+
+task 1 'run'. lines 25-25:
+return values: 0
+
+task 2 'run'. lines 27-27:
+return values: 0
+
+task 3 'run'. lines 29-29:
+return values: [119, 97, 116]
+
+task 4 'run'. lines 31-31:
+return values: { 0 }
+
+task 5 'run'. lines 35-35:
+return values: [0]
+
+task 6 'run'. lines 37-37:
+return values: [0]
+
+task 7 'run'. lines 39-39:
+return values: [[119, 97, 116]]
+
+task 8 'run'. lines 41-41:
+return values: [{ 0 }]
+
+task 9 'run'. lines 45-45:
+return values: { 0 }
+
+task 10 'run'. lines 47-47:
+return values: { 0 }
+
+task 11 'run'. lines 49-49:
+return values: { [119, 97, 116] }
+
+task 12 'run'. lines 51-51:
+return values: { { 0 } }
+
+task 13 'run'. lines 55-55:
+return values: 0, 0
+
+task 14 'run'. lines 57-57:
+return values: false, 0
+
+task 15 'run'. lines 59-59:
+return values: { 0 }, [119, 97, 116]
+
+task 16 'run'. lines 61-61:
+return values: 00000000000000000000000000000042, { 0 }

@@ -1,0 +1,12 @@
+RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/successful.sh
+../resolvers/successful.sh stderr:
+Successful External Resolver
+PWD:     $ROOT/language/tools/move-package/tests/test_sources/external_dev_dep
+Type:    dependencies
+Package: A
+RESOLVING DEV-DEPENDENCIES IN B FROM Root WITH ../resolvers/successful.sh
+../resolvers/successful.sh stderr:
+Successful External Resolver
+PWD:     $ROOT/language/tools/move-package/tests/test_sources/external_dev_dep
+Type:    dev-dependencies
+Package: B

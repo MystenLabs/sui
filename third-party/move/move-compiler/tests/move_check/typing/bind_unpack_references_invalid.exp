@@ -1,0 +1,65 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/bind_unpack_references_invalid.move:7:9
+  │
+6 │         let R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
+  │                         - Expected: '&u64'
+7 │         f = 0;
+  │         ^
+  │         │
+  │         Invalid assignment to local 'f'
+  │         Given: integer
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/bind_unpack_references_invalid.move:8:9
+  │
+6 │         let R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
+  │                              -- Expected: '&0x8675309::M::S'
+7 │         f = 0;
+8 │         s2 = S { f: 0 }
+  │         ^^   ---------- Given: '0x8675309::M::S'
+  │         │     
+  │         Invalid assignment to local 's2'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/bind_unpack_references_invalid.move:13:9
+   │
+12 │         let R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                         - Expected: '&mut u64'
+13 │         f = 0;
+   │         ^
+   │         │
+   │         Invalid assignment to local 'f'
+   │         Given: integer
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/bind_unpack_references_invalid.move:14:9
+   │
+12 │         let R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                              -- Expected: '&mut 0x8675309::M::S'
+13 │         f = 0;
+14 │         s2 = S { f: 0 }
+   │         ^^   ---------- Given: '0x8675309::M::S'
+   │         │     
+   │         Invalid assignment to local 's2'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_check/typing/bind_unpack_references_invalid.move:20:9
+   │
+19 │         let R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                         - Expected: '&mut u64'
+20 │         f = &0;
+   │         ^   -- Given: '&{integer}'
+   │         │    
+   │         Invalid assignment to local 'f'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_check/typing/bind_unpack_references_invalid.move:21:9
+   │
+19 │         let R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
+   │                              -- Expected: '&mut 0x8675309::M::S'
+20 │         f = &0;
+21 │         s2 = &S { f: 0 }
+   │         ^^   ----------- Given: '&0x8675309::M::S'
+   │         │     
+   │         Invalid assignment to local 's2'
+

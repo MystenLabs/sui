@@ -1,0 +1,6 @@
+[package]
+name = "ADep"
+version = "0.0.0"
+
+[dependencies]
+ADepDep = { local = "../ADepDep" }

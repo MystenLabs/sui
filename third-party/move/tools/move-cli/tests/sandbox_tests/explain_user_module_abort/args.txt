@@ -1,0 +1,2 @@
+sandbox publish
+sandbox run scripts/fail_script.move

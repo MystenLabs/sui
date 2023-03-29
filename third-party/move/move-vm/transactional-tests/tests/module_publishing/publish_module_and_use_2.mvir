@@ -1,0 +1,36 @@
+//# publish
+module 0x42.M {
+    public max(a: u64, b: u64): u64 {
+    label b0:
+        jump_if (copy(a) > copy(b)) b2;
+    label b1:
+        return copy(b);
+    label b2:
+        return copy(a);
+    }
+
+    public sum(a: u64, b: u64): u64 {
+        let c: u64;
+    label b0:
+        c = copy(a) + copy(b);
+        return copy(c);
+    }
+}
+
+//# run
+import 0x42.M;
+
+main() {
+    let a: u64;
+    let b: u64;
+    let c: u64;
+    let d: u64;
+label b0:
+    a = 10;
+    b = 2;
+    c = M.max(copy(a), copy(b));
+    d = M.sum(copy(a), copy(b));
+    assert(copy(c) == 10, 42);
+    assert(copy(d) == 12, 42);
+    return;
+}

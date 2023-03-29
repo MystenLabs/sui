@@ -1,0 +1,197 @@
+\SubSection{Reference Elimination}
+\label{sec:RefElim}
+
+The Move language supports references to data stored in global memory and on the
+stack. Those references can point to interior parts of the data. The reference
+system is based on \emph{borrow semantics} \cite{BORROW_SEM} as it is also found
+in the Rust programming language.  One can create (immutable) references |&x|
+and mutable references |&mut x|, and derive new references by field selection
+(|&mut x.f| and |&x.f|). The borrow semantics of Move provides the following
+guarantees (ensured by the borrow checker~\cite{BORROW_CHECKER}):
+
+\begin{itemize}
+\item For any given location in global memory or on the stack, there can be
+  either exactly one mutable reference, or $n$ immutable references. Hereby,
+  it does not matter to what interior part of the data is referred to.
+\item Dangling references to locations on the stack cannot exist; that is, the
+  lifetime of references to data on the stack is restricted to the lifetime of the
+  stack location.
+\end{itemize}
+
+\noindent These properties enable us to \emph{effectively eliminate} references from the Move
+program, reducing the verification complexity significantly, as we do not need to
+reason about sharing. It comes as no surprise that the same discipline of borrowing
+which makes Move (and Rust) programs safer by design also makes verification simpler.
+
+\SubSubSection{Immutable References}
+
+Since during the existance of an immutable reference no mutation on the
+referenced data can occur, we can simply replace references by the referred
+value.
+
+An example of the applied transformation is shown below. We remove the reference
+type constructor and all reference-taking operations from the code:
+
+\begin{Move}
+  fun select_f(s: &S): &T { &s.f } @\transform@ fun select_f(s: S): T { s.f }
+\end{Move}
+
+
+\noindent Notice that at Move execution time, immutable references serve
+performance objectives (avoid copies); however, the symbolic reasoning engines
+we use have a different representation of values, in which structure sharing is
+common and copying is cheap.
+
+\SubSubSection{Mutable References}
+
+Each mutation of a location |l| starts with an initial borrow for the whole data
+stored in this location (in Move, |borrow_global_mut<T>(addr)| for global
+memory, and |&mut x| for a local on the stack). Let's call the reference
+resulting from such a borrow |r|. As long as this reference is alive, Move code
+can either update its value (|*r = v|), or replace it with a sub-reference~%
+(|r' = &mut r.f|). The mutation ends when |r| (or the derived |r'|) go out of
+scope.  Because of the guarantees of the borrow semantics, during the mutation
+of the data in |l| no other reference can exist into data in |l|.
+
+The fact that |&mut| has exclusive access to the whole value in a location
+allows to reduce mutable references to a \emph{read-update-write} cycle. One can
+create a copy of the data in |l| and single-thread it to a sequence of
+mutation steps which are represented as purely functional data updates.  Once
+the last reference for the data in |l| goes out of scope, the updated value is
+written back to |l|. This effectively turns an imperative program with references
+into an imperative program which only has state updates on global memory or
+variables on the stack, a class of programs which is known to have a significantly
+simpler semantics. We illustrate the basics of this approach by an example:
+
+\begin{Move}
+  fun increment(x: &mut u64) { *x = *x + 1 }
+  fun increment_field(s: &mut S) { increment(&mut s.f) }
+  fun caller(): S { let s = S{f:0}; update(&mut s); s }
+  @\transform@
+  fun increment(x: u64): u64 { x + 1 }
+  fun increment_field(s: S): S { s[f = increment(s.f)] }
+  fun caller(): S { let s = S{f:0}; s = update(s); s }
+\end{Move}
+
+While the setup in this example covers a majority of the use cases in every day
+Move code, there are more complex ones to consider, namely that the value of a
+reference depends on runtime decisions:
+
+\begin{Move}
+  let r = if (p) &mut s1 else &mut s2;
+  increment_field(r);
+\end{Move}
+
+%% Dave comment: It may be a bit confusing to talk about runtime information when we're talking
+%%  about a static prover?  Maybe we need to make clear that this is runtime information
+%%  in the Boogie model?  I'm not sure how to write it.
+
+\noindent Additional runtime information is required to deal with such cases. At
+the execution point a reference goes out of scope, we need to know from which
+location it was derived, so we can write back the updated value
+correctly. Fig.~\ref{fig:MutElim} illustrates the approach for doing this. A new
+Move prover internal type |Mut<T>| is introduced which carries the location from
+which |T| was derived together with the value. It supports the following
+operations:
+
+\begin{itemize}
+\item |Mvp::mklocal(value, LOCAL_ID)| creates a new mutation value for a local
+  with the given local id.  Local ids are transformation generated constants
+  kept opaque here.
+\item Similarily, |Mvp::mkglobal(value, TYPE_ID, addr)| creates a new
+  mutation for a global with given type and address. Notice that in the
+    current Move type system, we would not need to represent the address, since
+    there can be only one mutable reference into the entire type (via the
+    acquires mechanism). However, we keep this more general here, as the Move
+    type system might change.
+\item With |r' = Mvp::field(r, FIELD_ID)| a mutation value for a subreference is
+  created for the identified field.
+\item The value of a mutation is replaced with |r' = Mvp::set(r, v)| and
+  retrieved with |v = Mvp::get(r)|.
+\item With the predicate |Mvp::is_local(r, LOCAL_ID)| one can test whether |r|
+  was derived from the given local, and with |Mvp::is_global(r, TYPE_ID, addr)|
+  whether it was derived from the specified global. The predicate
+  |Mvp::is_field(r, FIELD_ID)| tests whether it is derived from the given field.
+\end{itemize}
+
+\begin{figure}[t!]
+  \label{fig:MutElim}
+  \caption{Elimination of Mutable References}
+  \centering
+\begin{MoveBox}
+  fun increment(x: &mut u64) { *x = *x + 1 }
+  fun increment_field(s: &mut S) {
+    let r = if (s.f > 0) &mut s.f else &mut s.g;
+    increment(r)
+  }
+  fun caller(p: bool): (S, S) {
+    let s1 = S{f:0, g:0}; let s2 = S{f:1, g:1};
+    let r = if (p) &mut s1 else &mut s2;
+    increment_field(r);
+    (s1, s2)
+  }
+  @\transform@
+  fun increment(x: Mut<u64>): Mut<u64> { Mvp::set(x, Mvp::get(x) + 1) }
+  fun increment_field(s: Mut<S>): Mut<S> {
+    let r = if (s.f > 0) Mvp::field(s.f, S_F) else Mvp::field(s.g, S_G);
+    r = increment(r);
+    if (Mvp::is_field(r, S_F))
+      s = Mvp::set(s, Mvp::get(s)[f = Mvp::get(r)]);
+    if (Mvp::is_field(r, S_G))
+      s = Mvp::set(s, Mvp::get(s)[g = Mvp::get(r)]);
+    s
+  }
+  fun caller(p: bool): S {
+    let s1 = S{f:0, g:0}; let s2 = S{f:1, g:1};
+    let r = if (p) Mvp::mklocal(s1, CALLER_s1)
+            else Mvp::mklocal(s2, CALLER_s2);
+    r = increment_field(r);
+    if (Mvp::is_local(r, CALLER_s1))
+      s1 = Mvp::get(r); @\label{line:WriteBack}@
+    if (Mvp::is_local(r, CALLER_s2))
+      s2 = Mvp::get(r);
+    (s1, s2)
+  }
+\end{MoveBox}
+\end{figure}
+
+\Paragraph{Implementation} The Move Prover has a partial implementation of the
+illustrated transformation.  The completeness of this implementation has not yet
+been formally investigated, but we believe that it covers all of Move, with the
+language's simplification that we do not need to distinguish addresses in global
+memory locations.\footnote{\TODO{wrwg}{Need to investigate loops!}} (See
+discussion of |Mvp::mkglobal| above.) The transformation also relies on that in
+Move there are no recursive data types, so field selection paths are statically
+known. While those things can be potentially generalized, we have not yet
+investigated this direction.
+
+The transformation constructs a \emph{borrow graph} from the program via a data
+flow analysis. The borrow graph tracks both when references are released as well
+as how they relate to each other: e.g. |r' = &mut r.f| creates a edge from |r|
+to |r'| labelled with |f|, and |r' = &mut r.g| creates another also starting
+from |r|. For the matter of this problem, a reference is not released until a
+direct or indirect borrow on it goes out of scope; notice that its lifetimes in
+terms of borrowing is larger than the scope of its usage. The borrow analysis is
+\emph{inter-procedural} requiring computed summaries for the borrow graph of
+called functions.
+
+The resulting borrow graph is then used to guide the transformation, inserting
+the operations of the |Mut<T>| type as illustrated in
+Fig~\ref{fig:MutElim}. Specifically, when the borrow on a reference ends, the
+associated mutation value must be written back to its parent mutation or the
+original location (e.g. line~\ref{line:WriteBack} in
+Fig.~\ref{fig:MutElim}). The presence of multiple possible origins leads to case
+distinctions via |Mvp::is_X| predicates; however, these cases are rare in actual
+Move programs.
+
+\paragraph{Performance}
+
+\TODO{wrwg}{We may want to identify some historical benchmarks before
+  memory model.}
+
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

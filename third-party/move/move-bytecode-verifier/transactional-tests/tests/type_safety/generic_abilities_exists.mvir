@@ -1,0 +1,9 @@
+//# publish
+module 0x1.M {
+    struct Foo<T> { x: T }
+
+    exists_foo_u64(): bool {
+    label b0:
+        return exists<Foo<u64>>(0x0); // type does not have key
+    }
+}

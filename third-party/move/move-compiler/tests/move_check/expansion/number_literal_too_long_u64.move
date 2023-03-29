@@ -1,0 +1,8 @@
+module 0x42::M {
+    fun long_u64() {
+        0x0FFFFFFFFFFFFFFFFu64;
+        0x1FFFFFFFFFFFFFFFFu64;
+        18446744073709551615u64;
+        18446744073709551616u64;
+    }
+}

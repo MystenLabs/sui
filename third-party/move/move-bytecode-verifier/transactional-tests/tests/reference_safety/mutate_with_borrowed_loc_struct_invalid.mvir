@@ -1,0 +1,35 @@
+//# publish
+module 0x1.M {
+    struct X { b: bool }
+    struct S { z: u64 }
+    t1() {
+        let x: Self.X;
+        let y: &Self.X;
+        let b: bool;
+    label b0:
+        x = X { b: true };
+        y = &x;
+        x = X { b: true }; // cannot write to x, still borrowed
+        _ = move(y);
+        X { b } = move(x);
+        return;
+    }
+}
+
+//# publish
+module 0x1.N {
+    struct X { b: bool }
+    struct S { z: u64 }
+    t2() {
+        let s: Self.S;
+        let y: &Self.S;
+        let z: &u64;
+    label b0:
+        s = S { z: 2 };
+        y = &s;
+        z = &move(y).S::z;
+        s = S { z: 7 }; // cannot write to z, still borrowed
+        return;
+    }
+
+}
