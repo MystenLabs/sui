@@ -57,11 +57,11 @@ fn test_protocol_overrides_2() {
 
 #[cfg(msim)]
 mod sim_only_tests {
-
     use super::*;
     use fastcrypto::encoding::Base64;
     use move_binary_format::CompiledModule;
     use move_core_types::ident_str;
+    use std::io::Read;
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_core::authority::sui_system_injection;
@@ -72,6 +72,8 @@ mod sim_only_tests {
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::ObjectID;
     use sui_types::id::ID;
+    use sui_types::move_package::MovePackage;
+    use sui_types::object::Data;
     use sui_types::sui_system_state::{
         epoch_start_sui_system_state::EpochStartSystemStateTrait, get_validator_from_table,
         SuiSystemState, SuiSystemStateTrait, SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2,
@@ -734,6 +736,34 @@ mod sim_only_tests {
         } else {
             unreachable!("Unexpected sui system state version");
         }
+    }
+
+    #[sim_test]
+    async fn check_framework_snapshot_compatibility() {
+        let snapshot_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../sui-framework-snapshot/bytecode_snapshot");
+        let snapshot_objects: Vec<_> = std::fs::read_dir(&snapshot_path)
+            .unwrap()
+            .flatten()
+            .map(|entry| {
+                let file_name = entry.file_name().to_str().unwrap().to_string();
+                let mut file = std::fs::File::open(snapshot_path.clone().join(file_name)).unwrap();
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer).expect("Unable to read file");
+                let package: MovePackage = bcs::from_bytes(&buffer).unwrap();
+                Object::new_package_from_data(Data::Package(package), TransactionDigest::genesis())
+            })
+            .collect();
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .with_objects(&snapshot_objects)
+            .build()
+            .await
+            .unwrap();
+        // TODO: Override using the current framework and let it upgrade.
     }
 
     async fn monitor_version_change(test_cluster: &TestCluster, final_version: u64) {

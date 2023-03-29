@@ -1,0 +1,16 @@
+[package]
+name = "sui-framework-snapshot"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Tool to create a bytecode snapshot of the current sui-framework"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+bcs = "0.1.4"
+
+sui-framework = { path = "../sui-framework" }
+sui-types = { path = "../sui-types" }
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
