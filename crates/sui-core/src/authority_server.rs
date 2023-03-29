@@ -254,15 +254,14 @@ impl ValidatorService {
     pub(crate) fn check_execution_overload(
         state: Arc<AuthorityState>,
         msg: &SenderSignedData,
-    ) -> Result<(), tonic::Status> {
+    ) -> SuiResult<()> {
         // Too many transactions are pending execution.
         let execution_queue_len = state.transaction_manager().execution_queue_len();
         if execution_queue_len >= MAX_EXECUTION_QUEUE_LENGTH {
             return Err(SuiError::TooManyTransactionsPendingExecution {
                 queue_len: execution_queue_len,
                 threshold: MAX_EXECUTION_QUEUE_LENGTH,
-            }
-            .into());
+            });
         }
 
         for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
@@ -281,8 +280,7 @@ impl ValidatorService {
                     object_id,
                     queue_len,
                     threshold: MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH,
-                }
-                .into());
+                });
             }
         }
         Ok(())
@@ -290,12 +288,9 @@ impl ValidatorService {
 
     pub(crate) fn check_consensus_overload(
         consensus_adapter: Arc<ConsensusAdapter>,
-    ) -> Result<(), tonic::Status> {
+    ) -> SuiResult<()> {
         if !consensus_adapter.check_limits() {
-            return Err(tonic::Status::resource_exhausted(
-                "Reached maximum transactions pending in consensus. Consensus is overloaded."
-                    .to_string(),
-            ));
+            return Err(SuiError::TooManyTransactionsPendingConsensus);
         }
         Ok(())
     }
@@ -304,7 +299,7 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         msg: &SenderSignedData,
-    ) -> Result<(), tonic::Status> {
+    ) -> SuiResult<()> {
         Self::check_execution_overload(state, msg)?;
         Self::check_consensus_overload(consensus_adapter)?;
         Ok(())
@@ -320,14 +315,23 @@ impl ValidatorService {
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
         // Enforce overall transaction size limit.
-        let tx_size = bcs::serialized_size(&transaction)
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let tx_size = bcs::serialized_size(&transaction).map_err(|e| {
+            SuiError::TransactionSerializationError {
+                error: e.to_string(),
+            }
+        })?;
         let max_tx_size_bytes = epoch_store.protocol_config().max_tx_size_bytes();
         fp_ensure!(
             tx_size as u64 <= max_tx_size_bytes,
-            tonic::Status::resource_exhausted(format!(
-                "serialized transaction size ({tx_size}) exceeded maximum of {max_tx_size_bytes}"
-            ))
+            SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: format!(
+                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
+                    ),
+                    value: tx_size.to_string(),
+                }
+            }
+            .into()
         );
         Self::check_system_overload(
             Arc::clone(&state),
@@ -409,17 +413,17 @@ impl ValidatorService {
         }
 
         // 2) Validate if cert can be executed, and verify the cert.
-        if state.is_fullnode(&epoch_store) {
-            return Err(tonic::Status::unimplemented(format!(
-                "Cannot execute certificate without effects on fullnode! {:?}",
-                certificate.digest()
-            )));
-        }
-        if certificate.is_system_tx() {
-            return Err(tonic::Status::invalid_argument(format!(
-                "Cannot execute system certificate via RPC interface! {certificate:?}"
-            )));
-        }
+        // Fullnode does not serve handle_certificate call.
+        fp_ensure!(
+            !state.is_fullnode(&epoch_store),
+            SuiError::FullNodeCantHandleCertificate.into()
+        );
+
+        // CRITICAL! Validators should never sign an external system transaction.
+        fp_ensure!(
+            !certificate.is_system_tx(),
+            SuiError::InvalidSystemTransaction.into()
+        );
 
         // Check system overload
         Self::check_system_overload(
@@ -427,6 +431,7 @@ impl ValidatorService {
             Arc::clone(&consensus_adapter),
             certificate.data(),
         )?;
+
         // code block within reconfiguration lock
         let certificate = {
             let certificate = {

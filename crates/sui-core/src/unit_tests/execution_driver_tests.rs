@@ -555,14 +555,8 @@ async fn test_per_object_overload() {
     let res = ValidatorService::check_execution_overload(authorities[3].clone(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
-        message.contains(
-            format!(
-                "already has {} transactions pending",
-                MAX_PER_OBJECT_EXECUTION_QUEUE_LENGTH
-            )
-            .as_str()
-        ),
-        "Signing should fail with backlogs on the shared counter: {}",
-        message,
+        message.contains("TooManyTransactionsPendingOnObject"),
+        "{}",
+        message
     );
 }
