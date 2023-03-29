@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::fmt;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::{
     collections::BTreeSet,
@@ -46,7 +47,9 @@ use sui_keys::keystore::AccountKeystore;
 use sui_sdk::SuiClient;
 use sui_types::crypto::SignatureScheme;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::governance::StakedSui;
 use sui_types::move_package::UpgradeCap;
+use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -381,6 +384,18 @@ pub enum SuiClientCommands {
         /// Address owning the objects
         #[clap(name = "owner_address")]
         address: Option<SuiAddress>,
+    },
+
+    /// Obtain all staked Sui objects owned by the address.
+    #[clap(name = "staked-sui")]
+    StakedSui {
+        /// When this filter is set, only return Staked Sui this Validator Address is staked to,
+        #[clap(name = "validator_address")]
+        validator_address: Option<SuiAddress>,
+        /// If false, display object ID, principal and validator address
+        /// If true, also display validator pool ID and activation epoch
+        #[clap(long, parse(try_from_str), default_value = "false")]
+        verbose: bool,
     },
 
     /// Query a dynamic field by its address.
@@ -905,6 +920,74 @@ impl SuiClientCommands {
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
+
+            SuiClientCommands::StakedSui {
+                validator_address,
+                verbose,
+            } => {
+                let address = context.active_address()?;
+                let staked_sui = context.staked_sui_objects(address).await?;
+
+                let sui_client = context.get_client().await?;
+                let system_state = sui_client
+                    .governance_api()
+                    .get_latest_sui_system_state()
+                    .await?;
+                let pool_mapping_id = system_state.staking_pool_mappings_id;
+                let address_pool_mapping = sui_client
+                    .read_api()
+                    .get_dynamic_fields(pool_mapping_id, None, None)
+                    .await?
+                    .data;
+                if let Some(validator_address) = validator_address {
+                    let Some(pool_id) = address_pool_mapping
+                        .iter()
+                        .find(|dyi| SuiAddress::from(dyi.object_id) == validator_address)
+                        // the 1st Unwrap is safe, because the field name is Value::String
+                        // the 2nd Unwrap is safe, because the staking pool mapping is keyed by pool id
+                        .map(|dyi| ObjectID::from_hex_literal(dyi.name.value.as_str().unwrap()).unwrap()) else {
+                        return Ok(SuiClientCommandResult::StakedSui((BTreeMap::new(), verbose)));
+                    };
+                    return Ok(SuiClientCommandResult::StakedSui((
+                        staked_sui
+                            .into_iter()
+                            .filter_map(|ss| {
+                                if ss.pool_id() == pool_id {
+                                    Some((validator_address, ss))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        verbose,
+                    )));
+                }
+                let pool_address_mapping = address_pool_mapping
+                    .into_iter()
+                    .map(|dyi| {
+                        (
+                            // the 1st Unwrap is safe, because the field name is Value::String
+                            // the 2nd Unwrap is safe, because the staking pool mapping is keyed by pool id
+                            ObjectID::from_hex_literal(dyi.name.value.as_str().unwrap()).unwrap(),
+                            SuiAddress::from(dyi.object_id),
+                        )
+                    })
+                    .collect::<BTreeMap<_, _>>();
+                SuiClientCommandResult::StakedSui((
+                    staked_sui
+                        .into_iter()
+                        .map(|ss| {
+                            let pool_id = ss.pool_id();
+                            let validator_address = pool_address_mapping
+                                .get(&pool_id)
+                                .expect("A StakeSui is in a pool does not belong to any validator");
+                            (*validator_address, ss)
+                        })
+                        .collect(),
+                    verbose,
+                ))
+            }
+
             SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
@@ -1258,35 +1341,38 @@ impl WalletContext {
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
-    pub async fn gas_objects(
+    pub async fn get_owned_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
+        with_bcs: bool,
+    ) -> Result<Vec<SuiObjectResponse>, anyhow::Error> {
         let client = self.get_client().await?;
+        let mut option = SuiObjectDataOptions::full_content();
+        if with_bcs {
+            option = option.with_bcs();
+        }
         let objects = client
             .read_api()
             .get_owned_objects(
                 address,
-                Some(SuiObjectResponseQuery::new_with_options(
-                    SuiObjectDataOptions::full_content(),
-                )),
+                Some(SuiObjectResponseQuery::new_with_options(option)),
                 None,
                 None,
             )
             .await?
             .data;
+        Ok(objects)
+    }
+
+    /// Get all the gas objects (and conveniently, gas amounts) for the address
+    pub async fn gas_objects(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
         // TODO: We should ideally fetch the objects from local cache
+
+        let responses = self.get_owned_objects(address, false).await?;
         let mut values_objects = Vec::new();
-
-        let oref_ids = objects
-            .into_iter()
-            .map(|o| o.object().unwrap().object_id)
-            .collect();
-
-        let responses = client
-            .read_api()
-            .multi_get_object_with_options(oref_ids, SuiObjectDataOptions::full_content())
-            .await?;
 
         for object in responses {
             let o = object.data;
@@ -1295,6 +1381,28 @@ impl WalletContext {
                     // Okay to unwrap() since we already checked type
                     let gas_coin = GasCoin::try_from(&o)?;
                     values_objects.push((gas_coin.value(), o.clone()));
+                }
+            }
+        }
+
+        Ok(values_objects)
+    }
+
+    /// Get all the staked sui objects owned by this for the address
+    pub async fn staked_sui_objects(
+        &self,
+        address: SuiAddress,
+    ) -> Result<Vec<StakedSui>, anyhow::Error> {
+        let responses = self.get_owned_objects(address, true).await?;
+        let mut values_objects = Vec::new();
+
+        for object in responses {
+            let o = object.data;
+            if let Some(o) = o {
+                if matches!( &o.type_, Some(type_)  if type_.is_staked_sui()) {
+                    let o: Object = o.try_into()?;
+                    let staked_sui = StakedSui::try_from(&o)?;
+                    values_objects.push(staked_sui);
                 }
             }
         }
@@ -1509,6 +1617,42 @@ impl Display for SuiClientCommandResult {
                     writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
+            SuiClientCommandResult::StakedSui((staked_sui, verbose)) => {
+                // TODO: generalize formatting of CLI
+                write!(
+                    writer,
+                    " {0: ^66} | {1: ^66} | {2: ^11}",
+                    "StakedSui ID", "Validator Address", "Principal"
+                )?;
+                if *verbose {
+                    writeln!(writer, " | {0: ^66} | {1: ^11}", "Pool ID", "Since Epoch")?;
+                } else {
+                    writeln!(writer)?;
+                }
+                writeln!(
+                    writer,
+                    "------------------------------------------------------------------------------------------------------------------------------------------------------------"
+                )?;
+                for (validator_address, ss) in staked_sui {
+                    write!(
+                        writer,
+                        " {0: ^66} | {1: ^66} | {2: ^11}",
+                        ss.id(),
+                        validator_address,
+                        ss.principal(),
+                    )?;
+                    if *verbose {
+                        writeln!(
+                            writer,
+                            " | {0: ^66} | {1: ^11}",
+                            ss.pool_id(),
+                            ss.activation_epoch(),
+                        )?;
+                    } else {
+                        writeln!(writer)?;
+                    }
+                }
+            }
             SuiClientCommandResult::SplitCoin(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
@@ -1720,6 +1864,7 @@ pub enum SuiClientCommandResult {
     SyncClientState,
     NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
+    StakedSui((BTreeMap<SuiAddress, StakedSui>, bool)),
     SplitCoin(SuiTransactionBlockResponse),
     MergeCoin(SuiTransactionBlockResponse),
     Switch(SwitchResponse),
