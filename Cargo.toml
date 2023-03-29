@@ -70,6 +70,66 @@ members = [
     "narwhal/test-utils",
     "narwhal/types",
     "narwhal/worker",
+
+    # third-party/move
+    # "third-party/move/extensions/async/move-async-vm",
+    "third-party/move/extensions/move-table-extension",
+    # "third-party/move/move-analyzer",
+    "third-party/move/move-binary-format",
+    "third-party/move/move-binary-format/serializer-tests",
+    "third-party/move/move-borrow-graph",
+    "third-party/move/move-bytecode-verifier",
+    "third-party/move/move-bytecode-verifier/bytecode-verifier-tests",
+    "third-party/move/move-bytecode-verifier/fuzz",
+    "third-party/move/move-bytecode-verifier/invalid-mutations",
+    "third-party/move/move-bytecode-verifier/transactional-tests",
+    "third-party/move/move-command-line-common",
+    "third-party/move/move-compiler",
+    "third-party/move/move-compiler/transactional-tests",
+    "third-party/move/move-core/types",
+    "third-party/move/move-ir/types",
+    "third-party/move/move-ir-compiler",
+    "third-party/move/move-ir-compiler/move-bytecode-source-map",
+    "third-party/move/move-ir-compiler/move-ir-to-bytecode",
+    "third-party/move/move-ir-compiler/move-ir-to-bytecode/syntax",
+    "third-party/move/move-ir-compiler/transactional-tests",
+    "third-party/move/move-model",
+    "third-party/move/move-prover",
+    "third-party/move/move-prover/boogie-backend",
+    "third-party/move/move-prover/bytecode",
+    "third-party/move/move-prover/interpreter",
+    "third-party/move/move-prover/interpreter/crypto",
+    "third-party/move/move-prover/interpreter-testsuite",
+    # "third-party/move/move-prover/lab",
+    "third-party/move/move-prover/move-abigen",
+    "third-party/move/move-prover/move-docgen",
+    "third-party/move/move-prover/move-errmapgen",
+    # "third-party/move/move-prover/mutation",
+    "third-party/move/move-prover/test-utils",
+    # "third-party/move/move-prover/tools/spec-flatten",
+    "third-party/move/move-stdlib",
+    "third-party/move/move-symbol-pool",
+    "third-party/move/move-vm/integration-tests",
+    "third-party/move/move-vm/paranoid-tests",
+    "third-party/move/move-vm/runtime",
+    "third-party/move/move-vm/test-utils",
+    "third-party/move/move-vm/transactional-tests",
+    "third-party/move/move-vm/types",
+    "third-party/move/testing-infra/module-generation",
+    "third-party/move/testing-infra/test-generation",
+    "third-party/move/testing-infra/transactional-test-runner",
+    "third-party/move/tools/move-bytecode-utils",
+    "third-party/move/tools/move-bytecode-viewer",
+    "third-party/move/tools/move-cli",
+    "third-party/move/tools/move-coverage",
+    "third-party/move/tools/move-disassembler",
+    "third-party/move/tools/move-explain",
+    "third-party/move/tools/move-package",
+    "third-party/move/tools/move-resource-viewer",
+    "third-party/move/tools/move-unit-test",
+    "third-party/move/tools/read-write-set",
+    "third-party/move/tools/read-write-set/dynamic",
+    "third-party/move/tools/read-write-set/types",
 ]
 
 [workspace.package]
@@ -107,29 +167,30 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 
+bcs = "0.1.4"
 tokio = "1.24.1"
 
 # Move dependencies
-move-binary-format = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-cli = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1", features = ["address32"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-package = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-prover = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
+move-binary-format = { path = "third-party/move/move-binary-format" }
+move-bytecode-utils = { path = "third-party/move/tools/move-bytecode-utils" }
+move-bytecode-verifier = { path = "third-party/move/move-bytecode-verifier" }
+move-cli = { path = "third-party/move/tools/move-cli" }
+move-compiler = { path = "third-party/move/move-compiler" }
+move-core-types = { path = "third-party/move/move-core/types", features = ["address32"] }
+move-disassembler = { path = "third-party/move/tools/move-disassembler" }
+move-package = { path = "third-party/move/tools/move-package" }
+move-stdlib = { path = "third-party/move/move-stdlib" }
+move-vm-runtime =  { path = "third-party/move/move-vm/runtime" }
+move-unit-test = { path = "third-party/move/tools/move-unit-test" }
+move-vm-test-utils = { path = "third-party/move/move-vm/test-utils" }
+move-vm-types = { path = "third-party/move/move-vm/types" }
+move-command-line-common = { path = "third-party/move/move-command-line-common" }
+move-transactional-test-runner = { path = "third-party/move/testing-infra/transactional-test-runner" }
+move-ir-types = { path = "third-party/move/move-ir/types" }
+move-prover = { path = "third-party/move/move-prover" }
+move-prover-boogie-backend = { path = "third-party/move/move-prover/boogie-backend" }
+move-stackless-bytecode = { path = "third-party/move/move-prover/bytecode" }
+move-symbol-pool = { path = "third-party/move/move-symbol-pool" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c" }
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c", package = "fastcrypto-zkp" }
