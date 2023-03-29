@@ -272,12 +272,15 @@ impl ReadApiServer for ReadApi {
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
+        // Fetch transaction to determine existence
+        let transaction =
+            Some(self.state.get_executed_transaction(digest).await.tap_err(
+                |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
+            )?);
+
         // the input is needed for object_changes to retrieve the sender address.
         if opts.require_input() {
-            temp_response.transaction =
-                Some(self.state.get_executed_transaction(digest).await.tap_err(
-                    |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
-                )?);
+            temp_response.transaction = transaction;
         }
 
         // Fetch effects when `show_events` is true because events relies on effects
@@ -292,7 +295,7 @@ impl ReadApiServer for ReadApi {
             .state
             .get_transaction_checkpoint_sequence(&digest)
             .map_err(|e| {
-                error!("Failed to get_transaction for transaction {digest:?} with error: {e:?}");
+                error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
                 anyhow!("{e}")
             })?
         {
