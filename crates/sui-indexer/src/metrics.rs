@@ -27,6 +27,7 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub epoch_db_commit_latency: Histogram,
     // latency of event websocket subscription
     pub subscription_process_latency: Histogram,
+    pub transaction_per_checkpoint: Histogram,
 }
 
 impl IndexerCheckpointHandlerMetrics {
@@ -94,6 +95,13 @@ impl IndexerCheckpointHandlerMetrics {
                 "subscription_processing_latency",
                 "Time spent in process Websocket subscription",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            transaction_per_checkpoint: register_histogram_with_registry!(
+                "transaction_per_checkpoint",
+                "Number of transactions per checkpoint",
+                vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0],
                 registry,
             )
             .unwrap(),

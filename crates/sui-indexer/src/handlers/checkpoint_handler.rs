@@ -130,6 +130,9 @@ where
                 "Checkpoint {} committed with {tx_count} transactions and {object_count} object changes.",
                 next_cursor_sequence_number
             );
+            self.metrics
+                .transaction_per_checkpoint
+                .observe(tx_count as f64);
 
             // Write epoch to DB if needed
             if let Some(indexed_epoch) = indexed_epoch {
