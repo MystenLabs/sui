@@ -182,7 +182,7 @@ where
         }
     }
 
-    CertifiedTransaction::new(tx_data.unwrap(), votes, committee).unwrap()
+    CertifiedTransaction::new(tx_data.unwrap(), &votes, committee).unwrap()
 }
 
 pub async fn do_cert<A>(

@@ -324,7 +324,7 @@ impl ValidatorService {
         let transaction = epoch_store
             .signature_verifier
             .verify_tx(transaction.data())
-            .map(|_| VerifiedTransaction::new_from_verified(transaction))
+            .map(|_| VerifiedTransaction::new_unchecked(transaction))
             .tap_err(|_| {
                 metrics.signature_errors.inc();
             })?;

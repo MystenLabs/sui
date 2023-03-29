@@ -8,8 +8,7 @@ use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
     crypto::{
-        get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        AuthorityPublicKeyBytes, Signature,
+        get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, Signature,
     },
     gas::GasCostSummary,
     messages::{Transaction, TransactionData, VerifiedTransaction},
@@ -19,6 +18,8 @@ use crate::{
     object::Object,
 };
 use fastcrypto::traits::KeyPair as KeypairTraits;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
 
@@ -52,9 +53,10 @@ where
 // Creates a fake sender-signed transaction for testing. This transaction will
 // not actually work.
 pub fn create_fake_transaction() -> VerifiedTransaction {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let seed = &mut StdRng::from_seed([0u8; 32]);
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(seed);
     let recipient = dbg_addr(2);
-    let object_id = ObjectID::random();
+    let object_id = ObjectID::random_from_rng(seed);
     let object = Object::immutable_with_id_for_testing(object_id);
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -118,5 +120,5 @@ pub fn mock_certified_checkpoint<'a>(
         })
         .collect();
 
-    CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK")
+    CertifiedCheckpointSummary::new(summary, &sign_infos, &committee).expect("Cert is OK")
 }

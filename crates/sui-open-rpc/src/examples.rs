@@ -462,7 +462,8 @@ impl RpcExampleProvider {
             gas_ref,
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
             10,
-        );
+        )
+        .unwrap();
         let data1 = data.clone();
         let data2 = data.clone();
 

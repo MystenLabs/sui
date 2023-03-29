@@ -11,7 +11,7 @@ use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use prometheus::Registry;
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::Intent;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,11 +22,11 @@ use sui_framework::BuiltInFramework;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
     NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::error::SuiError;
 use sui_types::messages::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::messages::{
@@ -34,13 +34,10 @@ use sui_types::messages::{
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::messages::{ObjectArg, SignedTransactionEffects};
-use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, ObjectRef, SuiAddress, TransactionDigest},
+    base_types::{ObjectRef, SuiAddress, TransactionDigest},
     committee::Committee,
-    crypto::{AuthoritySignInfo, AuthoritySignature},
-    message_envelope::Message,
     messages::{CertifiedTransaction, Transaction, TransactionEffects},
     object::Object,
 };
@@ -64,7 +61,7 @@ pub async fn send_and_confirm_transaction(
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
     let certificate =
-        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
+        CertifiedTransaction::new(transaction.into_message(), &[vote.clone()], &committee)
             .unwrap()
             .verify(&committee)
             .unwrap();
@@ -141,41 +138,8 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
     }
 }
 
-pub fn create_fake_cert_and_effect_digest<'a>(
-    signers: impl Iterator<
-        Item = (
-            &'a AuthorityName,
-            &'a (dyn Signer<AuthoritySignature> + Send + Sync),
-        ),
-    >,
-    committee: &Committee,
-) -> (ExecutionDigests, CertifiedTransaction) {
-    let transaction = create_fake_transaction();
-    let cert = CertifiedTransaction::new(
-        transaction.data().clone(),
-        signers
-            .map(|(name, signer)| {
-                AuthoritySignInfo::new(
-                    committee.epoch,
-                    transaction.data(),
-                    Intent::sui_app(IntentScope::SenderSignedTransaction),
-                    *name,
-                    signer,
-                )
-            })
-            .collect(),
-        committee,
-    )
-    .unwrap();
-    let effects = dummy_transaction_effects(&transaction);
-    (
-        ExecutionDigests::new(*transaction.digest(), effects.digest()),
-        cert,
-    )
-}
-
 pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects::new_with_tx(tx)
+    TransactionEffects::new_with_tx_for_testing(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
@@ -357,7 +321,8 @@ pub fn make_transfer_object_transaction(
         gas_object,
         gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         gas_price,
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, keypair)
 }
 
@@ -406,7 +371,8 @@ pub fn make_dummy_tx(
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
             10,
-        ),
+        )
+        .unwrap(),
         Intent::sui_transaction(),
         vec![sender_sec],
     )
@@ -441,7 +407,7 @@ pub fn make_cert_with_large_committee(
         .collect();
 
     let cert =
-        CertifiedTransaction::new(transaction.clone().into_message(), sigs, committee).unwrap();
+        CertifiedTransaction::new(transaction.clone().into_message(), &sigs, committee).unwrap();
     cert.verify_signature(committee).unwrap();
     cert
 }

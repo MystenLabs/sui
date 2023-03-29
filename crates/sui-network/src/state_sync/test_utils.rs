@@ -100,7 +100,7 @@ impl CommitteeFixture {
     }
 
     fn create_certified_checkpoint(&self, checkpoint: CheckpointSummary) -> VerifiedCheckpoint {
-        let signatures = self
+        let signatures: Vec<_> = self
             .validators
             .iter()
             .map(|(name, (key, _))| {
@@ -117,7 +117,7 @@ impl CommitteeFixture {
             })
             .collect();
 
-        let checkpoint = CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
+        let checkpoint = CertifiedCheckpointSummary::new(checkpoint, &signatures, self.committee())
             .unwrap()
             .verify(self.committee())
             .unwrap();

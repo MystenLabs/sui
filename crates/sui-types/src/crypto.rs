@@ -1318,29 +1318,29 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn new_from_auth_sign_infos(
-        auth_sign_infos: Vec<AuthoritySignInfo>,
+        auth_sign_infos: &[AuthoritySignInfo],
         committee: &Committee,
     ) -> SuiResult<Self> {
-        fp_ensure!(
-            auth_sign_infos.iter().all(|a| a.epoch == committee.epoch),
-            SuiError::InvalidSignature {
-                error: "All signatures must be from the same epoch as the committee".to_string()
-            }
-        );
-        let total_stake: StakeUnit = auth_sign_infos
-            .iter()
-            .map(|a| committee.weight(&a.authority))
-            .sum();
+        let mut total_stake = 0;
+        for sig in auth_sign_infos {
+            fp_ensure!(
+                sig.epoch == committee.epoch(),
+                SuiError::WrongEpoch {
+                    expected_epoch: committee.epoch(),
+                    actual_epoch: sig.epoch,
+                }
+            );
+            total_stake += committee.weight(&sig.authority);
+        }
+
         fp_ensure!(
             total_stake >= Self::quorum_threshold(committee),
-            SuiError::InvalidSignature {
-                error: "Signatures don't have enough stake to form a quorum".to_string()
-            }
+            SuiError::CertificateRequiresQuorum
         );
 
         let signatures: BTreeMap<_, _> = auth_sign_infos
-            .into_iter()
-            .map(|a| (a.authority, a.signature))
+            .iter()
+            .map(|a| (a.authority, &a.signature))
             .collect();
         let mut map = RoaringBitmap::new();
         for pk in signatures.keys() {
@@ -1354,11 +1354,11 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
                     })?,
             );
         }
-        let sigs: Vec<AuthoritySignature> = signatures.into_values().collect();
+        let sigs: Vec<_> = signatures.values().collect();
 
         Ok(AuthorityQuorumSignInfo {
             epoch: committee.epoch,
-            signature: AggregateAuthoritySignature::aggregate(&sigs).map_err(|e| {
+            signature: AggregateAuthoritySignature::aggregate(sigs).map_err(|e| {
                 SuiError::InvalidSignature {
                     error: e.to_string(),
                 }
@@ -1380,14 +1380,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
     pub fn quorum_threshold(committee: &Committee) -> StakeUnit {
         committee.threshold::<STRONG_THRESHOLD>()
-    }
-
-    pub fn len(&self) -> u64 {
-        self.signers_map.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.signers_map.is_empty()
     }
 }
 
@@ -1534,6 +1526,7 @@ impl<'a> VerificationObligation<'a> {
         self.messages.len() - 1
     }
 
+    #[cfg(test)]
     // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
     pub fn add_signature_and_public_key(
         &mut self,

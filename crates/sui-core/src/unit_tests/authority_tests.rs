@@ -2527,7 +2527,8 @@ async fn test_move_call_insufficient_gas() {
     };
     // Now we try to construct a transaction with a smaller gas budget than required.
     let data =
-        TransactionData::new_transfer(sender, obj_ref, recipient, gas_ref, gas_used - 5, rgp);
+        TransactionData::new_transfer(sender, obj_ref, recipient, gas_ref, gas_used - 5, rgp)
+            .unwrap();
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();
@@ -4363,7 +4364,7 @@ async fn make_test_transaction(
         let vote = response.status.into_signed_for_testing();
         sigs.push(vote.clone());
         if let Ok(cert) =
-            CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
+            CertifiedTransaction::new(transaction.clone().into_message(), &sigs, &committee)
         {
             return cert.verify(&committee).unwrap();
         }

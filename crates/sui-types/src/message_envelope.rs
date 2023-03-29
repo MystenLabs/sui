@@ -122,9 +122,7 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
 
     pub fn verify(self) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
         self.verify_signature()?;
-        Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(
-            self,
-        ))
+        Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_unchecked(self))
     }
 }
 
@@ -170,7 +168,7 @@ where
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
         self.verify_signature(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
+        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_unchecked(
             self,
         ))
     }
@@ -182,7 +180,7 @@ where
 {
     pub fn new(
         data: T,
-        signatures: Vec<AuthoritySignInfo>,
+        signatures: &[AuthoritySignInfo],
         committee: &Committee,
     ) -> SuiResult<Self> {
         let cert = Self {
@@ -213,7 +211,7 @@ where
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
         self.verify_signature(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
+        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_unchecked(self))
     }
 }
 
@@ -271,14 +269,9 @@ where
 }
 
 impl<T: Message, S> VerifiedEnvelope<T, S> {
-    /// This API should only be called when the input is already verified.
-    pub fn new_from_verified(inner: Envelope<T, S>) -> Self {
-        Self(TrustedEnvelope(inner), NoSer)
-    }
-
     /// There are some situations (e.g. fragment verification) where its very awkward and/or
     /// inefficient to obtain verified certificates from calling CertifiedTransaction::verify()
-    /// Use this carefully.
+    /// Make sure the caller of this explicitly verifies the certificate.
     pub fn new_unchecked(inner: Envelope<T, S>) -> Self {
         Self(TrustedEnvelope(inner), NoSer)
     }
@@ -311,7 +304,7 @@ impl<T: Message, S> VerifiedEnvelope<T, S> {
 
     /// Remove the authority signatures `S` from this envelope.
     pub fn into_unsigned(self) -> VerifiedEnvelope<T, EmptySignInfo> {
-        VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(self.into_inner().into_unsigned())
+        VerifiedEnvelope::<T, EmptySignInfo>::new_unchecked(self.into_inner().into_unsigned())
     }
 }
 

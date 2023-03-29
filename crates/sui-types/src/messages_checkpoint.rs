@@ -627,7 +627,7 @@ mod tests {
             .collect();
 
         let checkpoint_cert =
-            CertifiedCheckpointSummary::new(summary, sign_infos, &committee).expect("Cert is OK");
+            CertifiedCheckpointSummary::new(summary, &sign_infos, &committee).expect("Cert is OK");
 
         // Signature is correct on proposal, and with same transactions
         assert!(checkpoint_cert
@@ -662,12 +662,12 @@ mod tests {
             .collect();
 
         let summary = signed_checkpoints[0].data().clone();
-        let sign_infos = signed_checkpoints
+        let sign_infos: Vec<_> = signed_checkpoints
             .into_iter()
             .map(|v| v.into_sig())
             .collect();
         assert!(
-            CertifiedCheckpointSummary::new(summary, sign_infos, &committee)
+            CertifiedCheckpointSummary::new(summary, &sign_infos, &committee)
                 .unwrap()
                 .verify_signature(&committee)
                 .is_err()

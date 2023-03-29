@@ -772,9 +772,9 @@ impl Builder {
         let committee = Self::committee(&objects);
 
         let checkpoint = {
-            let signatures = self.signatures.clone().into_values().collect();
+            let signatures = self.signatures.clone().into_values().collect::<Vec<_>>();
 
-            CertifiedCheckpointSummary::new(checkpoint, signatures, &committee).unwrap()
+            CertifiedCheckpointSummary::new(checkpoint, &signatures, &committee).unwrap()
         };
 
         let genesis = Genesis {

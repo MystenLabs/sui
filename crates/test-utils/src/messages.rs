@@ -213,7 +213,8 @@ pub fn make_transfer_object_transaction_with_wallet_context(
         gas_object,
         TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
         gas_price,
-    );
+    )
+    .unwrap();
     to_sender_signed_transaction(data, context.config.keystore.get_key(&sender).unwrap())
 }
 
@@ -376,7 +377,7 @@ pub fn make_tx_certs_and_signed_effects_with_committee(
             );
             sigs.push(vote.auth_sig().clone());
             if let Ok(tx_cert) =
-                CertifiedTransaction::new(vote.into_inner().into_data(), sigs.clone(), committee)
+                CertifiedTransaction::new(vote.into_inner().into_data(), &sigs, committee)
             {
                 tx_certs.push(tx_cert.verify(committee).unwrap());
                 let effects = dummy_transaction_effects(&tx);

@@ -126,7 +126,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
         match self.insert_generic(sig.authority, sig) {
             InsertResult::QuorumReached(_) => {
                 match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
-                    self.data.values().cloned().collect(),
+                    &self.data.values().cloned().collect::<Vec<_>>(),
                     self.committee(),
                 ) {
                     Ok(aggregated) => {

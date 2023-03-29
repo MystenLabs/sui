@@ -280,7 +280,7 @@ impl<C> SafeClient<C> {
                                 }
                                 _ => e,
                             })?;
-                        let ct = VerifiedCertificate::new_from_verified(ct);
+                        let ct = VerifiedCertificate::new_unchecked(ct);
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,
                             signed_effects,
