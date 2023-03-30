@@ -10,9 +10,13 @@ use test_utils::authority::start_node;
 #[should_panic]
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
+    let latest_version = ProtocolVersion::MAX;
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        .with_protocol_version(ProtocolVersion::new(2))
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 1))
+        .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            latest_version.as_u64(),
+            latest_version.as_u64(),
+        ))
         .build();
 
     let registry_service = RegistryService::new(Registry::new());
@@ -571,7 +575,7 @@ mod sim_only_tests {
         // a protocol version increment.
         let system_state = test_cluster.wait_for_epoch(Some(1)).await;
         assert_eq!(system_state.epoch(), 1);
-        assert_eq!(system_state.protocol_version(), 2); // protocol version increments
+        assert_eq!(system_state.protocol_version(), FINISH); // protocol version increments
         assert!(system_state.safe_mode()); // enters safe mode
 
         // We are getting out of safe mode soon.
@@ -580,7 +584,7 @@ mod sim_only_tests {
         // This epoch change should execute successfully without any upgrade and get us out of safe mode.
         let system_state = test_cluster.wait_for_epoch(Some(2)).await;
         assert_eq!(system_state.epoch(), 2);
-        assert_eq!(system_state.protocol_version(), 2); // protocol version stays the same
+        assert_eq!(system_state.protocol_version(), FINISH); // protocol version stays the same
         assert!(!system_state.safe_mode()); // out of safe mode
     }
 

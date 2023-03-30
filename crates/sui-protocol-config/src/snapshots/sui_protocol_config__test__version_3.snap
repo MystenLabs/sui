@@ -2,11 +2,11 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur)"
 ---
-version: 1
+version: 3
 feature_flags:
   package_upgrades: false
   commit_root_state_digest: false
-  gas_model_v2: false
+  gas_model_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_serialized_tx_effects_size_bytes: 524288

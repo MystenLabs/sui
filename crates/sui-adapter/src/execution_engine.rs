@@ -172,7 +172,6 @@ fn execute_transaction<
         Ok(obj_ref) => obj_ref,
         Err(_) => gas[0], // this cannot fail, but we use gas[0] anyway
     };
-    let is_system = transaction_kind.is_system_tx();
     // At this point no charge has been applied yet
     debug_assert!(
         u64::from(gas_status.gas_used()) == 0
@@ -180,6 +179,11 @@ fn execute_transaction<
             && gas_status.storage_gas_units() == 0,
         "No gas charges must be applied yet"
     );
+    #[cfg(debug_assertions)]
+    let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
+    #[cfg(debug_assertions)]
+    let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+
     // We must charge object read here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented
     let result = charge_gas_for_object_read(temporary_store, &mut gas_status);
@@ -226,15 +230,32 @@ fn execute_transaction<
         };
         execution_result
     });
-    if !gas_status.is_unmetered() {
-        temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
-    }
-    if !is_system {
-        #[cfg(debug_assertions)]
-        {
+    // We always go through the gas charging process, but for system transaction, we don't pass
+    // the gas object ID since it's not a valid object.
+    // TODO: Ideally we should make gas object ref None in the first place.
+    let gas_object_id = if gas_status.is_unmetered() {
+        None
+    } else {
+        Some(gas_object_ref.0)
+    };
+    temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
+    // Put all the storage rebate accumulated in the system transaction
+    // to the 0x5 object so that it's not lost.
+    temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
+    #[cfg(debug_assertions)]
+    {
+        // Genesis transactions mint sui supply, and hence does not satisfy SUI conservation.
+        if !is_genesis_tx {
+            // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+            // information provided to check_sui_conserved, because we mint rewards, and burn
+            // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+            // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+            // We could probably clean up the code a bit.
             if !Mode::allow_arbitrary_values() {
                 // ensure that this transaction did not create or destroy SUI
-                temporary_store.check_sui_conserved().unwrap();
+                temporary_store
+                    .check_sui_conserved(advance_epoch_gas_summary)
+                    .unwrap();
             }
             // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
             // objects (including coins). this can violate conservation, but it's expected
@@ -492,6 +513,8 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
             change_epoch,
         );
         temporary_store.drop_writes();
+        // Must reset the storage rebate since we are re-executing.
+        gas_status.reset_storage_cost_and_rebate();
         let advance_epoch_safe_mode_pt = construct_advance_epoch_safe_mode_pt(&params)?;
         programmable_transactions::execution::execute::<_, execution_mode::System>(
             protocol_config,
