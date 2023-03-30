@@ -27,9 +27,6 @@ export function usePageView() {
             },
         });
 
-        console.log(postHog)
-
-        debugger;
-        postHog?.capture('$pageview', { url: pathname, name: network, source: pathname });
+        postHog?.capture('$pageview', { url: pathname, name: network });
     }, [network, pathname, postHog]);
 }

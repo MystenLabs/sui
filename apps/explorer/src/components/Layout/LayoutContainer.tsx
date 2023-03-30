@@ -15,7 +15,7 @@ export function LayoutContainer() {
     );
 
     return (
-        <PostHogAnalyticsProvider isEnabled>
+        <PostHogAnalyticsProvider isEnabled={isPostHogEnabled}>
             <GrowthBookProvider growthbook={growthbook}>
                 <Layout />
             </GrowthBookProvider>
