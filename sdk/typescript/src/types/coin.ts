@@ -5,13 +5,11 @@ import {
   array,
   boolean,
   Infer,
-  literal,
   nullable,
   number,
   object,
   optional,
   string,
-  union,
 } from 'superstruct';
 import { ObjectId, TransactionDigest } from './common';
 
@@ -30,7 +28,7 @@ export type CoinStruct = Infer<typeof CoinStruct>;
 
 export const PaginatedCoins = object({
   data: array(CoinStruct),
-  nextCursor: union([ObjectId, literal(null)]),
+  nextCursor: nullable(ObjectId),
   hasNextPage: boolean(),
 });
 

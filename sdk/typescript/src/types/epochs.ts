@@ -1,15 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import {
-  array,
-  boolean,
-  Infer,
-  literal,
-  nullable,
-  number,
-  object,
-  union,
-} from 'superstruct';
+import { array, boolean, Infer, nullable, number, object } from 'superstruct';
 import { SuiValidatorSummary } from './validator';
 export const EndOfEpochInfo = object({
   lastCheckpointId: number(),
@@ -38,7 +29,7 @@ export const EpochInfo = object({
 export type EpochInfo = Infer<typeof EpochInfo>;
 export const EpochPage = object({
   data: array(EpochInfo),
-  nextCursor: union([number(), literal(null)]),
+  nextCursor: nullable(number()),
   hasNextPage: boolean(),
 });
 export type EpochPage = Infer<typeof EpochPage>;
