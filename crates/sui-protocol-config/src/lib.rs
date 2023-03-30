@@ -524,7 +524,8 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
 
-    // Config introduced in V2
+    // ==== Configs introduced in V2 ====
+
     // This is the max size of objects a transaction can write to disk after completion
     max_size_written_objects: Option<u64>,
     // This is the max size of objects a system transaction can write to disk after completion
