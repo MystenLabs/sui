@@ -554,7 +554,9 @@ async fn call_0x5(
         .quorum_driver()
         .execute_transaction_block(
             transaction,
-            SuiTransactionBlockResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::new()
+                .with_input()
+                .with_effects(),
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
