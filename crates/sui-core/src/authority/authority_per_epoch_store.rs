@@ -1668,9 +1668,10 @@ impl AuthorityPerEpochStore {
         &self,
         round: Round,
         timestamp_ms: CheckpointTimestamp,
-        checkpoint_service: &Arc<C>,
-    ) -> SuiResult {
+        _checkpoint_service: &Arc<C>,
+    ) -> SuiResult<Option<PendingCheckpoint>> {
         debug!("Commit boundary at {}", round);
+        let mut checkpoint = None;
         // This exchange is restart safe because of following:
         //
         // We try to read last checkpoint content and send it to the checkpoint service
@@ -1685,27 +1686,23 @@ impl AuthorityPerEpochStore {
                         "Not forming checkpoint for round {} above final checkpoint round {:?}",
                         round, final_checkpoint_round
                     );
-                    return Ok(());
+                    return Ok(None);
                 }
                 Some(CmpOrdering::Equal) => true,
                 Some(CmpOrdering::Greater) => false,
                 None => false,
             };
-            let checkpoint = PendingCheckpoint {
+            checkpoint = Some(PendingCheckpoint {
                 roots,
                 details: PendingCheckpointInfo {
                     timestamp_ms,
                     last_of_epoch: final_checkpoint,
                     commit_height: index,
                 },
-            };
-            checkpoint_service.notify_checkpoint(self, checkpoint)?;
-            if final_checkpoint {
-                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-                self.record_end_of_message_quorum_time_metric();
-            }
+            });
         }
-        self.record_checkpoint_boundary(round)
+        self.record_checkpoint_boundary(round)?;
+        Ok(checkpoint)
     }
 
     pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {

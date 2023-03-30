@@ -282,9 +282,17 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .schedule(transactions_to_schedule)
             .await;
 
-        self.epoch_store
+        if let Some(checkpoint) = self.epoch_store
             .handle_commit_boundary(round, timestamp, &self.checkpoint_service)
-            .expect("Unrecoverable error in consensus handler when processing commit boundary")
+            .expect("Unrecoverable error in consensus handler when processing commit boundary") {
+            let final_checkpoint = checkpoint.details.last_of_epoch;
+            use crate::checkpoints::CheckpointServiceNotify;
+            self.checkpoint_service.notify_checkpoint(&self.epoch_store, checkpoint).expect("Unrecoverable error in consensus handler when notifying checkpoint service");
+            if final_checkpoint {
+                tracing::info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                //self.record_end_of_message_quorum_time_metric();
+            }
+        }
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {
