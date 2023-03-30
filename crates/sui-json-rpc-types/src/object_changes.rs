@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::object::Owner;
+use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 use sui_types::sui_serde::SuiStructTag;
 
 /// ObjectChange are derived from the object mutations in the TransactionEffect to provide richer object information.
@@ -18,6 +19,8 @@ pub enum ObjectChange {
     #[serde(rename_all = "camelCase")]
     Published {
         package_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
         digest: ObjectDigest,
         modules: Vec<String>,
@@ -31,6 +34,8 @@ pub enum ObjectChange {
         #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
         digest: ObjectDigest,
     },
@@ -43,7 +48,11 @@ pub enum ObjectChange {
         #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         previous_version: SequenceNumber,
         digest: ObjectDigest,
     },
@@ -55,6 +64,8 @@ pub enum ObjectChange {
         #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
     },
     /// Wrapped object
@@ -65,6 +76,8 @@ pub enum ObjectChange {
         #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
     },
     /// New object creation
@@ -76,6 +89,8 @@ pub enum ObjectChange {
         #[serde_as(as = "SuiStructTag")]
         object_type: StructTag,
         object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
         version: SequenceNumber,
         digest: ObjectDigest,
     },

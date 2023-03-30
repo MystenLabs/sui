@@ -23,11 +23,18 @@ use tracing::{debug, error, warn};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
+<<<<<<< HEAD
     BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse,
     EventFilter, ObjectChange, SuiCheckpointSequenceNumber, SuiEvent, SuiGetPastObjectRequest,
     SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
+=======
+    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, EventFilter, ObjectChange, SuiEvent,
+    SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockEvents,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+>>>>>>> a5574b44f (* change all uint64 to BigInt)
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
@@ -44,6 +51,7 @@ use sui_types::messages::{
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointTimestamp};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, Object, ObjectRead, PastObjectRead};
+use sui_types::sui_serde::BigInt;
 
 use crate::api::{validate_limit, ReadApiServer};
 use crate::api::{QUERY_MAX_RESULT_LIMIT, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS};
@@ -70,7 +78,7 @@ struct IntermediateTransactionResponse {
     transaction: Option<VerifiedTransaction>,
     effects: Option<TransactionEffects>,
     events: Option<SuiTransactionBlockEvents>,
-    checkpoint_seq: Option<SuiCheckpointSequenceNumber>,
+    checkpoint_seq: Option<CheckpointSequenceNumber>,
     balance_changes: Option<Vec<BalanceChange>>,
     object_changes: Option<Vec<ObjectChange>>,
     timestamp: Option<CheckpointTimestamp>,
@@ -94,9 +102,7 @@ impl ReadApi {
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
-                let verified_summary = self
-                    .state
-                    .get_verified_checkpoint_by_sequence_number(seq.into())?;
+                let verified_summary = self.state.get_verified_checkpoint_by_sequence_number(seq)?;
                 let content = self
                     .state
                     .get_checkpoint_contents(verified_summary.content_digest)?;
@@ -189,12 +195,12 @@ impl ReadApi {
             .iter_mut()
             .zip(checkpoint_seq_list.into_iter())
         {
-            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq.into());
+            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
         }
 
         let unique_checkpoint_numbers = temp_response
             .values()
-            .filter_map(|cache_entry| cache_entry.checkpoint_seq.map(<u64>::from))
+            .filter_map(|cache_entry| cache_entry.checkpoint_seq)
             // It's likely that many transactions have the same checkpoint, so we don't
             // need to over-fetch
             .unique()
@@ -221,13 +227,7 @@ impl ReadApi {
             if cache_entry.checkpoint_seq.is_some() {
                 // safe to unwrap because is_some is checked
                 cache_entry.timestamp = *checkpoint_to_timestamp
-                    .get(
-                        cache_entry
-                            .checkpoint_seq
-                            .map(<u64>::from)
-                            .as_ref()
-                            .unwrap(),
-                    )
+                    .get(cache_entry.checkpoint_seq.as_ref().unwrap())
                     // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
                     .unwrap();
             }
@@ -678,9 +678,7 @@ impl ReadApiServer for ReadApi {
         Ok(events)
     }
 
-    async fn get_latest_checkpoint_sequence_number(
-        &self,
-    ) -> RpcResult<SuiCheckpointSequenceNumber> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt> {
         Ok(self
             .state
             .get_latest_checkpoint_sequence_number()
@@ -697,23 +695,24 @@ impl ReadApiServer for ReadApi {
     fn get_checkpoints(
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<SuiCheckpointSequenceNumber>,
-        limit: Option<usize>,
+        cursor: Option<BigInt>,
+        limit: Option<BigInt>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_CHECKPOINTS)?;
-
-        let mut data = self.state.get_checkpoints(
-            cursor.map(<u64>::from),
-            limit as u64 + 1,
-            descending_order,
+        let limit = validate_limit(
+            limit.map(|l| *l as usize),
+            QUERY_MAX_RESULT_LIMIT_CHECKPOINTS,
         )?;
+
+        let mut data =
+            self.state
+                .get_checkpoints(cursor.map(|s| *s), limit as u64 + 1, descending_order)?;
 
         let has_next_page = data.len() > limit;
         data.truncate(limit);
 
         let next_cursor = if has_next_page {
-            data.last().cloned().map(|d| d.sequence_number)
+            data.last().cloned().map(|d| d.sequence_number.into())
         } else {
             None
         };
@@ -1044,7 +1043,7 @@ fn convert_to_response(
         }
     }
 
-    response.checkpoint = cache.checkpoint_seq.map(<u64>::from);
+    response.checkpoint = cache.checkpoint_seq;
     response.timestamp_ms = cache.timestamp;
 
     if opts.show_events {

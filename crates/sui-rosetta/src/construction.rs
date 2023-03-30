@@ -319,8 +319,8 @@ pub async fn metadata(
         return Err(Error::TransactionDryRunError(error.to_string()));
     }
 
-    let budget = <u64>::from(effects.gas_cost_summary().computation_cost)
-        + <u64>::from(effects.gas_cost_summary().storage_cost);
+    let budget =
+        effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
