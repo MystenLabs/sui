@@ -63,7 +63,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -134,7 +135,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -205,7 +207,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -276,7 +279,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -347,7 +351,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -418,7 +423,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
@@ -489,7 +495,8 @@ validator_configs:
     authority-store-pruning-config:
       num-latest-epoch-dbs-to-retain: 3
       epoch-db-pruning-period-secs: 3600
-      num-epochs-to-retain: 1
+      num-epochs-to-retain: 0
+      pruning-run-delay-seconds: 60
       max-checkpoints-in-batch: 200
       max-transactions-in-batch: 1000
       use-range-deletion: true
