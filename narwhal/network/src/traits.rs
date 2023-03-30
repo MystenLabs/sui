@@ -6,10 +6,10 @@ use async_trait::async_trait;
 use crypto::NetworkPublicKey;
 use tokio::task::JoinHandle;
 use types::{
-    error::LocalClientError, Batch, BatchDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, GetCertificatesRequest, GetCertificatesResponse,
-    RequestBatchesRequest, RequestBatchesResponse, WorkerOthersBatchMessage, WorkerOurBatchMessage,
-    WorkerSynchronizeMessage,
+    error::LocalClientError, Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse,
+    FetchCertificatesRequest, FetchCertificatesResponse, GetCertificatesRequest,
+    GetCertificatesResponse, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerOthersBatchMessage, WorkerOurBatchMessage, WorkerSynchronizeMessage,
 };
 
 pub trait UnreliableNetwork<Request: Clone + Send + Sync> {
@@ -87,6 +87,12 @@ pub trait PrimaryToWorkerClient {
         worker_name: NetworkPublicKey,
         request: WorkerSynchronizeMessage,
     ) -> Result<(), LocalClientError>;
+
+    async fn fetch_batches(
+        &self,
+        worker_name: NetworkPublicKey,
+        request: FetchBatchesRequest,
+    ) -> Result<FetchBatchesResponse, LocalClientError>;
 }
 
 #[async_trait]

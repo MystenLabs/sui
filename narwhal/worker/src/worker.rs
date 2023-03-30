@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    batch_fetcher::BatchFetcher,
     batch_maker::BatchMaker,
     handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
     metrics::WorkerChannelMetrics,
@@ -102,20 +103,6 @@ impl Worker {
 
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
 
-        client.set_primary_to_worker_local_handler(
-            worker_peer_id,
-            Arc::new(PrimaryReceiverHandler {
-                authority_id: worker.authority.id(),
-                id: worker.id,
-                committee: worker.committee.clone(),
-                worker_cache: worker.worker_cache.clone(),
-                store: worker.store.clone(),
-                request_batch_timeout: worker.parameters.sync_retry_delay,
-                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
-                validator: validator.clone(),
-            }),
-        );
-
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
             client: client.clone(),
@@ -148,6 +135,7 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            batch_fetcher: None,
             validator: validator.clone(),
         });
 
@@ -276,6 +264,23 @@ impl Worker {
         }
 
         info!("Worker {} listening to worker messages on {}", id, address);
+
+        let batch_fetcher =
+            BatchFetcher::new(network.clone(), worker.store.clone(), node_metrics.clone());
+        client.set_primary_to_worker_local_handler(
+            worker_peer_id,
+            Arc::new(PrimaryReceiverHandler {
+                authority_id: worker.authority.id(),
+                id: worker.id,
+                committee: worker.committee.clone(),
+                worker_cache: worker.worker_cache.clone(),
+                store: worker.store.clone(),
+                request_batch_timeout: worker.parameters.sync_retry_delay,
+                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                batch_fetcher: Some(batch_fetcher),
+                validator: validator.clone(),
+            }),
+        );
 
         let mut peer_types = HashMap::new();
 

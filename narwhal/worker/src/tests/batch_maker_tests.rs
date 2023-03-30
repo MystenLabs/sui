@@ -5,10 +5,7 @@ use super::*;
 
 use crate::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
-use store::rocks;
-use store::rocks::MetricConf;
-use store::rocks::ReadWriteOptions;
-use test_utils::{temp_dir, transaction};
+use test_utils::{create_batch_store, transaction};
 use types::MockWorkerToPrimary;
 use types::PreSubscribedBroadcastSender;
 
@@ -16,21 +13,10 @@ fn create_network_client() -> NetworkClient {
     NetworkClient::new_with_empty_id()
 }
 
-fn create_batches_store() -> DBMap<BatchDigest, Batch> {
-    rocks::DBMap::<BatchDigest, Batch>::open(
-        temp_dir(),
-        MetricConf::default(),
-        None,
-        Some("batches"),
-        &ReadWriteOptions::default(),
-    )
-    .unwrap()
-}
-
 #[tokio::test]
 async fn make_batch() {
     let client = create_network_client();
-    let store = create_batches_store();
+    let store = create_batch_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
@@ -85,7 +71,7 @@ async fn make_batch() {
 #[tokio::test]
 async fn batch_timeout() {
     let client = create_network_client();
-    let store = create_batches_store();
+    let store = create_batch_store();
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_batch_maker, rx_batch_maker) = test_utils::test_channel!(1);
     let (tx_quorum_waiter, mut rx_quorum_waiter) = test_utils::test_channel!(1);
