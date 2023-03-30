@@ -5,7 +5,8 @@
 use crate::{
     error::{ExecutionError, UserInputError, UserInputResult},
     gas_coin::GasCoin,
-    gas_model::gas_v1::{self, SuiCostTable as SuiCostTableV0, SuiGasStatus as SuiGasStatusV0},
+    gas_model::gas_v1::{self, SuiCostTable as SuiCostTableV1, SuiGasStatus as SuiGasStatusV1},
+    gas_model::gas_v2::{self, SuiCostTable as SuiCostTableV2, SuiGasStatus as SuiGasStatusV2},
     messages::{TransactionEffects, TransactionEffectsAPI},
     object::Object,
 };
@@ -21,6 +22,7 @@ sui_macros::checked_arithmetic! {
 #[enum_dispatch]
 pub trait SuiGasStatusAPI<'a> {
     fn is_unmetered(&self) -> bool;
+    fn move_gas_status(&mut self) -> &mut GasStatus<'a>;
     fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
     fn summary(&self) -> GasCostSummary;
     fn gas_budget(&self) -> u64;
@@ -35,18 +37,26 @@ pub trait SuiGasStatusAPI<'a> {
         storage_rebate: u64,
     ) -> Result<u64, ExecutionError>;
     fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError>;
-    fn move_gas_status(&mut self) -> &mut GasStatus<'a>;
+    fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64;
+    fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
+    fn adjust_computation_on_out_of_gas(&mut self);
 }
 
 #[enum_dispatch(SuiGasStatusAPI)]
 pub enum SuiGasStatus<'a> {
-    V0(SuiGasStatusV0<'a>),
+    V1(SuiGasStatusV1<'a>),
+    V2(SuiGasStatusV2<'a>),
 }
 
 impl<'a> SuiGasStatus<'a> {
     pub fn new_with_budget(gas_budget: u64, gas_price: u64, config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
-            1 => Self::V0(SuiGasStatusV0::new_with_budget(
+            1 => Self::V1(SuiGasStatusV1::new_with_budget(
+                gas_budget,
+                gas_price,
+                config,
+            )),
+            2 => Self::V2(SuiGasStatusV2::new_with_budget(
                 gas_budget,
                 gas_price,
                 config,
@@ -57,20 +67,23 @@ impl<'a> SuiGasStatus<'a> {
 
     pub fn new_unmetered(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
-            1 => Self::V0(SuiGasStatusV0::new_unmetered()),
+            1 => Self::V1(SuiGasStatusV1::new_unmetered()),
+            2 => Self::V2(SuiGasStatusV2::new_unmetered()),
             _ => panic!("unknown gas model version"),
         }
     }
 }
 
 pub enum SuiCostTable {
-    V0(SuiCostTableV0),
+    V1(SuiCostTableV1),
+    V2(SuiCostTableV2),
 }
 
 impl SuiCostTable {
     pub fn new(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
-            1 => Self::V0(SuiCostTableV0::new(config)),
+            1 => Self::V1(SuiCostTableV1::new(config)),
+            2 => Self::V2(SuiCostTableV2::new(config)),
             _ => panic!("unknown gas model version"),
         }
     }
@@ -81,20 +94,23 @@ impl SuiCostTable {
 
     pub fn unmetered(config: &ProtocolConfig) -> Self {
         match config.gas_model_version() {
-            1 => Self::V0(SuiCostTableV0::unmetered()),
+            1 => Self::V1(SuiCostTableV1::unmetered()),
+            2 => Self::V2(SuiCostTableV2::unmetered()),
             _ => panic!("unknown gas model version"),
         }
     }
 
     pub fn max_gas_budget(&self) -> u64 {
         match self {
-            Self::V0(cost_table) => cost_table.max_gas_budget,
+            Self::V1(cost_table) => cost_table.max_gas_budget,
+            Self::V2(cost_table) => cost_table.max_gas_budget,
         }
     }
 
     pub fn min_gas_budget(&self) -> u64 {
         match self {
-            Self::V0(cost_table) => cost_table.min_gas_budget_external(),
+            Self::V1(cost_table) => cost_table.min_gas_budget_external(),
+            Self::V2(cost_table) => cost_table.min_transaction_cost,
         }
     }
 
@@ -109,11 +125,17 @@ impl SuiCostTable {
         gas_price: u64,
     ) -> UserInputResult {
         match self {
-            Self::V0(cost_table) => gas_v1::check_gas_balance(
+            Self::V1(cost_table) => gas_v1::check_gas_balance(
                 gas_object,
                 more_gas_objs,
                 gas_budget,
                 gas_price,
+                cost_table,
+            ),
+            Self::V2(cost_table) => gas_v2::check_gas_balance(
+                gas_object,
+                more_gas_objs,
+                gas_budget,
                 cost_table,
             ),
         }
@@ -126,7 +148,13 @@ impl SuiCostTable {
         storage_price: u64,
     ) -> SuiGasStatus<'a> {
         match self {
-            Self::V0(cost_table) => SuiGasStatus::V0(SuiGasStatusV0::new_for_testing(
+            Self::V1(cost_table) => SuiGasStatus::V1(SuiGasStatusV1::new_for_testing(
+                gas_budget,
+                gas_price,
+                storage_price,
+                cost_table,
+            )),
+            Self::V2(cost_table) => SuiGasStatus::V2(SuiGasStatusV2::new_for_testing(
                 gas_budget,
                 gas_price,
                 storage_price,
@@ -251,12 +279,31 @@ impl std::fmt::Display for GasCostSummary {
 /// Subtract the gas balance of \p gas_object by \p amount.
 /// This function should never fail, since we checked that the budget is always
 /// less than balance, and the amount is capped at the budget.
-pub fn deduct_gas(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u64) {
+
+pub fn deduct_gas_legacy(gas_object: &mut Object, deduct_amount: u64, rebate_amount: u64) {
     // The object must be a gas coin as we have checked in transaction handle phase.
     let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
     let balance = gas_coin.value();
     assert!(balance >= deduct_amount);
     let new_gas_coin = GasCoin::new(*gas_coin.id(), balance + rebate_amount - deduct_amount);
+    let move_object = gas_object.data.try_as_move_mut().unwrap();
+    // unwrap safe because GasCoin is guaranteed to serialize
+    let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();
+    assert_eq!(move_object.contents().len(), new_contents.len());
+    move_object.update_coin_contents(new_contents);
+}
+
+pub fn deduct_gas(gas_object: &mut Object, charge_or_rebate: i64) {
+    // The object must be a gas coin as we have checked in transaction handle phase.
+    let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
+    let balance = gas_coin.value();
+    let new_balance = if charge_or_rebate < 0 {
+        balance + (-charge_or_rebate as u64)
+    } else {
+        assert!(balance >= charge_or_rebate as u64);
+        balance - charge_or_rebate as u64
+    };
+    let new_gas_coin = GasCoin::new(*gas_coin.id(), new_balance);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
     // unwrap safe because GasCoin is guaranteed to serialize
     let new_contents = bcs::to_bytes(&new_gas_coin).unwrap();

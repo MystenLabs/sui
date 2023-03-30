@@ -233,6 +233,27 @@ fn to_internal(external_units: GasUnits) -> InternalGas {
 }
 
 impl<'a> SuiGasStatus<'a> {
+    fn new(
+        move_gas_status: GasStatus<'_>,
+        gas_budget: u64,
+        charge: bool,
+        computation_gas_unit_price: GasPrice,
+        storage_gas_unit_price: u64,
+        cost_table: SuiCostTable,
+    ) -> SuiGasStatus<'_> {
+        SuiGasStatus {
+            gas_status: move_gas_status,
+            init_budget: GasUnits::new(gas_budget),
+            charge,
+            computation_gas_unit_price: ComputeGasPricePerUnit::new(
+                computation_gas_unit_price.into(),
+            ),
+            storage_gas_unit_price: ComputeGasPricePerUnit::new(storage_gas_unit_price),
+            storage_gas_units: GasUnits::new(0),
+            storage_rebate: 0.into(),
+            cost_table,
+        }
+    }
     pub(crate) fn new_for_testing(
         gas_budget: u64,
         computation_gas_unit_price: u64,
@@ -294,28 +315,6 @@ impl<'a> SuiGasStatus<'a> {
             self.storage_rebate.add_assign(storage_rebate);
             gu.into()
         })
-    }
-
-    fn new(
-        move_gas_status: GasStatus<'_>,
-        gas_budget: u64,
-        charge: bool,
-        computation_gas_unit_price: GasPrice,
-        storage_gas_unit_price: u64,
-        cost_table: SuiCostTable,
-    ) -> SuiGasStatus<'_> {
-        SuiGasStatus {
-            gas_status: move_gas_status,
-            init_budget: GasUnits::new(gas_budget),
-            charge,
-            computation_gas_unit_price: ComputeGasPricePerUnit::new(
-                computation_gas_unit_price.into(),
-            ),
-            storage_gas_unit_price: ComputeGasPricePerUnit::new(storage_gas_unit_price),
-            storage_gas_units: GasUnits::new(0),
-            storage_rebate: 0.into(),
-            cost_table,
-        }
     }
 
     fn deduct_computation_cost(&mut self, cost: &InternalGas) -> Result<(), ExecutionError> {
@@ -442,11 +441,24 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
 
         self.deduct_computation_cost(&computation_cost)
     }
+
+    fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError> {
+        unreachable!("charge_storage_and_rebate should not be called in v1 gas model");
+    }
+
+    fn track_storage_mutation(&mut self, _new_size: usize, _storage_rebate: u64) -> u64 {
+        unreachable!("track_storage_mutation should not be called in v1 gas model");
+    }
+
+    fn adjust_computation_on_out_of_gas(&mut self) {
+        unreachable!("adjust_computation_on_out_of_gas should not be called in v1 gas model");
+    }
 }
 
 // Check whether gas arguments are legit:
 // 1. Gas object has an address owner.
 // 2. Gas budget is between min and max budget allowed
+// 3. Gas balance (all gas coins together) is bigger or equal to budget
 pub(crate) fn check_gas_balance(
     gas_object: &Object,
     more_gas_objs: Vec<&Object>,

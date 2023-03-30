@@ -10,6 +10,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
 use sui_framework::make_system_objects;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::gas::{SuiCostTable, SuiGasStatusAPI};
 use sui_types::gas_coin::GasCoin;
@@ -85,7 +86,8 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
         .into_effects_for_testing()
         .into_data();
     let gas_cost = effects.gas_cost_summary();
-    assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
+    assert!(gas_cost.net_gas_usage() as u64 > *MIN_GAS_BUDGET);
+    assert!(gas_cost.computation_cost > 0);
     assert!(gas_cost.storage_cost > 0);
     // Removing genesis object does not have rebate.
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -168,7 +170,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 110);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MIN_GAS_BUDGET);
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
@@ -179,7 +181,7 @@ async fn test_transfer_sui_insufficient_gas() {
         builder.finish()
     };
     let kind = TransactionKind::ProgrammableTransaction(pt);
-    let data = TransactionData::new(kind, sender, gas_object_ref, 110, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, *MIN_GAS_BUDGET, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
@@ -282,6 +284,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     let ((package_id, _, _), _) = effects.created()[0];
     let package = authority_state.get_object(&package_id).await?.unwrap();
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let gas_size = gas_object.object_size_for_gas_metering();
     let expected_gas_balance = GAS_VALUE_FOR_TESTING - gas_cost.gas_used();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
@@ -309,10 +312,10 @@ async fn test_publish_gas() -> anyhow::Result<()> {
             .map(|o| o.object_size_for_gas_metering())
             .sum(),
     )?;
-    gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
+    gas_status.charge_storage_read(gas_size)?;
     gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
     gas_status.charge_storage_mutation(package.object_size_for_gas_metering(), 0)?;
-    gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0)?;
+    gas_status.charge_storage_mutation(gas_size, 0)?;
     // Actual gas cost will be greater than the expected summary because of the cost to discard the
     // `UpgradeCap`.
     let gas_summary = gas_status.summary();
@@ -321,9 +324,11 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     assert!(gas_cost.storage_cost >= gas_summary.storage_cost);
 
     // Create a transaction with budget DELTA less than the gas cost required.
-    let total_gas_used = gas_cost.gas_used();
-    const DELTA: u64 = 1;
-    let budget = total_gas_used - DELTA;
+    let total_gas_used = gas_cost.net_gas_usage() as u64;
+    let config = ProtocolConfig::get_for_max_version();
+    let delta: u64 =
+        gas_size as u64 * config.obj_data_cost_refundable() * config.storage_gas_price() + 1000;
+    let budget = total_gas_used - delta;
     // Run the transaction again with 1 less than the required budget.
     let response = build_and_try_publish_test_package(
         &authority_state,
@@ -445,8 +450,11 @@ async fn test_move_call_gas() -> SuiResult {
     // storage_cost should be less than rebate because for object deletion, we only
     // rebate without charging.
     assert!(gas_cost.storage_cost > 0 && gas_cost.storage_cost < gas_cost.storage_rebate);
-    // Check that we have storage rebate that's the same as previous cost.
-    assert_eq!(gas_cost.storage_rebate, prev_storage_cost);
+    // Check that we have storage rebate is less or equal to the previous one + non refundable
+    assert_eq!(
+        gas_cost.storage_rebate + gas_cost.non_refundable_storage_fee,
+        prev_storage_cost
+    );
     Ok(())
 }
 

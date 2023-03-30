@@ -1497,7 +1497,13 @@ impl ProtocolConfig {
             // },
             2 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
+                // changes for gas model
                 cfg.gas_model_version = Some(2);
+                // max gas budget is in MIST and an absolute value 50SUI
+                cfg.max_tx_gas = Some(50_000_000_000);
+                // min gas budget is in MIST and an absolute value 2000MIST or 0.000002SUI
+                cfg.base_tx_cost_fixed = Some(2_000);
+                // enable conservation checks
                 cfg.feature_flags.conservation_checks = true;
                 cfg
             }

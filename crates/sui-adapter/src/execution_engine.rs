@@ -229,20 +229,20 @@ fn execute_transaction<
     #[allow(clippy::collapsible_if)]
     if protocol_config.gas_model_version() > 1 {
         if !is_system {
-            temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
-            if protocol_config.conservation_checks() {
-                if !Mode::allow_arbitrary_values() {
-                    // ensure that this transaction did not create or destroy SUI
-                    temporary_store.check_sui_conserved().unwrap();
-                }
-                // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
-                // objects (including coins). this can violate conservation, but it's expected
+            let cost_summary =
+                temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
+            if !Mode::allow_arbitrary_values() {
+                // ensure that this transaction did not create or destroy SUI
+                temporary_store.check_sui_conserved().unwrap();
             }
+            // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
+            // objects (including coins). this can violate conservation, but it's expected
+            return (cost_summary, result);
         }
     } else {
         #[allow(clippy::collapsible-else-if)]
         if !gas_status.is_unmetered() {
-            temporary_store.charge_gas(gas_object_ref.0, &mut gas_status, &mut result, gas);
+            temporary_store.charge_gas_legacy(gas_object_ref.0, &mut gas_status, &mut result, gas);
         }
     }
     let cost_summary = gas_status.summary();
