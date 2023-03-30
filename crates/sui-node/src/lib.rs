@@ -699,7 +699,7 @@ impl SuiNode {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
         let epoch_duration_ms = epoch_store.epoch_start_state().epoch_duration_ms();
 
-        debug!(
+        info!(
             "Starting checkpoint service with epoch start timestamp {}
             and epoch duration {}",
             epoch_start_timestamp_ms, epoch_duration_ms
