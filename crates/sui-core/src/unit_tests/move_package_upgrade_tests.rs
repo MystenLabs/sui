@@ -125,7 +125,7 @@ impl UpgradeStateRunner {
             builder.finish()
         };
         let TransactionEffects::V1(effects) = self.run(pt).await;
-        assert!(effects.status.is_ok());
+        assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
         let package = effects
             .created
@@ -185,7 +185,7 @@ async fn test_upgrade_package_happy_path() {
     };
     let TransactionEffects::V1(effects) = runner.run(pt).await;
 
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
     let new_package = effects
         .created
         .iter()
@@ -211,9 +211,7 @@ async fn test_upgrade_package_happy_path() {
         )));
 }
 
-// TODO(tzakian): turn this test on once the Move loader changes.
 #[tokio::test]
-#[ignore]
 async fn test_upgrade_incompatible() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let pt = {
@@ -243,7 +241,12 @@ async fn test_upgrade_incompatible() {
     };
     let TransactionEffects::V1(effects) = runner.run(pt).await;
 
-    assert!(effects.status.is_ok());
+    assert_eq!(
+        effects.status.unwrap_err().0,
+        ExecutionFailureStatus::PackageUpgradeError {
+            upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
+        },
+    )
 }
 
 #[tokio::test]
@@ -457,7 +460,7 @@ async fn upgrade_missing_deps() {
 #[tokio::test]
 async fn test_multiple_upgrades_valid() {
     let TransactionEffects::V1(effects) = test_multiple_upgrades(false).await;
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
 
 async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
@@ -488,7 +491,7 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
         builder.finish()
     };
     let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
     let new_package = effects
         .created
@@ -538,7 +541,6 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
 
 // TODO(tzakian): turn this test on once the Move loader changes.
 #[tokio::test]
-#[ignore]
 async fn test_interleaved_upgrades() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
@@ -576,7 +578,7 @@ async fn test_interleaved_upgrades() {
         builder.finish()
     };
     let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
     let dep_v2_package = effects
         .created
@@ -616,7 +618,7 @@ async fn test_interleaved_upgrades() {
         builder.finish()
     };
     let TransactionEffects::V1(effects) = runner.run(pt2).await;
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
 
 #[tokio::test]
@@ -660,7 +662,7 @@ async fn test_publish_override_happy_path() {
         builder.finish()
     };
     let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
     let dep_v2_package = effects
         .created

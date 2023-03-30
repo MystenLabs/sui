@@ -29,6 +29,7 @@ pub struct LinkageView<'state, S: StorageView> {
 
 pub struct LinkageInfo {
     link_context: AccountAddress,
+    original_package_id: AccountAddress,
     linkage_table: BTreeMap<ObjectID, UpgradeInfo>,
 }
 
@@ -56,6 +57,7 @@ impl From<&MovePackage> for LinkageInfo {
     fn from(package: &MovePackage) -> Self {
         Self {
             link_context: package.id().into(),
+            original_package_id: package.original_package_id().into(),
             linkage_table: package.linkage_table().clone(),
         }
     }
@@ -77,8 +79,13 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
             return Ok(module_id.clone());
         };
 
-        if module_id.address() == &linkage.link_context {
-            return Ok(module_id.clone());
+        // The request is to relocate a module in the package that the link context is from.  This
+        // entry will not be stored in the linkage table, so must be handled specially.
+        if module_id.address() == &linkage.original_package_id {
+            return Ok(ModuleId::new(
+                linkage.link_context.clone(),
+                module_id.name().to_owned(),
+            ));
         }
 
         let runtime_id = ObjectID::from_address(*module_id.address());
