@@ -449,7 +449,7 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         invariant_violation!("Newly created package object is not a package");
     };
 
-    context.set_linkage(package);
+    context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|()| {
         let modules_to_init = modules.iter().filter_map(|module| {
             for fdef in &module.function_defs {
@@ -586,7 +586,7 @@ fn execute_move_upgrade<S: StorageView, Mode: ExecutionMode>(
         invariant_violation!("Newly created package object is not a package");
     };
 
-    context.set_linkage(package);
+    context.set_linkage(package)?;
     let res = publish_and_verify_modules(context, runtime_id, &modules);
     context.reset_linkage();
     res?;

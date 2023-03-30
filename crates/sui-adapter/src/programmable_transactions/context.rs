@@ -214,12 +214,11 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         let package = package_for_linkage(&self.session, package_id)
             .map_err(|e| self.convert_vm_error(e))?;
 
-        set_linkage(&mut self.session, &package);
-        Ok(())
+        set_linkage(&mut self.session, &package)
     }
 
     /// Set the link context for the session from the linkage information in the `package`.
-    pub fn set_linkage(&mut self, package: &MovePackage) {
+    pub fn set_linkage(&mut self, package: &MovePackage) -> Result<(), ExecutionError> {
         set_linkage(&mut self.session, package)
     }
 
@@ -825,16 +824,14 @@ fn new_session<'state, 'vm, S: StorageView>(
 }
 
 /// Set the link context for the session from the linkage information in the `package`.
-pub fn set_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>, package: &MovePackage) {
-    let resolver = session.get_resolver_mut();
-    *resolver = LinkageView::from_package(resolver.storage(), package);
+pub fn set_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>, package: &MovePackage) -> Result<(), ExecutionError> {
+    session.get_resolver_mut().set_linkage(package)
 }
 
 /// Turn off linkage information, so that the next use of the session will need to set linkage
 /// information to succeed.
 pub fn reset_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>) {
-    let resolver = session.get_resolver_mut();
-    *resolver = LinkageView::new(resolver.storage());
+    session.get_resolver_mut().reset_linkage();
 }
 
 /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
@@ -903,7 +900,12 @@ pub fn load_type<'vm, 'state, S: StorageView>(
 
                 // Set the defining package as the link context on the session while loading the
                 // struct
-                set_linkage(session, &package);
+                set_linkage(session, &package).map_err(|e| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message(e.to_string())
+                        .finish(Location::Undefined)
+                })?;
+
                 let (idx, struct_type) = session.load_struct(&runtime_id, name)?;
 
                 // Recursively load type parameters, if necessary
