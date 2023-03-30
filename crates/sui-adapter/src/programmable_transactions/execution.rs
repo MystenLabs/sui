@@ -382,7 +382,6 @@ fn make_value<S: StorageView>(
             has_public_transfer,
         } => Value::Object(ObjectValue::new(
             context.vm,
-            context.state_view,
             &context.session,
             type_,
             has_public_transfer,
@@ -476,7 +475,6 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
         let cap = &UpgradeCap::new(context.fresh_id()?, storage_id);
         vec![Value::Object(ObjectValue::new(
             context.vm,
-            context.state_view,
             &context.session,
             UpgradeCap::type_().into(),
             /* has_public_transfer */ true,
@@ -840,7 +838,7 @@ fn check_visibility_and_signature<S: StorageView, Mode: ExecutionMode>(
     }
     let module = context
         .vm
-        .load_module(module_id, context.state_view)
+        .load_module(module_id, context.session.get_resolver())
         .map_err(|e| context.convert_vm_error(e))?;
     let Some((index, fdef)) = module.function_defs.iter().enumerate().find(|(_index, fdef)| {
         module.identifier_at(module.function_handle_at(fdef.function).name) == function
