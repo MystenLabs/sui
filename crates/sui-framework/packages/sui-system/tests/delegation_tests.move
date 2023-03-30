@@ -4,7 +4,7 @@
 #[test_only]
 module sui_system::stake_tests {
     use sui::coin;
-    use sui::test_scenario::{Self, Scenario};
+    use sui::test_scenario;
     use sui_system::sui_system::{Self, SuiSystemState};
     use sui_system::staking_pool::{Self, StakedSui};
     use sui::test_utils::assert_eq;
@@ -44,10 +44,10 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_split_join_staked_sui() {
+        // All this is just to generate a dummy StakedSui object to split and join later
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(STAKER_ADDR_1);
         let scenario = &mut scenario_val;
-        // All this is just to generate a dummy StakedSui object to split and join later
-        set_up_sui_system_state(scenario);
         governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
 
         test_scenario::next_tx(scenario, STAKER_ADDR_1);
@@ -83,9 +83,9 @@ module sui_system::stake_tests {
     #[test]
     #[expected_failure(abort_code = staking_pool::EIncompatibleStakedSui)]
     fun test_join_different_epochs() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(STAKER_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
         // Create two instances of staked sui w/ different epoch activations
         governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 60, scenario);
         governance_test_utils::advance_epoch(scenario);
@@ -108,9 +108,9 @@ module sui_system::stake_tests {
     #[test]
     #[expected_failure(abort_code = staking_pool::EStakedSuiBelowThreshold)]
     fun test_split_below_threshold() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(STAKER_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
         // Stake 2 SUI
         governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 2, scenario);
 
@@ -127,9 +127,9 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_add_remove_stake_flow() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         test_scenario::next_tx(scenario, STAKER_ADDR_1);
         {
@@ -194,9 +194,9 @@ module sui_system::stake_tests {
     }
 
     fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
+        set_up_sui_system_state_with_storage_fund();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state_with_storage_fund(scenario);
 
         governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
 
@@ -260,9 +260,9 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_earns_rewards_at_last_epoch() {
+        set_up_sui_system_state_with_storage_fund();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state_with_storage_fund(scenario);
 
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
 
@@ -313,9 +313,9 @@ module sui_system::stake_tests {
     #[test]
     #[expected_failure(abort_code = validator_set::ENotAValidator)]
     fun test_add_stake_post_active_flow() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         governance_test_utils::stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
 
@@ -347,9 +347,9 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_add_preactive_remove_preactive() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         governance_test_utils::add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
@@ -370,9 +370,9 @@ module sui_system::stake_tests {
     #[test]
     #[expected_failure(abort_code = validator_set::ENotAValidator)]
     fun test_add_preactive_remove_pending_failure() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         governance_test_utils::add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
@@ -387,9 +387,9 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_add_preactive_remove_active() {
+        set_up_sui_system_state_with_storage_fund();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state_with_storage_fund(scenario);
 
         add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
@@ -431,9 +431,9 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_add_preactive_remove_post_active() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
@@ -461,9 +461,9 @@ module sui_system::stake_tests {
 
     #[test]
     fun test_add_preactive_candidate_drop_out() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         add_validator_candidate(NEW_VALIDATOR_ADDR, NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
 
@@ -491,9 +491,9 @@ module sui_system::stake_tests {
     #[test]
     fun test_stake_during_safe_mode() {
         // test that stake and unstake can work during safe mode too.
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
         // Stake with exchange rate of 1.0
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
         advance_epoch(scenario);
@@ -521,7 +521,9 @@ module sui_system::stake_tests {
         test_scenario::end(scenario_val);
     }
 
-    fun set_up_sui_system_state(scenario: &mut Scenario) {
+    fun set_up_sui_system_state() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[
@@ -529,9 +531,12 @@ module sui_system::stake_tests {
             create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx)
         ];
         create_sui_system_state_for_testing(validators, 0, 0, ctx);
+        test_scenario::end(scenario_val);
     }
 
-    fun set_up_sui_system_state_with_storage_fund(scenario: &mut Scenario) {
+    fun set_up_sui_system_state_with_storage_fund() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[
@@ -539,5 +544,6 @@ module sui_system::stake_tests {
             create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx)
         ];
         create_sui_system_state_for_testing(validators, 300, 100, ctx);
+        test_scenario::end(scenario_val);
     }
 }

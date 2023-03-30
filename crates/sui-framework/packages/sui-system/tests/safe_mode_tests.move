@@ -18,7 +18,7 @@ module sui::safe_mode_tests {
 
     #[test]
     fun test_safe_mode_gas_accumulation() {
-        let scenario_val = test_scenario::begin(@0x1);
+        let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
         {
             // First, set up the system with 4 validators.
