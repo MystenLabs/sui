@@ -415,6 +415,16 @@ impl SequencedConsensusTransaction {
     pub fn key(&self) -> SequencedConsensusTransactionKey {
         self.transaction.key()
     }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        matches!(
+            &self.transaction,
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::EndOfPublish(_),
+                ..
+            })
+        )
+    }
 }
 
 pub struct VerifiedSequencedConsensusTransaction(pub SequencedConsensusTransaction);

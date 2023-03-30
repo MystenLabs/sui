@@ -6,7 +6,7 @@ use futures::FutureExt;
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::Round;
 use parking_lot::RwLock;
-use parking_lot::{Mutex, RwLockReadGuard};
+use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -1051,7 +1051,7 @@ impl AuthorityPerEpochStore {
         authority: AuthorityName,
         key: SequencedConsensusTransactionKey,
         consensus_index: &ExecutionIndicesWithHash,
-    ) -> SuiResult {
+    ) -> SuiResult<Option<RwLockWriteGuard<ReconfigState>>> {
         let mut write_batch = self.tables.last_consensus_index.batch();
         // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
         // And this function itself is always executed from consensus task
@@ -1068,7 +1068,7 @@ impl AuthorityPerEpochStore {
             debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
             false
         };
-        let _lock = if collected_end_of_publish {
+        let lock = if collected_end_of_publish {
             debug!(
                 "Collected enough end_of_publish messages with last message from validator {:?}",
                 authority.concise()
@@ -1098,7 +1098,7 @@ impl AuthorityPerEpochStore {
             consensus_index,
         )?;
         write_batch.write()?;
-        Ok(())
+        Ok(lock)
     }
 
     /// Caller is responsible to call consensus_message_processed before this method
@@ -1376,16 +1376,11 @@ impl AuthorityPerEpochStore {
         self.reconfig_state_mem.read()
     }
 
-    pub fn get_reconfig_state_write_lock_guard(
-        &self,
-    ) -> parking_lot::RwLockWriteGuard<ReconfigState> {
+    pub fn get_reconfig_state_write_lock_guard(&self) -> RwLockWriteGuard<ReconfigState> {
         self.reconfig_state_mem.write()
     }
 
-    pub fn close_user_certs(
-        &self,
-        mut lock_guard: parking_lot::RwLockWriteGuard<'_, ReconfigState>,
-    ) {
+    pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
@@ -1540,12 +1535,26 @@ impl AuthorityPerEpochStore {
     /// - Or update the state for checkpoint or epoch change protocol.
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
-        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        mut transactions: Vec<VerifiedSequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut verified_certificates = Vec::new();
-        for tx in &transactions {
+
+        // sort all end of publish messages to the end of the list
+        transactions.sort_by(|a, b| {
+            let a_is_end_of_publish = a.0.is_end_of_publish();
+            let b_is_end_of_publish = b.0.is_end_of_publish();
+
+            a_is_end_of_publish.cmp(&b_is_end_of_publish)
+        });
+
+        // partition transactions into two groups: end of publish messages and all other messages
+        let (end_of_publish_txns, other_txns): (Vec<_>, Vec<_>) = transactions
+            .into_iter()
+            .partition(|tx| tx.0.is_end_of_publish());
+
+        for tx in &other_txns {
             if let Some(cert) = self
                 .process_consensus_transaction(tx, checkpoint_service, &parent_sync_store)
                 .await?
@@ -1554,12 +1563,39 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        for tx in &transactions {
+        for tx in &end_of_publish_txns {
+            self.process_end_of_publish_transaction(tx)?;
+        }
+
+        for tx in other_txns.iter().chain(end_of_publish_txns.iter()) {
             let key = tx.0.transaction.key();
             self.consensus_notify_read.notify(&key, &());
         }
 
         Ok(verified_certificates)
+    }
+
+    fn process_end_of_publish_transaction(
+        &self,
+        transaction: &VerifiedSequencedConsensusTransaction,
+    ) -> SuiResult {
+        let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
+            consensus_index,
+            transaction,
+            ..
+        }) = transaction;
+
+        if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+            kind: ConsensusTransactionKind::EndOfPublish(authority),
+            ..
+        }) = transaction
+        {
+            debug!("Received EndOfPublish from {:?}", authority.concise());
+            self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
+        } else {
+            panic!("process_end_of_publish_transaction called with non-end-of-publish transaction");
+        }
+        Ok(())
     }
 
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
@@ -1652,12 +1688,11 @@ impl AuthorityPerEpochStore {
                 Ok(None)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::EndOfPublish(authority),
+                kind: ConsensusTransactionKind::EndOfPublish(_),
                 ..
             }) => {
-                debug!("Received EndOfPublish from {:?}", authority.concise());
-                self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
-                Ok(None)
+                // these are partitioned earlier
+                panic!("process_consensus_transaction called with end-of-publish transaction");
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
