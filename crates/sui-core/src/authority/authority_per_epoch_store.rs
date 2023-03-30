@@ -1495,6 +1495,30 @@ impl AuthorityPerEpochStore {
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
+    pub(crate) async fn process_consensus_transactions_and_commit_boundary<
+        C: CheckpointServiceNotify,
+    >(
+        &self,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        round: Round,
+        timestamp: u64,
+        checkpoint_service: &Arc<C>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+        let executable_txns = self
+            .process_consensus_transactions(transactions, checkpoint_service, parent_sync_store)
+            .await?;
+        if let Some(checkpoint) = self.handle_commit_boundary(round, timestamp)? {
+            let final_checkpoint = checkpoint.details.last_of_epoch;
+            checkpoint_service.notify_checkpoint(self, checkpoint)?;
+            if final_checkpoint {
+                tracing::info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                self.record_end_of_message_quorum_time_metric();
+            }
+        }
+        Ok(executable_txns)
+    }
+
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
     /// - Verify and initialize the state to execute the certificates.
     ///   Return VerifiedCertificates for each executable certificate
@@ -1664,11 +1688,10 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub fn handle_commit_boundary<C: CheckpointServiceNotify>(
+    pub fn handle_commit_boundary(
         &self,
         round: Round,
         timestamp_ms: CheckpointTimestamp,
-        _checkpoint_service: &Arc<C>,
     ) -> SuiResult<Option<PendingCheckpoint>> {
         debug!("Commit boundary at {}", round);
         let mut checkpoint = None;
