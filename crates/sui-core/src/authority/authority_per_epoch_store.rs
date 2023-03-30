@@ -1507,9 +1507,7 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        for tx in &end_of_publish_txns {
-            self.process_end_of_publish_transaction(tx)?;
-        }
+        self.process_end_of_publish_transactions(&end_of_publish_txns)?;
 
         for tx in other_txns.iter().chain(end_of_publish_txns.iter()) {
             let key = tx.0.transaction.key();
@@ -1519,73 +1517,79 @@ impl AuthorityPerEpochStore {
         Ok(verified_certificates)
     }
 
-    fn process_end_of_publish_transaction(
+    fn process_end_of_publish_transactions(
         &self,
-        transaction: &VerifiedSequencedConsensusTransaction,
+        transactions: &[VerifiedSequencedConsensusTransaction],
     ) -> SuiResult {
-        let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
-            consensus_index,
-            transaction,
-            ..
-        }) = transaction;
+        let mut write_batch = self.db_batch();
+        let mut write_lock = None;
 
-        if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
-            kind: ConsensusTransactionKind::EndOfPublish(authority),
-            ..
-        }) = transaction
-        {
-            debug!("Received EndOfPublish from {:?}", authority.concise());
-
-            let mut write_batch = self.tables.last_consensus_index.batch();
-            // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
-            // And this function itself is always executed from consensus task
-            let collected_end_of_publish = if self
-                .get_reconfig_state_read_lock_guard()
-                .should_accept_consensus_certs()
-            {
-                write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
-                self.end_of_publish.try_lock()
-                    .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
-                    .insert_generic(*authority, ()).is_quorum_reached()
-            } else {
-                // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
-                debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
-                false
-            };
-            let _lock = if collected_end_of_publish {
-                debug!(
-                    "Collected enough end_of_publish messages with last message from validator {:?}",
-                    authority.concise()
-                );
-                let mut lock = self.get_reconfig_state_write_lock_guard();
-                lock.close_all_certs();
-                // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
-                self.store_reconfig_state_batch(&lock, &mut write_batch)?;
-                write_batch.insert_batch(
-                    &self.tables.final_epoch_checkpoint,
-                    [(
-                        &FINAL_EPOCH_CHECKPOINT_INDEX,
-                        &consensus_index.index.last_committed_round,
-                    )],
-                )?;
-                // Holding this lock until end of this function where we write batch to DB
-                Some(lock)
-            } else {
-                None
-            };
-            // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
-            // If some day we won't panic in ConsensusHandler on error we need to figure out here how
-            // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
-            self.finish_consensus_transaction_process_with_batch(
-                &mut write_batch,
-                transaction.key(),
+        for transaction in transactions {
+            let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
                 consensus_index,
-            )?;
-            write_batch.write()?;
-            //Ok(lock)
-        } else {
-            panic!("process_end_of_publish_transaction called with non-end-of-publish transaction");
+                transaction,
+                ..
+            }) = transaction;
+
+            if let SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::EndOfPublish(authority),
+                ..
+            }) = transaction
+            {
+                debug!("Received EndOfPublish from {:?}", authority.concise());
+
+                // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
+                // And this function itself is always executed from consensus task
+                let collected_end_of_publish = if write_lock.is_none()
+                    && self
+                        .get_reconfig_state_read_lock_guard()
+                        .should_accept_consensus_certs()
+                {
+                    write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
+                    self.end_of_publish.try_lock()
+                        .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
+                        .insert_generic(*authority, ()).is_quorum_reached()
+                } else {
+                    // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
+                    debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
+                    false
+                };
+
+                if collected_end_of_publish {
+                    assert!(write_lock.is_none());
+                    debug!(
+                        "Collected enough end_of_publish messages with last message from validator {:?}",
+                        authority.concise()
+                    );
+                    let mut lock = self.get_reconfig_state_write_lock_guard();
+                    lock.close_all_certs();
+                    // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
+                    self.store_reconfig_state_batch(&lock, &mut write_batch)?;
+                    write_batch.insert_batch(
+                        &self.tables.final_epoch_checkpoint,
+                        [(
+                            &FINAL_EPOCH_CHECKPOINT_INDEX,
+                            &consensus_index.index.last_committed_round,
+                        )],
+                    )?;
+                    // Holding this lock until end of this function where we write batch to DB
+                    write_lock = Some(lock);
+                };
+                // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
+                // If some day we won't panic in ConsensusHandler on error we need to figure out here how
+                // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
+                self.finish_consensus_transaction_process_with_batch(
+                    &mut write_batch,
+                    transaction.key(),
+                    consensus_index,
+                )?;
+            } else {
+                panic!(
+                    "process_end_of_publish_transaction called with non-end-of-publish transaction"
+                );
+            }
         }
+        write_batch.write()?;
         Ok(())
     }
 
@@ -1617,7 +1621,7 @@ impl AuthorityPerEpochStore {
                     );
                     return Ok(None);
                 }
-                if self.has_sent_end_of_publish(&certificate_author)? {
+                if self.has_sent_end_of_publish(certificate_author)? {
                     // This can not happen with valid authority
                     // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
@@ -1647,7 +1651,7 @@ impl AuthorityPerEpochStore {
 
                 if certificate.contains_shared_object() {
                     self.record_shared_object_cert_from_consensus(
-                        &transaction,
+                        transaction,
                         &certificate,
                         consensus_index,
                         parent_sync_store,
@@ -1655,7 +1659,7 @@ impl AuthorityPerEpochStore {
                     .await?;
                 } else {
                     self.record_owned_object_cert_from_consensus(
-                        &transaction,
+                        transaction,
                         &certificate,
                         consensus_index,
                     )
@@ -1672,7 +1676,7 @@ impl AuthorityPerEpochStore {
                 let mut batch = self.db_batch();
                 self.record_consensus_transaction_processed(
                     &mut batch,
-                    &transaction,
+                    transaction,
                     consensus_index,
                 )?;
                 batch.write()?;
@@ -1708,7 +1712,7 @@ impl AuthorityPerEpochStore {
                 let mut batch = self.db_batch();
                 self.record_consensus_transaction_processed(
                     &mut batch,
-                    &transaction,
+                    transaction,
                     consensus_index,
                 )?;
                 batch.write()?;
@@ -1729,7 +1733,7 @@ impl AuthorityPerEpochStore {
                 // If needed we can support owned object system transactions as well...
                 assert!(system_transaction.contains_shared_object());
                 self.record_shared_object_cert_from_consensus(
-                    &transaction,
+                    transaction,
                     system_transaction,
                     consensus_index,
                     parent_sync_store,
