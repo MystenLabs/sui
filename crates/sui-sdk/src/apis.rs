@@ -16,7 +16,6 @@ use sui_json_rpc::api::GovernanceReadApiClient;
 use sui_json_rpc::api::{
     CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
 };
-use sui_json_rpc::api::{CoinReadApiClient, ReadApiClient, WriteApiClient};
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
@@ -148,7 +147,10 @@ impl ReadApi {
             .await?)
     }
 
-    pub async fn get_committee_info(&self, epoch: Option<BigInt>) -> SuiRpcResult<SuiCommittee> {
+    pub async fn get_committee_info(
+        &self,
+        epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 
@@ -533,7 +535,10 @@ impl GovernanceApi {
 
     /// Return the committee information for the asked `epoch`.
     /// `epoch`: The epoch of interest. If None, default to the latest epoch
-    pub async fn get_committee_info(&self, epoch: Option<BigInt>) -> SuiRpcResult<SuiCommittee> {
+    pub async fn get_committee_info(
+        &self,
+        epoch: Option<BigInt<u64>>,
+    ) -> SuiRpcResult<SuiCommittee> {
         Ok(self.api.http.get_committee_info(epoch).await?)
     }
 

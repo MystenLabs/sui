@@ -209,8 +209,8 @@ impl WriteApiServer for TransactionExecutionApi {
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
-        gas_price: Option<BigInt>,
-        _epoch: Option<BigInt>,
+        gas_price: Option<BigInt<u64>>,
+        _epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults> {
         let tx_kind: TransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;

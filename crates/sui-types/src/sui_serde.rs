@@ -5,6 +5,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::str::FromStr;
 
 use fastcrypto::encoding::Hex;
 use move_core_types::account_address::AccountAddress;
@@ -229,14 +230,21 @@ impl<'de> DeserializeAs<'de, TypeTag> for SuiTypeTag {
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
-pub struct BigInt(
+pub struct BigInt<T>(
     #[schemars(with = "String")]
     #[serde_as(as = "DisplayFromStr")]
-    u64,
-);
+    T,
+)
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display;
 
-impl SerializeAs<u64> for BigInt {
-    fn serialize_as<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+impl<T> SerializeAs<T> for BigInt<T>
+where
+    T: Display + FromStr + Copy,
+    <T as FromStr>::Err: Display,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -244,8 +252,12 @@ impl SerializeAs<u64> for BigInt {
     }
 }
 
-impl<'de> DeserializeAs<'de, u64> for BigInt {
-    fn deserialize_as<D>(deserializer: D) -> Result<u64, D::Error>
+impl<'de, T> DeserializeAs<'de, T> for BigInt<T>
+where
+    T: Display + FromStr + Copy,
+    <T as FromStr>::Err: Display,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -253,21 +265,33 @@ impl<'de> DeserializeAs<'de, u64> for BigInt {
     }
 }
 
-impl From<u64> for BigInt {
-    fn from(v: u64) -> BigInt {
+impl<T> From<T> for BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    fn from(v: T) -> BigInt<T> {
         BigInt(v)
     }
 }
 
-impl Deref for BigInt {
-    type Target = u64;
+impl<T> Deref for BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl Display for BigInt {
+impl<T> Display for BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -275,7 +299,7 @@ impl Display for BigInt {
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
-pub struct SequenceNumber(#[schemars(with = "BigInt")] u64);
+pub struct SequenceNumber(#[schemars(with = "BigInt<u64>")] u64);
 
 impl SerializeAs<crate::base_types::SequenceNumber> for SequenceNumber {
     fn serialize_as<S>(
@@ -302,7 +326,8 @@ impl<'de> DeserializeAs<'de, crate::base_types::SequenceNumber> for SequenceNumb
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
-pub struct AsProtocolVersion(#[schemars(with = "BigInt")] u64);
+#[serde(rename = "ProtocolVersion")]
+pub struct AsProtocolVersion(#[schemars(with = "BigInt<u64>")] u64);
 
 impl SerializeAs<ProtocolVersion> for AsProtocolVersion {
     fn serialize_as<S>(value: &ProtocolVersion, serializer: S) -> Result<S::Ok, S::Error>
@@ -319,7 +344,7 @@ impl<'de> DeserializeAs<'de, ProtocolVersion> for AsProtocolVersion {
     where
         D: Deserializer<'de>,
     {
-        let b = BigInt::deserialize(deserializer)?;
+        let b = BigInt::<u64>::deserialize(deserializer)?;
         Ok(ProtocolVersion::from(*b))
     }
 }

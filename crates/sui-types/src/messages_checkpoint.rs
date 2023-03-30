@@ -96,8 +96,8 @@ pub struct EndOfEpochData {
     /// or the total number of transactions from genesis to the end of an epoch.
     /// The committee is stored as a vector of validator pub key and stake pairs. The vector
     /// should be sorted based on the Committee data structure.
-    #[schemars(with = "Vec<(AuthorityName, BigInt)>")]
-    #[serde_as(as = "Vec<(_, BigInt)>")]
+    #[schemars(with = "Vec<(AuthorityName, BigInt<u64>)>")]
+    #[serde_as(as = "Vec<(_, BigInt<u64>)>")]
     pub next_epoch_committee: Vec<(AuthorityName, StakeUnit)>,
 
     /// The protocol version that is in effect during the epoch that starts immediately after this

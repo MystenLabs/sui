@@ -41,8 +41,8 @@ pub struct EventEnvelope {
 #[serde(rename_all = "camelCase")]
 pub struct EventID {
     pub tx_digest: TransactionDigest,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub event_seq: u64,
 }
 

@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::Page;
 use fastcrypto::encoding::Base64;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
-
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AggregateAuthoritySignature;
@@ -19,30 +17,26 @@ use sui_types::messages_checkpoint::{
     CheckpointTimestamp, EndOfEpochData,
 };
 use sui_types::sui_serde::BigInt;
-
-use crate::Page;
-
-pub type CheckpointPage = Page<Checkpoint, BigInt>;
+pub type CheckpointPage = Page<Checkpoint, BigInt<u64>>;
 
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
-#[serde_as]
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
     /// Checkpoint's epoch ID
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch: EpochId,
     /// Checkpoint sequence number
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub sequence_number: CheckpointSequenceNumber,
     /// Checkpoint digest
     pub digest: CheckpointDigest,
     /// Total number of transactions committed since genesis, including those in this
     /// checkpoint.
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub network_total_transactions: u64,
     /// Digest of the previous checkpoint
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,8 +47,8 @@ pub struct Checkpoint {
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub timestamp_ms: CheckpointTimestamp,
     /// Present only on the final checkpoint of the epoch.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,7 +60,7 @@ pub struct Checkpoint {
     pub checkpoint_commitments: Vec<CheckpointCommitment>,
     /// Validator Signature
     #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
+    //#[serde_as(as = "Readable<Base64, Bytes>")]
     pub validator_signature: AggregateAuthoritySignature,
 }
 
@@ -120,8 +114,8 @@ impl
 #[serde(untagged)]
 pub enum CheckpointId {
     SequenceNumber(
-        #[schemars(with = "BigInt")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         CheckpointSequenceNumber,
     ),
     Digest(CheckpointDigest),

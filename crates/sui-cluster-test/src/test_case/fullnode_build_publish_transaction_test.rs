@@ -32,7 +32,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             dependencies,
             None::<ObjectID>,
             // Doesn't need to be scaled by RGP since most of the cost is storage
-            50_000_000
+            50_000_000.to_string()
         ];
 
         let data = ctx
