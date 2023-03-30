@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{collections::HashMap, fs, pin::Pin, sync::Arc};
@@ -68,7 +68,7 @@ use sui_types::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp, VerifiedCheckpoint,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-use sui_types::object::{Data, MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
+use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::query::TransactionFilter;
 use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -1013,7 +1013,7 @@ impl AuthorityState {
 
         // make a gas object if one was not provided
         let mut gas_object_refs = transaction.gas().to_vec();
-        let (gas_status, mut input_objects) = if transaction.gas().is_empty() {
+        let (gas_status, input_objects) = if transaction.gas().is_empty() {
             let sender = transaction.sender();
             // use a 100M sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
@@ -1042,11 +1042,11 @@ impl AuthorityState {
             )
             .await?
         };
-        advance_gas_object_version_for_mock_transaction(&mut gas_object_refs, &mut input_objects);
 
         let shared_object_refs = input_objects.filter_shared_objects();
+
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,
@@ -1136,32 +1136,29 @@ impl AuthorityState {
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
-        let (gas_object_ref, mut input_objects) =
-            transaction_input_checker::check_dev_inspect_input(
-                &self.database,
-                protocol_config,
-                &transaction_kind,
-                gas_object,
-            )
-            .await?;
-        let mut gas_object_refs = vec![gas_object_ref];
-        advance_gas_object_version_for_mock_transaction(&mut gas_object_refs, &mut input_objects);
+        let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
+            &self.database,
+            protocol_config,
+            &transaction_kind,
+            gas_object,
+        )
+        .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
         // TODO should we error instead for 0?
         let gas_price = std::cmp::max(gas_price, 1);
         let gas_budget = max_tx_gas;
-        let data = TransactionData::new_with_gas_coins(
+        let data = TransactionData::new(
             transaction_kind,
             sender,
-            gas_object_refs.clone(),
+            gas_object_ref,
             gas_price,
             gas_budget,
         );
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,
@@ -1186,7 +1183,7 @@ impl AuthorityState {
                 temporary_store,
                 transaction_kind,
                 sender,
-                &gas_object_refs,
+                &[gas_object_ref],
                 transaction_digest,
                 transaction_dependencies,
                 &move_vm,
@@ -3420,46 +3417,6 @@ fn calculate_checkpoint_numbers(
     } else {
         (start_index..=end_index).collect()
     }
-}
-
-/// In dry run and dev inspect, you might load a dynamic field that is actually too new for the
-/// transaction. Ideally, we would want to load the "correct" dynamic fields, but as that is
-/// not easily determined, we instead set the sequence number of the gas objects to MAX - 1, to
-/// ensure that the lamport version for the transaction is MAX, and as such, a valid lamport
-/// version for any object used in the transaction (preventing internal assertions or
-/// invariant violations from being triggered)
-fn advance_gas_object_version_for_mock_transaction(
-    gas_object_refs: &mut Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
-    input_objects: &mut InputObjects,
-) {
-    const FAKE_SEQ: SequenceNumber = SequenceNumber::from_u64(SequenceNumber::MAX.value() - 1);
-    let mut remapped = HashSet::new();
-    for (id, seq, _digest) in gas_object_refs {
-        remapped.insert(*id);
-        *seq = FAKE_SEQ
-    }
-    let objs = std::mem::replace(input_objects, /* dummy */ InputObjects::new(vec![]));
-    let objs = objs.into_objects();
-    let fixed_objs = objs
-        .into_iter()
-        .map(|(mut kind, mut object)| {
-            let InputObjectKind::ImmOrOwnedMoveObject((id, seq, _digest)) = &mut kind else {
-                return (kind, object)
-            };
-            if !remapped.contains(id) {
-                return (kind, object);
-            }
-            if let Data::Move(move_obj) = &mut object.data {
-                if move_obj.version() == FAKE_SEQ {
-                    return (kind, object);
-                }
-                move_obj.increment_version_to(FAKE_SEQ);
-            }
-            *seq = FAKE_SEQ;
-            (kind, object)
-        })
-        .collect();
-    *input_objects = InputObjects::new(fixed_objs);
 }
 
 #[cfg(test)]
