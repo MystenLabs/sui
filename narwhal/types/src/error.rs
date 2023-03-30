@@ -57,6 +57,9 @@ pub enum DagError {
     #[error("Header {0} has parents with invalid round numbers")]
     HeaderHasInvalidParentRoundNumbers(HeaderDigest),
 
+    #[error("Header {0} has parents with invalid timestamp")]
+    HeaderHasInvalidParentTimestamp(HeaderDigest),
+
     #[error("Header {0} has more than one parent certificate with the same authority")]
     HeaderHasDuplicateParentAuthorities(HeaderDigest),
 

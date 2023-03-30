@@ -811,6 +811,10 @@ impl PrimaryReceiverHandler {
                 DagError::HeaderHasInvalidParentRoundNumbers(header.digest())
             );
             ensure!(
+                header.created_at() >= parent.header().created_at(),
+                DagError::HeaderHasInvalidParentTimestamp(header.digest())
+            );
+            ensure!(
                 parent_authorities.insert(parent.header().author()),
                 DagError::HeaderHasDuplicateParentAuthorities(header.digest())
             );
