@@ -93,7 +93,7 @@ impl FaucetClient for RemoteFaucetClient {
         if let Some(error) = faucet_response.error {
             panic!("Failed to get gas tokens with error: {}", error)
         };
-
+        print!("tester");
         faucet_response
     }
 }
