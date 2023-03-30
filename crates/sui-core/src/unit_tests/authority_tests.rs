@@ -119,7 +119,7 @@ impl TestCallArg {
     }
 }
 
-const MAX_GAS: u64 = 10000;
+const MAX_GAS: u64 = 1000000;
 
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
@@ -807,7 +807,10 @@ async fn test_dev_inspect_gas_coin_argument() {
     let (validator, fullnode, _object_basics) =
         init_state_with_ids_and_object_basics_with_fullnode(vec![]).await;
     let epoch_store = validator.epoch_store_for_testing();
+    let computation_gas_price = epoch_store.reference_gas_price();
     let protocol_config = epoch_store.protocol_config();
+    let storage_gas_price = protocol_config.storage_gas_price();
+    let max_gas_price = std::cmp::max(storage_gas_price, computation_gas_price);
 
     let sender = SuiAddress::random_for_testing_only();
     let recipient = SuiAddress::random_for_testing_only();
@@ -820,10 +823,12 @@ async fn test_dev_inspect_gas_coin_argument() {
     let kind = TransactionKind::programmable(pt);
     let results = fullnode
         .dev_inspect_transaction_block(sender, kind, Some(1))
-        .await
-        .unwrap()
-        .results
-        .unwrap();
+        .await;
+        // .unwrap()
+        // .results
+        // .unwrap();
+    println!("{:?}", results);
+    let results = results.unwrap().results.unwrap();
     assert_eq!(results.len(), 2);
     // Split results
     let SuiExecutionResult {
@@ -834,7 +839,7 @@ async fn test_dev_inspect_gas_coin_argument() {
     assert_eq!(mutable_reference_outputs.len(), 1);
     let (arg, arg_value, arg_type) = &mutable_reference_outputs[0];
     assert_eq!(arg, &SuiArgument::GasCoin);
-    check_coin_value(arg_value, arg_type, protocol_config.max_tx_gas() - amount);
+    check_coin_value(arg_value, arg_type, protocol_config.max_tx_gas() * max_gas_price - amount);
 
     assert_eq!(return_values.len(), 1);
     let (ret_value, ret_type) = &return_values[0];
@@ -1627,9 +1632,8 @@ async fn test_publish_dependent_module_ok() {
 async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_balance = MAX_GAS;
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+        Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -2612,7 +2616,7 @@ async fn test_move_call_insufficient_gas() {
         obj_ref,
         recipient,
         gas_ref,
-        gas_used - 5,
+        gas_used - 2000,
     );
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);

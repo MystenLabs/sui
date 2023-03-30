@@ -89,7 +89,7 @@ impl UpgradeStateRunner {
         });
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
-        let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 100000);
+        let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = init_state().await;
         authority_state.insert_genesis_object(gas_object).await;
 

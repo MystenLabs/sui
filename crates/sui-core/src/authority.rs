@@ -1132,10 +1132,11 @@ impl AuthorityState {
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution
         let gas_object = Object::new_move(
-            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas * 2),
+            MoveObject::new_gas_coin(SequenceNumber::new(), gas_object_id, max_tx_gas * std::cmp::max(storage_gas_price, gas_price) * 2),
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
+        println!("gas object value: {:?}", max_tx_gas * std::cmp::max(storage_gas_price, gas_price) + 500);
         let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
             &self.database,
             protocol_config,
@@ -1147,7 +1148,8 @@ impl AuthorityState {
 
         // TODO should we error instead for 0?
         let gas_price = std::cmp::max(gas_price, 1);
-        let gas_budget = max_tx_gas;
+        let gas_budget = max_tx_gas * gas_price;
+        println!("gas budget: {} gas price : {}", gas_budget, gas_price);
         let data = TransactionData::new(
             transaction_kind,
             sender,

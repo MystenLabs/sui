@@ -131,6 +131,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
                 invariant_violation!("Gas object should be a populated coin")
             };
             let max_gas_in_balance = gas_status.max_gax_budget_in_balance();
+            println!("max_gas_in_balance: {} coin balance {}", max_gas_in_balance, coin.balance.value());
             let Some(new_balance) = coin.balance.value().checked_sub(max_gas_in_balance) else {
                 invariant_violation!(
                     "Transaction input checker should check that there is enough gas"
