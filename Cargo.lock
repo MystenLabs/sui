@@ -8750,6 +8750,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "move-symbol-pool",
  "move-vm-runtime",
  "mysten-common",
  "mysten-metrics",
