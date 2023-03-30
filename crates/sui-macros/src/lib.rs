@@ -55,7 +55,7 @@ fn get_callback(identifier: &'static str) -> Option<Arc<FpCallback>> {
 
 pub fn handle_fail_point(identifier: &'static str) {
     if let Some(callback) = get_callback(identifier) {
-        tracing::error!("hit failpoint {}", identifier);
+        tracing::trace!("hit failpoint {}", identifier);
         assert!(
             callback().is_none(),
             "sync failpoint must not return future"
@@ -65,7 +65,7 @@ pub fn handle_fail_point(identifier: &'static str) {
 
 pub async fn handle_fail_point_async(identifier: &'static str) {
     if let Some(callback) = get_callback(identifier) {
-        tracing::error!("hit async failpoint {}", identifier);
+        tracing::trace!("hit async failpoint {}", identifier);
         let fut = callback().expect("async callback must return future");
         fut.await;
     }
