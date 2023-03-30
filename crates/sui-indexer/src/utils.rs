@@ -122,7 +122,7 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
 ) -> Result<Vec<BalanceChange>, E> {
     let gas_owner = effects.gas_object().owner;
     // Only charge gas when tx fails, skip all object parsing
-    let gas_cost_summary: GasCostSummary = effects.gas_cost_summary().clone().into();
+    let gas_cost_summary: GasCostSummary = effects.gas_cost_summary().clone();
     if effects.status() != &SuiExecutionStatus::Success {
         return Ok(vec![BalanceChange {
             owner: gas_owner,
