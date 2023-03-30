@@ -29,7 +29,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
 use sui_types::storage::ParentSync;
@@ -286,8 +286,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         let transactions_to_schedule = self
             .epoch_store
-            .process_consensus_transactions(
+            .process_consensus_transactions_and_commit_boundary(
                 verified_transactions,
+                round,
+                timestamp,
                 &self.checkpoint_service,
                 &self.parent_sync_store,
             )
@@ -297,6 +299,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
+
         if self.epoch_store.in_memory_checkpoint_roots {
             // The last block in this function notifies about new checkpoint if needed
             let final_checkpoint_round = self
@@ -479,6 +482,29 @@ impl SequencedConsensusTransaction {
 
     pub fn key(&self) -> SequencedConsensusTransactionKey {
         self.transaction.key()
+    }
+
+    pub fn is_end_of_publish(&self) -> bool {
+        matches!(
+            &self.transaction,
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::EndOfPublish(_),
+                ..
+            })
+        )
+    }
+
+    pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
+        match &self.transaction {
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                ..
+            }) if certificate.contains_shared_object() => Some(certificate.data()),
+            SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
+                Some(txn.data())
+            }
+            _ => None,
+        }
     }
 }
 
