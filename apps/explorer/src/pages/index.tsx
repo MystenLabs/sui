@@ -19,7 +19,7 @@ import TransactionResult from './transaction-result/TransactionResult';
 import { ValidatorDetails } from './validator/ValidatorDetails';
 import { ValidatorPageResult } from './validators/Validators';
 
-import { Layout } from '~/components/Layout';
+import { LayoutContainer } from '~/components/Layout/LayoutContainer';
 
 function RedirectWithId({ base }: { base: string }) {
     const params = useParams();
@@ -32,7 +32,7 @@ const sentryCreateBrowserRouter = wrapCreateBrowserRouter(createBrowserRouter);
 export const router = sentryCreateBrowserRouter([
     {
         path: '/',
-        element: <Layout />,
+        element: <LayoutContainer />,
         children: [
             { path: '/', element: <Home /> },
             { path: 'recent', element: <Recent /> },
