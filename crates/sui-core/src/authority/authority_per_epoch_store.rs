@@ -1050,7 +1050,7 @@ impl AuthorityPerEpochStore {
         &self,
         authority: AuthorityName,
         key: SequencedConsensusTransactionKey,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
         let mut write_batch = self.tables.last_consensus_index.batch();
         // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
@@ -1100,7 +1100,7 @@ impl AuthorityPerEpochStore {
         &self,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         let key = transaction.key();
         self.finish_consensus_certificate_process(key, certificate, consensus_index)
@@ -1115,7 +1115,7 @@ impl AuthorityPerEpochStore {
         &self,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
         parent_sync_store: impl ParentSync,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
@@ -1177,7 +1177,7 @@ impl AuthorityPerEpochStore {
     pub fn record_consensus_transaction_processed(
         &self,
         transaction: &SequencedConsensusTransactionKind,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         // executable transactions need to use record_(shared|owned)_object_cert_from_consensus
         assert!(!transaction.is_executable_transaction());
@@ -1190,7 +1190,7 @@ impl AuthorityPerEpochStore {
         &self,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
         let write_batch = self.tables.last_consensus_index.batch();
         self.finish_consensus_certificate_process_with_batch(
@@ -1205,7 +1205,7 @@ impl AuthorityPerEpochStore {
         &self,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
         assigned_versions: Vec<(ObjectID, SequenceNumber)>,
         next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
@@ -1244,7 +1244,7 @@ impl AuthorityPerEpochStore {
         &self,
         mut batch: DBBatch,
         key: SequencedConsensusTransactionKey,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
         batch.insert_batch(
             &self.tables.last_consensus_index,
@@ -1252,7 +1252,6 @@ impl AuthorityPerEpochStore {
         )?;
         batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
         batch.write()?;
-        self.consensus_notify_read.notify(&key, &());
         Ok(())
     }
 
@@ -1279,7 +1278,7 @@ impl AuthorityPerEpochStore {
         mut batch: DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
-        consensus_index: ExecutionIndicesWithHash,
+        consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
         let transaction_digest = *certificate.digest();
         batch.insert_batch(
@@ -1507,7 +1506,7 @@ impl AuthorityPerEpochStore {
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut verified_certificates = Vec::new();
-        for tx in transactions {
+        for tx in &transactions {
             if let Some(cert) = self
                 .process_consensus_transaction(tx, checkpoint_service, &parent_sync_store)
                 .await?
@@ -1515,12 +1514,18 @@ impl AuthorityPerEpochStore {
                 verified_certificates.push(cert);
             }
         }
+
+        for tx in &transactions {
+            let key = tx.0.transaction.key();
+            self.consensus_notify_read.notify(&key, &());
+        }
+
         Ok(verified_certificates)
     }
 
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
-        transaction: VerifiedSequencedConsensusTransaction,
+        transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
