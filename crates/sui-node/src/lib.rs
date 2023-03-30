@@ -979,6 +979,9 @@ impl SuiNode {
 
                 #[cfg(msim)]
                 {
+                    // This check needs to happen after `reconfigure_state for
+                    // validators, as otherwise reverts will not be reflected in
+                    // the live object set
                     self.check_is_consistent_state(
                         self.accumulator.clone(),
                         cur_epoch_store.epoch(),
@@ -1015,6 +1018,18 @@ impl SuiNode {
                     None
                 }
             } else {
+                // This check needs to happen before `reconfigure_state for
+                // fullnodes, as otherwise local execution from quorum driver
+                // may invalidate the consistency check. This is safe as the
+                // epoch has already ended, and reverts are not possible on
+                // fullnodes.
+                let is_inconsistent = self.check_is_consistent_state(
+                    self.accumulator.clone(),
+                    cur_epoch_store.epoch(),
+                    false,
+                );
+                checkpoint_executor.set_inconsistent_state(is_inconsistent);
+
                 let new_epoch_store = self
                     .reconfigure_state(
                         &cur_epoch_store,
@@ -1042,14 +1057,6 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    // was a fullnode, still a fullnode
-                    let is_inconsistent = self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        false,
-                    );
-                    checkpoint_executor.set_inconsistent_state(is_inconsistent);
-
                     None
                 }
             };
