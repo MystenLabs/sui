@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{account_address::AccountAddress, ident_str};
+use move_symbol_pool::Symbol;
 use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
 use sui_framework_build::compiled_package::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
@@ -18,7 +19,11 @@ use sui_types::{
     storage::BackingPackageStore,
 };
 
-use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use crate::authority::{
     authority_tests::{execute_programmable_transaction, init_state},
@@ -52,10 +57,11 @@ pub fn build_upgrade_test_modules(test_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>) {
 
 pub fn build_upgrade_test_modules_with_dep_addr(
     test_dir: &str,
+    dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
     dep_ids: impl IntoIterator<Item = (&'static str, ObjectID)>,
 ) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
     let mut build_config = BuildConfig::new_for_testing();
-    for (addr_name, obj_id) in dep_ids.into_iter() {
+    for (addr_name, obj_id) in dep_original_addresses {
         build_config
             .config
             .additional_named_addresses
@@ -64,11 +70,34 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let with_unpublished_deps = false;
-    let package = sui_framework::build_move_package(&path, build_config).unwrap();
+    let mut package = sui_framework::build_move_package(&path, build_config).unwrap();
+
+    let dep_id_mapping: BTreeMap<_, _> = dep_ids
+        .into_iter()
+        .map(|(dep_name, obj_id)| (Symbol::from(dep_name), obj_id))
+        .collect();
+
+    assert_eq!(
+        dep_id_mapping.len(),
+        package.dependency_ids.unpublished.len()
+    );
+    for unpublished_dep in &package.dependency_ids.unpublished {
+        let published_id = dep_id_mapping.get(unpublished_dep).unwrap();
+        // Make sure we aren't overriding a package
+        assert!(package
+            .dependency_ids
+            .published
+            .insert(*unpublished_dep, *published_id)
+            .is_none())
+    }
+
+    // No unpublished deps
+    package.dependency_ids.unpublished = BTreeSet::new();
+
     (
         package.get_package_digest(with_unpublished_deps).to_vec(),
         package.get_package_bytes(with_unpublished_deps),
-        package.get_dependency_original_package_ids(),
+        package.dependency_ids.published.values().cloned().collect(),
     )
 }
 
@@ -713,7 +742,6 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffects {
     runner.run(pt2).await
 }
 
-// TODO(tzakian): turn this test on once the Move loader changes.
 #[tokio::test]
 async fn test_interleaved_upgrades() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
@@ -722,6 +750,7 @@ async fn test_interleaved_upgrades() {
     let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
         "dep_on_upgrading_package",
         [("base_addr", runner.package.0)],
+        [("package_upgrade_base", runner.package.0)],
     );
     let (depender_package, depender_cap) = runner.publish(module_bytes, dep_ids).await;
 
@@ -768,7 +797,8 @@ async fn test_interleaved_upgrades() {
         // Currently doesn't work -- need to wait for linkage table to be added to the loader.
         let (digest, modules, dep_ids) = build_upgrade_test_modules_with_dep_addr(
             "dep_on_upgrading_package",
-            [("base_addr", dep_v2_package.0)],
+            [("base_addr", runner.package.0)],
+            [("package_upgrade_base", dep_v2_package.0)],
         );
 
         // We take as input the upgrade cap
@@ -803,6 +833,7 @@ async fn test_publish_override_happy_path() {
     let (_, module_bytes, dep_ids) = build_upgrade_test_modules_with_dep_addr(
         "dep_on_upgrading_package",
         [("base_addr", runner.package.0)],
+        [("package_upgrade_base", runner.package.0)],
     );
     // Dependency graph: base <-- dep_on_upgrading_package
     let (depender_package, _) = runner.publish(module_bytes, dep_ids).await;
@@ -853,6 +884,10 @@ async fn test_publish_override_happy_path() {
         "dep_on_dep",
         [
             ("base_addr", dep_v2_package.0),
+            ("dep_on_upgrading_package", depender_package.0),
+        ],
+        [
+            ("package_upgrade_base", dep_v2_package.0),
             ("dep_on_upgrading_package", depender_package.0),
         ],
     );
