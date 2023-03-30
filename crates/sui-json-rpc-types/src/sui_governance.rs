@@ -13,11 +13,11 @@ use sui_types::sui_serde::BigInt;
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename = "CommitteeInfo")]
 pub struct SuiCommittee {
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch: EpochId,
-    #[schemars(with = "Vec<(AuthorityName, BigInt)>")]
-    #[serde_as(as = "Vec<(_, BigInt)>")]
+    #[schemars(with = "Vec<(AuthorityName, BigInt<u64>)>")]
+    #[serde_as(as = "Vec<(_, BigInt<u64>)>")]
     pub validators: Vec<(AuthorityName, StakeUnit)>,
 }
 
@@ -47,8 +47,8 @@ pub enum StakeStatus {
     Pending,
     #[serde(rename_all = "camelCase")]
     Active {
-        #[schemars(with = "BigInt")]
-        #[serde_as(as = "BigInt")]
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         estimated_reward: u64,
     },
     Unstaked,
@@ -60,14 +60,14 @@ pub enum StakeStatus {
 pub struct Stake {
     /// ID of the StakedSui receipt object.
     pub staked_sui_id: ObjectID,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub stake_request_epoch: EpochId,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub stake_active_epoch: EpochId,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub principal: u64,
     #[serde(flatten)]
     pub status: StakeStatus,

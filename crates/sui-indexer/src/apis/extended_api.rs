@@ -15,7 +15,6 @@ use sui_json_rpc_types::{
     QueryObjectsPage, SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::EpochId;
 use sui_types::sui_serde::BigInt;
 
 use crate::errors::IndexerError;
@@ -89,8 +88,8 @@ impl<S: IndexerStore> ExtendedApi<S> {
 impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<S> {
     async fn get_epochs(
         &self,
-        cursor: Option<BigInt>,
-        limit: Option<BigInt>,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
         descending_order: Option<bool>,
     ) -> RpcResult<EpochPage> {
         let limit = validate_limit(
@@ -120,7 +119,7 @@ impl<S: IndexerStore + Sync + Send + 'static> ExtendedApiServer for ExtendedApi<
         &self,
         query: SuiObjectResponseQuery,
         cursor: Option<CheckpointedObjectID>,
-        limit: Option<BigInt>,
+        limit: Option<BigInt<u64>>,
     ) -> RpcResult<QueryObjectsPage> {
         Ok(self
             .query_objects_internal(query, cursor, limit.map(|l| *l as usize))

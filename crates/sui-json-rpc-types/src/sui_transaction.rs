@@ -14,8 +14,7 @@ use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::MoveTypeLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
-
+use serde_with::serde_as;
 use sui_json::{primitive_type, SuiJsonValue};
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -43,7 +42,7 @@ use crate::object_changes::ObjectChange;
 use crate::{Page, SuiEvent, SuiMovePackage, SuiObjectRef};
 
 // similar to EpochId of sui-types but BigInt
-pub type SuiEpochId = BigInt;
+pub type SuiEpochId = BigInt<u64>;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(
@@ -197,15 +196,15 @@ pub struct SuiTransactionBlockResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub balance_changes: Option<Vec<BalanceChange>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<BigInt>")]
-    #[serde_as(as = "Option<BigInt>")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     pub timestamp_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_local_execution: Option<bool>,
     /// The checkpoint number when this transaction was included and hence finalized.
     /// This is only returned in the read api, not in the transaction execution api.
-    #[schemars(with = "Option<BigInt>")]
-    #[serde_as(as = "Option<BigInt>")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<CheckpointSequenceNumber>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -330,20 +329,20 @@ impl SuiTransactionBlockKind {
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiChangeEpoch {
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch: EpochId,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub storage_charge: u64,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub computation_charge: u64,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub storage_rebate: u64,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch_start_timestamp_ms: u64,
 }
 
@@ -404,8 +403,8 @@ pub struct SuiTransactionBlockEffectsV1 {
     /// The status of the execution
     pub status: SuiExecutionStatus,
     /// The epoch when this transaction was executed.
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub executed_epoch: EpochId,
     pub gas_used: GasCostSummary,
     /// The version that every modified (mutated or deleted) object had before it was modified by
@@ -830,11 +829,11 @@ fn to_owned_ref(owned_refs: Vec<(ObjectRef, Owner)>) -> Vec<OwnedObjectRef> {
 pub struct SuiGasData {
     pub payment: Vec<SuiObjectRef>,
     pub owner: SuiAddress,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub price: u64,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub budget: u64,
 }
 
@@ -986,14 +985,14 @@ pub struct SuiGenesisTransaction {
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiConsensusCommitPrologue {
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub epoch: u64,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub round: u64,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
 }
 
