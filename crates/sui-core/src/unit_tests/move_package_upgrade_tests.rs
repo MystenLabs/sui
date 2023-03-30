@@ -187,6 +187,18 @@ impl UpgradeStateRunner {
 #[tokio::test]
 async fn test_upgrade_package_happy_path() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    let TransactionEffects::V1(effects) = runner.run({
+        let mut builder = ProgrammableTransactionBuilder::new();
+        move_call! {
+            builder,
+            (runner.package.0)::base::return_0()
+        };
+
+        builder.finish()
+    }).await;
+    assert!(effects.status.is_ok());
+
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         let current_package_id = runner.package.0;
@@ -238,6 +250,18 @@ async fn test_upgrade_package_happy_path() {
         .contains_key(ident_str!(
             "i_can_call_funs_in_other_modules_that_already_existed"
         )));
+
+    // XXX: This currently fails
+    let TransactionEffects::V1(effects) = runner.run({
+        let mut builder = ProgrammableTransactionBuilder::new();
+        move_call! {
+            builder,
+            (new_package.0.0)::base::return_0()
+        };
+
+        builder.finish()
+    }).await;
+    assert!(effects.status.is_ok());
 }
 
 #[tokio::test]
