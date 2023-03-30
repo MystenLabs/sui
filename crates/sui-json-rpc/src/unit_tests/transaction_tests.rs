@@ -43,7 +43,13 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     for obj in &objects[..objects.len() - 1] {
         let oref = obj.object().unwrap();
         let transaction_bytes: TransactionBlockBytes = http_client
-            .transfer_object(*address, oref.object_id, Some(gas_id), 100_000.into(), *address)
+            .transfer_object(
+                *address,
+                oref.object_id,
+                Some(gas_id),
+                100_000.into(),
+                *address,
+            )
             .await?;
         let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);

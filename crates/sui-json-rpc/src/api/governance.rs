@@ -29,7 +29,7 @@ pub trait GovernanceReadApi {
     async fn get_committee_info(
         &self,
         /// The epoch of interest. If None, default to the latest epoch
-        epoch: Option<BigInt>,
+        epoch: Option<BigInt<u64>>,
     ) -> RpcResult<SuiCommittee>;
 
     /// Return the latest SUI system state object on-chain.
@@ -38,5 +38,5 @@ pub trait GovernanceReadApi {
 
     /// Return the reference gas price for the network
     #[method(name = "getReferenceGasPrice")]
-    async fn get_reference_gas_price(&self) -> RpcResult<BigInt>;
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>>;
 }

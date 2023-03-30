@@ -19,12 +19,18 @@ use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 
 pub type CoinPage = Page<Coin, ObjectID>;
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
     pub coin_type: String,
     pub coin_object_count: usize,
+    #[schemars(with = "BigInt<u128>")]
+    #[serde_as(as = "BigInt<u128>")]
     pub total_balance: u128,
+    // TODO: This should be removed
+    #[schemars(with = "HashMap<BigInt<u64>, BigInt<u128>>")]
+    #[serde_as(as = "HashMap<BigInt<u64>, BigInt<u128>>")]
     pub locked_balance: HashMap<EpochId, u128>,
 }
 
@@ -38,11 +44,11 @@ pub struct Coin {
     #[serde_as(as = "AsSequenceNumber")]
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "BigInt")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
     pub balance: u64,
-    #[schemars(with = "Option<BigInt>")]
-    #[serde_as(as = "Option<BigInt>")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     pub locked_until_epoch: Option<EpochId>,
     pub previous_transaction: TransactionDigest,
 }
