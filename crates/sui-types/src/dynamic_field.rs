@@ -233,7 +233,7 @@ where
 {
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
 
-    // hash(parent || key || key_type_tag)
+    // hash(parent || len(key) || key || key_type_tag)
     let mut hasher = DefaultHash::default();
     hasher.update([HashingIntentScope::ChildObjectId as u8]);
     hasher.update(parent.into());

@@ -78,6 +78,7 @@ module sui::bls12381_tests {
         let round: u64 = 2373935;
         assert!(verify_drand_round(pk, sig, prev_sig, round) == false, 0);
     }
+
     fun verify_drand_round(pk: vector<u8>, sig: vector<u8>, prev_sig: vector<u8>, round: u64): bool {
         // The signed message can be computed in Rust using:
         //  let mut sha = Sha256::new();

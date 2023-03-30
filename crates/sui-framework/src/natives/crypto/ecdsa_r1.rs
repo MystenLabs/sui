@@ -109,9 +109,8 @@ pub fn ecrecover(
 
     let cost = context.gas_used();
 
-    let sig = match <Secp256r1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) {
-        Ok(s) => s,
-        Err(_) => return Ok(NativeResult::err(cost, INVALID_SIGNATURE)),
+    let Ok(sig) = <Secp256r1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) else {
+        return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
     let pk = match hash {
@@ -208,14 +207,12 @@ pub fn secp256r1_verify(
 
     let cost = context.gas_used();
 
-    let sig = match <Secp256r1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-        Ok(s) => s,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(sig) = <Secp256r1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let pk = match <Secp256r1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-        Ok(p) => p,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(pk) = <Secp256r1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let result = match hash {

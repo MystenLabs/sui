@@ -72,18 +72,16 @@ pub fn ed25519_verify(
     );
     let cost = context.gas_used();
 
-    let signature = match <Ed25519Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-        Ok(signature) => signature,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(signature) = <Ed25519Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let public_key = match <Ed25519PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-        Ok(public_key) => public_key,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(public_key) = <Ed25519PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    match public_key.verify(&msg_ref, &signature) {
-        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
-        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    }
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
+    ))
 }
