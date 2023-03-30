@@ -1092,7 +1092,13 @@ impl AuthorityPerEpochStore {
         // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
         // If some day we won't panic in ConsensusHandler on error we need to figure out here how
         // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
-        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
+        self.finish_consensus_transaction_process_with_batch(
+            &mut write_batch,
+            key,
+            consensus_index,
+        )?;
+        write_batch.write()?;
+        Ok(())
     }
 
     /// Caller is responsible to call consensus_message_processed before this method
@@ -1176,14 +1182,15 @@ impl AuthorityPerEpochStore {
 
     pub fn record_consensus_transaction_processed(
         &self,
+        write_batch: &mut DBBatch,
         transaction: &SequencedConsensusTransactionKind,
         consensus_index: &ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         // executable transactions need to use record_(shared|owned)_object_cert_from_consensus
         assert!(!transaction.is_executable_transaction());
         let key = transaction.key();
-        let write_batch = self.tables.last_consensus_index.batch();
-        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)
+        self.finish_consensus_transaction_process_with_batch(write_batch, key, consensus_index)?;
+        Ok(())
     }
 
     pub fn finish_consensus_certificate_process(
@@ -1242,7 +1249,7 @@ impl AuthorityPerEpochStore {
     /// Self::consensus_message_processed returns true after this call for given certificate
     fn finish_consensus_transaction_process_with_batch(
         &self,
-        mut batch: DBBatch,
+        batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
@@ -1251,7 +1258,6 @@ impl AuthorityPerEpochStore {
             [(LAST_CONSENSUS_INDEX_ADDR, consensus_index)],
         )?;
         batch.insert_batch(&self.tables.consensus_message_processed, [(key, true)])?;
-        batch.write()?;
         Ok(())
     }
 
@@ -1299,7 +1305,9 @@ impl AuthorityPerEpochStore {
             &self.tables.user_signatures_for_checkpoints,
             [(*certificate.digest(), certificate.tx_signatures().to_vec())],
         )?;
-        self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)
+        self.finish_consensus_transaction_process_with_batch(&mut batch, key, consensus_index)?;
+        batch.write()?;
+        Ok(())
     }
 
     pub fn final_epoch_checkpoint(&self) -> SuiResult<Option<u64>> {
@@ -1495,6 +1503,10 @@ impl AuthorityPerEpochStore {
         Ok(VerifiedSequencedConsensusTransaction(transaction))
     }
 
+    fn db_batch(&self) -> DBBatch {
+        self.tables.last_consensus_index.batch()
+    }
+
     pub(crate) async fn process_consensus_transactions_and_commit_boundary<
         C: CheckpointServiceNotify,
     >(
@@ -1627,7 +1639,13 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
-                self.record_consensus_transaction_processed(&transaction, consensus_index)?;
+                let mut batch = self.db_batch();
+                self.record_consensus_transaction_processed(
+                    &mut batch,
+                    &transaction,
+                    consensus_index,
+                )?;
+                batch.write()?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -1658,7 +1676,13 @@ impl AuthorityPerEpochStore {
                         authority.concise()
                     );
                 }
-                self.record_consensus_transaction_processed(&transaction, consensus_index)?;
+                let mut batch = self.db_batch();
+                self.record_consensus_transaction_processed(
+                    &mut batch,
+                    &transaction,
+                    consensus_index,
+                )?;
+                batch.write()?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
