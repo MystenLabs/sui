@@ -83,7 +83,7 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
         // entry will not be stored in the linkage table, so must be handled specially.
         if module_id.address() == &linkage.original_package_id {
             return Ok(ModuleId::new(
-                linkage.link_context.clone(),
+                linkage.link_context,
                 module_id.name().to_owned(),
             ));
         }

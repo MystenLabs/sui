@@ -57,7 +57,11 @@ async fn test_package_override() {
         let package_override = Object::new_package_for_testing(
             &framework_modules,
             TransactionDigest::genesis(),
-            &[MoveStdlib::as_package(), SuiFramework::as_package()],
+            &[
+                MoveStdlib::as_package(),
+                SuiFramework::as_package(),
+                SuiSystem::as_package(),
+            ],
         )
         .unwrap();
 
