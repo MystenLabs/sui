@@ -6,7 +6,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
-use sui_faucet::{Faucet, FaucetResponse, SimpleFaucet};
+use sui_faucet::{Faucet, FaucetConfig, FaucetResponse, SimpleFaucet};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use tracing::{debug, info, info_span, Instrument};
@@ -31,10 +31,12 @@ impl FaucetClientFactory {
                     .await;
 
                 let prom_registry = prometheus::Registry::new();
+                let config = FaucetConfig::default();
                 let simple_faucet = SimpleFaucet::new(
                     wallet_context,
                     &prom_registry,
                     &cluster.config_directory().join("faucet.wal"),
+                    config,
                 )
                 .await
                 .unwrap();
