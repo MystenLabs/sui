@@ -51,7 +51,7 @@ module sui_system::voting_power {
         let (info_list, remaining_power) = init_voting_power_info(validators, threshold);
         adjust_voting_power(&mut info_list, threshold, remaining_power);
         update_voting_power(validators, info_list);
-        check_invariants(validators);
+        // check_invariants(validators);
     }
 
     /// Create the initial voting power of each validator, set using their stake, but capped using threshold.

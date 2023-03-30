@@ -508,6 +508,7 @@ module sui_system::sui_system {
         next_protocol_version: u64,
         storage_rebate: u64,
         non_refundable_storage_fee: u64,
+        epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
         let self = load_system_state_mut(wrapper);
@@ -521,6 +522,7 @@ module sui_system::sui_system {
             computation_reward,
             storage_rebate,
             non_refundable_storage_fee,
+            epoch_start_timestamp_ms,
             ctx
         )
     }
@@ -738,6 +740,7 @@ module sui_system::sui_system {
             next_protocol_version,
             storage_rebate,
             non_refundable_storage_fee,
+            0,
             ctx,
         );
     }
