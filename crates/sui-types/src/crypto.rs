@@ -342,6 +342,7 @@ impl PublicKey {
             _ => Err(eyre!("Unsupported curve")),
         }
     }
+
     pub fn scheme(&self) -> SignatureScheme {
         match self {
             PublicKey::Ed25519(_) => Ed25519SuiSignature::SCHEME,
@@ -355,8 +356,9 @@ impl PublicKey {
 /// in Sui
 #[serde_as]
 #[derive(
-    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema, AsRef
 )]
+#[as_ref(forward)]
 pub struct AuthorityPublicKeyBytes(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -389,10 +391,9 @@ impl Debug for ConciseAuthorityPublicKeyBytes<'_> {
     }
 }
 
-impl std::fmt::Display for ConciseAuthorityPublicKeyBytes<'_> {
+impl Display for ConciseAuthorityPublicKeyBytes<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0 .0.get(0..4).ok_or(std::fmt::Error)?);
-        write!(f, "k#{}..", s)
+        Debug::fmt(self, f)
     }
 }
 
@@ -407,12 +408,6 @@ impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
 impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
     fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
         AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
-    }
-}
-
-impl AsRef<[u8]> for AuthorityPublicKeyBytes {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
     }
 }
 
