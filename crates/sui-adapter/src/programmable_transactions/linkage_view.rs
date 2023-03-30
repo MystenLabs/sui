@@ -10,12 +10,9 @@ use move_core_types::{
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
 };
 use sui_types::{
-    base_types::{ObjectID, ObjectRef},
-    error::{ExecutionError, SuiError, SuiResult},
-    event::Event,
+    base_types::ObjectID,
+    error::{ExecutionError, SuiError},
     move_package::{MovePackage, UpgradeInfo},
-    object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
 };
 
 use super::types::StorageView;
@@ -130,41 +127,5 @@ impl<'state, S: StorageView> ModuleResolver for LinkageView<'state, S> {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.state_view.get_module(id)
-    }
-}
-
-impl<'state, S: StorageView> BackingPackageStore for LinkageView<'state, S> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.state_view.get_package_object(package_id)
-    }
-}
-
-impl<'state, S: StorageView> Storage for LinkageView<'state, S> {
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
-        self.state_view.read_object(id)
-    }
-
-    fn reset(&mut self) {
-        unimplemented!("Read-only storage only.")
-    }
-
-    fn log_event(&mut self, _event: Event) {
-        unimplemented!("Read-only storage only.")
-    }
-
-    fn apply_object_changes(&mut self, _changes: BTreeMap<ObjectID, ObjectChange>) {
-        unimplemented!("Read-only storage only.")
-    }
-}
-
-impl<'state, S: StorageView> ParentSync for LinkageView<'state, S> {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        self.state_view.get_latest_parent_entry_ref(object_id)
-    }
-}
-
-impl<'state, S: StorageView> ChildObjectResolver for LinkageView<'state, S> {
-    fn read_child_object(&self, parent: &ObjectID, child: &ObjectID) -> SuiResult<Option<Object>> {
-        self.state_view.read_child_object(parent, child)
     }
 }
