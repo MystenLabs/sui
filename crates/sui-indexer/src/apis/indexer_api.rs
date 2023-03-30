@@ -51,7 +51,7 @@ impl<S: IndexerStore> IndexerApi<S> {
         }
     }
 
-    pub fn get_events_internal(
+    pub fn query_events_internal(
         &self,
         query: EventFilter,
         cursor: Option<EventID>,
@@ -292,7 +292,7 @@ where
     ) -> RpcResult<TransactionBlocksPage> {
         if !self
             .migrated_methods
-            .contains(&"query_transactions".to_string())
+            .contains(&"query_transaction_blocks".to_string())
         {
             return self
                 .fullnode
@@ -310,13 +310,13 @@ where
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        if self.migrated_methods.contains(&"get_events".to_string()) {
+        if self.migrated_methods.contains(&"query_events".to_string()) {
             return self
                 .fullnode
                 .query_events(query, cursor, limit, descending_order)
                 .await;
         }
-        Ok(self.get_events_internal(query, cursor, limit, descending_order)?)
+        Ok(self.query_events_internal(query, cursor, limit, descending_order)?)
     }
 
     async fn get_dynamic_fields(
