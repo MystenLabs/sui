@@ -227,7 +227,7 @@ function ValidatorPageResult() {
         if (!validatorEvents) return 0;
         let totalRewards = 0;
 
-        validatorEvents.data.forEach(({ parsedJson }) => {
+        validatorEvents.forEach(({ parsedJson }) => {
             totalRewards += +parsedJson!.pool_staking_reward;
         });
 
@@ -239,7 +239,7 @@ function ValidatorPageResult() {
         return validatorsTableData(
             data.activeValidators,
             data.atRiskValidators,
-            validatorEvents.data,
+            validatorEvents,
             rollingAverageApys
         );
     }, [data, validatorEvents, rollingAverageApys]);

@@ -60,14 +60,11 @@ export function useGetRollingAverageApys(numberOfValidators: number | null) {
 
     const apyByValidator =
         useMemo<ApyByValidator | null>(() => {
-            if (
-                !validatorEpochEvents?.data ||
-                !validatorEpochEvents?.data?.data
-            ) {
+            if (!validatorEpochEvents?.data) {
                 return null;
             }
             const apyGroups: ApyGroups = {};
-            validatorEpochEvents.data.data.forEach(({ parsedJson }) => {
+            validatorEpochEvents.data.forEach(({ parsedJson }) => {
                 const { stake, pool_staking_reward, validator_address } =
                     parsedJson as ParsedJson;
 
