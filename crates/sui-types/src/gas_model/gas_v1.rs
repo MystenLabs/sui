@@ -241,8 +241,8 @@ impl<'a> SuiGasStatus<'a> {
     ) -> SuiGasStatus<'a> {
         let budget_in_unit = gas_budget / computation_gas_unit_price; // truncate the value and move to units
         Self::new(
-            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
-            // GasStatus::new_v2(&INITIAL_COST_SCHEDULE, gas_budget, computation_gas_unit_price),
+            // GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
+            GasStatus::new_v2(&INITIAL_COST_SCHEDULE, gas_budget, computation_gas_unit_price),
             budget_in_unit,
             true,
             computation_gas_unit_price.into(),
@@ -260,8 +260,8 @@ impl<'a> SuiGasStatus<'a> {
          // truncate the value and move to units
         let budget_in_unit = gas_budget / computation_gas_unit_price;
         Self::new(
-            GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
-            // GasStatus::new_v2(&INITIAL_COST_SCHEDULE, gas_budget, computation_gas_unit_price),
+            // GasStatus::new(&INITIAL_COST_SCHEDULE, GasUnits::new(budget_in_unit)),
+            GasStatus::new_v2(&INITIAL_COST_SCHEDULE, gas_budget, computation_gas_unit_price),
             budget_in_unit,
             true,
             computation_gas_unit_price.into(),
