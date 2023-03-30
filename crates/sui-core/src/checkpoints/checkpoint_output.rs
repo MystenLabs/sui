@@ -7,6 +7,7 @@ use crate::consensus_adapter::SubmitToConsensus;
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
@@ -41,6 +42,7 @@ pub struct SubmitCheckpointToConsensus<T> {
     pub authority: AuthorityName,
     pub next_reconfiguration_timestamp_ms: u64,
     pub metrics: Arc<CheckpointMetrics>,
+    pub started: Instant,
 }
 
 pub struct LogCheckpointOutput;
@@ -91,7 +93,10 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
         self.metrics
             .last_sent_checkpoint_signature
             .set(checkpoint_seq as i64);
-        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms {
+        const MIN_SINCE_STARTED: Duration = Duration::from_secs(10 * 60); // 10 min
+        if checkpoint_timestamp >= self.next_reconfiguration_timestamp_ms
+            && self.started.elapsed() > MIN_SINCE_STARTED
+        {
             // close_epoch is ok if called multiple times
             self.sender.close_epoch(epoch_store);
         }
