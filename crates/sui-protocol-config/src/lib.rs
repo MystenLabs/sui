@@ -119,6 +119,8 @@ struct FeatureFlags {
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     commit_root_state_digest: bool,
+    // Pass epoch start time to advance_epoch safe mode function.
+    advance_epoch_start_time_in_safe_mode: bool,
     // If true, include various fixes to ensure sui conservation, including:
     // - Conserving storage rebate of system transactions.
     // - TBD.
@@ -563,6 +565,10 @@ impl ProtocolConfig {
 
     pub fn gas_model_v2(&self) -> bool {
         self.feature_flags.gas_model_v2
+    }
+
+    pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
+        self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
 }
 
@@ -1481,13 +1487,16 @@ impl ProtocolConfig {
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
-            2 => Self::get_for_version_impl(version - 1),
+            2 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
+                cfg
+            }
             3 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.gas_model_v2 = true;
                 cfg
             }
-
             // Use this template when making changes:
             //
             // NEW_VERSION => Self {

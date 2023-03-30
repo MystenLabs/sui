@@ -429,6 +429,7 @@ pub fn construct_advance_epoch_pt(
 
 pub fn construct_advance_epoch_safe_mode_pt(
     params: &AdvanceEpochParams,
+    protocol_config: &ProtocolConfig,
 ) -> Result<ProgrammableTransaction, ExecutionError> {
     let mut builder = ProgrammableTransactionBuilder::new();
     // Step 1: Create storage and computation rewards.
@@ -441,16 +442,25 @@ pub fn construct_advance_epoch_safe_mode_pt(
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
         mutable: true,
     });
-    let call_arg_arguments = vec![
+
+    let mut args = vec![
         system_object_arg,
         CallArg::Pure(bcs::to_bytes(&params.epoch).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
-    ]
-    .into_iter()
-    .map(|a| builder.input(a))
-    .collect::<Result<_, _>>();
+    ];
+
+    if protocol_config.get_advance_epoch_start_time_in_safe_mode() {
+        args.push(CallArg::Pure(
+            bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap(),
+        ));
+    }
+
+    let call_arg_arguments = args
+        .into_iter()
+        .map(|a| builder.input(a))
+        .collect::<Result<_, _>>();
 
     assert_invariant!(
         call_arg_arguments.is_ok(),
@@ -515,7 +525,8 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         temporary_store.drop_writes();
         // Must reset the storage rebate since we are re-executing.
         gas_status.reset_storage_cost_and_rebate();
-        let advance_epoch_safe_mode_pt = construct_advance_epoch_safe_mode_pt(&params)?;
+        let advance_epoch_safe_mode_pt =
+            construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
         programmable_transactions::execution::execute::<_, execution_mode::System>(
             protocol_config,
             move_vm,
