@@ -29,12 +29,11 @@ use rand::{
     Rng, SeedableRng,
 };
 use serde_json::json;
-use sui_framework::{make_system_objects, make_system_packages, system_package_ids};
 use tracing::info;
 
+use sui_framework::{make_system_objects, make_system_packages, system_package_ids};
 use sui_json_rpc_types::{
-    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiGasCostSummary,
-    SuiTransactionBlockEffectsAPI, SuiTypeTag,
+    SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -323,7 +322,7 @@ async fn test_dev_inspect_object_by_bytes() {
     // random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
-    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
@@ -367,8 +366,7 @@ async fn test_dev_inspect_object_by_bytes() {
         .contents()
         .to_vec();
     // gas used should be the same
-    let actual_gas_used: SuiGasCostSummary = effects.gas_cost_summary().clone().into();
-    assert_eq!(actual_gas_used, dev_inspect_gas_summary);
+    assert_eq!(effects.gas_cost_summary(), &dev_inspect_gas_summary);
 
     // use the created object directly, via its bytes
     let DevInspectResults {
@@ -392,7 +390,7 @@ async fn test_dev_inspect_object_by_bytes() {
     // but random gas is mutated
     assert_eq!(effects.mutated().len(), 1);
     assert!(effects.deleted().is_empty());
-    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -496,7 +494,7 @@ async fn test_dev_inspect_unowned_object() {
     // random gas and input object are mutated
     assert_eq!(effects.mutated().len(), 2);
     assert!(effects.deleted().is_empty());
-    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
 
     let mut results = results.unwrap();
     assert_eq!(results.len(), 1);
@@ -610,7 +608,7 @@ async fn test_dev_inspect_dynamic_field() {
     assert_eq!(effects.mutated().len(), 1);
     // nothing is deleted
     assert!(effects.deleted().is_empty());
-    assert!(<u64>::from(effects.gas_cost_summary().computation_cost) > 0);
+    assert!(effects.gas_cost_summary().computation_cost > 0);
     assert_eq!(results.len(), 1);
     let exec_results = results.pop().unwrap();
     let SuiExecutionResult {
