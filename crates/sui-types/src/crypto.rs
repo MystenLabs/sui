@@ -989,7 +989,7 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs
 /// to template on whether the struct is signed by an authority. We want to limit how
-/// those structs can be instanted on, hence the sealed trait.
+/// those structs can be instantiated on, hence the sealed trait.
 /// TODO: We could also add the aggregated signature as another impl of the trait.
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
@@ -1036,6 +1036,7 @@ pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
+
 impl AuthoritySignInfoTrait for AuthoritySignInfo {
     fn verify_secure<T: Serialize>(
         &self,
@@ -1387,12 +1388,14 @@ mod private {
 pub trait Signable<W> {
     fn write(&self, writer: &mut W);
 }
+
 pub trait SignableBytes
 where
     Self: Sized,
 {
     fn from_signable_bytes(bytes: &[u8]) -> Result<Self, Error>;
 }
+
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
 /// * We use `serde_name` to extract a seed from the name of structs and enums.
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
@@ -1403,8 +1406,6 @@ where
 /// MUST be on types that comply with the `serde_name` machinery
 /// for the below implementations not to panic. One way to check they work is to write
 /// a unit test for serialization to / deserialization from signable bytes.
-///
-///
 mod bcs_signable {
 
     pub trait BcsSignable: serde::Serialize + serde::de::DeserializeOwned {}
