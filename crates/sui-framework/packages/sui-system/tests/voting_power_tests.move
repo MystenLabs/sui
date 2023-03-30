@@ -68,6 +68,45 @@ module sui_system::voting_power_tests {
         test_scenario::end(scenario);
     }
 
+    struct Random has drop, store, copy {
+        seed: u64
+    }
+
+    public fun new(): Random {
+        Random {
+            seed: 1103515245
+        }
+    }
+
+    public fun random(rand: &mut Random, m: u64): u64 {
+        rand.seed = ((((1103515245 * (rand.seed as u128) + 465462346546) >> 1) & 0x0000000000000000ffffffffffffffff) as u64);
+        rand.seed % m
+    }
+
+    #[test]
+    fun test_fuzz() {
+        let scenario = test_scenario::begin(@0x0);
+        let ctx = test_scenario::ctx(&mut scenario);
+        let random = new();
+        let length;
+        let validators;
+        let n = 0;
+        while (n < 1000) {
+            length = random(&mut random, 19) + 1;
+            let i = 0;
+            let stakes = vector::empty();
+            while (i < length) {
+                vector::push_back(&mut stakes, random(&mut random, 20000));
+                i = i + 1;
+            };
+            validators = gtu::create_validators_with_stakes(stakes, ctx);
+            voting_power::set_voting_power(&mut validators);
+            test_utils::destroy(validators);
+            n = n + 1;
+        };
+        test_scenario::end(scenario);
+    }
+
     fun get_voting_power(validators: &vector<Validator>): vector<u64> {
         let result = vector[];
         let i = 0;
