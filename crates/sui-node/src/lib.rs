@@ -25,7 +25,7 @@ use tokio::sync::oneshot::Sender;
 use tokio::sync::{watch, Mutex};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tracing::{debug, warn};
+use tracing::warn;
 use tracing::{error_span, info, Instrument};
 
 use checkpoint_executor::CheckpointExecutor;
