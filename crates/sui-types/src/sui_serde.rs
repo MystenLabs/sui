@@ -1,17 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
+use std::ops::Deref;
 
 use fastcrypto::encoding::Hex;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use schemars::JsonSchema;
 use serde;
 use serde::de::{Deserializer, Error};
 use serde::ser::{Error as SerError, Serializer};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
+
+use sui_protocol_config::ProtocolVersion;
 
 use crate::{parse_sui_struct_tag, parse_sui_type_tag};
 
@@ -217,5 +224,102 @@ impl<'de> DeserializeAs<'de, TypeTag> for SuiTypeTag {
     {
         let s = String::deserialize(deserializer)?;
         parse_sui_type_tag(&s).map_err(D::Error::custom)
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
+pub struct BigInt(
+    #[schemars(with = "String")]
+    #[serde_as(as = "DisplayFromStr")]
+    u64,
+);
+
+impl SerializeAs<u64> for BigInt {
+    fn serialize_as<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        BigInt(*value).serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, u64> for BigInt {
+    fn deserialize_as<D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(*BigInt::deserialize(deserializer)?)
+    }
+}
+
+impl From<u64> for BigInt {
+    fn from(v: u64) -> BigInt {
+        BigInt(v)
+    }
+}
+
+impl Deref for BigInt {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for BigInt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
+pub struct SequenceNumber(#[schemars(with = "BigInt")] u64);
+
+impl SerializeAs<crate::base_types::SequenceNumber> for SequenceNumber {
+    fn serialize_as<S>(
+        value: &crate::base_types::SequenceNumber,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = value.value().to_string();
+        s.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, crate::base_types::SequenceNumber> for SequenceNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<crate::base_types::SequenceNumber, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let b = BigInt::deserialize(deserializer)?;
+        Ok(crate::base_types::SequenceNumber::from_u64(*b))
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy, JsonSchema)]
+pub struct AsProtocolVersion(#[schemars(with = "BigInt")] u64);
+
+impl SerializeAs<ProtocolVersion> for AsProtocolVersion {
+    fn serialize_as<S>(value: &ProtocolVersion, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = value.as_u64().to_string();
+        s.serialize(serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, ProtocolVersion> for AsProtocolVersion {
+    fn deserialize_as<D>(deserializer: D) -> Result<ProtocolVersion, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let b = BigInt::deserialize(deserializer)?;
+        Ok(ProtocolVersion::from(*b))
     }
 }

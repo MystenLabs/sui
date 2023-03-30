@@ -1,18 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::SuiAddress;
+use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::sui_serde::BigInt;
+use crate::ObjectID;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 
-use crate::base_types::SuiAddress;
-use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::ObjectID;
-
+#[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionFilter {
     /// Query by checkpoint.
-    Checkpoint(CheckpointSequenceNumber),
+    Checkpoint(
+        #[schemars(with = "BigInt")]
+        #[serde_as(as = "DisplayFromStr")]
+        CheckpointSequenceNumber,
+    ),
     /// Query by move function.
     MoveFunction {
         package: ObjectID,

@@ -2796,9 +2796,7 @@
           "lockedBalance": {
             "type": "object",
             "additionalProperties": {
-              "type": "integer",
-              "format": "uint128",
-              "minimum": 0.0
+              "$ref": "#/components/schemas/BigInt_for_uint128"
             }
           },
           "totalBalance": {

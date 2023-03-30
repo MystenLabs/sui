@@ -228,7 +228,7 @@ impl CheckpointBlockProvider {
     }
 
     async fn create_block_response(&self, checkpoint: Checkpoint) -> Result<BlockResponse, Error> {
-        let index = checkpoint.sequence_number.into();
+        let index = checkpoint.sequence_number;
         let hash = checkpoint.digest;
         let mut transactions = vec![];
         for digest in checkpoint.transactions.iter() {
@@ -289,7 +289,7 @@ impl CheckpointBlockProvider {
             .get_checkpoint(seq_number.into())
             .await?;
         Ok(BlockIdentifier {
-            index: checkpoint.sequence_number.into(),
+            index: checkpoint.sequence_number,
             hash: checkpoint.digest,
         })
     }
