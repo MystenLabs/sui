@@ -46,6 +46,7 @@ move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 
 diesel_migrations = { version = "2.0.0" }
+cached = "0.42.0"
 
 [features]
 pg_integration = []

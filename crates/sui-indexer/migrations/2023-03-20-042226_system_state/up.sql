@@ -78,14 +78,15 @@ CREATE TABLE at_risk_validators
     CONSTRAINT at_risk_validators_pk PRIMARY KEY (EPOCH, address)
 );
 
-CREATE VIEW network_metrics AS
+CREATE OR REPLACE VIEW network_metrics AS
 SELECT (SELECT COALESCE(SUM(transaction_count)::float8 / 10, 0)
         FROM transactions
-        WHERE timestamp_ms > (EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::BIGINT - 10000) AS current_tps,
-       (SELECT COALESCE(tps_30_days, 0) FROM epoch_network_metrics)                          AS tps_30_days,
-       (SELECT COUNT(1) FROM addresses)                                                      AS total_addresses,
-       (SELECT COUNT(1) FROM objects)                                                        AS total_objects,
-       (SELECT COUNT(1) FROM packages)                                                       AS total_packages,
-       (SELECT MAX(epoch) FROM epochs)                                                       AS current_epoch,
-       (SELECT MAX(sequence_number) FROM checkpoints)                                        AS current_checkpoint;
-
+        WHERE timestamp_ms >
+              (SELECT timestamp_ms FROM checkpoints ORDER BY sequence_number DESC LIMIT 1) - 10000) AS current_tps,
+       (SELECT COALESCE(tps_30_days, 0) FROM epoch_network_metrics)                                 AS tps_30_days,
+       (SELECT COUNT(1) FROM addresses)                                                             AS total_addresses,
+       -- row estimation
+       (SELECT reltuples AS estimate FROM pg_class WHERE relname = 'objects')::BIGINT               AS total_objects,
+       (SELECT COUNT(1) FROM packages)                                                              AS total_packages,
+       (SELECT MAX(epoch) FROM epochs)                                                              AS current_epoch,
+       (SELECT MAX(sequence_number) FROM checkpoints)                                               AS current_checkpoint;
