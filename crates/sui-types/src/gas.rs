@@ -596,13 +596,13 @@ pub fn check_gas_balance(
     if required_gas_amount > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
-            max_budget: cost_table.max_gas_budget,
+            max_budget: max_gas_budget as u64,
         });
     }
     if required_gas_amount < min_gas_budget {
         return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
-            min_budget: cost_table.min_gas_budget_external(),
+            min_budget: min_gas_budget as u64,
         });
     }
 
