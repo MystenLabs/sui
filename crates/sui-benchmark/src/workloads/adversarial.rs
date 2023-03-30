@@ -1,11 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
+    WorkloadBuilderInfo, WorkloadParams,
+};
+use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
 use crate::workloads::payload::Payload;
 use crate::workloads::{Gas, GasCoinConfig};
-use crate::{ExecutionEffects, ValidatorProxy};
+use crate::{BenchMoveCallArg, ExecutionEffects, ValidatorProxy};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -23,11 +28,6 @@ use sui_types::messages::{CallArg, ObjectArg, TransactionEffectsAPI};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, messages::VerifiedTransaction};
 use test_utils::messages::create_publish_move_package_transaction_with_budget;
-
-use super::{
-    workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING},
-    WorkloadBuilderInfo, WorkloadParams,
-};
 
 /// Number of vectors to create in LargeTransientRuntimeVectors workload
 const NUM_VECTORS: u64 = 1_000;
@@ -183,7 +183,7 @@ impl Payload for AdversarialTestPayload {
                 .expect("Protocol config not in system state"),
         );
 
-        self.state.move_call(
+        self.state.move_call_pt(
             self.sender,
             self.package_id,
             "adversarial",
@@ -214,13 +214,13 @@ impl AdversarialTestPayload {
     ) -> AdversarialPayloadArgs {
         match payload_type {
             AdversarialPayloadType::LargeObjects => AdversarialPayloadArgs {
-                fn_name: "create_shared_objects".to_owned(),
+                fn_name: "create_max_size_shared_objects".to_owned(),
                 args: [
                     // Use the maximum number of new ids which can be created
-                    protocol_config.max_num_new_move_object_ids().into(),
-                    // Raise this. Using a smaller value here as full value locks up local machine
-                    self.get_pct_of(protocol_config.max_move_object_size())
+                    self.get_pct_of(protocol_config.max_num_new_move_object_ids())
                         .into(),
+                    // Raise this. Using a smaller value here as full value locks up local machine
+                    protocol_config.max_move_object_size().into(),
                 ]
                 .to_vec(),
             },
@@ -240,7 +240,8 @@ impl AdversarialTestPayload {
                         id: self.df_parent_obj_ref.0,
                         initial_shared_version: self.df_parent_obj_ref.1,
                         mutable: true,
-                    }),
+                    })
+                    .into(),
                     self.get_pct_of(protocol_config.object_runtime_max_num_store_entries())
                         .into(),
                 ]
@@ -259,7 +260,7 @@ impl AdversarialTestPayload {
                 let max_fn_params = protocol_config.max_function_parameters();
                 let max_pure_arg_size =
                     self.get_pct_of(protocol_config.max_pure_argument_size().into());
-                let mut args: Vec<CallArg> = vec![];
+                let mut args: Vec<BenchMoveCallArg> = vec![];
                 (0..max_fn_params).for_each(|_| {
                     let mut v = vec![0u8; max_pure_arg_size as usize];
                     while bcs::to_bytes(&v).unwrap().len() >= max_pure_arg_size as usize {
@@ -410,7 +411,6 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .await
             .unwrap();
         let created = effects.created();
-
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
         assert_eq!(
             created.len() as u64,
@@ -434,6 +434,36 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             "Dynamic field parent must be created"
         );
         self.package_id = package_obj.0 .0;
+
+        let gas_ref = proxy
+            .get_object(gas.0 .0)
+            .await
+            .unwrap()
+            .compute_object_reference();
+
+        // WIP:
+        // Create a bunch of sharedobjects which we will use for MaxReads workload
+        let transaction = move_call_pt_impl(
+            gas.1,
+            &gas.2,
+            package_obj.0 .0,
+            "adversarial",
+            "create_min_size_shared_objects",
+            vec![],
+            vec![10u64.into()],
+            &gas_ref,
+            gas_budget,
+            reference_gas_price,
+        );
+
+        let effects = proxy
+            .execute_transaction_block(transaction.into())
+            .await
+            .unwrap();
+        let created = effects.created();
+        assert_eq!(created.len() as u64, 10);
+
+        // We've seen that the shared objects are indeed created, now we can read them in MaxReads workload
     }
 
     async fn make_test_payloads(
@@ -462,5 +492,5 @@ impl Workload<dyn Payload> for AdversarialWorkload {
 
 struct AdversarialPayloadArgs {
     pub fn_name: String,
-    pub args: Vec<CallArg>,
+    pub args: Vec<BenchMoveCallArg>,
 }
