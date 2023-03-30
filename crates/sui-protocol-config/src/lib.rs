@@ -10,11 +10,12 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 2;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
+// Version 2: Framework changes, including advancing epoch_start_time in safemode.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -117,6 +118,8 @@ struct FeatureFlags {
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     commit_root_state_digest: bool,
+
+    advance_epoch_start_time_in_safe_mode: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -553,6 +556,10 @@ impl ProtocolConfig {
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
         self.feature_flags.commit_root_state_digest
+    }
+
+    pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
+        self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
 }
 
@@ -1471,6 +1478,12 @@ impl ProtocolConfig {
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
+
+            2 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
+                cfg
+            }
 
             // Use this template when making changes:
             //
