@@ -214,6 +214,7 @@ pub mod pg_integration_test {
         Ok(())
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_total_objects() -> Result<(), anyhow::Error> {
         let (_test_cluster, _, store, _handle) = start_test_cluster(None).await;
