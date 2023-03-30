@@ -1199,13 +1199,15 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let write_batch = self.tables.last_consensus_index.batch();
+        let mut write_batch = self.db_batch();
         self.finish_consensus_certificate_process_with_batch(
-            write_batch,
+            &mut write_batch,
             key,
             certificate,
             consensus_index,
-        )
+        )?;
+        write_batch.write()?;
+        Ok(())
     }
 
     fn finish_assign_shared_object_versions(
@@ -1234,11 +1236,13 @@ impl AuthorityPerEpochStore {
         write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
 
         self.finish_consensus_certificate_process_with_batch(
-            write_batch,
+            &mut write_batch,
             key,
             certificate,
             consensus_index,
-        )
+        )?;
+        write_batch.write()?;
+        Ok(())
     }
 
     /// When we finish processing certificate from consensus we record this information.
@@ -1281,7 +1285,7 @@ impl AuthorityPerEpochStore {
 
     fn finish_consensus_certificate_process_with_batch(
         &self,
-        mut batch: DBBatch,
+        batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
@@ -1305,8 +1309,7 @@ impl AuthorityPerEpochStore {
             &self.tables.user_signatures_for_checkpoints,
             [(*certificate.digest(), certificate.tx_signatures().to_vec())],
         )?;
-        self.finish_consensus_transaction_process_with_batch(&mut batch, key, consensus_index)?;
-        batch.write()?;
+        self.finish_consensus_transaction_process_with_batch(batch, key, consensus_index)?;
         Ok(())
     }
 
