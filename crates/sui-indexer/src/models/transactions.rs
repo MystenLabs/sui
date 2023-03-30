@@ -114,10 +114,10 @@ impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
             .collect();
 
         let gas_summary = effects.gas_cost_summary();
-        let computation_cost = <u64>::from(gas_summary.computation_cost);
-        let storage_cost = <u64>::from(gas_summary.storage_cost);
-        let storage_rebate = <u64>::from(gas_summary.storage_rebate);
-        let non_refundable_storage_fee = <u64>::from(gas_summary.non_refundable_storage_fee);
+        let computation_cost = gas_summary.computation_cost;
+        let storage_cost = gas_summary.storage_cost;
+        let storage_rebate = gas_summary.storage_rebate;
+        let non_refundable_storage_fee = gas_summary.non_refundable_storage_fee;
         Ok(Transaction {
             id: None,
             transaction_digest: digest.base58_encode(),
