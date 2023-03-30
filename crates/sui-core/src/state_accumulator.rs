@@ -55,7 +55,6 @@ impl StateAccumulator {
     }
 
     /// Accumulates the effects of a single checkpoint and persists the accumulator.
-    /// This function is idempotent.
     pub fn accumulate_checkpoint(
         &self,
         effects: Vec<TransactionEffects>,
@@ -63,9 +62,6 @@ impl StateAccumulator {
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateCheckpoint");
-        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
-            return Ok(acc);
-        }
 
         let acc = self.accumulate_effects(effects);
 
