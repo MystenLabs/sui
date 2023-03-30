@@ -155,20 +155,18 @@ impl ReadApiServer for ReadApi {
                 futures.push(self.get_object(object_id, options.clone()))
             }
             let results = join_all(futures).await;
-            let (oks, errs): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
-
-            let success = oks.into_iter().filter_map(Result::ok).collect();
-            let errors: Vec<_> = errs.into_iter().filter_map(Result::err).collect();
-            if !errors.is_empty() {
-                let error_string = errors
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<String>>()
-                    .join("; ");
-                Err(anyhow!("{error_string}").into())
-            } else {
-                Ok(success)
-            }
+            let objects: Vec<SuiObjectResponse> = results
+                .into_iter()
+                .map(|result| match result {
+                    Ok(response) => Ok(response),
+                    Err(error) => {
+                        error!("Failed to fetch object with error: {error:?}");
+                        Err(format!("Error: {}", error))
+                    }
+                })
+                .filter_map(Result::ok)
+                .collect();
+            Ok(objects)
         } else {
             Err(anyhow!(UserInputError::SizeLimitExceeded {
                 limit: "input limit".to_string(),
