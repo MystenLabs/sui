@@ -10,11 +10,13 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 1;
+const MAX_PROTOCOL_VERSION: u64 = 3;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
+// Version 2: Framework changes, including advancing epoch_start_time in safemode.
+// Version 3: gas model v2, including all sui conservation fixes.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -117,6 +119,10 @@ struct FeatureFlags {
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     commit_root_state_digest: bool,
+    // If true, include various fixes to ensure sui conservation, including:
+    // - Conserving storage rebate of system transactions.
+    // - TBD.
+    gas_model_v2: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -553,6 +559,10 @@ impl ProtocolConfig {
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
         self.feature_flags.commit_root_state_digest
+    }
+
+    pub fn gas_model_v2(&self) -> bool {
+        self.feature_flags.gas_model_v2
     }
 }
 
@@ -1323,7 +1333,7 @@ impl ProtocolConfig {
                 address_from_u256_cost_base: Some(52),
 
                 // `dynamic_field` module
-                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
                 dynamic_field_hash_type_and_key_cost_base: Some(100),
                 dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
                 dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),
@@ -1471,6 +1481,12 @@ impl ProtocolConfig {
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
+            2 => Self::get_for_version_impl(version - 1),
+            3 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.gas_model_v2 = true;
+                cfg
+            }
 
             // Use this template when making changes:
             //
