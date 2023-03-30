@@ -62,7 +62,7 @@ where
         let fast_path_resp: FastPathTransactionBlockResponse =
             sui_transaction_response.clone().try_into()?;
         let effects = &fast_path_resp.effects;
-        let epoch = <u64>::from(effects.executed_epoch());
+        let epoch = effects.executed_epoch();
 
         let object_changes = get_object_changes(effects);
         let changed_objects = fetch_changed_objects(self.fullnode.clone(), object_changes).await?;
@@ -91,8 +91,8 @@ where
         &self,
         sender_address: SuiAddress,
         tx_bytes: Base64,
-        gas_price: Option<BigInt>,
-        epoch: Option<BigInt>,
+        gas_price: Option<BigInt<u64>>,
+        epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults> {
         self.fullnode
             .dev_inspect_transaction_block(sender_address, tx_bytes, gas_price, epoch)

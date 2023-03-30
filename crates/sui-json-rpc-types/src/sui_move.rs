@@ -289,8 +289,8 @@ pub enum MoveFunctionArgType {
 #[serde(untagged, rename = "MoveValue")]
 pub enum SuiMoveValue {
     Number(
-        #[schemars(with = "BigInt")]
-        #[serde_as(as = "BigInt")]
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         u64,
     ),
     Bool(bool),
