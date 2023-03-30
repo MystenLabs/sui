@@ -31,7 +31,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
 
         report_helper(@0x1, @0x2, false, scenario);
         assert!(get_reporters_of(@0x2, scenario) == vector[@0x1], 0);
@@ -75,7 +75,7 @@ module sui_system::sui_system_tests {
     fun test_validator_ops_by_stakee_ok() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2]);
 
         // @0x1 transfers the cap object to stakee.
         let stakee_address = @0xbeef;
@@ -130,7 +130,7 @@ module sui_system::sui_system_tests {
     fun test_report_validator_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2]);
 
         // @0x1 transfers the cap object to stakee.
         let stakee_address = @0xbeef;
@@ -156,7 +156,7 @@ module sui_system::sui_system_tests {
     fun test_set_reference_gas_price_by_stakee_revoked() {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(vector[@0x1, @0x2], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2]);
 
         // @0x1 transfers the cap object to stakee.
         let stakee_address = @0xbeef;
@@ -189,7 +189,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         report_helper(@0x1, @0x42, false, scenario);
         test_scenario::end(scenario_val);
     }
@@ -200,7 +200,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         report_helper(@0x1, @0x1, false, scenario);
         test_scenario::end(scenario_val);
     }
@@ -211,7 +211,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         report_helper(@0x2, @0x1, true, scenario);
         test_scenario::end(scenario_val);
     }
@@ -221,7 +221,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, @0x1);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pool_id_1 = sui_system::validator_staking_pool_id(&mut system_state, @0x1);
@@ -738,7 +738,7 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(validator_addr);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         test_scenario::next_tx(scenario, validator_addr);
@@ -807,7 +807,7 @@ module sui_system::sui_system_tests {
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, new_validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         sui_system::request_add_validator_candidate(
@@ -841,7 +841,7 @@ module sui_system::sui_system_tests {
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3], scenario);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
         test_scenario::next_tx(scenario, new_validator_addr);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         sui_system::request_add_validator_candidate(

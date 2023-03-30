@@ -38,9 +38,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_validator_rewards() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         // need to advance epoch so validator's staking starts counting
         governance_test_utils::advance_epoch(scenario);
@@ -68,9 +68,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_stake_subsidy() {
+        set_up_sui_system_state_with_big_amounts();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state_with_big_amounts(scenario);
 
         // need to advance epoch so validator's staking starts counting
         governance_test_utils::advance_epoch(scenario);
@@ -82,9 +82,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_stake_rewards() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 200, scenario);
         stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
@@ -121,9 +121,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_stake_tiny_rewards() {
+        set_up_sui_system_state_with_big_amounts();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state_with_big_amounts(scenario);
 
         // stake a large amount
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 200000000, scenario);
@@ -146,9 +146,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_validator_commission() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
         stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
@@ -180,9 +180,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_rewards_slashing() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         advance_epoch(scenario);
 
@@ -224,9 +224,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_rewards_slashing_with_storage_fund() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         // Put 300 SUI into the storage fund.
         advance_epoch_with_reward_amounts(300, 0, scenario);
@@ -268,9 +268,9 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_mul_rewards_withdraws_at_same_epoch() {
+        set_up_sui_system_state();
         let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
         let scenario = &mut scenario_val;
-        set_up_sui_system_state(scenario);
 
         stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 220, scenario);
 
@@ -329,7 +329,7 @@ module sui_system::rewards_distribution_tests {
 
     #[test]
     fun test_uncapped_rewards() {
-        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
+        let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
         let ctx = test_scenario::ctx(scenario);
@@ -362,7 +362,9 @@ module sui_system::rewards_distribution_tests {
         test_scenario::end(scenario_val);
     }
 
-    fun set_up_sui_system_state(scenario: &mut Scenario) {
+    fun set_up_sui_system_state() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[
@@ -372,9 +374,12 @@ module sui_system::rewards_distribution_tests {
             create_validator_for_testing(VALIDATOR_ADDR_4, 400, ctx),
         ];
         create_sui_system_state_for_testing(validators, 1000, 0, ctx);
+        test_scenario::end(scenario_val);
     }
 
-    fun set_up_sui_system_state_with_big_amounts(scenario: &mut Scenario) {
+    fun set_up_sui_system_state_with_big_amounts() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
         let ctx = test_scenario::ctx(scenario);
 
         let validators = vector[
@@ -384,6 +389,7 @@ module sui_system::rewards_distribution_tests {
             create_validator_for_testing(VALIDATOR_ADDR_4, 400000000, ctx),
         ];
         create_sui_system_state_for_testing(validators, 1000000000, 0, ctx);
+        test_scenario::end(scenario_val);
     }
 
     fun validator_addrs() : vector<address> {
