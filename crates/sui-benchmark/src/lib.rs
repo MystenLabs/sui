@@ -747,7 +747,7 @@ pub fn convert_move_call_args(
     args: &Vec<BenchMoveCallArg>,
     pt_builder: &mut ProgrammableTransactionBuilder,
 ) -> Vec<Argument> {
-    args.into_iter()
+    args.iter()
         .map(|arg| match arg {
             BenchMoveCallArg::Pure(bytes) => {
                 pt_builder.input(CallArg::Pure(bytes.clone())).unwrap()
@@ -760,7 +760,7 @@ pub fn convert_move_call_args(
                 }))
                 .unwrap(),
             BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
-                pt_builder.input(obj_ref.clone().into()).unwrap()
+                pt_builder.input(*obj_ref.into()).unwrap()
             }
             BenchMoveCallArg::ImmOrOwnedObjectVec(obj_refs) => pt_builder
                 .make_obj_vec(obj_refs.iter().map(|q| ObjectArg::ImmOrOwnedObject(*q)))
