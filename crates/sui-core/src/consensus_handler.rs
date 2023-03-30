@@ -29,7 +29,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::storage::ParentSync;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{
@@ -298,8 +298,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         let transactions_to_schedule = self
             .epoch_store
-            .process_consensus_transactions(
+            .process_consensus_transactions_and_commit_boundary(
                 verified_transactions,
+                round,
+                timestamp,
                 &self.checkpoint_service,
                 &self.parent_sync_store,
             )
@@ -496,6 +498,19 @@ impl SequencedConsensusTransaction {
             matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..))
         } else {
             false
+        }
+    }
+
+    pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
+        match &self.transaction {
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                ..
+            }) if certificate.contains_shared_object() => Some(certificate.data()),
+            SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
+                Some(txn.data())
+            }
+            _ => None,
         }
     }
 }
