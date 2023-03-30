@@ -382,6 +382,13 @@ impl ObjectType {
             ObjectType::Package => false,
         }
     }
+
+    pub fn is_staked_sui(&self) -> bool {
+        match self {
+            ObjectType::Struct(s) => s.is_staked_sui(),
+            ObjectType::Package => false,
+        }
+    }
 }
 
 impl From<ObjectInfo> for ObjectRef {
