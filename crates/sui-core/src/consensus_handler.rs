@@ -32,7 +32,7 @@ use sui_types::messages::{
 
 use sui_types::storage::ParentSync;
 
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, info, instrument};
 
 pub struct ConsensusHandler<T> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -133,6 +133,10 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let mut transactions = vec![];
         // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
         let timestamp = *consensus_output.sub_dag.leader.header().created_at();
+        info!(
+            "Received commit with timestamp {timestamp} from {:?}",
+            consensus_output.sub_dag.leader.header().author()
+        );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((
