@@ -175,6 +175,45 @@ pub async fn make_transactions_with_wallet_context(
     res
 }
 
+pub async fn make_transactions_with_wallet_context_and_rgp(
+    context: &mut WalletContext,
+    max_txn_num: usize,
+) -> Vec<VerifiedTransaction> {
+    let recipient = get_key_pair::<AuthorityKeyPair>().0;
+    let accounts_and_objs = get_account_and_gas_objects(context).await;
+    let mut res = Vec::with_capacity(max_txn_num);
+    let client = context.get_client().await.unwrap();
+    let gas_price = client
+        .governance_api()
+        .get_reference_gas_price()
+        .await
+        .unwrap();
+    for (address, objs) in &accounts_and_objs {
+        for obj in objs {
+            if res.len() >= max_txn_num {
+                return res;
+            }
+            let data = TransactionData::new_transfer_sui(
+                recipient,
+                *address,
+                Some(2),
+                obj.clone()
+                    .into_object()
+                    .expect("Gas coin could not be converted to object ref.")
+                    .object_ref(),
+                MAX_GAS * gas_price,
+                gas_price,
+            );
+            let tx = to_sender_signed_transaction(
+                data,
+                context.config.keystore.get_key(address).unwrap(),
+            );
+            res.push(tx);
+        }
+    }
+    res
+}
+
 pub async fn make_counter_increment_transaction_with_wallet_context(
     context: &WalletContext,
     sender: SuiAddress,

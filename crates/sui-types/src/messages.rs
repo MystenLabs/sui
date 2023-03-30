@@ -50,6 +50,7 @@ use tap::Pipe;
 use thiserror::Error;
 use tracing::trace;
 
+// TODO: use RGP instead.
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
