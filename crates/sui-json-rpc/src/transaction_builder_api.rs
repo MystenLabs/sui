@@ -92,7 +92,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         object_id: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
@@ -106,9 +106,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         sui_object_id: ObjectID,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
         recipient: SuiAddress,
-        amount: Option<BigInt>,
+        amount: Option<BigInt<u64>>,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -128,9 +128,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<BigInt>,
+        amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -151,8 +151,8 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipients: Vec<SuiAddress>,
-        amounts: Vec<BigInt>,
-        gas_budget: BigInt,
+        amounts: Vec<BigInt<u64>>,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -172,7 +172,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         input_coins: Vec<ObjectID>,
         recipient: SuiAddress,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -187,7 +187,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         compiled_modules: Vec<Base64>,
         dependencies: Vec<ObjectID>,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let compiled_modules = compiled_modules
             .into_iter()
@@ -204,9 +204,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
-        split_amounts: Vec<BigInt>,
+        split_amounts: Vec<BigInt<u64>>,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let split_amounts = split_amounts.into_iter().map(|a| *a).collect();
         let data = self
@@ -220,9 +220,9 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coin_object_id: ObjectID,
-        split_count: BigInt,
+        split_count: BigInt<u64>,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -237,7 +237,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let data = self
             .builder
@@ -255,7 +255,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         type_arguments: Vec<SuiTypeTag>,
         rpc_arguments: Vec<SuiJsonValue>,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
         txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes> {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
@@ -297,7 +297,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         params: Vec<RPCTransactionRequestParams>,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
         txn_builder_mode: Option<SuiTransactionBlockBuilderMode>,
     ) -> RpcResult<TransactionBlockBytes> {
         let mode = txn_builder_mode.unwrap_or(SuiTransactionBlockBuilderMode::Commit);
@@ -320,10 +320,10 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         &self,
         signer: SuiAddress,
         coins: Vec<ObjectID>,
-        amount: Option<BigInt>,
+        amount: Option<BigInt<u64>>,
         validator: SuiAddress,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         let amount = amount.map(|a| *a);
         Ok(TransactionBlockBytes::from_data(
@@ -338,7 +338,7 @@ impl TransactionBuilderServer for TransactionBuilderApi {
         signer: SuiAddress,
         staked_sui: ObjectID,
         gas: Option<ObjectID>,
-        gas_budget: BigInt,
+        gas_budget: BigInt<u64>,
     ) -> RpcResult<TransactionBlockBytes> {
         Ok(TransactionBlockBytes::from_data(
             self.builder

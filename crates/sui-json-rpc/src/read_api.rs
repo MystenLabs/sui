@@ -23,18 +23,11 @@ use tracing::{debug, error, warn};
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
-<<<<<<< HEAD
     BalanceChange, BigInt, Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse,
     EventFilter, ObjectChange, SuiCheckpointSequenceNumber, SuiEvent, SuiGetPastObjectRequest,
     SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
     SuiTransactionBlock, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
-=======
-    BalanceChange, Checkpoint, CheckpointId, CheckpointPage, EventFilter, ObjectChange, SuiEvent,
-    SuiGetPastObjectRequest, SuiMoveStruct, SuiMoveValue, SuiObjectDataOptions, SuiObjectResponse,
-    SuiPastObjectResponse, SuiTransactionBlock, SuiTransactionBlockEvents,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
->>>>>>> a5574b44f (* change all uint64 to BigInt)
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
@@ -102,7 +95,8 @@ impl ReadApi {
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
-                let verified_summary = self.state.get_verified_checkpoint_by_sequence_number(seq)?;
+                let verified_summary =
+                    self.state.get_verified_checkpoint_by_sequence_number(seq)?;
                 let content = self
                     .state
                     .get_checkpoint_contents(verified_summary.content_digest)?;
@@ -678,7 +672,7 @@ impl ReadApiServer for ReadApi {
         Ok(events)
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
         Ok(self
             .state
             .get_latest_checkpoint_sequence_number()
@@ -695,8 +689,8 @@ impl ReadApiServer for ReadApi {
     fn get_checkpoints(
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<BigInt>,
-        limit: Option<BigInt>,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         let limit = validate_limit(
