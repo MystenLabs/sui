@@ -1034,12 +1034,15 @@ impl SuiNode {
                     )
                 } else {
                     // was a fullnode, still a fullnode
-                    let is_inconsistent = self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        false,
-                    );
-                    checkpoint_executor.set_inconsistent_state(is_inconsistent);
+                    // Suppress state checks until we are caught up to the end of the epoch storm.
+                    if new_epoch_store.epoch() > 740 {
+                        let is_inconsistent = self.check_is_consistent_state(
+                            self.accumulator.clone(),
+                            cur_epoch_store.epoch(),
+                            false,
+                        );
+                        checkpoint_executor.set_inconsistent_state(is_inconsistent);
+                    }
 
                     None
                 }
