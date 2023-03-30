@@ -195,8 +195,6 @@ impl InMemoryWallet {
             total += account.owned.len()
         }
         total
-        total
-        total
     }
 }
 
