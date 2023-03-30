@@ -49,8 +49,8 @@ pub struct SuiEvent {
     pub bcs: Vec<u8>,
     /// UTC timestamp in milliseconds since epoch (1/1/1970)
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<BigInt>")]
-    #[serde_as(as = "Option<BigInt>")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
     pub timestamp_ms: Option<u64>,
 }
 
@@ -144,12 +144,12 @@ pub enum EventFilter {
     #[serde(rename_all = "camelCase")]
     TimeRange {
         /// left endpoint of time interval, milliseconds since epoch, inclusive
-        #[schemars(with = "BigInt")]
-        #[serde_as(as = "BigInt")]
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         start_time: u64,
         /// right endpoint of time interval, milliseconds since epoch, exclusive
-        #[schemars(with = "BigInt")]
-        #[serde_as(as = "BigInt")]
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         end_time: u64,
     },
 

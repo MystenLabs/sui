@@ -94,7 +94,8 @@ impl ReadApi {
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
-                let verified_summary = self.state.get_verified_checkpoint_by_sequence_number(seq)?;
+                let verified_summary =
+                    self.state.get_verified_checkpoint_by_sequence_number(seq)?;
                 let content = self
                     .state
                     .get_checkpoint_contents(verified_summary.content_digest)?;
@@ -290,7 +291,7 @@ impl ReadApiServer for ReadApi {
         }
     }
 
-    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
         Ok(self.state.get_total_transaction_blocks()?.into())
     }
 
@@ -664,7 +665,7 @@ impl ReadApiServer for ReadApi {
         Ok(events)
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
         Ok(self
             .state
             .get_latest_checkpoint_sequence_number()
@@ -681,8 +682,8 @@ impl ReadApiServer for ReadApi {
     async fn get_checkpoints(
         &self,
         // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<BigInt>,
-        limit: Option<BigInt>,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         let limit = validate_limit(

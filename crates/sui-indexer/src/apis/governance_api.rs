@@ -39,7 +39,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         self.fullnode.get_stakes(owner).await
     }
 
-    async fn get_committee_info(&self, epoch: Option<BigInt>) -> RpcResult<SuiCommittee> {
+    async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
         self.fullnode.get_committee_info(epoch).await
     }
 
@@ -47,7 +47,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         self.fullnode.get_latest_sui_system_state().await
     }
 
-    async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
         self.fullnode.get_reference_gas_price().await
     }
 }

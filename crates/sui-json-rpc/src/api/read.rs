@@ -99,9 +99,9 @@ pub trait ReadApi {
     async fn get_checkpoints(
         &self,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
-        cursor: Option<BigInt>,
+        cursor: Option<BigInt<u64>>,
         /// Maximum item returned per page, default to [QUERY_MAX_RESULT_LIMIT_CHECKPOINTS] if not specified.
-        limit: Option<BigInt>,
+        limit: Option<BigInt<u64>>,
         /// query result ordering, default to false (ascending order), oldest record first.
         descending_order: bool,
     ) -> RpcResult<CheckpointPage>;
@@ -116,9 +116,9 @@ pub trait ReadApi {
 
     /// Return the total number of transactions known to the server.
     #[method(name = "getTotalTransactionBlocks")]
-    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt>;
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>>;
 
     /// Return the sequence number of the latest checkpoint that has been executed
     #[method(name = "getLatestCheckpointSequenceNumber")]
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt>;
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>>;
 }
