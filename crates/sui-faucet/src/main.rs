@@ -11,54 +11,24 @@ use axum::{
 use clap::Parser;
 use http::Method;
 use mysten_metrics::spawn_monitored_task;
+use std::env;
 use std::{
     borrow::Cow,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
-use std::{env, path::PathBuf};
 use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
-use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet};
+use sui_faucet::{
+    Faucet, FaucetConfig, FaucetRequest, FaucetResponse, RequestMetricsLayer, SimpleFaucet,
+};
 use tower::{limit::RateLimitLayer, ServiceBuilder};
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
 const CONCURRENCY_LIMIT: usize = 30;
-
-#[derive(Parser)]
-#[clap(
-    name = "Sui Faucet",
-    about = "Faucet for requesting test tokens on Sui",
-    rename_all = "kebab-case"
-)]
-struct FaucetConfig {
-    #[clap(long, default_value_t = 5003)]
-    port: u16,
-
-    #[clap(long, default_value = "127.0.0.1")]
-    host_ip: Ipv4Addr,
-
-    #[clap(long, default_value_t = 200_000_000)]
-    amount: u64,
-
-    #[clap(long, default_value_t = 5)]
-    num_coins: usize,
-
-    #[clap(long, default_value_t = 10)]
-    request_buffer_size: usize,
-
-    #[clap(long, default_value_t = 10)]
-    max_request_per_second: u64,
-
-    #[clap(long, default_value_t = 60)]
-    wallet_client_timeout_secs: u64,
-
-    #[clap(long)]
-    write_ahead_log: PathBuf,
-}
 
 struct AppState<F = SimpleFaucet> {
     faucet: F,
@@ -100,9 +70,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let prometheus_registry = registry_service.default_registry();
 
     let app_state = Arc::new(AppState {
-        faucet: SimpleFaucet::new(context, &prometheus_registry, write_ahead_log)
-            .await
-            .unwrap(),
+        faucet: SimpleFaucet::new(
+            context,
+            &prometheus_registry,
+            write_ahead_log,
+            config.clone(),
+        )
+        .await
+        .unwrap(),
         config,
     });
 
