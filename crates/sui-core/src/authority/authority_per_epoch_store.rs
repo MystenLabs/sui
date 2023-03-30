@@ -1045,62 +1045,6 @@ impl AuthorityPerEpochStore {
         self.tables.authority_capabilities.values().collect()
     }
 
-    /// Returns Ok(true) if 2f+1 end of publish messages were recorded at this point
-    pub fn record_end_of_publish(
-        &self,
-        authority: AuthorityName,
-        key: SequencedConsensusTransactionKey,
-        consensus_index: &ExecutionIndicesWithHash,
-    ) -> SuiResult<Option<RwLockWriteGuard<ReconfigState>>> {
-        let mut write_batch = self.tables.last_consensus_index.batch();
-        // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
-        // And this function itself is always executed from consensus task
-        let collected_end_of_publish = if self
-            .get_reconfig_state_read_lock_guard()
-            .should_accept_consensus_certs()
-        {
-            write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
-            self.end_of_publish.try_lock()
-                .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
-                .insert_generic(authority, ()).is_quorum_reached()
-        } else {
-            // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
-            debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
-            false
-        };
-        let lock = if collected_end_of_publish {
-            debug!(
-                "Collected enough end_of_publish messages with last message from validator {:?}",
-                authority.concise()
-            );
-            let mut lock = self.get_reconfig_state_write_lock_guard();
-            lock.close_all_certs();
-            // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
-            self.store_reconfig_state_batch(&lock, &mut write_batch)?;
-            write_batch.insert_batch(
-                &self.tables.final_epoch_checkpoint,
-                [(
-                    &FINAL_EPOCH_CHECKPOINT_INDEX,
-                    &consensus_index.index.last_committed_round,
-                )],
-            )?;
-            // Holding this lock until end of this function where we write batch to DB
-            Some(lock)
-        } else {
-            None
-        };
-        // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
-        // If some day we won't panic in ConsensusHandler on error we need to figure out here how
-        // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
-        self.finish_consensus_transaction_process_with_batch(
-            &mut write_batch,
-            key,
-            consensus_index,
-        )?;
-        write_batch.write()?;
-        Ok(lock)
-    }
-
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
@@ -1591,7 +1535,54 @@ impl AuthorityPerEpochStore {
         }) = transaction
         {
             debug!("Received EndOfPublish from {:?}", authority.concise());
-            self.record_end_of_publish(*authority, transaction.key(), consensus_index)?;
+
+            let mut write_batch = self.tables.last_consensus_index.batch();
+            // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
+            // And this function itself is always executed from consensus task
+            let collected_end_of_publish = if self
+                .get_reconfig_state_read_lock_guard()
+                .should_accept_consensus_certs()
+            {
+                write_batch.insert_batch(&self.tables.end_of_publish, [(authority, ())])?;
+                self.end_of_publish.try_lock()
+                    .expect("No contention on Authority::end_of_publish as it is only accessed from consensus handler")
+                    .insert_generic(*authority, ()).is_quorum_reached()
+            } else {
+                // If we past the stage where we are accepting consensus certificates we also don't record end of publish messages
+                debug!("Ignoring end of publish message from validator {:?} as we already collected enough end of publish messages", authority.concise());
+                false
+            };
+            let _lock = if collected_end_of_publish {
+                debug!(
+                    "Collected enough end_of_publish messages with last message from validator {:?}",
+                    authority.concise()
+                );
+                let mut lock = self.get_reconfig_state_write_lock_guard();
+                lock.close_all_certs();
+                // We store reconfig_state and end_of_publish in same batch to avoid dealing with inconsistency here on restart
+                self.store_reconfig_state_batch(&lock, &mut write_batch)?;
+                write_batch.insert_batch(
+                    &self.tables.final_epoch_checkpoint,
+                    [(
+                        &FINAL_EPOCH_CHECKPOINT_INDEX,
+                        &consensus_index.index.last_committed_round,
+                    )],
+                )?;
+                // Holding this lock until end of this function where we write batch to DB
+                Some(lock)
+            } else {
+                None
+            };
+            // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
+            // If some day we won't panic in ConsensusHandler on error we need to figure out here how
+            // to revert in-memory state of .end_of_publish and .reconfig_state when write fails
+            self.finish_consensus_transaction_process_with_batch(
+                &mut write_batch,
+                transaction.key(),
+                consensus_index,
+            )?;
+            write_batch.write()?;
+            //Ok(lock)
         } else {
             panic!("process_end_of_publish_transaction called with non-end-of-publish transaction");
         }
