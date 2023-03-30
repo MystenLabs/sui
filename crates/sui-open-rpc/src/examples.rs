@@ -19,8 +19,8 @@ use sui_json_rpc::error::Error;
 use sui_json_rpc_types::SuiTypeTag;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, EventPage, MoveCallParams, ObjectChange, OwnedObjectRef,
-    RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiGasCostSummary,
-    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
+    RPCTransactionRequestParams, SuiData, SuiEvent, SuiExecutionStatus, SuiObjectData,
+    SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse,
     SuiObjectResponseQuery, SuiParsedData, SuiPastObjectResponse, SuiTransactionBlock,
     SuiTransactionBlockData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsV1,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -36,6 +36,7 @@ use sui_types::base_types::{
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AggregateAuthoritySignature};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::event::EventID;
+use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::ObjectArg;
 use sui_types::messages::{
@@ -286,7 +287,7 @@ impl RpcExampleProvider {
     fn get_checkpoint_example(&mut self) -> Examples {
         let result = Checkpoint {
             epoch: 5000,
-            sequence_number: 1000.into(),
+            sequence_number: 1000,
             digest: CheckpointDigest::new(self.rng.gen()),
             network_total_transactions: 792385,
             previous_digest: Some(CheckpointDigest::new(self.rng.gen())),
@@ -302,7 +303,7 @@ impl RpcExampleProvider {
             "sui_getCheckpoint",
             vec![ExamplePairing::new(
                 "Get checkpoint",
-                vec![("id", json!(CheckpointId::SequenceNumber(1000.into())))],
+                vec![("id", json!(CheckpointId::SequenceNumber(1000)))],
                 json!(result),
             )],
         )
@@ -490,13 +491,13 @@ impl RpcExampleProvider {
             effects: Some(SuiTransactionBlockEffects::V1(
                 SuiTransactionBlockEffectsV1 {
                     status: SuiExecutionStatus::Success,
-                    executed_epoch: 0.into(),
+                    executed_epoch: 0,
                     modified_at_versions: vec![],
-                    gas_used: SuiGasCostSummary {
-                        computation_cost: 100.into(),
-                        storage_cost: 100.into(),
-                        storage_rebate: 10.into(),
-                        non_refundable_storage_fee: 0.into(),
+                    gas_used: GasCostSummary {
+                        computation_cost: 100,
+                        storage_cost: 100,
+                        storage_rebate: 10,
+                        non_refundable_storage_fee: 0,
                     },
                     shared_objects: vec![],
                     transaction_digest: TransactionDigest::new(self.rng.gen()),
