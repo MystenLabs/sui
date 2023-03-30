@@ -137,7 +137,7 @@ export function TokenView({ data }: { data: DataType }) {
                                     </DescriptionList>
                                 </div>
                                 {data.display ? (
-                                    <div className="pt-2 pr-10 md:pt-2.5">
+                                    <div className="pr-10 pt-2 md:pt-2.5">
                                         <DescriptionList>
                                             <LinkOrTextDescriptionItem
                                                 title="Name"

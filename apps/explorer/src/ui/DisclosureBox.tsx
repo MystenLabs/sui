@@ -23,7 +23,7 @@ export function DisclosureBox({
             <Disclosure defaultOpen={defaultOpen}>
                 <Disclosure.Button
                     as="div"
-                    className="flex cursor-pointer flex-nowrap items-center py-3.75 px-5"
+                    className="flex cursor-pointer flex-nowrap items-center px-5 py-3.75"
                 >
                     <div className="flex-1 text-body font-semibold text-gray-90">
                         {title}
