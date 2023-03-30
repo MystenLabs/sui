@@ -205,17 +205,20 @@ impl Proposer {
         // Here we check that the timestamp we will include in the header is consistent with the
         // parents, ie our current time is *after* the timestamp in all the included headers. If
         // not we log an error and hope a kind operator fixes the clock.
-        let current_time = now();
         let parent_max_time = parents
             .iter()
             .map(|c| *c.header().created_at())
             .max()
             .unwrap_or(0);
+        let current_time = now();
         if current_time < parent_max_time {
+            let drift_ms = parent_max_time - current_time;
             error!(
-                "Current time {} earlier than max parent time {}",
-                current_time, parent_max_time
+                "Current time {} earlier than max parent time {}, sleeping for {}ms until max parent time.",
+                current_time, parent_max_time, drift_ms,
             );
+            self.metrics.header_max_parent_wait_ms.inc_by(drift_ms);
+            sleep(Duration::from_millis(drift_ms)).await;
         }
 
         let header = Header::new(
