@@ -281,29 +281,44 @@ fn execute_transaction<
         };
         let cost_summary =
             temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
+         // === begin SUI conservation checks ===
+    // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
+    // information provided to check_sui_conserved, because we mint rewards, and burn
+    // the rebates. We also need to pass in the unmetered_storage_rebate because storage
+    // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
+    // We could probably clean up the code a bit.
         // Put all the storage rebate accumulated in the system transaction
         // to the 0x5 object so that it's not lost.
         temporary_store.conserve_unmetered_storage_rebate(gas_status.unmetered_storage_rebate());
-        #[cfg(debug_assertions)]
-        {
-            // Genesis transactions mint sui supply, and hence does not satisfy SUI conservation.
-            if !is_genesis_tx {
-                // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-                // information provided to check_sui_conserved, because we mint rewards, and burn
-                // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-                // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-                // We could probably clean up the code a bit.
-                if !Mode::allow_arbitrary_values() {
-                    // ensure that this transaction did not create or destroy SUI
-                    temporary_store
-                        .check_sui_conserved(advance_epoch_gas_summary)
-                        .unwrap();
-                }
-                // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary
-                // objects (including coins). this can violate conservation, but it's expected
-                return (cost_summary, result);
-            }
-        }
+        if !is_genesis_tx {
+        // TODO: use node_config for this instead?
+          let do_expensive_checks  = cfg!(debug_assertions);
+          if cfg!(debug_assertions) {
+              // in debug mode--run all the conservation checks even if expensive, and don't bother
+              // with avoiding panics if they fail
+              if !Mode::allow_arbitrary_values() {
+                  // ensure that this transaction did not create or destroy SUI
+                  temporary_store
+                      .check_sui_conserved(advance_epoch_gas_summary, do_expensive_checks)
+                      .unwrap();
+              } // else, we're in dev-inspect mode, which lets you turn bytes into arbitrary objects (including coins).
+              //  this can violate conservation, but it's ok/expected because this mode does no writes
+          } else {
+              // in release mode--do the cheaper checks and try to recover if they fail
+              let conservation_result = temporary_store.check_sui_conserved(advance_epoch_gas_summary, do_expensive_checks);
+              if let Err(conservation_err) = conservation_result {
+                  // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
+                  // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
+                  result = Err(conservation_err);
+                  temporary_store.charge_gas(gas_object_id, &mut gas_status, &mut result, gas);
+                  // check conservation once more more. if we still fail, it's a problem with gas
+                  // charging that happens even in the "aborted" case--no other option but panic.
+                  // we will create or destroy SUI otherwise
+                  temporary_store.check_sui_conserved(advance_epoch_gas_summary, do_expensive_checks).unwrap();
+              }
+          }
+      } // else, genesis transactions mint the SUI supply, and hence does not satisfy SUI conservation.
+      // === end SUI conservation checks ===
         (cost_summary, result)
     } else {
         // legacy code before gas v2, leave it alone
