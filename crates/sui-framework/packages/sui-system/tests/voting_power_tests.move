@@ -40,6 +40,9 @@ module sui_system::voting_power_tests {
         check(vector[1, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000], ctx);
         check(vector[2, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000], ctx);
         check(vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], vector[1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000, 1_000], ctx);
+        // This tests the scenario where we have validators whose stakes are only slightly different.
+        // Make sure that the order is preserved correctly and the leftover voting power goes to the right validators.
+        check(vector[10000, 10001, 10000], vector[3333, 3334, 3333], ctx);
         test_scenario::end(scenario);
     }
 
@@ -52,6 +55,7 @@ module sui_system::voting_power_tests {
         check(vector[2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[1000, 900, 900, 900, 900, 900, 900, 900, 900, 900, 900], ctx);
         check(vector[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[1000, 1000, 888, 889, 889, 889, 889, 889, 889, 889, 889], ctx);
         check(vector[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], vector[522, 674, 826, 978, 1000, 1000, 1000, 1000, 1000, 1000, 1000], ctx);
+
         test_scenario::end(scenario);
     }
 
@@ -63,14 +67,6 @@ module sui_system::voting_power_tests {
         // more validators, harder to reach max
         check(vector[2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[953, 953, 476, 476, 476, 476, 476, 476, 476, 476, 476, 476, 476, 476, 476, 476, 476, 477, 477], ctx);
         check(vector[4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], vector[1000, 951, 951, 951, 639, 639, 639, 325, 325, 325, 325, 325, 325, 325, 325, 326, 326, 326, 326, 326], ctx);
-        test_scenario::end(scenario);
-    }
-
-    #[test]
-    fun test_inc_236() {
-        let scenario = test_scenario::begin(@0x0);
-        let ctx = test_scenario::ctx(&mut scenario);
-        check(vector[10000, 10001, 10000], vector[3334, 3333, 3333], ctx);
         test_scenario::end(scenario);
     }
 

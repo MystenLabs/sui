@@ -6,6 +6,7 @@
 
 
 -  [Struct `VotingPowerInfo`](#0x3_voting_power_VotingPowerInfo)
+-  [Struct `VotingPowerInfoV2`](#0x3_voting_power_VotingPowerInfoV2)
 -  [Constants](#@Constants_0)
 -  [Function `set_voting_power`](#0x3_voting_power_set_voting_power)
 -  [Function `init_voting_power_info`](#0x3_voting_power_init_voting_power_info)
@@ -29,6 +30,7 @@
 
 ## Struct `VotingPowerInfo`
 
+Deprecated. Use VotingPowerInfoV2 instead.
 
 
 <pre><code><b>struct</b> <a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a> <b>has</b> drop
@@ -49,6 +51,45 @@
 </dd>
 <dt>
 <code><a href="voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x3_voting_power_VotingPowerInfoV2"></a>
+
+## Struct `VotingPowerInfoV2`
+
+
+
+<pre><code><b>struct</b> <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>validator_index: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake: u64</code>
 </dt>
 <dd>
 
@@ -179,7 +220,7 @@ descending order using voting power.
 Anything beyond the threshold is added to the remaining_power, which is also returned.
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_init_voting_power_info">init_voting_power_info</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, threshold: u64): (<a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">voting_power::VotingPowerInfo</a>&gt;, u64)
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_init_voting_power_info">init_voting_power_info</a>(validators: &<a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, threshold: u64): (<a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">voting_power::VotingPowerInfoV2</a>&gt;, u64)
 </code></pre>
 
 
@@ -191,7 +232,7 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
 <pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_init_voting_power_info">init_voting_power_info</a>(
     validators: &<a href="">vector</a>&lt;Validator&gt;,
     threshold: u64,
-): (<a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a>&gt;, u64) {
+): (<a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>&gt;, u64) {
     <b>let</b> total_stake = <a href="voting_power.md#0x3_voting_power_total_stake">total_stake</a>(validators);
     <b>let</b> i = 0;
     <b>let</b> len = <a href="_length">vector::length</a>(validators);
@@ -202,9 +243,10 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
         <b>let</b> stake = <a href="validator.md#0x3_validator_total_stake">validator::total_stake</a>(<a href="validator.md#0x3_validator">validator</a>);
         <b>let</b> adjusted_stake = (stake <b>as</b> u128) * (<a href="voting_power.md#0x3_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128);
         <b>let</b> <a href="voting_power.md#0x3_voting_power">voting_power</a> = <a href="_min">math::min</a>((adjusted_stake <b>as</b> u64), threshold);
-        <b>let</b> info = <a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a> {
+        <b>let</b> info = <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index: i,
             <a href="voting_power.md#0x3_voting_power">voting_power</a>,
+            stake,
         };
         <a href="voting_power.md#0x3_voting_power_insert">insert</a>(&<b>mut</b> result, info);
         total_power = total_power + <a href="voting_power.md#0x3_voting_power">voting_power</a>;
@@ -255,10 +297,10 @@ Sum up the total stake of all validators.
 ## Function `insert`
 
 Insert <code>new_info</code> to <code>info_list</code> as part of insertion sort, such that <code>info_list</code> is always sorted
-using voting_power, in descending order.
+using stake, in descending order.
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_insert">insert</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">voting_power::VotingPowerInfo</a>&gt;, new_info: <a href="voting_power.md#0x3_voting_power_VotingPowerInfo">voting_power::VotingPowerInfo</a>)
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_insert">insert</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">voting_power::VotingPowerInfoV2</a>&gt;, new_info: <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">voting_power::VotingPowerInfoV2</a>)
 </code></pre>
 
 
@@ -267,10 +309,10 @@ using voting_power, in descending order.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_insert">insert</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a>&gt;, new_info: <a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a>) {
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_insert">insert</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>&gt;, new_info: <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>) {
     <b>let</b> i = 0;
     <b>let</b> len = <a href="_length">vector::length</a>(info_list);
-    <b>while</b> (i &lt; len && <a href="_borrow">vector::borrow</a>(info_list, i).<a href="voting_power.md#0x3_voting_power">voting_power</a> &gt; new_info.<a href="voting_power.md#0x3_voting_power">voting_power</a>) {
+    <b>while</b> (i &lt; len && <a href="_borrow">vector::borrow</a>(info_list, i).stake &gt; new_info.stake) {
         i = i + 1;
     };
     <a href="_insert">vector::insert</a>(info_list, new_info, i);
@@ -288,7 +330,7 @@ using voting_power, in descending order.
 Distribute remaining_power to validators that are not capped at threshold.
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_adjust_voting_power">adjust_voting_power</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">voting_power::VotingPowerInfo</a>&gt;, threshold: u64, remaining_power: u64)
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_adjust_voting_power">adjust_voting_power</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">voting_power::VotingPowerInfoV2</a>&gt;, threshold: u64, remaining_power: u64)
 </code></pre>
 
 
@@ -297,7 +339,7 @@ Distribute remaining_power to validators that are not capped at threshold.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_adjust_voting_power">adjust_voting_power</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a>&gt;, threshold: u64, remaining_power: u64) {
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_adjust_voting_power">adjust_voting_power</a>(info_list: &<b>mut</b> <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>&gt;, threshold: u64, remaining_power: u64) {
     <b>let</b> i = 0;
     <b>let</b> len = <a href="_length">vector::length</a>(info_list);
     <b>while</b> (i &lt; len && remaining_power &gt; 0) {
@@ -328,7 +370,7 @@ Distribute remaining_power to validators that are not capped at threshold.
 Update validators with the decided voting power.
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_update_voting_power">update_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, info_list: <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">voting_power::VotingPowerInfo</a>&gt;)
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_update_voting_power">update_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;<a href="validator.md#0x3_validator_Validator">validator::Validator</a>&gt;, info_list: <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">voting_power::VotingPowerInfoV2</a>&gt;)
 </code></pre>
 
 
@@ -337,11 +379,12 @@ Update validators with the decided voting power.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_update_voting_power">update_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, info_list: <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a>&gt;) {
+<pre><code><b>fun</b> <a href="voting_power.md#0x3_voting_power_update_voting_power">update_voting_power</a>(validators: &<b>mut</b> <a href="">vector</a>&lt;Validator&gt;, info_list: <a href="">vector</a>&lt;<a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>&gt;) {
     <b>while</b> (!<a href="_is_empty">vector::is_empty</a>(&info_list)) {
-        <b>let</b> <a href="voting_power.md#0x3_voting_power_VotingPowerInfo">VotingPowerInfo</a> {
+        <b>let</b> <a href="voting_power.md#0x3_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index,
             <a href="voting_power.md#0x3_voting_power">voting_power</a>,
+            stake: _,
         } = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> info_list);
         <b>let</b> v = <a href="_borrow_mut">vector::borrow_mut</a>(validators, validator_index);
         <a href="validator.md#0x3_validator_set_voting_power">validator::set_voting_power</a>(v, <a href="voting_power.md#0x3_voting_power">voting_power</a>);
