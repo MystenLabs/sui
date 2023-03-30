@@ -1498,12 +1498,19 @@ impl AuthorityPerEpochStore {
             .partition(|tx| tx.0.is_end_of_publish());
 
         for tx in &other_txns {
+            let mut batch = self.db_batch();
             if let Some(cert) = self
-                .process_consensus_transaction(tx, checkpoint_service, &parent_sync_store)
+                .process_consensus_transaction(
+                    &mut batch,
+                    tx,
+                    checkpoint_service,
+                    &parent_sync_store,
+                )
                 .await?
             {
                 verified_certificates.push(cert);
             }
+            batch.write()?;
         }
 
         self.process_end_of_publish_transactions(&end_of_publish_txns)?;
@@ -1594,6 +1601,7 @@ impl AuthorityPerEpochStore {
 
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
+        batch: &mut DBBatch,
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
@@ -1607,9 +1615,7 @@ impl AuthorityPerEpochStore {
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
 
-        let mut batch = self.db_batch();
-
-        let ret = match &transaction {
+        match &transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(certificate),
                 ..
@@ -1653,7 +1659,7 @@ impl AuthorityPerEpochStore {
 
                 if certificate.contains_shared_object() {
                     self.record_shared_object_cert_from_consensus(
-                        &mut batch,
+                        batch,
                         transaction,
                         &certificate,
                         consensus_index,
@@ -1662,7 +1668,7 @@ impl AuthorityPerEpochStore {
                     .await?;
                 } else {
                     self.record_owned_object_cert_from_consensus(
-                        &mut batch,
+                        batch,
                         transaction,
                         &certificate,
                         consensus_index,
@@ -1677,11 +1683,7 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
-                self.record_consensus_transaction_processed(
-                    &mut batch,
-                    transaction,
-                    consensus_index,
-                )?;
+                self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -1711,11 +1713,7 @@ impl AuthorityPerEpochStore {
                         authority.concise()
                     );
                 }
-                self.record_consensus_transaction_processed(
-                    &mut batch,
-                    transaction,
-                    consensus_index,
-                )?;
+                self.record_consensus_transaction_processed(batch, transaction, consensus_index)?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
@@ -1733,7 +1731,7 @@ impl AuthorityPerEpochStore {
                 // If needed we can support owned object system transactions as well...
                 assert!(system_transaction.contains_shared_object());
                 self.record_shared_object_cert_from_consensus(
-                    &mut batch,
+                    batch,
                     transaction,
                     system_transaction,
                     consensus_index,
@@ -1743,11 +1741,7 @@ impl AuthorityPerEpochStore {
 
                 Ok(Some(system_transaction.clone()))
             }
-        };
-
-        batch.write()?;
-
-        ret
+        }
     }
 
     pub fn handle_commit_boundary(
