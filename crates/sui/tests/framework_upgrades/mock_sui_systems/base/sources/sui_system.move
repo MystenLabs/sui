@@ -96,7 +96,7 @@ module sui_system::sui_system {
             storage_reward,
             computation_reward,
             storage_rebate,
-            epoch_start_timestamp_ms
+            epoch_start_timestamp_ms,
             ctx
         )
     }
