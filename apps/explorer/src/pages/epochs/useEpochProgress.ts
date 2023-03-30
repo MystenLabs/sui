@@ -6,18 +6,14 @@ import { useQuery } from '@tanstack/react-query';
 
 export function useEpochProgress(suffix: string = 'left') {
     const rpc = useRpcClient();
-    const { data } = useQuery(
-        ['system', 'state'],
-        () => rpc.getLatestSuiSystemState(),
-        {
-            refetchInterval: 5000,
-        }
+    const { data } = useQuery(['system', 'state'], () =>
+        rpc.getLatestSuiSystemState()
     );
 
     const start = data?.epochStartTimestampMs ?? 0;
     const duration = data?.epochDurationMs ?? 0;
     const end = start + duration;
-    const time = useTimeAgo(end, true);
+    const time = useTimeAgo(end, true, true);
     const progress =
         start && duration
             ? Math.min(((Date.now() - start) / (end - start)) * 100, 100)
@@ -26,6 +22,6 @@ export function useEpochProgress(suffix: string = 'left') {
     return {
         epoch: data?.epoch,
         progress,
-        label: `${time} ${suffix}`,
+        label: end <= Date.now() ? 'Ending soon' : `${time} ${suffix}`,
     };
 }
