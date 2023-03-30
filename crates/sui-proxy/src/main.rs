@@ -7,10 +7,10 @@ use sui_proxy::config::ProxyConfig;
 use sui_proxy::{
     admin::{
         app, create_server_cert_default_allow, create_server_cert_enforce_peer,
-        make_reqwest_client, server,
+        make_reqwest_client, server, VERSION,
     },
     config::load,
-    metrics,
+    histogram_relay, metrics,
 };
 use sui_tls::TlsAcceptor;
 use telemetry_subscribers::TelemetryConfig;
@@ -58,7 +58,8 @@ async fn main() -> Result<()> {
         };
     let acceptor = TlsAcceptor::new(tls_config);
     let client = make_reqwest_client(config.remote_write);
-    let app = app(config.network, client, allower);
+    let histogram_relay = histogram_relay::start_prometheus_server(config.histogram_address);
+    let app = app(config.network, client, histogram_relay, allower);
 
     let registry_service = metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
@@ -70,15 +71,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
