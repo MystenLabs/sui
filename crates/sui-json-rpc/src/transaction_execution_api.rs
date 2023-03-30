@@ -16,20 +16,20 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::transaction_orchestrator::TransactiondOrchestrator;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
+    DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlock,
     SuiTransactionBlockData, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::{EpochId, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, TransactionEffectsAPI,
     TransactionKind,
 };
-
 use sui_types::messages::{ExecuteTransactionResponse, Transaction};
 use sui_types::messages::{TransactionData, TransactionDataAPI};
 use sui_types::signature::GenericSignature;
+use sui_types::sui_serde::BigInt;
 
 use crate::api::WriteApiServer;
 use crate::error::Error;
@@ -210,13 +210,13 @@ impl WriteApiServer for TransactionExecutionApi {
         sender_address: SuiAddress,
         tx_bytes: Base64,
         gas_price: Option<BigInt>,
-        _epoch: Option<EpochId>,
+        _epoch: Option<BigInt>,
     ) -> RpcResult<DevInspectResults> {
         let tx_kind: TransactionKind =
             bcs::from_bytes(&tx_bytes.to_vec().map_err(|e| anyhow!(e))?).map_err(|e| anyhow!(e))?;
         Ok(self
             .state
-            .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(<u64>::from))
+            .dev_inspect_transaction_block(sender_address, tx_kind, gas_price.map(|i| *i))
             .await?)
     }
 

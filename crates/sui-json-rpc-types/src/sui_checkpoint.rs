@@ -5,6 +5,9 @@ use fastcrypto::encoding::Base64;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
+
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AggregateAuthoritySignature;
@@ -15,25 +18,31 @@ use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
     CheckpointTimestamp, EndOfEpochData,
 };
+use sui_types::sui_serde::BigInt;
 
-use crate::BigInt;
 use crate::Page;
 
-pub type SuiCheckpointSequenceNumber = BigInt;
-pub type CheckpointPage = Page<Checkpoint, SuiCheckpointSequenceNumber>;
+pub type CheckpointPage = Page<Checkpoint, BigInt>;
 
+#[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize, PartialEq, Eq)]
 #[serde_as]
 #[serde(rename_all = "camelCase")]
 pub struct Checkpoint {
     /// Checkpoint's epoch ID
+    #[schemars(with = "BigInt")]
+    #[serde_as(as = "BigInt")]
     pub epoch: EpochId,
     /// Checkpoint sequence number
-    pub sequence_number: SuiCheckpointSequenceNumber,
+    #[schemars(with = "BigInt")]
+    #[serde_as(as = "DisplayFromStr")]
+    pub sequence_number: CheckpointSequenceNumber,
     /// Checkpoint digest
     pub digest: CheckpointDigest,
     /// Total number of transactions committed since genesis, including those in this
     /// checkpoint.
+    #[schemars(with = "BigInt")]
+    #[serde_as(as = "BigInt")]
     pub network_total_transactions: u64,
     /// Digest of the previous checkpoint
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,6 +53,8 @@ pub struct Checkpoint {
     /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
     /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
     /// checkpoints can have same timestamp if they originate from the same underlining consensus commit
+    #[schemars(with = "BigInt")]
+    #[serde_as(as = "BigInt")]
     pub timestamp_ms: CheckpointTimestamp,
     /// Present only on the final checkpoint of the epoch.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -87,7 +98,7 @@ impl
 
         Checkpoint {
             epoch,
-            sequence_number: sequence_number.into(),
+            sequence_number,
             digest,
             network_total_transactions,
             previous_digest,
@@ -104,16 +115,21 @@ impl
     }
 }
 
+#[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CheckpointId {
-    SequenceNumber(SuiCheckpointSequenceNumber),
+    SequenceNumber(
+        #[schemars(with = "BigInt")]
+        #[serde_as(as = "DisplayFromStr")]
+        CheckpointSequenceNumber,
+    ),
     Digest(CheckpointDigest),
 }
 
 impl From<CheckpointSequenceNumber> for CheckpointId {
     fn from(seq: CheckpointSequenceNumber) -> Self {
-        Self::SequenceNumber(seq.into())
+        Self::SequenceNumber(seq)
     }
 }
 
