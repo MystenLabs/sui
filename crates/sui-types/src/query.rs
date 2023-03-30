@@ -9,15 +9,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
-use serde_with::DisplayFromStr;
 
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
 pub enum TransactionFilter {
     /// Query by checkpoint.
     Checkpoint(
-        #[schemars(with = "BigInt")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[schemars(with = "BigInt<u64>")]
+        #[serde_as(as = "BigInt<u64>")]
         CheckpointSequenceNumber,
     ),
     /// Query by move function.

@@ -21,8 +21,8 @@ pub const BALANCE_DESTROY_REBATES_FUNCTION_NAME: &IdentStr = ident_str!("destroy
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct Supply {
-    #[schemars(with = "BigInt")]
-    #[serde_as(as = "Readable<BigInt, _>")]
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "Readable<BigInt<u64>, _>")]
     pub value: u64,
 }
 

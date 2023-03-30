@@ -50,9 +50,9 @@ pub trait WriteApi {
         /// BCS encoded TransactionKind(as opposed to TransactionData, which include gasBudget and gasPrice)
         tx_bytes: Base64,
         /// Gas is not charged, but gas usage is still calculated. Default to use reference gas price
-        gas_price: Option<BigInt>,
+        gas_price: Option<BigInt<u64>>,
         /// The epoch to perform the call. Will be set from the system state object if not provided
-        epoch: Option<BigInt>,
+        epoch: Option<BigInt<u64>>,
     ) -> RpcResult<DevInspectResults>;
 
     /// Return transaction execution effects including the gas cost summary,

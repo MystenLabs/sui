@@ -18,9 +18,8 @@ use models::transactions::Transaction;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiCheckpointSequenceNumber, SuiGetPastObjectRequest, SuiObjectData,
-    SuiObjectDataOptions, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+    OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
+    SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
 };
 use sui_sdk::error::Error;
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -287,7 +286,7 @@ where
                     .map(|(status, o)| {
                         Object::from(
                             checkpoint.epoch,
-                            Some(<u64>::from(checkpoint.sequence_number)),
+                            Some(checkpoint.sequence_number),
                             status,
                             o,
                         )
@@ -563,7 +562,7 @@ pub async fn fetch_changed_objects(
 pub fn to_changed_db_objects(
     changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
     epoch: u64,
-    checkpoint: Option<SuiCheckpointSequenceNumber>,
+    checkpoint: Option<CheckpointSequenceNumber>,
 ) -> Vec<Object> {
     changed_objects
         .into_iter()
@@ -574,7 +573,7 @@ pub fn to_changed_db_objects(
 pub fn get_deleted_db_objects(
     effects: &SuiTransactionBlockEffects,
     epoch: EpochId,
-    checkpoint: Option<SuiCheckpointSequenceNumber>,
+    checkpoint: Option<CheckpointSequenceNumber>,
 ) -> Vec<DeletedObject> {
     let deleted = effects.deleted().iter();
     let deleted = deleted.map(|o| (ObjectStatus::Deleted, o));

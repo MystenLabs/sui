@@ -239,7 +239,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
         Ok(self.get_stakes(owner).await?)
     }
 
-    async fn get_committee_info(&self, epoch: Option<BigInt>) -> RpcResult<SuiCommittee> {
+    async fn get_committee_info(&self, epoch: Option<BigInt<u64>>) -> RpcResult<SuiCommittee> {
         Ok(self
             .state
             .committee_store()
@@ -257,7 +257,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
             .into_sui_system_state_summary())
     }
 
-    async fn get_reference_gas_price(&self) -> RpcResult<BigInt> {
+    async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         Ok(epoch_store.reference_gas_price().into())
     }

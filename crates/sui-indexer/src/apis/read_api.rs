@@ -146,7 +146,7 @@ where
         return self.fullnode.multi_get_objects(object_ids, options).await;
     }
 
-    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
+    async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {
         if !self
             .migrated_methods
             .contains(&"get_total_transaction_blocks".to_string())
@@ -212,7 +212,7 @@ where
             .await
     }
 
-    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt> {
+    async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
         if !self
             .migrated_methods
             .contains(&"get_latest_checkpoint_sequence_number".to_string())
@@ -237,8 +237,8 @@ where
 
     async fn get_checkpoints(
         &self,
-        cursor: Option<BigInt>,
-        limit: Option<BigInt>,
+        cursor: Option<BigInt<u64>>,
+        limit: Option<BigInt<u64>>,
         descending_order: bool,
     ) -> RpcResult<CheckpointPage> {
         return self
