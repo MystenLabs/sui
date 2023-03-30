@@ -19,7 +19,7 @@ CREATE TABLE transactions (
     checkpoint_sequence_number  BIGINT,
     timestamp_ms                BIGINT,
     transaction_kind            TEXT         NOT NULL,
-    transaction_count               BIGINT       NOT NULL,
+    transaction_count           BIGINT       NOT NULL,
     -- object related
     created                     TEXT[]       NOT NULL,
     mutated                     TEXT[]       NOT NULL,
@@ -53,5 +53,4 @@ CREATE TABLE transactions (
 CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest);
 CREATE INDEX transactions_timestamp_ms ON transactions (timestamp_ms);
 CREATE INDEX transactions_sender ON transactions (sender);
-CREATE INDEX transactions_gas_object_id ON transactions (gas_object_id);
 CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);
