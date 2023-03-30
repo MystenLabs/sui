@@ -3,9 +3,10 @@
 use mysten_network::metrics::MetricsCallbackProvider;
 use network::metrics::{NetworkConnectionMetrics, NetworkMetrics};
 use prometheus::{
-    default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, HistogramVec, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    default_registry, register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    Registry,
 };
 use std::time::Duration;
 use tonic::Code;
@@ -62,6 +63,14 @@ pub struct WorkerMetrics {
     pub created_batch_latency: HistogramVec,
     /// The number of parallel worker batches currently processed by the worker
     pub parallel_worker_batches: IntGauge,
+    /// Counter of remote/local batch fetch statuses.
+    pub worker_batch_fetch: IntCounterVec,
+    /// Time it takes to download a payload from local worker peer
+    pub worker_local_fetch_latency: Histogram,
+    /// Time it takes to download a payload from remote peer
+    pub worker_remote_fetch_latency: Histogram,
+    /// The number of pending remote calls to request_batch
+    pub pending_remote_request_batch: IntGauge,
 }
 
 impl WorkerMetrics {
@@ -100,6 +109,33 @@ impl WorkerMetrics {
             parallel_worker_batches: register_int_gauge_with_registry!(
                 "parallel_worker_batches",
                 "The number of parallel worker batches currently processed by the worker",
+                registry
+            )
+            .unwrap(),
+            worker_batch_fetch: register_int_counter_vec_with_registry!(
+                "worker_batch_fetch",
+                "Counter of remote/local batch fetch statuses",
+                &["source", "status"],
+                registry
+            )
+            .unwrap(),
+            worker_local_fetch_latency: register_histogram_with_registry!(
+                "worker_local_fetch_latency",
+                "Time it takes to download a payload from local storage",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            worker_remote_fetch_latency: register_histogram_with_registry!(
+                "worker_remote_fetch_latency",
+                "Time it takes to download a payload from remote worker peer",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+            pending_remote_request_batch: register_int_gauge_with_registry!(
+                "pending_remote_request_batch",
+                "The number of pending remote calls to request_batch",
                 registry
             )
             .unwrap(),

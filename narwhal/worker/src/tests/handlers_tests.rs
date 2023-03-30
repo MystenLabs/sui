@@ -19,7 +19,7 @@ async fn synchronize() {
     let id = 0;
 
     // Create a new test store.
-    let store = test_utils::open_batch_store();
+    let store = test_utils::create_batch_store();
 
     let handler = PrimaryReceiverHandler {
         authority_id,
@@ -29,6 +29,7 @@ async fn synchronize() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
+        batch_fetcher: None,
         validator: TrivialTransactionValidator,
     };
 
@@ -94,7 +95,7 @@ async fn synchronize_when_batch_exists() {
     let id = 0;
 
     // Create a new test store.
-    let store = test_utils::open_batch_store();
+    let store = test_utils::create_batch_store();
 
     let handler = PrimaryReceiverHandler {
         authority_id,
@@ -104,6 +105,7 @@ async fn synchronize_when_batch_exists() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
+        batch_fetcher: None,
         validator: TrivialTransactionValidator,
     };
 
@@ -140,7 +142,7 @@ async fn delete_batches() {
     let id = 0;
 
     // Create a new test store.
-    let store = test_utils::open_batch_store();
+    let store = test_utils::create_batch_store();
     let batch = test_utils::batch();
     let digest = batch.digest();
     store.insert(&digest, &batch).unwrap();
@@ -154,6 +156,7 @@ async fn delete_batches() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
+        batch_fetcher: None,
         validator: TrivialTransactionValidator,
     };
     let message = WorkerDeleteBatchesMessage {
