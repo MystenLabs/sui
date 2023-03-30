@@ -356,7 +356,17 @@ impl PublicKey {
 /// in Sui
 #[serde_as]
 #[derive(
-    Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema, AsRef
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+    AsRef,
 )]
 #[as_ref(forward)]
 pub struct AuthorityPublicKeyBytes(
@@ -508,24 +518,6 @@ impl SuiAuthoritySignature for AuthoritySignature {
                 error: "Invalid signature".to_string(),
             })
     }
-}
-
-pub fn random_key_pairs<KP: KeypairTraits>(num: usize) -> Vec<KP>
-where
-    <KP as KeypairTraits>::PubKey: SuiPublicKey,
-{
-    let mut items = num;
-    let mut rng = OsRng;
-
-    std::iter::from_fn(|| {
-        if items == 0 {
-            None
-        } else {
-            items -= 1;
-            Some(get_key_pair_from_rng(&mut rng).1)
-        }
-    })
-    .collect::<Vec<_>>()
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
