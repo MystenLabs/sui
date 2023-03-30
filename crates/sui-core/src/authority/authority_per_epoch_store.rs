@@ -1606,7 +1606,10 @@ impl AuthorityPerEpochStore {
             transaction,
         }) = transaction;
         let tracking_id = transaction.get_tracking_id();
-        match &transaction {
+
+        let mut batch = self.db_batch();
+
+        let ret = match &transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(certificate),
                 ..
@@ -1648,7 +1651,6 @@ impl AuthorityPerEpochStore {
                     return Ok(None);
                 }
 
-                let mut batch = self.db_batch();
                 if certificate.contains_shared_object() {
                     self.record_shared_object_cert_from_consensus(
                         &mut batch,
@@ -1667,7 +1669,6 @@ impl AuthorityPerEpochStore {
                     )
                     .await?;
                 }
-                batch.write()?;
 
                 Ok(Some(certificate))
             }
@@ -1676,13 +1677,11 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 checkpoint_service.notify_checkpoint_signature(self, info)?;
-                let mut batch = self.db_batch();
                 self.record_consensus_transaction_processed(
                     &mut batch,
                     transaction,
                     consensus_index,
                 )?;
-                batch.write()?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -1712,13 +1711,11 @@ impl AuthorityPerEpochStore {
                         authority.concise()
                     );
                 }
-                let mut batch = self.db_batch();
                 self.record_consensus_transaction_processed(
                     &mut batch,
                     transaction,
                     consensus_index,
                 )?;
-                batch.write()?;
                 Ok(None)
             }
             SequencedConsensusTransactionKind::System(system_transaction) => {
@@ -1735,7 +1732,6 @@ impl AuthorityPerEpochStore {
 
                 // If needed we can support owned object system transactions as well...
                 assert!(system_transaction.contains_shared_object());
-                let mut batch = self.db_batch();
                 self.record_shared_object_cert_from_consensus(
                     &mut batch,
                     transaction,
@@ -1744,11 +1740,14 @@ impl AuthorityPerEpochStore {
                     parent_sync_store,
                 )
                 .await?;
-                batch.write()?;
 
                 Ok(Some(system_transaction.clone()))
             }
-        }
+        };
+
+        batch.write()?;
+
+        ret
     }
 
     pub fn handle_commit_boundary(
