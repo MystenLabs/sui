@@ -423,6 +423,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
         CallArg::Pure(bcs::to_bytes(&params.next_protocol_version.as_u64()).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.storage_rebate).unwrap()),
         CallArg::Pure(bcs::to_bytes(&params.non_refundable_storage_fee).unwrap()),
+        CallArg::Pure(bcs::to_bytes(&params.epoch_start_timestamp_ms).unwrap()),
     ]
     .into_iter()
     .map(|a| builder.input(a))
