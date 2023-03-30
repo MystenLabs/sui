@@ -11,8 +11,8 @@ use test_utils::authority::start_node;
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        .with_protocol_version(ProtocolVersion::new(2))
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 1))
+        .with_protocol_version(ProtocolVersion::new(3))
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(2, 2))
         .build();
 
     let registry_service = RegistryService::new(Registry::new());
