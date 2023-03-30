@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature, useGrowthBook } from '@growthbook/growthbook-react';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import { CheckpointsTable } from '../checkpoints/CheckpointsTable';
 import { validatorsTableData } from '../validators/Validators';
@@ -20,9 +19,8 @@ import { LoadingSpinner } from '~/ui/LoadingSpinner';
 import { Stats } from '~/ui/Stats';
 import { TableCard } from '~/ui/TableCard';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
-import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
-function EpochDetail() {
+export default function EpochDetail() {
     const { id } = useParams();
     const enhancedRpc = useEnhancedRpcClient();
     const { data, isLoading, isError } = useQuery(['epoch', id], async () =>
@@ -48,14 +46,14 @@ function EpochDetail() {
         );
     }, [epochData]);
 
+    if (isLoading) return <LoadingSpinner />;
+
     if (isError || !epochData)
         return (
             <Banner variant="error" fullWidth>
                 {`There was an issue retrieving data for epoch ${id}.`}
             </Banner>
         );
-
-    if (isLoading) return <LoadingSpinner />;
 
     return (
         <div className="flex flex-col space-y-16">
@@ -150,14 +148,4 @@ function EpochDetail() {
             </TabGroup>
         </div>
     );
-}
-
-export default function EpochDetailFeatureFlagged() {
-    const gb = useGrowthBook();
-    const { on: epochsEnabled } = useFeature(
-        GROWTHBOOK_FEATURES.EPOCHS_CHECKPOINTS
-    );
-    if (!gb?.ready) return <LoadingSpinner />;
-    if (epochsEnabled) return <EpochDetail />;
-    return <Navigate to="/" />;
 }
