@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useMemo } from 'react';
-import BigNumber from 'bignumber.js';
+// NOTE: Bignumber's .pow() method is very slow, so we use decimal.js for this use-case.
+// this inflates bundle size quite a bit, so we should move this calculation to the API in the future.
+import Decimal from 'decimal.js';
 
 import { useGetValidatorsEvents } from './useGetValidatorsEvents';
 import { roundFloat } from '../utils/roundFloat';
@@ -40,10 +42,10 @@ export interface ApyByValidator {
 }
 
 const calculateApy = (stake: string, poolStakingReward: string) => {
-    const poolStakingRewardBigNumber = new BigNumber(poolStakingReward);
-    const stakeBigNumber = new BigNumber(stake);
+    const poolStakingRewardBigNumber = new Decimal(poolStakingReward);
+    const stakeBigNumber = new Decimal(stake);
     // Calculate the ratio of pool_staking_reward / stake
-    const ratio = poolStakingRewardBigNumber.dividedBy(stakeBigNumber);
+    const ratio = poolStakingRewardBigNumber.div(stakeBigNumber);
 
     // Perform the exponentiation and subtraction using BigNumber
     const apy = ratio.plus(1).pow(365).minus(1);
