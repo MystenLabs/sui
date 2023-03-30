@@ -407,7 +407,7 @@ impl Certifier {
                 Some(result) = self.propose_header_tasks.join_next() => {
                     match result {
                         Ok(Ok(certificate)) => {
-                            self.synchronizer.accept_own_certificate(certificate, &self.network).await
+                            self.synchronizer.accept_own_certificate(certificate).await
                         },
                         Ok(Err(e)) => Err(e),
                         Err(_) => Err(DagError::ShuttingDown),
