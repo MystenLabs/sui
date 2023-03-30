@@ -1048,12 +1048,13 @@ impl AuthorityPerEpochStore {
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_owned_object_cert_from_consensus(
         &self,
+        batch: &mut DBBatch,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
     ) -> Result<(), SuiError> {
         let key = transaction.key();
-        self.finish_consensus_certificate_process(key, certificate, consensus_index)
+        self.finish_consensus_certificate_process(batch, key, certificate, consensus_index)
     }
 
     /// Locks a sequence number for the shared objects of the input transaction. Also updates the
@@ -1063,6 +1064,7 @@ impl AuthorityPerEpochStore {
     /// Caller is responsible to call consensus_message_processed before this method
     pub async fn record_shared_object_cert_from_consensus(
         &self,
+        batch: &mut DBBatch,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
@@ -1116,6 +1118,7 @@ impl AuthorityPerEpochStore {
                "locking shared objects");
 
         self.finish_assign_shared_object_versions(
+            batch,
             transaction.key(),
             certificate,
             consensus_index,
@@ -1139,32 +1142,29 @@ impl AuthorityPerEpochStore {
 
     pub fn finish_consensus_certificate_process(
         &self,
+        write_batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
     ) -> SuiResult {
-        let mut write_batch = self.db_batch();
         self.finish_consensus_certificate_process_with_batch(
-            &mut write_batch,
+            write_batch,
             key,
             certificate,
             consensus_index,
         )?;
-        write_batch.write()?;
         Ok(())
     }
 
     fn finish_assign_shared_object_versions(
         &self,
+        write_batch: &mut DBBatch,
         key: SequencedConsensusTransactionKey,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
         assigned_versions: Vec<(ObjectID, SequenceNumber)>,
         next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
-        // Atomically store all elements.
-        let mut write_batch = self.tables.assigned_shared_object_versions.batch();
-
         let tx_digest = *certificate.digest();
 
         debug!(
@@ -1180,12 +1180,11 @@ impl AuthorityPerEpochStore {
         write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
 
         self.finish_consensus_certificate_process_with_batch(
-            &mut write_batch,
+            write_batch,
             key,
             certificate,
             consensus_index,
         )?;
-        write_batch.write()?;
         Ok(())
     }
 
@@ -1649,8 +1648,10 @@ impl AuthorityPerEpochStore {
                     return Ok(None);
                 }
 
+                let mut batch = self.db_batch();
                 if certificate.contains_shared_object() {
                     self.record_shared_object_cert_from_consensus(
+                        &mut batch,
                         transaction,
                         &certificate,
                         consensus_index,
@@ -1659,12 +1660,14 @@ impl AuthorityPerEpochStore {
                     .await?;
                 } else {
                     self.record_owned_object_cert_from_consensus(
+                        &mut batch,
                         transaction,
                         &certificate,
                         consensus_index,
                     )
                     .await?;
                 }
+                batch.write()?;
 
                 Ok(Some(certificate))
             }
@@ -1732,13 +1735,16 @@ impl AuthorityPerEpochStore {
 
                 // If needed we can support owned object system transactions as well...
                 assert!(system_transaction.contains_shared_object());
+                let mut batch = self.db_batch();
                 self.record_shared_object_cert_from_consensus(
+                    &mut batch,
                     transaction,
                     system_transaction,
                     consensus_index,
                     parent_sync_store,
                 )
                 .await?;
+                batch.write()?;
 
                 Ok(Some(system_transaction.clone()))
             }
