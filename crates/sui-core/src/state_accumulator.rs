@@ -7,7 +7,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::storage::ObjectKey;
-use tracing::debug;
+use tracing::{debug, error};
 use typed_store::Map;
 
 use std::collections::HashSet;
@@ -177,10 +177,14 @@ impl StateAccumulator {
                     .get_object_ref_prior_to_key(id, *seq_num)
                     .expect("read cannot fail");
 
-                objref.map(|(id, version, digest)| {
-                    assert!(digest.is_wrapped(), "{:?}", id);
-                    WrappedObject::new(id, version)
-                })
+                if let Some((id, version, digest)) = objref {
+                    if !digest.is_wrapped() {
+                        error!("Expected object id {}, digest {} to be wrapped", id, digest);
+                        return None;
+                    }
+                    return Some(WrappedObject::new(id, version));
+                }
+                None
             })
             .collect();
 
