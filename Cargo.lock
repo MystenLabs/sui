@@ -1454,8 +1454,8 @@ checksum = "e10ca87c81aaa3a949dbbe2b5e6c2c45dbc94ba4897e45ea31ff9ec5087be3dc"
 dependencies = [
  "cached_proc_macro_types",
  "darling",
- "proc-macro2 1.0.54",
- "quote 1.0.26",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
  "syn 1.0.107",
 ]
 
