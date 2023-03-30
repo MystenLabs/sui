@@ -64,7 +64,7 @@ Sui Move supports *field punning*, which allows you to skip the field values if 
 
 You now have a constructor for the `ColorObject`. If you call this constructor, it puts the value in a local variable. The local variable can be returned from the current function, passed to other functions, or stored inside another struct. The object can be placed in persistent global storage, be read by anyone, and accessed in subsequent transactions.
 
-All of the APIs for adding objects to persistent storage are defined in the [`transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module. One key API is:
+All of the APIs for adding objects to persistent storage are defined in the [`transfer`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/transfer.move) module. One key API is:
 
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
@@ -112,7 +112,7 @@ sui move build
 
 After you define the `create` function, you can test it in Sui Move using unit tests without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
-To assist easy testing in Sui Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Sui Move unit tests. A lot of this is also covered in our [Move testing](../move/build-test.md#sui-specific-testing) topic.
+To assist easy testing in Sui Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Sui Move unit tests. A lot of this is also covered in our [Move testing](../move/build-test.md#sui-specific-testing) topic.
 
 The `test_scenario` emulates a series of Sui transactions, each sent from a particular address. You can start the first transaction using the `test_scenario::begin` function that takes the address of the user sending this transaction as an argument, and returns an instance of the `Scenario` struct representing a test scenario.
 

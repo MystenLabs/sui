@@ -176,6 +176,14 @@ impl TestCluster {
         .await
         .expect("Timed out waiting for cluster to target epoch")
     }
+
+    #[cfg(msim)]
+    pub fn set_safe_mode_expected(&self, value: bool) {
+        for n in self.swarm.validator_node_handles() {
+            n.with(|node| node.set_safe_mode_expected(value));
+        }
+        self.fullnode_handle.sui_node.set_safe_mode_expected(value);
+    }
 }
 
 pub struct RandomNodeRestarter {
@@ -460,21 +468,24 @@ pub async fn start_fullnode_from_config(
     })
 }
 
+pub async fn wait_for_node_transition_to_epoch(node: &SuiNodeHandle, expected_epoch: EpochId) {
+    node.with_async(|node| async move {
+        let mut rx = node.subscribe_to_epoch_change();
+        let epoch = node.current_epoch_for_testing();
+        if epoch != expected_epoch {
+            let system_state = rx.recv().await.unwrap();
+            assert_eq!(system_state.epoch(), expected_epoch);
+        }
+    })
+    .await
+}
+
 pub async fn wait_for_nodes_transition_to_epoch<'a>(
     nodes: impl Iterator<Item = &'a SuiNodeHandle>,
     expected_epoch: EpochId,
 ) {
     let handles: Vec<_> = nodes
-        .map(|handle| {
-            handle.with_async(|node| async move {
-                let mut rx = node.subscribe_to_epoch_change();
-                let epoch = node.current_epoch_for_testing();
-                if epoch != expected_epoch {
-                    let system_state = rx.recv().await.unwrap();
-                    assert_eq!(system_state.epoch(), expected_epoch);
-                }
-            })
-        })
+        .map(|handle| wait_for_node_transition_to_epoch(handle, expected_epoch))
         .collect();
     join_all(handles).await;
 }

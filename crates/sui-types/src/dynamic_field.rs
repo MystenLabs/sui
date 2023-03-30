@@ -7,9 +7,12 @@ use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
 use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
+use crate::sui_serde::SuiTypeTag;
 use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base58;
 use fastcrypto::hash::HashFunction;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::value::{MoveStruct, MoveValue};
 use schemars::JsonSchema;
@@ -22,6 +25,9 @@ use serde_with::DisplayFromStr;
 use shared_crypto::intent::HashingIntentScope;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+
+const DYNAMIC_FIELD_MODULE_NAME: &IdentStr = ident_str!("dynamic_field");
+const DYNAMIC_FIELD_FIELD_STRUCT_NAME: &IdentStr = ident_str!("Field");
 
 /// Rust version of the Move sui::dynamic_field::Field type
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -51,7 +57,7 @@ pub struct DynamicFieldInfo {
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldName {
     #[schemars(with = "String")]
-    #[serde_as(as = "Readable<DisplayFromStr, _>")]
+    #[serde_as(as = "Readable<SuiTypeTag, _>")]
     pub type_: TypeTag,
     // Bincode does not like serde_json::Value, rocksdb will not insert the value without serializing value as string.
     // TODO: investigate if this can be removed after switch to BCS.
@@ -76,8 +82,17 @@ pub enum DynamicFieldType {
 impl DynamicFieldInfo {
     pub fn is_dynamic_field(tag: &StructTag) -> bool {
         tag.address == SUI_FRAMEWORK_ADDRESS
-            && tag.module.as_str() == "dynamic_field"
-            && tag.name.as_str() == "Field"
+            && tag.module.as_ident_str() == DYNAMIC_FIELD_MODULE_NAME
+            && tag.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
+    }
+
+    pub fn dynamic_field_type(key: TypeTag, value: TypeTag) -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: DYNAMIC_FIELD_FIELD_STRUCT_NAME.to_owned(),
+            module: DYNAMIC_FIELD_MODULE_NAME.to_owned(),
+            type_params: vec![key, value],
+        }
     }
 
     pub fn try_extract_field_name(tag: &StructTag, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
@@ -218,7 +233,7 @@ where
 {
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
 
-    // hash(parent || key || key_type_tag)
+    // hash(parent || len(key) || key || key_type_tag)
     let mut hasher = DefaultHash::default();
     hasher.update([HashingIntentScope::ChildObjectId as u8]);
     hasher.update(parent.into());

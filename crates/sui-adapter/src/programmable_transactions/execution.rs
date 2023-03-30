@@ -1132,8 +1132,9 @@ fn build_move_args<S: StorageView, Mode: ExecutionMode>(
                     let TypeTag::Struct(struct_tag) = type_tag else {
                         invariant_violation!("Struct type make a non struct type tag")
                     };
+                    let type_ = (*struct_tag).into();
                     ValueKind::Object {
-                        type_: MoveObjectType::Other(*struct_tag),
+                        type_,
                         has_public_transfer: *has_public_transfer,
                     }
                 } else {

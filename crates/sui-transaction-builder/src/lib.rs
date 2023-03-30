@@ -11,10 +11,11 @@ use anyhow::{anyhow, bail, ensure, Ok};
 use async_trait::async_trait;
 use futures::future::join_all;
 use move_binary_format::file_format::SignatureToken;
+use move_binary_format::file_format_common::VERSION_MAX;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 
-use sui_adapter::adapter::CheckCallArg;
+use sui_adapter::adapter::{resolve_and_type_check, CheckCallArg};
 use sui_adapter::execution_mode::ExecutionMode;
 use sui_json::{resolve_move_function_args, ResolvedCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
@@ -74,11 +75,13 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
         input_objects: Vec<ObjectID>,
         gas_price: u64,
     ) -> Result<ObjectRef, anyhow::Error> {
+        if budget < gas_price {
+            bail!("Gas budget {budget} is less than the reference gas price {gas_price}. The gas budget must be at least the current reference gas price of {gas_price}.")
+        }
         if let Some(gas) = input_gas {
             self.get_object_ref(gas).await
         } else {
             let gas_objs = self.0.get_owned_objects(signer, GasCoin::type_()).await?;
-            let required_gas_amount = (budget as u128) * (gas_price as u128);
 
             for obj in gas_objs {
                 let response = self
@@ -94,13 +97,11 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                         .ok_or_else(|| anyhow!("Cannot parse move object to gas object"))?
                         .bcs_bytes,
                 )?;
-                if !input_objects.contains(&obj.object_id)
-                    && (gas.value() as u128) >= required_gas_amount
-                {
+                if !input_objects.contains(&obj.object_id) && gas.value() >= budget {
                     return Ok(obj.object_ref());
                 }
             }
-            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{required_gas_amount}]."))
+            Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the required gas amount [{budget}]."))
         }
     }
 
@@ -412,18 +413,17 @@ impl<Mode: ExecutionMode> TransactionBuilder<Mode> {
                 }
             })
         }
-        // FIXME: uncomment once we figure out what is going on.
-        // let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
+        let compiled_module = package.deserialize_module(module, VERSION_MAX)?;
 
-        // // TODO set the Mode from outside?
-        // resolve_and_type_check::<Mode>(
-        //     &objects,
-        //     &compiled_module,
-        //     function,
-        //     type_args,
-        //     check_args.clone(),
-        //     false,
-        // )?;
+        // TODO set the Mode from outside?
+        resolve_and_type_check::<Mode>(
+            &objects,
+            &compiled_module,
+            function,
+            type_args,
+            check_args.clone(),
+            false,
+        )?;
         let args = check_args
             .into_iter()
             .map(|check_arg| match check_arg {

@@ -20,7 +20,7 @@ use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -237,40 +237,46 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
-        let mut transactions_to_schedule = vec![];
-        for sequenced_transaction in sequenced_transactions {
-            // todo if we can make handle_consensus_transaction into sync function,
-            // we could acquire mutex once for entire loop
-            if self
-                .processed_cache
-                .lock()
-                .put(sequenced_transaction.key(), ())
-                .is_some()
-            {
-                self.metrics.skipped_consensus_txns_cache_hit.inc();
-                continue;
-            }
-            let verified_transaction = match self.epoch_store.verify_consensus_transaction(
-                sequenced_transaction,
-                &self.metrics.skipped_consensus_txns,
-            ) {
-                Ok(verified_transaction) => verified_transaction,
-                Err(()) => continue,
-            };
+        let verified_transactions = {
+            let mut processed_cache = self.processed_cache.lock();
+            // We need a set here as well, since the processed_cache is a LRU cache and can drop
+            // entries while we're iterating over the sequenced transactions.
+            let mut processed_set = HashSet::new();
 
-            if let Some(transaction) = self
-                .epoch_store
-                .process_consensus_transaction(
-                    verified_transaction,
-                    &self.checkpoint_service,
-                    &self.parent_sync_store,
-                )
-                .await
-                .expect("Unrecoverable error in consensus handler")
-            {
-                transactions_to_schedule.push(transaction);
-            }
-        }
+            sequenced_transactions
+                .into_iter()
+                .filter_map(|sequenced_transaction| {
+                    let key = sequenced_transaction.key();
+                    let in_set = !processed_set.insert(key);
+                    let in_cache = processed_cache
+                        .put(sequenced_transaction.key(), ())
+                        .is_some();
+
+                    if in_set || in_cache {
+                        self.metrics.skipped_consensus_txns_cache_hit.inc();
+                        return None;
+                    }
+
+                    match self.epoch_store.verify_consensus_transaction(
+                        sequenced_transaction,
+                        &self.metrics.skipped_consensus_txns,
+                    ) {
+                        Ok(verified_transaction) => Some(verified_transaction),
+                        Err(()) => None,
+                    }
+                })
+                .collect()
+        };
+
+        let transactions_to_schedule = self
+            .epoch_store
+            .process_consensus_transactions(
+                verified_transactions,
+                &self.checkpoint_service,
+                &self.parent_sync_store,
+            )
+            .await
+            .expect("Unrecoverable error in consensus handler");
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)

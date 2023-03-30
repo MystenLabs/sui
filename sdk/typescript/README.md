@@ -230,19 +230,20 @@ const { execSync } = require('child_process');
 const keypair = new Ed25519Keypair();
 const provider = new JsonRpcProvider();
 const signer = new RawSigner(keypair, provider);
-const compiledModulesAndDependencies = JSON.parse(
+const compiledModulesAndDeps = JSON.parse(
   execSync(
     `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
     { encoding: 'utf-8' },
   ),
 );
 const tx = new TransactionBlock();
-tx.publish(
+const [upgradeCap] = tx.publish(
   compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
   compiledModulesAndDeps.dependencies.map((addr: string) =>
     normalizeSuiObjectId(addr),
   ),
 );
+tx.transferObjects([upgradeCap], tx.pure(await signer.getAddress()));
 const result = await signer.signAndExecuteTransactionBlock({ transactionBlock: tx });
 console.log({ result });
 ```

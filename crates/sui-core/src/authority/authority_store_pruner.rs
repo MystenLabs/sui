@@ -80,20 +80,20 @@ impl AuthorityStorePruner {
                 for (object_id, (min_version, max_version)) in updates {
                     let start_range = ObjectKey(object_id, min_version);
                     let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-                    wb = wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+                    wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
                 }
             }
             DeletionMethod::PointDelete => {
-                wb = wb.delete_batch(&perpetual_db.objects, object_keys_to_prune)?;
+                wb.delete_batch(&perpetual_db.objects, object_keys_to_prune)?;
             }
         }
         if !indirect_objects.is_empty() {
             let ref_count_update = indirect_objects
                 .iter()
                 .map(|(digest, delta)| (digest, delta.to_le_bytes()));
-            wb = wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
+            wb.partial_merge_batch(&perpetual_db.indirect_move_objects, ref_count_update)?;
         }
-        wb = perpetual_db.set_highest_pruned_checkpoint(wb, checkpoint_number)?;
+        perpetual_db.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
 
         let _locks = objects_lock_table
             .acquire_locks(indirect_objects.into_keys())
@@ -381,13 +381,13 @@ mod tests {
                 }
                 let StoreObjectPair(obj, indirect_obj) =
                     get_store_object_pair(Object::immutable_with_id_for_testing(id), 1);
-                batch = batch.insert_batch(
+                batch.insert_batch(
                     &db.objects,
                     [(ObjectKey(id, SequenceNumber::from(i)), obj.clone())],
                 )?;
                 if let StoreObject::Value(o) = obj.into_inner() {
                     if let StoreData::IndirectObject(metadata) = o.data {
-                        batch = batch.merge_batch(
+                        batch.merge_batch(
                             &db.indirect_move_objects,
                             [(metadata.digest, indirect_obj.unwrap())],
                         )?;

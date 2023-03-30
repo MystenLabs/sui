@@ -62,6 +62,7 @@ import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
 import { NetworkMetrics } from '../types/metrics';
+import { EpochInfo, EpochPage } from '../types/epochs';
 
 export const TARGETED_RPC_VERSION = '0.29.0';
 
@@ -819,6 +820,32 @@ export class JsonRpcProvider {
       'suix_getNetworkMetrics',
       [],
       NetworkMetrics,
+    );
+  }
+  /**
+   * Return the committee information for the asked epoch
+   */
+  async getEpochs(input?: {
+    cursor?: number;
+    limit?: number;
+    descendingOrder?: boolean;
+  }): Promise<EpochPage> {
+    return await this.client.requestWithType(
+      'suix_getEpochs',
+      [input?.cursor, input?.limit, input?.descendingOrder],
+      EpochPage,
+      this.options.skipDataValidation,
+    );
+  }
+  /**
+   * Return the committee information for the asked epoch
+   */
+  async getCurrentEpoch(): Promise<EpochInfo> {
+    return await this.client.requestWithType(
+      'suix_getCurrentEpoch',
+      [],
+      EpochInfo,
+      this.options.skipDataValidation,
     );
   }
 }

@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { Transactions } from '../transactions';
 
 import { CheckpointsTable } from '~/pages/checkpoints/CheckpointsTable';
+import { EpochsTable } from '~/pages/epochs/EpochsTable';
 import { PlayPause } from '~/ui/PlayPause';
 import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '~/ui/Tabs';
 
@@ -20,13 +21,18 @@ const AUTO_REFRESH_ID = 'auto-refresh';
 const REFETCH_INTERVAL_SECONDS = 10;
 const REFETCH_INTERVAL = REFETCH_INTERVAL_SECONDS * 1000;
 
+const tabs: Record<string, number> = {
+    epochs: 1,
+    checkpoints: 2,
+};
+
 export function Activity({
     initialTab,
     initialLimit,
     disablePagination,
 }: Props) {
     const [selectedIndex, setSelectedIndex] = useState(
-        initialTab === 'checkpoints' ? 1 : 0
+        initialTab && tabs[initialTab] ? tabs[initialTab] : 0
     );
     const [paused, setPaused] = useState(false);
 
@@ -55,9 +61,9 @@ export function Activity({
                 <div className="relative">
                     <TabList>
                         <Tab>Transaction Blocks</Tab>
+                        <Tab>Epochs</Tab>
                         <Tab>Checkpoints</Tab>
                     </TabList>
-
                     <div className="absolute inset-y-0 right-0 -top-1 text-2xl">
                         <PlayPause
                             paused={paused}
@@ -73,7 +79,13 @@ export function Activity({
                             disablePagination={disablePagination}
                         />
                     </TabPanel>
-
+                    <TabPanel>
+                        <EpochsTable
+                            refetchInterval={refetchInterval}
+                            initialLimit={initialLimit}
+                            disablePagination={disablePagination}
+                        />
+                    </TabPanel>
                     <TabPanel>
                         <CheckpointsTable
                             refetchInterval={refetchInterval}

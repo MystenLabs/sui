@@ -952,8 +952,8 @@ impl<K, V> DBMap<K, V> {
 ///     .expect("Failed to open storage");
 /// let keys_vals_2 = (1000..1100).map(|i| (i, i.to_string()));
 ///
-/// let batch = db_cf_1
-///     .batch()
+/// let mut batch = db_cf_1.batch();
+/// batch
 ///     .insert_batch(&db_cf_1, keys_vals_1.clone())
 ///     .expect("Failed to batch insert")
 ///     .insert_batch(&db_cf_2, keys_vals_2.clone())
@@ -1027,73 +1027,15 @@ impl DBBatch {
         }
         Ok(())
     }
-
-    /// Deletes a set of keys given as an iterator
-    pub fn delete_batch_non_consuming<J: Borrow<K>, K: Serialize, V>(
-        &mut self,
-        db: &DBMap<K, V>,
-        purged_vals: impl IntoIterator<Item = J>,
-    ) -> Result<(), TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-
-        purged_vals
-            .into_iter()
-            .try_for_each::<_, Result<_, TypedStoreError>>(|k| {
-                let k_buf = be_fix_int_ser(k.borrow())?;
-                self.batch.delete_cf(&db.cf(), k_buf);
-
-                Ok(())
-            })?;
-        Ok(())
-    }
-    /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range_non_consuming<K: Serialize, V>(
-        &mut self,
-        db: &DBMap<K, V>,
-        from: &K,
-        to: &K,
-    ) -> Result<(), TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-
-        let from_buf = be_fix_int_ser(from)?;
-        let to_buf = be_fix_int_ser(to)?;
-
-        self.batch.delete_range_cf(&db.cf(), from_buf, to_buf)
-    }
-
-    /// inserts a range of (key, value) pairs given as an iterator
-    pub fn insert_batch_non_consuming<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        &mut self,
-        db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<(), TypedStoreError> {
-        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
-            return Err(TypedStoreError::CrossDBBatch);
-        }
-
-        new_vals
-            .into_iter()
-            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
-                let k_buf = be_fix_int_ser(k.borrow())?;
-                let v_buf = bcs::to_bytes(v.borrow())?;
-                self.batch.put_cf(&db.cf(), k_buf, v_buf);
-                Ok(())
-            })?;
-        Ok(())
-    }
 }
 
 // TODO: Remove this entire implementation once we switch to sally
 impl DBBatch {
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
-        mut self,
+        &mut self,
         db: &DBMap<K, V>,
         purged_vals: impl IntoIterator<Item = J>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<(), TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1106,16 +1048,16 @@ impl DBBatch {
 
                 Ok(())
             })?;
-        Ok(self)
+        Ok(())
     }
 
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
     pub fn delete_range<K: Serialize, V>(
-        mut self,
+        &mut self,
         db: &DBMap<K, V>,
         from: &K,
         to: &K,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<(), TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1124,15 +1066,15 @@ impl DBBatch {
         let to_buf = be_fix_int_ser(to)?;
 
         self.batch.delete_range_cf(&db.cf(), from_buf, to_buf)?;
-        Ok(self)
+        Ok(())
     }
 
     /// inserts a range of (key, value) pairs given as an iterator
     pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        mut self,
+        &mut self,
         db: &DBMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1150,10 +1092,10 @@ impl DBBatch {
 
     /// merges a range of (key, value) pairs given as an iterator
     pub fn merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        mut self,
+        &mut self,
         db: &DBMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1171,10 +1113,10 @@ impl DBBatch {
 
     /// similar to `merge_batch` but allows merge with partial values
     pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
-        mut self,
+        &mut self,
         db: &DBMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, B)>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1210,10 +1152,10 @@ impl<'a> DBTransaction<'a> {
     }
 
     pub fn insert_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
-        self,
+        &mut self,
         db: &DBMap<K, V>,
         new_vals: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1231,10 +1173,10 @@ impl<'a> DBTransaction<'a> {
 
     /// Deletes a set of keys given as an iterator
     pub fn delete_batch<J: Borrow<K>, K: Serialize, V>(
-        self,
+        &mut self,
         db: &DBMap<K, V>,
         purged_vals: impl IntoIterator<Item = J>,
-    ) -> Result<Self, TypedStoreError> {
+    ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
             return Err(TypedStoreError::CrossDBBatch);
         }
@@ -1712,7 +1654,9 @@ where
         J: Borrow<K>,
         U: Borrow<V>,
     {
-        self.batch().insert_batch(self, key_val_pairs)?.write()
+        let mut batch = self.batch();
+        batch.insert_batch(self, key_val_pairs)?;
+        batch.write()
     }
 
     /// Convenience method for batch removal
@@ -1721,7 +1665,9 @@ where
     where
         J: Borrow<K>,
     {
-        self.batch().delete_batch(self, keys)?.write()
+        let mut batch = self.batch();
+        batch.delete_batch(self, keys)?;
+        batch.write()
     }
 
     /// Try to catch up with primary when running as secondary
@@ -1744,13 +1690,15 @@ where
     where
         T: Iterator<Item = (J, U)>,
     {
-        let batch = self.batch().insert_batch(self, iter)?;
+        let mut batch = self.batch();
+        batch.insert_batch(self, iter)?;
         batch.write()
     }
 
     fn try_extend_from_slice(&mut self, slice: &[(J, U)]) -> Result<(), Self::Error> {
         let slice_of_refs = slice.iter().map(|(k, v)| (k.borrow(), v.borrow()));
-        let batch = self.batch().insert_batch(self, slice_of_refs)?;
+        let mut batch = self.batch();
+        batch.insert_batch(self, slice_of_refs)?;
         batch.write()
     }
 }

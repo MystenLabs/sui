@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount, roundFloat, useRpcClient } from '@mysten/core';
-import { Connection, JsonRpcProvider } from '@mysten/sui.js';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
 
-import { Network } from '../../utils/api/DefaultRpcClient';
 import { MetricGroup } from './MetricGroup';
 
-import { useNetwork } from '~/context';
+import { useEnhancedRpcClient } from '~/hooks/useEnhancedRpc';
 import { Card } from '~/ui/Card';
 import { Heading } from '~/ui/Heading';
 import { Stats, type StatsProps } from '~/ui/Stats';
@@ -26,19 +23,10 @@ function StatsWrapper(props: StatsProps) {
 const HOME_REFETCH_INTERVAL = 5 * 1000;
 
 export function HomeMetrics() {
-    const [network] = useNetwork();
     const rpc = useRpcClient();
 
-    // TODO: Use enhanced RPC locally by default
-    const enhancedRpc = useMemo(() => {
-        if (network === Network.LOCAL) {
-            return new JsonRpcProvider(
-                new Connection({ fullnode: 'http://localhost:9124' })
-            );
-        }
-
-        return rpc;
-    }, [network, rpc]);
+    // todo: remove this hook when we enable enhanced rpc client by default
+    const enhancedRpc = useEnhancedRpcClient();
 
     const { data: gasData } = useQuery(['home', 'reference-gas-price'], () =>
         rpc.getReferenceGasPrice()

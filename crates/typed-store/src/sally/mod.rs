@@ -356,7 +356,7 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.delete_batch_non_consuming(db_map, purged_vals)
+                db_batch.delete_batch(db_map, purged_vals)
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
                 write_batch.delete_batch(test_db, purged_vals)
@@ -373,7 +373,7 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.delete_range_non_consuming(db_map, from, to)
+                db_batch.delete_range(db_map, from, to)
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
                 write_batch.delete_range(test_db, from, to)
@@ -389,10 +389,12 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.insert_batch_non_consuming(db_map, new_vals)
+                db_batch.insert_batch(db_map, new_vals)?;
+                Ok(())
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
-                write_batch.insert_batch(test_db, new_vals)
+                write_batch.insert_batch(test_db, new_vals)?;
+                Ok(())
             }
             _ => unimplemented!(),
         }
