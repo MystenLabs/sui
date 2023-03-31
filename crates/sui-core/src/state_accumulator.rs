@@ -59,12 +59,30 @@ impl StateAccumulator {
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
+        debug!("About to accumulate checkpoint {}", checkpoint_seq_num);
         let _scope = monitored_scope("AccumulateCheckpoint");
-        if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
-            return Ok(acc);
-        }
 
-        let acc = self.accumulate_effects(effects);
+        let acc = self.accumulate_effects(effects.clone());
+
+        if let Some(old_acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
+            if checkpoint_seq_num == 66 {
+                if old_acc != acc {
+                    let old_effects = epoch_store
+                        .get_checkpoint_66_effects()
+                        .expect("Failed to get checkpoint 66 effects")
+                        .unwrap();
+                    panic!(
+                        "Checkpoint 66 accumulator mismatch. Old effects: {:?}, new effects: {:?}",
+                        old_effects.clone(),
+                        effects.clone(),
+                    );
+                }
+            } else {
+                epoch_store
+                    .set_checkpoint_66_effects(effects)
+                    .expect("Failed to set checkpoint 66 effects");
+            }
+        }
 
         epoch_store.insert_state_hash_for_checkpoint(&checkpoint_seq_num, &acc)?;
         debug!("Accumulated checkpoint {}", checkpoint_seq_num);

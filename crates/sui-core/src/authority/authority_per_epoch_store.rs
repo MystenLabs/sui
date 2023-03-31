@@ -82,6 +82,7 @@ const RECONFIG_STATE_INDEX: u64 = 0;
 const FINAL_EPOCH_CHECKPOINT_INDEX: u64 = 0;
 const OVERRIDE_PROTOCOL_UPGRADE_BUFFER_STAKE_INDEX: u64 = 0;
 pub const EPOCH_DB_PREFIX: &str = "epoch_";
+const CHECKPOINT_66_CONTENTS_INDEX: u64 = 0;
 
 // CertLockGuard and CertTxGuard are functionally identical right now, but we retain a distinction
 // anyway. If we need to support distributed object storage, having this distinction will be
@@ -287,6 +288,9 @@ pub struct AuthorityEpochTables {
     /// Contains a single key, which overrides the value of
     /// ProtocolConfig::buffer_stake_for_protocol_upgrade_bps
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
+
+    // TODO(william)
+    debug_only_checkpoint_66_contents: DBMap<u64, Vec<TransactionEffects>>,
 }
 
 impl AuthorityEpochTables {
@@ -458,6 +462,20 @@ impl AuthorityPerEpochStore {
         checkpoint: &CheckpointSequenceNumber,
     ) -> SuiResult<Option<Accumulator>> {
         Ok(self.tables.state_hash_by_checkpoint.get(checkpoint)?)
+    }
+
+    pub fn get_checkpoint_66_effects(&self) -> SuiResult<Option<Vec<TransactionEffects>>> {
+        Ok(self
+            .tables
+            .debug_only_checkpoint_66_contents
+            .get(&CHECKPOINT_66_CONTENTS_INDEX)?)
+    }
+
+    pub fn set_checkpoint_66_effects(&self, effects: Vec<TransactionEffects>) -> SuiResult {
+        self.tables
+            .debug_only_checkpoint_66_contents
+            .insert(&CHECKPOINT_66_CONTENTS_INDEX, &effects)?;
+        Ok(())
     }
 
     pub fn insert_state_hash_for_checkpoint(
