@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
+use crate::crypto::ConciseAuthorityPublicKeyBytes;
 use crate::error::SuiError;
 use crate::messages::{QuorumDriverResponse, VerifiedTransaction};
 use serde::{Deserialize, Serialize};
@@ -41,12 +42,12 @@ pub enum QuorumDriverError {
     #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
     FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u8 },
     #[error("Transaction has non recoverable errors from at least 1/3 of validators: {errors:?}.")]
-    NonRecoverableTransactionError {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    NonRecoverableTransactionError { errors: GroupedErrors },
     #[error("Transaction is not processed because {overloaded_stake} of validators by stake are overloaded with certificates pending execution.")]
     SystemOverload {
         overloaded_stake: StakeUnit,
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
     },
 }
+
+pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;
