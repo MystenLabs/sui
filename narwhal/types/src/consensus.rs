@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::mutable_key_type)]
 
-use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
+use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round, TimestampMs};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
 use serde::{Deserialize, Serialize};
@@ -35,9 +35,33 @@ pub struct CommittedSubDag {
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
     pub reputation_score: ReputationScores,
+    /// The timestamp that should identify this commit. This is guaranteed to be monotonically
+    /// incremented
+    pub commit_timestamp: TimestampMs,
 }
 
 impl CommittedSubDag {
+    pub fn new(
+        certificates: Vec<Certificate>,
+        leader: Certificate,
+        sub_dag_index: SequenceNumber,
+        reputation_score: ReputationScores,
+        previous_sub_dag: Option<CommittedSubDag>,
+    ) -> Self {
+        let previous_sub_dag_ts = previous_sub_dag
+            .map(|s| s.commit_timestamp)
+            .unwrap_or_default();
+        let commit_timestamp = previous_sub_dag_ts.max(*leader.header().created_at());
+
+        Self {
+            certificates,
+            leader,
+            sub_dag_index,
+            reputation_score,
+            commit_timestamp,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.certificates.len()
     }
@@ -111,12 +135,15 @@ pub struct CommittedSubDagShell {
     pub certificates: Vec<CertificateDigest>,
     /// The leader certificate's digest responsible of committing this sub-dag.
     pub leader: CertificateDigest,
-    // The round of the leader
+    /// The round of the leader
     pub leader_round: Round,
     /// Sequence number of the CommittedSubDag
     pub sub_dag_index: SequenceNumber,
     /// The so far calculated reputation score for nodes
     pub reputation_score: ReputationScores,
+    /// The timestamp that should identify this commit. This is guaranteed to be monotonically
+    /// incremented
+    pub commit_timestamp: TimestampMs,
 }
 
 impl CommittedSubDagShell {
@@ -127,6 +154,7 @@ impl CommittedSubDagShell {
             leader_round: sub_dag.leader.round(),
             sub_dag_index: sub_dag.sub_dag_index,
             reputation_score: sub_dag.reputation_score.clone(),
+            commit_timestamp: sub_dag.commit_timestamp,
         }
     }
 }

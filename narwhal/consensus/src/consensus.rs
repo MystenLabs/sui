@@ -46,6 +46,8 @@ pub struct ConsensusState {
     /// The last committed sub dag leader. This allow us to calculate the reputation score of the nodes
     /// that vote for the last leader.
     pub last_committed_leader: Option<CertificateDigest>,
+    /// The last committed sub dag. If value is None, it means that we haven't committed any sub dag yet.
+    pub last_committed_sub_dag: Option<CommittedSubDag>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
     pub dag: Dag,
@@ -63,6 +65,7 @@ impl ConsensusState {
             dag: Default::default(),
             last_consensus_reputation_score: ReputationScores::new(committee),
             last_committed_leader: None,
+            last_committed_sub_dag: None,
             metrics,
         }
     }
@@ -79,7 +82,7 @@ impl ConsensusState {
         let last_round = ConsensusRound::new_with_gc_depth(last_committed_round, gc_depth);
 
         let dag = Self::construct_dag_from_cert_store(
-            cert_store,
+            &cert_store,
             &recovered_last_committed,
             last_round.gc_round,
         )
@@ -88,8 +91,37 @@ impl ConsensusState {
 
         let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
             latest_sub_dag
-                .map(|s| (s.sub_dag_index, s.reputation_score, Some(s.leader)))
+                .as_ref()
+                .map(|s| (s.sub_dag_index, s.reputation_score.clone(), Some(s.leader)))
                 .unwrap_or((0, ReputationScores::new(committee), None));
+
+        let last_committed_sub_dag = if let Some(latest_sub_dag) = latest_sub_dag.as_ref() {
+            let certificates = latest_sub_dag
+                .certificates
+                .iter()
+                .map(|s| {
+                    cert_store
+                        .read(*s)
+                        .unwrap()
+                        .expect("Certificate should be found in database")
+                })
+                .collect();
+
+            let leader = cert_store
+                .read(latest_sub_dag.leader)
+                .unwrap()
+                .expect("Certificate should be found in database");
+
+            Some(CommittedSubDag {
+                certificates,
+                leader,
+                sub_dag_index: latest_sub_dag.sub_dag_index,
+                reputation_score: latest_sub_dag.reputation_score.clone(),
+                commit_timestamp: latest_sub_dag.commit_timestamp,
+            })
+        } else {
+            None
+        };
 
         Self {
             gc_depth,
@@ -98,6 +130,7 @@ impl ConsensusState {
             last_consensus_reputation_score,
             latest_sub_dag_index,
             last_committed_leader,
+            last_committed_sub_dag,
             dag,
             metrics,
         }
@@ -105,7 +138,7 @@ impl ConsensusState {
 
     #[instrument(level = "info", skip_all)]
     pub fn construct_dag_from_cert_store(
-        cert_store: CertificateStore,
+        cert_store: &CertificateStore,
         last_committed: &HashMap<AuthorityIdentifier, Round>,
         gc_round: Round,
     ) -> Result<Dag, ConsensusError> {

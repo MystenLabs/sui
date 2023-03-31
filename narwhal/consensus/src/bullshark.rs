@@ -181,12 +181,13 @@ impl ConsensusProtocol for Bullshark {
             // We update the reputation score stored in state
             let reputation_score = self.update_reputation_score(state, &sequence, sub_dag_index);
 
-            let sub_dag = CommittedSubDag {
-                certificates: sequence,
-                leader: leader.clone(),
+            let sub_dag = CommittedSubDag::new(
+                sequence,
+                leader.clone(),
                 sub_dag_index,
                 reputation_score,
-            };
+                state.last_committed_sub_dag.clone(),
+            );
 
             // Persist the update.
             self.store
@@ -195,6 +196,7 @@ impl ConsensusProtocol for Bullshark {
             // Increase the global consensus index.
             state.latest_sub_dag_index = sub_dag_index;
             state.last_committed_leader = Some(sub_dag.leader.digest());
+            state.last_committed_sub_dag = Some(sub_dag.clone());
 
             committed_sub_dags.push(sub_dag);
         }

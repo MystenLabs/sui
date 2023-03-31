@@ -105,12 +105,14 @@ impl ConsensusProtocol for Tusk {
             }
             debug!("Subdag has {} certificates", sequence.len());
 
-            let sub_dag = CommittedSubDag {
-                certificates: sequence,
-                leader: leader.clone(),
+            // TODO compute the scores for Tusk as well
+            let sub_dag = CommittedSubDag::new(
+                sequence,
+                leader.clone(),
                 sub_dag_index,
-                reputation_score: ReputationScores::default(), // TODO compute the scores for Tusk as well
-            };
+                ReputationScores::default(),
+                None,
+            );
 
             // Persist the update.
             self.store
