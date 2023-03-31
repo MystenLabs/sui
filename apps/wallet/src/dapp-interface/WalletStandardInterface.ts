@@ -65,6 +65,13 @@ type SuiWalletStakeFeature = {
         stake: (input: StakeInput) => Promise<void>;
     };
 };
+type CustodialConnectInput = { service: string; apiUrl: string; token: string };
+type SuiWalletCustodialConnectFeature = {
+    'suiWallet:custodialConnect': {
+        version: '0.0.1';
+        custodialConnect: (input: CustodialConnectInput) => Promise<void>;
+    };
+};
 type ChainType = Wallet['chains'][number];
 const API_ENV_TO_CHAIN: Record<
     Exclude<API_ENV, API_ENV.customRPC>,
@@ -103,7 +110,8 @@ export class SuiWallet implements Wallet {
     get features(): StandardConnectFeature &
         StandardEventsFeature &
         SuiFeatures &
-        SuiWalletStakeFeature {
+        SuiWalletStakeFeature &
+        SuiWalletCustodialConnectFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -129,6 +137,10 @@ export class SuiWallet implements Wallet {
             'sui:signMessage': {
                 version: '1.0.0',
                 signMessage: this.#signMessage,
+            },
+            'suiWallet:custodialConnect': {
+                version: '0.0.1',
+                custodialConnect: this.#custodialConnect,
             },
         };
     }
@@ -336,6 +348,11 @@ export class SuiWallet implements Wallet {
     #setActiveChain({ env }: NetworkEnvType) {
         this.#activeChain =
             env === API_ENV.customRPC ? 'sui:unknown' : API_ENV_TO_CHAIN[env];
+    }
+
+    #custodialConnect(input: CustodialConnectInput): Promise<void> {
+        console.log('custodialConnect');
+        throw new Error('not implemented yet');
     }
 
     #send<
