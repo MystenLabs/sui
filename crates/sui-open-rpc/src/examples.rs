@@ -453,7 +453,11 @@ impl RpcExampleProvider {
         );
 
         let data = TransactionData::new_transfer_with_dummy_gas_price(
-            recipient, object_ref, signer, gas_ref, 1000,
+            recipient,
+            object_ref,
+            signer,
+            gas_ref,
+            5_000_000_000,
         );
         let data1 = data.clone();
         let data2 = data.clone();

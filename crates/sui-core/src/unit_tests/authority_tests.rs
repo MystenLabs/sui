@@ -119,7 +119,7 @@ impl TestCallArg {
     }
 }
 
-const MAX_GAS: u64 = 1000000;
+const MAX_GAS: u64 = 5_000_000_000;
 
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
@@ -1123,7 +1123,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 async fn test_upgrade_module_is_feature_gated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 1000000);
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
 
@@ -2432,7 +2432,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         )
         .await
         .unwrap();
-    assert!(signed_effects.data().status().is_ok());
+    assert_eq!(signed_effects.data().status(), &ExecutionStatus::Success);
 
     let signed_effects2 = authority_state
         .execute_certificate(
@@ -2441,7 +2441,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         )
         .await
         .unwrap();
-    assert!(signed_effects2.data().status().is_ok());
+    assert_eq!(signed_effects2.data().status(), &ExecutionStatus::Success);
 
     // this is valid because we're checking the authority state does not change the certificate
     assert_eq!(signed_effects, signed_effects2);
@@ -4192,7 +4192,7 @@ pub fn init_transfer_transaction(
         object_ref,
         sender,
         gas_object_ref,
-        100000,
+        5_000_000_000,
     );
     to_sender_signed_transaction(data, secret)
 }
@@ -5100,7 +5100,7 @@ async fn test_gas_smashing() {
 
     // get the cost of the transaction so we can play with multiple gas coins
     // 100,000 should be enough money for that transaction.
-    let gas_used = run_and_check(100_000, 1, 100_000, true).await;
+    let gas_used = run_and_check(100_000_000, 1, 100_000_000, true).await;
 
     // add something to the gas used to account for multiple gas coins being charged for
     let reference_gas_used = gas_used + 1_000;
@@ -5169,7 +5169,7 @@ async fn test_for_inc_201_dry_run() {
     builder.publish_immutable(modules, system_package_ids());
     let kind = TransactionKind::programmable(builder.finish());
 
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 1000000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 50_000_000, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
     let (DryRunTransactionBlockResponse { events, .. }, _, _) = fullnode
@@ -5192,7 +5192,7 @@ async fn test_for_inc_201_dry_run() {
 async fn test_publish_transitive_dependencies_ok() {
     use sui_framework_build::compiled_package::BuildConfig;
 
-    const TXN_BUDGET: u64 = 200000;
+    const TXN_BUDGET: u64 = MAX_GAS;
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
