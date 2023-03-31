@@ -88,19 +88,31 @@ module sui_system::voting_power_tests {
         use std::debug;
         let scenario = test_scenario::begin(@0x0);
         let ctx = test_scenario::ctx(&mut scenario);
+        let max_total_stake = 10_000_000_000;
+        let min_stake = 15_000_000;
+        let stake;
         let random = new();
         let length;
         let validators;
+
         let n = 0;
         while (n < 1000) {
             length = random(&mut random, 29) + 1;
             let i = 0;
             let stakes = vector::empty();
+            let temp_total_stake = 0;
+            let limit = max_total_stake / length;
             while (i < length) {
-                vector::push_back(&mut stakes, random(&mut random, 20000));
+                stake = min_stake + random(&mut random, limit);
+                if (stake + temp_total_stake > max_total_stake) {
+                    break
+                };
+                temp_total_stake = temp_total_stake + stake;
+                vector::push_back(&mut stakes, stake);
                 i = i + 1;
             };
             debug::print(&stakes);
+            debug::print(&temp_total_stake);
             validators = gtu::create_validators_with_stakes(stakes, ctx);
             voting_power::set_voting_power(&mut validators);
             test_utils::destroy(validators);
