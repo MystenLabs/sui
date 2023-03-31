@@ -7,15 +7,31 @@ import {
     formatAddress,
     type TransactionType,
     normalizeSuiAddress,
+    type MakeMoveVecTransaction,
 } from '@mysten/sui.js';
 import { useState } from 'react';
 
 import { Text } from '_src/ui/app/shared/text';
 
 function convertCommandArgumentToString(
-    arg: string | string[] | TransactionArgument | TransactionArgument[]
-): string {
+    arg:
+        | string
+        | string[]
+        | TransactionArgument
+        | TransactionArgument[]
+        | MakeMoveVecTransaction['type']
+): string | null {
+    if (!arg) return null;
+
     if (typeof arg === 'string') return arg;
+
+    if ('None' in arg) {
+        return null;
+    }
+
+    if ('Some' in arg) {
+        return arg.Some;
+    }
 
     if (Array.isArray(arg)) {
         return `[${arg
@@ -33,7 +49,9 @@ function convertCommandArgumentToString(
         case 'NestedResult':
             return `NestedResult(${arg.index}, ${arg.resultIndex})`;
         default:
-            throw new Error('Unexpected argument kind');
+            // eslint-disable-next-line no-console
+            console.warn('Unexpected command argument type.', arg);
+            return null;
     }
 }
 
@@ -51,8 +69,13 @@ function convertCommandToString({ kind, ...command }: TransactionType) {
                 ].join(', ');
             }
 
-            return `${key}: ${convertCommandArgumentToString(value)}`;
+            const stringValue = convertCommandArgumentToString(value);
+
+            if (!stringValue) return null;
+
+            return `${key}: ${stringValue}`;
         })
+        .filter(Boolean)
         .join(', ');
 }
 
