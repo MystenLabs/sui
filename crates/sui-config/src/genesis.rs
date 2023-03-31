@@ -638,6 +638,14 @@ impl Builder {
         self
     }
 
+    pub fn with_token_distribution_schedule(
+        mut self,
+        token_distribution_schedule: TokenDistributionSchedule,
+    ) -> Self {
+        self.token_distribution_schedule = Some(token_distribution_schedule);
+        self
+    }
+
     pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
         self.parameters.protocol_version = v;
         self
@@ -1800,6 +1808,52 @@ pub struct TokenAllocation {
 
     /// Indicates if this allocation should be staked at genesis and with which validator
     pub staked_with_validator: Option<SuiAddress>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenDistributionScheduleBuilder {
+    pool: u64,
+    allocations: Vec<TokenAllocation>,
+}
+
+impl TokenDistributionScheduleBuilder {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self {
+            pool: TOTAL_SUPPLY_MIST,
+            allocations: vec![],
+        }
+    }
+
+    pub fn default_allocation_for_validators<I: IntoIterator<Item = SuiAddress>>(
+        &mut self,
+        validators: I,
+    ) {
+        let default_allocation = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
+
+        for validator in validators {
+            self.add_allocation(TokenAllocation {
+                recipient_address: validator,
+                amount_mist: default_allocation,
+                staked_with_validator: Some(validator),
+            });
+        }
+    }
+
+    pub fn add_allocation(&mut self, allocation: TokenAllocation) {
+        self.pool = self.pool.checked_sub(allocation.amount_mist).unwrap();
+        self.allocations.push(allocation);
+    }
+
+    pub fn build(&self) -> TokenDistributionSchedule {
+        let schedule = TokenDistributionSchedule {
+            stake_subsidy_fund_mist: self.pool,
+            allocations: self.allocations.clone(),
+        };
+
+        schedule.validate();
+        schedule
+    }
 }
 
 #[cfg(test)]

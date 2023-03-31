@@ -17,7 +17,7 @@ use sui::{
     sui_commands::SuiCommand,
 };
 use sui_config::{
-    genesis_config::{AccountConfig, GenesisConfig, ObjectConfig},
+    genesis_config::{AccountConfig, GenesisConfig},
     Config, NodeConfig, SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME,
 };
 use sui_config::{
@@ -271,14 +271,9 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 
     let mut config = GenesisConfig::for_local_testing();
     config.accounts.clear();
-    let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
         address: None,
-        gas_objects: vec![ObjectConfig {
-            object_id,
-            gas_value: 500,
-        }],
-        gas_object_ranges: None,
+        gas_amounts: vec![500],
     });
     let mut cluster = TestClusterBuilder::new()
         .set_genesis_config(config)
