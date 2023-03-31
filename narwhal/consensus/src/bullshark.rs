@@ -178,7 +178,7 @@ impl ConsensusProtocol for Bullshark {
 
             total_committed_certificates += sequence.len();
 
-            // We update the reputation score stored in state
+            // We resolve the reputation score that should be stored alongside with this sub dag.
             let reputation_score = self.resolve_reputation_score(state, &sequence, sub_dag_index);
 
             let sub_dag = CommittedSubDag::new(
