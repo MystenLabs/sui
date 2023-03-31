@@ -214,14 +214,8 @@ impl<S: IndexerStore> IndexerApi<S> {
             has_next_page,
         })
     }
-}
 
-#[async_trait]
-impl<S> IndexerApiServer for IndexerApi<S>
-where
-    S: IndexerStore + Sync + Send + 'static,
-{
-    async fn get_owned_objects(
+    async fn get_owned_objects_interal(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
@@ -274,6 +268,33 @@ where
             next_cursor,
             has_next_page,
         })
+    }
+}
+
+#[async_trait]
+impl<S> IndexerApiServer for IndexerApi<S>
+where
+    S: IndexerStore + Sync + Send + 'static,
+{
+    async fn get_owned_objects(
+        &self,
+        address: SuiAddress,
+        query: Option<SuiObjectResponseQuery>,
+        cursor: Option<CheckpointedObjectID>,
+        limit: Option<usize>,
+    ) -> RpcResult<ObjectsPage> {
+        if !self
+            .migrated_methods
+            .contains(&"get_owned_objects".to_string())
+        {
+            return self
+                .fullnode
+                .get_owned_objects(address, query, cursor, limit)
+                .await;
+        }
+        Ok(self
+            .get_owned_objects_interal(address, query, cursor, limit)
+            .await?)
     }
 
     async fn query_transaction_blocks(
