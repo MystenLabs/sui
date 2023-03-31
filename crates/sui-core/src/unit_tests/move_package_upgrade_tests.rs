@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{account_address::AccountAddress, ident_str};
+use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
 use move_symbol_pool::Symbol;
 use sui_framework::{MoveStdlib, SuiFramework, SystemPackage};
 use sui_framework_build::compiled_package::BuildConfig;
@@ -296,6 +296,85 @@ async fn test_upgrade_package_happy_path() {
 }
 
 #[tokio::test]
+async fn test_upgrade_introduces_type_then_uses_it() {
+    let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
+
+    // First upgrade introduces a new type, B.
+    let (digest, modules) = build_upgrade_test_modules("new_object");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SuiFramework::ID, MoveStdlib::ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v2 = runner.package.0;
+
+    // Second upgrade introduces an entry function that creates `B`s.
+    let (digest, modules) = build_upgrade_test_modules("makes_new_object");
+    let effects = runner
+        .upgrade(
+            UpgradePolicy::COMPATIBLE,
+            digest,
+            modules,
+            vec![SuiFramework::ID, MoveStdlib::ID],
+        )
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let package_v3 = runner.package.0;
+
+    // Create an instance of the type introduced at version 2, with the function introduced at
+    // version 3.
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! { builder, (package_v3)::base::makes_b() };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let created = effects
+        .created
+        .iter()
+        .find_map(|(b, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(b))
+        .unwrap();
+
+    let b = runner
+        .authority_state
+        .database
+        .get_object_by_key(&created.0, created.1)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        b.data.struct_tag().unwrap(),
+        StructTag {
+            address: *package_v2,
+            module: ident_str!("base").to_owned(),
+            name: ident_str!("B").to_owned(),
+            type_params: vec![],
+        },
+    );
+
+    // Delete the instance we just created
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let b = builder.obj(ObjectArg::ImmOrOwnedObject(*created)).unwrap();
+            move_call! { builder, (package_v3)::base::destroys_b(b) };
+            builder.finish()
+        })
+        .await;
+
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+}
+
+#[tokio::test]
 async fn test_upgrade_incompatible() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
@@ -337,7 +416,9 @@ async fn test_upgrade_package_compatibility_too_permissive() {
     let TransactionEffects::V1(effects) = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
-            let cap = builder.obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap)).unwrap();
+            let cap = builder
+                .obj(ObjectArg::ImmOrOwnedObject(runner.upgrade_cap))
+                .unwrap();
             move_call! { builder, (SuiFramework::ID)::package::only_dep_upgrades(cap) };
             builder.finish()
         })
@@ -363,12 +444,8 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
 
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
     let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![]
-        ).await;
+        .upgrade(UpgradePolicy::DEP_ONLY, digest, modules, vec![])
+        .await;
 
     assert_eq!(
         effects.status.unwrap_err().0,
@@ -384,12 +461,8 @@ async fn test_upgrade_package_compatible_in_additive_mode() {
 
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
     let effects = runner
-        .upgrade(
-            UpgradePolicy::ADDITIVE,
-            digest,
-            modules,
-            vec![]
-        ).await;
+        .upgrade(UpgradePolicy::ADDITIVE, digest, modules, vec![])
+        .await;
 
     assert_eq!(
         effects.status.unwrap_err().0,
@@ -404,13 +477,7 @@ async fn test_upgrade_package_invalid_compatibility() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
-    let effects = runner
-        .upgrade(
-            255u8,
-            digest,
-            modules,
-            vec![]
-        ).await;
+    let effects = runner.upgrade(255u8, digest, modules, vec![]).await;
 
     assert!(matches!(
         effects.status.unwrap_err().0,
@@ -426,12 +493,8 @@ async fn test_upgrade_package_additive_mode() {
 
     let (digest, modules) = build_upgrade_test_modules("additive_upgrade");
     let effects = runner
-        .upgrade(
-            UpgradePolicy::ADDITIVE,
-            digest,
-            modules,
-            vec![]
-        ).await;
+        .upgrade(UpgradePolicy::ADDITIVE, digest, modules, vec![])
+        .await;
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
@@ -442,12 +505,8 @@ async fn test_upgrade_package_invalid_additive_mode() {
 
     let (digest, modules) = build_upgrade_test_modules("additive_upgrade_invalid");
     let effects = runner
-        .upgrade(
-            UpgradePolicy::ADDITIVE,
-            digest,
-            modules,
-            vec![]
-        ).await;
+        .upgrade(UpgradePolicy::ADDITIVE, digest, modules, vec![])
+        .await;
 
     assert_eq!(
         effects.status.unwrap_err().0,
@@ -463,12 +522,8 @@ async fn test_upgrade_package_additive_dep_only_mode() {
 
     let (digest, modules) = build_upgrade_test_modules("additive_upgrade");
     let effects = runner
-        .upgrade(
-            UpgradePolicy::DEP_ONLY,
-            digest,
-            modules,
-            vec![]
-        ).await;
+        .upgrade(UpgradePolicy::DEP_ONLY, digest, modules, vec![])
+        .await;
 
     assert_eq!(
         effects.status.unwrap_err().0,
@@ -489,7 +544,8 @@ async fn test_upgrade_package_dep_only_mode() {
             digest,
             modules,
             vec![SuiFramework::ID, MoveStdlib::ID],
-        ).await;
+        )
+        .await;
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
@@ -575,12 +631,8 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffectsV1 {
 
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
     let effects = runner
-        .upgrade(
-            UpgradePolicy::COMPATIBLE,
-            digest,
-            modules,
-            vec![]
-        ).await;
+        .upgrade(UpgradePolicy::COMPATIBLE, digest, modules, vec![])
+        .await;
 
     assert!(effects.status.is_ok(), "{:#?}", effects.status);
 
@@ -595,8 +647,9 @@ async fn test_multiple_upgrades(use_empty_deps: bool) -> TransactionEffectsV1 {
                 vec![]
             } else {
                 vec![SuiFramework::ID, MoveStdlib::ID]
-            }
-        ).await
+            },
+        )
+        .await
 }
 
 #[tokio::test]
