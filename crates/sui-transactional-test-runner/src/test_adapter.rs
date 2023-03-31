@@ -50,7 +50,6 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
-    gas,
     messages::{
         ExecutionStatus, TransactionData, TransactionDataAPI, TransactionEffectsAPI,
         VerifiedTransaction,
@@ -624,10 +623,9 @@ impl<'a> SuiTestAdapter<'a> {
         gas_budget: u64,
     ) -> anyhow::Result<TxnSummary> {
         let gas_status = if transaction.inner().is_system_tx() {
-            SuiGasStatus::new_unmetered()
+            SuiGasStatus::new_unmetered(&PROTOCOL_CONSTANTS)
         } else {
-            gas::start_gas_metering(gas_budget, 1, 1, SuiCostTable::new(&PROTOCOL_CONSTANTS))
-                .unwrap()
+            SuiCostTable::new(&PROTOCOL_CONSTANTS).into_gas_status_for_testing(gas_budget, 1, 1)
         };
         transaction
             .data()

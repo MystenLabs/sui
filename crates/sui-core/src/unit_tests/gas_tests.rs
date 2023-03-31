@@ -10,17 +10,18 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use once_cell::sync::Lazy;
 use sui_framework::make_system_objects;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
+use sui_types::gas::{SuiCostTable, SuiGasStatusAPI};
 use sui_types::gas_coin::GasCoin;
 use sui_types::is_system_package;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::{base_types::dbg_addr, crypto::get_key_pair, gas::SuiGasStatus};
+use sui_types::{base_types::dbg_addr, crypto::get_key_pair};
 
-static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| SuiCostTable::new_for_testing().max_gas_budget);
-static MIN_GAS_BUDGET: Lazy<u64> =
-    Lazy::new(|| SuiCostTable::new_for_testing().min_gas_budget_external());
+static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| SuiCostTable::new_for_testing().max_gas_budget());
+static MIN_GAS_BUDGET: Lazy<u64> = Lazy::new(|| SuiCostTable::new_for_testing().min_gas_budget());
 
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
@@ -85,7 +86,8 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
         .into_effects_for_testing()
         .into_data();
     let gas_cost = effects.gas_cost_summary();
-    assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
+    assert!(gas_cost.net_gas_usage() as u64 > *MIN_GAS_BUDGET);
+    assert!(gas_cost.computation_cost > 0);
     assert!(gas_cost.storage_cost > 0);
     // Removing genesis object does not have rebate.
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -108,19 +110,15 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
 
     // Mimic the process of gas charging, to check that we are charging
     // exactly what we should be charging.
-    let mut gas_status = SuiGasStatus::new_with_budget(
-        *MAX_GAS_BUDGET,
-        1.into(),
-        1.into(),
-        SuiCostTable::new_for_testing(),
-    );
+    let mut gas_status =
+        SuiCostTable::new_for_testing().into_gas_status_for_testing(*MAX_GAS_BUDGET, 1, 1);
     let obj_size = object.object_size_for_gas_metering();
     let gas_size = gas_object.object_size_for_gas_metering();
 
     gas_status.charge_storage_read(obj_size + gas_size)?;
     gas_status.bucketize_computation()?;
-    gas_status.charge_storage_mutation(obj_size, 0.into())?;
-    gas_status.charge_storage_mutation(gas_size, 0.into())?;
+    gas_status.charge_storage_mutation(obj_size, 0)?;
+    gas_status.charge_storage_mutation(gas_size, 0)?;
     let summary = gas_status.summary();
     assert_eq!(gas_cost, &summary);
     Ok(())
@@ -172,7 +170,7 @@ async fn test_transfer_sui_insufficient_gas() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 110);
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, *MIN_GAS_BUDGET);
     let gas_object_ref = gas_object.compute_object_reference();
     let authority_state = init_state().await;
     authority_state.insert_genesis_object(gas_object).await;
@@ -183,7 +181,7 @@ async fn test_transfer_sui_insufficient_gas() {
         builder.finish()
     };
     let kind = TransactionKind::ProgrammableTransaction(pt);
-    let data = TransactionData::new(kind, sender, gas_object_ref, 110, 1);
+    let data = TransactionData::new(kind, sender, gas_object_ref, *MIN_GAS_BUDGET, 1);
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
@@ -262,7 +260,6 @@ async fn test_native_transfer_insufficient_gas_execution() {
     );
 }
 
-// disabled because it violates the SUI conservation checks
 #[tokio::test]
 async fn test_publish_gas() -> anyhow::Result<()> {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -287,6 +284,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     let ((package_id, _, _), _) = effects.created()[0];
     let package = authority_state.get_object(&package_id).await?.unwrap();
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
+    let gas_size = gas_object.object_size_for_gas_metering();
     let expected_gas_balance = GAS_VALUE_FOR_TESTING - gas_cost.gas_used();
     assert_eq!(
         GasCoin::try_from(&gas_object)?.value(),
@@ -304,12 +302,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     };
 
     // Mimic the gas charge behavior and cross check the result with above.
-    let mut gas_status = SuiGasStatus::new_with_budget(
-        *MAX_GAS_BUDGET,
-        1.into(),
-        1.into(),
-        SuiCostTable::new_for_testing(),
-    );
+    let mut gas_status =
+        SuiCostTable::new_for_testing().into_gas_status_for_testing(*MAX_GAS_BUDGET, 1, 1);
     gas_status.charge_storage_read(
         genesis_objects
             .iter()
@@ -318,10 +312,10 @@ async fn test_publish_gas() -> anyhow::Result<()> {
             .map(|o| o.object_size_for_gas_metering())
             .sum(),
     )?;
-    gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
+    gas_status.charge_storage_read(gas_size)?;
     gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
-    gas_status.charge_storage_mutation(package.object_size_for_gas_metering(), 0.into())?;
-    gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0.into())?;
+    gas_status.charge_storage_mutation(package.object_size_for_gas_metering(), 0)?;
+    gas_status.charge_storage_mutation(gas_size, 0)?;
     // Actual gas cost will be greater than the expected summary because of the cost to discard the
     // `UpgradeCap`.
     let gas_summary = gas_status.summary();
@@ -330,9 +324,15 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     assert!(gas_cost.storage_cost >= gas_summary.storage_cost);
 
     // Create a transaction with budget DELTA less than the gas cost required.
-    let total_gas_used = gas_cost.gas_used();
-    const DELTA: u64 = 1;
-    let budget = total_gas_used - DELTA;
+    let total_gas_used = gas_cost.net_gas_usage() as u64;
+    let config = ProtocolConfig::get_for_max_version();
+    let delta: u64 =
+        gas_size as u64 * config.obj_data_cost_refundable() * config.storage_gas_price() + 1000;
+    let budget = if delta < total_gas_used {
+        total_gas_used - delta
+    } else {
+        total_gas_used - 10
+    };
     // Run the transaction again with 1 less than the required budget.
     let response = build_and_try_publish_test_package(
         &authority_state,
@@ -410,12 +410,8 @@ async fn test_move_call_gas() -> SuiResult {
     // Mimic the gas charge behavior and cross check the result with above. Do not include
     // computation cost calculation as it would require hard-coding a constant representing VM
     // execution cost which is quite fragile.
-    let mut gas_status = SuiGasStatus::new_with_budget(
-        GAS_VALUE_FOR_TESTING,
-        1.into(),
-        1.into(),
-        SuiCostTable::new_for_testing(),
-    );
+    let mut gas_status =
+        SuiCostTable::new_for_testing().into_gas_status_for_testing(*MAX_GAS_BUDGET, 1, 1);
     let package_object = authority_state
         .get_object(&package_object_ref.0)
         .await?
@@ -427,8 +423,8 @@ async fn test_move_call_gas() -> SuiResult {
         .get_object(&effects.created()[0].0 .0)
         .await?
         .unwrap();
-    gas_status.charge_storage_mutation(created_object.object_size_for_gas_metering(), 0.into())?;
-    gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0.into())?;
+    gas_status.charge_storage_mutation(created_object.object_size_for_gas_metering(), 0)?;
+    gas_status.charge_storage_mutation(gas_object.object_size_for_gas_metering(), 0)?;
     let new_cost = gas_status.summary();
     assert_eq!(gas_cost.storage_cost, new_cost.storage_cost);
     // This is the total amount of storage cost paid. We will use this
@@ -458,28 +454,23 @@ async fn test_move_call_gas() -> SuiResult {
     // storage_cost should be less than rebate because for object deletion, we only
     // rebate without charging.
     assert!(gas_cost.storage_cost > 0 && gas_cost.storage_cost < gas_cost.storage_rebate);
-    // Check that we have storage rebate that's the same as previous cost.
-    assert_eq!(gas_cost.storage_rebate, prev_storage_cost);
+    // Check that we have storage rebate is less or equal to the previous one + non refundable
+    assert_eq!(
+        gas_cost.storage_rebate + gas_cost.non_refundable_storage_fee,
+        prev_storage_cost
+    );
     Ok(())
 }
 
 #[tokio::test]
 async fn test_storage_gas_unit_price() -> SuiResult {
-    let mut gas_status1 = SuiGasStatus::new_with_budget(
-        *MAX_GAS_BUDGET,
-        1.into(),
-        1.into(),
-        SuiCostTable::new_for_testing(),
-    );
-    gas_status1.charge_storage_mutation(200, 5.into())?;
+    let mut gas_status1 =
+        SuiCostTable::new_for_testing().into_gas_status_for_testing(*MAX_GAS_BUDGET, 1, 1);
+    gas_status1.charge_storage_mutation(200, 5)?;
     let gas_cost1 = gas_status1.summary();
-    let mut gas_status2 = SuiGasStatus::new_with_budget(
-        *MAX_GAS_BUDGET,
-        1.into(),
-        3.into(),
-        SuiCostTable::new_for_testing(),
-    );
-    gas_status2.charge_storage_mutation(200, 5.into())?;
+    let mut gas_status2 =
+        SuiCostTable::new_for_testing().into_gas_status_for_testing(*MAX_GAS_BUDGET, 1, 3);
+    gas_status2.charge_storage_mutation(200, 5)?;
     let gas_cost2 = gas_status2.summary();
     // Computation unit price is the same, hence computation cost should be the same.
     assert_eq!(gas_cost1.computation_cost, gas_cost2.computation_cost);

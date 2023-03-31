@@ -259,7 +259,7 @@ async fn test_regression_6546() -> Result<(), anyhow::Error> {
         &coins.first().unwrap().object()?.object_id.to_string(),
         &test_cluster.get_address_1().to_string(),
         "--gas-budget",
-        "10000",
+        "100000",
     ])
     .await
 }
@@ -1476,7 +1476,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
         primary_coin,
         coin_to_merge,
         gas: Some(gas),
-        gas_budget: 20_000,
+        gas_budget: 200_000,
     }
     .execute(context)
     .await?;
@@ -1588,7 +1588,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: Some(gas),
-        gas_budget: 20_000,
+        gas_budget: 200_000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1653,7 +1653,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test split coin into equal parts
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 20_000,
+        gas_budget: 200_000,
         coin_id: coin,
         amounts: None,
         count: Some(3),
@@ -1721,7 +1721,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
-        gas_budget: 20_000,
+        gas_budget: 200_000,
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
@@ -1869,7 +1869,7 @@ async fn test_stake_with_none_amount() -> Result<(), anyhow::Error> {
         "[]",
         &validator_addr.to_string(),
         "--gas-budget",
-        "10000",
+        "1000000",
     ])
     .await?;
 
@@ -1921,7 +1921,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
         "[1000000000]",
         &validator_addr.to_string(),
         "--gas-budget",
-        "10000",
+        "1000000",
     ])
     .await?;
 

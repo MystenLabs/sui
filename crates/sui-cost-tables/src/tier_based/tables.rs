@@ -44,10 +44,13 @@ pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_sched
 /// Provide all the proper guarantees about gas metering in the Move VM.
 ///
 /// Every client must use an instance of this type to interact with the Move VM.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
+    gas_price: u64,
+    initial_budget: InternalGas,
     charge: bool,
 
     // The current height of the operand stack, and the maximal height that it has reached.
@@ -73,7 +76,43 @@ impl<'a> GasStatus<'a> {
     ///
     /// Charge for every operation and fail when there is no more gas to pay for operations.
     /// This is the instantiation that must be used when executing a user script.
+
+    pub fn new_v2(cost_table: &'a CostTable, budget: u64, gas_price: u64) -> Self {
+        assert!(gas_price > 0, "gas price cannot be 0");
+        let budget_in_unit = budget / gas_price;
+        let gas_left = Self::to_internal_units(budget_in_unit);
+        // println!(
+        //     "GAS - GasStatus: budget {}, gas price: {}, gas_left {}",
+        //     budget, gas_price, gas_left,
+        // );
+        let (stack_height_current_tier_mult, stack_height_next_tier_start) =
+            cost_table.stack_height_tier(0);
+        let (stack_size_current_tier_mult, stack_size_next_tier_start) =
+            cost_table.stack_size_tier(0);
+        let (instructions_current_tier_mult, instructions_next_tier_start) =
+            cost_table.instruction_tier(0);
+        Self {
+            gas_left,
+            gas_price,
+            initial_budget: gas_left,
+            cost_table,
+            charge: true,
+            stack_height_high_water_mark: 0,
+            stack_height_current: 0,
+            stack_size_high_water_mark: 0,
+            stack_size_current: 0,
+            instructions_executed: 0,
+            stack_height_current_tier_mult,
+            stack_size_current_tier_mult,
+            instructions_current_tier_mult,
+            stack_height_next_tier_start,
+            stack_size_next_tier_start,
+            instructions_next_tier_start,
+        }
+    }
+
     pub fn new(cost_table: &'a CostTable, gas_left: Gas) -> Self {
+        // println!("GAS - GasStatus: gas_left {}", gas_left);
         let (stack_height_current_tier_mult, stack_height_next_tier_start) =
             cost_table.stack_height_tier(0);
         let (stack_size_current_tier_mult, stack_size_next_tier_start) =
@@ -82,6 +121,8 @@ impl<'a> GasStatus<'a> {
             cost_table.instruction_tier(0);
         Self {
             gas_left: gas_left.to_unit(),
+            gas_price: 1,
+            initial_budget: InternalGas::new(0),
             cost_table,
             charge: true,
             stack_height_high_water_mark: 0,
@@ -105,6 +146,8 @@ impl<'a> GasStatus<'a> {
     pub fn new_unmetered() -> Self {
         Self {
             gas_left: InternalGas::new(0),
+            gas_price: 1,
+            initial_budget: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
             charge: false,
             stack_height_high_water_mark: 0,
@@ -119,6 +162,18 @@ impl<'a> GasStatus<'a> {
             stack_size_next_tier_start: None,
             instructions_next_tier_start: None,
         }
+    }
+
+    const INTERNAL_UNIT_MULTIPLIER: u64 = 1000;
+
+    fn to_internal_units(val: u64) -> InternalGas {
+        InternalGas::new(val * Self::INTERNAL_UNIT_MULTIPLIER)
+    }
+
+    #[allow(dead_code)]
+    fn to_mist(&self, val: InternalGas) -> u64 {
+        let gas: Gas = InternalGas::to_unit_round_down(val);
+        u64::from(gas) * self.gas_price
     }
 
     pub fn push_stack(&mut self, pushes: u64) -> PartialVMResult<()> {
@@ -262,8 +317,36 @@ impl<'a> GasStatus<'a> {
         }
     }
 
+    // Deduct the amount provided with no conversion, as if it was InternalGasUnit
+    fn deduct_units(&mut self, amount: u64) -> PartialVMResult<()> {
+        // println!("GAS - deduct_units: {}", amount);
+        self.deduct_gas(InternalGas::new(amount))
+    }
+
     pub fn set_metering(&mut self, enabled: bool) {
         self.charge = enabled
+    }
+
+    // The amount of gas used, it does not include the multiplication for the gas price
+    pub fn gas_used_pre_gas_price(&self) -> u64 {
+        let gas: Gas = match self.initial_budget.checked_sub(self.gas_left) {
+            Some(val) => InternalGas::to_unit_round_down(val),
+            None => {
+                // println!("GAS - ERROR: gas use underflow");
+                InternalGas::to_unit_round_down(self.initial_budget)
+            }
+        };
+        u64::from(gas)
+    }
+
+    // Charge the number of bytes with the cost per byte value
+    pub fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> PartialVMResult<()> {
+        let computation_cost = size as u64 * cost_per_byte;
+        // println!(
+        //     "GAS - charge_bytes: {} from {} - {}",
+        //     computation_cost, size, cost_per_byte
+        // );
+        self.deduct_units(computation_cost)
     }
 }
 
@@ -570,7 +653,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     ) -> PartialVMResult<()> {
         // We will perform `num_args` number of pops.
         let num_args = args.len() as u64;
-        // The amount of data on the stack stays contstant except we have some extra metadata for
+        // The amount of data on the stack stays constant except we have some extra metadata for
         // the vector to hold the length of the vector.
         self.charge(1, 1, num_args, VEC_SIZE.into(), 0)
     }

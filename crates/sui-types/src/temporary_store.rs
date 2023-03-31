@@ -27,7 +27,7 @@ use crate::{
     error::{ExecutionError, SuiError, SuiResult},
     event::Event,
     fp_bail, gas,
-    gas::{GasCostSummary, SuiGasStatus},
+    gas::{GasCostSummary, SuiGasStatus, SuiGasStatusAPI},
     messages::{ExecutionStatus, InputObjects, TransactionEffects},
     object::Owner,
     object::{Data, Object},
@@ -682,13 +682,20 @@ impl<S: ObjectStore> TemporaryStore<S> {
         }
         Ok(())
     }
+}
 
+//==============================================================================
+// Charge gas legacy - start
+// This is the original gas charging code, all code between comment
+// "Charge gas legacy - start/end" is exclusively for legacy gas
+//==============================================================================
+impl<S: ObjectStore> TemporaryStore<S> {
     /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of mutated objects
     /// 2. Deduct computation gas costs and storage costs to `gas_object_id`, credit storage rebates to `gas_object_id`.
     // The happy path of this function follows (1) + (2) and is fairly simple. Most of the complexity is in the unhappy paths:
     // - if execution aborted before calling this function, we have to dump all writes + re-smash gas, then charge for storage
     // - if we run out of gas while charging for storage, we have to dump all writes + re-smash gas, then charge for storage again
-    pub fn charge_gas<T>(
+    pub fn charge_gas_legacy<T>(
         &mut self,
         gas_object_id: ObjectID,
         gas_status: &mut SuiGasStatus<'_>,
@@ -737,7 +744,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
         // Important to fetch the gas object here instead of earlier, as it may have been reset
         // previously in the case of error.
         let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
-        gas::deduct_gas(
+        gas::deduct_gas_legacy(
             &mut gas_object,
             gas_used,
             // MUSTFIX: This is incorrect. Storage rebate in cost summary need to be consistent with balance change.
@@ -834,7 +841,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
             };
             let new_object_size = object.object_size_for_gas_metering();
             let new_storage_rebate =
-                gas_status.charge_storage_mutation(new_object_size, old_storage_rebate.into())?;
+                gas_status.charge_storage_mutation(new_object_size, old_storage_rebate)?;
             object.storage_rebate = new_storage_rebate;
             if !object.is_immutable() {
                 objects_to_update.push((object.clone(), *write_kind));
@@ -847,7 +854,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
                 DeleteKind::Wrap | DeleteKind::Normal => {
                     let (storage_rebate, object_size) =
                         self.get_input_storage_rebate_and_size(object_id, *version)?;
-                    gas_status.charge_storage_mutation(0, storage_rebate.into())?;
+                    gas_status.charge_storage_mutation(0, storage_rebate)?;
                     total_bytes_written_deleted += object_size;
                 }
                 DeleteKind::UnwrapThenDelete => {
@@ -864,6 +871,207 @@ impl<S: ObjectStore> TemporaryStore<S> {
         Ok(total_bytes_written_deleted as u64)
     }
 }
+//==============================================================================
+// Charge gas legacy - end
+//==============================================================================
+
+//==============================================================================
+// Charge gas current - start
+// This is the new/current/latest gas charging code, all code between comment
+// "Charge gas current - start/end" is exclusively for latest gas
+//==============================================================================
+impl<S: ObjectStore> TemporaryStore<S> {
+    /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of mutated objects
+    /// 2. Deduct computation gas costs and storage costs to `gas_object_id`, credit storage rebates to `gas_object_id`.
+    // The happy path of this function follows (1) + (2) and is fairly simple. Most of the complexity is in the unhappy paths:
+    // - if execution aborted before calling this function, we have to dump all writes + re-smash gas, then charge for storage
+    // - if we run out of gas while charging for storage, we have to dump all writes + re-smash gas, then charge for storage again
+    pub fn charge_gas<T>(
+        &mut self,
+        gas_object_id: ObjectID,
+        gas_status: &mut SuiGasStatus<'_>,
+        execution_result: &mut Result<T, ExecutionError>,
+        gas: &[ObjectRef],
+    ) -> GasCostSummary {
+        // at this point, we have done *all* charging for computation,
+        // but have not yet set the storage rebate or storage gas units
+        assert!(gas_status.storage_rebate() == 0);
+        assert!(gas_status.storage_gas_units() == 0);
+
+        // println!("GAS - charge gas with result error: {}", execution_result.is_err());
+
+        // bucketize computation cost
+        if let Err(err) = gas_status.bucketize_computation() {
+            // println!("GAS - bucketize failed");
+            if execution_result.is_ok() {
+                *execution_result = Err(err);
+            }
+        }
+
+        // On error we need to dump writes, deletes, etc before charging storage gas
+        if execution_result.is_err() {
+            self.reset(gas, gas_status);
+        }
+
+        // collect and charge storage cost
+        self.collect_storage_and_rebate(gas_status, gas_object_id);
+        if let Err(err) = gas_status.charge_storage_and_rebate() {
+            // println!("GAS - Out Of Gas charging storage");
+            // out of gas
+            self.reset(gas, gas_status);
+            self.cleanup_store_on_out_of_gas(gas_status, gas_object_id);
+            if execution_result.is_ok() {
+                *execution_result = Err(err);
+            }
+        }
+
+        let cost_summary = gas_status.summary();
+        let gas_used = cost_summary.net_gas_usage();
+
+        // Important to fetch the gas object here instead of earlier, as it may have been reset
+        // previously in the case of error.
+        let mut gas_object = self.read_object(&gas_object_id).unwrap().clone();
+        gas::deduct_gas(&mut gas_object, gas_used);
+        trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
+
+        self.write_object(gas_object, WriteKind::Mutate);
+        self.gas_charged = Some((gas_object_id, cost_summary.clone()));
+        // println!("GAS - gas charged - error: {}", execution_result.is_err());
+        cost_summary
+    }
+
+    /// Return the storage rebate of object `id`
+    fn get_input_storage_rebate(&self, id: &ObjectID, expected_version: SequenceNumber) -> u64 {
+        if let Some(old_obj) = self.input_objects.get(id) {
+            old_obj.storage_rebate
+        } else {
+            // else, this is a dynamic field, not an input object
+            if let Ok(Some(old_obj)) = self.store.get_object(id) {
+                if old_obj.version() != expected_version {
+                    // not a lot we can do safely and under this condition everything is broken
+                    panic!(
+                        "Expected to find old object with version {expected_version}, found {}",
+                        old_obj.version(),
+                    );
+                }
+                old_obj.storage_rebate
+            } else {
+                // not a lot we can do safely and under this condition everything is broken
+                panic!("Looking up storage rebate of mutated object should not fail")
+            }
+        }
+    }
+
+    fn cleanup_store_on_out_of_gas(
+        &mut self,
+        gas_status: &mut SuiGasStatus<'_>,
+        gas_object_id: ObjectID,
+    ) {
+        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
+        let gas_object = self
+            .read_object(&gas_object_id)
+            .expect("We constructed the object map so it should always have the gas object id")
+            .clone();
+        self.written
+            .entry(gas_object_id)
+            .or_insert_with(|| (gas_object, WriteKind::Mutate));
+        self.ensure_active_inputs_mutated();
+
+        let mut objects_to_update = vec![];
+        for (object, write_kind) in self.written.values() {
+            if !object.is_immutable() {
+                objects_to_update.push((object.clone(), *write_kind));
+            }
+        }
+        for (object, write_kind) in objects_to_update {
+            self.write_object(object, write_kind);
+        }
+        // we do not charge for storage at this point because we are out of gas
+        gas_status.adjust_computation_on_out_of_gas();
+    }
+
+    /// Track storage gas for each mutable input object (including the gas coin)
+    /// and each created object. Compute storage refunds for each deleted object.
+    /// Will *not* charge anything, gas status keeps track of storage cost and rebate.
+    /// All objects will be updated with their new (current) storage rebate/cost.
+    /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
+    /// overall storage rebate and cost.
+    fn collect_storage_and_rebate(
+        &mut self,
+        gas_status: &mut SuiGasStatus<'_>,
+        gas_object_id: ObjectID,
+    ) {
+        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
+        let gas_object = self
+            .read_object(&gas_object_id)
+            .expect("We constructed the object map so it should always have the gas object id")
+            .clone();
+        self.written
+            .entry(gas_object_id)
+            .or_insert_with(|| (gas_object, WriteKind::Mutate));
+        self.ensure_active_inputs_mutated();
+
+        let mut objects_to_update = vec![];
+        for (object_id, (object, write_kind)) in &mut self.written {
+            // get the object storage_rebate in input for mutated objects
+            let old_storage_rebate = match write_kind {
+                WriteKind::Create | WriteKind::Unwrap => 0,
+                WriteKind::Mutate => {
+                    if let Some(old_obj) = self.input_objects.get(object_id) {
+                        old_obj.storage_rebate
+                    } else {
+                        // else, this is a dynamic field, not an input object
+                        if let Ok(Some(old_obj)) = self.store.get_object(object_id) {
+                            let expected_version = object.version();
+                            if old_obj.version() != expected_version {
+                                // not a lot we can do safely and under this condition everything is broken
+                                panic!(
+                                    "Expected to find old object with version {expected_version}, found {}",
+                                    old_obj.version(),
+                                );
+                            }
+                            old_obj.storage_rebate
+                        } else {
+                            // not a lot we can do safely and under this condition everything is broken
+                            panic!("Looking up storage rebate of mutated object should not fail");
+                        }
+                    }
+                }
+            };
+            // new object size
+            let new_object_size = object.object_size_for_gas_metering();
+            // track changes and compute the new object `storage_rebate`
+            let new_storage_rebate =
+                gas_status.track_storage_mutation(new_object_size, old_storage_rebate);
+            object.storage_rebate = new_storage_rebate;
+            if !object.is_immutable() {
+                objects_to_update.push((object.clone(), *write_kind));
+            }
+        }
+
+        for (object_id, (version, kind)) in &self.deleted {
+            match kind {
+                DeleteKind::Wrap | DeleteKind::Normal => {
+                    // get and track the deleted object `storage_rebate`
+                    let storage_rebate = self.get_input_storage_rebate(object_id, *version);
+                    gas_status.track_storage_mutation(0, storage_rebate);
+                }
+                DeleteKind::UnwrapThenDelete => {
+                    // an unwrapped object does not have a storage rebate, we will charge for storage changes via its wrapper object
+                }
+            }
+        }
+
+        // Write all objects at the end only if all previous gas charges succeeded.
+        // This avoids polluting the temporary store state if this function failed.
+        for (object, write_kind) in objects_to_update {
+            self.write_object(object, write_kind);
+        }
+    }
+}
+//==============================================================================
+// Charge gas current - end
+//==============================================================================
 
 impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
     /// Get the total SUI in `obj` at version `v`, which should be the version before the
@@ -894,7 +1102,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         // total amount of SUI in output objects, including both coins and storage rebates
         let mut total_output_sui = 0;
         // sum of the storage_rebate fields of all objects written by this tx
-        let mut _output_rebate_amount = 0;
+        let mut output_rebate_amount = 0;
         for (id, (output_obj, kind)) in &self.written {
             match kind {
                 WriteKind::Mutate => {
@@ -903,12 +1111,12 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     let input_version = output_obj.version();
                     total_input_sui += self.get_input_sui(id, input_version)?;
                     total_output_sui += output_obj.get_total_sui(&self)?;
-                    _output_rebate_amount += output_obj.storage_rebate;
+                    output_rebate_amount += output_obj.storage_rebate;
                 }
                 WriteKind::Create => {
                     // created objects did not exist at input, and thus contribute 0 to input SUI
                     total_output_sui += output_obj.get_total_sui(&self)?;
-                    _output_rebate_amount += output_obj.storage_rebate;
+                    output_rebate_amount += output_obj.storage_rebate;
                 }
                 WriteKind::Unwrap => {
                     // an unwrapped object was either:
@@ -916,7 +1124,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     // 2. wrapped in a dynamic field A, or itself a dynamic field
                     // in both cases, its contribution to input SUI will be captured by looking at A
                     total_output_sui += output_obj.get_total_sui(&self)?;
-                    _output_rebate_amount += output_obj.storage_rebate;
+                    output_rebate_amount += output_obj.storage_rebate;
                 }
             }
         }
@@ -950,25 +1158,24 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                 )
             })?
             .1;
-        let storage_fund_rebate_inflow =
-            gas_summary.storage_fund_rebate_inflow(self.storage_rebate_rate);
 
         // storage gas cost should be equal to total rebates of mutated objects + storage fund rebate inflow (see below).
         // note: each mutated object O of size N bytes is assessed a storage cost of N * storage_price bytes, but also
-        // has O.storage_rebate credited to the tx storage rebate.
-        // TODO: figure out what's wrong with this check. The one below is more important, but this should still hold.
-        // I suspect the problem is rounding error on `storage_rebate_inflow`
-        /*assert_eq!(
-            gas_summary.storage_cost,
-            output_rebate_amount + storage_fund_rebate_inflow
-        );*/
+        // has O storage_rebate credited to the tx storage rebate.
+        // If we run out of gas we do not perform any storage charges and the assert will fail
+        // `gas_summary.storage_cost` is a good proxy for OOG
+        if gas_summary.storage_cost > 0 {
+            assert_eq!(gas_summary.storage_cost, output_rebate_amount);
+        }
 
         // note: storage_cost flows into the storage_rebate field of the output objects, which is why it is not accounted for here.
         // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow gets credited to the gas coin
         // both computation costs and storage rebate inflow are
         assert_eq!(
             total_input_sui,
-            total_output_sui + gas_summary.computation_cost + storage_fund_rebate_inflow,
+            total_output_sui
+                + gas_summary.computation_cost
+                + gas_summary.non_refundable_storage_fee,
             "SUI conservation violated--this transaction either mints or burns SUI"
         );
         Ok(())
