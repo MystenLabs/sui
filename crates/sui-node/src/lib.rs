@@ -163,7 +163,6 @@ impl SuiNode {
             config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
         }
 
-        // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
         let prometheus_registry = registry_service.default_registry();
