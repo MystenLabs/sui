@@ -5,15 +5,16 @@ A: object(103)
 
 task 1 'publish'. lines 8-41:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 43-43:
 created: object(107), object(108)
-written: object(106)
+mutated: object(106)
 
 task 3 'run'. lines 45-45:
 created: object(111)
-written: object(107), object(109), object(110)
+mutated: object(107), object(109)
+unwrapped: object(110)
 deleted: object(108)
 
 task 4 'view-object'. lines 47-47:
@@ -23,18 +24,19 @@ Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(110)
 
 task 5 'run'. lines 50-50:
 created: object(113), object(114)
-written: object(112)
+mutated: object(112)
 
 task 6 'run'. lines 52-52:
-written: object(113), object(115)
+mutated: object(113), object(115)
 deleted: object(114)
 
 task 7 'run'. lines 55-55:
 created: object(117), object(118)
-written: object(116)
+mutated: object(116)
 
 task 8 'run'. lines 58-58:
-written: object(117), object(119), object(120)
+mutated: object(117), object(119)
+unwrapped: object(120)
 deleted: object(118)
 
 task 9 'view-object'. lines 60-60:

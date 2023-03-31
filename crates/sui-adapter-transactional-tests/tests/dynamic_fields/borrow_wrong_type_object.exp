@@ -5,11 +5,11 @@ A: object(103)
 
 task 1 'publish'. lines 10-39:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 41-41:
 created: object(107), object(108), object(109)
-written: object(106)
+mutated: object(106)
 
 task 3 'run'. lines 43-43:
 Error: Object 0xa3520bbf03b9236b44e2b6a098cba4be28ffa57169ce6da445dd879ce497858e is owned by object 0x4eeb215c80c209f03da8950d2505b4254774d1dedd8888f73462ef17de06de8d. Objects owned by other objects cannot be used as input arguments.

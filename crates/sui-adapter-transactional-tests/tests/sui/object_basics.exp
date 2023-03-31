@@ -5,11 +5,11 @@ A: object(103), B: object(104)
 
 task 1 'publish'. lines 8-70:
 created: object(106)
-written: object(105)
+mutated: object(105)
 
 task 2 'run'. lines 72-72:
 created: object(108)
-written: object(107)
+mutated: object(107)
 
 task 3 'view-object'. lines 74-74:
 Owner: Account Address ( A )
@@ -17,7 +17,7 @@ Version: 2
 Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}, value: 10u64}
 
 task 4 'run'. lines 76-76:
-written: object(108), object(109)
+mutated: object(108), object(109)
 
 task 5 'view-object'. lines 78-78:
 Owner: Account Address ( B )
@@ -26,12 +26,12 @@ Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID
 
 task 6 'run'. lines 80-80:
 created: object(111)
-written: object(110)
+mutated: object(110)
 
 task 7 'run'. lines 82-82:
 events: Event { package_id: test, transaction_module: Identifier("object_basics"), sender: B, type_: StructTag { address: test, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
-written: object(108), object(111), object(112)
+mutated: object(108), object(111), object(112)
 
 task 8 'run'. lines 84-84:
-written: object(113)
+mutated: object(113)
 deleted: object(108)

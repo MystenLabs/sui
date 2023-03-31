@@ -94,8 +94,11 @@ pub struct SuiTestAdapter<'a> {
 
 struct TxnSummary {
     created: Vec<ObjectID>,
-    written: Vec<ObjectID>,
+    mutated: Vec<ObjectID>,
+    unwrapped: Vec<ObjectID>,
     deleted: Vec<ObjectID>,
+    unwrapped_then_deleted: Vec<ObjectID>,
+    wrapped: Vec<ObjectID>,
     events: Vec<Event>,
     gas_summary: GasCostSummary,
 }
@@ -706,23 +709,23 @@ impl<'a> SuiTestAdapter<'a> {
             .iter()
             .map(|((id, _, _), _)| *id)
             .collect();
-        let unwrapped_ids: Vec<_> = effects
-            .unwrapped()
-            .iter()
-            .map(|((id, _, _), _)| *id)
-            .collect();
-        let mut written_ids: Vec<_> = effects
+        let mut mutated_ids: Vec<_> = effects
             .mutated()
             .iter()
             .map(|((id, _, _), _)| *id)
             .collect();
-        let mut deleted_ids: Vec<_> = effects
-            .deleted()
+        let mut unwrapped_ids: Vec<_> = effects
+            .unwrapped()
             .iter()
-            .chain(effects.wrapped())
+            .map(|((id, _, _), _)| *id)
+            .collect();
+        let mut deleted_ids: Vec<_> = effects.deleted().iter().map(|(id, _, _)| *id).collect();
+        let mut unwrapped_then_deleted_ids: Vec<_> = effects
+            .unwrapped_then_deleted()
+            .iter()
             .map(|(id, _, _)| *id)
             .collect();
-
+        let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
         let gas_summary = effects.gas_cost_summary();
         // update storage
         Arc::get_mut(&mut self.storage)
@@ -744,20 +747,25 @@ impl<'a> SuiTestAdapter<'a> {
 
         // Treat unwrapped objects as writes (even though sometimes this is the first time we can
         // refer to them at their id in storage).
-        written_ids.extend(unwrapped_ids.into_iter());
 
         // sort by fake id
         created_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
-        written_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        mutated_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unwrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => Ok(TxnSummary {
-                created: created_ids,
-                written: written_ids,
-                deleted: deleted_ids,
                 events: inner.events.data,
                 gas_summary: gas_summary.clone(),
+                created: created_ids,
+                mutated: mutated_ids,
+                unwrapped: unwrapped_ids,
+                deleted: deleted_ids,
+                unwrapped_then_deleted: unwrapped_then_deleted_ids,
+                wrapped: wrapped_ids,
             }),
             ExecutionStatus::Failure { error, .. } => {
                 Err(anyhow::anyhow!(self.stabilize_str(format!(
@@ -830,11 +838,14 @@ impl<'a> SuiTestAdapter<'a> {
     fn object_summary_output(
         &self,
         TxnSummary {
-            created,
-            written,
-            deleted,
             events,
             gas_summary,
+            created,
+            mutated,
+            unwrapped,
+            deleted,
+            unwrapped_then_deleted,
+            wrapped,
         }: &TxnSummary,
         view_events: bool,
         view_gas_summary: bool,
@@ -853,17 +864,40 @@ impl<'a> SuiTestAdapter<'a> {
             }
             write!(out, "created: {}", self.list_objs(created)).unwrap();
         }
-        if !written.is_empty() {
+        if !mutated.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
-            write!(out, "written: {}", self.list_objs(written)).unwrap();
+            write!(out, "mutated: {}", self.list_objs(mutated)).unwrap();
+        }
+        if !unwrapped.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(out, "unwrapped: {}", self.list_objs(unwrapped)).unwrap();
         }
         if !deleted.is_empty() {
             if !out.is_empty() {
                 out.push('\n')
             }
             write!(out, "deleted: {}", self.list_objs(deleted)).unwrap();
+        }
+        if !unwrapped_then_deleted.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "unwrapped_then_deleted: {}",
+                self.list_objs(unwrapped_then_deleted)
+            )
+            .unwrap();
+        }
+        if !wrapped.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(out, "wrapped: {}", self.list_objs(wrapped)).unwrap();
         }
         if view_gas_summary {
             out.push('\n');

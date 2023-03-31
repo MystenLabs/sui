@@ -4,7 +4,7 @@ init:
 A: object(103), B: object(104)
 
 task 1 'programmable'. lines 8-9:
-written: object(105)
+mutated: object(105)
 
 task 2 'view-object'. lines 11-11:
 Owner: Account Address ( B )

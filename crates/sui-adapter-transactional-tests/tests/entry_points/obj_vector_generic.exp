@@ -5,30 +5,30 @@ A: object(103)
 
 task 1 'publish'. lines 8-115:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 117-117:
 created: object(107)
-written: object(106)
+mutated: object(106)
 
 task 3 'run'. lines 119-123:
-written: object(108)
+mutated: object(108)
 deleted: object(107)
 
 task 4 'run'. lines 125-125:
 created: object(110)
-written: object(109)
+mutated: object(109)
 
 task 5 'run'. lines 127-127:
 created: object(112), object(113)
-written: object(110), object(111)
+mutated: object(110), object(111)
 
 task 6 'run'. lines 129-133:
 Error: Object 0xa9e7aa5a9a578df37ca690c9bd33bda7fdebeecce88fc495620dd3da3dd5448d is owned by object 0xeb5dd40748926a4c1e950a6c595de48d456a70f09ba8ef4e931a63e9464e1c49. Objects owned by other objects cannot be used as input arguments.
 
 task 7 'run'. lines 135-135:
 created: object(116)
-written: object(115)
+mutated: object(115)
 
 task 8 'run'. lines 137-140:
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
@@ -36,11 +36,11 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 9 'run'. lines 142-142:
 created: object(119)
-written: object(118)
+mutated: object(118)
 
 task 10 'run'. lines 144-144:
 created: object(121)
-written: object(120)
+mutated: object(120)
 
 task 11 'run'. lines 146-149:
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
@@ -48,7 +48,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 12 'run'. lines 151-151:
 created: object(124)
-written: object(123)
+mutated: object(123)
 
 task 13 'run'. lines 153-156:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable and shared objects cannot be passed by-value.
@@ -56,7 +56,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 14 'run'. lines 158-158:
 created: object(127)
-written: object(126)
+mutated: object(126)
 
 task 15 'run'. lines 160-163:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
@@ -64,7 +64,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 16 'run'. lines 165-165:
 created: object(130)
-written: object(129)
+mutated: object(129)
 
 task 17 'run'. lines 167-167:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.

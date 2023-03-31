@@ -25,7 +25,7 @@ move-transactional-test-runner.workspace = true
 move-vm-runtime.workspace = true
 
 sui-framework = { path = "../sui-framework" }
-sui-types = { path = "../sui-types" }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 sui-adapter = { path = "../sui-adapter" }
 sui-core = { path = "../sui-core" }
 sui-protocol-config = { path = "../sui-protocol-config" }
