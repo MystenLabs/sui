@@ -43,6 +43,7 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::Owner;
+use sui_types::object::MAX_GAS_BUDGET_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
@@ -457,7 +458,7 @@ impl RpcExampleProvider {
             object_ref,
             signer,
             gas_ref,
-            5_000_000_000,
+            MAX_GAS_BUDGET_FOR_TESTING,
         );
         let data1 = data.clone();
         let data2 = data.clone();

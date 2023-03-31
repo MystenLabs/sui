@@ -41,8 +41,6 @@ use sui_framework::{
     make_system_modules, make_system_objects, system_package_ids, DEFAULT_FRAMEWORK_PATH,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::gas::{GasCostSummary, SuiCostTable};
-use sui_types::id::UID;
 use sui_types::messages::CallArg;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
@@ -62,6 +60,11 @@ use sui_types::{
 use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
 use sui_types::{epoch_data::EpochData, messages::Command};
 use sui_types::{gas::SuiGasStatus, temporary_store::TemporaryStore};
+use sui_types::{
+    gas::{GasCostSummary, SuiCostTable},
+    object::GAS_VALUE_FOR_TESTING,
+};
+use sui_types::{id::UID, object::MAX_GAS_BUDGET_FOR_TESTING};
 use sui_types::{in_memory_storage::InMemoryStorage, messages::ProgrammableTransaction};
 
 pub(crate) type FakeID = u64;
@@ -77,8 +80,8 @@ const RNG_SEED: [u8; 32] = [
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
 
-const DEFAULT_GAS_BUDGET: u64 = 300_000_000_000_000;
-const GAS_FOR_TESTING: u64 = 300_000_000_000_000;
+const DEFAULT_GAS_BUDGET: u64 = MAX_GAS_BUDGET_FOR_TESTING;
+const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,

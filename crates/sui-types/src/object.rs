@@ -31,6 +31,7 @@ use crate::{
 };
 use sui_protocol_config::ProtocolConfig;
 
+pub const MAX_GAS_BUDGET_FOR_TESTING: u64 = 5_000_000_000;
 pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 

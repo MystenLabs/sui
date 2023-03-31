@@ -20,7 +20,7 @@ use sui_types::utils::create_fake_transaction;
 
 use sui_macros::sim_test;
 use sui_types::messages::*;
-use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, MAX_GAS_BUDGET_FOR_TESTING};
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -61,7 +61,7 @@ pub fn transfer_coin_transaction(
             object_ref,
             src,
             gas_object_ref,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         ),
         secret,
     )
@@ -89,7 +89,7 @@ pub fn transfer_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -119,7 +119,7 @@ pub fn create_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             arguments,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -142,7 +142,7 @@ pub fn delete_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))],
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,
@@ -171,7 +171,7 @@ pub fn set_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            GAS_VALUE_FOR_TESTING / 2,
+            MAX_GAS_BUDGET_FOR_TESTING,
         )
         .unwrap(),
         secret,

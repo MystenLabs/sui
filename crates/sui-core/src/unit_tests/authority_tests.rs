@@ -42,7 +42,7 @@ use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::Data;
+use sui_types::object::{Data, MAX_GAS_BUDGET_FOR_TESTING};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
@@ -119,7 +119,7 @@ impl TestCallArg {
     }
 }
 
-const MAX_GAS: u64 = 5_000_000_000;
+const MAX_GAS: u64 = MAX_GAS_BUDGET_FOR_TESTING;
 
 // TODO break this up into a cleaner set of components. It does a bit too much
 // currently
@@ -4192,7 +4192,7 @@ pub fn init_transfer_transaction(
         object_ref,
         sender,
         gas_object_ref,
-        5_000_000_000,
+        MAX_GAS_BUDGET_FOR_TESTING,
     );
     to_sender_signed_transaction(data, secret)
 }
