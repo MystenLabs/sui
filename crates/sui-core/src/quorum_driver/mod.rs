@@ -22,7 +22,7 @@ use tokio::time::{sleep_until, Instant};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tracing::Instrument;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::authority_aggregator::{
     AggregatorProcessCertificateError, AggregatorProcessTransactionError, AuthorityAggregator,
@@ -402,19 +402,23 @@ where
         &self,
         certificate: VerifiedCertificate,
     ) -> Result<QuorumDriverResponse, Option<QuorumDriverError>> {
+        let tx_digest = *certificate.digest();
         let (effects, events) = self
             .validators
             .load()
             .process_certificate(certificate.clone().into_inner())
-            .instrument(
-                tracing::debug_span!("aggregator_process_cert", tx_digest = ?certificate.digest()),
-            )
+            .instrument(tracing::debug_span!("aggregator_process_cert", ?tx_digest))
             .await
             .map_err(|agg_err| match agg_err {
                 AggregatorProcessCertificateError::FatalExecuteCertificate {
                     non_retryable_errors,
                 } => {
-                    debug!(?non_retryable_errors, "Nonretryable certificate");
+                    // Normally a certificate shouldn't have fatal errors.
+                    error!(
+                        ?tx_digest,
+                        ?non_retryable_errors,
+                        "[WATCHOUT] Unexpected Fatal error for certificate"
+                    );
                     Some(QuorumDriverError::NonRecoverableTransactionError {
                         errors: non_retryable_errors,
                     })
