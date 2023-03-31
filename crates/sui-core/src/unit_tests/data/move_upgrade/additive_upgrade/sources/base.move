@@ -19,7 +19,7 @@ module base_addr::base {
     // new function is fine
     public fun return_1(): u64 { 1 }
 
-    public fun return_0(): u64 { 0 }
+    public fun return_0(): u64 { abort 42 }
 
     public fun plus_1(x: u64): u64 { x + 1 }
 

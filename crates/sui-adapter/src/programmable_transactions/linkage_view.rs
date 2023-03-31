@@ -61,14 +61,17 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
         self.linkage_info = None;
     }
 
-    pub fn set_linkage(&mut self, context: &MovePackage) -> Result<(), ExecutionError> {
+    /// Set the linkage context to the information based on the linkage and type origin tables from
+    /// the `context` package.  Returns the original package ID (aka the runtime ID) of the context
+    /// package on success.
+    pub fn set_linkage(&mut self, context: &MovePackage) -> Result<AccountAddress, ExecutionError> {
         let info = LinkageInfo::from(context);
         let storage_id = context.id();
         let runtime_id = info.original_package_id;
         self.linkage_info = Some(info);
 
         if !self.past_contexts.borrow_mut().insert(storage_id) {
-            return Ok(());
+            return Ok(runtime_id);
         }
 
         // Pre-populate the type origin cache with entries from the current package -- this is
@@ -96,11 +99,19 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
             self.add_type_origin(runtime_id, struct_name, *defining_id)?;
         }
 
-        Ok(())
+        Ok(runtime_id)
     }
 
     pub fn storage(&self) -> &'state S {
         self.state_view
+    }
+
+    pub fn original_package_id(&self) -> AccountAddress {
+        if let Some(info) = &self.linkage_info {
+            info.original_package_id
+        } else {
+            AccountAddress::ZERO
+        }
     }
 
     fn get_cached_type_origin(

@@ -273,13 +273,12 @@ fn execute_command<S: StorageView, Mode: ExecutionMode>(
                 loaded_type_arguments.push(ty);
             }
 
-            context.set_link_context(package)?;
-
-            let module_id = ModuleId::new(package.into(), module);
+            let original_address = context.set_link_context(package)?;
+            let runtime_id = ModuleId::new(original_address, module);
             let return_values = execute_move_call::<_, Mode>(
                 context,
                 &mut argument_updates,
-                &module_id,
+                &runtime_id,
                 &function,
                 loaded_type_arguments,
                 arguments,

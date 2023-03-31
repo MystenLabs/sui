@@ -204,11 +204,12 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     }
 
     /// Set the link context for the session from the linkage information in the MovePackage found
-    /// at `package_id`.
-    pub fn set_link_context(&mut self, package_id: ObjectID) -> Result<(), ExecutionError> {
-        if self.session.get_resolver().link_context() == *package_id {
+    /// at `package_id`.  Returns the runtime ID of the link context package on success.
+    pub fn set_link_context(&mut self, package_id: ObjectID) -> Result<AccountAddress, ExecutionError> {
+        let resolver = self.session.get_resolver();
+        if resolver.link_context() == *package_id {
             // Setting same context again, can skip.
-            return Ok(());
+            return Ok(resolver.original_package_id());
         }
 
         let package = package_for_linkage(&self.session, package_id)
@@ -217,8 +218,9 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         set_linkage(&mut self.session, &package)
     }
 
-    /// Set the link context for the session from the linkage information in the `package`.
-    pub fn set_linkage(&mut self, package: &MovePackage) -> Result<(), ExecutionError> {
+    /// Set the link context for the session from the linkage information in the `package`.  Returns
+    /// the runtime ID of the link context package on success.
+    pub fn set_linkage(&mut self, package: &MovePackage) -> Result<AccountAddress, ExecutionError> {
         set_linkage(&mut self.session, package)
     }
 
@@ -824,7 +826,7 @@ fn new_session<'state, 'vm, S: StorageView>(
 }
 
 /// Set the link context for the session from the linkage information in the `package`.
-pub fn set_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>, package: &MovePackage) -> Result<(), ExecutionError> {
+pub fn set_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>, package: &MovePackage) -> Result<AccountAddress, ExecutionError> {
     session.get_resolver_mut().set_linkage(package)
 }
 
@@ -895,17 +897,16 @@ pub fn load_type<'vm, 'state, S: StorageView>(
                 // Load the package that the struct is defined in, in storage
                 let defining_id = ObjectID::from_address(*address);
                 let package = package_for_linkage(session, defining_id)?;
-                let original_address = AccountAddress::from(package.original_package_id());
-                let runtime_id = ModuleId::new(original_address, module.clone());
 
                 // Set the defining package as the link context on the session while loading the
                 // struct
-                set_linkage(session, &package).map_err(|e| {
+                let original_address = set_linkage(session, &package).map_err(|e| {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(e.to_string())
                         .finish(Location::Undefined)
                 })?;
 
+                let runtime_id = ModuleId::new(original_address, module.clone());
                 let (idx, struct_type) = session.load_struct(&runtime_id, name)?;
 
                 // Recursively load type parameters, if necessary

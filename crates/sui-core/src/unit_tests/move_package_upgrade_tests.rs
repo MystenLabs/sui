@@ -188,16 +188,22 @@ impl UpgradeStateRunner {
 async fn test_upgrade_package_happy_path() {
     let runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
-    let TransactionEffects::V1(effects) = runner.run({
-        let mut builder = ProgrammableTransactionBuilder::new();
-        move_call! {
-            builder,
-            (runner.package.0)::base::return_0()
-        };
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! {
+                builder,
+                (runner.package.0)::base::return_0()
+            };
 
-        builder.finish()
-    }).await;
-    assert!(effects.status.is_ok());
+            builder.finish()
+        })
+        .await;
+
+    match effects.status.unwrap_err().0 {
+        ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
+        err => panic!("Unexpected error: {:#?}", err),
+    };
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -252,16 +258,18 @@ async fn test_upgrade_package_happy_path() {
         )));
 
     // XXX: This currently fails
-    let TransactionEffects::V1(effects) = runner.run({
-        let mut builder = ProgrammableTransactionBuilder::new();
-        move_call! {
-            builder,
-            (new_package.0.0)::base::return_0()
-        };
+    let TransactionEffects::V1(effects) = runner
+        .run({
+            let mut builder = ProgrammableTransactionBuilder::new();
+            move_call! {
+                builder,
+                (new_package.0.0)::base::return_0()
+            };
 
-        builder.finish()
-    }).await;
-    assert!(effects.status.is_ok());
+            builder.finish()
+        })
+        .await;
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
 
 #[tokio::test]
@@ -505,7 +513,7 @@ async fn test_upgrade_package_additive_mode() {
 
     let TransactionEffects::V1(effects) = runner.run(pt).await;
 
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
 
 #[tokio::test]
@@ -611,7 +619,7 @@ async fn test_upgrade_package_dep_only_mode() {
 
     let TransactionEffects::V1(effects) = runner.run(pt).await;
 
-    assert!(effects.status.is_ok());
+    assert!(effects.status.is_ok(), "{:#?}", effects.status);
 }
 
 #[tokio::test]
