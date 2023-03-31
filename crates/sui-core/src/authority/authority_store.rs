@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use either::Either;
 use fastcrypto::hash::MultisetHash;
+use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
@@ -223,11 +224,14 @@ impl AuthorityStore {
         let data = self
             .perpetual_tables
             .events
-            .iter()
+            .safe_iter()
             .skip_to(&(*event_digest, 0))?
-            .take_while(|((digest, _), _)| digest == event_digest)
-            .map(|(_, e)| e)
-            .collect::<Vec<_>>();
+            .take_while(|item| {
+                item.as_ref()
+                    .map_or(true, |((digest, _), _)| digest == event_digest)
+            })
+            .map_ok(|(_, e)| e)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(data.is_empty().not().then_some(TransactionEvents { data }))
     }
 
@@ -393,10 +397,10 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .objects
-            .iter()
+            .safe_iter()
             .skip_prior_to(&ObjectKey(*object_id, prior_version))?;
 
-        if let Some((object_key, value)) = iterator.next() {
+        if let Some((object_key, value)) = iterator.next().transpose()? {
             if object_key.0 == *object_id {
                 return Ok(Some(
                     self.perpetual_tables.object_reference(&object_key, value)?,
@@ -1019,11 +1023,12 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .owned_object_transaction_locks
-            .iter()
+            .safe_iter()
             // Make the max possible entry for this object ID.
             .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
         Ok(iterator
             .next()
+            .transpose()?
             .and_then(|value| {
                 if value.0 .0 == object_id {
                     Some(value)

@@ -164,12 +164,12 @@ impl AuthorityStorePruner {
         );
         let iter = checkpoint_store
             .certified_checkpoints
-            .iter()
-            .skip_to(&(checkpoint_number + 1))?
-            .map(|(k, ckpt)| (k, ckpt.into_inner()));
+            .safe_iter()
+            .skip_to(&(checkpoint_number + 1))?;
 
         #[allow(clippy::explicit_counter_loop)]
-        for (_, checkpoint) in iter {
+        for item in iter {
+            let checkpoint = item?.1.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
             // parts of the system that still require access to old object versions (i.e. state accumulator)
@@ -346,9 +346,8 @@ mod tests {
             // so we can read the accurate number of retained versions
             &ReadWriteOptions::default(),
         )?;
-        let iter = objects.iter();
-        for (k, _v) in iter {
-            after_pruning.insert(k);
+        for item in objects.safe_iter() {
+            after_pruning.insert(item.unwrap().0);
         }
         Ok(after_pruning)
     }

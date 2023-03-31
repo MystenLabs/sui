@@ -110,9 +110,10 @@ impl BlockProvider for CheckpointBlockProvider {
         Ok(self
             .index_store
             .balances
-            .iter()
+            .safe_iter()
             .skip_prior_to(&(addr, block_height))?
             .next()
+            .transpose()?
             .and_then(
                 |((address, _), balance)| {
                     if address == addr {

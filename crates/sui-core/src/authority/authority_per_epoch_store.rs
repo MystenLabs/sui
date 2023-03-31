@@ -3,6 +3,7 @@
 
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
+use itertools::Itertools;
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::Round;
 use parking_lot::RwLock;
@@ -320,10 +321,12 @@ impl AuthorityEpochTables {
         Ok(state)
     }
 
-    pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
+    pub fn get_all_pending_consensus_transactions(
+        &self,
+    ) -> Result<Vec<ConsensusTransaction>, TypedStoreError> {
         self.pending_consensus_transactions
-            .iter()
-            .map(|(_k, v)| v)
+            .safe_iter()
+            .map_ok(|(_k, v)| v)
             .collect()
     }
 }
@@ -346,12 +349,15 @@ impl AuthorityPerEpochStore {
         let epoch_id = committee.epoch;
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
-            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.iter());
+            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.safe_iter())
+                .expect("Failed to init stake aggregator");
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
         let epoch_alive_notify = NotifyOnce::new();
-        let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
+        let pending_consensus_transactions = tables
+            .get_all_pending_consensus_transactions()
+            .expect("Failed to get all pending consensus transactions");
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
             .iter()
             .filter_map(|transaction| {
@@ -590,11 +596,20 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.next_shared_object_versions.multi_get(ids)?)
     }
 
-    pub fn get_last_checkpoint_boundary(&self) -> (u64, Option<u64>) {
-        match self.tables.checkpoint_boundary.iter().skip_to_last().next() {
-            Some((idx, height)) => (idx, Some(height)),
-            None => (0, None),
-        }
+    pub fn get_last_checkpoint_boundary(&self) -> Result<(u64, Option<u64>), TypedStoreError> {
+        Ok(
+            match self
+                .tables
+                .checkpoint_boundary
+                .safe_iter()
+                .skip_to_last()
+                .next()
+                .transpose()?
+            {
+                Some((idx, height)) => (idx, Some(height)),
+                None => (0, None),
+            },
+        )
     }
 
     pub fn get_last_consensus_index(&self) -> SuiResult<ExecutionIndicesWithHash> {
@@ -610,13 +625,15 @@ impl AuthorityPerEpochStore {
         from_checkpoint: CheckpointSequenceNumber,
         to_checkpoint: CheckpointSequenceNumber,
     ) -> Result<Vec<(CheckpointSequenceNumber, Accumulator)>, TypedStoreError> {
-        Ok(self
-            .tables
+        self.tables
             .state_hash_by_checkpoint
-            .iter()
+            .safe_iter()
             .skip_to(&from_checkpoint)?
-            .take_while(|(checkpoint, _)| *checkpoint <= to_checkpoint)
-            .collect())
+            .take_while(|item| {
+                item.as_ref()
+                    .map_or(true, |(checkpoint, _)| *checkpoint <= to_checkpoint)
+            })
+            .collect()
     }
 
     pub fn get_transactions_in_checkpoint_range(
@@ -624,7 +641,7 @@ impl AuthorityPerEpochStore {
         from_height_excluded: Option<u64>,
         to_height_included: u64,
     ) -> SuiResult<Vec<TransactionDigest>> {
-        let mut iter = self.tables.consensus_message_order.iter();
+        let mut iter = self.tables.consensus_message_order.safe_iter();
         if let Some(from_height_excluded) = from_height_excluded {
             let last_previous = ExecutionIndices::end_for_commit(from_height_excluded);
             iter = iter.skip_to(&last_previous)?;
@@ -633,10 +650,14 @@ impl AuthorityPerEpochStore {
         // technically here we need to check if first item in stream has a key equal to last_previous
         // however in practice this can not happen because number of batches in certificate is
         // limited and is less then u64::MAX
-        let roots: Vec<_> = iter
-            .take_while(|(idx, _tx)| idx.last_committed_round <= to_height_included)
-            .map(|(_idx, tx)| tx)
-            .collect();
+        let roots = iter
+            .take_while(|item| {
+                item.as_ref().map_or(true, |(idx, _tx)| {
+                    idx.last_committed_round <= to_height_included
+                })
+            })
+            .map_ok(|(_idx, tx)| tx)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(roots)
     }
 
@@ -675,12 +696,13 @@ impl AuthorityPerEpochStore {
 
     /// Gets all pending certificates. Used during recovery.
     pub fn all_pending_execution(&self) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
-        Ok(self
+        let transactions: Result<_, _> = self
             .tables
             .pending_execution
-            .iter()
-            .map(|(_, cert)| cert.into())
-            .collect())
+            .safe_iter()
+            .map_ok(|(_, cert)| cert.into())
+            .collect();
+        Ok(transactions?)
     }
 
     /// Deletes one pending certificate.
@@ -689,7 +711,9 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
+    pub fn get_all_pending_consensus_transactions(
+        &self,
+    ) -> Result<Vec<ConsensusTransaction>, TypedStoreError> {
         self.tables.get_all_pending_consensus_transactions()
     }
 
@@ -1318,7 +1342,7 @@ impl AuthorityPerEpochStore {
         &self,
         to_height_included: u64,
     ) -> SuiResult<Option<(u64, Vec<TransactionDigest>)>> {
-        let (index, from_height_excluded) = self.get_last_checkpoint_boundary();
+        let (index, from_height_excluded) = self.get_last_checkpoint_boundary()?;
 
         if let Some(from_height_excluded) = from_height_excluded {
             if from_height_excluded >= to_height_included {
@@ -1341,7 +1365,7 @@ impl AuthorityPerEpochStore {
         Ok(Some((index, roots)))
     }
     pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
-        let (index, height) = self.get_last_checkpoint_boundary();
+        let (index, height) = self.get_last_checkpoint_boundary()?;
 
         if let Some(height) = height {
             if height >= commit_round {
@@ -1703,8 +1727,10 @@ impl AuthorityPerEpochStore {
         self.record_checkpoint_boundary(round)
     }
 
-    pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
-        self.tables.pending_checkpoints.iter().collect()
+    pub fn get_pending_checkpoints(
+        &self,
+    ) -> Result<Vec<(CheckpointCommitHeight, PendingCheckpoint)>, TypedStoreError> {
+        self.tables.pending_checkpoints.safe_iter().collect()
     }
 
     pub fn get_pending_checkpoint(
@@ -1774,9 +1800,10 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables
             .builder_checkpoint_summary
-            .iter()
+            .safe_iter()
             .skip_to_last()
-            .next())
+            .next()
+            .transpose()?)
     }
 
     pub fn get_built_checkpoint_summary(
@@ -1800,25 +1827,32 @@ impl AuthorityPerEpochStore {
         checkpoint_seq: CheckpointSequenceNumber,
         starting_index: u64,
     ) -> Result<
-        impl Iterator<Item = ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage)> + '_,
+        impl Iterator<
+                Item = Result<
+                    ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage),
+                    TypedStoreError,
+                >,
+            > + '_,
         TypedStoreError,
     > {
         let key = (checkpoint_seq, starting_index);
         debug!("Scanning pending checkpoint signatures from {:?}", key);
         self.tables
             .pending_checkpoint_signatures
-            .iter()
+            .safe_iter()
             .skip_to(&key)
     }
 
-    pub fn get_last_checkpoint_signature_index(&self) -> u64 {
-        self.tables
+    pub fn get_last_checkpoint_signature_index(&self) -> Result<u64, TypedStoreError> {
+        Ok(self
+            .tables
             .pending_checkpoint_signatures
-            .iter()
+            .safe_iter()
             .skip_to_last()
             .next()
+            .transpose()?
             .map(|((_, index), _)| index)
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 
     pub fn insert_checkpoint_signature(

@@ -9564,6 +9564,7 @@ dependencies = [
  "criterion",
  "eyre",
  "futures",
+ "itertools",
  "move-core-types",
  "mysten-metrics",
  "num_cpus",

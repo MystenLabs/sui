@@ -1570,7 +1570,7 @@ impl AuthorityState {
             Some(seq) => self
                 .checkpoint_store
                 .get_checkpoint_by_sequence_number(seq)?,
-            None => self.checkpoint_store.get_latest_certified_checkpoint(),
+            None => self.checkpoint_store.get_latest_certified_checkpoint()?,
         }
         .map(|v| v.into_inner());
         let contents = match &summary {
