@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::prelude::*;
-use diesel::result::Error;
 
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectRef, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
@@ -10,9 +9,7 @@ use sui_json_rpc_types::{
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
-use crate::schema::transactions::transaction_digest;
 use crate::types::TemporaryTransactionBlockResponseStore;
-use crate::PgPoolConnection;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = transactions)]
@@ -49,8 +46,8 @@ pub struct Transaction {
     pub confirmed_local_execution: Option<bool>,
 }
 
-pub fn commit_transactions(
-    pg_pool_conn: &mut PgPoolConnection,
+/*pub fn commit_transactions(
+    pg_pool_conn: &mut PgPoolConnection<'_>,
     tx_resps: Vec<TemporaryTransactionBlockResponseStore>,
 ) -> Result<usize, IndexerError> {
     let new_txs: Vec<Transaction> = tx_resps
@@ -75,7 +72,7 @@ pub fn commit_transactions(
             new_txs, e
         ))
     })
-}
+}*/
 
 impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
     type Error = IndexerError;

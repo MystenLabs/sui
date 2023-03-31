@@ -87,7 +87,8 @@ where
 
     async fn start(&self) -> Result<(), IndexerError> {
         info!("Indexer checkpoint handler started...");
-        let mut next_cursor_sequence_number = self.state.get_latest_checkpoint_sequence_number()?;
+        let mut next_cursor_sequence_number =
+            self.state.get_latest_checkpoint_sequence_number().await?;
         if next_cursor_sequence_number > 0 {
             info!("Resuming from checkpoint {next_cursor_sequence_number}");
         }
@@ -117,7 +118,7 @@ where
             let object_count = indexed_checkpoint.objects_changes.len();
 
             let checkpoint_db_guard = self.metrics.checkpoint_db_commit_latency.start_timer();
-            self.state.persist_checkpoint(&indexed_checkpoint)?;
+            self.state.persist_checkpoint(&indexed_checkpoint).await?;
             checkpoint_db_guard.stop_and_record();
 
             self.metrics.total_checkpoint_committed.inc();
@@ -135,7 +136,7 @@ where
             // Write epoch to DB if needed
             if let Some(indexed_epoch) = indexed_epoch {
                 let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                self.state.persist_epoch(&indexed_epoch)?;
+                self.state.persist_epoch(&indexed_epoch).await?;
                 epoch_db_guard.stop_and_record();
                 self.metrics.total_epoch_committed.inc();
             }

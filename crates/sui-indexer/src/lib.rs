@@ -7,12 +7,15 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
-use backoff::retry;
+use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
+use diesel::r2d2::ConnectionManager;
+use diesel_async::pooled_connection::bb8::{Pool, PooledConnection};
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::AsyncPgConnection;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
@@ -44,8 +47,11 @@ pub mod test_utils;
 pub mod types;
 pub mod utils;
 
-pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
-pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
+pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
+pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
+
+pub type AsyncPgConnectionPool = Pool<AsyncPgConnection>;
+pub type AsyncPgPoolConnection<'a> = PooledConnection<'a, AsyncPgConnection>;
 
 /// Returns all endpoints for which we have implemented on the indexer,
 /// some of them are not validated yet.
@@ -179,22 +185,50 @@ pub fn establish_connection(db_url: String) -> PgConnection {
     PgConnection::establish(&db_url).unwrap_or_else(|_| panic!("Error connecting to {}", db_url))
 }
 
-pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+pub async fn new_pg_connection_pool(
+    db_url: &str,
+) -> Result<(PgConnectionPool, AsyncPgConnectionPool), IndexerError> {
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     // default connection pool max size is 10
-    Pool::builder().build(manager).map_err(|e| {
+    let blocking_cp = diesel::r2d2::Pool::builder().build(manager).map_err(|e| {
         IndexerError::PgConnectionPoolInitError(format!(
             "Failed to initialize connection pool with error: {:?}",
+            e
+        ))
+    })?;
+
+    let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
+    // default connection pool max size is 10
+    let async_pool = Pool::builder().build(manager).await.map_err(|e| {
+        IndexerError::PgConnectionPoolInitError(format!(
+            "Failed to initialize connection pool with error: {:?}",
+            e
+        ))
+    })?;
+
+    Ok((blocking_cp, async_pool))
+}
+
+pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
+    backoff::retry(ExponentialBackoff::default(), || {
+        let pool_conn = pool.get()?;
+        Ok(pool_conn)
+    })
+    .map_err(|e| {
+        IndexerError::PgPoolConnectionError(format!(
+            "Failed to get pool connection from PG connection pool with error: {:?}",
             e
         ))
     })
 }
 
-pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
-    retry(ExponentialBackoff::default(), || {
-        let pool_conn = pool.get()?;
-        Ok(pool_conn)
+pub async fn get_async_pg_pool_connection(
+    pool: &AsyncPgConnectionPool,
+) -> Result<AsyncPgPoolConnection, IndexerError> {
+    retry(ExponentialBackoff::default(), || async {
+        pool.get().await.map_err(backoff::Error::Permanent)
     })
+    .await
     .map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed to get pool connection from PG connection pool with error: {:?}",

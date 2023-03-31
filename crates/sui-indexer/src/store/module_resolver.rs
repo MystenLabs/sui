@@ -11,8 +11,8 @@ use move_core_types::resolver::ModuleResolver;
 use sui_types::base_types::ObjectID;
 
 use crate::errors::{Context, IndexerError};
-use crate::store::diesel_marco::read_only;
-use crate::{get_pg_pool_connection, PgConnectionPool};
+use crate::store::diesel_marco::read_only_blocking;
+use crate::PgConnectionPool;
 
 pub struct IndexerModuleResolver {
     cp: PgConnectionPool,
@@ -42,7 +42,8 @@ impl ModuleResolver for IndexerModuleResolver {
         let package_id = ObjectID::from(*id.address()).to_string();
         let module_name = id.name().to_string();
 
-        let module_bytes = read_only!(&self.cp, |conn| {
+        // TODO: do we need to make this async?
+        let module_bytes = read_only_blocking!(&self.cp, |conn| {
             diesel::sql_query(LATEST_MODULE_QUERY)
                 .bind::<Text, _>(package_id)
                 .bind::<Text, _>(module_name)

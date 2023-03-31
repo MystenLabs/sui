@@ -59,7 +59,7 @@ where
             sui_transaction_response.clone().try_into()?;
         let transaction_store: TemporaryTransactionBlockResponseStore = fast_path_resp.into();
         let transaction: Transaction = transaction_store.try_into()?;
-        self.state.persist_fast_path(transaction)?;
+        self.state.persist_fast_path(transaction).await?;
 
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,
