@@ -1212,9 +1212,8 @@ Update a validator's name.
     ctx: &TxContext,
 ) {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut_with_ctx_including_candidates">validator_set::get_validator_mut_with_ctx_including_candidates</a>(&<b>mut</b> self.validators, ctx);
+
     <a href="validator.md#0x3_validator_update_name">validator::update_name</a>(<a href="validator.md#0x3_validator">validator</a>, name);
-    <b>let</b> <a href="validator.md#0x3_validator">validator</a> :&Validator = <a href="validator.md#0x3_validator">validator</a>; // Force immutability for the following call
-    <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">validator_set::assert_no_pending_or_active_duplicates</a>(&self.validators, <a href="validator.md#0x3_validator">validator</a>);
 }
 </code></pre>
 
