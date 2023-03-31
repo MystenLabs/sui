@@ -310,7 +310,6 @@ importers:
       postcss: ^8.4.19
       postcss-loader: ^7.1.0
       postcss-preset-env: ^8.2.0
-      posthog-js: ^1.51.5
       prettier: ^2.8.7
       react: ^18.2.0
       react-dom: ^18.2.0
@@ -379,7 +378,6 @@ importers:
       formik: 2.2.9_react@18.2.0
       framer-motion: 10.10.0_biqbaboplfbrettd7655fr4n2y
       mitt: 3.0.0
-      posthog-js: 1.51.5
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       react-error-boundary: 3.1.4_react@18.2.0
