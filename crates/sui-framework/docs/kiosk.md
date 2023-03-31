@@ -44,6 +44,7 @@ be used to implement application-specific transfer rules.
 -  [Function `new`](#0x2_kiosk_new)
 -  [Function `close_and_withdraw`](#0x2_kiosk_close_and_withdraw)
 -  [Function `set_owner`](#0x2_kiosk_set_owner)
+-  [Function `set_owner_custom`](#0x2_kiosk_set_owner_custom)
 -  [Function `place`](#0x2_kiosk_place)
 -  [Function `lock`](#0x2_kiosk_lock)
 -  [Function `take`](#0x2_kiosk_take)
@@ -631,6 +632,35 @@ in a third party module.
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
     self.owner = sender(ctx);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_kiosk_set_owner_custom"></a>
+
+## Function `set_owner_custom`
+
+Update the <code>owner</code> field with a custom address. Can be used for
+implementing a custom logic that relies on the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> owner.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner_custom">set_owner_custom</a>(self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">kiosk::Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">kiosk::KioskOwnerCap</a>, owner: <b>address</b>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="kiosk.md#0x2_kiosk_set_owner_custom">set_owner_custom</a>(
+    self: &<b>mut</b> <a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a>, cap: &<a href="kiosk.md#0x2_kiosk_KioskOwnerCap">KioskOwnerCap</a>, owner: <b>address</b>
+) {
+    <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.for, <a href="kiosk.md#0x2_kiosk_ENotOwner">ENotOwner</a>);
+    self.owner = owner
 }
 </code></pre>
 
