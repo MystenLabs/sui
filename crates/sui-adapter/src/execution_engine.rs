@@ -13,6 +13,7 @@ use sui_types::balance::{
 };
 use sui_types::base_types::ObjectID;
 use sui_types::gas_coin::GAS;
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use tracing::{info, instrument, trace, warn};
 
@@ -618,6 +619,13 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
             new_package.compute_object_reference()
         );
 
+        let write_kind = if version == OBJECT_START_VERSION {
+            // creation of a new framework module
+            WriteKind::Create
+        } else {
+            // upgrade of a previously existing framework module
+            WriteKind::Mutate
+        };
         // Decrement the version before writing the package so that the store can record the version
         // growing by one in the effects.
         new_package
@@ -625,7 +633,7 @@ fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObject
             .try_as_package_mut()
             .unwrap()
             .decrement_version();
-        temporary_store.write_object(new_package, WriteKind::Mutate);
+        temporary_store.write_object(new_package, write_kind);
     }
 
     Ok(())

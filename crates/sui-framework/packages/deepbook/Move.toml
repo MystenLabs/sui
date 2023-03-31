@@ -1,0 +1,11 @@
+[package]
+name = "DeepBook"
+version = "0.0.1"
+published-at = "0xdee9"
+
+[dependencies]
+MoveStdlib = { local = "../move-stdlib" }
+Sui = { local = "../sui-framework" }
+
+[addresses]
+deepbook = "0xdee9"

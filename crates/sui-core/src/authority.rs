@@ -46,7 +46,7 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
-use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
+use sui_framework::{DeepBook, MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc_types::{
     Checkpoint, DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent,
     SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEvents,
@@ -3035,7 +3035,16 @@ impl AuthorityState {
             return vec![];
         };
 
-        vec![move_stdlib, sui_framework, sui_system]
+        let Some(deepbook) = self.compare_system_package(
+            DeepBook::ID,
+            DeepBook::as_modules(),
+            DeepBook::transitive_dependencies(),
+            max_binary_format_version
+        ).await else {
+            return vec![];
+        };
+
+        vec![move_stdlib, sui_framework, sui_system, deepbook]
     }
 
     /// Check whether the framework defined by `modules` is compatible with the framework that is
@@ -3058,12 +3067,20 @@ impl AuthorityState {
     ) -> Option<ObjectRef> {
         let cur_object = match self.get_object(&id).await {
             Ok(Some(cur_object)) => cur_object,
-
             Ok(None) => {
-                error!("No framework package at {id}");
-                return None;
+                // creating a new framework package--nothing to check
+                return Some(
+                    Object::new_system_package(
+                        modules,
+                        OBJECT_START_VERSION,
+                        dependencies,
+                        // Genesis is fine here, we only use it to calculate an object ref that we can use
+                        // for all validators to commit to the same bytes in the update
+                        TransactionDigest::genesis(),
+                    )
+                    .compute_object_reference(),
+                );
             }
-
             Err(e) => {
                 error!("Error loading framework object at {id}: {e:?}");
                 return None;
@@ -3171,6 +3188,7 @@ impl AuthorityState {
                     framework_injection::get_bytes::<SuiSystem>(self.name),
                     SuiSystem::transitive_dependencies(),
                 ),
+                DeepBook::ID => (DeepBook::as_bytes(), DeepBook::transitive_dependencies()),
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 

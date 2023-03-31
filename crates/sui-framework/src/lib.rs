@@ -12,7 +12,7 @@ use sui_types::{
     error::SuiResult,
     move_package::MovePackage,
     object::{Object, OBJECT_START_VERSION},
-    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
 
 pub mod natives;
@@ -100,6 +100,20 @@ define_system_package!(
     SUI_SYSTEM_ADDRESS,
     SuiSystemTest,
     "sui-system-test",
+    [MoveStdlib, SuiFramework]
+);
+
+define_system_package!(
+    DEEPBOOK_ADDRESS,
+    DeepBook,
+    "deepbook",
+    [MoveStdlib, SuiFramework]
+);
+
+define_system_package!(
+    DEEPBOOK_ADDRESS,
+    DeepBookTest,
+    "deepbook-test",
     [MoveStdlib, SuiFramework]
 );
 
