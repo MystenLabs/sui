@@ -95,7 +95,7 @@ async fn test_get_staked_sui() {
             Some(1_000_000_000),
             validator,
             None,
-            10000,
+            1000000,
         )
         .await
         .unwrap();
