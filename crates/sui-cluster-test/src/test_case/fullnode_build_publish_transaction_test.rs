@@ -31,7 +31,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             all_module_bytes,
             dependencies,
             None::<ObjectID>,
-            10000
+            1_000_000
         ];
 
         let data = ctx

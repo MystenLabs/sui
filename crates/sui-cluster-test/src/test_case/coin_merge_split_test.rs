@@ -118,7 +118,13 @@ impl CoinMergeSplitTest {
         coin_to_merge: ObjectID,
         gas_obj_id: ObjectID,
     ) -> SuiTransactionBlockResponse {
-        let params = rpc_params![signer, primary_coin, coin_to_merge, Some(gas_obj_id), 2000];
+        let params = rpc_params![
+            signer,
+            primary_coin,
+            coin_to_merge,
+            Some(gas_obj_id),
+            30_000
+        ];
 
         let data = ctx
             .build_transaction_remotely("unsafe_mergeCoins", params)
@@ -135,7 +141,7 @@ impl CoinMergeSplitTest {
         amounts: Vec<u64>,
         gas_obj_id: ObjectID,
     ) -> SuiTransactionBlockResponse {
-        let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 2000];
+        let params = rpc_params![signer, primary_coin, amounts, Some(gas_obj_id), 30_000];
 
         let data = ctx
             .build_transaction_remotely("unsafe_splitCoin", params)
