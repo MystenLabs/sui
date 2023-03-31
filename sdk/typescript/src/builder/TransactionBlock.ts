@@ -624,7 +624,6 @@ export class TransactionBlock {
           provider,
         );
       }
-      console.log('before gas budget check.');
       if (!this.blockData.gasConfig.budget) {
         console.log('before_dry_run');
         const dryRunResult = await expectProvider(
