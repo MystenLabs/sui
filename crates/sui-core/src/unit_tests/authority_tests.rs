@@ -5169,7 +5169,7 @@ async fn test_for_inc_201_dry_run() {
     builder.publish_immutable(modules, system_package_ids());
     let kind = TransactionKind::programmable(builder.finish());
 
-    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 10000, 1);
+    let txn_data = TransactionData::new_with_gas_coins(kind, sender, vec![], 1000000, 1);
 
     let signed = to_sender_signed_transaction(txn_data, &sender_key);
     let (DryRunTransactionBlockResponse { events, .. }, _, _) = fullnode
