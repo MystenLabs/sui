@@ -41,7 +41,7 @@ use crate::messages::{
     make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
 
-const GAS_BUDGET: u64 = 10000;
+const GAS_BUDGET_IN_UNIT: u64 = 10000;
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
@@ -118,10 +118,17 @@ pub async fn publish_package_with_wallet(
     dep_ids: Vec<ObjectID>,
 ) -> (ObjectRef, TransactionDigest) {
     let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
-            .publish(sender, all_module_bytes, dep_ids, None, GAS_BUDGET)
+            .publish(
+                sender,
+                all_module_bytes,
+                dep_ids,
+                None,
+                GAS_BUDGET_IN_UNIT * gas_price,
+            )
             .await
             .unwrap();
 
@@ -171,6 +178,7 @@ pub async fn submit_move_transaction(
 ) -> SuiTransactionBlockResponse {
     debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
@@ -181,7 +189,7 @@ pub async fn submit_move_transaction(
             vec![], // type_args
             arguments,
             gas_object,
-            GAS_BUDGET,
+            GAS_BUDGET_IN_UNIT * gas_price,
         )
         .await
         .unwrap();
@@ -270,6 +278,7 @@ pub async fn create_devnet_nft(
 ) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
     let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
     let gas_object = gas_objects.get(0).unwrap().id();
+    let gas_price = context.get_reference_gas_price().await?;
 
     let args_json = json!([
         "example_nft_name",
@@ -288,7 +297,7 @@ pub async fn create_devnet_nft(
         type_args: vec![],
         args,
         gas: Some(*gas_object),
-        gas_budget: GAS_BUDGET,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await?;
@@ -318,6 +327,7 @@ pub async fn transfer_sui(
     sender: Option<SuiAddress>,
     receiver: Option<SuiAddress>,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+    let gas_price = context.get_reference_gas_price().await?;
     let sender = match sender {
         None => context.config.keystore.addresses().get(0).cloned().unwrap(),
         Some(addr) => addr,
@@ -334,7 +344,7 @@ pub async fn transfer_sui(
         to: receiver,
         amount: None,
         sui_coin_object_id: gas_ref.0,
-        gas_budget: GAS_BUDGET,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await?;
@@ -361,6 +371,7 @@ pub async fn transfer_coin(
     ),
     anyhow::Error,
 > {
+    let gas_price = context.get_reference_gas_price().await?;
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
     let client = context.get_client().await.unwrap();
@@ -393,7 +404,7 @@ pub async fn transfer_coin(
         to: receiver,
         object_id: object_to_send,
         gas: None,
-        gas_budget: GAS_BUDGET,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await?;
@@ -427,12 +438,13 @@ pub async fn transfer_coin(
 }
 
 pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     SuiClientCommands::SplitCoin {
         coin_id,
         amounts: None,
         count: Some(2),
         gas: None,
-        gas_budget: MAX_GAS,
+        gas_budget: GAS_BUDGET_IN_UNIT * gas_price,
     }
     .execute(context)
     .await
