@@ -886,7 +886,11 @@ pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> 
 }
 
 /// Make a few test gas objects (all with the same owner).
-pub fn generate_test_gas_objects_with_owner_and_value(count: usize, owner: SuiAddress, value: u64) -> Vec<Object> {
+pub fn generate_test_gas_objects_with_owner_and_value(
+    count: usize,
+    owner: SuiAddress,
+    value: u64,
+) -> Vec<Object> {
     (0..count)
         .map(|_i| {
             let gas_object_id = ObjectID::random();

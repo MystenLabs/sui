@@ -29,7 +29,9 @@ use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
     VerifiedTransaction,
 };
-use sui_types::object::{generate_test_gas_objects_with_owner, generate_test_gas_objects_with_owner_and_value, Object};
+use sui_types::object::{
+    generate_test_gas_objects_with_owner, generate_test_gas_objects_with_owner_and_value, Object,
+};
 use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
@@ -439,7 +441,8 @@ async fn test_validator_candidate_pool_read() {
     let new_validator_key = gen_keys(5).pop().unwrap();
     let new_validator_address: SuiAddress = new_validator_key.public().into();
 
-    let gas_objects = generate_test_gas_objects_with_owner_and_value(4, new_validator_address, 2_000_000_000);
+    let gas_objects =
+        generate_test_gas_objects_with_owner_and_value(4, new_validator_address, 2_000_000_000);
 
     let init_configs = ConfigBuilder::new_with_temp_dir()
         .rng(StdRng::from_seed([0; 32]))
@@ -618,7 +621,8 @@ async fn test_reconfig_with_committee_change_basic() {
     // TODO: In order to better "test" this flow we probably want to set the validators to ignore
     // all p2p peer connections so that we can verify that new nodes joining can really "talk" with the
     // other validators in the set.
-    let gas_objects = generate_test_gas_objects_with_owner_and_value(4, new_validator_address, 2_000_000_000);
+    let gas_objects =
+        generate_test_gas_objects_with_owner_and_value(4, new_validator_address, 2_000_000_000);
     let stake = Object::new_gas_with_balance_and_owner_for_testing(
         30_000_000_000_000_000,
         new_validator_address,
@@ -760,7 +764,8 @@ async fn test_reconfig_with_committee_change_stress() {
         .iter()
         .map(|key| {
             let sender: SuiAddress = key.public().into();
-            let gas_objects = generate_test_gas_objects_with_owner_and_value(4, sender, 2_000_000_000);
+            let gas_objects =
+                generate_test_gas_objects_with_owner_and_value(4, sender, 2_000_000_000);
             let stake =
                 Object::new_gas_with_balance_and_owner_for_testing(30_000_000_000_000_000, sender);
             (sender, (gas_objects, stake))
