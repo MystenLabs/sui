@@ -1,0 +1,13 @@
+[package]
+name = "Root"
+version = "0.0.0"
+
+[addresses]
+B = "_"
+A = "0x1"
+
+[dev-addresses]
+B = "0x1"
+
+[dev-dependencies]
+A = { local = "./deps_only/A" }

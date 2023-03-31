@@ -1,0 +1,35 @@
+//# publish
+module 0x1.A {
+    public push_u64(): u64  {
+    label b0:
+        return 42;
+    }
+
+    public push_bool(): bool {
+    label b0:
+        return true;
+    }
+
+    public foo(u: u64): u64 {
+    label b0:
+        return move(u) * 2;
+    }
+
+    public eat_stack(b: bool, u: u64) {
+    label b0:
+        return;
+    }
+}
+
+//# run
+import 0x1.A;
+
+main() {
+    let ans: u64;
+label b0:
+    (A.push_bool(), A.push_u64());
+    ans = (A.foo());
+    // negative stack
+    (A.eat_stack());
+    return;
+}

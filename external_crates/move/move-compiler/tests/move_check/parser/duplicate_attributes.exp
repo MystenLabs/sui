@@ -1,0 +1,24 @@
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/duplicate_attributes.move:2:10
+  │
+2 │     #[a, a(x = 0)]
+  │       -  ^^^^^^^^ Duplicate attribute 'a' attached to the same item
+  │       │   
+  │       Attribute previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/duplicate_attributes.move:5:12
+  │
+5 │     #[b(a, a = 0, a(x = 1))]
+  │         -  ^^^^^ Duplicate attribute 'a' attached to the same item
+  │         │   
+  │         Attribute previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/duplicate_attributes.move:5:19
+  │
+5 │     #[b(a, a = 0, a(x = 1))]
+  │         -         ^^^^^^^^ Duplicate attribute 'a' attached to the same item
+  │         │          
+  │         Attribute previously given here
+

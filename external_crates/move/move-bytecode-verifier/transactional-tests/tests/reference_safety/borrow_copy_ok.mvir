@@ -1,0 +1,34 @@
+//# publish
+
+module 0x1.B {
+    struct T has drop {g: u64}
+
+    public new(g: u64): Self.T {
+    label b0:
+        return T{g: move(g)};
+    }
+
+    public t(this: &Self.T) {
+        let g: &u64;
+        let y: u64;
+    label b0:
+        g = &copy(this).T::g;
+        // can read g even with the live parent reference
+        y = *move(g);
+        _ = move(this);
+        return;
+    }
+}
+
+//# run
+import 0x1.B;
+
+main() {
+    let x: B.T;
+    let y: &B.T;
+label b0:
+    x = B.new(5);
+    y = &x;
+    B.t(move(y));
+    return;
+}

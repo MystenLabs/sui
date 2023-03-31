@@ -1,0 +1,50 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/vector_mismatched_args.move:7:9
+  │
+7 │         vector[0, false];
+  │         ^^^^^^^^^^^^^^^^
+  │         │      │  │
+  │         │      │  Found: 'bool'. It is not compatible with the other type.
+  │         │      Found: integer. It is not compatible with the other type.
+  │         Invalid 'vector' instantiation. Incompatible argument
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/vector_mismatched_args.move:8:9
+  │
+8 │         vector[0u8, 0u64, 0u128];
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │      │    │
+  │         │      │    Found: 'u64'. It is not compatible with the other type.
+  │         │      Found: 'u8'. It is not compatible with the other type.
+  │         Invalid 'vector' instantiation. Incompatible argument
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/vector_mismatched_args.move:9:9
+  │
+9 │         vector[0, @0];
+  │         ^^^^^^^^^^^^^
+  │         │      │  │
+  │         │      │  Found: 'address'. It is not compatible with the other type.
+  │         │      Found: integer. It is not compatible with the other type.
+  │         Invalid 'vector' instantiation. Incompatible argument
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/vector_mismatched_args.move:10:9
+   │
+10 │         vector[X{}, Y{}];
+   │         ^^^^^^^^^^^^^^^^
+   │         │      │    │
+   │         │      │    Found: '0x42::Test::Y'. It is not compatible with the other type.
+   │         │      Found: '0x42::Test::X'. It is not compatible with the other type.
+   │         Invalid 'vector' instantiation. Incompatible argument
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/vector_mismatched_args.move:11:9
+   │
+11 │         vector[&0, &false];
+   │         ^^^^^^^^^^^^^^^^^^
+   │         │       │   │
+   │         │       │   Found: 'bool'. It is not compatible with the other type.
+   │         │       Found: integer. It is not compatible with the other type.
+   │         Invalid 'vector' instantiation. Incompatible argument
+

@@ -1,0 +1,1 @@
+Error parsing '[dependencies]' section of manifest: must provide exactly one of 'local' or 'git' or 'resolver' or 'custom' for dependency.

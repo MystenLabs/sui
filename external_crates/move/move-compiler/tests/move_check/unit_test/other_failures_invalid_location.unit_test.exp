@@ -1,0 +1,66 @@
+error[E10004]: invalid usage of known attribute
+  ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:6:24
+  │
+6 │     #[expected_failure(vector_error)]
+  │                        ^^^^^^^^^^^^ Expected 'location' following 'vector_error'
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:10:24
+   │
+10 │     #[expected_failure(arithmetic_error)]
+   │                        ^^^^^^^^^^^^^^^^ Expected 'location' following 'arithmetic_error'
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:14:24
+   │
+14 │     #[expected_failure(out_of_gas)]
+   │                        ^^^^^^^^^^ Expected 'location' following 'out_of_gas'
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:18:24
+   │
+18 │     #[expected_failure(major_status=4004)]
+   │                        ^^^^^^^^^^^^ Expected 'location' following 'major_status'
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:22:24
+   │
+22 │     #[expected_failure(major_status=4016, minor_code=0)]
+   │                        ^^^^^^^^^^^^ Expected 'location' following 'major_status'
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:26:38
+   │
+26 │     #[expected_failure(vector_error, location=x)]
+   │                                      ^^^^^^^^^^
+   │                                      │        │
+   │                                      │        Expected a module identifier, e.g. 'std::vector'
+   │                                      Invalid value in attribute assignment
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:30:36
+   │
+30 │     #[expected_failure(out_of_gas, location=0x1::m::t0)]
+   │                                    ^^^^^^^^^^^^^^^^^^^
+   │                                    │        │
+   │                                    │        Expected a module identifier, e.g. 'std::vector'
+   │                                    Invalid value in attribute assignment
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:34:43
+   │
+34 │     #[expected_failure(major_status=4004, location=self)]
+   │                                           ^^^^^^^^^^^^^
+   │                                           │        │
+   │                                           │        Expected a module identifier, e.g. 'std::vector'
+   │                                           Invalid value in attribute assignment
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:38:59
+   │
+38 │     #[expected_failure(major_status=4016, minor_status=0, location=0)]
+   │                                                           ^^^^^^^^^^
+   │                                                           │        │
+   │                                                           │        Expected a module identifier, e.g. 'std::vector'
+   │                                                           Invalid value in attribute assignment
+

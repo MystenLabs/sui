@@ -1,0 +1,14 @@
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/pack_unpack_private_script.move:12:17
+   │
+12 │         let t = T {  };
+   │                 ^^^^^^ Invalid instantiation of '0x42::M::T'.
+All structs can only be constructed in the module in which they are declared
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/pack_unpack_private_script.move:13:13
+   │
+13 │         let T {} = t;
+   │             ^^^^ Invalid deconstruction binding of '0x42::M::T'.
+ All structs can only be deconstructed in the module in which they are declared
+

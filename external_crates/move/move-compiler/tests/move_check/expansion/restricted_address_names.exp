@@ -1,0 +1,12 @@
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_address_names.move:1:8
+  │
+1 │ module Self::A {}
+  │        ^^^^ Invalid address name 'Self'. 'Self' is restricted and cannot be used to name an address
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/restricted_address_names.move:2:8
+  │
+2 │ module vector::A {}
+  │        ^^^^^^ Invalid address name 'vector'. 'vector' is restricted and cannot be used to name an address
+

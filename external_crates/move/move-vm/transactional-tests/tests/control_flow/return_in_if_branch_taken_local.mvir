@@ -1,0 +1,13 @@
+//# run
+main() {
+    let x: u64;
+label b0:
+    jump_if (true) b2;
+label b1:
+    x = 0;
+label b2:
+    return;
+label b3:
+    assert(false, 42);
+    return;
+}

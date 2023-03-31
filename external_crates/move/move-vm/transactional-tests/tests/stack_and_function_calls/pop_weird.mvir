@@ -1,0 +1,25 @@
+//# publish
+module 0x1.A {
+    three(): u64 * u64 * u64 {
+    label b0:
+        return 0, 1, 2;
+    }
+
+    public pop() {
+    label b0:
+        Self.three();
+        _, _ = ();
+        _ = ();
+        return;
+    }
+}
+
+
+//# run
+import 0x1.A;
+
+main() {
+label b0:
+    A.pop();
+    return;
+}

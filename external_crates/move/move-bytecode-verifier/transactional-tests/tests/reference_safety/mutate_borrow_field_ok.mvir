@@ -1,0 +1,36 @@
+//# publish
+module 0x42.Test {
+    struct T has drop {v: u64}
+
+    public new(g: u64): Self.T {
+    label b0:
+        return T{v: move(g)};
+    }
+
+    public thousand(t : &mut Self.T) {
+    label b0:
+        *(&mut move(t).T::v) = 1000;
+        return;
+    }
+
+    public value(this: &mut Self.T): u64 {
+        let y: &u64;
+    label b0:
+        y = &move(this).T::v;
+        return *move(y);
+    }
+}
+
+//# run
+import 0x42.Test;
+
+main() {
+    let x: Test.T;
+    let x_ref: u64;
+label b0:
+    x = Test.new(500);
+    Test.thousand(&mut x);
+    x_ref = Test.value(&mut x); // can read references through calls
+    assert(move(x_ref) == 1000, 42);
+    return;
+}

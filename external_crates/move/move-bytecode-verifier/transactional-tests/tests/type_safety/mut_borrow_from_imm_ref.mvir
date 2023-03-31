@@ -1,0 +1,25 @@
+//# publish
+module 0x42.Token {
+    struct T{value: u64}
+    public new(m: u64): Self.T {
+    label b0:
+        return T{value: copy(m)};
+    }
+    public destroy(t: Self.T) {
+        let value: u64;
+    label b0:
+        T {value} = move(t);
+        return;
+    }
+
+    public bump_value(this: &Self.T) {
+        let val: &mut u64;
+        let x: u64;
+    label b0:
+        // cannot mut borrow imm reff
+        val = &mut move(this).T::value;
+        x = *copy(val) + 1;
+        *move(val) = copy(x);
+        return;
+    }
+}

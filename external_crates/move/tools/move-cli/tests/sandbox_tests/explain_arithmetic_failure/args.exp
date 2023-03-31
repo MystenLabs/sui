@@ -1,0 +1,2 @@
+Command `sandbox run sources/script.move`:
+Execution failed because of an arithmetic error (i.e., integer overflow/underflow, div/mod by zero, or invalid shift) in script at code offset 2

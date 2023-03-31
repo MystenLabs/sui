@@ -1,0 +1,12 @@
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:17
+   │
+13 │             if (return) break;
+   │                 ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:25
+   │
+13 │             if (return) break;
+   │                         ^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+

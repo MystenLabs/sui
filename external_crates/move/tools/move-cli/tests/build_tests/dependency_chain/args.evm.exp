@@ -1,0 +1,3 @@
+Command `build -v --arch ethereum`:
+COMPILING A, Bar, Foo to Yul
+GENERATING EVM bytecote from Yul

@@ -1,0 +1,18 @@
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/parser/function_visibility_script.move:2:5
+  │
+2 │     public(script) fun f() {}
+  │     ^^^^^^^^^^^^^^ 'public(script)' is deprecated in favor of the 'entry' modifier. Replace with 'public entry'
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/parser/function_visibility_script.move:3:5
+  │
+3 │     public (script) fun g() {}
+  │     ^^^^^^^^^^^^^^^ 'public(script)' is deprecated in favor of the 'entry' modifier. Replace with 'public entry'
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/parser/function_visibility_script.move:4:5
+  │
+4 │     public ( script ) fun h() {}
+  │     ^^^^^^^^^^^^^^^^^ 'public(script)' is deprecated in favor of the 'entry' modifier. Replace with 'public entry'
+

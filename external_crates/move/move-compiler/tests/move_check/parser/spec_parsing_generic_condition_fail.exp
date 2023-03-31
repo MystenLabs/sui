@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_parsing_generic_condition_fail.move:3:16
+  │
+3 │         ensures<T> exists<T>(0x1) <==> exists<T>(0x1);
+  │                ^
+  │                │
+  │                Unexpected '<'
+  │                Expected an expression term
+

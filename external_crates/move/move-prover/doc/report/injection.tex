@@ -1,0 +1,638 @@
+\SubSection{Function Condition Injection}
+
+During specification injection, move specifications are reduced to basic
+assume/assert statements added to the Move code.  Those statements represent
+instructions to the solver backend about what propositions can be assumed and
+which need to be asserted (verified) at a given program point.  In this section,
+we cover how \emph{function specification conditions} are injected.
+
+
+\SubSubSection{Modular Verification}
+\label{sec:ModularVerification}
+
+
+%% Dave comment: I don't think we need to assume that used modules are verified before
+%%  the modules that use them.  For inductive invariants, we just assume that every
+%%  invariant holds at time t, then prove that that implies that each invariant holds at time t+1.
+%%  So, it's induction on time, not the module dependency structure.}
+
+Modular verification applies to all types of injections, and its principles are
+therefore described first. When the Move prover is run, it takes as input a set
+of Move modules which is closed under the transitive dependency relation (module
+imports). However, only a subset of those modules are \emph{verification target}
+(typically just one module). It is assumed that the tool environment ensures
+that modules in the dependency relation which are not a target of verification
+have already successfully verified. This is possible since Move has an acyclic
+import relation.
+
+From the set of target modules, the set of \emph{target functions} is
+derived. This set might be enriched by additional functions which need
+verification because of global invariants, as discussed in
+Sec.~\ref{sec:GlobalInvariants}. The resulting set of target functions will then
+be verified one-by-one, assuming that any called functions have successfully
+verified. If a called function is among the target functions, it might in fact
+not verify; however, in this case a verification error will be reported at the
+called function, and the verification result at the caller side can be ignored.
+
+\SubSubSection{Pre- and Post conditions}
+
+The injection of basic function specifications is illustrated in
+Fig.~\ref{fig:RequiresEnsuresAbortsIf}.  An extension of the Move source
+language is used to specify abort behavior. With~%
+|fun f() { .. } onabort { conditions }| a Move function is defined where
+|conditions| are assume or assert statements that are evaluated at every program
+point the function aborts (either implicitly or with an |abort| statement). This
+construct simplifies the presentation and corresponds to a per-function abort
+block on bytecode level which is target of branching.
+
+\begin{Figure}
+  \caption{Requires, Ensures, and AbortsIf Injection}
+  \label{fig:RequiresEnsuresAbortsIf}
+  \centering
+\begin{MoveBox}
+  fun f(x: u64, y: u64): u64 { x + y }
+  spec f {
+    requires x < y;
+    aborts_if x + y > MAX_U64;
+    ensures result == x + y;
+  }
+  fun g(x: u64): u64 { f(x, x + 1) }
+  spec g {
+    ensures result > x;
+  }
+  @\transform@
+  fun f(x: u64, y: u64): u64 {
+    spec assume x < y;
+    let result = x + y;
+    spec assert result == x + y;     // ensures of of
+    spec assert                      // negated abort_if of f
+      !(x + y > MAX_U64); @\label{line:aborts_holds_not}@
+    result
+  } onabort {
+    spec assert                      // abort_if of f
+      x + y > MAX_U64; @\label{line:aborts_holds}@
+  }
+  fun g(x: u64): u64 {
+    spec assert x < x + 1;           // requires of f
+@$\textrm{\it if inlined}$\label{line:inline}@
+    let result = inline f(x, x + 1);
+@$\textrm{\it elif opaque}$\label{line:opaque}@
+    if (x + x + 1 > MAX_U64) abort;  // aborts_if of f
+    spec assume result == x + x + 1; // ensures of f
+@$\textrm{\it endif}$@
+    spec assert result > x;          // ensures of g
+    result
+  }
+\end{MoveBox}
+\end{Figure}
+
+An aborts condition is translated into two different asserts: one where the
+function aborts and the condition must hold (line~\ref{line:aborts_holds}), and
+one where it returns and the condition must \emph{not} hold
+(line~\ref{line:aborts_holds_not}). If there are multiple |aborts_if|, they are
+or-ed. If there is no abort condition, no asserts are generated. This means
+that once a user specifies aborts conditions, they must completely cover the
+abort behavior of the code. (The prover also provides an option to relax this
+behavior, where aborts conditions can be partial and are only enforced on
+function return.)
+
+For a function call site we distinguish two variants: the call is \emph{inlined}
+(line~\ref{line:inline}) or it is \emph{opaque} (line~\ref{line:opaque}). In
+both cases, it is assumed that the called function is verified (see Modular
+Verification, Sec.~\ref{sec:ModularVerification}). For inlined calls, the
+function definition, with all injected assumptions and assertions turned into
+assumptions (as those are considered proven) is substituted. For opaque
+functions the specification conditions are inserted as
+assumptions. Methodologically, opaque functions need precise specifications
+relative to a particular objective, where as in the case of inlined functions
+the code is still the source of truth and specifications can be partial or
+omitted. However, inlining does not scale arbitrarily, and can be only used for
+small function systems.
+
+Notice we have not discussed the way how to deal with relating pre and post
+states yet, which requires taking snapshots of state (e.g.~%
+|ensures x == old(x) + 1|); the example in
+Fig.~\ref{fig:RequiresEnsuresAbortsIf} does not need it. Snapshots of state
+will be discussed for global update invariants in Sec.~\ref{sec:GlobalInvariants}.
+
+\SubSubSection{Modifies}
+
+\begin{Figure}
+  \caption{Modifies Injection}
+  \label{fig:Modifies}
+  \centering
+\begin{MoveBox}
+  fun f(addr: address) { move_to<T>(addr, T{}) }
+  spec f {
+    pragma opaque;
+    ensures exists<T>(addr);
+    modifies global<T>(addr);
+  }
+  fun g() { f(0x1) }
+  spec g {
+    modifies global<T>(0x1); modifies global<T>(0x2);
+  }
+  @\transform@
+  fun f(addr: address) {
+    let can_modify_T = {addr};      // modifies of f
+    spec assert addr in can_modify; // permission check @%
+                                            \label{line:modifies_permission}@
+    move_to<T>(addr, T{});
+  }
+  fun g() {
+    let can_modify_T = {0x1, 0x2};  // modifies of g
+    spec assert {0x1} <= can_modify_T; // permission check @%
+                                            \label{line:modifies_call_permission}@
+    spec havoc global<T>(0x1);      // havoc modified memory @%
+                                            \label{line:modifies_havoc}@
+    spec assume exists<T>(0x1);     // ensures of f
+  }
+\end{MoveBox}
+\end{Figure}
+
+
+The |modifies| condition specifies that a function only changes specific memory.
+It comes in the form |modifies global<T>(addr)|, and its injection is
+illustrated in Fig.~\ref{fig:Modifies}.
+
+A type check is used to ensure that if a function has one or more~%
+|modifies| conditions all called functions which are \emph{opaque} have a matching
+modifies declaration. This is important so we can relate the callees
+memory modifications to that what is allowed at caller side.
+
+At verification time, when an operation is performed which modifies memory, an
+assertion is emitted that modification is allowed
+(e.g. line~\ref{line:modifies_permission}). The permitted addresses derived from
+the modifies clause are stored in a set |can_modify_T| generated by the
+transformation. Instructions which modify memory are either primitives (like
+|move_to| in the example) or function calls. If the function call is inlined,
+modifies injection proceeds (conceptually) with the inlined body. For opaque
+function calls, the static analysis has ensured that the target has a modifies
+clause.  This clause is used to derive the modified memory, which must be a
+subset of the modified memory of the caller
+(line~\ref{line:modifies_call_permission}).
+
+For opaque calls, we also need to \emph{havoc} the memory they modify
+(line~\ref{line:modifies_havoc}), by which is meant assigning an unconstrained
+value to it. If present, |ensures| from the called function, injected as
+subsequent assumptions, are further constraining the modified memory.
+
+
+\SubSubSection{Data Invariants}
+
+\begin{Figure}
+  \caption{Data Invariant Injection}
+  \label{fig:DataInvariants}
+  \centering
+\begin{MoveBox}
+  struct S { a: u64, b: u64 }
+  spec S { invariant a < b }
+  fun f(s: S): S {
+    let r = &mut s;
+    r.a = r.a + 1;
+    r.b = r.b + 1;
+    s
+  }
+  @\transform@
+  fun f(s: S): S {
+    spec assume s.a < s.b;      // assume invariant for s
+    let r = Mvp::local(s, F_s); // begin mutation of s
+    r = Mvp::set(r, Mvp::get(r)[a = Mvp::get(r).a + 1]);
+    r = Mvp::set(r, Mvp::get(r)[b = Mvp::get(r).b + 1]);
+    spec assert                 // invariant enforced
+      Mvp::get(r).a < Mvp::get(r).b;
+    s = Mvp::get(r);            // write back to s
+    s
+  }
+\end{MoveBox}
+\end{Figure}
+
+A data invariant specifies a constraint over a struct value. The value is
+guaranteed to satisfy this constraint at any time. Thus, when a value is
+constructed, the data invariant needs to be verified, and when it is consumed,
+it can be assumed to hold.
+
+In Move's reference semantics, construction of struct values is often done via a
+sequence of mutations via mutable references. It is desirable that \emph{during}
+such mutations, assertion of the data invariant is suspended. This allows to
+state invariants which reference multiple fields, where the fields are updated
+step-by-step.  Move's borrow semantics and concept of mutations provides a
+natural way how to defer invariant evaluation: at the point a mutable reference
+is released, mutation ends, and the data invariant can be enforced.  In other
+specification formalisms, we would need a special language construct for
+invariant suspension. Fig.~\ref{fig:DataInvariants} gives an example, and shows
+how data invariants are reduced to assert/assume statements.
+
+\Paragraph{Implementation}
+
+The implementation hooks into the reference elimination
+(Sec.~\ref{sec:RefElim}). As part of this the lifetime of references is
+computed. Whenever a reference is released and the mutated value is written
+back, we also enforce the data invariant. In addition, the data invariant is
+enforced when a struct value is directly constructed.
+
+
+
+\SubSection{Global Invariant Injection}
+\label{sec:GlobalInvariants}
+
+%% Dave comment: We discussed requiring update invariants to be transitive, but I don't think that's
+%% a great idea after thinking about it more.  Too long to write here
+
+
+Global invariants are properties declared in Move modules
+that must hold on all global states
+in which a transaction is not being executed.
+\textit{Inductive invariants} are properties that don't have the
+``old'' operator, so their truth can be evaluated in a single state.
+\textit{update invariants} contain the ``old'' operator, so they
+must be evaluated in two consecutive states: the current state (where
+the two-state invariant holds) and the immediately previous state
+(for simplicity, we define a two-state invariant to hold in the initial state).
+Regular invariants are proved by induction over time, while update
+invariants can be proved without induction.
+
+In some situations (such as blockchains), we would like
+users to be able to write transactions ``on-the-fly'' and submit
+them to the system, which does not allow time to run the Prover
+on individual transactions. The coarsest granularity we can
+practically achieve is to verify that each public and script function preserves
+inductive invariants.
+
+In the simplest case, the
+prover proves the much stronger condition that an invariant holds
+before and after every single instruction during transaction
+execution.  It is also possible a user to suspend checking of an
+invariant during intervals of execution of a transaction. We first
+discuss the basic model, then deal with additional issues from generics
+and invariant suspension.
+
+We wish to support open systems to which untrusted modules can be
+added to without invalidating invariants that have already been
+proved.  For each invariant, there is a defined subset of Move modules
+(called a \textit{cluster}).  If the invariant is proved for the
+modules in the cluster, it is guaranteed to hold in all other modules
+-- even those that were not yet defined when the invariant was proved.
+The cluster must contain every function that can invalidate the invariant,
+and, in some cases (explained in more detail below) callers to those
+functions.
+
+
+\TODO{dld}{We need consistent terminology for ``public'' functions that does
+not include public(friend) functions.}
+
+The soundness of the invariant proof method holds by an inductive
+argument over sequences of public and script function calls.  The base
+case is that the invariant must hold in the empty state that preceeds
+the genesis transaction, and the induction is that, if the invariant
+holds immediately before each public or script function, it continues
+to hold immediately after that function.  Note that the induction
+proof allows the assumption of \textit{all} invariants at the
+beginning of each public or script function to prove that an invariant
+holds after the function.  In practice, a subset of the available
+invariants are actually assumed on entry to a function. Some are not
+visible to the prover because they are specified outside of the
+cluster being verified, and others are excluded heuristically to
+reduce computational cost.
+
+% "modifies a type" is not defined precisely.
+
+The Prover verifies one module at a time.  The module being verified
+is called the \textit{target module}, and the global invariants to be
+verified are called \textit{target invariants}. The cluster of modules
+to be verified is computed from the target module.  it is necessary
+that every occurrence of an instruction that can potentially
+invalidate a target invariant be contained in some function in the
+cluster of modules for that invariant.  In the basic case in which
+invariants are not suspended, the cluster is the target module and all
+the modules it directly or indirectly uses, since the invariant can
+sonly refer to types defined in these modules, and the semantics of the
+Move language forbid a function from containing an instruction that
+modifies a type not appearing in the same module. Importantly,
+functions outside the cluster can never invalidate an invariant, so
+those functions trivially preserve the invariant, so it is only
+necessary to verify functions defined in the cluster.
+
+To ensure that invariants continue to hold after a public or script
+function returns, it is necessary to inject an assertion of the invariant at some
+point between each instruction that could invalidate it and the return
+points from the procedure.  In the simple case where invariants are
+not suspended, each target invariant is asserted after
+every instruction that could invalidate the invariant. So, by an
+obvious inductive argument, if the invariant holds in the initialy
+empty state, it holds after every instruction that is executed by
+every function.
+
+Update invariants are processed differently from inductive invariants.
+The value of an update invariant depends on two consecutive states, where
+``old'' expressions are evaluated in the first state, and expressions
+not in the context of an ``old'' operator are evaluated in the second
+state.
+To check an update invariant, the Prover first finds every
+instruction that can modify the truth of the invariant. A temporary
+value is generated to name the contents of the state before the
+instruction, and expressions involving this temporary are substituted
+for ``old'' expressions in the update invariant.
+Then, the prover injects an instruction to save the state in the
+temporary before the instruction, and injects an assert of
+the translated update after the instruction.
+
+%% Dave comment: I just noticed the next issue after writing the above paragraph.
+%% If we only want to instrument instructions that change the types in invariant,
+%% we need to make sure the invariant is valid when there are no changes.}
+
+We assume that an instruction that doesn't modify any of the types
+mentioned in an update invariant also does alter the validity of the invariant.
+Hence, an update invariant, regarded as a binary relation, must be reflexive.
+This property is not currently enforced by the prover.
+
+\SubSubSection{Basic Translation}
+
+\begin{Figure}
+  \caption{Basic Global Invariant Injection}
+  \label{fig:GlobalInvariants}
+  \centering
+\begin{MoveBox}
+  fun f(a: address) {
+    let r = borrow_global_mut<S>(a);
+    r.value = r.value + 1
+  }
+  invariant [I1] forall a: address: global<S>(a).value > 0;
+  invariant [I2] update forall a: address:
+      global<S>(a).value > old(global<S>(a).value);
+  @\transform@
+  fun f(a: address) {
+    spec assume I1;
+    Mvp::snapshot_state(I2_BEFORE);
+    r = <increment mutation>;
+    spec assert I1;
+    spec assert I2[old = I2_BEFORE];
+  }
+\end{MoveBox}
+\end{Figure}
+
+
+%% Dave comment: Do we have standard terminology for the state
+%%  variables upon which an invariant depends and that a function can
+%%  access or modify? We should explain the concepts and terminology
+%%  earlier and use them consistently throughout.
+
+The injection of assumes and asserts of global invariants into
+functions requires knowing whether a function reads or modifies types
+that are mentioned in the invariant.  Without generic type parameters,
+this is a relatively simple analysis. First, the prover collects the
+set of types mentioned in the invariant.
+For choosing the invariants to
+assume on entry to a function, the Prover collects all the types that
+are read or modified by the function or indirectly by functions that it
+calls, and intersects this set with the set of types in the invariant.
+For choosing the invariants to assert, the Prover collects types that
+are modified by the function or by an individual instruction or function
+call and intersects that set with the set of types in the invariant.
+
+Fig.~\ref{fig:GlobalInvariants} contains an example for the supported invariant
+types and their injection into code. The first invariant, |I1|, is an inductive
+invariant. It is assumed on function entry, and asserted after the state
+update. The second, |I2|, is an update invariant, which relates pre and
+post states. For this a state snapshot is stored under some label |I2_BEFORE|,
+which is then used in an assertion.
+
+\TODO{dld}{Note that ``modifies'' won't help with reads in opaque functions.}
+
+Global invariant injection is optimized by knowledge of the prover, obtained
+by static analysis, about (transitively) accessed memory. For opaque functions
+(including also builtin functions) this information is obtained via the modifies
+clause. For other functions it is determined from the code.  Assuming that the
+prover has precise knowledge (up to symbolic address representation) of memory
+usage, it can determine which invariants to inject. Let |f| be a target function:
+
+\begin{itemize}
+\item Inject |assume I| at entry to |f| \emph{if} |read*(f)| has overlap with
+  |read*(I)|.
+\item At every point in |f| where a memory location |M| is updated inject
+  |assert I| after the update \emph{if} |M in read*(I)|. Also, if |I| is an
+  update invariant, before the update inject a memory snapshot save.
+\end{itemize}
+
+Notice that we do not inject any invariants in functions that are not
+verification targets. However, the set of target functions may need to be
+extended because of invariants, as described later.
+
+
+\SubSubSection{Genericity}
+
+\begin{Figure}
+  \caption{Genericity}
+  \label{fig:Genericity}
+  \centering
+\begin{MoveBox}
+  invariant [I1] global<S<u64>>(0).value > 1;
+  invariant<T> [I2] global<S<T>>(0).value > 0;
+  fun f(a: address) { borrow_global_mut<S<u8>>(0).value = 2 }
+  fun g<R>(a: address) { borrow_global_mut<S<R>>(0).value = 3 }
+  @\transform@
+  fun f(a: address) {
+    spec assume I2[T = u8];
+    <<mutate>>
+    spec assert I2[T = u8];
+  }
+  fun g<R>(a: address) {
+    spec assume I1;
+    spec assume I2[T = R];
+    <<mutate>>
+    spec assert I1;
+    spec assert I2[T = R];
+  }
+\end{MoveBox}
+\end{Figure}
+
+Generic type parameters make the problem of determining whether a
+function can modify an invariant more difficult.
+For soundness, a property must hold for every possible instantiation
+of type parameters.
+So, rather than checking
+whether some of the types mentioned in the invariant are equal to some
+of the types accessed or modified by a function
+the Prover needs to
+discover whether there is any possible instantiation of type parameters
+that might allow the instantiated function to invalidate an instantiated invariant.
+In other words, it needs to know whether the
+each type in the invariant can be unified with a type accessed or modified by
+the function.
+Consider the example
+in Fig.~\ref{fig:Genericity}. Invariant |I1| holds for a specific type
+instantiation |S<u64>|, whereas |I2| is generic over all type instantiations for
+|S<T>|.
+
+The non-generic function |f| which works on the instantiation |S<u8>| will have
+to inject the \emph{specialized} instance |I2[T = u8]|. The invariant |I1|,
+however, does not apply for this function, because there is no overlap with
+|S<u64>|.  In contrast, in the generic function |g| we have to inject both
+invariants. Because this function works on arbitrary instances, it is also
+relevant for the specific case of |S<u64>|.
+
+In the general case, we are looking at a unification problem of the following
+kind. Given the accessed memory of a function |f<R>| and an invariant |I<T>|, we
+compute the pairwise unification of memory types. Those types are parameterized
+over |R| resp. |T|, and successful unification will result in a substitution
+for both. On successful unification, we include the invariant with |T| specialized
+according to the substitution.
+
+Notice that there are implications related to monomorphization coming from the
+injection of global invariants; those are discussed in Sec.~\ref{sec:Mono}.
+
+
+\SubSubSection{Modularity}
+
+\begin{Figure}
+  \caption{Modular Verification and Invariants}
+  \label{fig:ModularVerificationInv}
+  \centering
+\begin{MoveBox}
+  module Store {
+    struct T has key { x: u64 }
+    public fun read(): u64 { borrow_global<S>(0).x }
+    public fun write(x: u64) { borrow_global_mut_<S>(0).x = x }
+  }
+  module Actor {
+    use Store;
+    invariant global<S>(0).x > 0;
+    public fun set(x: u64) {
+      if (x == 0) then abort 1;
+      Store::set(x);
+    }
+  }
+\end{MoveBox}
+\end{Figure}
+
+In Sec.~\ref{sec:ModularVerification}, the general mechanism of modular
+verification was described, deriving the set of verified \emph{target
+  functions} from the set of \emph{target modules}, provided by the user on the
+command line. Global invariants add additional functions by possibly requiring
+re-verification of non-target functions which can influence the invariant.
+
+Consider the example in Fig.~\ref{fig:ModularVerificationInv}. The module
+|Store| provides an API for some storage location which is shared between a set
+of modules. The module |Actor|, one of those modules, establishes an
+invariant on the content of the store. When |Actor| is verified, one must
+also verify the function |Store::write|, because this invariant is verification
+target.  (In this example, verification cannot succeed, because the function
+|Store::write| is not restricting the values for the parameter |x|; we see in
+the next section how to fix this.)
+
+In general, the set of additional functions to verify is computed as
+follows. Let |I| be a target invariant which appears in some target module, and
+|f| some function in the dependency relation. If |modify(f)| has an overlap
+with |read*(I)| then |f| needs to be added to the target functions. Notice it is
+not |modify*(f)|; only direct modifications make a function to a verification
+target (with exceptions as discussed in the next section).
+
+
+\SubSubSection{Suspending Invariants}
+
+\begin{Figure}
+  \caption{Suspension of Invariants}
+  \label{fig:SuspensionInv}
+  \centering
+\begin{MoveBox}
+  module Store {
+    friend Actor;
+    ...
+    public(friend) fun write(x: u64) {
+      borrow_global_mut_<S>(0).x = x
+    }
+    spec write { pragma suspend_invariants; }
+  }
+  module Actor {
+    ...
+    invariant [suspendable] global<S>(0).x > 0;
+  }
+\end{MoveBox}
+\end{Figure}
+
+The example in Fig.~\ref{fig:ModularVerificationInv} is not quite right from a
+design viewpoint, since a global store accessible to everybody is constrained by
+a specific module. Consequently, it cannot be successfully
+verified. Fig.~\ref{fig:SuspensionInv} modifies the example to fix this. First,
+Move's |friend| mechanism is used to restrict visibility of |Store::write| to
+the |Actor| module. Note one could add other modules to the friends list as
+needed.  Second, the |Store::write| function is declared to \emph{suspend
+  invariant evaluation to callers}. Only private and friend functions can have
+such a declaration, ensuring the all call sites are known and the suspended
+invariants are actually verified in all call contexts.  An invariant needs to be
+explicitly marked via |[suspendable]| do be eligible for suspension.
+
+When an invariant |I| is suspended for a function |f|, the injection scheme changes
+as follows:
+
+\begin{itemize}
+\item At the definition side of |f|, |I| is neither assumed nor asserted.
+\item At every call side of |f| (whether opaque or inlined), the invariant
+  is asserted right after the call. It will also be assumed at the entry point
+  of the caller.
+\item Instead of |f| becoming a target function because it modifies the memory
+  read in |I| (see above paragraph about modular verification), all callers will
+  become target functions.
+\item If the caller is itself suspended, the process is instead continued with
+  the parent callers.
+\end{itemize}
+
+A function that is called from a suspended function cannot rely on a
+suspended invariants holding.  It would be unsound to assume those invariants
+in the function, and, since the invariants may not hold, asserting them would
+often yield failed proofs.  Therefore, the prover implicitly suspends all
+functions that are called from a suspended function.
+% *** error condition when the suspended function is public.
+
+Suspending an update invariant may change its meaning,
+meaning, depending on the form of the predicate. Without suspension, an update
+invariant is implemented by snapshotting the memory before the update and then
+asserting a predicate after the update which refers to the previous state and
+the current one. For suspended update invariants, the snapshot is taken
+\emph{before} the suspended function is called, and the assertion injected
+\emph{after} it returns, which might be earlier resp.~later states. An example
+of an update invariant which works well for suspension is e.g. a requirement for
+a monotonically increasing value, as in~%
+|invariant [suspendable] old(value()) <= value()|.
+
+Methodologically, the suspension mechanism should be used with care, because it
+may complicate the verification problem by propagating verification errors to
+more complex application contexts. The Move prover supports a further pragma to
+suspend invariant verification which draws a clear boundary to function systems
+with suspension. With |pragma suspend_invariants_in_body| a function can be
+marked to suspend invariants only in its body but ensure they hold at caller
+side. This is conceptually syntactic sugar for introducing a helper function:
+
+\begin{Move}
+  public fun f(P) { S }
+  spec f { pragma suspend_invariants_in_body; }
+  @\transform@
+  public fun f(P) { f'(P) }
+  fun f'(P) { S } spec f' { pragma suspend_invariants; }
+\end{Move}
+
+
+
+\SubSubSection{Invariant Consistency}
+
+\TODO{wrwg}{Describe solution to the below problem via induction}
+
+Notice that invariant injection can lead to inconsistencies. Consider the following
+code fragment:
+
+\begin{Move}
+  invariant [I] forall a: address: global<S>(a).value > 0;
+  @\transform@
+  spec assume global<S>(0).value == 0;  // context, e.g. from a requires
+  spec assume I;                        // injected
+\end{Move}
+
+\noindent We currently do not check whether an invariant is satisfiable
+before we assume it, but rather rely on a generic consistency checker for
+specifications.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "main"
+%%% End:

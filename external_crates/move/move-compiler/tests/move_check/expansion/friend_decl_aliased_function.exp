@@ -1,0 +1,6 @@
+error[E03002]: unbound module
+  ┌─ tests/move_check/expansion/friend_decl_aliased_function.move:8:12
+  │
+8 │     friend a;
+  │            ^ Unbound module alias 'a'
+

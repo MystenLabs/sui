@@ -1,0 +1,3 @@
+build -v --arch ethereum
+> touch sources/Foo.move
+build -v --arch ethereum

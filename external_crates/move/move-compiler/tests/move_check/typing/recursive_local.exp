@@ -1,0 +1,28 @@
+error[E04010]: cannot infer type
+  ┌─ tests/move_check/typing/recursive_local.move:4:13
+  │
+4 │         let x;
+  │             ^ Could not infer this type. Try adding an annotation
+
+error[E04008]: invalid type. recursive type found
+  ┌─ tests/move_check/typing/recursive_local.move:5:9
+  │
+4 │         let x;
+  │             - Unable to infer the type. Recursive type found.
+5 │         x = (x, 0);
+  │         ^ Invalid assignment to local 'x'
+
+error[E04005]: expected a single type
+  ┌─ tests/move_check/typing/recursive_local.move:5:9
+  │
+5 │         x = (x, 0);
+  │         ^   ------ Expected a single type, but found expression list type: '(_, u64)'
+  │         │    
+  │         Invalid type for local
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_check/typing/recursive_local.move:5:14
+  │
+5 │         x = (x, 0);
+  │              ^ Could not infer this type. Try adding an annotation
+

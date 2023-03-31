@@ -1,0 +1,2 @@
+Command `sandbox run sources/looper.move --gas-budget 100`:
+Execution failed because of an out of gas error in script at code offset 0

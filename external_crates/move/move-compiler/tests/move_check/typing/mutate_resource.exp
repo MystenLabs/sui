@@ -1,0 +1,31 @@
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/mutate_resource.move:5:10
+  │
+2 │     struct R {}
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+3 │ 
+4 │     fun t0(r: &mut R) {
+  │                    - The type '0x8675309::M::R' does not have the ability 'drop'
+5 │         *r = R {};
+  │          ^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/mutate_resource.move:9:10
+  │
+8 │     fun t1<T>(r: &mut T, x: T) {
+  │            -          - The type 'T' does not have the ability 'drop'
+  │            │           
+  │            To satisfy the constraint, the 'drop' ability would need to be added here
+9 │         *r = x;
+  │          ^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/mutate_resource.move:13:10
+   │
+12 │     fun t2<T: key>(r: &mut T, x: T) {
+   │            -               - The type 'T' does not have the ability 'drop'
+   │            │                
+   │            To satisfy the constraint, the 'drop' ability would need to be added here
+13 │         *r = x;
+   │          ^ Invalid mutation. Mutation requires the 'drop' ability as the old value is destroyed
+

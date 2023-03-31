@@ -1,0 +1,12 @@
+[book]
+title = "The Move Book"
+description = "Move book maintained by the Move core team."
+authors = ["The Move Contributors"]
+language = "en"
+multilingual = false
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/move-language/move"
+git-repository-icon = "fa-github"
+edit-url-template = "https://github.com/move-language/move/edit/main/language/documentation/book/{path}"

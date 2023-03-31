@@ -1,0 +1,12 @@
+//# publish
+module 0x42.Tester {
+    public no(): &u64 {
+        let x: u64;
+        let x_ref: &u64;
+    label b0:
+        x = 5;
+        x_ref = &x;
+        return move(x_ref); // cannot return references not rooted in params
+    }
+
+}
