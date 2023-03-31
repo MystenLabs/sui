@@ -1178,12 +1178,13 @@ pub mod pg_integration_test {
             start_test_cluster(Some(20000)).await;
         // Allow indexer to sync
         wait_until_next_checkpoint(&store).await;
-        let current_epoch = store.get_current_epoch().await.unwrap();
         let cp = store.get_latest_checkpoint_sequence_number().await.unwrap() as u64;
         let first_checkpoint = indexer_rpc_client
             .get_checkpoint(CheckpointId::SequenceNumber(cp.try_into().unwrap()))
             .await
             .unwrap();
+
+        let current_epoch = store.get_current_epoch().await.unwrap();
 
         assert_eq!(first_checkpoint.epoch, current_epoch.epoch);
         assert_eq!(u64::from(first_checkpoint.sequence_number), 0);

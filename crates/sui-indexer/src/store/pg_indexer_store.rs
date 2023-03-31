@@ -15,6 +15,7 @@ use diesel::upsert::excluded;
 use diesel::QueryDsl;
 use diesel::{ExpressionMethods, PgArrayExpressionMethods};
 use diesel::{OptionalExtension, QueryableByName};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use fastcrypto::hash::Digest;
 use fastcrypto::traits::ToFromBytes;
@@ -59,7 +60,9 @@ use crate::schema::{
     packages, recipients, recipients::dsl as recipients_dsl, system_states, transactions,
     transactions::dsl as transactions_dsl, validators,
 };
-use crate::store::diesel_marco::{read_only, transactional};
+use crate::store::diesel_marco::{
+    read_only, read_only_blocking, transactional, transactional_blocking,
+};
 use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
@@ -102,7 +105,7 @@ impl PgIndexerStore {
         )));
         PgIndexerStore {
             cp: cp.clone(),
-            partition_manager: PartitionManager::new(cp).await.unwrap(),
+            partition_manager: PartitionManager::new(blocking_cp).await.unwrap(),
             module_cache,
         }
     }
@@ -112,29 +115,27 @@ impl PgIndexerStore {
         object_id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<sui_types::object::Object, IndexerError> {
-        let pg_object = read_only!(&self.cp, |conn| Box::pin(async {
-            objects_history::dsl::objects_history
-                .select((
-                    objects_history::epoch,
-                    objects_history::checkpoint,
-                    objects_history::object_id,
-                    objects_history::version,
-                    objects_history::object_digest,
-                    objects_history::owner_type,
-                    objects_history::owner_address,
-                    objects_history::initial_shared_version,
-                    objects_history::previous_transaction,
-                    objects_history::object_type,
-                    objects_history::object_status,
-                    objects_history::has_public_transfer,
-                    objects_history::storage_rebate,
-                    objects_history::bcs,
-                ))
-                .filter(objects_history::object_id.eq(object_id.to_string()))
-                .filter(objects_history::version.eq(version.value() as i64))
-                .first::<Object>(conn)
-                .await
-        }))
+        let pg_object = read_only!(&self.cp, |conn| objects_history::dsl::objects_history
+            .select((
+                objects_history::epoch,
+                objects_history::checkpoint,
+                objects_history::object_id,
+                objects_history::version,
+                objects_history::object_digest,
+                objects_history::owner_type,
+                objects_history::owner_address,
+                objects_history::initial_shared_version,
+                objects_history::previous_transaction,
+                objects_history::object_type,
+                objects_history::object_status,
+                objects_history::has_public_transfer,
+                objects_history::storage_rebate,
+                objects_history::bcs,
+            ))
+            .filter(objects_history::object_id.eq(object_id.to_string()))
+            .filter(objects_history::version.eq(version.value() as i64))
+            .first::<Object>(conn)
+            .scope_boxed())
         .context("Failed reading Object from PostgresDB");
         match pg_object {
             Ok(pg_object) => {
@@ -150,7 +151,7 @@ impl PgIndexerStore {
         id: &ObjectID,
         version: &SequenceNumber,
     ) -> Result<Option<sui_types::object::Object>, IndexerError> {
-        let pg_object = read_only!(&self.cp, |conn| Box::pin(async {
+        let pg_object = read_only!(&self.cp, |conn| async {
             objects_history::dsl::objects_history
                 .select((
                     objects_history::epoch,
@@ -174,7 +175,8 @@ impl PgIndexerStore {
                 .first::<Object>(conn)
                 .await
                 .optional()
-        }))
+        }
+        .scope_boxed())
         .context("Failed reading Object before version from PostgresDB");
         match pg_object {
             Ok(Some(pg_object)) => {
@@ -192,14 +194,15 @@ impl IndexerStore for PgIndexerStore {
     type ModuleCache = SyncModuleCache<IndexerModuleResolver>;
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(async {
+        read_only!(&self.cp, |conn| async {
             checkpoints_dsl::checkpoints
                 .select(max(checkpoints::sequence_number))
                 .first::<Option<i64>>(conn)
                 .await
                 // -1 to differentiate between no checkpoints and the first checkpoint
                 .map(|o| o.unwrap_or(-1))
-        }))
+        }
+        .scope_boxed())
         .context("Failed reading latest checkpoint sequence number from PostgresDB")
     }
 
@@ -207,7 +210,7 @@ impl IndexerStore for PgIndexerStore {
         &self,
         id: CheckpointId,
     ) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(async {
+        read_only!(&self.cp, |conn| async {
             let cp: Checkpoint = match id {
                 CheckpointId::SequenceNumber(seq) => {
                     checkpoints_dsl::checkpoints
@@ -280,7 +283,8 @@ impl IndexerStore for PgIndexerStore {
                 None
             };
             cp.into_rpc(end_of_epoch_data)
-        }))
+        }
+        .scope_boxed())
         .context("Failed reading previous checkpoint from PostgresDB")
     }
 
@@ -288,22 +292,20 @@ impl IndexerStore for PgIndexerStore {
         &self,
         digest: CheckpointDigest,
     ) -> Result<CheckpointSequenceNumber, IndexerError> {
-        Ok(read_only!(&self.cp, |conn| Box::pin(
-            checkpoints_dsl::checkpoints
-                .select(checkpoints::sequence_number)
-                .filter(checkpoints::checkpoint_digest.eq(digest.base58_encode()))
-                .first::<i64>(conn)
-        ))
+        Ok(read_only!(&self.cp, |conn| checkpoints_dsl::checkpoints
+            .select(checkpoints::sequence_number)
+            .filter(checkpoints::checkpoint_digest.eq(digest.base58_encode()))
+            .first::<i64>(conn)
+            .scope_boxed())
         .context("Failed reading checkpoint seq number from PostgresDB")? as u64)
     }
 
     async fn get_event(&self, id: EventID) -> Result<Event, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(
-            events::table
-                .filter(events::dsl::transaction_digest.eq(id.tx_digest.base58_encode()))
-                .filter(events::dsl::event_sequence.eq(id.event_seq as i64))
-                .first::<Event>(conn)
-        ))
+        read_only!(&self.cp, |conn| events::table
+            .filter(events::dsl::transaction_digest.eq(id.tx_digest.base58_encode()))
+            .filter(events::dsl::event_sequence.eq(id.event_seq as i64))
+            .first::<Event>(conn)
+            .scope_boxed())
         .context("Failed reading event from PostgresDB")
     }
 
@@ -381,7 +383,7 @@ impl IndexerStore for PgIndexerStore {
             } else {
                 boxed_query = boxed_query.order(events::id.asc());
             }
-            Box::pin(boxed_query.load(conn))
+            boxed_query.load(conn).scope_boxed()
         })
         .context("Failed reading events from PostgresDB")?;
 
@@ -403,11 +405,10 @@ impl IndexerStore for PgIndexerStore {
 
     async fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
         let checkpoint: Checkpoint = read_only!(&self.cp, |conn| {
-            Box::pin(
-                checkpoints_dsl::checkpoints
-                    .order(checkpoints_dsl::network_total_transactions.desc())
-                    .first::<Checkpoint>(conn),
-            )
+            checkpoints_dsl::checkpoints
+                .order(checkpoints_dsl::network_total_transactions.desc())
+                .first::<Checkpoint>(conn)
+                .scope_boxed()
         })
         .context("Failed reading total transaction number")?;
         Ok(checkpoint.network_total_transactions)
@@ -418,11 +419,10 @@ impl IndexerStore for PgIndexerStore {
         tx_digest: &str,
     ) -> Result<Transaction, IndexerError> {
         read_only!(&self.cp, |conn| {
-            Box::pin(
-                transactions_dsl::transactions
-                    .filter(transactions_dsl::transaction_digest.eq(tx_digest))
-                    .first::<Transaction>(conn),
-            )
+            transactions_dsl::transactions
+                .filter(transactions_dsl::transaction_digest.eq(tx_digest))
+                .first::<Transaction>(conn)
+                .scope_boxed()
         })
         .context(&format!(
             "Failed reading transaction with digest {tx_digest}"
@@ -521,11 +521,10 @@ impl IndexerStore for PgIndexerStore {
         tx_digests: &[String],
     ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
-            Box::pin(
-                transactions_dsl::transactions
-                    .filter(transactions_dsl::transaction_digest.eq_any(tx_digests))
-                    .load::<Transaction>(conn),
-            )
+            transactions_dsl::transactions
+                .filter(transactions_dsl::transaction_digest.eq_any(tx_digests))
+                .load::<Transaction>(conn)
+                .scope_boxed()
         })
         .context(&format!(
             "Failed reading transactions with digests {tx_digests:?}"
@@ -537,7 +536,7 @@ impl IndexerStore for PgIndexerStore {
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(async {
+        read_only!(&self.cp, |conn| async {
             if let Some(digest) = &tx_digest {
                 let mut boxed_query = transactions_dsl::transactions
                     .filter(transactions_dsl::transaction_digest.eq(digest))
@@ -553,7 +552,8 @@ impl IndexerStore for PgIndexerStore {
                 None
             }
             .transpose()
-        }))
+        }
+        .scope_boxed())
         .context(&format!(
             "Failed reading transaction sequence with digest {tx_digest:?}"
         ))
@@ -564,7 +564,7 @@ impl IndexerStore for PgIndexerStore {
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError> {
-        let object = read_only!(&self.cp, |conn| Box::pin(async {
+        let object = read_only!(&self.cp, |conn| async {
             if let Some(version) = version {
                 objects_history::dsl::objects_history
                     .select((
@@ -595,7 +595,8 @@ impl IndexerStore for PgIndexerStore {
                     .await
                     .optional()
             }
-        }))
+        }
+        .scope_boxed())
         .context(&format!("Failed reading object with id {object_id}"))?;
 
         match object {
@@ -611,7 +612,7 @@ impl IndexerStore for PgIndexerStore {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError> {
-        let objects = read_only!(&self.cp, |conn| Box::pin(async {
+        let objects = read_only!(&self.cp, |conn| {
             let columns = vec![
                 "epoch",
                 "checkpoint",
@@ -631,8 +632,8 @@ impl IndexerStore for PgIndexerStore {
             diesel::sql_query(filter.to_sql(cursor, limit, columns))
                 .bind::<BigInt, _>(at_checkpoint as i64)
                 .get_results::<Object>(conn)
-                .await
-        }))?;
+                .scope_boxed()
+        })?;
 
         objects
             .into_iter()
@@ -645,7 +646,7 @@ impl IndexerStore for PgIndexerStore {
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(async {
+        read_only!(&self.cp, |conn| async {
             if let Some(digest) = &tx_digest {
                 let mut boxed_query = move_calls_dsl::move_calls
                     .filter(move_calls_dsl::transaction_digest.eq(digest))
@@ -661,7 +662,8 @@ impl IndexerStore for PgIndexerStore {
                 None
             }
             .transpose()
-        }))
+        }
+        .scope_boxed())
         .context(&format!(
             "Failed reading move call sequence with digest {tx_digest:?}"
         ))
@@ -672,7 +674,7 @@ impl IndexerStore for PgIndexerStore {
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(async {
+        read_only!(&self.cp, |conn| async {
             if let Some(digest) = &tx_digest {
                 let mut boxed_query = input_objects_dsl::input_objects
                     .filter(input_objects_dsl::transaction_digest.eq(digest))
@@ -688,7 +690,8 @@ impl IndexerStore for PgIndexerStore {
                 None
             }
             .transpose()
-        }))
+        }
+        .scope_boxed())
         .context(&format!(
             "Failed reading input object sequence with digest {tx_digest:?}"
         ))
@@ -699,7 +702,7 @@ impl IndexerStore for PgIndexerStore {
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError> {
-        read_only!(&self.cp, |conn| Box::pin(async {
+        read_only!(&self.cp, |conn| async {
             if let Some(digest) = &tx_digest {
                 let mut boxed_query = recipients_dsl::recipients
                     .filter(recipients_dsl::transaction_digest.eq(digest))
@@ -715,7 +718,8 @@ impl IndexerStore for PgIndexerStore {
                 None
             }
             .transpose()
-        }))
+        }
+        .scope_boxed())
         .context(&format!(
             "Failed reading recipients sequence with digest {tx_digest:?}"
         ))
@@ -738,15 +742,15 @@ impl IndexerStore for PgIndexerStore {
             }
 
             if is_descending {
-                Box::pin(boxed_query
+                boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             } else {
-              Box::pin(  boxed_query
+                boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             }
         }).context(&format!("Failed reading all transaction digests with start_sequence {start_sequence:?} and limit {limit}"))
     }
@@ -770,15 +774,15 @@ impl IndexerStore for PgIndexerStore {
                 }
             }
             if is_descending {
-                Box::pin(boxed_query
+                boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             } else {
-                Box::pin(boxed_query
+                boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             }
         }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
@@ -803,15 +807,15 @@ impl IndexerStore for PgIndexerStore {
             }
 
             if is_descending {
-                Box::pin(boxed_query
+                boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             } else {
-               Box::pin( boxed_query
+               boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             }
         }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
     }
@@ -837,15 +841,15 @@ impl IndexerStore for PgIndexerStore {
                 }
             }
             if is_descending {
-                Box::pin(boxed_query
+               boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit(limit as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             } else {
-              Box::pin(  boxed_query
+                boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit(limit as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             }
         }).context(&format!("Failed reading transaction digests by mutated object id {object_id} with start_sequence {start_sequence:?} and limit {limit}"))
     }
@@ -870,15 +874,15 @@ impl IndexerStore for PgIndexerStore {
             }
 
             if is_descending {
-                Box::pin(boxed_query
+                boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit(limit as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             } else {
-               Box::pin( boxed_query
+               boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit(limit as i64)
-                    .load::<Transaction>(conn))
+                    .load::<Transaction>(conn).scope_boxed()
             }
         }).context(&format!("Failed reading transaction digests by sender address {sender_address} with start_sequence {start_sequence:?} and limit {limit}"))
     }
@@ -917,7 +921,7 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| Box::pin(diesel::sql_query(sql_query).load(conn)))
+        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn).scope_boxed())
                 .context(&format!("Failed reading transaction digests by input object ID {object_id} and version {version:?} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
@@ -965,7 +969,7 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| Box::pin(diesel::sql_query(sql_query).load(conn)))
+        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn).scope_boxed())
                 .context(&format!(
                         "Failed reading transaction digests with package_name {} module_name {:?} and function_name {:?} and start_sequence {:?} and limit {}",
                         package_name, module_name, function_name, start_sequence, limit))?
@@ -1008,7 +1012,7 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| { Box::pin(diesel::sql_query(sql_query).load(conn)) })
+        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn).scope_boxed())
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
@@ -1022,10 +1026,9 @@ impl IndexerStore for PgIndexerStore {
 
     async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
         let metrics = read_only!(&self.cp, |conn| {
-            Box::pin(
-                diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
-                    .get_results::<DBMoveCallMetrics>(conn),
-            )
+            diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
+                .get_results::<DBMoveCallMetrics>(conn)
+                .scope_boxed()
         })?;
 
         let mut d3 = vec![];
@@ -1057,7 +1060,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     async fn persist_fast_path(&self, tx: Transaction) -> Result<usize, IndexerError> {
-        transactional!(&self.cp, |conn| Box::pin(async {
+        transactional!(&self.cp, |conn| async {
             diesel::insert_into(transactions::table)
                 .values(vec![tx])
                 .on_conflict_do_nothing()
@@ -1065,7 +1068,8 @@ impl IndexerStore for PgIndexerStore {
                 .await
                 .map_err(IndexerError::from)
                 .context("Failed writing transactions to PostgresDB")
-        }))
+        }
+        .scope_boxed())
     }
 
     async fn persist_checkpoint(
@@ -1084,7 +1088,7 @@ impl IndexerStore for PgIndexerStore {
             recipients,
         } = data;
 
-        transactional!(&self.cp, |conn| Box::pin(async {
+        transactional!(&self.cp, |conn| async {
             // Commit indexed transactions
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
@@ -1242,7 +1246,8 @@ WHERE e1.epoch = e2.epoch
                 .await
                 .map_err(IndexerError::from)
                 .context("Failed writing checkpoint to PostgresDB")
-        }))
+        }
+        .scope_boxed())
     }
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError> {
@@ -1255,7 +1260,8 @@ WHERE e1.epoch = e2.epoch
         self.partition_manager
             .advance_epoch(&data.new_epoch, last_epoch_cp_id)
             .await?;
-        transactional!(&self.cp, |conn| Box::pin(async {
+
+        transactional!(&self.cp, |conn| async {
             if let Some(last_epoch) = &data.last_epoch {
                 diesel::insert_into(epochs::table)
                     .values(last_epoch)
@@ -1304,7 +1310,8 @@ WHERE e1.epoch = e2.epoch
                 .on_conflict_do_nothing()
                 .execute(conn)
                 .await
-        }))?;
+        }
+        .scope_boxed())?;
         Ok(())
     }
 
@@ -1333,9 +1340,10 @@ WHERE e1.epoch = e2.epoch
                 .order_by(epochs::epoch.asc());
         }
 
-        let epoch_info: Vec<DBEpochInfo> = read_only!(&self.cp, |conn| Box::pin(
-            query.limit(limit as i64).load(conn)
-        ))
+        let epoch_info: Vec<DBEpochInfo> = read_only!(&self.cp, |conn| query
+            .limit(limit as i64)
+            .load(conn)
+            .scope_boxed())
         .map_err(|e| {
             IndexerError::PostgresReadError(format!(
                 "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
@@ -1343,19 +1351,17 @@ WHERE e1.epoch = e2.epoch
             ))
         })?;
 
-        let validators: Vec<DBValidatorSummary> = read_only!(&self.cp, |conn| {
-            Box::pin(
-                validators::dsl::validators
-                    .filter(validators::epoch.gt(id))
-                    .load(conn),
-            )
-        })
-        .map_err(|e| {
-            IndexerError::PostgresReadError(format!(
+        let validators: Vec<DBValidatorSummary> =
+            read_only!(&self.cp, |conn| validators::dsl::validators
+                .filter(validators::epoch.gt(id))
+                .load(conn)
+                .scope_boxed())
+            .map_err(|e| {
+                IndexerError::PostgresReadError(format!(
                 "Failed reading latest checkpoint sequence number in PostgresDB with error {:?}",
                 e
             ))
-        })?;
+            })?;
 
         let mut validators =
             validators
@@ -1375,20 +1381,22 @@ WHERE e1.epoch = e2.epoch
     }
 
     async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError> {
-        let epoch_info: DBEpochInfo = read_only!(&self.cp, |conn| Box::pin(async {
+        let epoch_info: DBEpochInfo = read_only!(&self.cp, |conn| async {
             epochs::dsl::epochs
                 .order_by(epochs::epoch.desc())
                 .first::<DBEpochInfo>(conn)
                 .await
-        }))
+        }
+        .scope_boxed())
         .context("Failed reading latest epoch")?;
 
-        let validators: Vec<DBValidatorSummary> = read_only!(&self.cp, |conn| Box::pin(async {
+        let validators: Vec<DBValidatorSummary> = read_only!(&self.cp, |conn| async {
             validators::dsl::validators
                 .filter(validators::epoch.eq(epoch_info.epoch))
                 .load(conn)
                 .await
-        }))
+        }
+        .scope_boxed())
         .context("Failed reading latest validator summary")?;
 
         epoch_info.to_epoch_info(validators)
@@ -1397,11 +1405,11 @@ WHERE e1.epoch = e2.epoch
 
 #[derive(Clone)]
 struct PartitionManager {
-    cp: AsyncPgConnectionPool,
+    cp: PgConnectionPool,
 }
 
 impl PartitionManager {
-    async fn new(cp: AsyncPgConnectionPool) -> Result<Self, IndexerError> {
+    async fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
         // Find all tables with partition
         let manager = Self { cp };
         let tables = manager.get_table_partitions().await?;
@@ -1424,35 +1432,7 @@ impl PartitionManager {
 
         let tables = self.get_table_partitions().await?;
 
-        /* let mut pg_pool_conn = crate::get_async_pg_pool_connection(&self.cp).await?;
-                let table_updated = pg_pool_conn
-                    .build_transaction()
-                    .serializable()
-                    .read_write()
-                    .run(|conn| Box::pin(async {
-                        let mut updated_table = vec![];
-                        for (table, last_partition) in &tables {
-                            if last_partition < &(next_epoch_id as u64) {
-                                let detach_partition = format!(
-                                    "ALTER TABLE {table} DETACH PARTITION {table}_partition_{last_epoch_id};"
-                                );
-                                let attach_partition_with_new_range = format!("ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch_id} FOR VALUES FROM ('{last_epoch_start_cp}') TO ('{next_epoch_start_cp}');");
-                                let new_partition = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);");
-                                diesel::sql_query(detach_partition).execute(conn).await?;
-                                diesel::sql_query(attach_partition_with_new_range)
-                                    .execute(conn)
-                                    .await?;
-                                diesel::sql_query(new_partition).execute(conn).await?;
-                                updated_table.push(table.clone());
-                            }
-                        }
-                        Ok::<_, diesel::result::Error>(updated_table)
-
-                    }))
-                    .await
-                    .map_err(|e| IndexerError::PostgresWriteError(e.to_string()))?;
-        */
-        let table_updated = transactional!(&self.cp, |conn| Box::pin(async {
+        let table_updated = transactional_blocking!(&self.cp, |conn| {
             let mut updated_table = vec![];
             for (table, last_partition) in &tables {
                 if last_partition < &(next_epoch_id as u64) {
@@ -1461,16 +1441,17 @@ impl PartitionManager {
                     );
                     let attach_partition_with_new_range = format!("ALTER TABLE {table} ATTACH PARTITION {table}_partition_{last_epoch_id} FOR VALUES FROM ('{last_epoch_start_cp}') TO ('{next_epoch_start_cp}');");
                     let new_partition = format!("CREATE TABLE {table}_partition_{next_epoch_id} PARTITION OF {table} FOR VALUES FROM ({next_epoch_start_cp}) TO (MAXVALUE);");
-                    diesel::sql_query(detach_partition).execute(conn).await?;
-                    diesel::sql_query(attach_partition_with_new_range)
-                        .execute(conn)
-                        .await?;
-                    diesel::sql_query(new_partition).execute(conn).await?;
+                    diesel::RunQueryDsl::execute(diesel::sql_query(detach_partition), conn)?;
+                    diesel::RunQueryDsl::execute(
+                        diesel::sql_query(attach_partition_with_new_range),
+                        conn,
+                    )?;
+                    diesel::RunQueryDsl::execute(diesel::sql_query(new_partition), conn)?;
                     updated_table.push(table.clone());
                 }
             }
             Ok::<_, diesel::result::Error>(updated_table)
-        }))?;
+        })?;
         info! {"Created epoch partition {next_epoch_id} for {table_updated:?}"};
         Ok(())
     }
@@ -1484,16 +1465,19 @@ impl PartitionManager {
             last_partition: String,
         }
 
-        Ok(read_only!(&self.cp, |conn| Box::pin(
-            diesel::sql_query(GET_PARTITION_SQL).load(conn)
-        ))?
-        .into_iter()
-        .map(|table: PartitionedTable| {
-            u64::from_str(&table.last_partition)
-                .map(|last_partition| (table.table_name, last_partition))
-                .map_err(|e| anyhow!(e))
-        })
-        .collect::<Result<_, _>>()?)
+        Ok(
+            read_only_blocking!(&self.cp, |conn| diesel::RunQueryDsl::load(
+                diesel::sql_query(GET_PARTITION_SQL),
+                conn
+            ))?
+            .into_iter()
+            .map(|table: PartitionedTable| {
+                u64::from_str(&table.last_partition)
+                    .map(|last_partition| (table.table_name, last_partition))
+                    .map_err(|e| anyhow!(e))
+            })
+            .collect::<Result<_, _>>()?,
+        )
     }
 }
 
@@ -1501,11 +1485,11 @@ impl PartitionManager {
 async fn get_network_metrics_cached(
     cp: &AsyncPgConnectionPool,
 ) -> Result<NetworkMetrics, IndexerError> {
-    let metrics = read_only!(cp, |conn| Box::pin(async {
-        diesel::sql_query("SELECT * FROM network_metrics;")
-            .get_result::<DBNetworkMetrics>(conn)
-            .await
-    }))?;
+    let metrics = read_only!(cp, |conn| diesel::sql_query(
+        "SELECT * FROM network_metrics;"
+    )
+    .get_result::<DBNetworkMetrics>(conn)
+    .scope_boxed())?;
     Ok(metrics.into())
 }
 

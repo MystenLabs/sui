@@ -113,6 +113,16 @@ where
             let (indexed_checkpoint, indexed_epoch) = self.index_checkpoint(&checkpoint)?;
             index_guard.stop_and_record();
 
+            // for the first epoch, we need to store the epoch data first
+            if let Some(store) = indexed_epoch.as_ref() {
+                if store.last_epoch.is_none() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    self.state.persist_epoch(store).await?;
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                }
+            }
+
             // Write checkpoint to DB
             let tx_count = indexed_checkpoint.transactions.len();
             let object_count = indexed_checkpoint.objects_changes.len();
@@ -135,10 +145,12 @@ where
 
             // Write epoch to DB if needed
             if let Some(indexed_epoch) = indexed_epoch {
-                let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                self.state.persist_epoch(&indexed_epoch).await?;
-                epoch_db_guard.stop_and_record();
-                self.metrics.total_epoch_committed.inc();
+                if indexed_epoch.last_epoch.is_some() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    self.state.persist_epoch(&indexed_epoch).await?;
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                }
             }
 
             // Process websocket subscription

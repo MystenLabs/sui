@@ -45,7 +45,20 @@ mod diesel_marco {
                 .map_err(|e| IndexerError::PostgresWriteError(e.to_string()))
         }};
     }
+
+    macro_rules! transactional_blocking {
+        ($pool:expr, $query:expr) => {{
+            let mut pg_pool_conn = crate::get_pg_pool_connection($pool)?;
+            pg_pool_conn
+                .build_transaction()
+                .serializable()
+                .read_write()
+                .run($query)
+                .map_err(|e| IndexerError::PostgresWriteError(e.to_string()))
+        }};
+    }
     pub(crate) use read_only;
     pub(crate) use read_only_blocking;
     pub(crate) use transactional;
+    pub(crate) use transactional_blocking;
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![recursion_limit = "256"]
 
+use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -198,13 +199,22 @@ pub async fn new_pg_connection_pool(
     })?;
 
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
-    // default connection pool max size is 10
-    let async_pool = Pool::builder().build(manager).await.map_err(|e| {
-        IndexerError::PgConnectionPoolInitError(format!(
-            "Failed to initialize connection pool with error: {:?}",
-            e
-        ))
-    })?;
+
+    let connection_size = env::var("DB_CONNECTION_SIZE")
+        .unwrap_or_else(|_| "100".to_string())
+        .parse::<u32>()
+        .unwrap_or(100);
+    info!("Creating connection pool with size: {connection_size}");
+    let async_pool = Pool::builder()
+        .max_size(connection_size)
+        .build(manager)
+        .await
+        .map_err(|e| {
+            IndexerError::PgConnectionPoolInitError(format!(
+                "Failed to initialize connection pool with error: {:?}",
+                e
+            ))
+        })?;
 
     Ok((blocking_cp, async_pool))
 }
