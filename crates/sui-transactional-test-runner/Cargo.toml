@@ -21,6 +21,7 @@ move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-stdlib.workspace = true
+move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
 move-vm-runtime.workspace = true
 
