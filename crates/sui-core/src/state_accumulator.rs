@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use itertools::Itertools;
 use mysten_metrics::monitored_scope;
 use serde::Serialize;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::committee::EpochId;
-use sui_types::digests::ObjectDigest;
+use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::storage::ObjectKey;
 use tracing::debug;
 use typed_store::Map;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
@@ -90,7 +91,6 @@ impl StateAccumulator {
                         .map(|(oref, _)| oref.2)
                         .chain(fx.unwrapped().iter().map(|(oref, _)| oref.2))
                         .chain(fx.mutated().iter().map(|(oref, _)| oref.2))
-                        .collect::<Vec<ObjectDigest>>()
                 })
                 .collect::<Vec<ObjectDigest>>(),
         );
@@ -118,19 +118,22 @@ impl StateAccumulator {
             .flat_map(|fx| {
                 fx.unwrapped()
                     .iter()
-                    .map(|(oref, _owner)| (oref.0, oref.1))
-                    .collect::<Vec<(ObjectID, SequenceNumber)>>()
+                    .map(|(oref, _owner)| (*fx.transaction_digest(), oref.0, oref.1))
             })
             .chain(effects.iter().flat_map(|fx| {
                 fx.unwrapped_then_deleted()
                     .iter()
-                    .map(|oref| (oref.0, oref.1))
-                    .collect::<Vec<(ObjectID, SequenceNumber)>>()
+                    .map(|oref| (*fx.transaction_digest(), oref.0, oref.1))
             }))
-            .collect::<Vec<(ObjectID, SequenceNumber)>>();
+            .collect::<Vec<(TransactionDigest, ObjectID, SequenceNumber)>>();
 
-        let unwrapped_ids: HashSet<ObjectID> =
-            all_unwrapped.iter().map(|(id, _)| id).cloned().collect();
+        let unwrapped_ids: HashMap<TransactionDigest, HashSet<ObjectID>> = all_unwrapped
+            .iter()
+            .map(|(digest, id, _)| (*digest, *id))
+            .into_group_map()
+            .iter()
+            .map(|(digest, ids)| (*digest, HashSet::from_iter(ids.iter().cloned())))
+            .collect();
 
         // Collect keys from modified_at_versions to remove from the accumulator.
         // Filter all unwrapped objects (from unwrapped or unwrapped_then_deleted effects)
@@ -138,13 +141,20 @@ impl StateAccumulator {
         // separately.
         let modified_at_version_keys: Vec<ObjectKey> = effects
             .iter()
-            .flat_map(|fx| fx.modified_at_versions())
-            .filter_map(|(id, seq_num)| {
-                if unwrapped_ids.contains(id) {
-                    None
-                } else {
-                    Some(ObjectKey(*id, *seq_num))
+            .flat_map(|fx| {
+                fx.modified_at_versions()
+                    .iter()
+                    .map(|(id, seq_num)| (*fx.transaction_digest(), *id, *seq_num))
+            })
+            .filter_map(|(tx_digest, id, seq_num)| {
+                // unwrapped tx
+                if let Some(ids) = unwrapped_ids.get(&tx_digest) {
+                    // object unwrapped in this tx. We handle it later
+                    if ids.contains(&id) {
+                        return None;
+                    }
                 }
+                Some(ObjectKey(id, seq_num))
             })
             .collect();
 
@@ -171,7 +181,7 @@ impl StateAccumulator {
         // we don't expect to find it in the table.
         let wrapped_objects_to_remove: Vec<WrappedObject> = all_unwrapped
             .iter()
-            .filter_map(|(id, seq_num)| {
+            .filter_map(|(_tx_digest, id, seq_num)| {
                 let objref = self
                     .authority_store
                     .get_object_ref_prior_to_key(id, *seq_num)
