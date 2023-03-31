@@ -4,7 +4,7 @@
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
-use fastcrypto::encoding::{Base64, Encoding, Hex};
+use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
@@ -1085,20 +1085,6 @@ impl Builder {
             None
         };
 
-        // Load Objects
-        let mut objects = BTreeMap::new();
-        for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
-            let entry = entry?;
-            if entry.file_name().starts_with('.') {
-                continue;
-            }
-
-            let path = entry.path();
-            let object_bytes = fs::read(path)?;
-            let object: Object = serde_yaml::from_slice(&object_bytes)?;
-            objects.insert(object.id(), object);
-        }
-
         // Load validator infos
         let mut committee = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
@@ -1133,7 +1119,7 @@ impl Builder {
         let mut builder = Self {
             parameters,
             token_distribution_schedule,
-            objects,
+            objects: Default::default(),
             validators: committee,
             signatures,
             built_genesis: None, // Leave this as none, will build and compare below
@@ -1180,16 +1166,6 @@ impl Builder {
             token_distribution_schedule.to_csv(fs::File::create(
                 path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE),
             )?)?;
-        }
-
-        // Write Objects
-        let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
-        fs::create_dir_all(&object_dir)?;
-
-        for (_id, object) in self.objects {
-            let object_bytes = serde_yaml::to_vec(&object)?;
-            let hex_digest = Hex::encode(object.id());
-            fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
         // Write Signatures
@@ -1661,7 +1637,6 @@ pub fn generate_genesis_system_object(
     Ok(())
 }
 
-const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
 const GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE: &str = "token-distribution-schedule";
