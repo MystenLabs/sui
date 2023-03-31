@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
+use sui_protocol_config_macros::ProtocolConfigGetters;
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
@@ -15,7 +16,8 @@ const MAX_PROTOCOL_VERSION: u64 = 2;
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
-// Version 2: Adds `max_size_written_objects`, `max_size_written_objects_system_tx`
+// Version 2: Framework changes, including advancing epoch_start_time in safemode.
+// Version 3: gas model v2, including all sui conservation fixes, limits on `max_size_written_objects`, `max_size_written_objects_system_tx`
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -138,7 +140,7 @@ struct FeatureFlags {
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
 #[skip_serializing_none]
-#[derive(Clone, Serialize, Debug)]
+#[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
@@ -1492,6 +1494,20 @@ impl ProtocolConfig {
                 // new_constant: None,
             },
 
+            2 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
+                cfg
+            }
+            3 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.gas_model_v2 = true;
+                max_size_written_objects: Some(5 * 1000 * 1000);
+                max_size_written_objects_system_tx: Some(50 * 1000 * 1000);
+                cfg
+            }
+
+
             // Use this template when making changes:
             //
             // NEW_VERSION => Self {
@@ -1508,11 +1524,6 @@ impl ProtocolConfig {
             //     // changes.
             //     ..Self::get_for_version_impl(version - 1)
             // },
-            2 => Self {
-                max_size_written_objects: Some(5 * 1000 * 1000),
-                max_size_written_objects_system_tx: Some(50 * 1000 * 1000),
-                ..Self::get_for_version_impl(version - 1)
-            },
             _ => panic!("unsupported version {:?}", version),
         }
     }
@@ -1627,6 +1638,23 @@ macro_rules! check_limit_by_meter {
 mod test {
     use super::*;
     use insta::assert_yaml_snapshot;
+
+    #[test]
+    fn version_gating_test() {
+        // This config is present in v1
+        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
+        assert_eq!(config.get_for_current_version_max_function_definitions(), Some(1000));
+        assert_eq!(ProtocolConfig::get_for_version_max_function_definitions(ProtocolVersion::new(1)), Some(1000));
+
+        
+        // This config is not present in v1 or v2 
+        assert_eq!(config.get_for_current_version_get_for_current_version_max_size_written_objects(), None);
+        assert_eq!(ProtocolConfig::get_for_version_get_for_current_version_max_size_written_objects(ProtocolVersion::new(1)), None);
+
+
+
+
+    }
 
     #[test]
     fn snaphost_tests() {
