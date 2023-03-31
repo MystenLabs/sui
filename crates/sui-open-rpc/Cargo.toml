@@ -25,7 +25,7 @@ sui-core = { path = "../sui-core"}
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-json = { path = "../sui-json" }
-sui-types = { path = "../sui-types" }
+sui-types = { path = "../sui-types", features = ["test-utils"] }
 rand = "0.8.5"
 
 move-core-types.workspace = true
