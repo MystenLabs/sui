@@ -121,9 +121,6 @@ export async function publishPackage(
     ),
   );
   const tx = new TransactionBlock();
-  // TODO: Publish dry runs fail currently, so we need to set a gas budget:
-  tx.setGasBudget(10000);
-
   const cap = tx.publish(
     compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
     compiledModulesAndDeps.dependencies.map((addr: string) =>

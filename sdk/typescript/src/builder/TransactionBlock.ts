@@ -624,13 +624,23 @@ export class TransactionBlock {
           provider,
         );
       }
-
+      console.log('before gas budget check.');
       if (!this.blockData.gasConfig.budget) {
+        console.log('before_dry_run');
         const dryRunResult = await expectProvider(
           provider,
         ).dryRunTransactionBlock({
           transactionBlock: this.#blockData.build({
-            overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
+            overrides: {
+              gasConfig: {
+                budget: String(MAX_GAS),
+                // use user provided payment.
+                payment: [],
+                // payment: this.#blockData.gasConfig.payment
+                //   ? this.#blockData.gasConfig.payment
+                //   : [],
+              },
+            },
           }),
         });
         console.log('dry run:', dryRunResult);
@@ -640,7 +650,6 @@ export class TransactionBlock {
             { cause: dryRunResult },
           );
         }
-
         const coinOverhead =
           GAS_OVERHEAD_PER_COIN *
           BigInt(this.blockData.gasConfig.payment?.length || 0n) *
