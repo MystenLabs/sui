@@ -450,7 +450,11 @@ impl Orchestrator {
                         self.ssh_manager.kill(action.kill.iter(), "node").await?;
                     }
                     if !action.boot.is_empty() {
-                        self.boot_nodes(action.boot).await?;
+                        self.boot_nodes(action.boot.clone()).await?;
+                    }
+                    if !action.kill.is_empty() || !action.boot.is_empty() {
+                        display::newline();
+                        display::config("Update testbed", action);
                     }
                 }
             }

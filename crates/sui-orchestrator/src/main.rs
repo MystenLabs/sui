@@ -304,7 +304,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 },
             };
 
-            let fault_type = if !crash_recovery {
+            let fault_type = if !crash_recovery || faults == 0 {
                 FaultsType::Permanent { faults }
             } else {
                 FaultsType::CrashRecovery { max_faults: faults }

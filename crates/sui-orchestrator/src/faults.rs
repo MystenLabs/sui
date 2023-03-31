@@ -33,17 +33,14 @@ impl Debug for FaultsType {
 impl Display for FaultsType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Permanent { faults } => write!(f, "{faults} permanently crashed"),
+            Self::Permanent { faults } => {
+                if *faults == 0 {
+                    write!(f, "No faults")
+                } else {
+                    write!(f, "{faults} permanently crashed")
+                }
+            }
             Self::CrashRecovery { max_faults } => write!(f, "up to {max_faults} crash-recovery"),
-        }
-    }
-}
-
-impl FaultsType {
-    pub fn max_faults(&self) -> usize {
-        match self {
-            Self::Permanent { faults } => *faults,
-            Self::CrashRecovery { max_faults } => *max_faults,
         }
     }
 }
@@ -92,17 +89,14 @@ impl CrashRecoveryAction {
 pub struct CrashRecoverySchedule {
     /// The number of faulty nodes and the crash-recovery pattern to follow.
     faults_type: FaultsType,
-    /// The instances that can be crashed.
+    /// The available instances.
     instances: Vec<Instance>,
     /// The current number of dead nodes.
     dead: usize,
 }
 
 impl CrashRecoverySchedule {
-    pub fn new(faults_type: FaultsType, mut instances: Vec<Instance>) -> Self {
-        let n = faults_type.max_faults();
-        instances.truncate(n);
-
+    pub fn new(faults_type: FaultsType, instances: Vec<Instance>) -> Self {
         Self {
             faults_type,
             instances,
