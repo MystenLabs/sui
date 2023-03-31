@@ -196,6 +196,15 @@ module sui::kiosk {
         self.owner = sender(ctx);
     }
 
+    /// Update the `owner` field with a custom address. Can be used for
+    /// implementing a custom logic that relies on the `Kiosk` owner.
+    public fun set_owner_custom(
+        self: &mut Kiosk, cap: &KioskOwnerCap, owner: address
+    ) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        self.owner = owner
+    }
+
     // === Place, Lock and Take from the Kiosk ===
 
     /// Place any object into a Kiosk.
