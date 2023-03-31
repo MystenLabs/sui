@@ -17,7 +17,8 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 //
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
-// Version 3: gas model v2, including all sui conservation fixes, limits on `max_size_written_objects`, `max_size_written_objects_system_tx`
+// Version 3: gas model v2, including all sui conservation fixes,
+//             limits on `max_size_written_objects`, `max_size_written_objects_system_tx`
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -144,9 +145,11 @@ struct FeatureFlags {
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
-/// - Alternatively, by deriving `ProtocolConfigGetters`, every field of name `config_field` with type `Option<config_type>` will be automatically have two getters derived
-///     `get_for_current_version_config_field(&self) -> Option<config_type>` and `et_for_version_config_field(version: ProtocolVersion) -> `Option<config_type>`.
-///     This can be used to get the value of a field at the specified version if it exists, or `None` otherwise.
+/// - Alternatively, by deriving `ProtocolConfigGetters`, every field of name `config_field`
+///     with type `Option<config_type>` will automatically have two getters derived
+///     `get_for_current_version_config_field(&self) -> Option<config_type>` and
+///     `get_for_version_config_field(version: ProtocolVersion) -> `Option<config_type>`.
+///     This is used to get a field value at a specified version if it exists, or `None` otherwise.
 ///     We can use this to access fields only if they exist, without crashing.
 #[skip_serializing_none]
 #[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
@@ -163,6 +166,11 @@ pub struct ProtocolConfig {
 
     /// Maximum number of input objects to a transaction. Enforced by the transaction input checker
     max_input_objects: Option<u64>,
+
+    /// Max size of objects a transaction can write to disk after completion. Enforce by the Sui adapter.
+    max_size_written_objects: Option<u64>,
+    /// Max size of objects a system transaction can write to disk after completion. Enforce by the Sui adapter.
+    max_size_written_objects_system_tx: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
     max_serialized_tx_effects_size_bytes: Option<u64>,
@@ -534,13 +542,6 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
-
-    // ==== Configs introduced in V2 ====
-
-    // This is the max size of objects a transaction can write to disk after completion
-    max_size_written_objects: Option<u64>,
-    // This is the max size of objects a system transaction can write to disk after completion
-    max_size_written_objects_system_tx: Option<u64>,
 }
 
 const CONSTANT_ERR_MSG: &str = "protocol constant not present in current protocol version";

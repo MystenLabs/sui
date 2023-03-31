@@ -231,7 +231,8 @@ fn execute_transaction<
         if execution_result.is_ok() {
 
             // This limit is only present in Version 3 and up, so use this to gate it
-            if let (Some(normal_lim), Some(system_lim)) = (protocol_config.get_for_current_version_max_size_written_objects(), protocol_config
+            if let (Some(normal_lim), Some(system_lim)) =
+                (protocol_config.get_for_current_version_max_size_written_objects(), protocol_config
             .get_for_current_version_max_size_written_objects_system_tx()) {
                 let written_objects_size = temporary_store.written_objects_size();
 
