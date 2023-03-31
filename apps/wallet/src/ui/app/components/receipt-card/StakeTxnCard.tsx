@@ -31,8 +31,8 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     );
 
     const apy =
-        rollingAverageApys?.[validatorAddress] &&
-        typeof rollingAverageApys?.[validatorAddress] === 'number'
+        rollingAverageApys?.[validatorAddress] ||
+        rollingAverageApys?.[validatorAddress] === 0
             ? rollingAverageApys?.[validatorAddress]
             : null;
 
