@@ -640,13 +640,13 @@ export class TransactionBlock {
             },
           }),
         });
-        console.log('dry run:', dryRunResult);
         if (dryRunResult.effects.status.status !== 'success') {
           throw new Error(
             'Dry run failed, could not automatically determine a budget',
             { cause: dryRunResult },
           );
         }
+
         const coinOverhead =
           GAS_OVERHEAD_PER_COIN *
           BigInt(this.blockData.gasConfig.payment?.length || 0n) *
