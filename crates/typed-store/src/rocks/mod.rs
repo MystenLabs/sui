@@ -12,7 +12,7 @@ use crate::{
 };
 use bincode::Options;
 use collectable::TryExtend;
-use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache};
+use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, LiveFile};
 use rocksdb::{
     properties, AsColumnFamilyRef, CStrLike, ColumnFamilyDescriptor, DBWithThreadMode, Error,
     ErrorKind, IteratorMode, MultiThreaded, OptimisticTransactionOptions, ReadOptions, Transaction,
@@ -445,6 +445,10 @@ impl RocksDB {
                 .clone()
                 .unwrap_or_else(|| self.default_db_name()),
         }
+    }
+
+    pub fn live_files(&self) -> Result<Vec<LiveFile>, Error> {
+        delegate_call!(self.live_files())
     }
 
     fn default_db_name(&self) -> String {
