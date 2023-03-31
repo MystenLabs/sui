@@ -53,7 +53,7 @@ impl SuiAccount {
 
     /// Get a ref to the keypair for this account
     pub fn key(&self) -> &AccountKeyPair {
-        &self.key.as_ref()
+        self.key.as_ref()
     }
 }
 
