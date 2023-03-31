@@ -1054,7 +1054,7 @@ impl AuthorityState {
         let shared_object_refs = input_objects.filter_shared_objects();
 
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,
@@ -1166,7 +1166,7 @@ impl AuthorityState {
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let temporary_store = TemporaryStore::new(
+        let temporary_store = TemporaryStore::new_for_mock_transaction(
             self.database.clone(),
             input_objects,
             transaction_digest,

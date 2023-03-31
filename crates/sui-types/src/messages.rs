@@ -3177,6 +3177,10 @@ impl InputObjects {
         SequenceNumber::lamport_increment(input_versions)
     }
 
+    pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
+        self.objects
+    }
+
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
         self.objects
             .into_iter()
