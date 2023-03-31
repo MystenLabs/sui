@@ -56,12 +56,15 @@ pub struct CrashRecoveryAction {
 
 impl Display for CrashRecoveryAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let booted = self.boot.len();
         let killed = self.kill.len();
+
         if self.boot.is_empty() {
-            write!(f, "{killed} nodes killed")
+            write!(f, "{killed} node(s) killed")
+        } else if self.kill.is_empty() {
+            write!(f, "{booted} node(s) recovered")
         } else {
-            let booted = self.boot.len();
-            write!(f, "{killed} nodes killed and {booted} nodes recovered")
+            write!(f, "{killed} node(s) killed and {booted} node(s) recovered")
         }
     }
 }

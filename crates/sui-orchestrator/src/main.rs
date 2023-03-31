@@ -75,7 +75,7 @@ pub enum Operation {
         faults: usize,
 
         /// Whether the faulty nodes recover.
-        #[clap(long, default_value = "false", global = true)]
+        #[clap(long, action, default_value = "false", global = true)]
         crash_recovery: bool,
 
         /// The interval to crash nodes in seconds.
