@@ -50,6 +50,11 @@ impl SuiAccount {
 
         self.owned.remove(id)
     }
+
+    /// Get a ref to the keypair for this account
+    pub fn key(&self) -> &AccountKeyPair {
+        &self.key.as_ref()
+    }
 }
 
 /// Utility struct tracking keys for known accounts, owned objects, shared objects, and immutable objects
