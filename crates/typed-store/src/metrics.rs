@@ -33,8 +33,8 @@ pub struct SamplingInterval {
 
 impl Default for SamplingInterval {
     fn default() -> Self {
-        // Disabled by default
-        SamplingInterval::new(Duration::ZERO, u64::MAX - 1)
+        // Enabled with 10 second interval
+        SamplingInterval::new(Duration::from_secs(60), u64::MAX - 1)
     }
 }
 
