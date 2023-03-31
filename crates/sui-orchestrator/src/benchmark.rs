@@ -75,6 +75,11 @@ impl BenchmarkParameters {
             duration,
         }
     }
+
+    /// The maximum number of faults that can be tolerated in this configuration.
+    pub fn maximum_faults(&self) -> usize {
+        (self.nodes - 1) / 3
+    }
 }
 
 /// The load type to submit to the nodes.

@@ -21,6 +21,7 @@ mod benchmark;
 mod client;
 mod display;
 mod error;
+mod faults;
 mod logs;
 mod measurement;
 mod orchestrator;
@@ -73,7 +74,7 @@ pub enum Operation {
         faults: usize,
 
         /// The minimum duration of the benchmark in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "180", global = true)]
+        #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
         duration: Duration,
 
         /// The interval between measurements collection in seconds.

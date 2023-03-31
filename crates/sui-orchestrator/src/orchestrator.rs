@@ -16,6 +16,7 @@ use crate::{
     client::Instance,
     display, ensure,
     error::{TestbedError, TestbedResult},
+    faults::{FaultsSchedule, FaultsType},
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
     protocol::{sui::SuiProtocol, ProtocolCommands},
@@ -127,6 +128,42 @@ impl Orchestrator {
             }
         }
         Ok(instances)
+    }
+
+    /// Boot one node per instance.
+    async fn boot_nodes(&self, instances: Vec<Instance>) -> TestbedResult<()> {
+        // Run one node per instance.
+        let listen_addresses = SuiProtocol::make_listen_addresses(&instances);
+        let working_dir = self.settings.working_dir.clone();
+        let command = move |i: usize| -> String {
+            let mut config_path = working_dir.clone();
+            config_path.push("sui_config");
+            config_path.push(format!("validator-config-{i}.yaml"));
+            let address = listen_addresses[i].clone();
+            let run = format!(
+                "cargo run --release --bin sui-node -- --config-path {} --listen-address {address}",
+                config_path.display()
+            );
+            ["source $HOME/.cargo/env", &run].join(" && ")
+        };
+
+        let repo = self.settings.repository_name();
+        let ssh_command = SshCommand::new(command)
+            .run_background("node".into())
+            .with_log_file("~/node.log".into())
+            .with_execute_from_path(repo.into());
+        self.ssh_manager
+            .execute(instances.iter(), &ssh_command)
+            .await?;
+
+        // Wait until all nodes are reachable.
+        let metrics_command = format!("curl 127.0.0.1:{}/metrics", SuiProtocol::NODE_METRICS_PORT);
+        let metrics_ssh_command = SshCommand::new(move |_| metrics_command.clone());
+        self.ssh_manager
+            .wait_for_success(instances.iter(), &metrics_ssh_command)
+            .await;
+
+        Ok(())
     }
 
     /// Install the codebase and its dependencies on the testbed.
@@ -265,49 +302,14 @@ impl Orchestrator {
 
     /// Deploy the nodes. Optionally specify which instances to deploy; run the entire committee
     /// by default.
-    pub async fn run_nodes(
-        &self,
-        parameters: &BenchmarkParameters,
-        selected_instances: Option<Vec<Instance>>,
-    ) -> TestbedResult<()> {
+    pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
         display::action("Deploying validators");
 
         // Select the instances to run.
-        let instances = match selected_instances {
-            Some(x) => x,
-            None => self.select_instances(parameters)?,
-        };
+        let instances = self.select_instances(parameters)?;
 
-        // Deploy the committee.
-        let listen_addresses = SuiProtocol::make_listen_addresses(&instances);
-        let working_dir = self.settings.working_dir.clone();
-        let command = move |i: usize| -> String {
-            let mut config_path = working_dir.clone();
-            config_path.push("sui_config");
-            config_path.push(format!("validator-config-{i}.yaml"));
-            let address = listen_addresses[i].clone();
-            let run = format!(
-                "cargo run --release --bin sui-node -- --config-path {} --listen-address {address}",
-                config_path.display()
-            );
-            ["source $HOME/.cargo/env", &run].join(" && ")
-        };
-
-        let repo = self.settings.repository_name();
-        let ssh_command = SshCommand::new(command)
-            .run_background("node".into())
-            .with_log_file("~/node.log".into())
-            .with_execute_from_path(repo.into());
-        self.ssh_manager
-            .execute(instances.iter(), &ssh_command)
-            .await?;
-
-        // Wait until all nodes are reachable.
-        let metrics_command = format!("curl 127.0.0.1:{}/metrics", SuiProtocol::NODE_METRICS_PORT);
-        let metrics_ssh_command = SshCommand::new(move |_| metrics_command.clone());
-        self.ssh_manager
-            .wait_for_success(instances.iter(), &metrics_ssh_command)
-            .await;
+        // Boot one node per instance.
+        self.boot_nodes(instances).await?;
 
         display::done();
         Ok(())
@@ -377,7 +379,7 @@ impl Orchestrator {
     }
 
     /// Collect metrics from the load generators.
-    pub async fn collect_metrics(
+    pub async fn run(
         &self,
         parameters: &BenchmarkParameters,
     ) -> TestbedResult<MeasurementsCollection> {
@@ -389,11 +391,6 @@ impl Orchestrator {
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
 
-        // Kill the faulty instances.
-        // TODO: Kill them according to a schedule.
-        let faulty = instances.iter().take(parameters.faults);
-        self.ssh_manager.kill(faulty, "node").await?;
-
         // Regularly scrape the client metrics.
         let command = format!(
             "curl 127.0.0.1:{}/metrics",
@@ -402,29 +399,53 @@ impl Orchestrator {
         let ssh_command = SshCommand::new(move |_| command.clone());
 
         let mut aggregator = MeasurementsCollection::new(&self.settings, parameters.clone());
-        let mut interval = time::interval(self.scrape_interval);
-        interval.tick().await; // The first tick returns immediately.
+        let mut metrics_interval = time::interval(self.scrape_interval);
+        metrics_interval.tick().await; // The first tick returns immediately.
+
+        let faulty = instances
+            .iter()
+            .cloned()
+            .take(parameters.maximum_faults())
+            .collect();
+        let mut faults_schedule = FaultsSchedule::new(FaultsType::CrashRecoveryOne, faulty);
+        let mut faults_interval = time::interval(Duration::from_secs(60));
+        faults_interval.tick().await; // The first tick returns immediately.
 
         let start = Instant::now();
         loop {
-            let now = interval.tick().await;
-            let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
-            display::status(format!("{elapsed}s"));
+            tokio::select! {
+                // Scrape metrics.
+                now = metrics_interval.tick() => {
+                    let elapsed = now.duration_since(start).as_secs_f64().ceil() as u64;
+                    display::status(format!("{elapsed}s"));
 
-            let stdio = self
-                .ssh_manager
-                .execute(instances.iter(), &ssh_command)
-                .await?;
-            for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
-                let measurement = Measurement::from_prometheus::<SuiProtocol>(stdout);
-                aggregator.add(i, measurement);
-            }
+                    let stdio = self
+                        .ssh_manager
+                        .execute(instances.iter(), &ssh_command)
+                        .await?;
+                    for (i, (stdout, _stderr)) in stdio.iter().enumerate() {
+                        let measurement = Measurement::from_prometheus::<SuiProtocol>(stdout);
+                        aggregator.add(i, measurement);
+                    }
 
-            if aggregator.benchmark_duration() >= parameters.duration {
-                break;
-            } else if elapsed > (parameters.duration + self.scrape_interval).as_secs() {
-                display::error("Maximum scraping duration exceeded");
-                break;
+                    if aggregator.benchmark_duration() >= parameters.duration {
+                        break;
+                    } else if elapsed > (parameters.duration + self.scrape_interval).as_secs() {
+                        display::error("Maximum scraping duration exceeded");
+                        break;
+                    }
+                },
+
+                // Kill and recover nodes according to the input schedule.
+                _ = faults_interval.tick() => {
+                    let action = faults_schedule.update();
+                    if !action.kill.is_empty() {
+                        self.ssh_manager.kill(action.kill.iter(), "node").await?;
+                    }
+                    if !action.boot.is_empty() {
+                        self.boot_nodes(action.boot).await?;
+                    }
+                }
             }
         }
 
@@ -533,13 +554,13 @@ impl Orchestrator {
             }
 
             // Deploy the validators.
-            self.run_nodes(&parameters, None).await?;
+            self.run_nodes(&parameters).await?;
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;
 
             // Wait for the benchmark to terminate. Then save the results and print a summary.
-            let aggregator = self.collect_metrics(&parameters).await?;
+            let aggregator = self.run(&parameters).await?;
             aggregator.display_summary();
             generator.register_result(aggregator);
 

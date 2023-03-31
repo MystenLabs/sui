@@ -50,6 +50,18 @@ impl Instance {
     pub fn ssh_address(&self) -> SocketAddr {
         format!("{}:22", self.main_ip).parse().unwrap()
     }
+
+    #[cfg(test)]
+    pub fn new_for_test(id: String) -> Self {
+        Self {
+            id,
+            region: Default::default(),
+            main_ip: Ipv4Addr::new(127, 0, 0, 1),
+            tags: Default::default(),
+            specs: Default::default(),
+            status: Default::default(),
+        }
+    }
 }
 
 #[async_trait::async_trait]
