@@ -77,8 +77,8 @@ const RNG_SEED: [u8; 32] = [
     179, 179, 65, 9, 31, 249, 221, 123, 225, 112, 199, 247,
 ];
 
-const DEFAULT_GAS_BUDGET: u64 = 10_000;
-const GAS_FOR_TESTING: u64 = 3_000_000;
+const DEFAULT_GAS_BUDGET: u64 = 300_000_000_000_000;
+const GAS_FOR_TESTING: u64 = 300_000_000_000_000;
 
 pub struct SuiTestAdapter<'a> {
     vm: Arc<MoveVM>,
@@ -91,6 +91,7 @@ pub struct SuiTestAdapter<'a> {
     rng: StdRng,
 }
 
+#[derive(Debug)]
 struct TxnSummary {
     created: Vec<ObjectID>,
     written: Vec<ObjectID>,
