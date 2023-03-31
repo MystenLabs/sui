@@ -15,6 +15,10 @@ bcs = "0.1.4"
 chrono = { version = "0.4.23", features = ["clock", "serde"] }
 clap = { version = "3.2.17", features = ["derive"] }
 diesel = { version = "2.0.3", features = ["chrono", "postgres", "r2d2", "serde_json", "64-column-tables"] }
+rustls = { version = "0.20.4", features = ["dangerous_configuration"]}
+tokio-postgres-rustls = "0.9.0"
+tokio-postgres = "0.7.7"
+diesel-async = { version = "0.2.1", features = ["postgres", "deadpool"] }
 diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 futures = "0.3.23"
 jsonrpsee = { version = "0.16.2", features = ["full"] }

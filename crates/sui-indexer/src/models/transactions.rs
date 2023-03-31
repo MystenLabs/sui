@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::prelude::*;
-use diesel::result::Error;
 
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiObjectRef, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
@@ -10,9 +9,7 @@ use sui_json_rpc_types::{
 
 use crate::errors::IndexerError;
 use crate::schema::transactions;
-use crate::schema::transactions::transaction_digest;
 use crate::types::TemporaryTransactionBlockResponseStore;
-use crate::PgPoolConnection;
 
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = transactions)]
@@ -47,34 +44,6 @@ pub struct Transaction {
     pub transaction_content: String,
     pub transaction_effects_content: String,
     pub confirmed_local_execution: Option<bool>,
-}
-
-pub fn commit_transactions(
-    pg_pool_conn: &mut PgPoolConnection,
-    tx_resps: Vec<TemporaryTransactionBlockResponseStore>,
-) -> Result<usize, IndexerError> {
-    let new_txs: Vec<Transaction> = tx_resps
-        .into_iter()
-        .map(|tx| tx.try_into())
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let tx_commit_result: Result<usize, Error> = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-            diesel::insert_into(transactions::table)
-                .values(&new_txs)
-                .on_conflict(transaction_digest)
-                .do_nothing()
-                .execute(conn)
-        });
-
-    tx_commit_result.map_err(|e| {
-        IndexerError::PostgresWriteError(format!(
-            "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
-            new_txs, e
-        ))
-    })
 }
 
 impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {

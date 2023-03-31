@@ -31,9 +31,9 @@ async fn main() -> Result<(), IndexerError> {
     );
 
     let registry = registry_service.default_registry();
-    let pg_connection_pool = new_pg_connection_pool(&indexer_config.db_url)?;
+    let (blocking_cp, async_cp) = new_pg_connection_pool(&indexer_config.db_url).await?;
     if indexer_config.reset_db {
-        let mut conn = get_pg_pool_connection(&pg_connection_pool)?;
+        let mut conn = get_pg_pool_connection(&blocking_cp)?;
         reset_database(&mut conn, /* drop_all */ true).map_err(|e| {
             IndexerError::PostgresResetError(format!(
                 "unable to reset database with url: {:?} and err: {:?}",
@@ -42,7 +42,7 @@ async fn main() -> Result<(), IndexerError> {
             ))
         })?;
     }
-    let store = PgIndexerStore::new(pg_connection_pool);
+    let store = PgIndexerStore::new(async_cp, blocking_cp).await;
 
     Indexer::start(&indexer_config, &registry, store).await
 }

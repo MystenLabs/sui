@@ -32,15 +32,15 @@ use crate::types::CheckpointTransactionBlockResponse;
 pub trait IndexerStore {
     type ModuleCache;
 
-    fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
-    fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
-    fn get_checkpoint_sequence_number(
+    async fn get_latest_checkpoint_sequence_number(&self) -> Result<i64, IndexerError>;
+    async fn get_checkpoint(&self, id: CheckpointId) -> Result<RpcCheckpoint, IndexerError>;
+    async fn get_checkpoint_sequence_number(
         &self,
         digest: CheckpointDigest,
     ) -> Result<CheckpointSequenceNumber, IndexerError>;
 
-    fn get_event(&self, id: EventID) -> Result<Event, IndexerError>;
-    fn get_events(
+    async fn get_event(&self, id: EventID) -> Result<Event, IndexerError>;
+    async fn get_events(
         &self,
         query: EventFilter,
         cursor: Option<EventID>,
@@ -48,13 +48,13 @@ pub trait IndexerStore {
         descending_order: bool,
     ) -> Result<EventPage, IndexerError>;
 
-    fn get_object(
+    async fn get_object(
         &self,
         object_id: ObjectID,
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
 
-    fn query_objects_history(
+    async fn query_objects_history(
         &self,
         filter: SuiObjectDataFilter,
         at_checkpoint: CheckpointSequenceNumber,
@@ -62,18 +62,19 @@ pub trait IndexerStore {
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError>;
 
-    fn query_latest_objects(
+    async fn query_latest_objects(
         &self,
         filter: SuiObjectDataFilter,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError>;
 
-    fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;
+    async fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;
 
     // TODO: combine all get_transaction* methods
-    fn get_transaction_by_digest(&self, tx_digest: &str) -> Result<Transaction, IndexerError>;
-    fn multi_get_transactions_by_digests(
+    async fn get_transaction_by_digest(&self, tx_digest: &str)
+        -> Result<Transaction, IndexerError>;
+    async fn multi_get_transactions_by_digests(
         &self,
         tx_digests: &[String],
     ) -> Result<Vec<Transaction>, IndexerError>;
@@ -84,14 +85,14 @@ pub trait IndexerStore {
         options: Option<&SuiTransactionBlockResponseOptions>,
     ) -> Result<SuiTransactionBlockResponse, IndexerError>;
 
-    fn get_all_transaction_page(
+    async fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_checkpoint(
+    async fn get_transaction_page_by_checkpoint(
         &self,
         checkpoint_sequence_number: i64,
         start_sequence: Option<i64>,
@@ -99,7 +100,7 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_transaction_kind(
+    async fn get_transaction_page_by_transaction_kind(
         &self,
         kind: String,
         start_sequence: Option<i64>,
@@ -107,7 +108,7 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_sender_address(
+    async fn get_transaction_page_by_sender_address(
         &self,
         sender_address: String,
         start_sequence: Option<i64>,
@@ -115,7 +116,7 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_mutated_object(
+    async fn get_transaction_page_by_mutated_object(
         &self,
         object_id: String,
         start_sequence: Option<i64>,
@@ -123,7 +124,7 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_sender_recipient_address(
+    async fn get_transaction_page_by_sender_recipient_address(
         &self,
         sender_address: Option<String>,
         recipient_address: String,
@@ -132,7 +133,7 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_input_object(
+    async fn get_transaction_page_by_input_object(
         &self,
         object_id: String,
         version: Option<i64>,
@@ -141,7 +142,7 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_page_by_move_call(
+    async fn get_transaction_page_by_move_call(
         &self,
         package: String,
         module: Option<String>,
@@ -151,49 +152,52 @@ pub trait IndexerStore {
         is_descending: bool,
     ) -> Result<Vec<Transaction>, IndexerError>;
 
-    fn get_transaction_sequence_by_digest(
+    async fn get_transaction_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
-    fn get_move_call_sequence_by_digest(
+    async fn get_move_call_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
-    fn get_input_object_sequence_by_digest(
+    async fn get_input_object_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
-    fn get_recipient_sequence_by_digest(
+    async fn get_recipient_sequence_by_digest(
         &self,
         tx_digest: Option<String>,
         is_descending: bool,
     ) -> Result<Option<i64>, IndexerError>;
 
-    fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
-    fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
+    async fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
+    async fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
-    fn persist_fast_path(
+    async fn persist_fast_path(
         &self,
         tx: Transaction,
         tx_object_changes: TransactionObjectChanges,
     ) -> Result<usize, IndexerError>;
-    fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
-    fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
+    async fn persist_checkpoint(
+        &self,
+        data: &TemporaryCheckpointStore,
+    ) -> Result<usize, IndexerError>;
+    async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
-    fn get_epochs(
+    async fn get_epochs(
         &self,
         cursor: Option<EpochId>,
         limit: usize,
         descending_order: Option<bool>,
     ) -> Result<Vec<EpochInfo>, IndexerError>;
 
-    fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
+    async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
 
     fn module_cache(&self) -> &Self::ModuleCache;
 }
