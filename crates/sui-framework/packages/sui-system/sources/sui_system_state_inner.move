@@ -520,7 +520,7 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_address(validator, network_address);
         let validator :&Validator = validator; // Force immutability for the following call
-        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
+        validator_set::assert_no_pending_or_active_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's network address.
@@ -543,7 +543,7 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_p2p_address(validator, p2p_address);
         let validator :&Validator = validator; // Force immutability for the following call
-        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
+        validator_set::assert_no_pending_or_active_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's p2p address.
@@ -609,7 +609,7 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_protocol_pubkey(validator, protocol_pubkey, proof_of_possession);
         let validator :&Validator = validator; // Force immutability for the following call
-        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
+        validator_set::assert_no_pending_or_active_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of protocol key and proof of possession.
@@ -633,7 +633,7 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_worker_pubkey(validator, worker_pubkey);
         let validator :&Validator = validator; // Force immutability for the following call
-        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
+        validator_set::assert_no_pending_or_active_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of worker key.
@@ -656,7 +656,7 @@ module sui_system::sui_system_state_inner {
         let validator = validator_set::get_validator_mut_with_ctx(&mut self.validators, ctx);
         validator::update_next_epoch_network_pubkey(validator, network_pubkey);
         let validator :&Validator = validator; // Force immutability for the following call
-        validator_set::assert_no_pending_or_actice_duplicates(&self.validators, validator);
+        validator_set::assert_no_pending_or_active_duplicates(&self.validators, validator);
     }
 
     /// Update candidate validator's public key of network key.
