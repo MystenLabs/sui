@@ -2980,14 +2980,12 @@ impl AuthorityState {
             return Some(cur_ref);
         }
 
-        let check_struct_and_pub_function_linking = true;
-        let check_struct_layout = true;
-        let check_friend_linking = false;
-        let compatibility = Compatibility::new(
-            check_struct_and_pub_function_linking,
-            check_struct_layout,
-            check_friend_linking,
-        );
+        let compatibility = Compatibility {
+            check_struct_and_pub_function_linking: true,
+            check_struct_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: true,
+        };
 
         let new_pkg = new_object
             .data

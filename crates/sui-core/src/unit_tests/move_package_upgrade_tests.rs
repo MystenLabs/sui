@@ -272,10 +272,10 @@ async fn test_upgrade_package_happy_path() {
         .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
-        .exposed_functions
+        .functions
         .contains_key(ident_str!("this_is_a_new_module")));
     assert!(normalized_modules["new_module"]
-        .exposed_functions
+        .functions
         .contains_key(ident_str!(
             "i_can_call_funs_in_other_modules_that_already_existed"
         )));

@@ -126,10 +126,9 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
             LinkageInfo::Set(existing) => {
                 return Err(ExecutionError::invariant_violation(format!(
                     "Attempt to overwrite linkage info with context from {}. \
-                 Existing linkage: {existing:#?}",
+                     Existing linkage: {existing:#?}",
                     context.id(),
-                ))
-                .into())
+                )))
             }
         }
 
