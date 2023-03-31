@@ -41,7 +41,7 @@ use crate::messages::{
     make_tx_certs_and_signed_effects_with_committee, MAX_GAS,
 };
 
-const GAS_BUDGET: u64 = 10_000_000;
+const GAS_BUDGET: u64 = 200_000_000;
 
 pub fn make_publish_package(gas_object: Object, path: PathBuf) -> VerifiedTransaction {
     let (sender, keypair) = deterministic_random_account_key();
@@ -146,6 +146,7 @@ pub async fn publish_package_with_wallet(
         .unwrap();
 
     assert!(resp.confirmed_local_execution.unwrap());
+    println!("{:#?}", resp.effects);
     (
         resp.effects
             .unwrap()

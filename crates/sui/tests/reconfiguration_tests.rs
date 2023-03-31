@@ -47,6 +47,8 @@ use test_utils::{
 use tokio::time::{sleep, timeout};
 use tracing::{info, warn};
 
+const GAS_BUDGET: u64 = 200_000_000;
+
 #[sim_test]
 async fn advance_epoch_tx_test() {
     let authorities = spawn_test_authorities(&test_authority_configs()).await;
@@ -568,13 +570,14 @@ async fn test_inactive_validator_pool_read() {
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        GAS_BUDGET,
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
     let effects = execute_transaction_block(&authorities, transaction)
         .await
         .unwrap();
+    println!("{:#?}", effects.status());
     assert!(effects.status().is_ok());
 
     trigger_reconfiguration(&authorities).await;
@@ -1045,7 +1048,7 @@ async fn execute_add_validator_candidate_tx(
             CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
-        10000,
+        GAS_BUDGET,
     )
     .unwrap();
     let transaction =
@@ -1091,7 +1094,7 @@ async fn execute_join_committee_txes(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(stake)),
             CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        10000,
+        GAS_BUDGET,
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
@@ -1115,7 +1118,7 @@ async fn execute_join_committee_txes(
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        GAS_BUDGET,
     )
     .unwrap();
     let transaction =
@@ -1146,7 +1149,7 @@ async fn execute_leave_committee_tx(
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        GAS_BUDGET,
     )
     .unwrap();
 
