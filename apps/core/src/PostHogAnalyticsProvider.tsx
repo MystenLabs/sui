@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { PostHogConfig } from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
 import { ReactNode } from 'react';

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    GrowthBookProvider,
-    useFeature,
-} from '@growthbook/growthbook-react';
+import { GrowthBookProvider, useFeature } from '@growthbook/growthbook-react';
 import { PostHogAnalyticsProvider } from '@mysten/core';
 
 import { LayoutContent } from './LayoutContent';
