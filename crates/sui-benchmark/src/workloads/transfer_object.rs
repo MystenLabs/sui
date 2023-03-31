@@ -149,7 +149,7 @@ impl WorkloadBuilder<dyn Payload> for TransferObjectWorkloadBuilder {
         for _i in 0..self.num_payloads {
             let (address, keypair) = (owner, address_map.get(&owner).unwrap().clone());
             gas_configs.push(GasCoinConfig {
-                amount: MAX_GAS_FOR_TESTING,
+                amount: 1,
                 address,
                 keypair: keypair.clone(),
             });

@@ -3,7 +3,7 @@
 
 use crate::util::{make_pay_tx, UpdatedAndNewlyMintedGasCoins};
 use crate::workloads::payload::Payload;
-use crate::workloads::workload::{Workload, WorkloadBuilder};
+use crate::workloads::workload::{Workload, WorkloadBuilder, MAX_GAS_FOR_TESTING};
 use crate::workloads::{Gas, GasCoinConfig};
 use crate::ValidatorProxy;
 use anyhow::{Error, Result};
