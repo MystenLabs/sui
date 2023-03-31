@@ -940,7 +940,6 @@ impl<S: ObjectStore> TemporaryStore<S> {
             }
         }
 
-        // collect and charge storage cost
         self.collect_storage_and_rebate(gas_status, gas_object_id);
         if let Some(gas_object_id) = gas_object_id {
             if let Err(err) = gas_status.charge_storage_and_rebate() {

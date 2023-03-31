@@ -394,6 +394,7 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
             computation_cost: computation_cost_in_sui,
             storage_cost: storage_cost.mul(self.storage_gas_unit_price).into(),
             storage_rebate: self.storage_rebate.into(),
+            // gas model v1 does not use non refundable fees
             non_refundable_storage_fee: 0,
         }
     }

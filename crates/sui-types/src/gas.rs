@@ -203,12 +203,12 @@ pub struct GasCostSummary {
 }
 
 impl GasCostSummary {
-    pub fn new(computation_cost: u64, storage_cost: u64, storage_rebate: u64) -> GasCostSummary {
+    pub fn new(computation_cost: u64, storage_cost: u64, storage_rebate: u64, non_refundable_storage_fee: u64) -> GasCostSummary {
         GasCostSummary {
             computation_cost,
             storage_cost,
             storage_rebate,
-            non_refundable_storage_fee: 0,
+            non_refundable_storage_fee,
         }
     }
 
@@ -271,8 +271,8 @@ impl std::fmt::Display for GasCostSummary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "computation_cost: {}, storage_cost: {},  storage_rebate: {}",
-            self.computation_cost, self.storage_cost, self.storage_rebate
+            "computation_cost: {}, storage_cost: {},  storage_rebate: {}, non_refundable_storage_fee: {}",
+            self.computation_cost, self.storage_cost, self.storage_rebate, self.non_refundable_storage_fee,
         )
     }
 }
