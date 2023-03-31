@@ -54,12 +54,7 @@ export function validatorsTableData(
                         logo: validator.imageUrl,
                     },
                     stake: totalStake,
-                    // show the rolling average apy even if its zero, otherwise show -- for no data
-                    apy:
-                        rollingAverageApys?.[validator.suiAddress] ||
-                        rollingAverageApys?.[validator.suiAddress] === 0
-                            ? rollingAverageApys?.[validator.suiAddress]
-                            : null,
+                    apy: rollingAverageApys?.[validator.suiAddress] || 0,
                     nextEpochGasPrice: validator.nextEpochGasPrice,
                     commission: +validator.commissionRate / 100,
                     img: img,
@@ -139,7 +134,7 @@ export function validatorsTableData(
                     const apy = props.getValue();
                     return (
                         <Text variant="bodySmall/medium" color="steel-darker">
-                            {apy === null ? '--' : `${apy}%`}
+                            {apy > 0 ? `${apy}%` : '--'}
                         </Text>
                     );
                 },
@@ -307,7 +302,7 @@ function ValidatorPageResult() {
                                 <Stats
                                     label="AVG APY"
                                     tooltip="The global average of annualized percentage yield of all participating validators."
-                                    unavailable={averageAPY === null}
+                                    unavailable={averageAPY <= 0}
                                 >
                                     {averageAPY}%
                                 </Stats>
