@@ -350,17 +350,26 @@ fn execute_move_call<S: StorageView, Mode: ExecutionMode>(
         by_mut_ref.len() == mutable_reference_outputs.len(),
         "lost mutable input"
     );
+    // save the link context because calls to `make_value` below can set new ones, and we don't want
+    // it to be clobbered.
+    let saved_linkage = context.steal_linkage();
     // write back mutable inputs. We also update if they were used in non entry Move calls
     // though we do not care for immutable usages of objects or other values
-    for ((i1, bytes, _layout), (i2, value_info)) in
-        mutable_reference_outputs.into_iter().zip(by_mut_ref)
-    {
-        assert_invariant!(i1 == i2, "lost mutable input");
-        let arg_idx = i1 as usize;
-        let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-        let value = make_value(context, value_info, bytes, used_in_non_entry_move_call)?;
-        context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
-    }
+    let res: Result<Vec<()>, _> = mutable_reference_outputs
+        .into_iter()
+        .zip(by_mut_ref)
+        .map(|((i1, bytes, _layout), (i2, value_info))| {
+            assert_invariant!(i1 == i2, "lost mutable input");
+            let arg_idx = i1 as usize;
+            let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
+            let value = make_value(context, value_info, bytes, used_in_non_entry_move_call)?;
+            context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
+            Ok(())
+        })
+        .collect();
+
+    context.restore_linkage(saved_linkage)?;
+    res?;
 
     context.take_user_events(module_id, index, last_instr)?;
     assert_invariant!(
@@ -458,9 +467,7 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
 
         package_obj
     } else {
-        context.reset_linkage();
         publish_verify_and_init_modules::<_, Mode>(context, runtime_id, argument_updates, &modules)?;
-
         let dependencies = fetch_packages(context, &dep_ids)?;
         context.new_package(&modules, &dependencies)?
     };

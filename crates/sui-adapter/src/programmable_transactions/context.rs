@@ -34,7 +34,7 @@ use crate::{
     execution_mode::ExecutionMode,
 };
 
-use super::linkage_view::LinkageView;
+use super::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
 use super::types::*;
 
 sui_macros::checked_arithmetic! {
@@ -96,11 +96,17 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         gas_coin_opt: Option<ObjectID>,
         inputs: Vec<CallArg>,
     ) -> Result<Self, ExecutionError> {
+        let init_linkage = if protocol_config.package_upgrades_supported() {
+            LinkageInfo::Unset
+        } else {
+            LinkageInfo::Universal
+        };
+
         // we need a new session just for loading types, which is sad
         // TODO remove this
         let mut tmp_session = new_session(
             vm,
-            LinkageView::new(state_view),
+            LinkageView::new(state_view, init_linkage),
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -205,15 +211,18 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
 
     /// Set the link context for the session from the linkage information in the MovePackage found
     /// at `package_id`.  Returns the runtime ID of the link context package on success.
-    pub fn set_link_context(&mut self, package_id: ObjectID) -> Result<AccountAddress, ExecutionError> {
+    pub fn set_link_context(
+        &mut self,
+        package_id: ObjectID,
+    ) -> Result<AccountAddress, ExecutionError> {
         let resolver = self.session.get_resolver();
         if resolver.link_context() == *package_id {
             // Setting same context again, can skip.
             return Ok(resolver.original_package_id());
         }
 
-        let package = package_for_linkage(&self.session, package_id)
-            .map_err(|e| self.convert_vm_error(e))?;
+        let package =
+            package_for_linkage(&self.session, package_id).map_err(|e| self.convert_vm_error(e))?;
 
         set_linkage(&mut self.session, &package)
     }
@@ -228,6 +237,16 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
     /// information to succeed.
     pub fn reset_linkage(&mut self) {
         reset_linkage(&mut self.session);
+    }
+
+    /// Reset the linkage context, and save it (if one exists)
+    pub fn steal_linkage(&mut self) -> Option<SavedLinkage> {
+        steal_linkage(&mut self.session)
+    }
+
+    /// Restore a previously stolen/saved link context.
+    pub fn restore_linkage(&mut self, saved: Option<SavedLinkage>) -> Result<(), ExecutionError> {
+        restore_linkage(&mut self.session, saved)
     }
 
     /// Load a type using the context's current session.
@@ -620,7 +639,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         // TODO remove this
         let tmp_session = new_session(
             vm,
-            LinkageView::new(state_view),
+            linkage,
             BTreeMap::new(),
             !gas_status.is_unmetered(),
             protocol_config,
@@ -826,14 +845,30 @@ fn new_session<'state, 'vm, S: StorageView>(
 }
 
 /// Set the link context for the session from the linkage information in the `package`.
-pub fn set_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>, package: &MovePackage) -> Result<AccountAddress, ExecutionError> {
-    session.get_resolver_mut().set_linkage(package)
+pub fn set_linkage<S: StorageView>(
+    session: &mut Session<LinkageView<S>>,
+    linkage: &MovePackage,
+) -> Result<AccountAddress, ExecutionError> {
+    session.get_resolver_mut().set_linkage(linkage)
 }
 
 /// Turn off linkage information, so that the next use of the session will need to set linkage
 /// information to succeed.
 pub fn reset_linkage<S: StorageView>(session: &mut Session<LinkageView<S>>) {
     session.get_resolver_mut().reset_linkage();
+}
+
+pub fn steal_linkage<S: StorageView>(
+    session: &mut Session<LinkageView<S>>,
+) -> Option<SavedLinkage> {
+    session.get_resolver_mut().steal_linkage()
+}
+
+pub fn restore_linkage<S: StorageView>(
+    session: &mut Session<LinkageView<S>>,
+    saved: Option<SavedLinkage>,
+) -> Result<(), ExecutionError> {
+    session.get_resolver_mut().restore_linkage(saved)
 }
 
 /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
@@ -848,20 +883,18 @@ fn package_for_linkage<S: StorageView>(
     let storage = session.get_resolver().storage();
     match storage.get_package(&package_id) {
         Ok(Some(package)) => Ok(package),
-        Ok(None) => Err(
-            PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find link context {package_id} in store"))
-                .finish(Location::Undefined),
-        ),
-        Err(err) => Err(
-            PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Error loading link context {package_id} from store: {err}"))
-                .finish(Location::Undefined),
-        ),
+        Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+            .with_message(format!("Cannot find link context {package_id} in store"))
+            .finish(Location::Undefined)),
+        Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+            .with_message(format!(
+                "Error loading link context {package_id} from store: {err}"
+            ))
+            .finish(Location::Undefined)),
     }
 }
 
-/// Load `type_tag` to get a `Type` in the provided `session`.  `session`'s linkage context will be
+/// Load `type_tag` to get a `Type` in the provided `session`.  `session`'s linkage context may be
 /// reset after this operation, because during the operation, it may change when loading a struct.
 pub fn load_type<'vm, 'state, S: StorageView>(
     session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
@@ -870,80 +903,73 @@ pub fn load_type<'vm, 'state, S: StorageView>(
     use move_binary_format::errors::PartialVMError;
     use move_core_types::vm_status::StatusCode;
 
-    fn load_type_<'vm, 'state, S: StorageView>(
-        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
-        type_tag: &TypeTag,
-    ) -> VMResult<Type> {
-        Ok(match type_tag {
-            TypeTag::Bool => Type::Bool,
-            TypeTag::U8 => Type::U8,
-            TypeTag::U16 => Type::U16,
-            TypeTag::U32 => Type::U32,
-            TypeTag::U64 => Type::U64,
-            TypeTag::U128 => Type::U128,
-            TypeTag::U256 => Type::U256,
-            TypeTag::Address => Type::Address,
-            TypeTag::Signer => Type::Signer,
-
-            TypeTag::Vector(inner) => Type::Vector(Box::new(load_type_(session, inner)?)),
-            TypeTag::Struct(struct_tag) => {
-                let StructTag {
-                    address,
-                    module,
-                    name,
-                    type_params,
-                } = struct_tag.as_ref();
-
-                // Load the package that the struct is defined in, in storage
-                let defining_id = ObjectID::from_address(*address);
-                let package = package_for_linkage(session, defining_id)?;
-
-                // Set the defining package as the link context on the session while loading the
-                // struct
-                let original_address = set_linkage(session, &package).map_err(|e| {
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(e.to_string())
-                        .finish(Location::Undefined)
-                })?;
-
-                let runtime_id = ModuleId::new(original_address, module.clone());
-                let (idx, struct_type) = session.load_struct(&runtime_id, name)?;
-
-                // Recursively load type parameters, if necessary
-                let type_param_constraints = struct_type.type_param_constraints();
-                if type_param_constraints.len() != type_params.len() {
-                    return verification_error(StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH);
-                }
-
-                if type_params.is_empty() {
-                    Type::Struct(idx)
-                } else {
-                    let loaded_type_params = type_params
-                        .iter()
-                        .map(|type_param| load_type_(session, type_param))
-                        .collect::<VMResult<Vec<_>>>()?;
-
-                    // Verify that the type parameter constraints on the struct are met
-                    for (constraint, param) in type_param_constraints.zip(&loaded_type_params) {
-                        let abilities = session.get_type_abilities(param)?;
-                        if !constraint.is_subset(abilities) {
-                            return verification_error(StatusCode::CONSTRAINT_NOT_SATISFIED);
-                        }
-                    }
-
-                    Type::StructInstantiation(idx, loaded_type_params)
-                }
-            }
-        })
-    }
-
     fn verification_error<T>(code: StatusCode) -> VMResult<T> {
         Err(PartialVMError::new(code).finish(Location::Undefined))
     }
 
-    let res = load_type_(session, type_tag);
-    reset_linkage(session);
-    res
+    Ok(match type_tag {
+        TypeTag::Bool => Type::Bool,
+        TypeTag::U8 => Type::U8,
+        TypeTag::U16 => Type::U16,
+        TypeTag::U32 => Type::U32,
+        TypeTag::U64 => Type::U64,
+        TypeTag::U128 => Type::U128,
+        TypeTag::U256 => Type::U256,
+        TypeTag::Address => Type::Address,
+        TypeTag::Signer => Type::Signer,
+
+        TypeTag::Vector(inner) => Type::Vector(Box::new(load_type(session, inner)?)),
+        TypeTag::Struct(struct_tag) => {
+            let StructTag {
+                address,
+                module,
+                name,
+                type_params,
+            } = struct_tag.as_ref();
+
+            // Load the package that the struct is defined in, in storage
+            let defining_id = ObjectID::from_address(*address);
+            let package = package_for_linkage(session, defining_id)?;
+
+            // Set the defining package as the link context on the session while loading the
+            // struct
+            let original_address = set_linkage(session, &package).map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(e.to_string())
+                    .finish(Location::Undefined)
+            })?;
+
+            let runtime_id = ModuleId::new(original_address, module.clone());
+            let res = session.load_struct(&runtime_id, name);
+            reset_linkage(session);
+            let (idx, struct_type) = res?;
+
+            // Recursively load type parameters, if necessary
+            let type_param_constraints = struct_type.type_param_constraints();
+            if type_param_constraints.len() != type_params.len() {
+                return verification_error(StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH);
+            }
+
+            if type_params.is_empty() {
+                Type::Struct(idx)
+            } else {
+                let loaded_type_params = type_params
+                    .iter()
+                    .map(|type_param| load_type(session, type_param))
+                    .collect::<VMResult<Vec<_>>>()?;
+
+                // Verify that the type parameter constraints on the struct are met
+                for (constraint, param) in type_param_constraints.zip(&loaded_type_params) {
+                    let abilities = session.get_type_abilities(param)?;
+                    if !constraint.is_subset(abilities) {
+                        return verification_error(StatusCode::CONSTRAINT_NOT_SATISFIED);
+                    }
+                }
+
+                Type::StructInstantiation(idx, loaded_type_params)
+            }
+        }
+    })
 }
 
 /// Load an input object from the state_view
