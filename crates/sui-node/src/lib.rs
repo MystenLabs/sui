@@ -1016,7 +1016,6 @@ impl SuiNode {
                     None
                 }
             } else {
-                // TODO: Enable this when we can.
                 self.check_system_consistency();
 
                 let new_epoch_store = self
@@ -1122,18 +1121,17 @@ impl SuiNode {
 
     fn check_system_consistency(&self) {
         if !self.config.enable_expensive_safety_checks && cfg!(not(debug_assertions)) {
+            // We only do these checks if either the expensive safety checks are enabled or we are
+            // running in debug mode.
             return;
         }
         let total_storage_rebate: u64 = self
             .state
             .db()
             .iter_live_object_set()
-            .map(|o| {
-                if let LiveObject::Normal(object) = o {
-                    object.storage_rebate
-                } else {
-                    0
-                }
+            .map(|o| match o {
+                LiveObject::Normal(object) => object.storage_rebate,
+                LiveObject::Wrapped(_) => 0,
             })
             .sum();
         let system_state = self
@@ -1149,7 +1147,7 @@ impl SuiNode {
                 system_state.epoch, total_storage_rebate, storage_fund_balance
             );
             if cfg!(debug_assertions) {
-                panic!(err);
+                panic!("{}", err);
             } else {
                 // We cannot panic in production yet because it is known that there are some
                 // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
