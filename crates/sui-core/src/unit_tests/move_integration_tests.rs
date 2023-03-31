@@ -34,7 +34,7 @@ use sui_verifier::entry_points_verifier::{
     RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
 };
 
-const MAX_GAS: u64 = 1000000;
+const MAX_GAS: u64 = 10_000_000;
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
