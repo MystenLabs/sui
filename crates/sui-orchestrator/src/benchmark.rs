@@ -8,7 +8,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::measurement::MeasurementsCollection;
+use crate::{faults::FaultsType, measurement::MeasurementsCollection};
 
 /// The benchmark parameters for a run.
 #[derive(Serialize, Deserialize, Clone)]
@@ -19,7 +19,7 @@ pub struct BenchmarkParameters {
     /// The committee size.
     pub nodes: usize,
     /// The number of (crash-)faults.
-    pub faults: usize,
+    pub faults: FaultsType,
     /// The total load (tx/s) to submit to the system.
     pub load: usize,
     /// The duration of the benchmark.
@@ -31,7 +31,7 @@ impl Default for BenchmarkParameters {
         Self {
             shared_objects_ratio: 0,
             nodes: 4,
-            faults: 0,
+            faults: FaultsType::default(),
             load: 500,
             duration: Duration::from_secs(60),
         }
@@ -42,7 +42,7 @@ impl Debug for BenchmarkParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}-{}-{}-{}",
+            "{}-{:?}-{}-{}",
             self.shared_objects_ratio, self.faults, self.nodes, self.load
         )
     }
@@ -52,7 +52,7 @@ impl Display for BenchmarkParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} nodes ({} faulty) - {} tx/s",
+            "{} nodes ({}) - {} tx/s",
             self.nodes, self.faults, self.load
         )
     }
@@ -63,7 +63,7 @@ impl BenchmarkParameters {
     pub fn new(
         shared_objects_ratio: u16,
         nodes: usize,
-        faults: usize,
+        faults: FaultsType,
         load: usize,
         duration: Duration,
     ) -> Self {
@@ -74,11 +74,6 @@ impl BenchmarkParameters {
             load,
             duration,
         }
-    }
-
-    /// The maximum number of faults that can be tolerated in this configuration.
-    pub fn maximum_faults(&self) -> usize {
-        (self.nodes - 1) / 3
     }
 }
 
@@ -108,7 +103,7 @@ pub struct BenchmarkParametersGenerator {
     /// The load type.
     load_type: LoadType,
     /// The number of faulty nodes.
-    pub faults: usize,
+    pub faults: FaultsType,
     /// The duration of the benchmark.
     duration: Duration,
     /// The load of the next benchmark run.
@@ -130,7 +125,7 @@ impl Iterator for BenchmarkParametersGenerator {
             BenchmarkParameters::new(
                 self.shared_objects_ratio,
                 self.nodes,
-                self.faults,
+                self.faults.clone(),
                 load,
                 self.duration,
             )
@@ -158,7 +153,7 @@ impl BenchmarkParametersGenerator {
             shared_objects_ratio: shared_objects_ration,
             nodes,
             load_type,
-            faults: 0,
+            faults: FaultsType::default(),
             duration: Self::DEFAULT_DURATION,
             next_load,
             lower_bound_result: None,
@@ -167,8 +162,8 @@ impl BenchmarkParametersGenerator {
         }
     }
 
-    /// Set the number of faulty nodes.
-    pub fn with_faults(mut self, faults: usize) -> Self {
+    /// Set crash-recovery pattern and the number of faulty nodes.
+    pub fn with_faults(mut self, faults: FaultsType) -> Self {
         self.faults = faults;
         self
     }

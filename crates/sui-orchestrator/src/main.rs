@@ -15,6 +15,7 @@ use crate::{
 };
 use clap::Parser;
 use color_eyre::eyre::{Context, Result};
+use faults::FaultsType;
 use protocol::sui::SuiProtocol;
 
 mod benchmark;
@@ -72,6 +73,14 @@ pub enum Operation {
         /// Number of faulty nodes.
         #[clap(long, value_name = "INT", default_value = "0", global = true)]
         faults: usize,
+
+        /// Whether the faulty nodes recover.
+        #[clap(long, default_value = "false", global = true)]
+        crash_recovery: bool,
+
+        /// The interval to crash nodes in seconds.
+        #[clap(long, value_parser = parse_duration, default_value = "60", global = true)]
+        crash_interval: Duration,
 
         /// The minimum duration of the benchmark in seconds.
         #[clap(long, value_parser = parse_duration, default_value = "300", global = true)]
@@ -163,7 +172,7 @@ pub enum TestbedAction {
 #[clap(rename_all = "kebab-case")]
 pub enum Load {
     /// The fixed loads (in tx/s) to submit to the nodes.
-    Fixed {
+    FixedLoad {
         /// A list of fixed load (tx/s).
         #[clap(
             long,
@@ -253,6 +262,8 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
             shared_objects_ratio,
             committee,
             faults,
+            crash_recovery,
+            crash_interval,
             duration,
             scrape_interval,
             skip_testbed_update,
@@ -280,7 +291,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
 
             let shared_objects_ratio = shared_objects_ratio.min(100);
             let load = match load_type {
-                Load::Fixed { loads } => {
+                Load::FixedLoad { loads } => {
                     let loads = if loads.is_empty() { vec![200] } else { loads };
                     LoadType::Fixed(loads)
                 }
@@ -293,10 +304,16 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 },
             };
 
+            let fault_type = if !crash_recovery {
+                FaultsType::Permanent { faults }
+            } else {
+                FaultsType::CrashRecovery { max_faults: faults }
+            };
+
             let generator =
                 BenchmarkParametersGenerator::new(shared_objects_ratio, committee, load)
                     .with_custom_duration(duration)
-                    .with_faults(faults);
+                    .with_faults(fault_type);
 
             Orchestrator::new(
                 settings,
@@ -306,6 +323,7 @@ async fn run<C: ServerProviderClient>(settings: Settings, client: C, opts: Opts)
                 ssh_manager,
             )
             .with_scrape_interval(scrape_interval)
+            .with_crash_interval(crash_interval)
             .skip_testbed_updates(skip_testbed_update)
             .skip_testbed_configuration(skip_testbed_configuration)
             .with_log_processing(log_processing)

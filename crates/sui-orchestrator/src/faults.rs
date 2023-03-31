@@ -1,29 +1,63 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
+
+use serde::{Deserialize, Serialize};
 
 use crate::client::Instance;
 
+#[derive(Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum FaultsType {
     /// Permanently crash the maximum number of nodes from the beginning.
-    Permanent,
-    /// Crash and recover the first node. This option is mostly useful for debugging.
-    CrashRecoveryOne,
+    Permanent { faults: usize },
     /// Progressively crash and recover nodes.
-    CrashRecovery,
+    CrashRecovery { max_faults: usize },
+}
+
+impl Default for FaultsType {
+    fn default() -> Self {
+        Self::Permanent { faults: 0 }
+    }
+}
+
+impl Debug for FaultsType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Permanent { faults } => write!(f, "{faults}"),
+            Self::CrashRecovery { max_faults } => write!(f, "{max_faults}cr"),
+        }
+    }
+}
+
+impl Display for FaultsType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Permanent { faults } => write!(f, "{faults} permanently crashed"),
+            Self::CrashRecovery { max_faults } => write!(f, "up to {max_faults} crash-recovery"),
+        }
+    }
+}
+
+impl FaultsType {
+    pub fn max_faults(&self) -> usize {
+        match self {
+            Self::Permanent { faults } => *faults,
+            Self::CrashRecovery { max_faults } => *max_faults,
+        }
+    }
 }
 
 /// The actions to apply to the testbed, i.e., which instances to crash and recover.
 #[derive(Default)]
-pub struct Action {
+pub struct CrashRecoveryAction {
     /// The instances to boot.
     pub boot: Vec<Instance>,
     /// The instances to kill.
     pub kill: Vec<Instance>,
 }
 
-impl Display for Action {
+impl Display for CrashRecoveryAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let killed = self.kill.len();
         if self.boot.is_empty() {
@@ -35,106 +69,81 @@ impl Display for Action {
     }
 }
 
-pub struct FaultsSchedule {
-    faults_type: FaultsType,
-    alive: Vec<Instance>,
-    dead: Vec<Instance>,
-}
-
-impl Display for FaultsSchedule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let faults = self.alive.len() + self.dead.len();
-        match self.faults_type {
-            FaultsType::Permanent => write!(f, "{faults} permanently crashed"),
-            FaultsType::CrashRecoveryOne => write!(f, "1 crash-recovery"),
-            FaultsType::CrashRecovery => write!(f, "up to {faults} crash-recovery"),
+impl CrashRecoveryAction {
+    pub fn boot(instances: Vec<Instance>) -> Self {
+        Self {
+            boot: instances,
+            kill: Vec::new(),
         }
+    }
+
+    pub fn kill(instances: Vec<Instance>) -> Self {
+        Self {
+            boot: Vec::new(),
+            kill: instances,
+        }
+    }
+
+    pub fn no_op() -> Self {
+        Self::default()
     }
 }
 
-impl FaultsSchedule {
-    pub fn new(
-        // The type of faulty behavior.
-        faults_type: FaultsType,
-        // The maximum number of instances that can b crashed.
-        instances: Vec<Instance>,
-    ) -> Self {
+pub struct CrashRecoverySchedule {
+    /// The number of faulty nodes and the crash-recovery pattern to follow.
+    faults_type: FaultsType,
+    /// The instances that can be crashed.
+    instances: Vec<Instance>,
+    /// The current number of dead nodes.
+    dead: usize,
+}
+
+impl CrashRecoverySchedule {
+    pub fn new(faults_type: FaultsType, mut instances: Vec<Instance>) -> Self {
+        let n = faults_type.max_faults();
+        instances.truncate(n);
+
         Self {
             faults_type,
-            alive: instances,
-            dead: Vec::new(),
+            instances,
+            dead: 0,
         }
     }
-    pub fn update(&mut self) -> Action {
+    pub fn update(&mut self) -> CrashRecoveryAction {
         match &self.faults_type {
             // Permanently crash the specified number of nodes.
-            FaultsType::Permanent => Action {
-                boot: Vec::new(),
-                kill: self.alive.drain(..).collect(),
-            },
-
-            // Periodically crash and recover one node.
-            FaultsType::CrashRecoveryOne => match self.dead.pop() {
-                Some(instance) => {
-                    self.alive.push(instance.clone());
-                    Action {
-                        boot: vec![instance],
-                        kill: Vec::new(),
-                    }
+            FaultsType::Permanent { faults } => {
+                if self.dead == 0 {
+                    self.dead = *faults;
+                    CrashRecoveryAction::kill(self.instances.clone().drain(0..*faults).collect())
+                } else {
+                    CrashRecoveryAction::no_op()
                 }
-                None => {
-                    let instance = self.alive.pop().expect("The committee is empty");
-                    self.dead.push(instance.clone());
-                    Action {
-                        boot: vec![instance],
-                        kill: Vec::new(),
-                    }
-                }
-            },
+            }
 
             // Periodically crash and recover nodes.
-            FaultsType::CrashRecovery => {
-                let max_faults = self.alive.len() + self.dead.len();
+            FaultsType::CrashRecovery { max_faults } => {
                 let min_faults = max_faults / 3;
 
-                // There are initially no dead nodes; kill a few of them. This branch is skipped
-                // for committees smaller than 10 nodes.
-                if self.dead.is_empty() && min_faults != 0 {
-                    let kill: Vec<_> = self.alive.drain(0..min_faults).collect();
-                    self.dead.extend(kill.clone());
-                    Action {
-                        boot: Vec::new(),
-                        kill,
-                    }
+                // Recover all nodes if we already crashed them all.
+                if self.dead == *max_faults {
+                    let instances: Vec<_> = self.instances.clone().drain(0..*max_faults).collect();
+                    self.dead = 0;
+                    CrashRecoveryAction::boot(instances)
+                }
+                // Otherwise crash a few nodes at the time.
+                else {
+                    let (l, h) = if self.dead == 0 && min_faults != 0 {
+                        (0, min_faults)
+                    } else if self.dead == min_faults && min_faults != 0 {
+                        (min_faults, 2 * min_faults)
+                    } else {
+                        (2 * min_faults, *max_faults)
+                    };
 
-                // There are then a few dead nodes; kill a few of them again.  This branch is
-                // skipped for committees smaller than 10 nodes.
-                } else if self.dead.len() == min_faults && min_faults != 0 {
-                    let kill: Vec<_> = self.alive.drain(0..min_faults).collect();
-                    self.dead.extend(kill.clone());
-                    Action {
-                        boot: Vec::new(),
-                        kill,
-                    }
-
-                // Kill the remaining nodes. The maximum number of nodes is killed for committees
-                // smaller than 10 nodes.
-                } else if !self.alive.is_empty() {
-                    let kill: Vec<_> = self.alive.drain(..).collect();
-                    self.dead.extend(kill.clone());
-                    Action {
-                        boot: Vec::new(),
-                        kill,
-                    }
-
-                // Reboot all nodes.
-                } else {
-                    let boot: Vec<_> = self.dead.drain(..).collect();
-                    self.alive.extend(boot.clone());
-                    Action {
-                        boot,
-                        kill: Vec::new(),
-                    }
+                    let instances: Vec<_> = self.instances.clone().drain(l..h).collect();
+                    self.dead += h - l;
+                    CrashRecoveryAction::kill(instances)
                 }
             }
         }
@@ -145,12 +154,16 @@ impl FaultsSchedule {
 mod faults_tests {
     use crate::client::Instance;
 
-    use super::{FaultsSchedule, FaultsType};
+    use super::{CrashRecoverySchedule, FaultsType};
 
     #[test]
     fn crash_recovery_1_fault() {
-        let faulty = vec![Instance::new_for_test("id".into())];
-        let mut schedule = FaultsSchedule::new(FaultsType::CrashRecovery, faulty);
+        let max_faults = 1;
+        let faulty = (0..max_faults)
+            .map(|i| Instance::new_for_test(i.to_string()))
+            .collect();
+        let mut schedule =
+            CrashRecoverySchedule::new(FaultsType::CrashRecovery { max_faults }, faulty);
 
         let action = schedule.update();
         assert_eq!(action.boot.len(), 0);
@@ -171,10 +184,12 @@ mod faults_tests {
 
     #[test]
     fn crash_recovery_2_faults() {
-        let faulty = (0..2)
+        let max_faults = 2;
+        let faulty = (0..max_faults)
             .map(|i| Instance::new_for_test(i.to_string()))
             .collect();
-        let mut schedule = FaultsSchedule::new(FaultsType::CrashRecovery, faulty);
+        let mut schedule =
+            CrashRecoverySchedule::new(FaultsType::CrashRecovery { max_faults }, faulty);
 
         let action = schedule.update();
         assert_eq!(action.boot.len(), 0);
@@ -202,7 +217,8 @@ mod faults_tests {
             let instances = (0..max_faults)
                 .map(|i| Instance::new_for_test(i.to_string()))
                 .collect();
-            let mut schedule = FaultsSchedule::new(FaultsType::CrashRecovery, instances);
+            let mut schedule =
+                CrashRecoverySchedule::new(FaultsType::CrashRecovery { max_faults }, instances);
 
             let action = schedule.update();
             assert_eq!(action.boot.len(), 0);

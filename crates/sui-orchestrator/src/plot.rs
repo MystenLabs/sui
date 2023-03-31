@@ -16,7 +16,7 @@ use plotters::{
     style::{Color, RED, WHITE},
 };
 
-use crate::{measurement::MeasurementsCollection, settings::Settings};
+use crate::{faults::FaultsType, measurement::MeasurementsCollection, settings::Settings};
 
 /// The set of parameters that uniquely identify a set of measurements. This id avoids
 /// plotting incomparable measurements on the same graph.
@@ -24,7 +24,7 @@ use crate::{measurement::MeasurementsCollection, settings::Settings};
 pub struct MeasurementsCollectionId {
     shared_objects_ratio: u16,
     nodes: usize,
-    faults: usize,
+    faults: FaultsType,
     duration: Duration,
     machine_specs: String,
     commit: String,
@@ -34,7 +34,7 @@ impl Debug for MeasurementsCollectionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}-{}-{}-{}",
+            "{}-{:?}-{}-{}",
             self.shared_objects_ratio,
             self.faults,
             self.nodes,
@@ -47,7 +47,7 @@ impl Display for MeasurementsCollectionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} nodes ({} faulty) - {}% shared objects",
+            "{} nodes ({}) - {}% shared objects",
             self.nodes, self.faults, self.shared_objects_ratio
         )
     }

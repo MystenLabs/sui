@@ -16,7 +16,7 @@ use crate::{
     client::Instance,
     display, ensure,
     error::{TestbedError, TestbedResult},
-    faults::{FaultsSchedule, FaultsType},
+    faults::CrashRecoverySchedule,
     logs::LogsAnalyzer,
     measurement::{Measurement, MeasurementsCollection},
     protocol::{sui::SuiProtocol, ProtocolCommands},
@@ -37,6 +37,8 @@ pub struct Orchestrator {
     protocol_commands: SuiProtocol,
     /// The interval between measurements collection.
     scrape_interval: Duration,
+    /// The interval to crash nodes.
+    crash_interval: Duration,
     /// Handle ssh connections to instances.
     ssh_manager: SshConnectionManager,
     /// Whether to skip testbed updates before running benchmarks.
@@ -49,7 +51,9 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     /// The default interval between measurements collection.
-    const SCRAPE_INTERVAL: Duration = Duration::from_secs(15);
+    const DEFAULT_SCRAPE_INTERVAL: Duration = Duration::from_secs(15);
+    /// The default interval to crash nodes.
+    const DEFAULT_CRASH_INTERVAL: Duration = Duration::from_secs(60);
 
     /// Make a new orchestrator.
     pub fn new(
@@ -65,7 +69,8 @@ impl Orchestrator {
             instance_setup_commands,
             protocol_commands,
             ssh_manager,
-            scrape_interval: Self::SCRAPE_INTERVAL,
+            scrape_interval: Self::DEFAULT_SCRAPE_INTERVAL,
+            crash_interval: Self::DEFAULT_CRASH_INTERVAL,
             skip_testbed_update: false,
             skip_testbed_configuration: false,
             log_processing: false,
@@ -75,6 +80,12 @@ impl Orchestrator {
     /// Set interval between measurements collection.
     pub fn with_scrape_interval(mut self, scrape_interval: Duration) -> Self {
         self.scrape_interval = scrape_interval;
+        self
+    }
+
+    /// Set interval with which to crash nodes.
+    pub fn with_crash_interval(mut self, crash_interval: Duration) -> Self {
+        self.crash_interval = crash_interval;
         self
     }
 
@@ -402,13 +413,9 @@ impl Orchestrator {
         let mut metrics_interval = time::interval(self.scrape_interval);
         metrics_interval.tick().await; // The first tick returns immediately.
 
-        let faulty = instances
-            .iter()
-            .cloned()
-            .take(parameters.maximum_faults())
-            .collect();
-        let mut faults_schedule = FaultsSchedule::new(FaultsType::CrashRecoveryOne, faulty);
-        let mut faults_interval = time::interval(Duration::from_secs(60));
+        let faults_type = parameters.faults.clone();
+        let mut faults_schedule = CrashRecoverySchedule::new(faults_type, instances.clone());
+        let mut faults_interval = time::interval(self.crash_interval);
         faults_interval.tick().await; // The first tick returns immediately.
 
         let start = Instant::now();
