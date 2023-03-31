@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
+use crate::db_tool::db_dump::print_table_metadata;
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -15,15 +16,16 @@ pub mod db_dump;
 #[clap(rename_all = "kebab-case")]
 pub enum DbToolCommand {
     ListTables,
-    Dump(Dump),
-    TableSummary(Dump),
+    Dump(Options),
+    TableSummary(Options),
     DuplicatesSummary,
     ResetDB,
+    ListDBMetadata(Options),
 }
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
-pub struct Dump {
+pub struct Options {
     /// The type of store to dump
     #[clap(long = "store", value_enum)]
     store_name: StoreName,
@@ -61,6 +63,9 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
         }
         DbToolCommand::DuplicatesSummary => print_db_duplicates_summary(db_path),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
+        DbToolCommand::ListDBMetadata(d) => {
+            print_table_metadata(d.store_name, d.epoch, db_path, &d.table_name)
+        }
     }
 }
 

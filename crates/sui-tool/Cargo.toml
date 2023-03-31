@@ -20,6 +20,8 @@ strum_macros = "^0.24"
 strum = "0.24.1"
 eyre = "0.6.8"
 ron = "0.8.0"
+comfy-table = "6.1.3"
+hex = "0.4.3"
 
 narwhal-types = { path = "../../narwhal/types" }
 sui-storage = { path = "../sui-storage" }
