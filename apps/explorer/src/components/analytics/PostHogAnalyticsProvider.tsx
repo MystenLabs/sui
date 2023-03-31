@@ -1,21 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PostHogConfig } from 'posthog-js';
+import { useFeature } from '@growthbook/growthbook-react';
+import { type PostHogConfig } from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
-import { ReactNode } from 'react';
+import { type ReactNode } from 'react';
+
+import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 type PostHogProviderProps = {
-    isEnabled: boolean;
     children: ReactNode;
     additionalOptions?: Partial<PostHogConfig>;
 };
 
 export function PostHogAnalyticsProvider({
-    isEnabled,
     children,
     additionalOptions,
 }: PostHogProviderProps) {
+    const { on: isEnabled } = useFeature(
+        GROWTHBOOK_FEATURES.EXPLORER_POSTHOG_ANALYTICS
+    );
+
     return isEnabled ? (
         <PostHogProvider
             apiKey="phc_IggVMJtR5vawlA4H3IIYnIyWjcK8rPiqAI1FlmKZPjp"
@@ -32,6 +37,6 @@ export function PostHogAnalyticsProvider({
             {children}
         </PostHogProvider>
     ) : (
-        <>{children}</>
+       <>{children}</>
     );
 }
