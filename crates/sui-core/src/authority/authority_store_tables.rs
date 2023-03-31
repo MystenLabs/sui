@@ -293,8 +293,46 @@ pub struct LiveSetIter<'a> {
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
 
+pub enum LiveObject {
+    Normal(Object),
+    Wrapped(ObjectKey),
+}
+
+impl LiveObject {
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            LiveObject::Normal(obj) => obj.id(),
+            LiveObject::Wrapped(key) => key.0,
+        }
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            LiveObject::Normal(obj) => obj.version(),
+            LiveObject::Wrapped(key) => key.1,
+        }
+    }
+}
+
+fn store_object_wrapper_to_live_object(
+    tables: &AuthorityPerpetualTables,
+    object_key: ObjectKey,
+    store_object: StoreObjectWrapper,
+) -> Option<LiveObject> {
+    match store_object.migrate().into_inner() {
+        StoreObject::Value(object) => {
+            let object = tables
+                .construct_object(object)
+                .expect("Constructing object from store cannot fail");
+            Some(LiveObject::Normal(object))
+        }
+        StoreObject::Wrapped => Some(LiveObject::Wrapped(object_key)),
+        StoreObject::Deleted => None,
+    }
+}
+
 impl Iterator for LiveSetIter<'_> {
-    type Item = ObjectRef;
+    type Item = LiveObject;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -304,23 +342,19 @@ impl Iterator for LiveSetIter<'_> {
 
                 if let Some((prev_key, prev_value)) = prev {
                     if prev_key.0 != next_key.0 {
-                        let obj_ref = self.tables.object_reference(&prev_key, prev_value).expect(
-                            "Couldn't construct an object reference in the live set iterator",
-                        );
-                        if !obj_ref.2.is_deleted() {
-                            return Some(obj_ref);
+                        let live_object =
+                            store_object_wrapper_to_live_object(self.tables, prev_key, prev_value);
+                        if live_object.is_some() {
+                            return live_object;
                         }
                     }
                 }
                 continue;
             }
             if let Some((key, value)) = self.prev.take() {
-                let obj_ref = self
-                    .tables
-                    .object_reference(&key, value)
-                    .expect("Couldn't construct an object reference in the live set iterator");
-                if !obj_ref.2.is_deleted() {
-                    return Some(obj_ref);
+                let live_object = store_object_wrapper_to_live_object(self.tables, key, value);
+                if live_object.is_some() {
+                    return live_object;
                 }
             }
             return None;
