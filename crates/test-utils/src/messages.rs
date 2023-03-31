@@ -39,7 +39,7 @@ use sui_types::{
 };
 
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 200_000;
+pub const MAX_GAS: u64 = 2_000_000;
 pub const MAX_DELEGATION_GAS: u64 = 150_000;
 
 /// A helper function to get all accounts and their owned GasCoin
