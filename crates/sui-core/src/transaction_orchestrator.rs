@@ -45,7 +45,7 @@ use sui_types::messages::VerifiedTransaction;
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
-const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(5);
+const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(30);
 
