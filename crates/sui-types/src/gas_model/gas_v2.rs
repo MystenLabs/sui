@@ -387,6 +387,7 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
     /// Return the new storage rebate (cost of object storage) according to `new_size`.
     fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64 {
         if self.is_unmetered() {
+            self.unmetered_storage_rebate += storage_rebate;
             return 0;
         }
         self.storage_rebate += storage_rebate;
