@@ -67,7 +67,7 @@ export function Banner({
             )}
             <div className="overflow-hidden break-words">{children}</div>
             {onDismiss ? (
-                <div className="absolute top-0 right-0">
+                <div className="absolute right-0 top-0">
                     <IconButton
                         icon={X12}
                         onClick={onDismiss}

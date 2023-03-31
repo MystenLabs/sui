@@ -10,7 +10,7 @@ export function EpochTimer() {
     const { epoch, progress, label } = useEpochProgress();
     if (!epoch) return null;
     return (
-        <div className="flex w-full items-center justify-center gap-1.5 rounded-full border border-gray-45 py-2 px-2.5 shadow-notification">
+        <div className="flex w-full items-center justify-center gap-1.5 rounded-full border border-gray-45 px-2.5 py-2 shadow-notification">
             <div className="w-5 text-steel-darker">
                 <ProgressCircle progress={progress} />
             </div>
