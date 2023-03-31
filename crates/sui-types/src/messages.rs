@@ -2384,12 +2384,6 @@ pub enum ExecutionFailureStatus {
     Limit is {max_size} bytes"
     )]
     EffectsTooLarge { current_size: u64, max_size: u64 },
-    // Indicates the transaction tried to write objects too large to storage
-    #[error(
-        "Written objects of {current_size} bytes too large. \
-    Limit is {max_size} bytes"
-    )]
-    WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
 
     #[error(
         "Publish/Upgrade Error, Missing dependency. \
@@ -2408,6 +2402,13 @@ pub enum ExecutionFailureStatus {
 
     #[error("Invalid package upgrade. {upgrade_error}")]
     PackageUpgradeError { upgrade_error: PackageUpgradeError },
+
+    // Indicates the transaction tried to write objects too large to storage
+    #[error(
+        "Written objects of {current_size} bytes too large. \
+    Limit is {max_size} bytes"
+    )]
+    WrittenObjectsTooLarge { current_size: u64, max_size: u64 },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
