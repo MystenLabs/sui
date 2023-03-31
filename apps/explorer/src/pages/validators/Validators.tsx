@@ -32,7 +32,7 @@ const NodeMap = lazy(() => import('../../components/node-map'));
 
 export function validatorsTableData(
     validators: SuiValidatorSummary[],
-    atRiskValidators: [string, number][],
+    atRiskValidators: [string, string][],
     validatorEvents: SuiEvent[],
     rollingAverageApys: ApyByValidator | null
 ) {
