@@ -8878,6 +8878,7 @@ dependencies = [
  "clap 3.2.23",
  "comfy-table",
  "duration-str",
+ "fastcrypto",
  "futures",
  "hdrhistogram",
  "indicatif",

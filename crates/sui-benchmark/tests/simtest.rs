@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-
+    use fastcrypto::ed25519::Ed25519KeyPair;
     use move_core_types::language_storage::StructTag;
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::path::PathBuf;
@@ -26,12 +26,18 @@ mod test {
     use sui_core::authority::framework_injection;
     use sui_core::checkpoints::CheckpointStore;
     use sui_framework::BuiltInFramework;
+    use sui_json_rpc_types::SuiExecutionStatus;
+    use sui_json_rpc_types::SuiObjectDataOptions;
+    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
     use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::base_types::{ObjectRef, SuiAddress};
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
-    use test_utils::messages::get_sui_gas_object_with_wallet_context;
+    use sui_types::DEEPBOOK_OBJECT_ID;
+    use test_utils::messages::{
+        create_publish_move_package_transaction, get_sui_gas_object_with_wallet_context,
+    };
     use test_utils::network::{TestCluster, TestClusterBuilder};
     use tracing::{error, info};
     use typed_store::traits::Map;
@@ -280,6 +286,7 @@ mod test {
             .unwrap();
 
         let test_init_data = TestInitData::new(&test_cluster).await;
+        let test_init_data_clone = test_init_data.clone();
 
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
@@ -316,10 +323,44 @@ mod test {
                         next_version,
                     ))
                     .await;
+                // TODO: move these DeepBook-specific checks into their own test or remove them
+                // make sure we can read the DeepBook package
+                assert!(test_cluster
+                    .sui_client()
+                    .read_api()
+                    .get_object_with_options(
+                        DEEPBOOK_OBJECT_ID,
+                        SuiObjectDataOptions::default().with_type()
+                    )
+                    .await
+                    .unwrap()
+                    .data
+                    .unwrap()
+                    .type_
+                    .unwrap()
+                    .is_package());
+
+                let keypair = test_init_data.keypair();
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.push("tests/data/deepbook_client");
+                let tx = create_publish_move_package_transaction(
+                    test_init_data.all_gas[1].1,
+                    path,
+                    test_init_data.sender,
+                    &keypair,
+                    1_000_000_000,
+                    1000,
+                );
+                let response = test_cluster.execute_transaction(tx).await.unwrap();
+                assert_eq!(
+                    *response.effects.unwrap().status(),
+                    SuiExecutionStatus::Success
+                );
             }
             finished_clone.store(true, Ordering::SeqCst);
         });
-        test_simulated_load(test_init_data.clone(), 120).await;
+
+        test_simulated_load(test_init_data_clone, 120).await;
         loop {
             if finished.load(Ordering::Relaxed) {
                 break;
@@ -360,8 +401,8 @@ mod test {
     struct TestInitData {
         keystore_path: PathBuf,
         genesis: Genesis,
-        all_gas: Vec<(StructTag, ObjectRef)>,
-        sender: SuiAddress,
+        pub all_gas: Vec<(StructTag, ObjectRef)>,
+        pub sender: SuiAddress,
     }
 
     impl TestInitData {
@@ -374,6 +415,13 @@ mod test {
                     .await,
                 sender,
             }
+        }
+
+        pub fn keypair(&self) -> Arc<Ed25519KeyPair> {
+            Arc::new(
+                get_ed25519_keypair_from_keystore(self.keystore_path.clone(), &self.sender)
+                    .unwrap(),
+            )
         }
     }
 
