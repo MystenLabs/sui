@@ -64,6 +64,12 @@ module sui::kiosk {
     const EExtensionsDisabled: u64 = 7;
     /// Attempt to `take` an item that is locked.
     const EItemLocked: u64 = 8;
+    /// Taking or mutably borrowing an item that is listed.
+    const EItemIsListed: u64 = 9;
+    /// Item does not match `Borrow` in `return_val`.
+    const EItemMismatch: u64 = 10;
+    /// An is not found while trying to borrow.
+    const EItemNotFound: u64 = 11;
 
     /// An object which allows selling collectibles within "kiosk" ecosystem.
     /// By default gives the functionality to list an item openly - for anyone
@@ -109,6 +115,12 @@ module sui::kiosk {
         /// Minimum price for which the item can be purchased.
         min_price: u64
     }
+
+    // === Utilities ===
+
+    /// Hot potato to ensure an item was returned after being taken using
+    /// the `borrow_val` call.
+    struct Borrow { kiosk_id: ID, item_id: ID }
 
     // === Dynamic Field keys ===
 
@@ -219,6 +231,7 @@ module sui::kiosk {
         assert!(object::id(self) == cap.for, ENotOwner);
         assert!(!is_locked(self, id), EItemLocked);
         assert!(!is_listed_exclusively(self, id), EListedExclusively);
+        assert!(has_item(self, id), EItemNotFound);
 
         self.item_count = self.item_count - 1;
         df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
@@ -340,26 +353,26 @@ module sui::kiosk {
     // === Kiosk fields access ===
 
     /// Check whether the an `item` is present in the `Kiosk`.
-    public fun has_item(self: &Kiosk, item: ID): bool {
-        dof::exists_(&self.id, Item { id: item })
+    public fun has_item(self: &Kiosk, id: ID): bool {
+        dof::exists_(&self.id, Item { id })
     }
 
-    /// Check whether an `item` is locked in the `Kiosk`. Meaning that
-    /// the only two actions that can be performed on it are `list` and
+    /// Check whether an item with the `id` is locked in the `Kiosk`. Meaning
+    /// that the only two actions that can be performed on it are `list` and
     /// `list_with_purchase_cap`, it cannot be `take`n out of the `Kiosk`.
-    public fun is_locked(self: &Kiosk, item: ID): bool {
-        df::exists_(&self.id, Lock { id: item })
+    public fun is_locked(self: &Kiosk, id: ID): bool {
+        df::exists_(&self.id, Lock { id })
     }
 
     /// Check whether an `item` is listed (exclusively or non exclusively).
-    public fun is_listed(self: &Kiosk, item: ID): bool {
-        df::exists_(&self.id, Listing { id: item, is_exclusive: false })
-        || is_listed_exclusively(self, item)
+    public fun is_listed(self: &Kiosk, id: ID): bool {
+        df::exists_(&self.id, Listing { id, is_exclusive: false })
+        || is_listed_exclusively(self, id)
     }
 
     /// Check whether there's a `PurchaseCap` issued for an item.
-    public fun is_listed_exclusively(self: &Kiosk, item: ID): bool {
-        df::exists_(&self.id, Listing { id: item, is_exclusive: true })
+    public fun is_listed_exclusively(self: &Kiosk, id: ID): bool {
+        df::exists_(&self.id, Listing { id, is_exclusive: true })
     }
 
     /// Check whether the `KioskOwnerCap` matches the `Kiosk`.
@@ -405,6 +418,49 @@ module sui::kiosk {
     public fun profits_mut(self: &mut Kiosk, cap: &KioskOwnerCap): &mut Balance<SUI> {
         assert!(object::id(self) == cap.for, ENotOwner);
         &mut self.profits
+    }
+
+    // === Item borrowing ===
+
+    /// Immutably borrow an item from the `Kiosk`. Any item can be `borrow`ed at any time.
+    public fun borrow<T: key + store>(self: &Kiosk, cap: &KioskOwnerCap, id: ID): &T {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
+
+        dof::borrow(&self.id, Item { id })
+    }
+
+    /// Mutably borrow an item from the `Kiosk`.
+    /// Item can be `borrow_mut`ed only if it's not `is_listed`.
+    public fun borrow_mut<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): &mut T {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
+        assert!(!is_listed(self, id), EItemIsListed);
+
+        dof::borrow_mut(&mut self.id, Item { id })
+    }
+
+    /// Take the item from the `Kiosk` with a guarantee that it will be returned.
+    /// Item can be `borrow_val`-ed only if it's not `is_listed`.
+    public fun borrow_val<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): (T, Borrow) {
+        assert!(object::id(self) == cap.for, ENotOwner);
+        assert!(has_item(self, id), EItemNotFound);
+        assert!(!is_listed(self, id), EItemIsListed);
+
+        (
+            dof::remove(&mut self.id, Item { id }),
+            Borrow { kiosk_id: object::id(self), item_id: id }
+        )
+    }
+
+    /// Return the borrowed item to the `Kiosk`. This method cannot be avoided if `borrow_val` is used.
+    public fun return_val<T: key + store>(self: &mut Kiosk, item: T, borrow: Borrow) {
+        let Borrow { kiosk_id, item_id } = borrow;
+
+        assert!(object::id(self) == kiosk_id, EWrongKiosk);
+        assert!(object::id(&item) == item_id, EItemMismatch);
+
+        dof::add(&mut self.id, Item { id: item_id }, item);
     }
 
     // === PurchaseCap fields access ===
