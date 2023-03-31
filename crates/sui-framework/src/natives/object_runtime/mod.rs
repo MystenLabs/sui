@@ -125,6 +125,9 @@ pub struct ObjectRuntime<'a> {
     pub(crate) state: ObjectRuntimeState,
     // whether or not this TX is gas metered
     is_metered: bool,
+    // FIXED BEHAVIOR if true, correctly take the loaded object versions from the object store
+    // LEGACY if false, recalculate the loaded child object versions from child object changes
+    loaded_child_objects_fixed: bool,
 
     pub(crate) constants: LocalProtocolConfig,
 }
@@ -163,6 +166,7 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
             },
             is_metered,
+            loaded_child_objects_fixed: protocol_config.loaded_child_objects_fixed(),
             constants: LocalProtocolConfig::new(protocol_config),
         }
     }
@@ -354,9 +358,14 @@ impl<'a> ObjectRuntime<'a> {
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
     ) -> Result<RuntimeResults, ExecutionError> {
-        let child_effects = self.object_store.take_effects();
-        self.state
-            .finish(by_value_inputs, external_transfers, child_effects)
+        let (loaded_child_objects, child_effects) = self.object_store.take_effects();
+        self.state.finish(
+            by_value_inputs,
+            external_transfers,
+            loaded_child_objects,
+            child_effects,
+            self.loaded_child_objects_fixed,
+        )
     }
 
     pub(crate) fn all_active_child_objects(
@@ -388,10 +397,19 @@ impl ObjectRuntimeState {
         mut self,
         by_value_inputs: BTreeSet<ObjectID>,
         external_transfers: BTreeSet<ObjectID>,
+        mut loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
         child_object_effects: BTreeMap<ObjectID, ChildObjectEffect>,
+        loaded_child_objects_fixed: bool,
     ) -> Result<RuntimeResults, ExecutionError> {
         let mut wrapped_children = BTreeSet::new();
-        let mut loaded_child_objects = BTreeMap::new();
+        if !loaded_child_objects_fixed {
+            loaded_child_objects = BTreeMap::new();
+            for (child, child_object_effect) in &child_object_effects {
+                if let Some(version) = child_object_effect.loaded_version {
+                    loaded_child_objects.insert(*child, version);
+                }
+            }
+        }
         for (child, child_object_effect) in child_object_effects {
             let ChildObjectEffect {
                 owner: parent,
@@ -400,12 +418,12 @@ impl ObjectRuntimeState {
                 move_type,
                 effect,
             } = child_object_effect;
-            if let Some(v) = loaded_version {
+            if loaded_child_objects.contains_key(&child) {
                 // remove if from new_ids if it was loaded for case in dynamic fields where the
                 // Field object was removed and then re-added in a single transaction
                 self.new_ids.remove(&child);
-                loaded_child_objects.insert(child, v);
             }
+
             match effect {
                 // was modified, so mark it as mutated and transferred
                 Op::Modify(v) => {

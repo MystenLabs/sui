@@ -121,6 +121,9 @@ struct FeatureFlags {
     commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
     advance_epoch_start_time_in_safe_mode: bool,
+    // If true, apply the fix to correctly capturing loaded child object versions in execution's
+    // object runtime.
+    loaded_child_objects_fixed: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -561,6 +564,10 @@ impl ProtocolConfig {
 
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
         self.feature_flags.advance_epoch_start_time_in_safe_mode
+    }
+
+    pub fn loaded_child_objects_fixed(&self) -> bool {
+        self.feature_flags.loaded_child_objects_fixed
     }
 }
 
@@ -1494,6 +1501,7 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(2_000);
                 // storage gas price multiplier
                 cfg.storage_gas_price = Some(76);
+                cfg.feature_flags.loaded_child_objects_fixed = true;
                 cfg
             }
             // Use this template when making changes:
