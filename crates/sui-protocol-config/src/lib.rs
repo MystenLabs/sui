@@ -141,10 +141,13 @@ struct FeatureFlags {
 /// - Initialize the field to `None` in prior protocol versions.
 /// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
-///
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
+/// - Alternatively, by deriving `ProtocolConfigGetters`, every field of name `config_field` with type `Option<config_type>` will be automatically have two getters derived
+///     `get_for_current_version_config_field(&self) -> Option<config_type>` and `et_for_version_config_field(version: ProtocolVersion) -> `Option<config_type>`.
+///     This can be used to get the value of a field at the specified version if it exists, or `None` otherwise.
+///     We can use this to access fields only if they exist, without crashing.
 #[skip_serializing_none]
 #[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
 pub struct ProtocolConfig {
