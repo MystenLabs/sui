@@ -82,7 +82,7 @@ export function ValidatorFormDetail({
         );
     }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
-    const apy = rollingAverageApys?.[validatorAddress] || 0;
+    const apy = rollingAverageApys?.[validatorAddress] || null;
 
     if (isLoading || loadingValidators) {
         return (
@@ -155,7 +155,7 @@ export function ValidatorFormDetail({
                                 weight="semibold"
                                 color="gray-90"
                             >
-                                {apy > 0 ? `${apy}%` : '--'}
+                                {apy === null ? '--' : `${apy}%`}
                             </Text>
                         </div>
                         <div className="flex gap-2 items-center justify-between">
