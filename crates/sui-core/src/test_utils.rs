@@ -331,7 +331,7 @@ pub fn make_dummy_tx(
             random_object_ref(),
             sender,
             random_object_ref(),
-            10000,
+            5_000_000_000,
         ),
         Intent::default(),
         vec![sender_sec],

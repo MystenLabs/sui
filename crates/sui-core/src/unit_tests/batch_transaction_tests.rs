@@ -64,7 +64,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .unwrap()
             .compute_object_reference()],
         builder.finish(),
-        1000000,
+        5_000_000_000,
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);
