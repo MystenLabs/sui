@@ -303,6 +303,8 @@ impl Subscriber {
         certificate: &Certificate,
         worker_id: &WorkerId,
     ) -> Vec<NetworkPublicKey> {
+        // Can include own authority and worker, but worker will always check local storage when
+        // fetching paylods.
         let authorities = certificate.signed_authorities(&inner.committee);
         authorities
             .into_iter()

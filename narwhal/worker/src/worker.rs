@@ -80,7 +80,8 @@ impl Worker {
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
-        let worker_peer_id = PeerId(keypair.public().0.to_bytes());
+        let worker_name = keypair.public().clone();
+        let worker_peer_id = PeerId(worker_name.0.to_bytes());
         info!("Boot worker node with id {} peer id {}", id, worker_peer_id,);
 
         // Define a worker instance.
@@ -265,8 +266,12 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
-        let batch_fetcher =
-            BatchFetcher::new(network.clone(), worker.store.clone(), node_metrics.clone());
+        let batch_fetcher = BatchFetcher::new(
+            worker_name,
+            network.clone(),
+            worker.store.clone(),
+            node_metrics.clone(),
+        );
         client.set_primary_to_worker_local_handler(
             worker_peer_id,
             Arc::new(PrimaryReceiverHandler {

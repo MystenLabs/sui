@@ -277,6 +277,9 @@ impl PrimaryNodeInner {
             (None, NetworkModel::PartiallySynchronous)
         };
 
+        // TODO: the same set of variables are sent to primary, consensus and downstream
+        // components. Consider using a holder struct to pass them around.
+
         // Spawn the primary.
         let primary_handles = Primary::spawn(
             authority.clone(),
