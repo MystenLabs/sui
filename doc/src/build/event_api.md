@@ -28,7 +28,7 @@ Move event attributes:
  * `sender`
  * `type`
  * `fields`
- * `bcs`  
+ * `bcs`
 
 ### Example Move event
 
@@ -112,7 +112,7 @@ Delete object events occur when you delete an object.
  * `packageId`
  * `transactionModule`
  * `sender`
- * `objectId`  
+ * `objectId`
 
 ### Example delete object event
 
@@ -508,13 +508,13 @@ We provide a few operators for combining filters:
 The following example demonstrates how to subscribe to Move events (`MoveEvent`) that a `<PACKAGE-ID>::nft` package emits:
 
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-MODULE-ID>"}, {"Module":"nft"}]}]}
+>> {"jsonrpc":"2.0", "id": 1, "method": "suix_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"<PACKAGE-MODULE-ID>"}, {"Module":"nft"}]}]}
 << {"jsonrpc":"2.0","result":3121662727959200,"id":1}
 ```
 
 To unsubscribe from this stream, use:
 
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_unsubscribeEvent", "params": [3121662727959200]}
+>> {"jsonrpc":"2.0", "id": 1, "method": "suix_unsubscribeEvent", "params": [3121662727959200]}
 << {"jsonrpc":"2.0","result":true,"id":1}
 ```

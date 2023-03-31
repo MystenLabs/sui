@@ -313,11 +313,11 @@ const subscriptionId = await provider.subscribeEvent(
 );
 
 // later, to unsubscribe
-// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
+// calls RPC method 'suix_unsubscribeEvent' with params: [ subscriptionId ]
 const subFoundAndRemoved = await provider.unsubscribeEvent(subscriptionId);
 
 // Updated for release .28
-// calls RPC method 'sui_subscribeEvent' with params:
+// calls RPC method 'suix_subscribeEvent' with params:
 // [ { Sender: '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3' } ]
 const subscriptionId = await provider.subscribeEvent({
   filter: { Sender: "0xbff6ccc8707aa517b4f1b95750a2a8c666012df3" },
@@ -327,7 +327,7 @@ const subscriptionId = await provider.subscribeEvent({
 });
 
 // later, to unsubscribe
-// calls RPC method 'sui_unsubscribeEvent' with params: [ subscriptionId ]
+// calls RPC method 'suix_unsubscribeEvent' with params: [ subscriptionId ]
 const subFoundAndRemoved = await provider.unsubscribeEvent({
   id: subscriptionId,
 });

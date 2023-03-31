@@ -214,7 +214,7 @@ export class WebsocketClient {
           if (!filter || !onMessage) return Promise.resolve(null);
           /**
             re-subscribe to the same filter & replace the subscription id.
-            we skip calling sui_unsubscribeEvent for the old sub id, because:
+            we skip calling suix_unsubscribeEvent for the old sub id, because:
               * we assume this is being called after a reconnection
               * the node keys subscriptions with a combo of connection id & subscription id
           */
