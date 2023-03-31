@@ -634,11 +634,10 @@ export class TransactionBlock {
             overrides: {
               gasConfig: {
                 budget: String(MAX_GAS),
-                // use user provided payment.
-                payment: [],
-                // payment: this.#blockData.gasConfig.payment
-                //   ? this.#blockData.gasConfig.payment
-                //   : [],
+                // use user provided payment if it exists.
+                payment: this.#blockData.gasConfig.payment
+                  ? this.#blockData.gasConfig.payment
+                  : [],
               },
             },
           }),
