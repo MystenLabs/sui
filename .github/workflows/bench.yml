@@ -150,7 +150,7 @@ jobs:
     name: indexer
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     services:
       postgres:
         image: postgres
@@ -169,7 +169,7 @@ jobs:
 
       - name: Run indexer benchmark
         run: |
-          cargo bench --bench indexer_benchmark | tee output.txt
+          cargo bench --bench indexer_benchmark -- --output-format bencher | tee output.txt
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432

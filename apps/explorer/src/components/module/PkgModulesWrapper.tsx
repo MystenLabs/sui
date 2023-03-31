@@ -131,7 +131,7 @@ function PkgModuleViewWrapper({ id, modules }: Props) {
                                     <button
                                         type="button"
                                         className={clsx(
-                                            'mt-0.5 block w-full cursor-pointer rounded-md border py-2 px-1.5 text-left text-body',
+                                            'mt-0.5 block w-full cursor-pointer rounded-md border px-1.5 py-2 text-left text-body',
                                             active
                                                 ? 'border-transparent bg-sui/10 text-gray-80'
                                                 : 'border-transparent bg-white font-medium text-gray-80'

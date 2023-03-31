@@ -18,6 +18,7 @@ use move_core_types::{
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::ops::AddAssign;
 use std::{
     convert::TryFrom,
     ops::{Add, Deref, Mul},
@@ -27,6 +28,21 @@ use sui_cost_tables::{
     units_types::GasUnit,
 };
 use sui_protocol_config::*;
+
+macro_rules! ok_or_gas_balance_error {
+    ($balance:expr, $required:expr) => {
+        if $balance < $required {
+            Err(UserInputError::GasBalanceTooLow {
+                gas_balance: $balance,
+                needed_gas_amount: $required,
+            })
+        } else {
+            Ok(())
+        }
+    };
+}
+
+sui_macros::checked_arithmetic! {
 
 // A bucket defines a range of units that will be priced the same.
 // A cost for the bucket is defined to make the step function non linear.
@@ -83,19 +99,6 @@ pub type ComputeGasPricePerUnit = GasQuantity<UnitDiv<GasUnit, GasUnit>>;
 
 pub type GasPrice = GasQuantity<GasPriceUnit>;
 pub type SuiGas = GasQuantity<SuiGasUnit>;
-
-macro_rules! ok_or_gas_balance_error {
-    ($balance:expr, $required:expr) => {
-        if $balance < $required {
-            Err(UserInputError::GasBalanceTooLow {
-                gas_balance: $balance,
-                needed_gas_amount: $required,
-            })
-        } else {
-            Ok(())
-        }
-    };
-}
 
 /// Summary of the charges in a transaction.
 /// Storage is charged independently of computation.
@@ -347,6 +350,9 @@ pub struct SuiGasStatus<'a> {
     /// was the storage cost paid when the object was last mutated. It is not affected
     /// by the current storage gas unit price.
     storage_rebate: SuiGas,
+    /// Amount of storage rebate accumulated when we are running in unmetered mode (i.e. system transaction).
+    /// This allows us to track how much storage rebate we need to retain in system transactions.
+    unmetered_storage_rebate: SuiGas,
 
     cost_table: SuiCostTable,
 }
@@ -397,6 +403,10 @@ impl<'a> SuiGasStatus<'a> {
         self.storage_rebate.into()
     }
 
+    pub fn unmetered_storage_rebate(&self) -> u64 {
+        self.unmetered_storage_rebate.into()
+    }
+
     pub fn storage_gas_units(&self) -> u64 {
         self.storage_gas_units.into()
     }
@@ -430,6 +440,7 @@ impl<'a> SuiGasStatus<'a> {
     pub fn reset_storage_cost_and_rebate(&mut self) {
         self.storage_gas_units = GasQuantity::zero();
         self.storage_rebate = GasQuantity::zero();
+        self.unmetered_storage_rebate = GasQuantity::zero();
     }
 
     /// Try to charge the minimal amount of gas from the gas object.
@@ -467,13 +478,14 @@ impl<'a> SuiGasStatus<'a> {
         storage_rebate: SuiGas,
     ) -> Result<u64, ExecutionError> {
         if self.is_unmetered() {
+            self.unmetered_storage_rebate.add_assign(storage_rebate);
             return Ok(0);
         }
 
         let storage_cost =
             NumBytes::new(new_size as u64).mul(*self.cost_table.storage_per_byte_cost);
         self.deduct_storage_cost(&storage_cost).map(|gu| {
-            self.storage_rebate += storage_rebate;
+            self.storage_rebate.add_assign(storage_rebate);
             gu.into()
         })
     }
@@ -530,6 +542,7 @@ impl<'a> SuiGasStatus<'a> {
             storage_gas_unit_price: ComputeGasPricePerUnit::new(storage_gas_unit_price),
             storage_gas_units: GasUnits::new(0),
             storage_rebate: 0.into(),
+            unmetered_storage_rebate: 0.into(),
             cost_table,
         }
     }
@@ -593,13 +606,13 @@ pub fn check_gas_balance(
     if required_gas_amount > max_gas_budget {
         return Err(UserInputError::GasBudgetTooHigh {
             gas_budget,
-            max_budget: cost_table.max_gas_budget,
+            max_budget: max_gas_budget as u64,
         });
     }
     if required_gas_amount < min_gas_budget {
         return Err(UserInputError::GasBudgetTooLow {
             gas_budget,
-            min_budget: cost_table.min_gas_budget_external(),
+            min_budget: min_gas_budget as u64,
         });
     }
 
@@ -660,4 +673,6 @@ pub fn get_gas_balance(gas_object: &Object) -> UserInputResult<u64> {
             object_id: gas_object.id(),
         })?
         .value())
+}
+
 }

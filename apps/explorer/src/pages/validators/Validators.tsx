@@ -7,7 +7,7 @@ import {
     type ApyByValidator,
     useGetValidatorsEvents,
 } from '@mysten/core';
-import { type SuiSystemStateSummary, type SuiEvent } from '@mysten/sui.js';
+import { type SuiEvent, type SuiValidatorSummary } from '@mysten/sui.js';
 import { lazy, Suspense, useMemo } from 'react';
 
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
@@ -31,37 +31,40 @@ const APY_DECIMALS = 3;
 const NodeMap = lazy(() => import('../../components/node-map'));
 
 export function validatorsTableData(
-    systemState: SuiSystemStateSummary,
+    validators: SuiValidatorSummary[],
+    atRiskValidators: [string, number][],
     validatorEvents: SuiEvent[],
     rollingAverageApys: ApyByValidator | null
 ) {
     return {
-        data: systemState.activeValidators.map((validator) => {
-            const validatorName = validator.name;
-            const totalStake = validator.stakingPoolSuiBalance;
-            const img = validator.imageUrl;
+        data: [...validators]
+            .sort(() => 0.5 - Math.random())
+            .map((validator) => {
+                const validatorName = validator.name;
+                const totalStake = validator.stakingPoolSuiBalance;
+                const img = validator.imageUrl;
 
-            const event = getValidatorMoveEvent(
-                validatorEvents,
-                validator.suiAddress
-            );
-            return {
-                name: {
-                    name: validatorName,
-                    logo: validator.imageUrl,
-                },
-                stake: totalStake,
-                apy: rollingAverageApys?.[validator.suiAddress] || 0,
-                nextEpochGasPrice: validator.nextEpochGasPrice,
-                commission: +validator.commissionRate / 100,
-                img: img,
-                address: validator.suiAddress,
-                lastReward: +event?.pool_staking_reward || 0,
-                atRisk: systemState.atRiskValidators.some(
-                    ([address]) => address === validator.suiAddress
-                ),
-            };
-        }),
+                const event = getValidatorMoveEvent(
+                    validatorEvents,
+                    validator.suiAddress
+                );
+                return {
+                    name: {
+                        name: validatorName,
+                        logo: validator.imageUrl,
+                    },
+                    stake: totalStake,
+                    apy: rollingAverageApys?.[validator.suiAddress] || 0,
+                    nextEpochGasPrice: validator.nextEpochGasPrice,
+                    commission: +validator.commissionRate / 100,
+                    img: img,
+                    address: validator.suiAddress,
+                    lastReward: +event?.pool_staking_reward || 0,
+                    atRisk: atRiskValidators.some(
+                        ([address]) => address === validator.suiAddress
+                    ),
+                };
+            }),
         columns: [
             {
                 header: '#',
@@ -119,7 +122,7 @@ export function validatorsTableData(
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
             },
             {
-                header: 'Next Epoch Gas Price',
+                header: 'Proposed Next Epoch Gas Price',
                 accessorKey: 'nextEpochGasPrice',
                 enableSorting: true,
                 cell: (props: any) => <StakeColumn stake={props.getValue()} />,
@@ -224,7 +227,7 @@ function ValidatorPageResult() {
         if (!validatorEvents) return 0;
         let totalRewards = 0;
 
-        validatorEvents.data.forEach(({ parsedJson }) => {
+        validatorEvents.forEach(({ parsedJson }) => {
             totalRewards += +parsedJson!.pool_staking_reward;
         });
 
@@ -234,13 +237,12 @@ function ValidatorPageResult() {
     const validatorsTable = useMemo(() => {
         if (!data || !validatorEvents) return null;
         return validatorsTableData(
-            data,
-            validatorEvents.data,
+            data.activeValidators,
+            data.atRiskValidators,
+            validatorEvents,
             rollingAverageApys
         );
     }, [data, validatorEvents, rollingAverageApys]);
-
-    const defaultSorting = [{ id: 'stake', desc: false }];
 
     if (isError || validatorEventError) {
         return (
@@ -332,7 +334,6 @@ function ValidatorPageResult() {
                             data={validatorsTable.data}
                             columns={validatorsTable.columns}
                             sortTable
-                            defaultSorting={defaultSorting}
                         />
                     )}
                 </ErrorBoundary>

@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-
 use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
@@ -19,11 +14,17 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use sui_types::sui_serde::SuiStructTag;
 
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{
-    MoveObjectType, ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber,
-    SuiAddress, TransactionDigest,
+    ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, SuiAddress,
+    TransactionDigest,
 };
 use sui_types::error::{SuiObjectResponseError, UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
@@ -58,6 +59,32 @@ impl SuiObjectResponse {
             data: None,
             error: Some(error),
         }
+    }
+}
+
+impl Ord for SuiObjectResponse {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (&self.data, &other.data) {
+            (Some(data), Some(data_2)) => {
+                if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Greater) {
+                    return Ordering::Greater;
+                } else if data.object_id.cmp(&data_2.object_id).eq(&Ordering::Less) {
+                    return Ordering::Less;
+                }
+                Ordering::Equal
+            }
+            // In this ordering those with data will come before SuiObjectResponses that are errors.
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            // SuiObjectResponses that are errors are just considered equal.
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl PartialOrd for SuiObjectResponse {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -182,7 +209,7 @@ impl SuiObjectData {
 
     pub fn is_gas_coin(&self) -> bool {
         match self.type_.as_ref() {
-            Some(ObjectType::Struct(MoveObjectType::GasCoin)) => true,
+            Some(ObjectType::Struct(ty)) if ty.is_gas_coin() => true,
             Some(_) => false,
             None => false,
         }
@@ -789,7 +816,7 @@ pub trait SuiMoveObject: Sized {
 #[serde(rename = "MoveObject", rename_all = "camelCase")]
 pub struct SuiParsedMoveObject {
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     #[schemars(with = "String")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
@@ -841,7 +868,7 @@ pub fn type_and_fields_from_move_struct(
 pub struct SuiRawMoveObject {
     #[schemars(with = "String")]
     #[serde(rename = "type")]
-    #[serde_as(as = "DisplayFromStr")]
+    #[serde_as(as = "SuiStructTag")]
     pub type_: StructTag,
     pub has_public_transfer: bool,
     pub version: SequenceNumber,
@@ -1029,7 +1056,7 @@ pub enum SuiObjectDataFilter {
     /// Query by type
     StructType(
         #[schemars(with = "String")]
-        #[serde_as(as = "DisplayFromStr")]
+        #[serde_as(as = "SuiStructTag")]
         StructTag,
     ),
     AddressOwner(SuiAddress),

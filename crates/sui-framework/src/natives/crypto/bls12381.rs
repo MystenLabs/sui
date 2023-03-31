@@ -37,7 +37,7 @@ pub fn bls12381_min_sig_verify(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 3);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let bls12381_bls12381_min_sig_verify_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
@@ -70,10 +70,9 @@ pub fn bls12381_min_sig_verify(
 
     let cost = context.gas_used();
 
-    let signature =
-        match <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-            Ok(signature) => signature,
-            Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(signature) =
+         <min_sig::BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes_ref)  else {
+            return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
         };
 
     let public_key =
@@ -85,10 +84,10 @@ pub fn bls12381_min_sig_verify(
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 
-    match public_key.verify(&msg_ref, &signature) {
-        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
-        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    }
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
+    ))
 }
 
 #[derive(Clone)]
@@ -157,8 +156,8 @@ pub fn bls12381_min_pk_verify(
             Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
         };
 
-    match public_key.verify(&msg_ref, &signature) {
-        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
-        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
-    }
+    Ok(NativeResult::ok(
+        cost,
+        smallvec![Value::bool(public_key.verify(&msg_ref, &signature).is_ok())],
+    ))
 }

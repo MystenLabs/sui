@@ -5,8 +5,8 @@
 module sui_system::validator_set_tests {
     use sui::balance;
     use sui::coin;
-    use sui_system::staking_pool::StakedSui;
     use sui::tx_context::TxContext;
+    use sui_system::staking_pool::StakedSui;
     use sui_system::validator::{Self, Validator, staking_pool_id};
     use sui_system::validator_set::{Self, ValidatorSet, active_validator_addresses};
     use sui::test_scenario::{Self, Scenario};
@@ -15,21 +15,22 @@ module sui_system::validator_set_tests {
     use std::option;
     use sui::test_utils::{Self, assert_eq};
 
+    const MIST_PER_SUI: u64 = 1_000_000_000; // used internally for stakes.
+
     #[test]
     fun test_validator_set_flow() {
-        let scenario_val = test_scenario::begin(@0x1);
-        let scenario = &mut scenario_val;
-        let ctx1 = test_scenario::ctx(scenario);
-
         // Create 4 validators, with stake 100, 200, 300, 400. Only the first validator is an initial validator.
-        let validator1 = create_validator(@0x1, 1, 1, true, ctx1);
-        let validator2 = create_validator(@0x2, 2, 1, false, ctx1);
-        let validator3 = create_validator(@0x3, 3, 1, false, ctx1);
-        let validator4 = create_validator(@0x4, 4, 1, false, ctx1);
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
+        let validator2 = create_validator(@0x2, 2, 1, false, ctx);
+        let validator3 = create_validator(@0x3, 3, 1, false, ctx);
+        let validator4 = create_validator(@0x4, 4, 1, false, ctx);
 
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[validator1], ctx1);
-        assert!(validator_set::total_stake(&validator_set) == 100, 0);
+        let validator_set = validator_set::new(vector[validator1], ctx);
+        assert!(validator_set::total_stake(&validator_set) == 100 * MIST_PER_SUI, 0);
 
         // Add the other 3 validators one by one.
         add_and_activate_validator(
@@ -38,26 +39,28 @@ module sui_system::validator_set_tests {
             scenario
         );
         // Adding validator during the epoch should not affect stake and quorum threshold.
-        assert!(validator_set::total_stake(&validator_set) == 100, 0);
+        assert!(validator_set::total_stake(&validator_set) == 100 * MIST_PER_SUI, 0);
 
         add_and_activate_validator(
             &mut validator_set,
             validator3,
             scenario
         );
+        test_scenario::end(scenario_val);
 
-        test_scenario::next_tx(scenario, @0x1);
+        let scenario_val = test_scenario::begin(@0x1);
+        let scenario = &mut scenario_val;
         {
             let ctx1 = test_scenario::ctx(scenario);
             validator_set::request_add_stake(
                 &mut validator_set,
                 @0x1,
-                coin::into_balance(coin::mint_for_testing(500, ctx1)),
+                coin::into_balance(coin::mint_for_testing(500 * MIST_PER_SUI, ctx1)),
                 ctx1,
             );
             // Adding stake to existing active validator during the epoch
             // should not change total stake.
-            assert!(validator_set::total_stake(&validator_set) == 100, 0);
+            assert!(validator_set::total_stake(&validator_set) == 100 * MIST_PER_SUI, 0);
         };
 
         add_and_activate_validator(
@@ -68,7 +71,7 @@ module sui_system::validator_set_tests {
 
         advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
         // Total stake for these should be the starting stake + the 500 staked with validator 1 in addition to the starting stake.
-        assert!(validator_set::total_stake(&validator_set) == 1500, 0);
+        assert!(validator_set::total_stake(&validator_set) == 1500 * MIST_PER_SUI, 0);
 
         test_scenario::next_tx(scenario, @0x1);
         {
@@ -81,10 +84,10 @@ module sui_system::validator_set_tests {
         };
 
         // Total validator candidate count changes, but total stake remains during epoch.
-        assert!(validator_set::total_stake(&validator_set) == 1500, 0);
+        assert!(validator_set::total_stake(&validator_set) == 1500 * MIST_PER_SUI, 0);
         advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
         // Validator1 is gone. This removes its stake (100) + the 500 staked with it.
-        assert!(validator_set::total_stake(&validator_set) == 900, 0);
+        assert!(validator_set::total_stake(&validator_set) == 900 * MIST_PER_SUI, 0);
 
         test_utils::destroy(validator_set);
         test_scenario::end(scenario_val);
@@ -92,18 +95,17 @@ module sui_system::validator_set_tests {
 
     #[test]
     fun test_reference_gas_price_derivation() {
-        let scenario_val = test_scenario::begin(@0x1);
-        let scenario = &mut scenario_val;
-        let ctx1 = test_scenario::ctx(scenario);
         // Create 5 validators with different stakes and different gas prices.
-        let v1 = create_validator(@0x1, 1, 45, true, ctx1);
-        let v2 = create_validator(@0x2, 2, 42, false, ctx1);
-        let v3 = create_validator(@0x3, 3, 40, false, ctx1);
-        let v4 = create_validator(@0x4, 4, 41, false, ctx1);
-        let v5 = create_validator(@0x5, 10, 43, false, ctx1);
-
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        let v1 = create_validator(@0x1, 1, 45, true, ctx);
+        let v2 = create_validator(@0x2, 2, 42, false, ctx);
+        let v3 = create_validator(@0x3, 3, 40, false, ctx);
+        let v4 = create_validator(@0x4, 4, 41, false, ctx);
+        let v5 = create_validator(@0x5, 10, 43, false, ctx);
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[v1], ctx1);
+        let validator_set = validator_set::new(vector[v1], ctx);
 
         assert_eq(validator_set::derive_reference_gas_price(&validator_set), 45);
 
@@ -144,20 +146,78 @@ module sui_system::validator_set_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = validator_set::EMinJoiningStakeNotReached)]
-    fun test_add_validator_failure_below_min_stake() {
+    #[expected_failure(abort_code = validator_set::EStakingBelowThreshold)]
+    fun test_staking_below_threshold() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
+        let validator_set = validator_set::new(vector[validator1], ctx);
+        assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
+        test_scenario::end(scenario_val);
+
         let scenario_val = test_scenario::begin(@0x1);
         let scenario = &mut scenario_val;
         let ctx1 = test_scenario::ctx(scenario);
 
+        validator_set::request_add_stake(
+            &mut validator_set,
+            @0x1,
+            balance::create_for_testing(MIST_PER_SUI - 1), // 1 MIST lower than the threshold
+            ctx1,
+        );
+        test_utils::destroy(validator_set);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun test_staking_min_threshold() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
+        let validator_set = validator_set::new(vector[validator1], ctx);
+        assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
+        test_scenario::end(scenario_val);
+
+        let scenario_val = test_scenario::begin(@0x1);
+        let scenario = &mut scenario_val;
+        let ctx1 = test_scenario::ctx(scenario);
+        validator_set::request_add_stake(
+            &mut validator_set,
+            @0x1,
+            balance::create_for_testing(MIST_PER_SUI), // min possible stake
+            ctx1,
+        );
+
+        advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
+        assert!(validator_set::total_stake(&validator_set) == 101 * MIST_PER_SUI, 0);
+
+        test_utils::destroy(validator_set);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = validator_set::EMinJoiningStakeNotReached)]
+    fun test_add_validator_failure_below_min_stake() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+
         // Create 2 validators, with stake 100 and 200.
-        let validator1 = create_validator(@0x1, 1, 1, true, ctx1);
-        let validator2 = create_validator(@0x2, 2, 1, false, ctx1);
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
+        let validator2 = create_validator(@0x2, 2, 1, false, ctx);
 
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[validator1], ctx1);
-        assert_eq(validator_set::total_stake(&validator_set), 100);
+        let validator_set = validator_set::new(vector[validator1], ctx);
+        assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
+        test_scenario::end(scenario_val);
 
+        let scenario_val = test_scenario::begin(@0x1);
+        let scenario = &mut scenario_val;
+        let ctx1 = test_scenario::ctx(scenario);
         validator_set::request_add_validator_candidate(&mut validator_set, validator2, ctx1);
 
         test_scenario::next_tx(scenario, @0x42);
@@ -166,16 +226,16 @@ module sui_system::validator_set_tests {
             validator_set::request_add_stake(
                 &mut validator_set,
                 @0x2,
-                balance::create_for_testing(500),
+                balance::create_for_testing(500 * MIST_PER_SUI),
                 ctx,
             );
             // Adding stake to a preactive validator should not change total stake.
-            assert_eq(validator_set::total_stake(&validator_set), 100);
+            assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
         };
 
         test_scenario::next_tx(scenario, @0x2);
-        // Validator 2 now has 700 MIST in stake but that's not enough because we need 701.
-        validator_set::request_add_validator(&mut validator_set, 701, test_scenario::ctx(scenario));
+        // Validator 2 now has 700 SUI in stake but that's not enough because we need 701.
+        validator_set::request_add_validator(&mut validator_set, 701 * MIST_PER_SUI, test_scenario::ctx(scenario));
 
         test_utils::destroy(validator_set);
         test_scenario::end(scenario_val);
@@ -183,18 +243,22 @@ module sui_system::validator_set_tests {
 
     #[test]
     fun test_add_validator_with_nonzero_min_stake() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+
+        // Create 2 validators, with stake 100 and 200.
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
+        let validator2 = create_validator(@0x2, 2, 1, false, ctx);
+
+        // Create a validator set with only the first validator in it.
+        let validator_set = validator_set::new(vector[validator1], ctx);
+        assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
+        test_scenario::end(scenario_val);
+
         let scenario_val = test_scenario::begin(@0x1);
         let scenario = &mut scenario_val;
         let ctx1 = test_scenario::ctx(scenario);
-
-        // Create 2 validators, with stake 100 and 200.
-        let validator1 = create_validator(@0x1, 1, 1, true, ctx1);
-        let validator2 = create_validator(@0x2, 2, 1, false, ctx1);
-
-        // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[validator1], ctx1);
-        assert_eq(validator_set::total_stake(&validator_set), 100);
-
         validator_set::request_add_validator_candidate(&mut validator_set, validator2, ctx1);
 
         test_scenario::next_tx(scenario, @0x42);
@@ -203,16 +267,16 @@ module sui_system::validator_set_tests {
             validator_set::request_add_stake(
                 &mut validator_set,
                 @0x2,
-                balance::create_for_testing(500),
+                balance::create_for_testing(500 * MIST_PER_SUI),
                 ctx,
             );
             // Adding stake to a preactive validator should not change total stake.
-            assert_eq(validator_set::total_stake(&validator_set), 100);
+            assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
         };
 
         test_scenario::next_tx(scenario, @0x2);
-        // Validator 2 now has 700 MIST in stake and that's just enough.
-        validator_set::request_add_validator(&mut validator_set, 700, test_scenario::ctx(scenario));
+        // Validator 2 now has 700 SUI in stake and that's just enough.
+        validator_set::request_add_validator(&mut validator_set, 700 * MIST_PER_SUI, test_scenario::ctx(scenario));
 
         test_utils::destroy(validator_set);
         test_scenario::end(scenario_val);
@@ -220,20 +284,24 @@ module sui_system::validator_set_tests {
 
     #[test]
     fun test_add_candidate_then_remove() {
-        let scenario_val = test_scenario::begin(@0x1);
+        let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
-        let ctx1 = test_scenario::ctx(scenario);
+        let ctx = test_scenario::ctx(scenario);
 
         // Create 2 validators, with stake 100 and 200.
-        let validator1 = create_validator(@0x1, 1, 1, true, ctx1);
-        let validator2 = create_validator(@0x2, 2, 1, false, ctx1);
+        let validator1 = create_validator(@0x1, 1, 1, true, ctx);
+        let validator2 = create_validator(@0x2, 2, 1, false, ctx);
 
         let pool_id_2 = staking_pool_id(&validator2);
 
         // Create a validator set with only the first validator in it.
-        let validator_set = validator_set::new(vector[validator1], ctx1);
-        assert_eq(validator_set::total_stake(&validator_set), 100);
+        let validator_set = validator_set::new(vector[validator1], ctx);
+        assert_eq(validator_set::total_stake(&validator_set), 100 * MIST_PER_SUI);
+        test_scenario::end(scenario_val);
 
+        let scenario_val = test_scenario::begin(@0x1);
+        let scenario = &mut scenario_val;
+        let ctx1 = test_scenario::ctx(scenario);
         // Add the second one as a candidate.
         validator_set::request_add_validator_candidate(&mut validator_set, validator2, ctx1);
         assert!(validator_set::is_validator_candidate(&validator_set, @0x2), 0);
@@ -250,17 +318,20 @@ module sui_system::validator_set_tests {
 
     #[test]
     fun test_low_stake_departure() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+        let ctx = test_scenario::ctx(scenario);
+        // Create 4 validators.
+        let v1 = create_validator(@0x1, 1, 1, true, ctx); // 100 SUI of stake
+        let v2 = create_validator(@0x2, 4, 1, true, ctx); // 400 SUI of stake
+        let v3 = create_validator(@0x3, 10, 1, true, ctx); // 1000 SUI of stake
+        let v4 = create_validator(@0x4, 4, 1, true, ctx); // 400 SUI of stake
+
+        let validator_set = validator_set::new(vector[v1, v2, v3, v4], ctx);
+        test_scenario::end(scenario_val);
+
         let scenario_val = test_scenario::begin(@0x1);
         let scenario = &mut scenario_val;
-        let ctx1 = test_scenario::ctx(scenario);
-        // Create 4 validators.
-        let v1 = create_validator(@0x1, 1, 1, true, ctx1); // 100 MIST of stake
-        let v2 = create_validator(@0x2, 4, 1, true, ctx1); // 400 MIST of stake
-        let v3 = create_validator(@0x3, 10, 1, true, ctx1); // 1000 MIST of stake
-        let v4 = create_validator(@0x4, 4, 1, true, ctx1); // 400 MIST of stake
-
-        let validator_set = validator_set::new(vector[v1, v2, v3, v4], ctx1);
-
         assert_eq(active_validator_addresses(&validator_set), vector[@0x1, @0x2, @0x3, @0x4]);
 
         advance_epoch_with_low_stake_params(
@@ -288,7 +359,7 @@ module sui_system::validator_set_tests {
             validator_set::request_add_stake(
                 &mut validator_set,
                 @0x4,
-                balance::create_for_testing(500),
+                balance::create_for_testing(500 * MIST_PER_SUI),
                 ctx,
             );
         };
@@ -333,7 +404,7 @@ module sui_system::validator_set_tests {
     }
 
     fun create_validator(addr: address, hint: u8, gas_price: u64, is_initial_validator: bool, ctx: &mut TxContext): Validator {
-        let stake_value = (hint as u64) * 100;
+        let stake_value = (hint as u64) * 100 * MIST_PER_SUI;
         let name = hint_to_ascii(hint);
         let validator = validator::new_for_testing(
             addr,
@@ -400,8 +471,8 @@ module sui_system::validator_set_tests {
             &mut dummy_storage_fund_reward,
             &mut vec_map::empty(),
             0, // reward_slashing_rate
-            low_stake_threshold,
-            very_low_stake_threshold,
+            low_stake_threshold * MIST_PER_SUI,
+            very_low_stake_threshold * MIST_PER_SUI,
             low_stake_grace_period,
             test_scenario::ctx(scenario)
         );

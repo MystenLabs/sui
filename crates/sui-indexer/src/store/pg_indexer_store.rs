@@ -20,6 +20,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use tracing::info;
 
+use cached::proc_macro::once;
 use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics, MoveFunctionName,
@@ -27,7 +28,7 @@ use sui_json_rpc_types::{
 };
 use sui_json_rpc_types::{
     SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::{EpochId, ProtocolVersion};
@@ -62,7 +63,6 @@ use crate::store::indexer_store::TemporaryCheckpointStore;
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::{IndexerStore, TemporaryEpochStore};
-use crate::types::SuiTransactionBlockFullResponse;
 use crate::utils::{get_balance_changes_from_effect, get_object_changes};
 use crate::{get_pg_pool_connection, PgConnectionPool};
 
@@ -406,11 +406,11 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    async fn compose_full_transaction_response(
+    async fn compose_sui_transaction_block_response(
         &self,
         tx: Transaction,
-        options: Option<SuiTransactionBlockResponseOptions>,
-    ) -> Result<SuiTransactionBlockFullResponse, IndexerError> {
+        options: Option<&SuiTransactionBlockResponseOptions>,
+    ) -> Result<SuiTransactionBlockResponse, IndexerError> {
         let transaction: SuiTransactionBlock =
             serde_json::from_str(&tx.transaction_content).map_err(|err| {
                 IndexerError::InsertableParsingError(format!(
@@ -433,14 +433,14 @@ impl IndexerStore for PgIndexerStore {
         })?;
         let sender = SuiAddress::from_str(tx.sender.as_str())?;
 
-        let (mut object_changes, mut balance_changes) = (None, None);
+        let (mut tx_opt, mut effects_opt, mut raw_tx) = (None, None, vec![]);
+        let (mut object_changes, mut balance_changes, mut events) = (None, None, None);
         if let Some(options) = options {
             if options.show_balance_changes {
                 let object_cache = ObjectProviderCache::new(self.clone());
                 balance_changes =
                     Some(get_balance_changes_from_effect(&object_cache, &effects).await?);
             }
-
             if options.show_object_changes {
                 let object_cache = ObjectProviderCache::new(self.clone());
                 object_changes = Some(
@@ -454,25 +454,40 @@ impl IndexerStore for PgIndexerStore {
                     .await?,
                 );
             }
+            if options.show_events {
+                let event_page = self.get_events(
+                    EventFilter::Transaction(tx_digest),
+                    None,
+                    None,
+                    /* descending_order */ false,
+                )?;
+                events = Some(SuiTransactionBlockEvents {
+                    data: event_page.data,
+                });
+            }
+            if options.show_input {
+                tx_opt = Some(transaction);
+            }
+            if options.show_raw_input {
+                raw_tx = tx.raw_transaction;
+            }
+            if options.show_effects {
+                effects_opt = Some(effects);
+            }
         }
-        let events = self.get_events(
-            EventFilter::Transaction(tx_digest),
-            None,
-            None,
-            /* descending_order */ false,
-        )?;
 
-        Ok(SuiTransactionBlockFullResponse {
+        Ok(SuiTransactionBlockResponse {
             digest: tx_digest,
-            transaction,
-            raw_transaction: tx.raw_transaction,
-            effects,
+            transaction: tx_opt,
+            raw_transaction: raw_tx,
+            effects: effects_opt,
             confirmed_local_execution: tx.confirmed_local_execution,
-            timestamp_ms: tx.timestamp_ms as u64,
-            checkpoint: tx.checkpoint_sequence_number as u64,
-            events: SuiTransactionBlockEvents { data: events.data },
+            timestamp_ms: tx.timestamp_ms.map(|t| t as u64),
+            checkpoint: tx.checkpoint_sequence_number.map(|c| c as u64),
+            events,
             object_changes,
             balance_changes,
+            errors: vec![],
         })
     }
 
@@ -673,12 +688,12 @@ impl IndexerStore for PgIndexerStore {
         ))
     }
 
-    fn get_all_transaction_digest_page(
+    fn get_all_transaction_page(
         &self,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
             let mut boxed_query = transactions_dsl::transactions.into_boxed();
             if let Some(start_sequence) = start_sequence {
@@ -693,25 +708,23 @@ impl IndexerStore for PgIndexerStore {
                 boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             } else {
                 boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             }
         }).context(&format!("Failed reading all transaction digests with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    fn get_transaction_digest_page_by_checkpoint(
+    fn get_transaction_page_by_checkpoint(
         &self,
         checkpoint_sequence_number: i64,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
             let mut boxed_query = transactions_dsl::transactions
                 .filter(transactions_dsl::checkpoint_sequence_number.eq(checkpoint_sequence_number))
@@ -727,25 +740,23 @@ impl IndexerStore for PgIndexerStore {
                 boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             } else {
                 boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             }
         }).context(&format!("Failed reading transaction digests with checkpoint_sequence_number {checkpoint_sequence_number:?} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    fn get_transaction_digest_page_by_transaction_kind(
+    fn get_transaction_page_by_transaction_kind(
         &self,
         kind: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
             let mut boxed_query = transactions_dsl::transactions
                 .filter(transactions_dsl::transaction_kind.eq(kind.clone()))
@@ -762,25 +773,23 @@ impl IndexerStore for PgIndexerStore {
                 boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit((limit) as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             } else {
                 boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit((limit) as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             }
         }).context(&format!("Failed reading transaction digests with kind {kind} and start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    fn get_transaction_digest_page_by_mutated_object(
+    fn get_transaction_page_by_mutated_object(
         &self,
         object_id: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
             let mut boxed_query = transactions_dsl::transactions
                 .filter(transactions_dsl::mutated.contains(vec![Some(object_id.clone())]))
@@ -798,25 +807,23 @@ impl IndexerStore for PgIndexerStore {
                 boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit(limit as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             } else {
                 boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit(limit as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             }
         }).context(&format!("Failed reading transaction digests by mutated object id {object_id} with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    fn get_transaction_digest_page_by_sender_address(
+    fn get_transaction_page_by_sender_address(
         &self,
         sender_address: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         read_only!(&self.cp, |conn| {
             let mut boxed_query = transactions_dsl::transactions
                 .filter(transactions_dsl::sender.eq(sender_address.clone()))
@@ -833,26 +840,24 @@ impl IndexerStore for PgIndexerStore {
                 boxed_query
                     .order(transactions_dsl::id.desc())
                     .limit(limit as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             } else {
                 boxed_query
                     .order(transactions_dsl::id.asc())
                     .limit(limit as i64)
-                    .select(transactions_dsl::transaction_digest)
-                    .load::<String>(conn)
+                    .load::<Transaction>(conn)
             }
         }).context(&format!("Failed reading transaction digests by sender address {sender_address} with start_sequence {start_sequence:?} and limit {limit}"))
     }
 
-    fn get_transaction_digest_page_by_input_object(
+    fn get_transaction_page_by_input_object(
         &self,
         object_id: String,
         version: Option<i64>,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
                 SELECT transaction_digest, max(id) AS max_id 
@@ -879,16 +884,15 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        Ok(
-            read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn))
+        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!("Failed reading transaction digests by input object ID {object_id} and version {version:?} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
-                .collect(),
-        )
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    fn get_transaction_digest_page_by_move_call(
+    fn get_transaction_page_by_move_call(
         &self,
         package_name: String,
         module_name: Option<String>,
@@ -896,7 +900,7 @@ impl IndexerStore for PgIndexerStore {
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
                 SELECT transaction_digest, max(id) AS max_id 
@@ -928,25 +932,24 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        Ok(
-            read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn))
+        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| diesel::sql_query(sql_query).load(conn))
                 .context(&format!(
                         "Failed reading transaction digests with package_name {} module_name {:?} and function_name {:?} and start_sequence {:?} and limit {}",
                         package_name, module_name, function_name, start_sequence, limit))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
-                .collect(),
-        )
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
-    fn get_transaction_digest_page_by_sender_recipient_address(
+    fn get_transaction_page_by_sender_recipient_address(
         &self,
         from: Option<String>,
         to: String,
         start_sequence: Option<i64>,
         limit: usize,
         is_descending: bool,
-    ) -> Result<Vec<String>, IndexerError> {
+    ) -> Result<Vec<Transaction>, IndexerError> {
         let sql_query = format!(
             "SELECT transaction_digest as digest_name FROM (
                 SELECT transaction_digest, max(id) AS max_id
@@ -972,41 +975,21 @@ impl IndexerStore for PgIndexerStore {
             if is_descending { "DESC" } else { "ASC" },
             limit
         );
-        Ok(
-            read_only!(&self.cp, |conn| { diesel::sql_query(sql_query).load(conn) })
+        let tx_digests: Vec<String> = read_only!(&self.cp, |conn| { diesel::sql_query(sql_query).load(conn) })
                 .context(&format!("Failed reading transaction digests by recipient address {to} with start_sequence {start_sequence:?} and limit {limit}"))?
                 .into_iter()
                 .map(|table: TempDigestTable| table.digest_name)
-                .collect(),
-        )
-    }
-
-    fn read_transactions(
-        &self,
-        last_processed_id: i64,
-        limit: usize,
-    ) -> Result<Vec<Transaction>, IndexerError> {
-        read_only!(&self.cp, |conn| {
-            transactions_dsl::transactions
-                .filter(transactions_dsl::id.gt(last_processed_id))
-                .limit(limit as i64)
-                .load::<Transaction>(conn)
-        })
-        .context(&format!(
-            "Failed reading transactions with last_processed_id {last_processed_id}"
-        ))
+                .collect();
+        self.multi_get_transactions_by_digests(&tx_digests)
     }
 
     fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
-        let metrics = read_only!(&self.cp, |conn| {
-            diesel::sql_query("SELECT * FROM network_metrics;").get_result::<DBNetworkMetrics>(conn)
-        })?;
-        Ok(metrics.into())
+        get_network_metrics_cached(&self.cp)
     }
 
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
         let metrics = read_only!(&self.cp, |conn| {
-            diesel::sql_query("SELECT * FROM network_metrics;")
+            diesel::sql_query("SELECT * FROM epoch_move_call_metrics;")
                 .get_results::<DBMoveCallMetrics>(conn)
         })?;
 
@@ -1038,6 +1021,17 @@ impl IndexerStore for PgIndexerStore {
         })
     }
 
+    fn persist_fast_path(&self, tx: Transaction) -> Result<usize, IndexerError> {
+        transactional!(&self.cp, |conn| {
+            diesel::insert_into(transactions::table)
+                .values(vec![tx])
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .map_err(IndexerError::from)
+                .context("Failed writing transactions to PostgresDB")
+        })
+    }
+
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError> {
         let TemporaryCheckpointStore {
             checkpoint,
@@ -1056,7 +1050,13 @@ impl IndexerStore for PgIndexerStore {
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
                     .values(transaction_chunk)
-                    .on_conflict_do_nothing()
+                    .on_conflict(transactions::transaction_digest)
+                    .do_update()
+                    .set((
+                        transactions::timestamp_ms.eq(excluded(transactions::timestamp_ms)),
+                        transactions::checkpoint_sequence_number
+                            .eq(excluded(transactions::checkpoint_sequence_number)),
+                    ))
                     .execute(conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
@@ -1438,6 +1438,14 @@ impl PartitionManager {
             .collect::<Result<_, _>>()?,
         )
     }
+}
+
+#[once(time = 2, result = true)]
+fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
+    let metrics = read_only!(cp, |conn| {
+        diesel::sql_query("SELECT * FROM network_metrics;").get_result::<DBNetworkMetrics>(conn)
+    })?;
+    Ok(metrics.into())
 }
 
 #[async_trait]

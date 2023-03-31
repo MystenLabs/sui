@@ -4,10 +4,16 @@
 import { filter, fromEventPattern, share, take, takeWhile } from 'rxjs';
 import Browser from 'webextension-polyfill';
 
+import { POPUP_HEIGHT, POPUP_WIDTH } from '_src/ui/app/wallet/constants';
+
 const windowRemovedStream = fromEventPattern<number>(
     (handler) => Browser.windows.onRemoved.addListener(handler),
     (handler) => Browser.windows.onRemoved.removeListener(handler)
 ).pipe(share());
+
+// This is arbitrary across different operating systems, and unfortunately
+// there isn't a great way to tell how much extra height we need to tack on
+const windowHeightWithFrame = POPUP_HEIGHT + 28;
 
 export class Window {
     private _id: number | null = null;
@@ -26,8 +32,8 @@ export class Window {
         const w = await Browser.windows.create({
             url: this._url,
             focused: true,
-            width: 360,
-            height: 623,
+            width: POPUP_WIDTH,
+            height: windowHeightWithFrame,
             type: 'popup',
             top: top,
             left: Math.floor(left + width - 450),

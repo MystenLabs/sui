@@ -50,7 +50,7 @@ pub struct EndOfEpochInfo {
     pub leftover_storage_fund_inflow: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkMetrics {
     /// Current TPS - Transaction Blocks per Second.

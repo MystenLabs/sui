@@ -13,7 +13,7 @@ import { Text } from '~/ui/Text';
 export interface EpochProgressProps {
     epoch?: number;
     start: number;
-    end: number;
+    end?: number;
     inProgress?: boolean;
 }
 
@@ -21,9 +21,9 @@ export function EpochProgress({
     epoch,
     start,
     end,
-    inProgress = true,
+    inProgress,
 }: EpochProgressProps) {
-    const { progress, label } = useEpochProgress(start, end);
+    const { progress, label } = useEpochProgress();
 
     return (
         <Card bg={inProgress ? 'highlight' : 'default'} spacing="lg">
@@ -46,14 +46,29 @@ export function EpochProgress({
                             {formatDate(start)}
                         </Text>
                     </div>
+                    {!inProgress && end && (
+                        <div className="space-y-1.5">
+                            <Text
+                                variant="p4/normal"
+                                uppercase
+                                color="steel-darker"
+                            >
+                                End
+                            </Text>
+                            <Text variant="p3/semibold" color="steel-darker">
+                                {formatDate(end)}
+                            </Text>
+                        </div>
+                    )}
                 </div>
-
-                <div className="space-y-1.5">
-                    <Heading variant="heading6/medium" color="steel-darker">
-                        {label}
-                    </Heading>
-                    <ProgressBar progress={progress} />
-                </div>
+                {inProgress ? (
+                    <div className="space-y-1.5">
+                        <Heading variant="heading6/medium" color="steel-darker">
+                            {label}
+                        </Heading>
+                        <ProgressBar progress={progress} />
+                    </div>
+                ) : null}
             </div>
         </Card>
     );

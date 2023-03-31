@@ -161,6 +161,12 @@ pub enum RunSpec {
         // batch size use for batch payment workload
         #[clap(long, default_value = "15")]
         batch_payment_size: u32,
+        // type and load % of adversarial transactions in the benchmark workload.
+        // Format is "{adversarial_type}-{load_factor}".
+        // `load_factor` is a number between 0.0 and 1.0 which dictates how much load per tx
+        // Default is (0-0.5) implying random load at 50% load. See `AdversarialPayloadType` enum for `adversarial_type`
+        #[clap(long, default_value = "0-1.0")]
+        adversarial_cfg: String,
 
         // --- generic options ---
         // Target qps

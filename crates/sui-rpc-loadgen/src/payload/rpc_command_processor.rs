@@ -1,17 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use futures::future::join_all;
+use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::fs::{self, File};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiTransactionBlockDataAPI,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tracing::debug;
@@ -35,10 +39,13 @@ pub struct RpcCommandProcessor {
     clients: Arc<RwLock<Vec<SuiClient>>>,
     // for equivocation prevention in `WaitForEffectsCert` mode
     object_ref_cache: Arc<DashMap<ObjectID, ObjectRef>>,
+    transaction_digests: Arc<DashSet<TransactionDigest>>,
+    addresses: Arc<DashSet<SuiAddress>>,
+    data_dir: String,
 }
 
 impl RpcCommandProcessor {
-    pub async fn new(urls: &[String]) -> Self {
+    pub async fn new(urls: &[String], data_dir: String) -> Self {
         let clients = join_all(urls.iter().map(|url| async {
             SuiClientBuilder::default()
                 .max_concurrent_requests(usize::MAX)
@@ -52,6 +59,9 @@ impl RpcCommandProcessor {
         Self {
             clients: Arc::new(RwLock::new(clients)),
             object_ref_cache: Arc::new(DashMap::new()),
+            transaction_digests: Arc::new(DashSet::new()),
+            addresses: Arc::new(DashSet::new()),
+            data_dir,
         }
     }
 
@@ -126,6 +136,32 @@ impl RpcCommandProcessor {
             }
         }
     }
+
+    pub(crate) fn add_transaction_digests(&self, digests: Vec<TransactionDigest>) {
+        // extend method requires mutable access to the underlying DashSet, which is not allowed by the Arc
+        for digest in digests {
+            self.transaction_digests.insert(digest);
+        }
+    }
+
+    pub(crate) fn add_addresses(&self, responses: Vec<SuiTransactionBlockResponse>) {
+        for response in responses {
+            let transaction = response.transaction;
+            if let Some(transaction) = transaction {
+                let data = transaction.data;
+                self.addresses.insert(*data.sender());
+            }
+        }
+    }
+
+    pub(crate) fn dump_cache_to_file(&self) {
+        // TODO: be more granular
+        let digests: Vec<TransactionDigest> = self.transaction_digests.iter().map(|x| *x).collect();
+        write_data_to_file(&digests, &format!("{}/digests", &self.data_dir)).unwrap();
+
+        let addresses: Vec<SuiAddress> = self.addresses.iter().map(|x| *x).collect();
+        write_data_to_file(&addresses, &format!("{}/addresses", &self.data_dir)).unwrap();
+    }
 }
 
 #[async_trait]
@@ -194,6 +230,14 @@ impl Processor for RpcCommandProcessor {
             })
             .collect())
     }
+
+    fn dump_cache_to_file(&self, config: &LoadTestConfig) {
+        if let CommandData::GetCheckpoints(data) = &config.command.data {
+            if data.record {
+                self.dump_cache_to_file();
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -202,6 +246,18 @@ impl<'a> ProcessPayload<'a, &'a DryRun> for RpcCommandProcessor {
         debug!("DryRun");
         Ok(())
     }
+}
+
+fn write_data_to_file<T: Serialize>(data: &T, file_path: &str) -> Result<(), anyhow::Error> {
+    let mut path_buf = PathBuf::from(&file_path);
+    path_buf.pop();
+    fs::create_dir_all(&path_buf).map_err(|e| anyhow!("Error creating directory: {}", e))?;
+
+    let file_name = format!("{}.json", file_path);
+    let file = File::create(&file_name).map_err(|e| anyhow!("Error creating file: {}", e))?;
+    serde_json::to_writer(file, data).map_err(|e| anyhow!("Error writing to file: {}", e))?;
+
+    Ok(())
 }
 
 async fn divide_checkpoint_tasks(
@@ -238,6 +294,7 @@ async fn divide_checkpoint_tasks(
                 Some(end_checkpoint),
                 data.verify_transactions,
                 data.verify_objects,
+                data.record,
             )
         })
         .collect()

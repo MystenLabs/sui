@@ -3,8 +3,11 @@
 
 use self::db_dump::{dump_table, duplicate_objects_summary, list_tables, table_summary, StoreName};
 use clap::Parser;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::checkpoints::CheckpointStore;
 use sui_types::base_types::EpochId;
+use typed_store::rocks::MetricConf;
 
 pub mod db_dump;
 
@@ -15,6 +18,7 @@ pub enum DbToolCommand {
     Dump(Dump),
     TableSummary(Dump),
     DuplicatesSummary,
+    ResetDB,
 }
 
 #[derive(Parser)]
@@ -56,6 +60,7 @@ pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::
             print_db_table_summary(d.store_name, d.epoch, db_path, &d.table_name)
         }
         DbToolCommand::DuplicatesSummary => print_db_duplicates_summary(db_path),
+        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
     }
 }
 
@@ -71,6 +76,55 @@ pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
         "Total objects = {}, duplicated objects = {}, total bytes = {}, duplicated bytes = {}",
         total_count, duplicate_count, total_bytes, duplicated_bytes
     );
+    Ok(())
+}
+
+pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
+    // Follow the below steps to test:
+    //
+    // Get a db snapshot. Either generate one by running stress locally and enabling db checkpoints or download one from S3 bucket (pretty big in size though).
+    // Download the snapshot for the epoch you want to restore to the local disk. You will find one snapshot per epoch in the S3 bucket. We need to place the snapshot in the dir where config is pointing to. If db-config in fullnode.yaml is /opt/sui/db/authorities_db and we want to restore from epoch 10, we want to copy the snapshot to /opt/sui/db/authorities_dblike this:
+    // aws s3 cp s3://myBucket/dir /opt/sui/db/authorities_db/ --recursive —exclude “*” —include “epoch_10*”
+    // Mark downloaded snapshot as live: mv  /opt/sui/db/authorities_db/epoch_10  /opt/sui/db/authorities_db/live
+    // Reset the downloaded db to execute from genesis with: cargo run --package sui-tool -- db-tool --db-path /opt/sui/db/authorities_db/live reset-db
+    // Start the sui full node: cargo run --release --bin sui-node -- --config-path ~/db_checkpoints/fullnode.yaml
+    // A sample fullnode.yaml config would be:
+    // ---
+    // db-path:  /opt/sui/db/authorities_db
+    // network-address: /ip4/0.0.0.0/tcp/8080/http
+    // json-rpc-address: "0.0.0.0:9000"
+    // websocket-address: "0.0.0.0:9001"
+    // metrics-address: "0.0.0.0:9184"
+    // admin-interface-port: 1337
+    // enable-event-processing: true
+    // grpc-load-shed: ~
+    // grpc-concurrency-limit: ~
+    // p2p-config:
+    //   listen-address: "0.0.0.0:8084"
+    // genesis:
+    //   genesis-file-location:  <path to genesis blob for the network>
+    // authority-store-pruning-config:
+    //   num-latest-epoch-dbs-to-retain: 3
+    //   epoch-db-pruning-period-secs: 3600
+    //   num-epochs-to-retain: 18446744073709551615
+    //   max-checkpoints-in-batch: 200
+    //   max-transactions-in-batch: 1000
+    //   use-range-deletion: true
+    let perpetual_db = AuthorityPerpetualTables::open_tables_read_write(
+        path.join("store").join("perpetual"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    perpetual_db.reset_db_for_execution_since_genesis()?;
+
+    let checkpoint_db = CheckpointStore::open_tables_read_write(
+        path.join("checkpoints"),
+        MetricConf::default(),
+        None,
+        None,
+    );
+    checkpoint_db.reset_db_for_execution_since_genesis()?;
     Ok(())
 }
 

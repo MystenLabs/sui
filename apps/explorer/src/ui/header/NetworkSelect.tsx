@@ -67,7 +67,7 @@ function SelectableNetwork({
             role="button"
             onClick={onClick}
             className={clsx(
-                'flex items-start gap-3 rounded-md py-2 px-1.25 text-body font-semibold hover:bg-gray-40 ui-active:bg-gray-40',
+                'flex items-start gap-3 rounded-md px-1.25 py-2 text-body font-semibold hover:bg-gray-40 ui-active:bg-gray-40',
                 state !== NetworkState.UNSELECTED
                     ? 'text-steel-darker'
                     : 'text-steel-dark'
@@ -146,7 +146,7 @@ function NetworkVersion({
     version: number | string;
 }) {
     return (
-        <div className="flex justify-between py-2 px-4">
+        <div className="flex justify-between px-4 py-2">
             <Text variant="subtitle/normal" color="steel">
                 Sui {label}
             </Text>

@@ -108,6 +108,7 @@ module sui_system::validator_set {
     const ANY_VALIDATOR: u8 = 3;
 
     const BASIS_POINT_DENOMINATOR: u128 = 10000;
+    const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
 
     // Errors
     const ENonValidatorInReportRecords: u64 = 0;
@@ -120,6 +121,10 @@ module sui_system::validator_set {
     const EValidatorNotCandidate: u64 = 7;
     const ENotValidatorCandidate: u64 = 8;
     const ENotActiveOrPendingValidator: u64 = 9;
+    const EStakingBelowThreshold: u64 = 10;
+    const EValidatorAlreadyRemoved: u64 = 11;
+    const ENotAPendingValidator: u64 = 12;
+    const EValidatorSetEmpty: u64 = 13;
 
     const EInvalidCap: u64 = 101;
 
@@ -250,11 +255,11 @@ module sui_system::validator_set {
     ) {
         let validator_address = tx_context::sender(ctx);
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         assert!(
             !vector::contains(&self.pending_removals, &validator_index),
-            0
+            EValidatorAlreadyRemoved
         );
         vector::push_back(&mut self.pending_removals, validator_index);
     }
@@ -265,12 +270,15 @@ module sui_system::validator_set {
     /// Called by `sui_system`, to add a new stake to the validator.
     /// This request is added to the validator's staking pool's pending stake entries, processed at the end
     /// of the epoch.
+    /// Aborts in case the staking amount is smaller than MIN_STAKING_THRESHOLD
     public(friend) fun request_add_stake(
         self: &mut ValidatorSet,
         validator_address: address,
         stake: Balance<SUI>,
         ctx: &mut TxContext,
     ) {
+        let sui_amount = balance::value(&stake);
+        assert!(sui_amount >= MIN_STAKING_THRESHOLD, EStakingBelowThreshold);
         let validator = get_candidate_or_active_validator_mut(self, validator_address);
         validator::request_add_stake(validator, stake, tx_context::sender(ctx), ctx);
     }
@@ -334,23 +342,21 @@ module sui_system::validator_set {
         ctx: &mut TxContext,
     ) {
         let new_epoch = tx_context::epoch(ctx) + 1;
-        let total_stake = self.total_stake;
+        let total_voting_power = voting_power::total_voting_power();
 
         // Compute the reward distribution without taking into account the tallying rule slashing.
         let (unadjusted_staking_reward_amounts, unadjusted_storage_fund_reward_amounts) = compute_unadjusted_reward_distribution(
             &self.active_validators,
-            total_stake,
+            total_voting_power,
             balance::value(computation_reward),
             balance::value(storage_fund_reward),
         );
 
         // Use the tallying rule report records for the epoch to compute validators that will be
-        // punished and the sum of their stakes.
-        let (slashed_validators, total_slashed_validator_stake) =
-            compute_slashed_validators_and_total_stake(
-                self,
-                *validator_report_records,
-            );
+        // punished.
+        let slashed_validators = compute_slashed_validators(self, *validator_report_records);
+
+        let total_slashed_validator_voting_power = sum_voting_power_by_addresses(&self.active_validators, &slashed_validators);
 
         // Compute the reward adjustments of slashed validators, to be taken into
         // account in adjusted reward computation.
@@ -370,8 +376,8 @@ module sui_system::validator_set {
         // make sure we are using the current epoch's stake information to compute reward distribution.
         let (adjusted_staking_reward_amounts, adjusted_storage_fund_reward_amounts) = compute_adjusted_reward_distribution(
             &self.active_validators,
-            total_stake,
-            total_slashed_validator_stake,
+            total_voting_power,
+            total_slashed_validator_voting_power,
             unadjusted_staking_reward_amounts,
             unadjusted_storage_fund_reward_amounts,
             total_staking_reward_adjustment,
@@ -746,7 +752,7 @@ module sui_system::validator_set {
         validator_address: address,
     ): &Validator {
         let validator_index_opt = find_validator(&self.active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         vector::borrow(&self.active_validators, validator_index)
     }
@@ -756,7 +762,7 @@ module sui_system::validator_set {
         validator_address: address,
     ): &Validator {
         let validator_index_opt = find_validator_from_table_vec(&self.pending_active_validators, validator_address);
-        assert!(option::is_some(&validator_index_opt), 0);
+        assert!(option::is_some(&validator_index_opt), ENotAPendingValidator);
         let validator_index = option::extract(&mut validator_index_opt);
         table_vec::borrow(&self.pending_active_validators, validator_index)
     }
@@ -990,12 +996,11 @@ module sui_system::validator_set {
 
     /// Process the validator report records of the epoch and return the addresses of the
     /// non-performant validators according to the input threshold.
-    fun compute_slashed_validators_and_total_stake(
+    fun compute_slashed_validators(
         self: &ValidatorSet,
         validator_report_records: VecMap<address, VecSet<address>>,
-    ): (vector<address>, u64) {
+    ): vector<address> {
         let slashed_validators = vector[];
-        let sum_of_stake = 0;
         while (!vec_map::is_empty(&validator_report_records)) {
             let (validator_address, reporters) = vec_map::pop(&mut validator_report_records);
             assert!(
@@ -1006,11 +1011,10 @@ module sui_system::validator_set {
             // passed the slashing threshold.
             let reporter_votes = sum_voting_power_by_addresses(&self.active_validators, &vec_set::into_keys(reporters));
             if (reporter_votes >= voting_power::quorum_threshold()) {
-                sum_of_stake = sum_of_stake + validator_total_stake_amount(self, validator_address);
                 vector::push_back(&mut slashed_validators, validator_address);
             }
         };
-        (slashed_validators, sum_of_stake)
+        slashed_validators
     }
 
     /// Given the current list of active validators, the total stake and total reward,
@@ -1019,7 +1023,7 @@ module sui_system::validator_set {
     /// Returns the unadjusted amounts of staking reward and storage fund reward for each validator.
     fun compute_unadjusted_reward_distribution(
         validators: &vector<Validator>,
-        total_stake: u64,
+        total_voting_power: u64,
         total_staking_reward: u64,
         total_storage_fund_reward: u64,
     ): (vector<u64>, vector<u64>) {
@@ -1033,8 +1037,8 @@ module sui_system::validator_set {
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_staking_reward`.
             // Use u128 to avoid multiplication overflow.
-            let stake_amount: u128 = (validator::total_stake_amount(validator) as u128);
-            let reward_amount = stake_amount * (total_staking_reward as u128) / (total_stake as u128);
+            let voting_power: u128 = (validator::voting_power(validator) as u128);
+            let reward_amount = voting_power * (total_staking_reward as u128) / (total_voting_power as u128);
             vector::push_back(&mut staking_reward_amounts, (reward_amount as u64));
             // Storage fund's share of the rewards are equally distributed among validators.
             vector::push_back(&mut storage_fund_reward_amounts, storage_fund_reward_per_validator);
@@ -1048,8 +1052,8 @@ module sui_system::validator_set {
     /// The staking rewards are shared with the stakers while the storage fund ones are not.
     fun compute_adjusted_reward_distribution(
         validators: &vector<Validator>,
-        total_stake: u64,
-        total_slashed_validator_stake: u64,
+        total_voting_power: u64,
+        total_slashed_validator_voting_power: u64,
         unadjusted_staking_reward_amounts: vector<u64>,
         unadjusted_storage_fund_reward_amounts: vector<u64>,
         total_staking_reward_adjustment: u64,
@@ -1057,7 +1061,7 @@ module sui_system::validator_set {
         total_storage_fund_reward_adjustment: u64,
         individual_storage_fund_reward_adjustments: VecMap<u64, u64>,
     ): (vector<u64>, vector<u64>) {
-        let total_unslashed_validator_stake = total_stake - total_slashed_validator_stake;
+        let total_unslashed_validator_voting_power = total_voting_power - total_slashed_validator_voting_power;
         let adjusted_staking_reward_amounts = vector::empty();
         let adjusted_storage_fund_reward_amounts = vector::empty();
 
@@ -1070,7 +1074,7 @@ module sui_system::validator_set {
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_reward`.
             // Use u128 to avoid multiplication overflow.
-            let stake_amount: u128 = (validator::total_stake_amount(validator) as u128);
+            let voting_power: u128 = (validator::voting_power(validator) as u128);
 
             // Compute adjusted staking reward.
             let unadjusted_staking_reward_amount = *vector::borrow(&unadjusted_staking_reward_amounts, i);
@@ -1082,8 +1086,8 @@ module sui_system::validator_set {
                 } else {
                     // Otherwise the slashed rewards should be distributed among the unslashed
                     // validators so add the corresponding adjustment.
-                    let adjustment = (total_staking_reward_adjustment as u128) * stake_amount
-                                   / (total_unslashed_validator_stake as u128);
+                    let adjustment = (total_staking_reward_adjustment as u128) * voting_power
+                                   / (total_unslashed_validator_voting_power as u128);
                     unadjusted_staking_reward_amount + (adjustment as u64)
                 };
             vector::push_back(&mut adjusted_staking_reward_amounts, adjusted_staking_reward_amount);
@@ -1117,7 +1121,7 @@ module sui_system::validator_set {
         ctx: &mut TxContext
     ) {
         let length = vector::length(validators);
-        assert!(length > 0, 0);
+        assert!(length > 0, EValidatorSetEmpty);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);

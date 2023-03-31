@@ -9,7 +9,6 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
-use move_core_types::parser::parse_struct_tag;
 use move_core_types::resolver::ModuleResolver;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -48,7 +47,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::query::TransactionFilter;
 use sui_types::signature::GenericSignature;
 use sui_types::utils::to_sender_signed_transaction;
-use sui_types::SUI_FRAMEWORK_OBJECT_ID;
+use sui_types::{parse_sui_struct_tag, SUI_FRAMEWORK_OBJECT_ID};
 
 struct Examples {
     function_name: String,
@@ -225,7 +224,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(1),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
             bcs: None,
             display: None,
         });
@@ -264,7 +263,7 @@ impl RpcExampleProvider {
             object_id,
             version: SequenceNumber::from_u64(4),
             digest: ObjectDigest::new(self.rng.gen()),
-            type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+            type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
             bcs: None,
             display: None,
         });
@@ -314,7 +313,7 @@ impl RpcExampleProvider {
                 object_id: ObjectID::new(self.rng.gen()),
                 version: Default::default(),
                 digest: ObjectDigest::new(self.rng.gen()),
-                type_: Some(ObjectType::Struct(MoveObjectType::GasCoin)),
+                type_: Some(ObjectType::Struct(MoveObjectType::gas_coin())),
                 owner: Some(Owner::AddressOwner(owner)),
                 previous_transaction: Some(TransactionDigest::new(self.rng.gen())),
                 storage_rebate: None,
@@ -468,7 +467,7 @@ impl RpcExampleProvider {
         let object_change = ObjectChange::Transferred {
             sender: signer,
             recipient: Owner::AddressOwner(recipient),
-            object_type: parse_struct_tag("0x2::example::Object").unwrap(),
+            object_type: parse_sui_struct_tag("0x2::example::Object").unwrap(),
             object_id: object_ref.0,
             version: object_ref.1,
             digest: ObjectDigest::new(self.rng.gen()),
@@ -547,7 +546,7 @@ impl RpcExampleProvider {
             package_id: ObjectID::new(self.rng.gen()),
             transaction_module: Identifier::from_str("test_module").unwrap(),
             sender: SuiAddress::from(ObjectID::new(self.rng.gen())),
-            type_: parse_struct_tag("0x9::test::TestEvent").unwrap(),
+            type_: parse_sui_struct_tag("0x9::test::TestEvent").unwrap(),
             parsed_json: json! ({"test": "example value"}),
             bcs: vec![],
             timestamp_ms: None,

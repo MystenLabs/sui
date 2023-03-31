@@ -42,6 +42,15 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
+                .name("submit_certificate")
+                .route_name("SubmitCertificate")
+                .input_type("sui_types::messages::CertifiedTransaction")
+                .output_type("sui_types::messages::SubmitCertificateResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("object_info")
                 .route_name("ObjectInfo")
                 .input_type("sui_types::messages::ObjectInfoRequest")

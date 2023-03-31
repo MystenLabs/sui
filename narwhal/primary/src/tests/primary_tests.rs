@@ -18,6 +18,7 @@ use fastcrypto::{
     traits::KeyPair,
 };
 use itertools::Itertools;
+use network::client::NetworkClient;
 use prometheus::Registry;
 use std::{
     borrow::Borrow,
@@ -39,8 +40,7 @@ use tokio::{
 use types::{
     now, BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
     Header, HeaderAPI, MockPrimaryToWorker, PayloadAvailabilityRequest,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToWorkerServer, RequestVoteRequest,
-    Round,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, RequestVoteRequest, Round,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -62,6 +62,7 @@ async fn get_network_peers_from_admin_server() {
 
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir(), None);
+    let client_1 = NetworkClient::new_from_keypair(&authority_1.network_keypair());
 
     let (tx_new_certificates, rx_new_certificates) = types::metered_channel::channel(
         CHANNEL_CAPACITY,
@@ -93,6 +94,7 @@ async fn get_network_peers_from_admin_server() {
         committee.clone(),
         worker_cache.clone(),
         primary_1_parameters.clone(),
+        client_1.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
         store.proposer_store.clone(),
@@ -140,6 +142,7 @@ async fn get_network_peers_from_admin_server() {
         worker_cache.clone(),
         worker_1_parameters.clone(),
         TrivialTransactionValidator::default(),
+        client_1,
         store.batch_store,
         metrics_1,
         &mut tx_shutdown_worker,
@@ -179,6 +182,7 @@ async fn get_network_peers_from_admin_server() {
 
     let authority_2 = fixture.authorities().nth(1).unwrap();
     let signer_2 = authority_2.keypair().copy();
+    let client_2 = NetworkClient::new_from_keypair(&authority_2.network_keypair());
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -215,6 +219,7 @@ async fn get_network_peers_from_admin_server() {
         committee.clone(),
         worker_cache.clone(),
         primary_2_parameters.clone(),
+        client_2.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
         store.proposer_store.clone(),
@@ -304,6 +309,7 @@ async fn test_request_vote_send_missing_parents() {
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(target.network_keypair(), target.address());
+    let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -319,6 +325,7 @@ async fn test_request_vote_send_missing_parents() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -453,6 +460,7 @@ async fn test_request_vote_accept_missing_parents() {
     let signature_service = SignatureService::new(target.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(target.network_keypair(), target.address());
+    let client = NetworkClient::new_from_keypair(&target.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -468,6 +476,7 @@ async fn test_request_vote_accept_missing_parents() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -594,6 +603,7 @@ async fn test_request_vote_missing_batches() {
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -609,6 +619,7 @@ async fn test_request_vote_missing_batches() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -673,6 +684,7 @@ async fn test_request_vote_missing_batches() {
     let author_id = author.id();
     let worker = primary.worker(1);
     let worker_address = &worker.info().worker_address;
+    let worker_peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     let mut mock_server = MockPrimaryToWorker::new();
     mock_server
         .expect_synchronize()
@@ -682,12 +694,13 @@ async fn test_request_vote_missing_batches() {
         })
         .times(1)
         .return_once(|_| Ok(anemo::Response::new(())));
-    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
-    let _worker_network = worker.new_network(routes);
+
+    client.set_primary_to_worker_local_handler(worker_peer_id, Arc::new(mock_server));
+
+    let _worker_network = worker.new_network(anemo::Router::new());
     let address = worker_address.to_anemo_address().unwrap();
-    let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
-        .connect_with_peer_id(address, peer_id)
+        .connect_with_peer_id(address, worker_peer_id)
         .await
         .unwrap();
 
@@ -723,6 +736,7 @@ async fn test_request_vote_already_voted() {
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -738,6 +752,7 @@ async fn test_request_vote_already_voted() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -748,6 +763,7 @@ async fn test_request_vote_already_voted() {
         None,
         metrics.clone(),
     ));
+
     let handler = PrimaryReceiverHandler {
         authority_id: id,
         committee: fixture.committee(),
@@ -786,17 +802,19 @@ async fn test_request_vote_already_voted() {
     // Set up mock worker.
     let worker = primary.worker(1);
     let worker_address = &worker.info().worker_address;
+    let worker_peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     let mut mock_server = MockPrimaryToWorker::new();
     // Always Synchronize successfully.
     mock_server
         .expect_synchronize()
         .returning(|_| Ok(anemo::Response::new(())));
-    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
-    let _worker_network = worker.new_network(routes);
+
+    client.set_primary_to_worker_local_handler(worker_peer_id, Arc::new(mock_server));
+
+    let _worker_network = worker.new_network(anemo::Router::new());
     let address = worker_address.to_anemo_address().unwrap();
-    let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
-        .connect_with_peer_id(address, peer_id)
+        .connect_with_peer_id(address, worker_peer_id)
         .await
         .unwrap();
 
@@ -887,6 +905,7 @@ async fn test_fetch_certificates_handler() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -902,6 +921,7 @@ async fn test_fetch_certificates_handler() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -1055,6 +1075,7 @@ async fn test_process_payload_availability_success() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -1070,6 +1091,7 @@ async fn test_process_payload_availability_success() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -1209,6 +1231,7 @@ async fn test_process_payload_availability_when_failures() {
     let primary = fixture.authorities().next().unwrap();
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, _, _) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -1224,6 +1247,7 @@ async fn test_process_payload_availability_when_failures() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client,
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -1310,6 +1334,7 @@ async fn test_request_vote_created_at_in_future() {
     let signature_service = SignatureService::new(primary.keypair().copy());
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
 
     let (header_store, certificate_store, payload_store) = create_db_stores();
     let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
@@ -1325,6 +1350,7 @@ async fn test_request_vote_created_at_in_future() {
         fixture.committee(),
         worker_cache.clone(),
         /* gc_depth */ 50,
+        client.clone(),
         certificate_store.clone(),
         payload_store.clone(),
         tx_certificate_fetcher,
@@ -1373,17 +1399,19 @@ async fn test_request_vote_created_at_in_future() {
     // Set up mock worker.
     let worker = primary.worker(1);
     let worker_address = &worker.info().worker_address;
+    let worker_peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     let mut mock_server = MockPrimaryToWorker::new();
     // Always Synchronize successfully.
     mock_server
         .expect_synchronize()
         .returning(|_| Ok(anemo::Response::new(())));
-    let routes = anemo::Router::new().add_rpc_service(PrimaryToWorkerServer::new(mock_server));
-    let _worker_network = worker.new_network(routes);
+
+    client.set_primary_to_worker_local_handler(worker_peer_id, Arc::new(mock_server));
+
+    let _worker_network = worker.new_network(anemo::Router::new());
     let address = worker_address.to_anemo_address().unwrap();
-    let peer_id = anemo::PeerId(worker.keypair().public().0.to_bytes());
     network
-        .connect_with_peer_id(address, peer_id)
+        .connect_with_peer_id(address, worker_peer_id)
         .await
         .unwrap();
 
@@ -1421,8 +1449,8 @@ async fn test_request_vote_created_at_in_future() {
 
     // Verify Handler generates a Vote.
 
-    // Set the creation time to be a bit in the future (a second)
-    let created_at = now() + 1000;
+    // Set the creation time to be a bit in the future (500 ms)
+    let created_at = now() + 500;
 
     let test_header = author
         .header_builder(&fixture.committee())

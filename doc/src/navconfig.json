@@ -110,24 +110,15 @@
 				"title": "Sui Cryptography",
 				"items": [{
 						"label": "Sui Intent Signing",
-						"fileName": "learn/cryptography/"
+						"fileName": "learn/cryptography/sui-intent-signing"
 					},
 					{
-						"label": "Sui Gas Pricing",
-						"fileName": "learn/tokenomics/gas-pricing"
+						"label": "Sui Offline Signing",
+						"fileName": "learn/cryptography/sui-offline-signing"
 					},
 					{
-						"label": "Sui Storage Fund",
-						"fileName": "learn/tokenomics/storage-fund"
-					},
-					{
-						"label": "Proof-of-Stake",
-						"fileName": "learn/tokenomics/proof-of-stake"
-					},
-					{
-						"label": "Tokenomics White Paper",
-						"link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/tokenomics.pdf",
-						"external": true
+						"label": "Sui Multi-Signature",
+						"fileName": "learn/cryptography/sui-multisig"
 					}
 				]
 			},
@@ -231,7 +222,7 @@
 				"title": "Connect to Sui",
 				"items": [
 					{
-						"label": "Programmable Transactions with TypeScript SDK",
+						"label": "Programmable Transaction Blocks with TypeScript SDK",
 						"fileName": "build/prog-trans-ts-sdk"
 					},
 					{
@@ -248,12 +239,16 @@
 						"external": true
 					},
 					{
-						"label": "Sui Full node",
+						"label": "Sui Full Node",
 						"fileName": "build/fullnode"
 					},
 					{
-						"label": "Sui Validator node",
+						"label": "Sui Validator Node",
 						"fileName": "build/validator-node"
+					},
+					{
+						"label": "Database Snapshots",
+						"fileName": "build/snapshot"
 					},
 					{
 						"label": "Event Query and Subscription",

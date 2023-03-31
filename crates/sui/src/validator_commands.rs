@@ -231,7 +231,7 @@ impl SuiValidatorCommand {
                         account_address: SuiAddress::from(&account_keypair.public()),
                         network_key: network_keypair.public().clone(),
                         gas_price,
-                        commission_rate: 0,
+                        commission_rate: sui_config::ValidatorInfo::DEFAULT_COMMISSION_RATE,
                         network_address: Multiaddr::try_from(format!(
                             "/dns/{}/tcp/8080/http",
                             host_name
@@ -554,7 +554,9 @@ async fn call_0x5(
         .quorum_driver()
         .execute_transaction_block(
             transaction,
-            SuiTransactionBlockResponseOptions::full_content(),
+            SuiTransactionBlockResponseOptions::new()
+                .with_input()
+                .with_effects(),
             Some(sui_types::messages::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await

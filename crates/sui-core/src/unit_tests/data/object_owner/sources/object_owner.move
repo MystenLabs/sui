@@ -83,6 +83,13 @@ module object_owner::object_owner {
         transfer::public_transfer(child, tx_context::sender(ctx));
     }
 
+    public entry fun remove_wrapped_child(parent: &mut Parent, ctx: &mut TxContext) {
+        let child_id = option::extract(&mut parent.child);
+        let child: Child = dynamic_field::remove(&mut parent.id, 0);
+        assert!(object::id(&child) == child_id, 0);
+        transfer::public_transfer(child, tx_context::sender(ctx));
+    }
+
     // Call to delete_child
     public entry fun delete_child(child: Child) {
         let Child { id } = child;

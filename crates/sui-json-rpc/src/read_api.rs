@@ -17,7 +17,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use tap::TapFallible;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_core::authority::AuthorityState;
@@ -115,7 +115,7 @@ impl ReadApiServer for ReadApi {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
         let object_read = self.state.get_object_read(&object_id).await.map_err(|e| {
-            debug!(?object_id, "Failed to get object: {:?}", e);
+            warn!(?object_id, "Failed to get object: {:?}", e);
             anyhow!("{e}")
         })?;
         let options = options.unwrap_or_default();
@@ -188,7 +188,10 @@ impl ReadApiServer for ReadApi {
             .state
             .get_past_object_read(&object_id, version)
             .await
-            .map_err(|e| anyhow!("{e}"))?;
+            .map_err(|e| {
+                error!("Failed to call try_get_past_object for object: {object_id:?} version: {version:?} with error: {e:?}");
+                anyhow!("{e}")
+            })?;
         let options = options.unwrap_or_default();
         match past_read {
             PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectResponse::ObjectNotExists(id)),
@@ -269,12 +272,15 @@ impl ReadApiServer for ReadApi {
         let opts = opts.unwrap_or_default();
         let mut temp_response = IntermediateTransactionResponse::new(digest);
 
+        // Fetch transaction to determine existence
+        let transaction =
+            Some(self.state.get_executed_transaction(digest).await.tap_err(
+                |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
+            )?);
+
         // the input is needed for object_changes to retrieve the sender address.
         if opts.require_input() {
-            temp_response.transaction =
-                Some(self.state.get_executed_transaction(digest).await.tap_err(
-                    |err| debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err),
-                )?);
+            temp_response.transaction = transaction;
         }
 
         // Fetch effects when `show_events` is true because events relies on effects
@@ -288,17 +294,24 @@ impl ReadApiServer for ReadApi {
         if let Some((_, seq)) = self
             .state
             .get_transaction_checkpoint_sequence(&digest)
-            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| {
+                error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
+                anyhow!("{e}")
+            })?
         {
             temp_response.checkpoint_seq = Some(seq.into());
         }
 
         if temp_response.checkpoint_seq.is_some() {
+            let checkpoint_id = temp_response.checkpoint_seq.unwrap().into();
             let checkpoint = self
                 .state
                 // safe to unwrap because we have checked `is_some` above
-                .get_checkpoint_by_sequence_number(temp_response.checkpoint_seq.unwrap().into())
-                .map_err(|e| anyhow!("{e}"))?;
+                .get_checkpoint_by_sequence_number(checkpoint_id)
+                .map_err(|e|{
+                    error!("Failed to get checkpoint by sequence number: {checkpoint_id:?} with error: {e:?}");
+                    anyhow!("{e}"
+                )})?;
             // TODO(chris): we don't need to fetch the whole checkpoint summary
             temp_response.timestamp = checkpoint.as_ref().map(|c| c.timestamp_ms);
         }
@@ -309,7 +322,11 @@ impl ReadApiServer for ReadApi {
                 let events = self
                     .state
                     .get_transaction_events(event_digest)
-                    .map_err(Error::from)?;
+                    .map_err(|e|
+                        {
+                            error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
+                            Error::from(e)
+                        })?;
                 match to_sui_transaction_events(self, digest, events) {
                     Ok(e) => temp_response.events = Some(e),
                     Err(e) => temp_response.errors.push(e.to_string()),
@@ -440,7 +457,9 @@ impl ReadApiServer for ReadApi {
         let timestamps = self
             .state
             .multi_get_checkpoint_by_sequence_number(&unique_checkpoint_numbers)
-            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| {
+                error!("Failed to fetch checkpoint summarys by these checkpoint ids: {unique_checkpoint_numbers:?} with error: {e:?}");
+                anyhow!("{e}")})?
             .into_iter()
             .map(|c| c.map(|checkpoint| checkpoint.timestamp_ms));
 
@@ -597,7 +616,11 @@ impl ReadApiServer for ReadApi {
         let events = if let Some(event_digest) = effect.events_digest() {
             self.state
                 .get_transaction_events(event_digest)
-                .map_err(Error::SuiError)?
+                .map_err(
+                    |e| {
+                        error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
+                        Error::SuiError(e)
+                    })?
                 .data
                 .into_iter()
                 .enumerate()
@@ -779,10 +802,10 @@ pub async fn get_move_modules_by_package(
     state: &AuthorityState,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
-    let object_read = state
-        .get_object_read(&package)
-        .await
-        .map_err(|e| anyhow!("{e}"))?;
+    let object_read = state.get_object_read(&package).await.map_err(|e| {
+        warn!("Failed to call get_move_modules_by_package for package: {package:?}");
+        anyhow!("{e}")
+    })?;
 
     Ok(match object_read {
         ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
@@ -793,7 +816,10 @@ pub async fn get_move_modules_by_package(
                     p.serialized_module_map().values(),
                     /* max_binary_format_version */ VERSION_MAX,
                 )
-                .map_err(|e| anyhow!("{e}"))
+                .map_err(|e| {
+                    error!("Failed to call get_move_modules_by_package for package: {package:?}");
+                    anyhow!("{e}")
+                })
             }
             _ => Err(anyhow!("Object is not a package with ID {}", package)),
         },

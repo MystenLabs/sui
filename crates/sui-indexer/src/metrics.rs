@@ -21,12 +21,15 @@ pub struct IndexerCheckpointHandlerMetrics {
     pub total_epoch_committed: IntCounter,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
-    pub fullnode_download_latency: Histogram,
+    pub fullnode_checkpoint_download_latency: Histogram,
+    pub fullnode_transaction_download_latency: Histogram,
+    pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
     pub epoch_db_commit_latency: Histogram,
     // latency of event websocket subscription
     pub subscription_process_latency: Histogram,
+    pub transaction_per_checkpoint: Histogram,
 }
 
 impl IndexerCheckpointHandlerMetrics {
@@ -62,38 +65,59 @@ impl IndexerCheckpointHandlerMetrics {
                 registry,
             )
             .unwrap(),
-            fullnode_download_latency: register_histogram_with_registry!(
-                "checkpoint_full_node_read_request_latency",
+            fullnode_checkpoint_download_latency: register_histogram_with_registry!(
+                "fullnode_checkpoint_download_latency",
                 "Time spent in waiting for a new checkpoint from the Full Node",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
+            fullnode_transaction_download_latency: register_histogram_with_registry!(
+                "fullnode_transaction_download_latency",
+                "Time spent in waiting for a new transaction from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            fullnode_object_download_latency: register_histogram_with_registry!(
+                "fullnode_object_download_latency",
+                "Time spent in waiting for a new epoch from the Full Node",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             checkpoint_index_latency: register_histogram_with_registry!(
-                "checkpoint_index_request_latency",
+                "checkpoint_index_latency",
                 "Time spent in indexing a checkpoint",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             checkpoint_db_commit_latency: register_histogram_with_registry!(
-                "checkpoint_db_write_request_latency",
+                "checkpoint_db_commit_latency",
                 "Time spent commiting a checkpoint to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             epoch_db_commit_latency: register_histogram_with_registry!(
-                "epoch_db_write_request_latency",
+                "epoch_db_commit_latency",
                 "Time spent commiting a epoch to the db",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             subscription_process_latency: register_histogram_with_registry!(
-                "subscription_processing_latency",
+                "subscription_process_latency",
                 "Time spent in process Websocket subscription",
                 LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            transaction_per_checkpoint: register_histogram_with_registry!(
+                "transaction_per_checkpoint",
+                "Number of transactions per checkpoint",
+                vec![1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0],
                 registry,
             )
             .unwrap(),

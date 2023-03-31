@@ -268,9 +268,8 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        let mut batch = self
-            .certified_checkpoints
-            .batch()
+        let mut batch = self.certified_checkpoints.batch();
+        batch
             .insert_batch(
                 &self.certified_checkpoints,
                 [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
@@ -280,7 +279,7 @@ impl CheckpointStore {
                 [(checkpoint.digest(), checkpoint.serializable_ref())],
             )?;
         if checkpoint.next_epoch_committee().is_some() {
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.epoch_last_checkpoint_map,
                 [(&checkpoint.epoch(), checkpoint.sequence_number())],
             )?;
@@ -382,6 +381,25 @@ impl CheckpointStore {
         self.checkpoint_content
             .checkpoint_db(path)
             .map_err(SuiError::StorageError)
+    }
+
+    pub fn delete_highest_executed_checkpoint_test_only(&self) -> Result<(), TypedStoreError> {
+        let mut wb = self.watermarks.batch();
+        wb.delete_batch(
+            &self.watermarks,
+            std::iter::once(CheckpointWatermark::HighestExecuted),
+        )?;
+        wb.write()?;
+        Ok(())
+    }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        self.delete_highest_executed_checkpoint_test_only()?;
+        self.watermarks
+            .rocksdb
+            .flush()
+            .map_err(SuiError::StorageError)?;
+        Ok(())
     }
 }
 
@@ -538,7 +556,7 @@ impl CheckpointBuilder {
                 .last_constructed_checkpoint
                 .set(sequence_number as i64);
 
-            batch = batch.insert_batch(
+            batch.insert_batch(
                 &self.tables.checkpoint_content,
                 [(contents.digest(), contents)],
             )?;
@@ -1179,10 +1197,10 @@ impl CheckpointServiceNotify for CheckpointService {
     ) -> SuiResult {
         let sequence = info.summary.sequence_number;
         let signer = info.summary.auth_sig().authority.concise();
-        if let Some((last_certified, _)) = self
+        if let Some(last_certified) = self
             .tables
             .certified_checkpoints
-            .iter()
+            .keys()
             .skip_to_last()
             .next()
         {

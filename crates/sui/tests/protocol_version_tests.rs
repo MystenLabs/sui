@@ -10,9 +10,13 @@ use test_utils::authority::start_node;
 #[should_panic]
 async fn test_validator_panics_on_unsupported_protocol_version() {
     let dir = tempfile::TempDir::new().unwrap();
+    let latest_version = ProtocolVersion::MAX;
     let network_config = sui_config::builder::ConfigBuilder::new(&dir)
-        .with_protocol_version(ProtocolVersion::new(2))
-        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(1, 1))
+        .with_protocol_version(ProtocolVersion::new(latest_version.as_u64() + 1))
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+            latest_version.as_u64(),
+            latest_version.as_u64(),
+        ))
         .build();
 
     let registry_service = RegistryService::new(Registry::new());
@@ -550,6 +554,41 @@ mod sim_only_tests {
     }
 
     #[sim_test]
+    async fn test_safe_mode_recovery() {
+        sui_system_injection::set_override(sui_system_modules("mock_sui_systems/base"));
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            // Overrides with a sui system package that would abort during epoch change txn
+            .with_objects([sui_system_package_object("mock_sui_systems/safe_mode")])
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+
+        // We are going to enter safe mode so set the expectation right.
+        test_cluster.set_safe_mode_expected(true);
+
+        // Wait for epoch change to happen. This epoch we should also experience a framework
+        // upgrade that upgrades the framework to the base one (which doesn't abort), and thus
+        // a protocol version increment.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.epoch(), 1);
+        assert_eq!(system_state.protocol_version(), FINISH); // protocol version increments
+        assert!(system_state.safe_mode()); // enters safe mode
+
+        // We are getting out of safe mode soon.
+        test_cluster.set_safe_mode_expected(false);
+
+        // This epoch change should execute successfully without any upgrade and get us out of safe mode.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        assert_eq!(system_state.epoch(), 2);
+        assert_eq!(system_state.protocol_version(), FINISH); // protocol version stays the same
+        assert!(!system_state.safe_mode()); // out of safe mode
+    }
+
+    #[sim_test]
     async fn sui_system_mock_smoke_test() {
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
@@ -647,6 +686,39 @@ mod sim_only_tests {
             .unwrap();
         } else {
             panic!("Expecting SimTestDeepV2 type");
+        }
+    }
+
+    #[sim_test]
+    async fn sui_system_state_production_upgrade_test() {
+        // Use this test to test a real sui system state upgrade. To make this test work,
+        // put the new sui system in a new path and point to it in the override.
+        // It's important to also handle the new protocol version in protocol-config/lib.rs.
+        // The MAX_PROTOCOL_VERSION must not be changed yet when testing this.
+        let test_cluster = TestClusterBuilder::new()
+            .with_epoch_duration_ms(20000)
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                START, FINISH,
+            ))
+            .build()
+            .await
+            .unwrap();
+        // TODO: Replace the path with the new framework path when we test it for real.
+        sui_system_injection::set_override(sui_system_modules(
+            "../../../sui-framework/packages/sui-system",
+        ));
+        // Wait for the upgrade to finish. After the upgrade, the new framework will be installed,
+        // but the system state object hasn't been upgraded yet.
+        let system_state = test_cluster.wait_for_epoch(Some(1)).await;
+        assert_eq!(system_state.protocol_version(), FINISH);
+
+        // The system state object will be upgraded next time we execute advance_epoch transaction
+        // at epoch boundary.
+        let system_state = test_cluster.wait_for_epoch(Some(2)).await;
+        if let SuiSystemState::V1(_inner) = system_state {
+            // TODO: Check _inner data integrity.
+        } else {
+            unreachable!("Unexpected sui system state version");
         }
     }
 

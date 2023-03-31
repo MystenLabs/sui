@@ -10,6 +10,7 @@ mod test {
     use std::time::{Duration, Instant};
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
+    use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -264,6 +265,9 @@ mod test {
         let delegation_weight = 1;
         let batch_payment_weight = 1;
 
+        // Run random payloads at 100% load
+        let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // tests run for ever
         let adversarial_weight = 0;
@@ -278,6 +282,7 @@ mod test {
             delegation_weight,
             batch_payment_weight,
             adversarial_weight,
+            adversarial_cfg,
             batch_payment_size,
             shared_counter_hotness_factor,
             target_qps,

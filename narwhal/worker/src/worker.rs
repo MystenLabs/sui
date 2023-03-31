@@ -5,7 +5,6 @@ use crate::{
     batch_maker::BatchMaker,
     handlers::{PrimaryReceiverHandler, WorkerReceiverHandler},
     metrics::WorkerChannelMetrics,
-    primary_connector::PrimaryConnector,
     quorum_waiter::QuorumWaiter,
     TransactionValidator, NUM_SHUTDOWN_RECEIVERS,
 };
@@ -22,6 +21,7 @@ use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache,
 use crypto::{traits::KeyPair as _, NetworkKeyPair, NetworkPublicKey};
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
+use network::client::NetworkClient;
 use network::epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY};
 use network::failpoints::FailpointsMakeCallbackHandler;
 use network::metrics::MetricsMakeCallbackHandler;
@@ -34,9 +34,8 @@ use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tracing::{error, info};
 use types::{
-    metered_channel::{channel_with_total, Sender},
-    Batch, BatchDigest, ConditionalBroadcastReceiver, PreSubscribedBroadcastSender,
-    PrimaryToWorkerServer, WorkerOurBatchMessage, WorkerToWorkerServer,
+    metered_channel::channel_with_total, Batch, BatchDigest, ConditionalBroadcastReceiver,
+    PreSubscribedBroadcastSender, PrimaryToWorkerServer, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -75,15 +74,13 @@ impl Worker {
         worker_cache: WorkerCache,
         parameters: Parameters,
         validator: impl TransactionValidator,
+        client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
         metrics: Metrics,
         tx_shutdown: &mut PreSubscribedBroadcastSender,
     ) -> Vec<JoinHandle<()>> {
-        info!(
-            "Boot worker node with id {} peer id {}",
-            id,
-            PeerId(keypair.public().0.to_bytes())
-        );
+        let worker_peer_id = PeerId(keypair.public().0.to_bytes());
+        info!("Boot worker node with id {} peer id {}", id, worker_peer_id,);
 
         // Define a worker instance.
         let worker = Self {
@@ -103,23 +100,25 @@ impl Worker {
         let outbound_network_metrics = Arc::new(metrics.outbound_network_metrics.unwrap());
         let network_connection_metrics = metrics.network_connection_metrics.unwrap();
 
-        // Spawn all worker tasks.
-        let (tx_our_batch, rx_our_batch) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_our_batch,
-            &channel_metrics.tx_our_batch_total,
-        );
-        let (tx_others_batch, rx_others_batch) = channel_with_total(
-            CHANNEL_CAPACITY,
-            &channel_metrics.tx_others_batch,
-            &channel_metrics.tx_others_batch_total,
-        );
-
         let mut shutdown_receivers = tx_shutdown.subscribe_n(NUM_SHUTDOWN_RECEIVERS);
+
+        client.set_primary_to_worker_local_handler(
+            worker_peer_id,
+            Arc::new(PrimaryReceiverHandler {
+                authority_id: worker.authority.id(),
+                id: worker.id,
+                committee: worker.committee.clone(),
+                worker_cache: worker.worker_cache.clone(),
+                store: worker.store.clone(),
+                request_batch_timeout: worker.parameters.sync_retry_delay,
+                request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                validator: validator.clone(),
+            }),
+        );
 
         let mut worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             id: worker.id,
-            tx_others_batch,
+            client: client.clone(),
             store: worker.store.clone(),
             validator: validator.clone(),
         });
@@ -341,24 +340,17 @@ impl Worker {
             shutdown_receivers.pop().unwrap(),
         );
 
-        let primary_connector_handle = PrimaryConnector::spawn(
-            authority.network_key(),
-            shutdown_receivers.pop().unwrap(),
-            rx_our_batch,
-            rx_others_batch,
-            network.clone(),
-        );
         let client_flow_handles = worker.handle_clients_transactions(
             vec![
                 shutdown_receivers.pop().unwrap(),
                 shutdown_receivers.pop().unwrap(),
                 shutdown_receivers.pop().unwrap(),
             ],
-            tx_our_batch,
             node_metrics,
             channel_metrics,
             endpoint_metrics,
             validator,
+            client,
             network.clone(),
         );
 
@@ -376,11 +368,7 @@ impl Worker {
                 .transactions
         );
 
-        let mut handles = vec![
-            primary_connector_handle,
-            connection_monitor_handle,
-            network_shutdown_handle,
-        ];
+        let mut handles = vec![connection_monitor_handle, network_shutdown_handle];
         handles.extend(admin_handles);
         handles.extend(client_flow_handles);
         handles
@@ -429,14 +417,11 @@ impl Worker {
     fn handle_clients_transactions(
         &self,
         mut shutdown_receivers: Vec<ConditionalBroadcastReceiver>,
-        tx_our_batch: Sender<(
-            WorkerOurBatchMessage,
-            Option<tokio::sync::oneshot::Sender<()>>,
-        )>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
         validator: impl TransactionValidator,
+        client: NetworkClient,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel_with_total(
@@ -479,8 +464,8 @@ impl Worker {
             rx_batch_maker,
             tx_quorum_waiter,
             node_metrics,
+            client,
             self.store.clone(),
-            tx_our_batch,
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards

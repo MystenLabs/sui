@@ -173,8 +173,8 @@ impl ConsensusStore {
         let shell = CommittedSubDagShell::from_sub_dag(sub_dag);
 
         let mut write_batch = self.last_committed.batch();
-        write_batch = write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
-        write_batch = write_batch.insert_batch(
+        write_batch.insert_batch(&self.last_committed, last_committed.iter())?;
+        write_batch.insert_batch(
             &self.committed_sub_dags_by_index,
             std::iter::once((sub_dag.sub_dag_index, shell)),
         )?;

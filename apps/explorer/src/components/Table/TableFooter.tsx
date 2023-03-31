@@ -20,6 +20,7 @@ interface Props {
     data?: PaginationResponse<any>;
     limit: number;
     onLimitChange(value: number): void;
+    href: string;
 }
 
 export function TableFooter({
@@ -30,12 +31,13 @@ export function TableFooter({
     count,
     limit,
     onLimitChange,
+    href,
 }: Props) {
     return (
         <div className="flex items-center justify-between">
             {disablePagination ? (
                 <>
-                    <Link to="/transactions" after={<ArrowRight12 />}>
+                    <Link to={href} after={<ArrowRight12 />}>
                         More {label}
                     </Link>
                     <Text variant="body/medium" color="steel-dark">

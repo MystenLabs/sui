@@ -314,6 +314,8 @@ pub struct PrimaryMetrics {
     pub proposer_resend_batches: IntCounter,
     /// Time it takes for a header to be materialised to a certificate
     pub header_to_certificate_latency: Histogram,
+    /// Millisecs taken to wait for max parent time, when proposing headers.
+    pub header_max_parent_wait_ms: IntCounter,
 }
 
 impl PrimaryMetrics {
@@ -476,7 +478,12 @@ impl PrimaryMetrics {
                 "Time it takes for a header to be materialised to a certificate",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry
-            ).unwrap()
+            ).unwrap(),
+            header_max_parent_wait_ms: register_int_counter_with_registry!(
+                "header_max_parent_wait_ms",
+                "Millisecs taken to wait for max parent time, when proposing headers.",
+                registry
+            ).unwrap(),
         }
     }
 }

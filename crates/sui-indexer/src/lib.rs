@@ -47,14 +47,20 @@ pub mod utils;
 pub type PgConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 
-pub const MIGRATED_METHODS: [&str; 7] = [
+/// Returns all endpoints for which we have implemented on the indexer,
+/// some of them are not validated yet.
+/// NOTE: we only use this for integration testing
+const IMPLEMENTED_METHODS: [&str; 8] = [
+    // read apis
     "get_checkpoint",
     "get_latest_checkpoint_sequence_number",
-    "get_object_with_options",
-    "get_total_transaction_number",
-    "get_transaction",
-    "multi_get_transactions_with_options",
-    "query_transactions",
+    "get_object",
+    "get_total_transaction_blocks",
+    "get_transaction_block",
+    "multi_get_transaction_blocks",
+    // indexer apis
+    "query_events",
+    "query_transaction_blocks",
 ];
 
 #[derive(Parser, Clone, Debug)]
@@ -96,10 +102,8 @@ impl IndexerConfig {
         )
     }
 
-    /// returns all endpoints for which we have implemented on the indexer
-    /// NOTE: we only use this for integration testing
-    pub fn all_migrated_methods() -> Vec<String> {
-        MIGRATED_METHODS.iter().map(|&s| s.to_string()).collect()
+    pub fn all_implemented_methods() -> Vec<String> {
+        IMPLEMENTED_METHODS.iter().map(|&s| s.to_string()).collect()
     }
 }
 
@@ -231,7 +235,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
         event_handler,
         config.migrated_methods.clone(),
     ))?;
-    builder.register_module(WriteApi::new(http_client.clone()))?;
+    builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;
     builder.register_module(ExtendedApi::new(state.clone()))?;
     builder.register_module(MoveUtilsApi::new(http_client))?;
     let default_socket_addr = SocketAddr::new(

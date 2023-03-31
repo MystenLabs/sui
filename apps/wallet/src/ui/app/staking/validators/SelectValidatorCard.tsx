@@ -27,7 +27,7 @@ export function SelectValidatorCard() {
     const [selectedValidator, setSelectedValidator] = useState<null | string>(
         null
     );
-    const [sortKey, setSortKey] = useState<SortKeys>('stakeShare');
+    const [sortKey, setSortKey] = useState<SortKeys | null>(null);
     const [sortAscending, setSortAscending] = useState(true);
     const { data, isLoading, isError } = useSystemState();
 
@@ -54,20 +54,23 @@ export function SelectValidatorCard() {
         );
     }, [data]);
 
+    const validatorsRandomOrder = useMemo(
+        () =>
+            [...(data?.activeValidators || [])].sort(() => 0.5 - Math.random()),
+        [data?.activeValidators]
+    );
     const validatorList = useMemo(() => {
-        if (!data) return [];
-
-        const sortedAsc = data.activeValidators
-            .map((validator) => ({
-                name: validator.name,
-                address: validator.suiAddress,
-                apy: rollingAverageApys?.[validator.suiAddress] || 0,
-                stakeShare: calculateStakeShare(
-                    BigInt(validator.stakingPoolSuiBalance),
-                    BigInt(totalStake)
-                ),
-            }))
-            .sort((a, b) => {
+        const sortedAsc = validatorsRandomOrder.map((validator) => ({
+            name: validator.name,
+            address: validator.suiAddress,
+            apy: rollingAverageApys?.[validator.suiAddress] || 0,
+            stakeShare: calculateStakeShare(
+                BigInt(validator.stakingPoolSuiBalance),
+                BigInt(totalStake)
+            ),
+        }));
+        if (sortKey) {
+            sortedAsc.sort((a, b) => {
                 if (sortKey === 'name') {
                     return a[sortKey].localeCompare(b[sortKey], 'en', {
                         sensitivity: 'base',
@@ -76,8 +79,17 @@ export function SelectValidatorCard() {
                 }
                 return a[sortKey] - b[sortKey];
             });
-        return sortAscending ? sortedAsc : sortedAsc.reverse();
-    }, [data, sortAscending, rollingAverageApys, totalStake, sortKey]);
+
+            return sortAscending ? sortedAsc : sortedAsc.reverse();
+        }
+        return sortedAsc;
+    }, [
+        validatorsRandomOrder,
+        sortAscending,
+        rollingAverageApys,
+        totalStake,
+        sortKey,
+    ]);
 
     if (isLoading) {
         return (
@@ -174,7 +186,7 @@ export function SelectValidatorCard() {
                                     }
                                     validatorAddress={validator.address}
                                     value={
-                                        sortKey === 'name'
+                                        !sortKey || sortKey === 'name'
                                             ? '-'
                                             : `${validator[sortKey]}%`
                                     }

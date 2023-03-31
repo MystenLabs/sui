@@ -3,19 +3,19 @@
 import { SVGProps } from "react";
 const SvgArrowUpRight12 = (props: SVGProps<SVGSVGElement>) => (
   <svg
+    xmlns="http://www.w3.org/2000/svg"
     width="1em"
     height="1em"
-    viewBox="0 0 12 12"
     fill="none"
-    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 12 12"
     {...props}
   >
     <path
-      d="m3.5 8.5 5-5M3.5 3.5h5v5"
       stroke="currentColor"
-      strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="m3.5 8.5 5-5M3.5 3.5h5v5"
     />
   </svg>
 );

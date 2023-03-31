@@ -33,14 +33,14 @@ pub fn hmac_sha3_256(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let hmac_hmac_sha3_256_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
         .hmac_hmac_sha3_256_cost_params
         .clone();
 
-    // Charge the base cost for this oper
+    // Charge the base cost for this operation
     native_charge_gas_early_exit!(
         context,
         hmac_hmac_sha3_256_cost_params.hmac_hmac_sha3_256_cost_base
@@ -63,7 +63,8 @@ pub fn hmac_sha3_256(
                     .into()
     );
 
-    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref()).unwrap();
+    let hmac_key = hmac::HmacKey::from_bytes(&key.as_bytes_ref())
+        .expect("HMAC key can be of any length and from_bytes should always succeed");
     let cost = context.gas_used();
 
     Ok(NativeResult::ok(

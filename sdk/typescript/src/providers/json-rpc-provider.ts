@@ -45,7 +45,6 @@ import {
   SuiEvent,
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
-  CheckpointedObjectId,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -61,12 +60,14 @@ import { Connection, devnetConnection } from '../rpc/connection';
 import { TransactionBlock } from '../builder';
 import { CheckpointPage } from '../types/checkpoints';
 import { RPCError } from '../utils/errors';
+import { NetworkMetrics } from '../types/metrics';
+import { EpochInfo, EpochPage } from '../types/epochs';
 
 export const TARGETED_RPC_VERSION = '0.29.0';
 
-export interface PaginationArguments {
+export interface PaginationArguments<Cursor> {
   /** Optional paging cursor */
-  cursor?: CheckpointedObjectId | ObjectId | null;
+  cursor?: Cursor;
   /** Maximum item returned per page */
   limit?: number | null;
 }
@@ -211,7 +212,7 @@ export class JsonRpcProvider {
   async getAllCoins(
     input: {
       owner: SuiAddress;
-    } & PaginationArguments,
+    } & PaginationArguments<PaginatedCoins['nextCursor']>,
   ): Promise<PaginatedCoins> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
       throw new Error('Invalid Sui address');
@@ -385,7 +386,7 @@ export class JsonRpcProvider {
   async getOwnedObjects(
     input: {
       owner: SuiAddress;
-    } & PaginationArguments &
+    } & PaginationArguments<PaginatedObjectsResponse['nextCursor']> &
       SuiObjectResponseQuery,
   ): Promise<PaginatedObjectsResponse> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
@@ -456,7 +457,7 @@ export class JsonRpcProvider {
    */
   async queryTransactionBlocks(
     input: SuiTransactionBlockResponseQuery &
-      PaginationArguments &
+      PaginationArguments<PaginatedTransactionResponse['nextCursor']> &
       OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
@@ -614,7 +615,7 @@ export class JsonRpcProvider {
     input: {
       /** the event query criteria. */
       query: SuiEventFilter;
-    } & PaginationArguments &
+    } & PaginationArguments<PaginatedEvents['nextCursor']> &
       OrderArguments,
   ): Promise<PaginatedEvents> {
     return await this.client.requestWithType(
@@ -715,7 +716,7 @@ export class JsonRpcProvider {
     input: {
       /** The id of the parent object */
       parentId: ObjectId;
-    } & PaginationArguments,
+    } & PaginationArguments<DynamicFieldPage['nextCursor']>,
   ): Promise<DynamicFieldPage> {
     if (
       !input.parentId ||
@@ -810,6 +811,40 @@ export class JsonRpcProvider {
       'suix_getCommitteeInfo',
       [input?.epoch],
       CommitteeInfo,
+    );
+  }
+
+  async getNetworkMetrics() {
+    return await this.client.requestWithType(
+      'suix_getNetworkMetrics',
+      [],
+      NetworkMetrics,
+    );
+  }
+  /**
+   * Return the committee information for the asked epoch
+   */
+  async getEpochs(input?: {
+    cursor?: number;
+    limit?: number;
+    descendingOrder?: boolean;
+  }): Promise<EpochPage> {
+    return await this.client.requestWithType(
+      'suix_getEpochs',
+      [input?.cursor, input?.limit, input?.descendingOrder],
+      EpochPage,
+      this.options.skipDataValidation,
+    );
+  }
+  /**
+   * Return the committee information for the asked epoch
+   */
+  async getCurrentEpoch(): Promise<EpochInfo> {
+    return await this.client.requestWithType(
+      'suix_getCurrentEpoch',
+      [],
+      EpochInfo,
+      this.options.skipDataValidation,
     );
   }
 }

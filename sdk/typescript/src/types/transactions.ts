@@ -81,7 +81,7 @@ export const SuiTransaction = union([
   object({ TransferObjects: tuple([array(SuiArgument), SuiArgument]) }),
   object({ SplitCoins: tuple([SuiArgument, array(SuiArgument)]) }),
   object({ MergeCoins: tuple([SuiArgument, array(SuiArgument)]) }),
-  object({ Publish: SuiMovePackage }),
+  object({ Publish: tuple([SuiMovePackage, array(ObjectId)]) }),
   object({ MakeMoveVec: tuple([nullable(string()), array(SuiArgument)]) }),
 ]);
 
@@ -411,7 +411,7 @@ export type SuiTransactionBlockResponseOptions = Infer<
 
 export const PaginatedTransactionResponse = object({
   data: array(SuiTransactionBlockResponse),
-  nextCursor: union([TransactionDigest, literal(null)]),
+  nextCursor: nullable(TransactionDigest),
   hasNextPage: boolean(),
 });
 export type PaginatedTransactionResponse = Infer<

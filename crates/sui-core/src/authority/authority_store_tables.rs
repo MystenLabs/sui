@@ -206,7 +206,7 @@ impl AuthorityPerpetualTables {
         epoch_start_configuration: &EpochStartConfiguration,
     ) -> SuiResult {
         let mut wb = self.epoch_start_configuration.batch();
-        wb = wb.insert_batch(
+        wb.insert_batch(
             &self.epoch_start_configuration,
             std::iter::once(((), epoch_start_configuration)),
         )?;
@@ -220,10 +220,11 @@ impl AuthorityPerpetualTables {
 
     pub fn set_highest_pruned_checkpoint(
         &self,
-        wb: DBBatch,
+        wb: &mut DBBatch,
         checkpoint_number: CheckpointSequenceNumber,
-    ) -> SuiResult<DBBatch> {
-        Ok(wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?)
+    ) -> SuiResult {
+        wb.insert_batch(&self.pruned_checkpoint, [((), checkpoint_number)])?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
@@ -248,6 +249,24 @@ impl AuthorityPerpetualTables {
         self.objects
             .checkpoint_db(path)
             .map_err(SuiError::StorageError)
+    }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        // TODO: Add new tables that get added to the db automatically
+        self.objects.clear()?;
+        self.indirect_move_objects.clear()?;
+        self.owned_object_transaction_locks.clear()?;
+        self.executed_effects.clear()?;
+        self.events.clear()?;
+        self.executed_transactions_to_checkpoint.clear()?;
+        self.root_state_hash_by_epoch.clear()?;
+        self.epoch_start_configuration.clear()?;
+        self.pruned_checkpoint.clear()?;
+        self.objects
+            .rocksdb
+            .flush()
+            .map_err(SuiError::StorageError)?;
+        Ok(())
     }
 }
 

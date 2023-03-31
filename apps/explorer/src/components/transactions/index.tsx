@@ -82,26 +82,21 @@ export function Transactions({
                 <PlaceholderTable
                     rowCount={initialLimit}
                     rowHeight="16px"
-                    colHeadings={[
-                        'Transaction ID',
-                        'Sender',
-                        'Amount',
-                        'Gas',
-                        'Time',
-                    ]}
+                    colHeadings={['Digest', 'Sender', 'Amount', 'Gas', 'Time']}
                     colWidths={['100px', '120px', '204px', '90px', '38px']}
                 />
             )}
 
             <div className="py-3">
                 <TableFooter
-                    label="Transactions"
+                    label="Transaction Blocks"
                     count={Number(countQuery.data)}
                     data={transactionQuery.data}
                     disablePagination={disablePagination}
                     pagination={pagination}
                     limit={limit}
                     onLimitChange={setLimit}
+                    href="/recent"
                 />
             </div>
         </div>

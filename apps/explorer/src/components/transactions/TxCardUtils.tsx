@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { X12 } from '@mysten/icons';
+import { X12, Dot12 } from '@mysten/icons';
 import {
     getExecutionStatusType,
     getTotalGasUsed,
@@ -14,7 +14,6 @@ import {
 import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
-import { getAmount } from '../../utils/getAmount';
 import { TxTimeType } from '../tx-time/TxTimeType';
 
 import styles from './RecentTxCard.module.css';
@@ -76,13 +75,6 @@ export const genTableDataFromTxData = (
 ) => ({
     data: results.map((transaction) => {
         const status = getExecutionStatusType(transaction);
-        const transfer = getAmount({
-            txnData: transaction,
-            suiCoinOnly: true,
-        })[0];
-
-        // use only absolute value of sui amount
-        const suiAmount = transfer?.amount ? Math.abs(transfer.amount) : null;
         const sender = getTransactionSender(transaction);
 
         return {
@@ -91,13 +83,13 @@ export const genTableDataFromTxData = (
                     <TxTimeType timestamp={transaction.timestampMs} />
                 </TxTableCol>
             ),
-            transactionId: (
+            digest: (
                 <TxTableCol isFirstCol isHighlightedOnHover>
                     <TransactionLink
                         digest={transaction.digest}
                         before={
                             status === 'success' ? (
-                                <div className="h-2 w-2 rounded-full bg-success" />
+                                <Dot12 className="text-success" />
                             ) : (
                                 <X12 className="text-issue-dark" />
                             )
@@ -105,9 +97,13 @@ export const genTableDataFromTxData = (
                     />
                 </TxTableCol>
             ),
-            amounts: (
+            txns: (
                 <TxTableCol>
-                    <SuiAmount amount={suiAmount} />
+                    {transaction.transaction?.data.transaction.kind ===
+                    'ProgrammableTransaction'
+                        ? transaction.transaction.data.transaction.transactions
+                              .length
+                        : '--'}
                 </TxTableCol>
             ),
             gas: (
@@ -124,16 +120,16 @@ export const genTableDataFromTxData = (
     }),
     columns: [
         {
-            header: 'Transaction ID',
-            accessorKey: 'transactionId',
+            header: 'Digest',
+            accessorKey: 'digest',
         },
         {
             header: () => <TxTableHeader label="Sender" />,
             accessorKey: 'sender',
         },
         {
-            header: () => <TxTableHeader label="Amount" />,
-            accessorKey: 'amounts',
+            header: () => <TxTableHeader label="Txns" />,
+            accessorKey: 'txns',
         },
         {
             header: () => <TxTableHeader label="Gas" />,

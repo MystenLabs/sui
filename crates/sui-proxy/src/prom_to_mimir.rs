@@ -241,6 +241,28 @@ pub mod tests {
         m
     }
 
+    pub fn create_metric_histogram(
+        labels: RepeatedField<proto::LabelPair>,
+        histogram: proto::Histogram,
+    ) -> proto::Metric {
+        let mut m = proto::Metric::default();
+        m.set_label(labels);
+        m.set_histogram(histogram);
+        m.set_timestamp_ms(12345);
+        m
+    }
+
+    pub fn create_histogram() -> proto::Histogram {
+        let mut h = proto::Histogram::default();
+        h.set_sample_count(1);
+        h.set_sample_sum(1.0);
+        let mut b = proto::Bucket::default();
+        b.set_cumulative_count(1);
+        b.set_upper_bound(1.0);
+        h.mut_bucket().push(b);
+        h
+    }
+
     pub fn create_labels(labels: Vec<(&str, &str)>) -> Vec<proto::LabelPair> {
         labels
             .into_iter()

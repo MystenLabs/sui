@@ -20,7 +20,7 @@ use sui_types::digests::TransactionDigest;
 
 use crate::errors::IndexerError;
 use crate::store::IndexerStore;
-use crate::types::{SuiTransactionBlockFullResponse, SuiTransactionBlockFullResponseWithOptions};
+use crate::types::SuiTransactionBlockResponseWithOptions;
 
 pub(crate) struct ReadApi<S> {
     fullnode: HttpClient,
@@ -37,13 +37,13 @@ impl<S: IndexerStore> ReadApi<S> {
         }
     }
 
-    fn get_total_transaction_number_internal(&self) -> Result<u64, IndexerError> {
+    fn get_total_transaction_blocks_internal(&self) -> Result<u64, IndexerError> {
         self.state
             .get_total_transaction_number_from_checkpoints()
             .map(|n| n as u64)
     }
 
-    async fn get_transaction_with_options_internal(
+    async fn get_transaction_block_internal(
         &self,
         digest: &TransactionDigest,
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -51,20 +51,19 @@ impl<S: IndexerStore> ReadApi<S> {
         let tx = self
             .state
             .get_transaction_by_digest(&digest.base58_encode())?;
-        let tx_full_resp: SuiTransactionBlockFullResponse = self
+        let sui_tx_resp = self
             .state
-            .compose_full_transaction_response(tx, options.clone())
+            .compose_sui_transaction_block_response(tx, options.as_ref())
             .await?;
-
-        let sui_transaction_response = SuiTransactionBlockFullResponseWithOptions {
-            response: tx_full_resp,
+        let sui_transaction_response = SuiTransactionBlockResponseWithOptions {
+            response: sui_tx_resp,
             options: options.unwrap_or_default(),
         }
         .into();
         Ok(sui_transaction_response)
     }
 
-    async fn multi_get_transactions_with_options_internal(
+    async fn multi_get_transaction_blocks_internal(
         &self,
         digests: &[TransactionDigest],
         options: Option<SuiTransactionBlockResponseOptions>,
@@ -88,21 +87,18 @@ impl<S: IndexerStore> ReadApi<S> {
                 "Transaction count changed after reorder, this should never happen.".to_string(),
             ));
         }
-        let tx_full_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
+        let sui_tx_resp_futures = ordered_tx_vec.into_iter().map(|tx| {
             self.state
-                .compose_full_transaction_response(tx, options.clone())
+                .compose_sui_transaction_block_response(tx, options.as_ref())
         });
-        let tx_full_resp_vec: Vec<SuiTransactionBlockFullResponse> = join_all(tx_full_resp_futures)
+        let sui_tx_resp_vec = join_all(sui_tx_resp_futures)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
-
-        let tx_resp_vec: Vec<SuiTransactionBlockResponse> =
-            tx_full_resp_vec.into_iter().map(|tx| tx.into()).collect();
-        Ok(tx_resp_vec)
+        Ok(sui_tx_resp_vec)
     }
 
-    fn get_object_with_options_internal(
+    fn get_object_internal(
         &self,
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
@@ -128,14 +124,11 @@ where
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        if !self
-            .migrated_methods
-            .contains(&"get_object_with_options".into())
-        {
+        if !self.migrated_methods.contains(&"get_object".into()) {
             return self.fullnode.get_object(object_id, options).await;
         }
 
-        Ok(self.get_object_with_options_internal(object_id, options)?)
+        Ok(self.get_object_internal(object_id, options)?)
     }
 
     async fn multi_get_objects(
@@ -149,11 +142,11 @@ where
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt> {
         if !self
             .migrated_methods
-            .contains(&"get_total_transaction_number".to_string())
+            .contains(&"get_total_transaction_blocks".to_string())
         {
             return self.fullnode.get_total_transaction_blocks().await;
         }
-        Ok(self.get_total_transaction_number_internal()?.into())
+        Ok(self.get_total_transaction_blocks_internal()?.into())
     }
 
     async fn get_transaction_block(
@@ -163,12 +156,12 @@ where
     ) -> RpcResult<SuiTransactionBlockResponse> {
         if !self
             .migrated_methods
-            .contains(&"get_transaction".to_string())
+            .contains(&"get_transaction_block".to_string())
         {
             return self.fullnode.get_transaction_block(digest, options).await;
         }
         Ok(self
-            .get_transaction_with_options_internal(&digest, options)
+            .get_transaction_block_internal(&digest, options)
             .await?)
     }
 
@@ -179,7 +172,7 @@ where
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
         if !self
             .migrated_methods
-            .contains(&"multi_get_transactions_with_options".to_string())
+            .contains(&"multi_get_transaction_blocks".to_string())
         {
             return self
                 .fullnode
@@ -187,7 +180,7 @@ where
                 .await;
         }
         Ok(self
-            .multi_get_transactions_with_options_internal(&digests, options)
+            .multi_get_transaction_blocks_internal(&digests, options)
             .await?)
     }
 

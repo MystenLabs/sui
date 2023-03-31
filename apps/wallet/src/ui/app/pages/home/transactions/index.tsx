@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getTransactionDigest } from '@mysten/sui.js';
-import { memo } from 'react';
 
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
@@ -58,4 +57,4 @@ function TransactionBlocksPage() {
     );
 }
 
-export default memo(TransactionBlocksPage);
+export default TransactionBlocksPage;

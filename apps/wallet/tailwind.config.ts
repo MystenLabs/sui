@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module.exports = {
-    presets: [require('@mysten/core/tailwind.config')],
+import preset from '@mysten/core/tailwind.config';
+import { type Config } from 'tailwindcss';
+
+export default {
+    presets: [preset],
 
     /*
      * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
@@ -26,7 +29,7 @@ module.exports = {
                 7.5: '1.875rem',
                 8: '2rem',
                 15: '3.75rem',
-                'popup-height': '595px',
+                'popup-height': '600px',
                 'popup-width': '360px',
             },
             boxShadow: {
@@ -60,4 +63,4 @@ module.exports = {
             },
         },
     },
-};
+} satisfies Partial<Config>;

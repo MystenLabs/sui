@@ -6,9 +6,9 @@
 use super::*;
 
 use crate::consensus::ConsensusRound;
+use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
 use crate::consensus_utils::*;
 use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
-use fastcrypto::hash::Hash;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
@@ -25,8 +25,6 @@ use types::{CertificateAPI, HeaderAPI, PreSubscribedBroadcastSender};
 // the leader of round 2.
 #[tokio::test]
 async fn commit_one() {
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
-
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     // Make certificates for rounds 1 and 2.
@@ -106,8 +104,6 @@ async fn commit_one() {
 // rounds 2, 4, 6 and 10. The leader of round 8 will be missing, but eventually the leader 10 will get committed.
 #[tokio::test]
 async fn dead_node() {
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
-
     // Make the certificates.
     let fixture = CommitteeFixture::builder().build();
     let committee: Committee = fixture.committee();
@@ -218,7 +214,6 @@ async fn dead_node() {
 // round 4 does. The leader of rounds 2 and 4 should thus be committed (because they are linked).
 #[tokio::test]
 async fn not_enough_support() {
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
@@ -370,7 +365,6 @@ async fn not_enough_support() {
 // and reappears from round 3.
 #[tokio::test]
 async fn missing_leader() {
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let mut ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
@@ -469,7 +463,6 @@ async fn committed_round_after_restart() {
     let committee = fixture.committee();
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let epoch = committee.epoch();
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Make certificates for rounds 1 to 11.
     let genesis = Certificate::genesis(&committee)
@@ -563,8 +556,6 @@ async fn committed_round_after_restart() {
 /// from round 2. Certificate 2 should not get committed.
 #[tokio::test]
 async fn delayed_certificates_are_rejected() {
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
-
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
@@ -737,7 +728,6 @@ async fn restart_with_new_committee() {
     let fixture = CommitteeFixture::builder().build();
     let mut committee: Committee = fixture.committee();
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     // Run for a few epochs.
     for epoch in 0..5 {
@@ -832,7 +822,6 @@ async fn restart_with_new_committee() {
 #[tokio::test]
 async fn garbage_collection_basic() {
     const GC_DEPTH: Round = 4;
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee: Committee = fixture.committee();
@@ -921,7 +910,6 @@ async fn garbage_collection_basic() {
 #[tokio::test]
 async fn slow_node() {
     const GC_DEPTH: Round = 4;
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee: Committee = fixture.committee();
@@ -1057,7 +1045,6 @@ async fn slow_node() {
 #[tokio::test]
 async fn not_enough_support_and_missing_leaders_and_gc() {
     const GC_DEPTH: Round = 4;
-    const NUM_SUB_DAGS_PER_SCHEDULE: u64 = 100;
 
     let fixture = CommitteeFixture::builder().build();
     let committee: Committee = fixture.committee();

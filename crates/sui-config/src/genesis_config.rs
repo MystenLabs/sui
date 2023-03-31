@@ -10,7 +10,6 @@ use anyhow::Result;
 use fastcrypto::traits::KeyPair;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;
 
@@ -102,7 +101,6 @@ impl GenesisConfig {
     }
 }
 
-#[serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorGenesisInfo {
     pub key_pair: AuthorityKeyPair,

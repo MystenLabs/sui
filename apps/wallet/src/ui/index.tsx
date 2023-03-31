@@ -4,9 +4,8 @@
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { RpcClientContext } from '@mysten/core';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Fragment } from 'react';
+import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { IntlProvider } from 'react-intl';
 import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
@@ -46,9 +45,11 @@ function renderApp() {
     }
     const root = createRoot(rootDom);
     root.render(
-        <Provider store={store}>
-            <AppWrapper />
-        </Provider>
+        <StrictMode>
+            <Provider store={store}>
+                <AppWrapper />
+            </Provider>
+        </StrictMode>
     );
 }
 
@@ -60,26 +61,24 @@ function AppWrapper() {
     return (
         <GrowthBookProvider growthbook={growthbook}>
             <HashRouter>
-                <IntlProvider locale={navigator.language}>
-                    <SuiLedgerClientProvider>
-                        {/*
-                         * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
-                         * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
-                         * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
-                         */}
-                        <Fragment key={network}>
-                            <QueryClientProvider client={queryClient}>
-                                <RpcClientContext.Provider
-                                    value={api.instance.fullNode}
-                                >
-                                    <ErrorBoundary>
-                                        <App />
-                                    </ErrorBoundary>
-                                </RpcClientContext.Provider>
-                            </QueryClientProvider>
-                        </Fragment>
-                    </SuiLedgerClientProvider>
-                </IntlProvider>
+                <SuiLedgerClientProvider>
+                    {/*
+                     * NOTE: We set a key here to force the entire react tree to be re-created when the network changes so that
+                     * the RPC client instance (api.instance.fullNode) is updated correctly. In the future, we should look into
+                     * making the API provider instance a reactive value and moving it out of the redux-thunk middleware
+                     */}
+                    <Fragment key={network}>
+                        <QueryClientProvider client={queryClient}>
+                            <RpcClientContext.Provider
+                                value={api.instance.fullNode}
+                            >
+                                <ErrorBoundary>
+                                    <App />
+                                </ErrorBoundary>
+                            </RpcClientContext.Provider>
+                        </QueryClientProvider>
+                    </Fragment>
+                </SuiLedgerClientProvider>
             </HashRouter>
         </GrowthBookProvider>
     );

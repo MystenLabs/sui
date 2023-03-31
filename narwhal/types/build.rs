@@ -145,15 +145,6 @@ fn build_anemo_services(out_dir: &Path) {
                 .codec_path(codec_path)
                 .build(),
         )
-        .method(
-            anemo_build::manual::Method::builder()
-                .name("worker_info")
-                .route_name("WorkerInfo")
-                .request_type("()")
-                .response_type("crate::WorkerInfoResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
         .build();
 
     let worker_to_worker = anemo_build::manual::Service::builder()

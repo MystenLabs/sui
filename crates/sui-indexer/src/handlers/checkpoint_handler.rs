@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::traits::ToFromBytes;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
 use futures::FutureExt;
 use move_core_types::ident_str;
@@ -37,7 +37,7 @@ use crate::store::{
     CheckpointData, IndexerStore, TemporaryCheckpointStore, TemporaryEpochStore,
     TransactionObjectChanges,
 };
-use crate::types::SuiTransactionBlockFullResponse;
+use crate::types::{CheckpointTransactionBlockResponse, TemporaryTransactionBlockResponseStore};
 use crate::utils::multi_get_full_transactions;
 
 const HANDLER_RETRY_INTERVAL_IN_SECS: u64 = 10;
@@ -96,7 +96,6 @@ where
         loop {
             // Download checkpoint data
             self.metrics.total_checkpoint_requested.inc();
-            let request_guard = self.metrics.fullnode_download_latency.start_timer();
             let checkpoint = self
                 .download_checkpoint_data(next_cursor_sequence_number as u64)
                 .await.map_err(|e| {
@@ -106,7 +105,6 @@ where
                     );
                     e
                 })?;
-            request_guard.stop_and_record();
             self.metrics.total_checkpoint_received.inc();
 
             // Index checkpoint data
@@ -130,6 +128,9 @@ where
                 "Checkpoint {} committed with {tx_count} transactions and {object_count} object changes.",
                 next_cursor_sequence_number
             );
+            self.metrics
+                .transaction_per_checkpoint
+                .observe(tx_count as f64);
 
             // Write epoch to DB if needed
             if let Some(indexed_epoch) = indexed_epoch {
@@ -168,11 +169,17 @@ where
                     seq, e
                 ))
             });
-        // this happens very often b/c checkpoint indexing is faster than checkpoint
-        // generation. Ideally we will want to differentiate between a real error and
-        // a checkpoint not generated yet.
+        let mut fn_checkpoint_guard = self
+            .metrics
+            .fullnode_checkpoint_download_latency
+            .start_timer();
         while checkpoint.is_err() {
+            // sleep for 1 second and retry if latest checkpoint is not available yet
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            fn_checkpoint_guard = self
+                .metrics
+                .fullnode_checkpoint_download_latency
+                .start_timer();
             checkpoint = self
                 .rpc_client
                 .read_api()
@@ -185,9 +192,14 @@ where
                     ))
                 })
         }
+        fn_checkpoint_guard.stop_and_record();
         // unwrap here is safe because we checked for error above
         let checkpoint = checkpoint.unwrap();
 
+        let fn_transaction_guard = self
+            .metrics
+            .fullnode_transaction_download_latency
+            .start_timer();
         let transactions = join_all(checkpoint.transactions.chunks(MULTI_GET_CHUNK_SIZE).map(
             |digests| multi_get_full_transactions(self.rpc_client.read_api(), digests.to_vec()),
         ))
@@ -197,17 +209,24 @@ where
             acc.extend(chunk?);
             Ok::<_, IndexerError>(acc)
         })?;
+        fn_transaction_guard.stop_and_record();
 
         let object_changes = transactions
             .iter()
             .flat_map(|tx| {
                 let effects = &tx.effects;
-                let created = effects.created().iter();
-                let created = created.map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
-                let mutated = effects.mutated().iter();
-                let mutated = mutated.map(|o: &OwnedObjectRef| (o, ObjectStatus::Mutated));
-                let unwrapped = effects.unwrapped().iter();
-                let unwrapped = unwrapped.map(|o: &OwnedObjectRef| (o, ObjectStatus::Unwrapped));
+                let created = effects
+                    .created()
+                    .iter()
+                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
+                let mutated = effects
+                    .mutated()
+                    .iter()
+                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Mutated));
+                let unwrapped = effects
+                    .unwrapped()
+                    .iter()
+                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Unwrapped));
                 created.chain(mutated).chain(unwrapped)
             })
             .fold(
@@ -218,6 +237,7 @@ where
                 },
             );
 
+        let fn_object_guard = self.metrics.fullnode_object_download_latency.start_timer();
         let rpc = self.rpc_client.clone();
         let changed_objects =
             join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
@@ -257,6 +277,7 @@ where
                     seq, e
                 ))
             })?;
+        fn_object_guard.stop_and_record();
 
         Ok(CheckpointData {
             checkpoint,
@@ -276,9 +297,11 @@ where
         } = data;
 
         // Index transaction
-        let db_transactions = transactions
+        let temp_tx_store_iter = transactions
             .iter()
-            .map(|tx| tx.clone().try_into())
+            .map(|tx| TemporaryTransactionBlockResponseStore::from(tx.clone()));
+        let db_transactions: Vec<Transaction> = temp_tx_store_iter
+            .map(|tx| tx.try_into())
             .collect::<Result<Vec<Transaction>, _>>()?;
 
         // Index events
@@ -396,19 +419,18 @@ where
             let system_state = get_sui_system_state(data)?;
             let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
 
-            let epoch_event = transactions
-                .iter()
-                .find_map(|tx| {
-                    tx.events.data.iter().find(|ev| {
-                        ev.type_.address == SUI_SYSTEM_ADDRESS
-                            && ev.type_.module.as_ident_str()
-                                == ident_str!("sui_system_state_inner")
-                            && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
-                    })
+            let epoch_event = transactions.iter().find_map(|tx| {
+                tx.events.data.iter().find(|ev| {
+                    ev.type_.address == SUI_SYSTEM_ADDRESS
+                        && ev.type_.module.as_ident_str() == ident_str!("sui_system_state_inner")
+                        && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
                 })
-                .ok_or_else(|| anyhow::anyhow!("Cannot find epoch event"))?;
+            });
 
-            let event: SystemEpochInfoEvent = bcs::from_bytes(&epoch_event.bcs)?;
+            let event = epoch_event
+                .map(|e| bcs::from_bytes::<SystemEpochInfoEvent>(&e.bcs))
+                .transpose()?;
+
             let validators = system_state
                 .active_validators
                 .iter()
@@ -435,6 +457,8 @@ where
                     },
                 );
 
+            let event = event.as_ref();
+
             Some(TemporaryEpochStore {
                 last_epoch: Some(DBEpochInfo {
                     epoch: system_state.epoch as i64 - 1,
@@ -448,17 +472,18 @@ where
                     ),
                     next_epoch_committee,
                     next_epoch_committee_stake,
-                    stake_subsidy_amount: Some(event.stake_subsidy_amount),
-                    reference_gas_price: Some(event.reference_gas_price),
-                    storage_fund_balance: Some(event.storage_fund_balance),
-                    total_gas_fees: Some(event.total_gas_fees),
-                    total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
-                    total_stake: Some(event.total_stake),
-                    storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
-                    storage_charge: Some(event.storage_charge),
-                    protocol_version: Some(event.protocol_version),
-                    storage_rebate: Some(event.storage_rebate),
-                    leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
+                    stake_subsidy_amount: event.map(|e| e.stake_subsidy_amount),
+                    reference_gas_price: event.map(|e| e.reference_gas_price),
+                    storage_fund_balance: event.map(|e| e.storage_fund_balance),
+                    total_gas_fees: event.map(|e| e.total_gas_fees),
+                    total_stake_rewards_distributed: event
+                        .map(|e| e.total_stake_rewards_distributed),
+                    total_stake: event.map(|e| e.total_stake),
+                    storage_fund_reinvestment: event.map(|e| e.storage_fund_reinvestment),
+                    storage_charge: event.map(|e| e.storage_charge),
+                    protocol_version: event.map(|e| e.protocol_version),
+                    storage_rebate: event.map(|e| e.storage_rebate),
+                    leftover_storage_fund_inflow: event.map(|e| e.leftover_storage_fund_inflow),
                     epoch_commitments,
                 }),
                 new_epoch: DBEpochInfo {
@@ -493,7 +518,7 @@ where
     }
 
     fn index_packages(
-        transactions: &[SuiTransactionBlockFullResponse],
+        transactions: &[CheckpointTransactionBlockResponse],
         changed_objects: &[(ObjectStatus, SuiObjectData)],
     ) -> Result<Vec<Package>, IndexerError> {
         let object_map = changed_objects

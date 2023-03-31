@@ -249,17 +249,17 @@ impl<T: Cache> CertificateStore<T> {
         let id = certificate.digest();
 
         // write the certificate by its id
-        batch = batch.insert_batch(
+        batch.insert_batch(
             &self.certificates_by_id,
             iter::once((id, certificate.clone())),
         )?;
 
         // Index the certificate id by its round and origin.
-        batch = batch.insert_batch(
+        batch.insert_batch(
             &self.certificate_id_by_round,
             iter::once(((certificate.round(), certificate.origin()), id)),
         )?;
-        batch = batch.insert_batch(
+        batch.insert_batch(
             &self.certificate_id_by_origin,
             iter::once(((certificate.origin(), certificate.round()), id)),
         )?;
@@ -298,7 +298,7 @@ impl<T: Cache> CertificateStore<T> {
             .collect();
 
         // write the certificates by their ids
-        batch = batch.insert_batch(&self.certificates_by_id, certificates.clone())?;
+        batch.insert_batch(&self.certificates_by_id, certificates.clone())?;
 
         // write the certificates id by their rounds
         let values = certificates.iter().map(|(digest, c)| {
@@ -306,7 +306,7 @@ impl<T: Cache> CertificateStore<T> {
             let value = digest;
             (key, value)
         });
-        batch = batch.insert_batch(&self.certificate_id_by_round, values)?;
+        batch.insert_batch(&self.certificate_id_by_round, values)?;
 
         // write the certificates id by their origins
         let values = certificates.iter().map(|(digest, c)| {
@@ -314,7 +314,7 @@ impl<T: Cache> CertificateStore<T> {
             let value = digest;
             (key, value)
         });
-        batch = batch.insert_batch(&self.certificate_id_by_origin, values)?;
+        batch.insert_batch(&self.certificate_id_by_origin, values)?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -459,12 +459,12 @@ impl<T: Cache> CertificateStore<T> {
         let mut batch = self.certificates_by_id.batch();
 
         // write the certificate by its id
-        batch = batch.delete_batch(&self.certificates_by_id, iter::once(id))?;
+        batch.delete_batch(&self.certificates_by_id, iter::once(id))?;
 
         // write the certificate index by its round
         let key = (cert.round(), cert.origin());
 
-        batch = batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
+        batch.delete_batch(&self.certificate_id_by_round, iter::once(key))?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();
@@ -493,10 +493,10 @@ impl<T: Cache> CertificateStore<T> {
         let mut batch = self.certificates_by_id.batch();
 
         // delete the certificates from the secondary index
-        batch = batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
+        batch.delete_batch(&self.certificate_id_by_round, keys_by_round)?;
 
         // delete the certificates by its ids
-        batch = batch.delete_batch(&self.certificates_by_id, ids.clone())?;
+        batch.delete_batch(&self.certificates_by_id, ids.clone())?;
 
         // execute the batch (atomically) and return the result
         let result = batch.write();

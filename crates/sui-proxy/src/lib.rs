@@ -4,6 +4,7 @@ pub mod admin;
 pub mod config;
 pub mod consumer;
 pub mod handlers;
+pub mod histogram_relay;
 pub mod metrics;
 pub mod middleware;
 pub mod peers;
@@ -33,6 +34,7 @@ macro_rules! var {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::histogram_relay::HistogramRelay;
     use crate::prom_to_mimir::tests::*;
 
     use crate::{admin::CertKeyPair, config::RemoteWriteConfig, peers::SuiNodeProvider};
@@ -105,7 +107,12 @@ mod tests {
         async fn handler(tls_info: axum::Extension<TlsConnectionInfo>) -> String {
             tls_info.public_key().unwrap().to_string()
         }
-        let app = admin::app("unittest-network".into(), client, Some(allower.clone()));
+        let app = admin::app(
+            "unittest-network".into(),
+            client,
+            HistogramRelay::new(),
+            Some(allower.clone()),
+        );
 
         let listener = std::net::TcpListener::bind("localhost:0").unwrap();
         let server_address = listener.local_addr().unwrap();

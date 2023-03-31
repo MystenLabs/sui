@@ -7,6 +7,7 @@ use mysten_metrics::RegistryService;
 use narwhal_node::execution_state::SimpleExecutionState;
 use narwhal_node::primary_node::PrimaryNode;
 use narwhal_node::worker_node::WorkerNodes;
+use network::client::NetworkClient;
 use prometheus::Registry;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -34,6 +35,7 @@ async fn simple_primary_worker_node_start_stop() {
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
     let network_key_pair = authority.network_keypair();
+    let client = NetworkClient::new_from_keypair(&network_key_pair);
 
     let store = NodeStorage::reopen(temp_dir(), None);
 
@@ -48,6 +50,7 @@ async fn simple_primary_worker_node_start_stop() {
             network_key_pair.copy(),
             committee.clone(),
             worker_cache.clone(),
+            client.clone(),
             &store,
             execution_state,
         )
@@ -63,6 +66,7 @@ async fn simple_primary_worker_node_start_stop() {
             vec![(0, authority.worker(0).keypair().copy())],
             committee,
             worker_cache,
+            client,
             &store,
             TrivialTransactionValidator::default(),
         )
@@ -113,6 +117,7 @@ async fn primary_node_restart() {
     let authority = fixture.authorities().next().unwrap();
     let key_pair = authority.keypair();
     let network_key_pair = authority.network_keypair();
+    let client = NetworkClient::new_from_keypair(&network_key_pair);
 
     let store = NodeStorage::reopen(temp_dir(), None);
 
@@ -127,6 +132,7 @@ async fn primary_node_restart() {
             network_key_pair.copy(),
             committee.clone(),
             worker_cache.clone(),
+            client.clone(),
             &store,
             execution_state.clone(),
         )
@@ -147,6 +153,7 @@ async fn primary_node_restart() {
             network_key_pair.copy(),
             committee.clone(),
             worker_cache.clone(),
+            client.clone(),
             &store,
             execution_state,
         )

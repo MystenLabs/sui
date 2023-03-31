@@ -1544,7 +1544,7 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         protocol_config,
         vm,
         &mut temporary_store,
@@ -1633,7 +1633,7 @@ pub fn generate_genesis_system_object(
         );
         builder.finish()
     };
-    programmable_transactions::execution::execute::<_, _, execution_mode::Genesis>(
+    programmable_transactions::execution::execute::<_, execution_mode::Genesis>(
         &protocol_config,
         move_vm,
         &mut temporary_store,
@@ -1856,8 +1856,8 @@ mod test {
             worker_key: worker_key.public().clone(),
             account_address: SuiAddress::from(account_key.public()),
             network_key: network_key.public().clone(),
-            gas_price: 1,
-            commission_rate: 0,
+            gas_price: ValidatorInfo::DEFAULT_GAS_PRICE,
+            commission_rate: ValidatorInfo::DEFAULT_COMMISSION_RATE,
             network_address: utils::new_tcp_network_address(),
             p2p_address: utils::new_udp_network_address(),
             narwhal_primary_address: utils::new_udp_network_address(),

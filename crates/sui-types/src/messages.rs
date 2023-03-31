@@ -821,6 +821,19 @@ impl TransactionKind {
         )
     }
 
+    /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
+    /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
+    /// directly.
+    pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
+        match self {
+            Self::ChangeEpoch(e) => Some((
+                e.computation_charge + e.storage_charge,
+                e.storage_rebate - e.non_refundable_storage_fee,
+            )),
+            _ => None,
+        }
+    }
+
     pub fn contains_shared_object(&self) -> bool {
         self.shared_input_objects().next().is_some()
     }
@@ -1509,6 +1522,9 @@ pub trait TransactionDataAPI {
     fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool;
+
     #[cfg(test)]
     fn sender_mut(&mut self) -> &mut SuiAddress;
 
@@ -1611,6 +1627,11 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult {
         self.kind().validity_check(config)?;
         self.check_sponsorship()
+    }
+
+    /// Check if the transaction is sponsored (namely gas owner != sender)
+    fn is_sponsored_tx(&self) -> bool {
+        self.gas_owner() != self.sender
     }
 
     /// Check if the transaction is compliant with sponsorship.
@@ -1854,6 +1875,10 @@ impl<S> Envelope<SenderSignedData, S> {
 
     pub fn is_system_tx(&self) -> bool {
         self.data().intent_message().value.is_system_tx()
+    }
+
+    pub fn is_sponsored_tx(&self) -> bool {
+        self.data().intent_message().value.is_sponsored_tx()
     }
 }
 
@@ -2208,6 +2233,12 @@ impl PlainTransactionInfoResponse {
 pub struct HandleCertificateResponse {
     pub signed_effects: SignedTransactionEffects,
     pub events: TransactionEvents,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubmitCertificateResponse {
+    /// If transaction is already executed, return same result as handle_certificate
+    pub executed: Option<HandleCertificateResponse>,
 }
 
 #[derive(Clone, Debug)]

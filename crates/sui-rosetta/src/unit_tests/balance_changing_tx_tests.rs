@@ -410,7 +410,7 @@ async fn test_stake_sui() {
         .request_add_stake(
             sender,
             vec![coin1.0, coin2.0],
-            Some(1000000),
+            Some(1000000000),
             validator,
             None,
             100000,

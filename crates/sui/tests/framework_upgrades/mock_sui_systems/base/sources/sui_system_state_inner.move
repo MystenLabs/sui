@@ -100,9 +100,11 @@ module sui_system::sui_system_state_inner {
         storage_reward: Balance<SUI>,
         computation_reward: Balance<SUI>,
         _storage_rebate: u64,
+        epoch_start_timestamp_ms: u64,
         _ctx: &mut TxContext,
     ) {
         self.epoch = new_epoch;
+        self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
         self.protocol_version = next_protocol_version;
         self.safe_mode = true;
         balance::join(&mut self.storage_fund, computation_reward);

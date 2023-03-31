@@ -136,6 +136,54 @@ async fn test_node_staggered_starts() {
     cluster.assert_progress(4, 2).await;
 }
 
+/// All the nodes have an outage at the same time, when they recover, the rounds begin to advance.
+#[ignore]
+#[tokio::test]
+async fn test_full_outage_and_recovery() {
+    let stop_and_start_delay = Duration::from_secs(12);
+    let node_advance_delay = Duration::from_secs(60);
+
+    // A cluster of 4 nodes will be created
+    let mut cluster = Cluster::new(None, true);
+
+    // ===== Start the cluster ====
+    cluster.start(Some(4), Some(1), None).await;
+
+    // Let the nodes advance a bit
+    tokio::time::sleep(node_advance_delay).await;
+
+    // Stop all the nodes
+    cluster.authority(0).stop_all().await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    cluster.authority(1).stop_all().await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    cluster.authority(2).stop_all().await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    cluster.authority(3).stop_all().await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    // Start all the nodes
+    cluster.authority(0).start(true, Some(1)).await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    cluster.authority(1).start(true, Some(1)).await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    cluster.authority(2).start(true, Some(1)).await;
+    tokio::time::sleep(stop_and_start_delay).await;
+
+    cluster.authority(3).start(true, Some(1)).await;
+
+    // now wait a bit to give the opportunity to recover
+    tokio::time::sleep(node_advance_delay).await;
+
+    // Ensure that nodes have made progress
+    cluster.assert_progress(4, 2).await;
+}
+
 #[ignore]
 #[tokio::test]
 async fn test_second_node_restart() {

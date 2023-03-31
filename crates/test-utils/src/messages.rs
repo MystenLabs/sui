@@ -159,8 +159,10 @@ pub async fn make_transactions_with_wallet_context(
                 recipient,
                 *address,
                 Some(2),
-                // TODO (jian)
-                obj.clone().into_object().expect("REASON").object_ref(),
+                obj.clone()
+                    .into_object()
+                    .expect("Gas coin could not be converted to object ref.")
+                    .object_ref(),
                 MAX_GAS,
             );
             let tx = to_sender_signed_transaction(
