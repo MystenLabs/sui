@@ -290,7 +290,7 @@ pub struct AuthorityEpochTables {
     override_protocol_upgrade_buffer_stake: DBMap<u64, u64>,
 
     // TODO(william)
-    debug_only_checkpoint_66_contents: DBMap<u64, Vec<TransactionEffects>>,
+    debug_only_checkpoint_effects: DBMap<u64, Vec<TransactionEffects>>,
 }
 
 impl AuthorityEpochTables {
@@ -464,17 +464,21 @@ impl AuthorityPerEpochStore {
         Ok(self.tables.state_hash_by_checkpoint.get(checkpoint)?)
     }
 
-    pub fn get_checkpoint_66_effects(&self) -> SuiResult<Option<Vec<TransactionEffects>>> {
-        Ok(self
-            .tables
-            .debug_only_checkpoint_66_contents
-            .get(&CHECKPOINT_66_CONTENTS_INDEX)?)
+    pub fn get_checkpoint_effects(
+        &self,
+        seq_num: &CheckpointSequenceNumber,
+    ) -> SuiResult<Option<Vec<TransactionEffects>>> {
+        Ok(self.tables.debug_only_checkpoint_effects.get(seq_num)?)
     }
 
-    pub fn set_checkpoint_66_effects(&self, effects: Vec<TransactionEffects>) -> SuiResult {
+    pub fn set_checkpoint_effects(
+        &self,
+        seq_num: &CheckpointSequenceNumber,
+        effects: Vec<TransactionEffects>,
+    ) -> SuiResult {
         self.tables
-            .debug_only_checkpoint_66_contents
-            .insert(&CHECKPOINT_66_CONTENTS_INDEX, &effects)?;
+            .debug_only_checkpoint_effects
+            .insert(seq_num, &effects)?;
         Ok(())
     }
 
