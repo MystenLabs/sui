@@ -441,48 +441,30 @@ fn execute_move_publish<S: StorageView, Mode: ExecutionMode>(
     // For newly published packages, runtime ID matches storage ID.
     let storage_id = runtime_id;
 
-    let dependencies = fetch_packages(context, &dep_ids)?;
-    let package_obj = context.new_package(&modules, &dependencies)?;
+    // Preserve the old order of operations when package upgrades are not supported, because it
+    // affects the order in which error cases are checked.
+    let package_obj = if context.protocol_config.package_upgrades_supported() {
+        let dependencies = fetch_packages(context, &dep_ids)?;
+        let package_obj = context.new_package(&modules, &dependencies)?;
 
-    let Some(package) = package_obj.data.try_as_package() else {
-        invariant_violation!("Newly created package object is not a package");
+        let Some(package) = package_obj.data.try_as_package() else {
+            invariant_violation!("Newly created package object is not a package");
+        };
+
+        context.set_linkage(package)?;
+        let res = publish_verify_and_init_modules::<_, Mode>(context, runtime_id, argument_updates, &modules);
+        context.reset_linkage();
+        res?;
+
+        package_obj
+    } else {
+        context.reset_linkage();
+        publish_verify_and_init_modules::<_, Mode>(context, runtime_id, argument_updates, &modules)?;
+
+        let dependencies = fetch_packages(context, &dep_ids)?;
+        context.new_package(&modules, &dependencies)?
     };
 
-    context.set_linkage(package)?;
-    let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|()| {
-        let modules_to_init = modules.iter().filter_map(|module| {
-            for fdef in &module.function_defs {
-                let fhandle = module.function_handle_at(fdef.function);
-                let fname = module.identifier_at(fhandle.name);
-                if fname == INIT_FN_NAME {
-                    return Some(module.self_id());
-                }
-            }
-            None
-        });
-
-        for module_id in modules_to_init {
-            let return_values = execute_move_call::<_, Mode>(
-                context,
-                argument_updates,
-                &module_id,
-                INIT_FN_NAME,
-                vec![],
-                vec![],
-                /* is_init */ true,
-            )?;
-
-            assert_invariant!(
-                return_values.is_empty(),
-                "init should not have return values"
-            )
-        }
-
-        Ok(())
-    });
-
-    context.reset_linkage();
-    res?;
 
     context.write_package(package_obj)?;
     let values = if Mode::packages_are_predefined() {
@@ -791,6 +773,45 @@ fn publish_and_verify_modules<S: StorageView>(
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move
         // bytecode verifier has passed.
         sui_verifier::verifier::verify_module(module, &BTreeMap::new())?;
+    }
+
+    Ok(())
+}
+
+fn publish_verify_and_init_modules<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
+    runtime_id: ObjectID,
+    argument_updates: &mut Mode::ArgumentUpdates,
+    modules: &[CompiledModule],
+) -> Result<(), ExecutionError> {
+    publish_and_verify_modules(context, runtime_id, modules)?;
+
+    let modules_to_init = modules.iter().filter_map(|module| {
+        for fdef in &module.function_defs {
+            let fhandle = module.function_handle_at(fdef.function);
+            let fname = module.identifier_at(fhandle.name);
+            if fname == INIT_FN_NAME {
+                return Some(module.self_id());
+            }
+        }
+        None
+    });
+
+    for module_id in modules_to_init {
+        let return_values = execute_move_call::<_, Mode>(
+            context,
+            argument_updates,
+            &module_id,
+            INIT_FN_NAME,
+            vec![],
+            vec![],
+            /* is_init */ true,
+        )?;
+
+        assert_invariant!(
+            return_values.is_empty(),
+            "init should not have return values"
+        )
     }
 
     Ok(())
