@@ -1041,14 +1041,6 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    // was a fullnode, still a fullnode
-                    let is_inconsistent = self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        false,
-                    );
-                    checkpoint_executor.set_inconsistent_state(is_inconsistent);
-
                     None
                 }
             };
@@ -1057,6 +1049,7 @@ impl SuiNode {
         }
     }
 
+    #[allow(dead_code)]
     fn check_is_consistent_state(
         &self,
         accumulator: Arc<StateAccumulator>,
