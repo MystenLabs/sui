@@ -24,7 +24,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     const { data: system } = useSystemState();
     const validatorAddress = event.parsedJson?.validator_address;
     const stakedAmount = event.parsedJson?.amount;
-    const stakedEpoch = event.parsedJson?.epoch || 0;
+    const stakedEpoch = Number(event.parsedJson?.epoch || 0);
 
     const { data: rollingAverageApys } = useGetRollingAverageApys(
         system?.activeValidators?.length || null
