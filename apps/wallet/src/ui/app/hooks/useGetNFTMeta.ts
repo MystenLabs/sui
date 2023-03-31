@@ -18,12 +18,12 @@ export function useGetNFTMeta(objectID: string) {
         if (!resp.data) return null;
         const { data } = resp.data || {};
         if (!is(data, SuiObjectData) || !data.display) return null;
-        const { name, description, creator, img_url, link, project_url } =
+        const { name, description, creator, image_url, link, project_url } =
             data.display;
         return {
             name: name || null,
             description: description || null,
-            imageUrl: img_url || null,
+            imageUrl: image_url || null,
             link: link || null,
             projectUrl: project_url || null,
             creator: creator || null,

@@ -32,8 +32,8 @@ use thiserror::Error;
 use tracing::{debug, error, info, trace, warn, Instrument};
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
+    IntCounterVec, Registry,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::string::ToString;
@@ -93,21 +93,11 @@ impl Default for TimeoutConfig {
 #[derive(Clone)]
 pub struct AuthAggMetrics {
     pub total_tx_certificates_created: IntCounter,
-    pub num_signatures: Histogram,
-    pub invalid_sig_bad_stake: Histogram,
-    pub num_good_stake: Histogram,
-    pub non_retryable_stake: Histogram,
-    pub total_quorum_once_timeout: IntCounter,
     pub process_tx_errors: IntCounterVec,
     pub process_cert_errors: IntCounterVec,
     pub total_client_double_spend_attempts_detected: IntCounter,
     pub total_aggregated_err: IntCounterVec,
 }
-
-// Override default Prom buckets for positive numbers in 0-50k range
-const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
-];
 
 impl AuthAggMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
@@ -115,42 +105,6 @@ impl AuthAggMetrics {
             total_tx_certificates_created: register_int_counter_with_registry!(
                 "total_tx_certificates_created",
                 "Total number of certificates made in the authority_aggregator",
-                registry,
-            )
-            .unwrap(),
-            // It's really important to use the right histogram buckets for accurate histogram collection.
-            // Otherwise values get clipped
-            num_signatures: register_histogram_with_registry!(
-                "num_signatures_per_tx",
-                "Number of signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            invalid_sig_bad_stake: register_histogram_with_registry!(
-                "invalid_sig_bad_stake",
-                "Bad stake due to invalid authority signatures collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            num_good_stake: register_histogram_with_registry!(
-                "num_good_stake_per_tx",
-                "Amount of good stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            non_retryable_stake: register_histogram_with_registry!(
-                "non_retryable_stake_per_tx",
-                "Amount of non-retryable stake collected per transaction",
-                POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            total_quorum_once_timeout: register_int_counter_with_registry!(
-                "total_quorum_once_timeout",
-                "Total number of timeout when calling quorum_once_with_timeout",
                 registry,
             )
             .unwrap(),
@@ -550,9 +504,6 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
         auth_agg_metrics: AuthAggMetrics,
     ) -> anyhow::Result<Self> {
         let net_config = default_mysten_network_config();
-        // TODO: the function returns on URL parsing errors. In this case we should
-        // tolerate it as long as we have 2f+1 good validators.
-        // GH issue: https://github.com/MystenLabs/sui/issues/7019
         let authority_clients =
             make_network_authority_clients_with_network_config(&committee, &net_config)?;
         Ok(Self::new_with_metrics(
@@ -856,7 +807,6 @@ where
         if let Some(t) = timeout_total {
             timeout(t, fut).await.map_err(|_timeout_error| {
                 if authority_errors.is_empty() {
-                    self.metrics.total_quorum_once_timeout.inc();
                     SuiError::TimeoutError
                 } else {
                     SuiError::TooManyIncorrectAuthorities {
@@ -1183,14 +1133,8 @@ where
         tx_digest: &TransactionDigest,
         state: &ProcessTransactionState,
     ) {
-        // TODO: Revisit whether we need these metrics.
         let num_signatures = state.tx_signatures.validator_sig_count();
-        self.metrics.num_signatures.observe(num_signatures as f64);
         let good_stake = state.tx_signatures.total_votes();
-        self.metrics.num_good_stake.observe(good_stake as f64);
-        self.metrics
-            .non_retryable_stake
-            .observe(state.non_retryable_stake as f64);
         debug!(
             ?tx_digest,
             num_errors = state.errors.iter().map(|e| e.1.len()).sum::<usize>(),
@@ -1263,7 +1207,6 @@ where
                 bad_votes,
                 bad_authorities,
             } => {
-                self.metrics.invalid_sig_bad_stake.observe(bad_votes as f64);
                 state.non_retryable_stake += bad_votes;
                 if bad_votes > 0 {
                     state.errors.push((
@@ -1311,7 +1254,6 @@ where
                         bad_votes,
                         bad_authorities,
                     } => {
-                        self.metrics.invalid_sig_bad_stake.observe(bad_votes as f64);
                         state.non_retryable_stake += bad_votes;
                         if bad_votes > 0 {
                             state.errors.push((
@@ -1551,7 +1493,6 @@ where
                         bad_votes,
                         bad_authorities,
                     } => {
-                        self.metrics.invalid_sig_bad_stake.observe(bad_votes as f64);
                         state.non_retryable_stake += bad_votes;
                         if bad_votes > 0 {
                             state.non_retryable_errors.push((

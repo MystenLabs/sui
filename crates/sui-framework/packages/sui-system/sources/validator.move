@@ -578,9 +578,8 @@ module sui_system::validator {
     public fun is_duplicate(self: &Validator, other: &Validator): bool {
          self.metadata.sui_address == other.metadata.sui_address
             || self.metadata.name == other.metadata.name
-            // MUSTFIX: tests break when this is uncommented
-            // || self.metadata.net_address == other.metadata.net_address
-            // || self.metadata.p2p_address == other.metadata.p2p_address
+            || self.metadata.net_address == other.metadata.net_address
+            || self.metadata.p2p_address == other.metadata.p2p_address
             || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
             || self.metadata.network_pubkey_bytes == other.metadata.network_pubkey_bytes
             || self.metadata.network_pubkey_bytes == other.metadata.worker_pubkey_bytes

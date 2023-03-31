@@ -170,6 +170,9 @@ export default {
             rotate: {
                 135: '135deg',
             },
+            borderRadius: {
+                '2lg': '0.625rem',
+            },
         },
     },
     corePlugins: {

@@ -133,7 +133,8 @@ export function StakeCard({
     // TODO: Once two step withdraw is available, add cool down and withdraw now logic
     // For cool down epoch, show Available to withdraw add rewards to principal
     // Reward earning epoch is 2 epochs after stake request epoch
-    const earningRewardsEpoch = stakeRequestEpoch + NUM_OF_EPOCH_BEFORE_EARNING;
+    const earningRewardsEpoch =
+        Number(stakeRequestEpoch) + NUM_OF_EPOCH_BEFORE_EARNING;
     const isEarnedRewards = currentEpoch >= Number(earningRewardsEpoch);
     const delegationState = inactiveValidator
         ? StakeState.IN_ACTIVE

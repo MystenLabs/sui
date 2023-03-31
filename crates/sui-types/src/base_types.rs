@@ -759,11 +759,11 @@ impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
 
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         SequenceNumber(0)
     }
 
-    pub fn value(&self) -> u64 {
+    pub const fn value(&self) -> u64 {
         self.0
     }
 

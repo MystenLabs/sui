@@ -59,8 +59,6 @@ impl OnsiteReconfigObserver {
             self.safe_client_metrics_base.clone(),
             self.auth_agg_metrics.clone(),
         )
-        // TODO: we should tolerate when <= f validators give invalid addresses
-        // GH issue: https://github.com/MystenLabs/sui/issues/7019
         .unwrap_or_else(|e| {
             panic!(
                 "Failed to create AuthorityAggregator from System State: {:?}",

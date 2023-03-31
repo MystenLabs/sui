@@ -108,7 +108,7 @@ module sui_system::sui_system_tests {
         test_scenario::next_tx(scenario, new_validator_addr);
         let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
         let pop = x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
-        add_validator_full_flow(new_validator_addr, 100, pubkey, pop, scenario);
+        add_validator_full_flow(new_validator_addr, b"name1", b"/ip4/127.0.0.1/udp/81", 100, pubkey, pop, scenario);
 
         test_scenario::next_tx(scenario, new_validator_addr);
         // Pending validator could set reference price as well
@@ -242,7 +242,7 @@ module sui_system::sui_system_tests {
         let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
         // Add a validator
-        add_validator_full_flow(new_validator_addr, 100, pubkey, pop, scenario);
+        add_validator_full_flow(new_validator_addr, b"name2", b"/ip4/127.0.0.1/udp/82", 100, pubkey, pop, scenario);
         advance_epoch(scenario);
 
         test_scenario::next_tx(scenario, @0x1);

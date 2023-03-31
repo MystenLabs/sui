@@ -35,14 +35,14 @@ impl TestCaseImpl for NativeTransferTest {
         let gas_obj = sui_objs.swap_remove(0);
         let signer = ctx.get_wallet_address();
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
-
+        let gas_price = ctx.get_reference_gas_price().await;
         // Test transfer object
         let obj_to_transfer = *sui_objs.swap_remove(0).id();
         let params = rpc_params![
             signer,
             obj_to_transfer,
             Some(*gas_obj.id()),
-            5000,
+            5000 * gas_price,
             recipient_addr
         ];
         let data = ctx
@@ -54,7 +54,13 @@ impl TestCaseImpl for NativeTransferTest {
 
         // Test transfer sui
         let obj_to_transfer = *sui_objs.swap_remove(0).id();
-        let params = rpc_params![signer, obj_to_transfer, 5000, recipient_addr, None::<u64>];
+        let params = rpc_params![
+            signer,
+            obj_to_transfer,
+            5000 * gas_price,
+            recipient_addr,
+            None::<u64>
+        ];
         let data = ctx
             .build_transaction_remotely("unsafe_transferSui", params)
             .await?;

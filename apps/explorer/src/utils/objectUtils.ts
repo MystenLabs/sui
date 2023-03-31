@@ -8,7 +8,7 @@ import { findIPFSvalue } from './stringUtils';
 import type { SuiObjectResponse } from '@mysten/sui.js';
 
 export function parseImageURL(display?: Record<string, string>) {
-    const url = display?.img_url;
+    const url = display?.image_url;
     if (url) {
         if (findIPFSvalue(url)) return url;
         // String representing true http/https URLs are valid:
