@@ -177,10 +177,18 @@ impl StateAccumulator {
                     .get_object_ref_prior_to_key(id, *seq_num)
                     .expect("read cannot fail");
 
-                objref.map(|(id, version, digest)| {
+                if let Some((id, version, digest)) = objref {
+                    if version == *seq_num {
+                        // Iterator did not find a prior version, therefore
+                        // this is the newly created wrapped object case. We
+                        // can safely ignore
+                        return None;
+                    }
+                    // However, if a prior version exists, we expect it to be wrapped.
                     assert!(digest.is_wrapped(), "{:?}", id);
-                    WrappedObject::new(id, version)
-                })
+                    return Some(WrappedObject::new(id, version));
+                }
+                None
             })
             .collect();
 
