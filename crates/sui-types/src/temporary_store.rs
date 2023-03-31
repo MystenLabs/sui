@@ -925,7 +925,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
 
         // println!("GAS - charge gas with result error: {}", execution_result.is_err());
 
-        if let Some(gas_object_id) = gas_object_id {
+        if gas_object_id.is_some() {
             // bucketize computation cost
             if let Err(err) = gas_status.bucketize_computation() {
                 // println!("GAS - bucketize failed");

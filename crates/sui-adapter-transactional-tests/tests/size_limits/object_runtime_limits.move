@@ -27,8 +27,8 @@ module a::m {
     }
 }
 
-//# run a::m::add_n_items --sender A --args 100 --gas-budget 1200000
+//# run a::m::add_n_items --sender A --args 100 --gas-budget 1000000000000
 
-//# run a::m::add_n_items --sender A --args 1000 --gas-budget 1200000
+//# run a::m::add_n_items --sender A --args 1000 --gas-budget 1000000000000
 
-//# run a::m::add_n_items --sender A --args 1025 --gas-budget 1200000
+//# run a::m::add_n_items --sender A --args 1025 --gas-budget 1000000000000
