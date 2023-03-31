@@ -415,6 +415,13 @@ impl ObjectType {
             ObjectType::Package => false,
         }
     }
+
+    pub fn is_package(&self) -> bool {
+        match self {
+            ObjectType::Struct(_) => false,
+            ObjectType::Package => true,
+        }
+    }
 }
 
 impl From<ObjectInfo> for ObjectRef {

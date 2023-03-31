@@ -76,6 +76,11 @@ pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_address(SUI_FRAMEWO
 pub const SUI_SYSTEM_ADDRESS: AccountAddress = address_from_single_byte(3);
 pub const SUI_SYSTEM_PACKAGE_ID: ObjectID = ObjectID::from_address(SUI_SYSTEM_ADDRESS);
 
+/// 0xdee9-- account address where DeepBook modules are stored
+/// Same as the ObjectID
+pub const DEEPBOOK_ADDRESS: AccountAddress = deepbook_addr();
+pub const DEEPBOOK_OBJECT_ID: ObjectID = ObjectID::from_address(DEEPBOOK_ADDRESS);
+
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
@@ -95,13 +100,24 @@ pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION
 pub fn is_system_package(id: ObjectID) -> bool {
     matches!(
         id,
-        MOVE_STDLIB_OBJECT_ID | SUI_FRAMEWORK_OBJECT_ID | SUI_SYSTEM_PACKAGE_ID
+        MOVE_STDLIB_OBJECT_ID
+            | SUI_FRAMEWORK_OBJECT_ID
+            | SUI_SYSTEM_PACKAGE_ID
+            | DEEPBOOK_OBJECT_ID
     )
 }
 
 const fn address_from_single_byte(b: u8) -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];
     addr[AccountAddress::LENGTH - 1] = b;
+    AccountAddress::new(addr)
+}
+
+/// return 0x0...dee9
+const fn deepbook_addr() -> AccountAddress {
+    let mut addr = [0u8; AccountAddress::LENGTH];
+    addr[AccountAddress::LENGTH - 2] = 0xde;
+    addr[AccountAddress::LENGTH - 1] = 0xe9;
     AccountAddress::new(addr)
 }
 
@@ -121,6 +137,7 @@ pub fn parse_sui_type_tag(s: &str) -> anyhow::Result<TypeTag> {
 
 fn resolve_address(addr: &str) -> Option<AccountAddress> {
     match addr {
+        "deepbook" => Some(DEEPBOOK_ADDRESS),
         "std" => Some(MOVE_STDLIB_ADDRESS),
         "sui" => Some(SUI_FRAMEWORK_ADDRESS),
         "sui_system" => Some(SUI_SYSTEM_ADDRESS),
