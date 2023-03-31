@@ -886,7 +886,6 @@ module sui_system::sui_system_tests {
         test_scenario::end(scenario_val);
     }
 
-// TODO: here
     #[test]
     #[expected_failure(abort_code = validator_set::EDuplicateValidator)]
     fun test_add_validator_candidate_failure_duplicate_with_active() {
