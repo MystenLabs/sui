@@ -96,7 +96,6 @@ where
         loop {
             // Download checkpoint data
             self.metrics.total_checkpoint_requested.inc();
-            let request_guard = self.metrics.fullnode_download_latency.start_timer();
             let checkpoint = self
                 .download_checkpoint_data(next_cursor_sequence_number as u64)
                 .await.map_err(|e| {
@@ -106,7 +105,6 @@ where
                     );
                     e
                 })?;
-            request_guard.stop_and_record();
             self.metrics.total_checkpoint_received.inc();
 
             // Index checkpoint data
@@ -171,11 +169,17 @@ where
                     seq, e
                 ))
             });
-        // this happens very often b/c checkpoint indexing is faster than checkpoint
-        // generation. Ideally we will want to differentiate between a real error and
-        // a checkpoint not generated yet.
+        let mut fn_checkpoint_guard = self
+            .metrics
+            .fullnode_checkpoint_download_latency
+            .start_timer();
         while checkpoint.is_err() {
+            // sleep for 1 second and retry if latest checkpoint is not available yet
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            fn_checkpoint_guard = self
+                .metrics
+                .fullnode_checkpoint_download_latency
+                .start_timer();
             checkpoint = self
                 .rpc_client
                 .read_api()
@@ -188,9 +192,14 @@ where
                     ))
                 })
         }
+        fn_checkpoint_guard.stop_and_record();
         // unwrap here is safe because we checked for error above
         let checkpoint = checkpoint.unwrap();
 
+        let fn_transaction_guard = self
+            .metrics
+            .fullnode_transaction_download_latency
+            .start_timer();
         let transactions = join_all(checkpoint.transactions.chunks(MULTI_GET_CHUNK_SIZE).map(
             |digests| multi_get_full_transactions(self.rpc_client.read_api(), digests.to_vec()),
         ))
@@ -200,6 +209,7 @@ where
             acc.extend(chunk?);
             Ok::<_, IndexerError>(acc)
         })?;
+        fn_transaction_guard.stop_and_record();
 
         let object_changes = transactions
             .iter()
@@ -227,6 +237,7 @@ where
                 },
             );
 
+        let fn_object_guard = self.metrics.fullnode_object_download_latency.start_timer();
         let rpc = self.rpc_client.clone();
         let changed_objects =
             join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
@@ -266,6 +277,7 @@ where
                     seq, e
                 ))
             })?;
+        fn_object_guard.stop_and_record();
 
         Ok(CheckpointData {
             checkpoint,
