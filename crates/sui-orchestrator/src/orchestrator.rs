@@ -263,12 +263,20 @@ impl Orchestrator {
         Ok(())
     }
 
-    /// Deploy the nodes.
-    pub async fn run_nodes(&self, parameters: &BenchmarkParameters) -> TestbedResult<()> {
+    /// Deploy the nodes. Optionally specify which instances to deploy; run the entire committee
+    /// by default.
+    pub async fn run_nodes(
+        &self,
+        parameters: &BenchmarkParameters,
+        selected_instances: Option<Vec<Instance>>,
+    ) -> TestbedResult<()> {
         display::action("Deploying validators");
 
         // Select the instances to run.
-        let instances = self.select_instances(parameters)?;
+        let instances = match selected_instances {
+            Some(x) => x,
+            None => self.select_instances(parameters)?,
+        };
 
         // Deploy the committee.
         let listen_addresses = SuiProtocol::make_listen_addresses(&instances);
@@ -294,7 +302,7 @@ impl Orchestrator {
             .execute(instances.iter(), &ssh_command)
             .await?;
 
-        // Wait until all nodes to be reachable.
+        // Wait until all nodes are reachable.
         let metrics_command = format!("curl 127.0.0.1:{}/metrics", SuiProtocol::NODE_METRICS_PORT);
         let metrics_ssh_command = SshCommand::new(move |_| metrics_command.clone());
         self.ssh_manager
@@ -354,7 +362,7 @@ impl Orchestrator {
             .execute(instances.iter(), &ssh_command)
             .await?;
 
-        // Wait until all load generators to be reachable.
+        // Wait until all load generators are reachable.
         let metrics_command = format!(
             "curl 127.0.0.1:{}/metrics",
             SuiProtocol::CLIENT_METRICS_PORT
@@ -380,6 +388,11 @@ impl Orchestrator {
 
         // Select the instances to run.
         let instances = self.select_instances(parameters)?;
+
+        // Kill the faulty instances.
+        // TODO: Kill them according to a schedule.
+        let faulty = instances.iter().take(parameters.faults);
+        self.ssh_manager.kill(faulty, "node").await?;
 
         // Regularly scrape the client metrics.
         let command = format!(
@@ -520,7 +533,7 @@ impl Orchestrator {
             }
 
             // Deploy the validators.
-            self.run_nodes(&parameters).await?;
+            self.run_nodes(&parameters, None).await?;
 
             // Deploy the load generators.
             self.run_clients(&parameters).await?;

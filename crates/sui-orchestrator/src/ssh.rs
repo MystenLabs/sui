@@ -216,6 +216,17 @@ impl SshConnectionManager {
             }
         }
     }
+
+    /// Kill a command running in the background of the specified instances.
+    pub async fn kill<'a, I>(&self, instances: I, command_id: &str) -> SshResult<()>
+    where
+        I: Iterator<Item = &'a Instance>,
+    {
+        let command = format!("(tmux kill-session -t {command_id} || true)");
+        let ssh_command = SshCommand::new(move |_| command.clone());
+        self.execute(instances, &ssh_command).await?;
+        Ok(())
+    }
 }
 
 /// Representation of an ssh connection.
