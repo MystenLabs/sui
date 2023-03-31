@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {  RpcClientContext } from '@mysten/core';
+import { RpcClientContext } from '@mysten/core';
 import { WalletKitProvider } from '@mysten/wallet-kit';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -17,7 +17,7 @@ import { NetworkContext, useNetwork } from '~/context';
 import { DefaultRpcClient } from '~/utils/api/DefaultRpcClient';
 import { queryClient } from '~/utils/queryClient';
 
-export function Layout() {
+export function LayoutContent() {
     const [network, setNetwork] = useNetwork();
     const jsonRpcProvider = useMemo(() => DefaultRpcClient(network), [network]);
 
@@ -25,6 +25,7 @@ export function Layout() {
 
     // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes
     return (
+        // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
         <Fragment key={network}>
             <WalletKitProvider
                 /*autoConnect={false}*/
@@ -36,7 +37,7 @@ export function Layout() {
                             <div className="w-full">
                                 <Header />
                                 <main className="relative z-10 min-h-screen bg-offwhite">
-                                    <section className="mx-auto max-w-[1440px] py-10 px-5 2xl:px-0">
+                                    <section className="mx-auto max-w-[1440px] px-5 py-10 2xl:px-0">
                                         <Outlet />
                                     </section>
                                 </main>
