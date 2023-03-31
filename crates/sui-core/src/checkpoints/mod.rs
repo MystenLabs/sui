@@ -197,12 +197,16 @@ impl CheckpointStore {
         self.checkpoint_sequence_by_contents_digest.remove(digest)
     }
 
-    pub fn get_latest_certified_checkpoint(&self) -> Option<VerifiedCheckpoint> {
-        self.certified_checkpoints
-            .unbounded_iter()
+    pub fn get_latest_certified_checkpoint(
+        &self,
+    ) -> Result<Option<VerifiedCheckpoint>, TypedStoreError> {
+        Ok(self
+            .certified_checkpoints
+            .safe_iter()
             .skip_to_last()
             .next()
-            .map(|(_, v)| v.into())
+            .transpose()?
+            .map(|(_, v)| v.into()))
     }
 
     pub fn multi_get_checkpoint_by_sequence_number(
@@ -586,7 +590,12 @@ impl CheckpointBuilder {
                 }
                 Ok(false) => (),
             };
-            let mut last = self.epoch_store.last_built_checkpoint_commit_height();
+            let Ok(mut last) = self.epoch_store.last_built_checkpoint_commit_height() else {
+                error!("Error while making checkpoint, will retry in 1s");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                self.metrics.checkpoint_errors.inc();
+                continue 'main;
+            };
             for (height, pending) in self.epoch_store.get_pending_checkpoints(last) {
                 last = Some(height);
                 debug!(
@@ -1099,7 +1108,7 @@ impl CheckpointAggregator {
         let _scope = monitored_scope("CheckpointAggregator");
         let mut result = vec![];
         'outer: loop {
-            let next_to_certify = self.next_checkpoint_to_certify();
+            let next_to_certify = self.next_checkpoint_to_certify()?;
             let current = if let Some(current) = &mut self.current {
                 // It's possible that the checkpoint was already certified by
                 // the rest of the network and we've already received the
@@ -1126,7 +1135,8 @@ impl CheckpointAggregator {
                 current.summary.sequence_number,
                 current.next_index,
             )?;
-            for ((seq, index), data) in iter {
+            for item in iter {
+                let ((seq, index), data) = item?;
                 if seq != current.summary.sequence_number {
                     debug!(
                         checkpoint_seq =? current.summary.sequence_number,
@@ -1175,14 +1185,16 @@ impl CheckpointAggregator {
         Ok(result)
     }
 
-    fn next_checkpoint_to_certify(&self) -> CheckpointSequenceNumber {
-        self.tables
+    fn next_checkpoint_to_certify(&self) -> Result<CheckpointSequenceNumber, TypedStoreError> {
+        Ok(self
+            .tables
             .certified_checkpoints
-            .unbounded_iter()
+            .safe_iter()
             .skip_to_last()
             .next()
+            .transpose()?
             .map(|(seq, _)| seq + 1)
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 }
 
@@ -1309,7 +1321,9 @@ impl CheckpointService {
 
         spawn_monitored_task!(aggregator.run());
 
-        let last_signature_index = epoch_store.get_last_checkpoint_signature_index();
+        let last_signature_index = epoch_store
+            .get_last_checkpoint_signature_index()
+            .expect("faled to get last checkpoint signature index");
         let last_signature_index = Mutex::new(last_signature_index);
 
         let service = Arc::new(Self {

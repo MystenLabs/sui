@@ -6,6 +6,7 @@
 //! 1. At one time, a transaction is only processed once.
 //! 2. When Fullnode crashes and restarts, the pending transaction will be loaded and retried.
 
+use itertools::Itertools;
 use std::path::PathBuf;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::EmptySignInfo;
@@ -14,7 +15,7 @@ use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use typed_store::rocks::MetricConf;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
-use typed_store::{rocks::DBMap, traits::Map};
+use typed_store::{rocks::DBMap, traits::Map, TypedStoreError};
 use typed_store_derive::DBMapUtils;
 
 pub type IsFirstRecord = bool;
@@ -82,11 +83,13 @@ impl WritePathPendingTransactionLog {
         write_batch.write().map_err(SuiError::from)
     }
 
-    pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
+    pub fn load_all_pending_transactions(
+        &self,
+    ) -> Result<Vec<VerifiedTransaction>, TypedStoreError> {
         self.pending_transactions
             .logs
-            .unbounded_iter()
-            .map(|(_tx_digest, tx)| VerifiedTransaction::from(tx))
+            .safe_iter()
+            .map_ok(|(_tx_digest, tx)| VerifiedTransaction::from(tx))
             .collect()
     }
 }
@@ -114,11 +117,11 @@ mod tests {
             .await
             .unwrap());
 
-        let loaded_txes = pending_txes.load_all_pending_transactions();
+        let loaded_txes = pending_txes.load_all_pending_transactions().unwrap();
         assert_eq!(vec![tx], loaded_txes);
 
         pending_txes.finish_transaction(&tx_digest).unwrap();
-        let loaded_txes = pending_txes.load_all_pending_transactions();
+        let loaded_txes = pending_txes.load_all_pending_transactions().unwrap();
         assert!(loaded_txes.is_empty());
 
         // It's ok to finish an already finished transaction
@@ -134,6 +137,7 @@ mod tests {
         }
         let loaded_tx_digests: HashSet<_> = pending_txes
             .load_all_pending_transactions()
+            .unwrap()
             .iter()
             .map(|t| *t.digest())
             .collect();
@@ -147,6 +151,7 @@ mod tests {
         }
         let loaded_tx_digests: HashSet<_> = pending_txes
             .load_all_pending_transactions()
+            .unwrap()
             .iter()
             .map(|t| *t.digest())
             .collect();

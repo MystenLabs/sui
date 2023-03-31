@@ -45,6 +45,7 @@ use tokio::time::timeout;
 use tracing::{debug, error, error_span, info, instrument, warn, Instrument};
 
 use sui_types::transaction::VerifiedTransaction;
+use typed_store::TypedStoreError;
 
 // How long to wait for local execution (including parents) before a timeout
 // is returned to client.
@@ -480,7 +481,10 @@ where
         pending_tx_log: &Arc<WritePathPendingTransactionLog>,
         quorum_driver: &Arc<QuorumDriverHandler<A>>,
     ) {
-        let pending_txes = pending_tx_log.load_all_pending_transactions();
+        let Ok(pending_txes) = pending_tx_log.load_all_pending_transactions() else {
+            error!("Failed to schedule pending transactions");
+            return;
+        };
         for tx in pending_txes {
             let tx_digest = *tx.digest();
             // It's not impossible we fail to enqueue a task but that's not the end of world.
@@ -495,7 +499,9 @@ where
         }
     }
 
-    pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
+    pub fn load_all_pending_transactions(
+        &self,
+    ) -> Result<Vec<VerifiedTransaction>, TypedStoreError> {
         self.pending_tx_log.load_all_pending_transactions()
     }
 }

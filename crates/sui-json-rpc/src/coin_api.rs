@@ -6,6 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cached::proc_macro::cached;
 use cached::SizedCache;
+use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -59,7 +60,7 @@ impl CoinReadApi {
                         limit + 1,
                         one_coin_type_only,
                     )?
-                    .map(|(coin_type, coin_object_id, coin)| SuiCoin {
+                    .map_ok(|(coin_type, coin_object_id, coin)| SuiCoin {
                         coin_type,
                         coin_object_id,
                         version: coin.version,
@@ -67,7 +68,7 @@ impl CoinReadApi {
                         balance: coin.balance,
                         previous_transaction: coin.previous_transaction,
                     })
-                    .collect::<Vec<_>>(),
+                    .collect::<Result<Vec<_>, _>>()?,
             )
         })
         .await??;

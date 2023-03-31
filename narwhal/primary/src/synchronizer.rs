@@ -320,7 +320,9 @@ impl Synchronizer {
     ) -> Self {
         let committee: &Committee = &committee;
         let genesis = Self::make_genesis(committee);
-        let highest_processed_round = certificate_store.highest_round_number();
+        let highest_processed_round = certificate_store
+            .highest_round_number()
+            .expect("failed to read highest round number");
         let highest_created_certificate = certificate_store.last_round(authority_id).unwrap();
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
         let (tx_own_certificate_broadcast, _rx_own_certificate_broadcast) =

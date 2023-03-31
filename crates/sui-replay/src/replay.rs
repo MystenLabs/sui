@@ -1895,7 +1895,10 @@ async fn create_epoch_store(
     let registry = Registry::new();
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
     let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-    let mut committee = authority_state.committee_store().get_latest_committee();
+    let mut committee = authority_state
+        .committee_store()
+        .get_latest_committee()
+        .expect("failed to fetch latest committee");
 
     // Overwrite the epoch so it matches this TXs
     committee.epoch = executed_epoch;

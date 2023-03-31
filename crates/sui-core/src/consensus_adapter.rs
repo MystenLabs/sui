@@ -369,7 +369,9 @@ impl ConsensusAdapter {
         // Currently narwhal worker might lose transactions on restart, so we need to resend them
         // todo - get_all_pending_consensus_transactions is called twice when
         // initializing AuthorityPerEpochStore and here, should not be a big deal but can be optimized
-        let mut recovered = epoch_store.get_all_pending_consensus_transactions();
+        let mut recovered = epoch_store
+            .get_all_pending_consensus_transactions()
+            .expect("failed to get all pending consensus transactions");
 
         #[allow(clippy::collapsible_if)] // This if can be collapsed but it will be ugly
         if epoch_store

@@ -286,6 +286,10 @@ where
         unimplemented!("umplemented API");
     }
 
+    fn safe_range_iter(&'a self, _range: impl RangeBounds<K>) -> Self::SafeIterator {
+        unimplemented!("umplemented API");
+    }
+
     fn safe_iter(&'a self) -> Self::SafeIterator {
         TestDBIterBuilder {
             rows: self.rows.read().unwrap(),

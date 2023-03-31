@@ -57,7 +57,7 @@ impl DataReader for AuthorityStateDataReader {
                 None,
                 Some(SuiObjectDataFilter::StructType(object_type)),
             )?
-            .collect())
+            .collect::<Result<_, _>>()?)
     }
 
     async fn get_object_with_options(

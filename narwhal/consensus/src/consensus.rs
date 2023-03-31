@@ -334,13 +334,17 @@ impl Consensus {
         metrics: Arc<ConsensusMetrics>,
     ) -> JoinHandle<()> {
         // The consensus state (everything else is immutable).
-        let recovered_last_committed = store.read_last_committed();
+        let recovered_last_committed = store
+            .read_last_committed()
+            .expect("failed to read last committed");
         let last_committed_round = recovered_last_committed
             .iter()
             .max_by(|a, b| a.1.cmp(b.1))
             .map(|(_k, v)| *v)
             .unwrap_or_else(|| 0);
-        let latest_sub_dag = store.get_latest_sub_dag();
+        let latest_sub_dag = store
+            .get_latest_sub_dag()
+            .expect("failed to read latest subdag");
         if let Some(sub_dag) = &latest_sub_dag {
             assert_eq!(
                 sub_dag.leader_round(),

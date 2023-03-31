@@ -25,6 +25,7 @@ prometheus = "0.13.3"
 lru = "0.10"
 parking_lot = "0.12.1"
 tap = "1.0.1"
+itertools = "0.10.5"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }

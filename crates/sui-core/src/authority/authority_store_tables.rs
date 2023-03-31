@@ -210,10 +210,11 @@ impl AuthorityPerpetualTables {
     ) -> Result<Option<ObjectRef>, SuiError> {
         let mut iterator = self
             .objects
-            .unbounded_iter()
+            .safe_iter()
             .skip_prior_to(&ObjectKey::max_for_id(&object_id))?;
 
-        if let Some((object_key, value)) = iterator.next() {
+        if let Some(item) = iterator.next() {
+            let (object_key, value) = item?;
             if object_key.0 == object_id {
                 return Ok(Some(self.object_reference(&object_key, value)?));
             }
@@ -364,15 +365,16 @@ impl AuthorityPerpetualTables {
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         Ok(self
             .objects
-            .unbounded_iter()
+            .safe_iter()
             .skip_to(&ObjectKey::ZERO)?
             .next()
+            .transpose()?
             .is_none())
     }
 
     pub fn iter_live_object_set(&self) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.unbounded_iter(),
+            iter: self.objects.safe_iter(),
             tables: self,
             prev: None,
         }
@@ -434,9 +436,10 @@ impl ObjectStore for AuthorityPerpetualTables {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         let obj_entry = self
             .objects
-            .unbounded_iter()
+            .safe_iter()
             .skip_prior_to(&ObjectKey::max_for_id(object_id))?
-            .next();
+            .next()
+            .transpose()?;
 
         match obj_entry {
             Some((ObjectKey(obj_id, version), obj)) if obj_id == *object_id => {
@@ -462,7 +465,7 @@ impl ObjectStore for AuthorityPerpetualTables {
 
 pub struct LiveSetIter<'a> {
     iter:
-        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
+        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::SafeIterator,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
 }
@@ -518,7 +521,8 @@ impl Iterator for LiveSetIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some((next_key, next_value)) = self.iter.next() {
+            if let Some(item) = self.iter.next() {
+                let (next_key, next_value) = item.expect("Live set iteration failed");
                 let prev = self.prev.take();
                 self.prev = Some((next_key, next_value));
 

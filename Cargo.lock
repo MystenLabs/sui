@@ -6073,6 +6073,7 @@ dependencies = [
  "dashmap",
  "fastcrypto",
  "futures",
+ "itertools",
  "lru",
  "mysten-common",
  "narwhal-config",

@@ -136,7 +136,7 @@ async fn test_consensus_recovery_with_bullshark() {
     }
 
     // AND the last committed store should be updated correctly
-    let last_committed = consensus_store.read_last_committed();
+    let last_committed = consensus_store.read_last_committed().unwrap();
 
     for id in ids.clone() {
         let last_round = *last_committed.get(&id).unwrap();

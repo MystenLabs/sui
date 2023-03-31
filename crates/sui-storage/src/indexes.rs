@@ -39,6 +39,7 @@ use typed_store::rocks::{
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
+use typed_store::TypedStoreError;
 use typed_store_derive::DBMapUtils;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
@@ -262,9 +263,11 @@ impl IndexStore {
         };
         let next_sequence_number = tables
             .transaction_order
-            .unbounded_iter()
+            .safe_iter()
             .skip_to_last()
             .next()
+            .transpose()
+            .expect("failed to fetch next transaction order")
             .map(|(seq, _)| seq + 1)
             .unwrap_or(0)
             .into();
@@ -665,28 +668,28 @@ impl IndexStore {
                 error: UserInputError::Unsupported(format!("{:?}", filter)),
             }),
             None => {
-                let iter = self.tables.transaction_order.unbounded_iter();
+                let iter = self.tables.transaction_order.safe_iter();
 
                 if reverse {
                     let iter = iter
                         .skip_prior_to(&cursor.unwrap_or(TxSequenceNumber::MAX))?
                         .reverse()
                         .skip(usize::from(cursor.is_some()))
-                        .map(|(_, digest)| digest);
+                        .map_ok(|(_, digest)| digest);
                     if let Some(limit) = limit {
-                        Ok(iter.take(limit).collect())
+                        Ok(iter.take(limit).collect::<Result<_, _>>()?)
                     } else {
-                        Ok(iter.collect())
+                        Ok(iter.collect::<Result<_, _>>()?)
                     }
                 } else {
                     let iter = iter
                         .skip_to(&cursor.unwrap_or(TxSequenceNumber::MIN))?
                         .skip(usize::from(cursor.is_some()))
-                        .map(|(_, digest)| digest);
+                        .map_ok(|(_, digest)| digest);
                     if let Some(limit) = limit {
-                        Ok(iter.take(limit).collect())
+                        Ok(iter.take(limit).collect::<Result<_, _>>()?)
                     } else {
-                        Ok(iter.collect())
+                        Ok(iter.collect::<Result<_, _>>()?)
                     }
                 }
             }
@@ -722,30 +725,30 @@ impl IndexStore {
     ) -> SuiResult<Vec<TransactionDigest>> {
         Ok(if reverse {
             let iter = index
-                .unbounded_iter()
+                .safe_iter()
                 .skip_prior_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MAX)))?
                 .reverse()
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
-                .take_while(|((id, _), _)| *id == key)
-                .map(|(_, digest)| digest);
+                .take_while(|item| item.as_ref().map_or(true, |((id, _), _)| *id == key))
+                .map_ok(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).collect()
+                iter.take(limit).collect::<Result<_, _>>()?
             } else {
-                iter.collect()
+                iter.collect::<Result<_, _>>()?
             }
         } else {
             let iter = index
-                .unbounded_iter()
+                .safe_iter()
                 .skip_to(&(key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN)))?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
-                .take_while(|((id, _), _)| *id == key)
-                .map(|(_, digest)| digest);
+                .take_while(|item| item.as_ref().map_or(true, |((id, _), _)| *id == key))
+                .map_ok(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).collect()
+                iter.take(limit).collect::<Result<_, _>>()?
             } else {
-                iter.collect()
+                iter.collect::<Result<_, _>>()?
             }
         })
     }
@@ -844,39 +847,43 @@ impl IndexStore {
                 .unwrap_or(if reverse { max_string } else { "".to_string() });
 
         let key = (package, module_val, function_val, cursor_val);
-        let iter = self.tables.transactions_by_move_function.unbounded_iter();
+        let iter = self.tables.transactions_by_move_function.safe_iter();
         Ok(if reverse {
             let iter = iter
                 .skip_prior_to(&key)?
                 .reverse()
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
-                .take_while(|((id, m, f, _), _)| {
-                    *id == package
-                        && module.as_ref().map(|x| x == m).unwrap_or(true)
-                        && function.as_ref().map(|x| x == f).unwrap_or(true)
+                .take_while(|item| {
+                    item.as_ref().map_or(true, |((id, m, f, _), _)| {
+                        *id == package
+                            && module.as_ref().map(|x| x == m).unwrap_or(true)
+                            && function.as_ref().map(|x| x == f).unwrap_or(true)
+                    })
                 })
-                .map(|(_, digest)| digest);
+                .map_ok(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).collect()
+                iter.take(limit).collect::<Result<_, _>>()?
             } else {
-                iter.collect()
+                iter.collect::<Result<_, _>>()?
             }
         } else {
             let iter = iter
                 .skip_to(&key)?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
-                .take_while(|((id, m, f, _), _)| {
-                    *id == package
-                        && module.as_ref().map(|x| x == m).unwrap_or(true)
-                        && function.as_ref().map(|x| x == f).unwrap_or(true)
+                .take_while(|item| {
+                    item.as_ref().map_or(true, |((id, m, f, _), _)| {
+                        *id == package
+                            && module.as_ref().map(|x| x == m).unwrap_or(true)
+                            && function.as_ref().map(|x| x == f).unwrap_or(true)
+                    })
                 })
-                .map(|(_, digest)| digest);
+                .map_ok(|(_, digest)| digest);
             if let Some(limit) = limit {
-                iter.take(limit).collect()
+                iter.take(limit).collect::<Result<_, _>>()?
             } else {
-                iter.collect()
+                iter.collect::<Result<_, _>>()?
             }
         })
     }
@@ -914,24 +921,24 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .unbounded_iter()
+                .safe_iter()
                 .skip_prior_to(&(tx_seq, event_seq))?
                 .reverse()
                 .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                .map_ok(|((_, event_seq), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         } else {
             self.tables
                 .event_order
-                .unbounded_iter()
+                .safe_iter()
                 .skip_to(&(tx_seq, event_seq))?
                 .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                .map_ok(|((_, event_seq), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         })
     }
 
@@ -949,26 +956,26 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_order
-                .unbounded_iter()
+                .safe_iter()
                 .skip_prior_to(&(min(tx_seq, seq), event_seq))?
                 .reverse()
-                .take_while(|((tx, _), _)| tx == &seq)
+                .take_while(|item| item.as_ref().map_or(true, |((tx, _), _)| tx == &seq))
                 .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                .map_ok(|((_, event_seq), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         } else {
             self.tables
                 .event_order
-                .unbounded_iter()
+                .safe_iter()
                 .skip_to(&(max(tx_seq, seq), event_seq))?
-                .take_while(|((tx, _), _)| tx == &seq)
+                .take_while(|item| item.as_ref().map_or(true, |((tx, _), _)| tx == &seq))
                 .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
+                .map_ok(|((_, event_seq), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         })
     }
 
@@ -982,25 +989,25 @@ impl IndexStore {
     ) -> SuiResult<Vec<(TransactionEventsDigest, TransactionDigest, usize, u64)>> {
         Ok(if descending {
             index
-                .unbounded_iter()
+                .safe_iter()
                 .skip_prior_to(&(key.clone(), (tx_seq, event_seq)))?
                 .reverse()
-                .take_while(|((m, _), _)| m == key)
+                .take_while(|item| item.as_ref().map_or(true, |((m, _), _)| m == key))
                 .take(limit)
-                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                .map_ok(|((_, (_, event_seq)), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         } else {
             index
-                .unbounded_iter()
+                .safe_iter()
                 .skip_to(&(key.clone(), (tx_seq, event_seq)))?
-                .take_while(|((m, _), _)| m == key)
+                .take_while(|item| item.as_ref().map_or(true, |((m, _), _)| m == key))
                 .take(limit)
-                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                .map_ok(|((_, (_, event_seq)), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         })
     }
 
@@ -1088,26 +1095,26 @@ impl IndexStore {
         Ok(if descending {
             self.tables
                 .event_by_time
-                .unbounded_iter()
+                .safe_iter()
                 .skip_prior_to(&(end_time, (tx_seq, event_seq)))?
                 .reverse()
-                .take_while(|((m, _), _)| m >= &start_time)
+                .take_while(|item| item.as_ref().map_or(true, |((m, _), _)| m >= &start_time))
                 .take(limit)
-                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                .map_ok(|((_, (_, event_seq)), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         } else {
             self.tables
                 .event_by_time
-                .unbounded_iter()
+                .safe_iter()
                 .skip_to(&(start_time, (tx_seq, event_seq)))?
-                .take_while(|((m, _), _)| m <= &end_time)
+                .take_while(|item| item.as_ref().map_or(true, |((m, _), _)| m <= &end_time))
                 .take(limit)
-                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                .map_ok(|((_, (_, event_seq)), (digest, tx_digest, time))| {
                     (digest, tx_digest, event_seq, time)
                 })
-                .collect()
+                .collect::<Result<_, _>>()?
         })
     }
 
@@ -1197,30 +1204,33 @@ impl IndexStore {
         Ok(self
             .get_owner_objects_iterator(owner, cursor, filter)?
             .take(limit)
-            .collect())
+            .collect::<Result<_, _>>()?)
     }
 
     pub fn get_owned_coins_iterator(
         coin_index: &DBMap<CoinIndexKey, CoinInfo>,
         owner: SuiAddress,
         coin_type_tag: Option<String>,
-    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<(String, ObjectID, CoinInfo), TypedStoreError>> + '_>
+    {
         let all_coins = coin_type_tag.is_none();
         let starting_coin_type =
             coin_type_tag.unwrap_or_else(|| String::from_utf8([0u8].to_vec()).unwrap());
         Ok(coin_index
-            .unbounded_iter()
+            .safe_iter()
             .skip_to(&(owner, starting_coin_type.clone(), ObjectID::ZERO))?
-            .take_while(move |((addr, coin_type, _), _)| {
-                if addr != &owner {
-                    return false;
-                }
-                if !all_coins && &starting_coin_type != coin_type {
-                    return false;
-                }
-                true
+            .take_while(move |item| {
+                item.as_ref().map_or(true, |((addr, coin_type, _), _)| {
+                    if addr != &owner {
+                        return false;
+                    }
+                    if !all_coins && &starting_coin_type != coin_type {
+                        return false;
+                    }
+                    true
+                })
             })
-            .map(|((_, coin_type, obj_id), coin)| (coin_type, obj_id, coin)))
+            .map_ok(|((_, coin_type, obj_id), coin)| (coin_type, obj_id, coin)))
     }
 
     pub fn get_owned_coins_iterator_with_cursor(
@@ -1229,28 +1239,31 @@ impl IndexStore {
         cursor: (String, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
-    ) -> SuiResult<impl Iterator<Item = (String, ObjectID, CoinInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<(String, ObjectID, CoinInfo), TypedStoreError>> + '_>
+    {
         let (starting_coin_type, starting_object_id) = cursor;
         Ok(self
             .tables
             .coin_index
-            .unbounded_iter()
+            .safe_iter()
             .skip_to(&(owner, starting_coin_type.clone(), starting_object_id))?
-            .filter(move |((_, _, obj_id), _)| obj_id != &starting_object_id)
+            .filter_ok(move |((_, _, obj_id), _)| obj_id != &starting_object_id)
             .enumerate()
-            .take_while(move |(index, ((addr, coin_type, _), _))| {
-                if *index >= limit {
-                    return false;
-                }
-                if addr != &owner {
-                    return false;
-                }
-                if one_coin_type_only && &starting_coin_type != coin_type {
-                    return false;
-                }
-                true
+            .take_while(move |(index, item)| {
+                item.as_ref().map_or(true, |((addr, coin_type, _), _)| {
+                    if *index >= limit {
+                        return false;
+                    }
+                    if addr != &owner {
+                        return false;
+                    }
+                    if one_coin_type_only && &starting_coin_type != coin_type {
+                        return false;
+                    }
+                    true
+                })
             })
-            .map(|(_, ((_, coin_type, obj_id), coin))| (coin_type, obj_id, coin)))
+            .map(|(_, item)| item.map(|((_, coin_type, obj_id), coin)| (coin_type, obj_id, coin))))
     }
 
     /// starting_object_id can be used to implement pagination, where a client remembers the last
@@ -1260,23 +1273,26 @@ impl IndexStore {
         owner: SuiAddress,
         starting_object_id: ObjectID,
         filter: Option<SuiObjectDataFilter>,
-    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<ObjectInfo, TypedStoreError>> + '_> {
         Ok(self
             .tables
             .owner_index
-            .unbounded_iter()
+            .safe_iter()
             // The object id 0 is the smallest possible
             .skip_to(&(owner, starting_object_id))?
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
-            .take_while(move |((address_owner, _), _)| address_owner == &owner)
-            .filter(move |(_, o)| {
+            .take_while(move |item| {
+                item.as_ref()
+                    .map_or(true, |((address_owner, _), _)| address_owner == &owner)
+            })
+            .filter_ok(move |(_, o)| {
                 if let Some(filter) = filter.as_ref() {
                     filter.matches(o)
                 } else {
                     true
                 }
             })
-            .map(|(_, object_info)| object_info))
+            .map_ok(|(_, object_info)| object_info))
     }
 
     pub fn insert_genesis_objects(&self, object_index_changes: ObjectIndexChanges) -> SuiResult {
@@ -1426,11 +1442,12 @@ impl IndexStore {
         let coin_type_str = coin_type.to_string();
         let coins =
             Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?
-                .map(|(_coin_type, obj_id, coin)| (coin_type_str.clone(), obj_id, coin));
+                .map_ok(|(_coin_type, obj_id, coin)| (coin_type_str.clone(), obj_id, coin));
 
         let mut balance = 0i128;
         let mut num_coins = 0;
-        for (_coin_type, _obj_id, coin_info) in coins {
+        for item in coins {
+            let (_coin_type, _obj_id, coin_info) = item?;
             balance += coin_info.balance as i128;
             num_coins += 1;
         }
@@ -1446,7 +1463,8 @@ impl IndexStore {
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
             .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
         for (coin_type, coins) in &coins {
             let mut total_balance = 0i128;
