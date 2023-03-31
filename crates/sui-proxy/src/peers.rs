@@ -4,6 +4,9 @@ use anyhow::{bail, Context, Result};
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
+use once_cell::sync::Lazy;
+use prometheus::{register_counter_vec, register_histogram_vec};
+use prometheus::{CounterVec, HistogramVec};
 use serde::Deserialize;
 use std::time::Duration;
 use std::{
@@ -13,6 +16,23 @@ use std::{
 use sui_tls::Allower;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use tracing::{debug, error, info};
+
+static JSON_RPC_STATE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "json_rpc_state",
+        "Number of successful/failed requests made.",
+        &["rpc_method", "status"]
+    )
+    .unwrap()
+});
+static JSON_RPC_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "json_rpc_duration_seconds",
+        "The json-rpc latencies in seconds.",
+        &["rpc_method"]
+    )
+    .unwrap()
+});
 
 /// SuiNods a mapping of public key to SuiPeer data
 pub type SuiPeers = Arc<RwLock<HashMap<Ed25519PublicKey, SuiPeer>>>;
@@ -76,10 +96,21 @@ impl SuiNodeProvider {
 
     /// get_validators will retrieve known validators
     async fn get_validators(url: String) -> Result<SuiSystemStateSummary> {
+        // TODO convert get_validators to a struct and add a drop impl for timer
+        // tracking
+        let rpc_method = "suix_getLatestSuiSystemState";
+        let observe = || {
+            let timer = JSON_RPC_DURATION
+                .with_label_values(&[rpc_method])
+                .start_timer();
+            || {
+                timer.observe_duration();
+            }
+        }();
         let client = reqwest::Client::builder().build().unwrap();
         let request = serde_json::json!({
             "jsonrpc": "2.0",
-            "method":"suix_getLatestSuiSystemState",
+            "method":rpc_method,
             "id":1,
         });
         let response = client
@@ -88,12 +119,21 @@ impl SuiNodeProvider {
             .body(request.to_string())
             .send()
             .await
-            .context("unable to perform json rpc")?;
+            .with_context(|| {
+                JSON_RPC_STATE
+                    .with_label_values(&[rpc_method, "failed_get"])
+                    .inc();
+                observe();
+                "unable to perform json rpc"
+            })?;
 
-        let raw = response
-            .bytes()
-            .await
-            .context("unable to extract body bytes from json rpc")?;
+        let raw = response.bytes().await.with_context(|| {
+            JSON_RPC_STATE
+                .with_label_values(&[rpc_method, "failed_body_extract"])
+                .inc();
+            observe();
+            "unable to extract body bytes from json rpc"
+        })?;
 
         #[derive(Debug, Deserialize)]
         struct ResponseBody {
@@ -103,13 +143,20 @@ impl SuiNodeProvider {
         let body: ResponseBody = match serde_json::from_slice(&raw) {
             Ok(b) => b,
             Err(error) => {
+                JSON_RPC_STATE
+                    .with_label_values(&[rpc_method, "failed_json_decode"])
+                    .inc();
+                observe();
                 bail!(
                     "unable to decode json: {error} response from json rpc: {:?}",
                     raw
                 )
             }
         };
-
+        JSON_RPC_STATE
+            .with_label_values(&[rpc_method, "success"])
+            .inc();
+        observe();
         Ok(body.result)
     }
 
@@ -135,8 +182,16 @@ impl SuiNodeProvider {
                         allow.clear();
                         allow.extend(peers);
                         info!("{} peers managed to make it on the allow list", allow.len());
+                        JSON_RPC_STATE
+                            .with_label_values(&["update_peer_count", "success"])
+                            .inc_by(allow.len() as f64);
                     }
-                    Err(error) => error!("unable to refresh peer list: {error}"),
+                    Err(error) => {
+                        JSON_RPC_STATE
+                            .with_label_values(&["update_peer_count", "failed"])
+                            .inc();
+                        error!("unable to refresh peer list: {error}")
+                    }
                 }
             }
         });
