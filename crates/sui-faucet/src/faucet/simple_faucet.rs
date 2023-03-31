@@ -704,7 +704,7 @@ mod tests {
         let res = SuiClientCommands::PayAllSui {
             input_coins: vec![*bad_gas.id()],
             recipient: SuiAddress::random_for_testing_only(),
-            gas_budget: 50000,
+            gas_budget: 2_000_000,
         }
         .execute(faucet.wallet_mut())
         .await
