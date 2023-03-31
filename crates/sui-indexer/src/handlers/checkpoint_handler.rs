@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::traits::ToFromBytes;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
 use futures::FutureExt;
 use move_core_types::ident_str;
@@ -407,19 +407,18 @@ where
             let system_state = get_sui_system_state(data)?;
             let system_state: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
 
-            let epoch_event = transactions
-                .iter()
-                .find_map(|tx| {
-                    tx.events.data.iter().find(|ev| {
-                        ev.type_.address == SUI_SYSTEM_ADDRESS
-                            && ev.type_.module.as_ident_str()
-                                == ident_str!("sui_system_state_inner")
-                            && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
-                    })
+            let epoch_event = transactions.iter().find_map(|tx| {
+                tx.events.data.iter().find(|ev| {
+                    ev.type_.address == SUI_SYSTEM_ADDRESS
+                        && ev.type_.module.as_ident_str() == ident_str!("sui_system_state_inner")
+                        && ev.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
                 })
-                .ok_or_else(|| anyhow::anyhow!("Cannot find epoch event"))?;
+            });
 
-            let event: SystemEpochInfoEvent = bcs::from_bytes(&epoch_event.bcs)?;
+            let event = epoch_event
+                .map(|e| bcs::from_bytes::<SystemEpochInfoEvent>(&e.bcs))
+                .transpose()?;
+
             let validators = system_state
                 .active_validators
                 .iter()
@@ -446,6 +445,8 @@ where
                     },
                 );
 
+            let event = event.as_ref();
+
             Some(TemporaryEpochStore {
                 last_epoch: Some(DBEpochInfo {
                     epoch: system_state.epoch as i64 - 1,
@@ -459,17 +460,18 @@ where
                     ),
                     next_epoch_committee,
                     next_epoch_committee_stake,
-                    stake_subsidy_amount: Some(event.stake_subsidy_amount),
-                    reference_gas_price: Some(event.reference_gas_price),
-                    storage_fund_balance: Some(event.storage_fund_balance),
-                    total_gas_fees: Some(event.total_gas_fees),
-                    total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
-                    total_stake: Some(event.total_stake),
-                    storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
-                    storage_charge: Some(event.storage_charge),
-                    protocol_version: Some(event.protocol_version),
-                    storage_rebate: Some(event.storage_rebate),
-                    leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
+                    stake_subsidy_amount: event.map(|e| e.stake_subsidy_amount),
+                    reference_gas_price: event.map(|e| e.reference_gas_price),
+                    storage_fund_balance: event.map(|e| e.storage_fund_balance),
+                    total_gas_fees: event.map(|e| e.total_gas_fees),
+                    total_stake_rewards_distributed: event
+                        .map(|e| e.total_stake_rewards_distributed),
+                    total_stake: event.map(|e| e.total_stake),
+                    storage_fund_reinvestment: event.map(|e| e.storage_fund_reinvestment),
+                    storage_charge: event.map(|e| e.storage_charge),
+                    protocol_version: event.map(|e| e.protocol_version),
+                    storage_rebate: event.map(|e| e.storage_rebate),
+                    leftover_storage_fund_inflow: event.map(|e| e.leftover_storage_fund_inflow),
                     epoch_commitments,
                 }),
                 new_epoch: DBEpochInfo {
