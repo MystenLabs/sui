@@ -571,7 +571,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
         .subscribe(
             "suix_subscribeEvent",
             rpc_params![EventFilter::MoveEventType(struct_tag.clone())],
-            "suix_unsubscribeEvents",
+            "suix_unsubscribeEvent",
         )
         .await
         .unwrap();
