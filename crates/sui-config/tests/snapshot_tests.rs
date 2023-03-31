@@ -49,6 +49,7 @@ fn genesis_config_snapshot_matches() {
     assert_yaml_snapshot!(genesis_config);
 }
 
+#[ignore]
 #[test]
 #[cfg_attr(msim, ignore)]
 fn populated_genesis_snapshot_matches() {

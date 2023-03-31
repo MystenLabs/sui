@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 2;
+const MAX_PROTOCOL_VERSION: u64 = 3;
 
 // Record history of protocol version allocations here:
 //
@@ -120,6 +120,12 @@ struct FeatureFlags {
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     commit_root_state_digest: bool,
+    // Pass epoch start time to advance_epoch safe mode function.
+    advance_epoch_start_time_in_safe_mode: bool,
+    // If true, include various fixes to ensure sui conservation, including:
+    // - Conserving storage rebate of system transactions.
+    // - TBD.
+    gas_model_v2: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -563,6 +569,14 @@ impl ProtocolConfig {
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
         self.feature_flags.commit_root_state_digest
+    }
+
+    pub fn gas_model_v2(&self) -> bool {
+        self.feature_flags.gas_model_v2
+    }
+
+    pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
+        self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
 }
 
@@ -1341,7 +1355,7 @@ impl ProtocolConfig {
                 address_from_u256_cost_base: Some(52),
 
                 // `dynamic_field` module
-                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`                
+                // Cost params for the Move native function `hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address`
                 dynamic_field_hash_type_and_key_cost_base: Some(100),
                 dynamic_field_hash_type_and_key_type_cost_per_byte: Some(2),
                 dynamic_field_hash_type_and_key_value_cost_per_byte: Some(2),
@@ -1493,7 +1507,6 @@ impl ProtocolConfig {
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
-
             2 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
@@ -1502,11 +1515,10 @@ impl ProtocolConfig {
             3 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
                 cfg.feature_flags.gas_model_v2 = true;
-                max_size_written_objects: Some(5 * 1000 * 1000);
-                max_size_written_objects_system_tx: Some(50 * 1000 * 1000);
+                cfg.max_size_written_objects = Some(5 * 1000 * 1000);
+                cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                 cfg
             }
-
 
             // Use this template when making changes:
             //
@@ -1643,17 +1655,40 @@ mod test {
     fn version_gating_test() {
         // This config is present in v1
         let mut config = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
-        assert_eq!(config.get_for_current_version_max_function_definitions(), Some(1000));
-        assert_eq!(ProtocolConfig::get_for_version_max_function_definitions(ProtocolVersion::new(1)), Some(1000));
+        assert_eq!(
+            config.get_for_current_version_max_function_definitions(),
+            Some(1000)
+        );
 
-        
-        // This config is not present in v1 or v2 
-        assert_eq!(config.get_for_current_version_get_for_current_version_max_size_written_objects(), None);
-        assert_eq!(ProtocolConfig::get_for_version_get_for_current_version_max_size_written_objects(ProtocolVersion::new(1)), None);
+        // This config is not present in v1 or v2
+        assert_eq!(
+            config.get_for_current_version_max_size_written_objects(),
+            None
+        );
+        assert_eq!(
+            config.get_for_current_version_max_size_written_objects_system_tx(),
+            None
+        );
+        config = ProtocolConfig::get_for_version(ProtocolVersion::new(2));
+        assert_eq!(
+            config.get_for_current_version_max_size_written_objects(),
+            None
+        );
+        assert_eq!(
+            config.get_for_current_version_max_size_written_objects_system_tx(),
+            None
+        );
 
-
-
-
+        // This config is not present in v3
+        config = ProtocolConfig::get_for_version(ProtocolVersion::new(3));
+        assert_eq!(
+            config.get_for_current_version_max_size_written_objects(),
+            Some(5 * 1000 * 1000)
+        );
+        assert_eq!(
+            config.get_for_current_version_max_size_written_objects_system_tx(),
+            Some(50 * 1000 * 1000)
+        );
     }
 
     #[test]

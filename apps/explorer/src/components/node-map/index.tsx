@@ -164,7 +164,7 @@ export default function NodeMap({ minHeight }: Props) {
                     </div>
                 </div>
 
-                <div className="absolute top-5 right-5 z-10">
+                <div className="absolute right-5 top-5 z-10">
                     <DateFilter value={dateFilter} onChange={setDateFilter} />
                 </div>
 

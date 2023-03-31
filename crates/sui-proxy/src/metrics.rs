@@ -4,6 +4,10 @@ use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use mysten_metrics::RegistryService;
 use prometheus::{Registry, TextEncoder};
 use std::net::SocketAddr;
+use tower::ServiceBuilder;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
+use tower_http::LatencyUnit;
+use tracing::Level;
 
 const METRICS_ROUTE: &str = "/metrics";
 
@@ -17,7 +21,16 @@ pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
 
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))
-        .layer(Extension(registry_service.clone()));
+        .layer(Extension(registry_service.clone()))
+        .layer(
+            ServiceBuilder::new().layer(
+                TraceLayer::new_for_http().on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .latency_unit(LatencyUnit::Seconds),
+                ),
+            ),
+        );
 
     tokio::spawn(async move {
         axum::Server::bind(&addr)

@@ -79,7 +79,7 @@ impl SuiNodeProvider {
         let client = reqwest::Client::builder().build().unwrap();
         let request = serde_json::json!({
             "jsonrpc": "2.0",
-            "method":"sui_getLatestSuiSystemState",
+            "method":"suix_getLatestSuiSystemState",
             "id":1,
         });
         let response = client
@@ -88,17 +88,25 @@ impl SuiNodeProvider {
             .body(request.to_string())
             .send()
             .await
-            .context("unable to perform rpc")?;
+            .context("unable to perform json rpc")?;
+
+        let raw = response
+            .bytes()
+            .await
+            .context("unable to extract body bytes from json rpc")?;
 
         #[derive(Debug, Deserialize)]
         struct ResponseBody {
             result: SuiSystemStateSummary,
         }
 
-        let body = match response.json::<ResponseBody>().await {
+        let body: ResponseBody = match serde_json::from_slice(&raw) {
             Ok(b) => b,
             Err(error) => {
-                bail!("unable to decode json: {error}")
+                bail!(
+                    "unable to decode json: {error} response from json rpc: {:?}",
+                    raw
+                )
             }
         };
 

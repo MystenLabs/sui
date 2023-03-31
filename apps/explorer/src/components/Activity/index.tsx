@@ -64,7 +64,7 @@ export function Activity({
                         <Tab>Epochs</Tab>
                         <Tab>Checkpoints</Tab>
                     </TabList>
-                    <div className="absolute inset-y-0 right-0 -top-1 text-2xl">
+                    <div className="absolute inset-y-0 -top-1 right-0 text-2xl">
                         <PlayPause
                             paused={paused}
                             onChange={handlePauseChange}

@@ -382,6 +382,25 @@ impl CheckpointStore {
             .checkpoint_db(path)
             .map_err(SuiError::StorageError)
     }
+
+    pub fn delete_highest_executed_checkpoint_test_only(&self) -> Result<(), TypedStoreError> {
+        let mut wb = self.watermarks.batch();
+        wb.delete_batch(
+            &self.watermarks,
+            std::iter::once(CheckpointWatermark::HighestExecuted),
+        )?;
+        wb.write()?;
+        Ok(())
+    }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        self.delete_highest_executed_checkpoint_test_only()?;
+        self.watermarks
+            .rocksdb
+            .flush()
+            .map_err(SuiError::StorageError)?;
+        Ok(())
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]

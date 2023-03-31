@@ -250,6 +250,24 @@ impl AuthorityPerpetualTables {
             .checkpoint_db(path)
             .map_err(SuiError::StorageError)
     }
+
+    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
+        // TODO: Add new tables that get added to the db automatically
+        self.objects.clear()?;
+        self.indirect_move_objects.clear()?;
+        self.owned_object_transaction_locks.clear()?;
+        self.executed_effects.clear()?;
+        self.events.clear()?;
+        self.executed_transactions_to_checkpoint.clear()?;
+        self.root_state_hash_by_epoch.clear()?;
+        self.epoch_start_configuration.clear()?;
+        self.pruned_checkpoint.clear()?;
+        self.objects
+            .rocksdb
+            .flush()
+            .map_err(SuiError::StorageError)?;
+        Ok(())
+    }
 }
 
 impl ObjectStore for AuthorityPerpetualTables {

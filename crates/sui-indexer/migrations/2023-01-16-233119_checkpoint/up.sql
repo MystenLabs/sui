@@ -1,6 +1,6 @@
 CREATE TABLE checkpoints
 (
-    sequence_number            BIGINT PRIMARY KEY,
+    sequence_number            BIGINT       PRIMARY KEY,
     checkpoint_digest          VARCHAR(255) NOT NULL,
     epoch                      BIGINT       NOT NULL,
     transactions               TEXT[]       NOT NULL,
@@ -21,4 +21,3 @@ CREATE TABLE checkpoints
 
 CREATE INDEX checkpoints_epoch ON checkpoints (epoch);
 CREATE INDEX checkpoints_timestamp ON checkpoints (timestamp_ms);
-CREATE INDEX checkpoints_checkpoint_digest ON checkpoints (checkpoint_digest);

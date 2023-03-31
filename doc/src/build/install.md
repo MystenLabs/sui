@@ -264,7 +264,7 @@ The command installs Sui components in the `~/.cargo/bin` folder.
 
 ### Confirm the installation
 
-To confirm that Sui installed correctly, type `sui` and press Enter. YOu should see a message about the Sui version installed and help for using Sui commands.
+To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands.
 
 ## Integrated development environment
 

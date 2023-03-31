@@ -45,7 +45,6 @@ import {
   SuiEvent,
   PaginatedObjectsResponse,
   SuiObjectResponseQuery,
-  CheckpointedObjectId,
 } from '../types';
 import { DynamicFieldName, DynamicFieldPage } from '../types/dynamic_fields';
 import {
@@ -66,9 +65,9 @@ import { EpochInfo, EpochPage } from '../types/epochs';
 
 export const TARGETED_RPC_VERSION = '0.29.0';
 
-export interface PaginationArguments {
+export interface PaginationArguments<Cursor> {
   /** Optional paging cursor */
-  cursor?: CheckpointedObjectId | ObjectId | null;
+  cursor?: Cursor;
   /** Maximum item returned per page */
   limit?: number | null;
 }
@@ -213,7 +212,7 @@ export class JsonRpcProvider {
   async getAllCoins(
     input: {
       owner: SuiAddress;
-    } & PaginationArguments,
+    } & PaginationArguments<PaginatedCoins['nextCursor']>,
   ): Promise<PaginatedCoins> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
       throw new Error('Invalid Sui address');
@@ -387,7 +386,7 @@ export class JsonRpcProvider {
   async getOwnedObjects(
     input: {
       owner: SuiAddress;
-    } & PaginationArguments &
+    } & PaginationArguments<PaginatedObjectsResponse['nextCursor']> &
       SuiObjectResponseQuery,
   ): Promise<PaginatedObjectsResponse> {
     if (!input.owner || !isValidSuiAddress(normalizeSuiAddress(input.owner))) {
@@ -458,7 +457,7 @@ export class JsonRpcProvider {
    */
   async queryTransactionBlocks(
     input: SuiTransactionBlockResponseQuery &
-      PaginationArguments &
+      PaginationArguments<PaginatedTransactionResponse['nextCursor']> &
       OrderArguments,
   ): Promise<PaginatedTransactionResponse> {
     return await this.client.requestWithType(
@@ -616,7 +615,7 @@ export class JsonRpcProvider {
     input: {
       /** the event query criteria. */
       query: SuiEventFilter;
-    } & PaginationArguments &
+    } & PaginationArguments<PaginatedEvents['nextCursor']> &
       OrderArguments,
   ): Promise<PaginatedEvents> {
     return await this.client.requestWithType(
@@ -717,7 +716,7 @@ export class JsonRpcProvider {
     input: {
       /** The id of the parent object */
       parentId: ObjectId;
-    } & PaginationArguments,
+    } & PaginationArguments<DynamicFieldPage['nextCursor']>,
   ): Promise<DynamicFieldPage> {
     if (
       !input.parentId ||

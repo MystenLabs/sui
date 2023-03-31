@@ -15,7 +15,7 @@ import { normalizeSuiObjectId, ObjectId, SuiAddress } from '../types/common';
 import { getOption, Option } from '../types/option';
 import { CoinStruct } from '../types/coin';
 import { StructTag } from '../types/sui-bcs';
-import { Infer, literal, number, object, string, union } from 'superstruct';
+import { Infer, nullable, number, object, string } from 'superstruct';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';
 export const SUI_FRAMEWORK_ADDRESS = '0x2';
@@ -49,8 +49,8 @@ export const CoinMetadataStruct = object({
   name: string(),
   symbol: string(),
   description: string(),
-  iconUrl: union([string(), literal(null)]),
-  id: union([ObjectId, literal(null)]),
+  iconUrl: nullable(string()),
+  id: nullable(ObjectId),
 });
 
 export type CoinMetadata = Infer<typeof CoinMetadataStruct>;

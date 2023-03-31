@@ -821,6 +821,19 @@ impl TransactionKind {
         )
     }
 
+    /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
+    /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
+    /// directly.
+    pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
+        match self {
+            Self::ChangeEpoch(e) => Some((
+                e.computation_charge + e.storage_charge,
+                e.storage_rebate - e.non_refundable_storage_fee,
+            )),
+            _ => None,
+        }
+    }
+
     pub fn contains_shared_object(&self) -> bool {
         self.shared_input_objects().next().is_some()
     }
