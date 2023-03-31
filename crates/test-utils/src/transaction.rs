@@ -118,11 +118,7 @@ pub async fn publish_package_with_wallet(
     dep_ids: Vec<ObjectID>,
 ) -> (ObjectRef, TransactionDigest) {
     let client = context.get_client().await.unwrap();
-    let gas_price = client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let transaction = {
         let data = client
             .transaction_builder()
@@ -182,11 +178,7 @@ pub async fn submit_move_transaction(
 ) -> SuiTransactionBlockResponse {
     debug!(?package_id, ?arguments, "move_transaction");
     let client = context.get_client().await.unwrap();
-    let gas_price = client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     let data = client
         .transaction_builder()
         .move_call(
@@ -286,8 +278,7 @@ pub async fn create_devnet_nft(
 ) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
     let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
     let gas_object = gas_objects.get(0).unwrap().id();
-    let client = context.get_client().await?;
-    let gas_price = client.governance_api().get_reference_gas_price().await?;
+    let gas_price = context.get_reference_gas_price().await?;
 
     let args_json = json!([
         "example_nft_name",
@@ -336,8 +327,7 @@ pub async fn transfer_sui(
     sender: Option<SuiAddress>,
     receiver: Option<SuiAddress>,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
-    let client = context.get_client().await?;
-    let gas_price = client.governance_api().get_reference_gas_price().await?;
+    let gas_price = context.get_reference_gas_price().await?;
     let sender = match sender {
         None => context.config.keystore.addresses().get(0).cloned().unwrap(),
         Some(addr) => addr,
@@ -381,8 +371,7 @@ pub async fn transfer_coin(
     ),
     anyhow::Error,
 > {
-    let client = context.get_client().await?;
-    let gas_price = client.governance_api().get_reference_gas_price().await?;
+    let gas_price = context.get_reference_gas_price().await?;
     let sender = context.config.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.config.keystore.addresses().get(1).cloned().unwrap();
     let client = context.get_client().await.unwrap();
@@ -449,12 +438,7 @@ pub async fn transfer_coin(
 }
 
 pub async fn split_coin_with_wallet_context(context: &mut WalletContext, coin_id: ObjectID) {
-    let client = context.get_client().await.unwrap();
-    let gas_price = client
-        .governance_api()
-        .get_reference_gas_price()
-        .await
-        .unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
     SuiClientCommands::SplitCoin {
         coin_id,
         amounts: None,
