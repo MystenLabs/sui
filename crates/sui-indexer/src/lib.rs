@@ -199,11 +199,12 @@ pub async fn new_pg_connection_pool(
     })?;
 
     let manager = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
-
+    // Our vultr instances allow up to 197 concurrent connections,
+    // setting the default pool size to 187 for async connections and 10 for blocking connections.
     let connection_size = env::var("DB_CONNECTION_SIZE")
-        .unwrap_or_else(|_| "100".to_string())
+        .unwrap_or_else(|_| "187".to_string())
         .parse::<u32>()
-        .unwrap_or(100);
+        .unwrap_or(187);
     info!("Creating connection pool with size: {connection_size}");
     let async_pool = Pool::builder()
         .max_size(connection_size)
