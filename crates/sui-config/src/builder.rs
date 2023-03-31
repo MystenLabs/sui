@@ -490,6 +490,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     supported_protocol_versions: Some(supported_protocol_versions),
                     db_checkpoint_config: self.db_checkpoint_config.clone(),
                     indirect_objects_threshold: usize::MAX,
+                    enable_expensive_safety_checks: false,
                 }
             })
             .collect();

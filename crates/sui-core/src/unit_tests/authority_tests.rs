@@ -3969,7 +3969,8 @@ async fn test_iter_live_object_set() {
     let starting_live_set: HashSet<_> = authority
         .database
         .iter_live_object_set()
-        .filter_map(|(id, _, _)| {
+        .filter_map(|object| {
+            let id = object.object_id();
             if id != gas && id != obj_id {
                 Some(id)
             } else {
@@ -4152,11 +4153,12 @@ fn check_live_set(
     let actual: Vec<_> = authority
         .database
         .iter_live_object_set()
-        .filter_map(|(id, v, _)| {
+        .filter_map(|object| {
+            let id = object.object_id();
             if ignore.contains(&id) {
                 None
             } else {
-                Some((id, v))
+                Some((id, object.version()))
             }
         })
         .collect();

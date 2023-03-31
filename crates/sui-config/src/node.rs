@@ -96,6 +96,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub indirect_objects_threshold: usize,
+
+    #[serde(default)]
+    pub enable_expensive_safety_checks: bool,
 }
 
 fn default_authority_store_pruning_config() -> AuthorityStorePruningConfig {
