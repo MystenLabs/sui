@@ -1266,7 +1266,7 @@ impl<'a> DBTransaction<'a> {
             RocksDBRawIter::OptimisticTransaction(db_iter),
             db.cf.clone(),
             &db.db_metrics,
-            &db.iter_latency_sample_interval,
+            &db.iter_bytes_sample_interval,
         )
     }
 
