@@ -28,7 +28,12 @@ use sui_json_rpc_types::{
 };
 use sui_network::{DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::base_types::SequenceNumber;
+use sui_types::messages::Argument;
+use sui_types::messages::CallArg;
+use sui_types::messages::ObjectArg;
 use sui_types::messages::TransactionEvents;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::{
     base_types::ObjectID,
@@ -655,4 +660,124 @@ impl ValidatorProxy for FullNodeProxy {
             .active_validators;
         Ok(validators.into_iter().map(|v| v.sui_address).collect())
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum BenchMoveCallArg {
+    Pure(Vec<u8>),
+    Shared((ObjectID, SequenceNumber, bool)),
+    ImmOrOwnedObject(ObjectRef),
+    ImmOrOwnedObjectVec(Vec<ObjectRef>),
+    SharedObjectVec(Vec<(ObjectID, SequenceNumber, bool)>),
+}
+
+impl From<bool> for BenchMoveCallArg {
+    fn from(b: bool) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&b).unwrap())
+    }
+}
+
+impl From<u8> for BenchMoveCallArg {
+    fn from(n: u8) -> Self {
+        // unwrap safe because every u8 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u16> for BenchMoveCallArg {
+    fn from(n: u16) -> Self {
+        // unwrap safe because every u16 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u32> for BenchMoveCallArg {
+    fn from(n: u32) -> Self {
+        // unwrap safe because every u32 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u64> for BenchMoveCallArg {
+    fn from(n: u64) -> Self {
+        // unwrap safe because every u64 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<u128> for BenchMoveCallArg {
+    fn from(n: u128) -> Self {
+        // unwrap safe because every u128 value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(&n).unwrap())
+    }
+}
+
+impl From<&Vec<u8>> for BenchMoveCallArg {
+    fn from(v: &Vec<u8>) -> Self {
+        // unwrap safe because every vec<u8> value is BCS-serializable
+        BenchMoveCallArg::Pure(bcs::to_bytes(v).unwrap())
+    }
+}
+
+impl From<ObjectRef> for BenchMoveCallArg {
+    fn from(obj: ObjectRef) -> Self {
+        BenchMoveCallArg::ImmOrOwnedObject(obj)
+    }
+}
+
+impl From<CallArg> for BenchMoveCallArg {
+    fn from(ca: CallArg) -> Self {
+        match ca {
+            CallArg::Pure(p) => BenchMoveCallArg::Pure(p),
+            CallArg::Object(obj) => match obj {
+                ObjectArg::ImmOrOwnedObject(imo) => BenchMoveCallArg::ImmOrOwnedObject(imo),
+                ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+            },
+        }
+    }
+}
+
+/// Convert MoveCallArg to Vector of Argument for PT
+pub fn convert_move_call_args(
+    args: &[BenchMoveCallArg],
+    pt_builder: &mut ProgrammableTransactionBuilder,
+) -> Vec<Argument> {
+    args.iter()
+        .map(|arg| match arg {
+            BenchMoveCallArg::Pure(bytes) => {
+                pt_builder.input(CallArg::Pure(bytes.clone())).unwrap()
+            }
+            BenchMoveCallArg::Shared((id, initial_shared_version, mutable)) => pt_builder
+                .input(CallArg::Object(ObjectArg::SharedObject {
+                    id: *id,
+                    initial_shared_version: *initial_shared_version,
+                    mutable: *mutable,
+                }))
+                .unwrap(),
+            BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
+                pt_builder.input((*obj_ref).into()).unwrap()
+            }
+            BenchMoveCallArg::ImmOrOwnedObjectVec(obj_refs) => pt_builder
+                .make_obj_vec(obj_refs.iter().map(|q| ObjectArg::ImmOrOwnedObject(*q)))
+                .unwrap(),
+            BenchMoveCallArg::SharedObjectVec(obj_refs) => pt_builder
+                .make_obj_vec(
+                    obj_refs
+                        .iter()
+                        .map(
+                            |(id, initial_shared_version, mutable)| ObjectArg::SharedObject {
+                                id: *id,
+                                initial_shared_version: *initial_shared_version,
+                                mutable: *mutable,
+                            },
+                        ),
+                )
+                .unwrap(),
+        })
+        .collect()
 }

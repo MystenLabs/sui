@@ -12,7 +12,9 @@ use sui_types::{
     utils::to_sender_signed_transaction,
 };
 
-use crate::{workloads::Gas, ExecutionEffects};
+use crate::ProgrammableTransactionBuilder;
+use crate::{convert_move_call_args, workloads::Gas, BenchMoveCallArg, ExecutionEffects};
+use sui_types::messages::Command;
 
 /// A Sui account and all of the objects it owns
 #[derive(Debug)]
@@ -47,6 +49,11 @@ impl SuiAccount {
         debug_assert!(self.gas.0 != *id, "Deleting gas object");
 
         self.owned.remove(id)
+    }
+
+    /// Get a ref to the keypair for this account
+    pub fn key(&self) -> &AccountKeyPair {
+        self.key.as_ref()
     }
 }
 
@@ -149,6 +156,32 @@ impl InMemoryWallet {
         to_sender_signed_transaction(data, account.key.as_ref())
     }
 
+    pub fn move_call_pt(
+        &self,
+        sender: SuiAddress,
+        package: ObjectID,
+        module: &str,
+        function: &str,
+        type_arguments: Vec<TypeTag>,
+        arguments: Vec<BenchMoveCallArg>,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> VerifiedTransaction {
+        let account = self.account(&sender).unwrap();
+        move_call_pt_impl(
+            sender,
+            &account.key,
+            package,
+            module,
+            function,
+            type_arguments,
+            arguments,
+            &account.gas,
+            gas_budget,
+            gas_price,
+        )
+    }
+
     pub fn keypair(&self, addr: &SuiAddress) -> Option<Arc<AccountKeyPair>> {
         self.accounts.get(addr).map(|a| a.key.clone())
     }
@@ -168,4 +201,36 @@ impl InMemoryWallet {
         }
         total
     }
+}
+
+pub fn move_call_pt_impl(
+    sender: SuiAddress,
+    keypair: &AccountKeyPair,
+    package: ObjectID,
+    module: &str,
+    function: &str,
+    type_arguments: Vec<TypeTag>,
+    arguments: Vec<BenchMoveCallArg>,
+    gas_ref: &ObjectRef,
+    gas_budget: u64,
+    gas_price: u64,
+) -> VerifiedTransaction {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let args = convert_move_call_args(&arguments, &mut builder);
+
+    builder.command(Command::move_call(
+        package,
+        Identifier::new(module).unwrap(),
+        Identifier::new(function).unwrap(),
+        type_arguments,
+        args,
+    ));
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![*gas_ref],
+        builder.finish(),
+        gas_budget,
+        gas_price,
+    );
+    to_sender_signed_transaction(data, keypair)
 }
