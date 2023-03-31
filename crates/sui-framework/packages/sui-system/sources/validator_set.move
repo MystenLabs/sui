@@ -236,7 +236,7 @@ module sui_system::validator_set {
         table_vec::push_back(&mut self.pending_active_validators, validator);
     }
 
-    public(friend) fun assert_no_pending_or_actice_duplicates(self: &ValidatorSet, validator: &Validator) {
+    public(friend) fun assert_no_pending_or_active_duplicates(self: &ValidatorSet, validator: &Validator) {
         // Validator here must be active or pending, and thus must be identified as duplicate exactly once.
         assert!(
             count_duplicates_vec(&self.active_validators, validator) +
