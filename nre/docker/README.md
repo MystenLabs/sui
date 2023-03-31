@@ -33,7 +33,7 @@ You may need to explicitly open the ports outlined in [Sui for Node Operators](.
 
 Start Sui Node in detached mode:
 
-`sudo docker compose up -d`
+`sudo docker-compose up -d`
 
 ## Logs
 
@@ -42,7 +42,7 @@ By default, logs are stored at `/var/lib/docker/containers/[container-id]/[conta
 - View and follow
 
 ```shell
-sudo docker compose logs -f validator
+sudo docker-compose logs -f validator
 ```
 
 - By default all logs are output, limit this using `--since`
@@ -72,10 +72,10 @@ sudo docker-compose down -v
 
 - **DO NOT** delete the Sui databases
 
-1. Stop docker compose
+1. Stop docker-compose
 
 ```shell
-sudo docker compose down
+sudo docker-compose down
 ```
 
 2. Update docker-compose.yaml to reference the new image
@@ -88,5 +88,5 @@ sudo docker compose down
 3. Start docker compose in detached mode:
 
 ```shell
-sudo docker compose up -d
+sudo docker-compose up -d
 ```
