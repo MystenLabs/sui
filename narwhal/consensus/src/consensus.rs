@@ -19,8 +19,8 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument};
 use types::{
     metered_channel, Certificate, CertificateAPI, CertificateDigest, CommittedSubDag,
-    CommittedSubDagShell, ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI,
-    ReputationScores, Round, Timestamp,
+    CommittedSubDagShell, ConditionalBroadcastReceiver, ConsensusStore, HeaderAPI, Round,
+    Timestamp,
 };
 
 #[cfg(test)]
@@ -39,13 +39,6 @@ pub struct ConsensusState {
     /// Keeps the last committed round for each authority. This map is used to clean up the dag and
     /// ensure we don't commit twice the same certificate.
     pub last_committed: HashMap<AuthorityIdentifier, Round>,
-    /// Used to populate the index in the sub-dag construction.
-    pub latest_sub_dag_index: SequenceNumber,
-    /// The last calculated consensus reputation score
-    pub last_consensus_reputation_score: ReputationScores,
-    /// The last committed sub dag leader. This allow us to calculate the reputation score of the nodes
-    /// that vote for the last leader.
-    pub last_committed_leader: Option<CertificateDigest>,
     /// The last committed sub dag. If value is None, it means that we haven't committed any sub dag yet.
     pub last_committed_sub_dag: Option<CommittedSubDag>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
@@ -56,15 +49,12 @@ pub struct ConsensusState {
 }
 
 impl ConsensusState {
-    pub fn new(metrics: Arc<ConsensusMetrics>, committee: &Committee, gc_depth: Round) -> Self {
+    pub fn new(metrics: Arc<ConsensusMetrics>, gc_depth: Round) -> Self {
         Self {
             last_round: ConsensusRound::default(),
             gc_depth,
             last_committed: Default::default(),
-            latest_sub_dag_index: 0,
             dag: Default::default(),
-            last_consensus_reputation_score: ReputationScores::new(committee),
-            last_committed_leader: None,
             last_committed_sub_dag: None,
             metrics,
         }
@@ -77,7 +67,6 @@ impl ConsensusState {
         recovered_last_committed: HashMap<AuthorityIdentifier, Round>,
         latest_sub_dag: Option<CommittedSubDagShell>,
         cert_store: CertificateStore,
-        committee: &Committee,
     ) -> Self {
         let last_round = ConsensusRound::new_with_gc_depth(last_committed_round, gc_depth);
 
@@ -88,12 +77,6 @@ impl ConsensusState {
         )
         .expect("error when recovering DAG from store");
         metrics.recovered_consensus_state.inc();
-
-        let (latest_sub_dag_index, last_consensus_reputation_score, last_committed_leader) =
-            latest_sub_dag
-                .as_ref()
-                .map(|s| (s.sub_dag_index, s.reputation_score.clone(), Some(s.leader)))
-                .unwrap_or((0, ReputationScores::new(committee), None));
 
         let last_committed_sub_dag = if let Some(latest_sub_dag) = latest_sub_dag.as_ref() {
             let certificates = latest_sub_dag
@@ -127,9 +110,6 @@ impl ConsensusState {
             gc_depth,
             last_round,
             last_committed: recovered_last_committed,
-            last_consensus_reputation_score,
-            latest_sub_dag_index,
-            last_committed_leader,
             last_committed_sub_dag,
             dag,
             metrics,
@@ -262,6 +242,15 @@ impl ConsensusState {
             panic!("Parent round not found in DAG for {certificate:?}!");
         }
     }
+
+    /// Provides the next index to be used for the next produced sub dag
+    pub fn next_sub_dag_index(&self) -> SequenceNumber {
+        self.last_committed_sub_dag
+            .as_ref()
+            .map(|s| s.sub_dag_index)
+            .unwrap_or_default()
+            + 1
+    }
 }
 
 /// Describe how to sequence input certificates.
@@ -382,7 +371,6 @@ where
             recovered_last_committed,
             latest_sub_dag,
             cert_store,
-            &committee,
         );
 
         tx_consensus_round_updates

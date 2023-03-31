@@ -572,7 +572,7 @@ async fn delayed_certificates_are_rejected() {
         test_utils::make_certificates_with_epoch(&committee, 1..=5, epoch, &genesis, &ids);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
+    let mut state = ConsensusState::new(metrics.clone(), gc_depth);
     let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Populate DAG with the rounds up to round 5 so we trigger commits
@@ -618,7 +618,7 @@ async fn submitting_equivocating_certificate_should_error() {
         test_utils::make_certificates_with_epoch(&committee, 1..=1, epoch, &genesis, &ids);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
+    let mut state = ConsensusState::new(metrics.clone(), gc_depth);
     let mut bullshark =
         Bullshark::new(committee.clone(), store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
@@ -676,7 +676,7 @@ async fn reset_consensus_scores_on_every_schedule_change() {
         test_utils::make_certificates_with_epoch(&committee, 1..=50, epoch, &genesis, &ids);
 
     let store = make_consensus_store(&test_utils::temp_dir());
-    let mut state = ConsensusState::new(metrics.clone(), &committee, gc_depth);
+    let mut state = ConsensusState::new(metrics.clone(), gc_depth);
     let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Populate DAG with the rounds up to round 50 so we trigger commits
@@ -853,7 +853,7 @@ async fn garbage_collection_basic() {
     let store = make_consensus_store(&test_utils::temp_dir());
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
+    let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
     let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     // Now start feeding the certificates per round
@@ -953,7 +953,7 @@ async fn slow_node() {
     // Create Bullshark consensus engine
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
+    let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
     let mut bullshark =
         Bullshark::new(committee.clone(), store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
@@ -1126,7 +1126,7 @@ async fn not_enough_support_and_missing_leaders_and_gc() {
     // Create Bullshark consensus engine
     let store = make_consensus_store(&test_utils::temp_dir());
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    let mut state = ConsensusState::new(metrics.clone(), &committee, GC_DEPTH);
+    let mut state = ConsensusState::new(metrics.clone(), GC_DEPTH);
     let mut bullshark = Bullshark::new(committee, store, metrics, NUM_SUB_DAGS_PER_SCHEDULE);
 
     let mut committed = false;
