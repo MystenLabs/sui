@@ -8,7 +8,7 @@ import { ReactNode } from 'react';
 type PostHogProviderProps = {
     isEnabled: boolean;
     children: ReactNode;
-    additionalOptions?: Partial<PostHogConfig>,
+    additionalOptions?: Partial<PostHogConfig>;
 };
 
 export function PostHogAnalyticsProvider({
