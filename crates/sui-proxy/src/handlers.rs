@@ -10,7 +10,28 @@ use axum::{
     http::StatusCode,
 };
 use multiaddr::Multiaddr;
+use once_cell::sync::Lazy;
+use prometheus::{register_counter_vec, register_histogram_vec};
+use prometheus::{CounterVec, HistogramVec};
 use std::net::SocketAddr;
+
+static HANDLER_HITS: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "http_handler_hits",
+        "Number of HTTP requests made.",
+        &["handler"]
+    )
+    .unwrap()
+});
+
+static HTTP_HANDLER_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "http_handler_duration_seconds",
+        "The HTTP request latencies in seconds.",
+        &["handler"]
+    )
+    .unwrap()
+});
 
 /// Publish handler which receives metrics from nodes.  Nodes will call us at this endpoint
 /// and we relay them to the upstream tsdb
@@ -24,9 +45,13 @@ pub async fn publish_metrics(
     Extension(relay): Extension<HistogramRelay>,
     LenDelimProtobuf(data): LenDelimProtobuf,
 ) -> (StatusCode, &'static str) {
+    HANDLER_HITS.with_label_values(&["publish_metrics"]).inc();
+    let timer = HTTP_HANDLER_DURATION
+        .with_label_values(&["publish_metrics"])
+        .start_timer();
     let data = populate_labels(host.name, network, data);
     relay.submit(data.clone());
-    convert_to_remote_write(
+    let response = convert_to_remote_write(
         client.clone(),
         NodeMetric {
             data,
@@ -34,5 +59,7 @@ pub async fn publish_metrics(
             public_key: host.public_key,
         },
     )
-    .await
+    .await;
+    timer.observe_duration();
+    response
 }

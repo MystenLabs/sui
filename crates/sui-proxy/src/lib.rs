@@ -25,7 +25,7 @@ macro_rules! var {
     };
     ($key:expr, $default:expr) => {
         match std::env::var($key) {
-            Ok(val) => val.parse::<usize>().unwrap(),
+            Ok(val) => val.parse::<_>().unwrap(),
             Err(_) => $default,
         }
     };

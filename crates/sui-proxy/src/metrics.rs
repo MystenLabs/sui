@@ -43,8 +43,9 @@ pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
 }
 
 async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
-    let metrics_families = registry_service.gather_all();
-    match TextEncoder.encode_to_string(&metrics_families) {
+    let mut metric_families = registry_service.gather_all();
+    metric_families.extend(prometheus::gather());
+    match TextEncoder.encode_to_string(&metric_families) {
         Ok(metrics) => (StatusCode::OK, metrics),
         Err(error) => (
             StatusCode::INTERNAL_SERVER_ERROR,
