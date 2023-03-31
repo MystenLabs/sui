@@ -23,7 +23,6 @@ export function LayoutContent() {
 
     usePageView();
 
-    // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes
     return (
         // NOTE: We set a top-level key here to force the entire react tree to be re-created when the network changes:
         <Fragment key={network}>
