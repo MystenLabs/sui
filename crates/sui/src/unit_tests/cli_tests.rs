@@ -431,7 +431,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         package_path,
         build_config,
         gas: Some(gas_obj_id),
-        gas_budget: 20_000,
+        gas_budget: 1_000_000,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_output: false,
@@ -508,7 +508,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args,
         gas: None,
-        gas_budget: 20_000,
+        gas_budget: 1_000_000,
     }
     .execute(context)
     .await?;
@@ -545,7 +545,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 20_000,
+        gas_budget: 1_000_000,
     }
     .execute(context)
     .await;
@@ -569,7 +569,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 20_000,
+        gas_budget: 1_000_000,
     }
     .execute(context)
     .await;
@@ -595,7 +595,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         gas: Some(gas),
-        gas_budget: 20_000,
+        gas_budget: 1_000_000,
     }
     .execute(context)
     .await?;
