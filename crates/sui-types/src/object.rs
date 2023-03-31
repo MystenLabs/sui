@@ -885,6 +885,16 @@ pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> 
         .collect()
 }
 
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_test_gas_objects_with_owner_and_value(count: usize, owner: SuiAddress, value: u64) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, value)
+        })
+        .collect()
+}
+
 /// Make a few test gas objects (all with the same owner) with TOTAL_SUPPLY_MIST / count balance
 pub fn generate_max_test_gas_objects_with_owner(count: u64, owner: SuiAddress) -> Vec<Object> {
     let coin_size = TOTAL_SUPPLY_MIST / count;
