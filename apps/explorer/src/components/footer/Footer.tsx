@@ -37,7 +37,7 @@ function FooterLinks({ links }: { links: FooterItems }) {
 
 function Footer() {
     return (
-        <footer className="bg-gray-75 py-10 px-5 md:px-10 md:py-14">
+        <footer className="bg-gray-75 px-5 py-10 md:px-10 md:py-14">
             <nav className="mx-auto grid grid-cols-1 gap-8 md:mx-0 md:grid-cols-4 md:gap-10 xl:w-1/2">
                 <div className="order-last mx-auto md:order-first md:mt-0">
                     <div className="h-full space-y-2 md:flex md:flex-col md:justify-between">

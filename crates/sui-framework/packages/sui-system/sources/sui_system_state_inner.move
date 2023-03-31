@@ -828,11 +828,13 @@ module sui_system::sui_system_state_inner {
         computation_reward: Balance<SUI>,
         storage_rebate: u64,
         non_refundable_storage_fee: u64,
+        epoch_start_timestamp_ms: u64,
         ctx: &mut TxContext,
     ) {
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
+        self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
         self.epoch = new_epoch;
         self.protocol_version = next_protocol_version;
 

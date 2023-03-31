@@ -28,6 +28,7 @@ pub trait SuiGasStatusAPI<'a> {
     fn gas_budget(&self) -> u64;
     fn storage_gas_units(&self) -> u64;
     fn storage_rebate(&self) -> u64;
+    fn unmetered_storage_rebate(&self) -> u64;
     fn gas_used(&self) -> u64;
     fn reset_storage_cost_and_rebate(&mut self);
     fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError>;

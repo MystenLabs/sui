@@ -36,7 +36,7 @@
 }
 
 .txcomponent {
-    @apply pt-4 pb-4;
+    @apply pb-4 pt-4;
 }
 
 .txgridcolspan2 {
@@ -55,7 +55,7 @@
 
 .itemviewtitle,
 .txtitle {
-    @apply mt-5 mb-0 text-lg  font-[500] text-gray-100;
+    @apply mb-0 mt-5 text-lg  font-[500] text-gray-100;
 }
 
 .itemviewcontentlabel {
@@ -112,7 +112,7 @@
 }
 
 .txdetailsbg ul {
-    @apply mt-5 mb-2;
+    @apply mb-2 mt-5;
 
     border-top: none !important;
 }

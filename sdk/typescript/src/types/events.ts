@@ -5,8 +5,6 @@ import {
   object,
   number,
   string,
-  union,
-  literal,
   Infer,
   array,
   record,
@@ -14,6 +12,7 @@ import {
   optional,
   boolean,
   integer,
+  nullable,
 } from 'superstruct';
 import {
   ObjectId,
@@ -86,7 +85,7 @@ export type SuiEventFilter =
 
 export const PaginatedEvents = object({
   data: array(SuiEvent),
-  nextCursor: union([EventId, literal(null)]),
+  nextCursor: nullable(EventId),
   hasNextPage: boolean(),
 });
 export type PaginatedEvents = Infer<typeof PaginatedEvents>;

@@ -377,8 +377,8 @@ impl RocksDB {
         delegate_call!(self.compact_range_cf(cf, start, end))
     }
 
-    pub fn flush(&self) -> Result<(), rocksdb::Error> {
-        delegate_call!(self.flush())
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        delegate_call!(self.flush()).map_err(|e| TypedStoreError::RocksDBError(e.into_string()))
     }
 
     pub fn checkpoint(&self, path: &Path) -> Result<(), TypedStoreError> {

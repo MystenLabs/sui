@@ -64,8 +64,8 @@ impl ExecutionPlan {
     }
 }
 
-#[tokio::test]
 #[ignore]
+#[tokio::test]
 async fn bullshark_randomised_tests() {
     // Configuration regarding the randomized tests. The tests will run for different values
     // on the below parameters to increase the different cases we can generate.
@@ -73,7 +73,7 @@ async fn bullshark_randomised_tests() {
     // A range of gc_depth to be used
     const GC_DEPTH: RangeInclusive<Round> = 4..=15;
     // A range of the committee size to be used
-    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=6;
+    const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=4;
     // A range of rounds for which we will create DAGs
     const DAG_ROUNDS: RangeInclusive<Round> = 7..=20;
     // The number of different execution plans to be created and tested against for every generated DAG

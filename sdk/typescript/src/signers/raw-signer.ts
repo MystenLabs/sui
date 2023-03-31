@@ -26,7 +26,7 @@ export class RawSigner extends SignerWithProvider {
   async signData(data: Uint8Array): Promise<SerializedSignature> {
     const pubkey = this.keypair.getPublicKey();
     const digest = blake2b(data, { dkLen: 32 });
-    const signature = this.keypair.signData(digest, false);
+    const signature = this.keypair.signData(digest);
     const signatureScheme = this.keypair.getKeyScheme();
 
     return toSerializedSignature({

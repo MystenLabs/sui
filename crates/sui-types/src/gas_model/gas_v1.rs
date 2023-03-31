@@ -413,6 +413,10 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         self.storage_gas_units.into()
     }
 
+    fn unmetered_storage_rebate(&self) -> u64 {
+        unreachable!("unmetered_storage_rebate should not be called in v1 gas model");
+    }
+
     fn gas_used(&self) -> u64 {
         self.gas_used_in_gas_units().into()
     }

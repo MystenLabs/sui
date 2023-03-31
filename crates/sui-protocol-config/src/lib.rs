@@ -10,12 +10,13 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 2;
+const MAX_PROTOCOL_VERSION: u64 = 3;
 
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
-// Version 2: Increment gas model version and add feature flag for conservation
+// Version 2: Framework changes, including advancing epoch_start_time in safemode.
+// Version 3: gas model v2, including all sui conservation fixes.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -118,8 +119,8 @@ struct FeatureFlags {
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     commit_root_state_digest: bool,
-    // Allow conservation checks when true
-    conservation_checks: bool,
+    // Pass epoch start time to advance_epoch safe mode function.
+    advance_epoch_start_time_in_safe_mode: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -558,8 +559,8 @@ impl ProtocolConfig {
         self.feature_flags.commit_root_state_digest
     }
 
-    pub fn conservation_checks(&self) -> bool {
-        self.feature_flags.conservation_checks
+    pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
+        self.feature_flags.advance_epoch_start_time_in_safe_mode
     }
 }
 
@@ -1478,7 +1479,23 @@ impl ProtocolConfig {
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
-
+            2 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.advance_epoch_start_time_in_safe_mode = true;
+                cfg
+            }
+            3 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                // changes for gas model
+                cfg.gas_model_version = Some(2);
+                // max gas budget is in MIST and an absolute value 50SUI
+                cfg.max_tx_gas = Some(50_000_000_000);
+                // min gas budget is in MIST and an absolute value 2000MIST or 0.000002SUI
+                cfg.base_tx_cost_fixed = Some(2_000);
+                // storage gas price multiplier
+                cfg.storage_gas_price = Some(76);
+                cfg
+            }
             // Use this template when making changes:
             //
             // NEW_VERSION => Self {
@@ -1495,18 +1512,6 @@ impl ProtocolConfig {
             //     // changes.
             //     ..Self::get_for_version_impl(version - 1)
             // },
-            2 => {
-                let mut cfg = Self::get_for_version_impl(version - 1);
-                // changes for gas model
-                cfg.gas_model_version = Some(2);
-                // max gas budget is in MIST and an absolute value 50SUI
-                cfg.max_tx_gas = Some(50_000_000_000);
-                // min gas budget is in MIST and an absolute value 2000MIST or 0.000002SUI
-                cfg.base_tx_cost_fixed = Some(2_000);
-                // enable conservation checks
-                cfg.feature_flags.conservation_checks = true;
-                cfg
-            }
             _ => panic!("unsupported version {:?}", version),
         }
     }

@@ -15,7 +15,7 @@ section .codeview {
 }
 
 .moduletitle {
-    @apply pt-2 pb-2 text-sm font-semibold;
+    @apply pb-2 pt-2 text-sm font-semibold;
 }
 
 .module {
@@ -34,7 +34,7 @@ section .codeview {
 
 .itemviewtitle,
 .title {
-    @apply mt-5 mb-0 text-lg  font-[500] text-gray-100;
+    @apply mb-0 mt-5 text-lg  font-[500] text-gray-100;
 }
 
 section .codeview pre {

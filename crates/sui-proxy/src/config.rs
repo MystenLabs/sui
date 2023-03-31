@@ -16,6 +16,7 @@ pub struct ProxyConfig {
     pub remote_write: RemoteWriteConfig,
     pub json_rpc: PeerValidationConfig,
     pub metrics_address: SocketAddr,
+    pub histogram_address: SocketAddr,
 }
 
 #[serde_as]

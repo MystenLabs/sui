@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module.exports = {
-    presets: [require('@mysten/core/tailwind.config')],
+import preset from '@mysten/core/tailwind.config';
+import { type Config } from 'tailwindcss';
+
+export default {
+    presets: [preset],
 
     /*
      * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
@@ -60,4 +63,4 @@ module.exports = {
             },
         },
     },
-};
+} satisfies Partial<Config>;

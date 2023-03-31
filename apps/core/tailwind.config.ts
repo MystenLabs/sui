@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-const { fontFamily } = require('tailwindcss/defaultTheme');
-const colors = require('tailwindcss/colors');
+import { type Config } from 'tailwindcss';
+import { fontFamily } from 'tailwindcss/defaultTheme';
+import colors from 'tailwindcss/colors';
 
-/** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
     content: ['./src/**/*.{js,jsx,ts,tsx}'],
     theme: {
         // Overwrite colors to avoid accidental usage of Tailwind colors:
@@ -181,6 +181,5 @@ module.exports = {
         require('@tailwindcss/forms')({
             strategy: 'class',
         }),
-        require('@tailwindcss/line-clamp'),
     ],
-};
+} satisfies Config;

@@ -176,6 +176,9 @@ pub struct SuiGasStatus<'a> {
     storage_rebate: u64,
     // storage rebate rate as defined in the ProtocolConfig
     rebate_rate: u64,
+    /// Amount of storage rebate accumulated when we are running in unmetered mode (i.e. system transaction).
+    /// This allows us to track how much storage rebate we need to retain in system transactions.
+    unmetered_storage_rebate: u64,
 }
 
 impl<'a> SuiGasStatus<'a> {
@@ -198,6 +201,7 @@ impl<'a> SuiGasStatus<'a> {
             storage_cost: 0,
             storage_rebate: 0,
             rebate_rate,
+            unmetered_storage_rebate: 0,
             cost_table,
         }
     }
@@ -329,6 +333,10 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         self.storage_rebate
     }
 
+    fn unmetered_storage_rebate(&self) -> u64 {
+        self.unmetered_storage_rebate
+    }
+
     fn gas_used(&self) -> u64 {
         self.gas_status.gas_used_pre_gas_price()
     }
@@ -353,6 +361,8 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         new_size: usize,
         storage_rebate: u64,
     ) -> Result<u64, ExecutionError> {
+        // TODO: this is exclusively called from testing as it breaks too much
+        // if we fork tests between old and new, revisit
         let size = self.track_storage_mutation(new_size, storage_rebate);
         self.charge_storage_and_rebate()?;
         Ok(size)

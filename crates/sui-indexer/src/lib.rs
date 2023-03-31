@@ -50,14 +50,17 @@ pub type PgPoolConnection = PooledConnection<ConnectionManager<PgConnection>>;
 /// Returns all endpoints for which we have implemented on the indexer,
 /// some of them are not validated yet.
 /// NOTE: we only use this for integration testing
-const IMPLEMENTED_METHODS: [&str; 7] = [
+const IMPLEMENTED_METHODS: [&str; 8] = [
+    // read apis
     "get_checkpoint",
     "get_latest_checkpoint_sequence_number",
-    "get_object_with_options",
-    "get_total_transaction_number",
-    "get_transaction",
-    "multi_get_transactions_with_options",
-    "query_transactions",
+    "get_object",
+    "get_total_transaction_blocks",
+    "get_transaction_block",
+    "multi_get_transaction_blocks",
+    // indexer apis
+    "query_events",
+    "query_transaction_blocks",
 ];
 
 #[derive(Parser, Clone, Debug)]

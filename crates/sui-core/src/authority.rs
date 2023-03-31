@@ -1010,6 +1010,14 @@ impl AuthorityState {
         if !self.is_fullnode(&epoch_store) {
             return Err(anyhow!("dry-exec is only supported on fullnodes"));
         }
+        match transaction.kind() {
+            TransactionKind::ProgrammableTransaction(_) => (),
+            TransactionKind::ChangeEpoch(_)
+            | TransactionKind::Genesis(_)
+            | TransactionKind::ConsensusCommitPrologue(_) => {
+                return Err(anyhow!("dry-exec does not support system transactions"));
+            }
+        }
 
         // make a gas object if one was not provided
         let mut gas_object_refs = transaction.gas().to_vec();

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFormatCoin } from '@mysten/core';
-import { X12 } from '@mysten/icons';
+import { X12, Dot12 } from '@mysten/icons';
 import {
     getExecutionStatusType,
     getTotalGasUsed,
@@ -89,7 +89,7 @@ export const genTableDataFromTxData = (
                         digest={transaction.digest}
                         before={
                             status === 'success' ? (
-                                <div className="h-2 w-2 rounded-full bg-success" />
+                                <Dot12 className="text-success" />
                             ) : (
                                 <X12 className="text-issue-dark" />
                             )

@@ -20,6 +20,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::identifier::Identifier;
 use tracing::info;
 
+use cached::proc_macro::once;
 use sui_json_rpc::{ObjectProvider, ObjectProviderCache};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics, MoveFunctionName,
@@ -983,10 +984,7 @@ impl IndexerStore for PgIndexerStore {
     }
 
     fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError> {
-        let metrics = read_only!(&self.cp, |conn| {
-            diesel::sql_query("SELECT * FROM network_metrics;").get_result::<DBNetworkMetrics>(conn)
-        })?;
-        Ok(metrics.into())
+        get_network_metrics_cached(&self.cp)
     }
 
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError> {
@@ -1440,6 +1438,14 @@ impl PartitionManager {
             .collect::<Result<_, _>>()?,
         )
     }
+}
+
+#[once(time = 2, result = true)]
+fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
+    let metrics = read_only!(cp, |conn| {
+        diesel::sql_query("SELECT * FROM network_metrics;").get_result::<DBNetworkMetrics>(conn)
+    })?;
+    Ok(metrics.into())
 }
 
 #[async_trait]

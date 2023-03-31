@@ -4,15 +4,14 @@
 import {
   array,
   Infer,
-  literal,
   number,
   object,
   string,
-  union,
   tuple,
   boolean,
   optional,
   any,
+  nullable,
 } from 'superstruct';
 
 import { TransactionDigest, TransactionEffectsDigest } from './common';
@@ -67,7 +66,7 @@ export type Checkpoint = Infer<typeof Checkpoint>;
 
 export const CheckpointPage = object({
   data: array(Checkpoint),
-  nextCursor: union([string(), literal(null)]),
+  nextCursor: nullable(string()),
   hasNextPage: boolean(),
 });
 export type CheckpointPage = Infer<typeof CheckpointPage>;

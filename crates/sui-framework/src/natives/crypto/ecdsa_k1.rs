@@ -57,7 +57,7 @@ pub fn ecrecover(
 
     let hash = pop_arg!(args, u8);
 
-    // Load the cost paramaters from the protocol config
+    // Load the cost parameters from the protocol config
     let (ecdsa_k1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
         let cost_table = &context.extensions().get::<NativesCostTable>();
         (
@@ -106,15 +106,14 @@ pub fn ecrecover(
 
     let cost = context.gas_used();
 
-    let sig = match <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) {
-        Ok(s) => s,
-        Err(_) => return Ok(NativeResult::err(cost, INVALID_SIGNATURE)),
+    let Ok(sig) = <Secp256k1RecoverableSignature as ToFromBytes>::from_bytes(&signature_ref) else {
+        return Ok(NativeResult::err(cost, INVALID_SIGNATURE));
     };
 
     let pk = match hash {
         KECCAK256 => sig.recover_with_hash::<Keccak256>(&msg_ref),
         SHA256 => sig.recover_with_hash::<Sha256>(&msg_ref),
-        _ => Err(FastCryptoError::InvalidInput),
+        _ => Err(FastCryptoError::InvalidInput), // We should never reach here
     };
 
     match pk {
@@ -250,14 +249,12 @@ pub fn secp256k1_verify(
 
     let cost = context.gas_used();
 
-    let sig = match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) {
-        Ok(s) => s,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(sig) = <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes_ref) else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
-    let pk = match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) {
-        Ok(p) => p,
-        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    let Ok(pk) = <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes_ref) else {
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let result = match hash {

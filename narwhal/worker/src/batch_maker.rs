@@ -1,33 +1,34 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::metrics::WorkerMetrics;
-#[cfg(feature = "trace_transaction")]
-use byteorder::{BigEndian, ReadBytesExt};
-use fastcrypto::hash::Hash;
-use futures::stream::FuturesUnordered;
-use store::{rocks::DBMap, Map};
+
+use std::sync::Arc;
 
 use config::WorkerId;
-use tracing::{debug, error};
-
-#[cfg(feature = "benchmark")]
-use std::convert::TryInto;
-
+use fastcrypto::hash::Hash;
+use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
-
 use mysten_metrics::spawn_logged_monitored_task;
-use std::sync::Arc;
+use network::{client::NetworkClient, WorkerToPrimaryClient};
+use store::{rocks::DBMap, Map};
 use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
+use tracing::{error, warn};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, PrimaryResponse, Transaction,
-    TxResponse, WorkerOurBatchMessage,
+    now, Batch, BatchAPI, BatchDigest, ConditionalBroadcastReceiver, Transaction, TxResponse,
+    WorkerOurBatchMessage,
 };
+
+use crate::metrics::WorkerMetrics;
+
+#[cfg(feature = "trace_transaction")]
+use byteorder::{BigEndian, ReadBytesExt};
+#[cfg(feature = "benchmark")]
+use std::convert::TryInto;
 
 // The number of batches to store / transmit in parallel.
 pub const MAX_PARALLEL_BATCH: usize = 100;
@@ -55,10 +56,10 @@ pub struct BatchMaker {
     /// The timestamp of the batch creation.
     /// Average resident time in the batch would be ~ (batch seal time - creation time) / 2
     batch_start_timestamp: Instant,
+    /// The network client to send our batches to the primary.
+    client: NetworkClient,
     /// The batch store to store our own batches.
     store: DBMap<BatchDigest, Batch>,
-    // Output channel to send out batches' digests.
-    tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
 }
 
 impl BatchMaker {
@@ -71,8 +72,8 @@ impl BatchMaker {
         rx_batch_maker: Receiver<(Transaction, TxResponse)>,
         tx_quorum_waiter: Sender<(Batch, tokio::sync::oneshot::Sender<()>)>,
         node_metrics: Arc<WorkerMetrics>,
+        client: NetworkClient,
         store: DBMap<BatchDigest, Batch>,
-        tx_our_batch: Sender<(WorkerOurBatchMessage, PrimaryResponse)>,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
             async move {
@@ -85,8 +86,8 @@ impl BatchMaker {
                     tx_quorum_waiter,
                     batch_start_timestamp: Instant::now(),
                     node_metrics,
+                    client,
                     store,
-                    tx_our_batch,
                 }
                 .run()
                 .await;
@@ -259,9 +260,9 @@ impl BatchMaker {
             .observe(batch_creation_duration);
 
         // Clone things to not capture self
+        let client = self.client.clone();
         let store = self.store.clone();
         let worker_id = self.id;
-        let tx_our_batch = self.tx_our_batch.clone();
 
         // The batch has been sealed so we can officially set its creation time
         // for latency calculations.
@@ -285,28 +286,18 @@ impl BatchMaker {
             //       it since it is now stored. So ignore the error for the moment.
             let _ = done_sending.await;
 
-            // Finally send to primary
-            let (primary_response, batch_done) = tokio::sync::oneshot::channel();
+            // Send the batch to the primary.
             let message = WorkerOurBatchMessage {
                 digest,
                 worker_id,
                 metadata,
             };
-            if tx_our_batch
-                .send((message, Some(primary_response)))
-                .await
-                .is_err()
-            {
-                debug!("Failed to send created batch to primary. Shutting down.");
-                return;
-            };
-
-            // Wait for a primary response
-            if batch_done.await.is_err() {
-                // If there is an error it means the channel closed,
-                // and therefore we drop all response handers since we
+            if let Err(e) = client.report_our_batch(message).await {
+                warn!("Failed to report our batch: {}", e);
+                // Drop all response handers to signal error, since we
                 // cannot ensure the primary has actually signaled the
                 // batch will eventually be sent.
+                // The transaction submitter will see the error and retry.
                 return;
             }
 

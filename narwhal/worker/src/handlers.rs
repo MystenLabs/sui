@@ -8,16 +8,16 @@ use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
+use network::{client::NetworkClient, WorkerToPrimaryClient};
 use rand::seq::SliceRandom;
 use std::{collections::HashSet, time::Duration};
 use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
 use tracing::{debug, info, trace, warn};
 use types::{
-    metered_channel::Sender, Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest,
-    RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage,
-    WorkerDeleteBatchesMessage, WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerClient,
+    Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
+    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
+    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
@@ -32,7 +32,7 @@ pub mod handlers_tests;
 #[derive(Clone)]
 pub struct WorkerReceiverHandler<V> {
     pub id: WorkerId,
-    pub tx_others_batch: Sender<WorkerOthersBatchMessage>,
+    pub client: NetworkClient,
     pub store: DBMap<BatchDigest, Batch>,
     pub validator: V,
 }
@@ -55,14 +55,14 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         self.store.insert(&digest, &message.batch).map_err(|e| {
             anemo::rpc::Status::internal(format!("failed to write to batch store: {e:?}"))
         })?;
-        self.tx_others_batch
-            .send(WorkerOthersBatchMessage {
+        self.client
+            .report_others_batch(WorkerOthersBatchMessage {
                 digest,
                 worker_id: self.id,
             })
             .await
-            .map(|_| anemo::Response::new(()))
-            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
+        Ok(anemo::Response::new(()))
     }
 
     async fn request_batch(
