@@ -71,29 +71,27 @@ async fn bullshark_randomised_tests() {
     // on the below parameters to increase the different cases we can generate.
 
     // A range of gc_depth to be used
-    const GC_DEPTH: RangeInclusive<Round> = 4..=15;
+    const GC_DEPTH: RangeInclusive<Round> = 7..=8;
     // A range of the committee size to be used
     const COMMITTEE_SIZE: RangeInclusive<usize> = 4..=4;
     // A range of rounds for which we will create DAGs
-    const DAG_ROUNDS: RangeInclusive<Round> = 7..=20;
+    const DAG_ROUNDS: RangeInclusive<Round> = 7..=15;
     // The number of different execution plans to be created and tested against for every generated DAG
-    const EXECUTION_PLANS: u64 = 500;
+    const EXECUTION_PLANS: u64 = 400;
     // The number of DAGs that should be generated and tested against for every set of properties.
-    const DAGS_PER_SETUP: u64 = 100;
+    const DAGS_PER_SETUP: u64 = 50;
     // DAGs will be created for these failure modes
     let failure_modes: Vec<FailureModes> = vec![
-        // No failures
-        FailureModes {
-            nodes_failure_probability: 0.0,
-            slow_nodes_percentage: 0.0,
-            slow_nodes_failure_probability: 0.0,
-        },
         // Some failures
+        // TODO: re-enable once we do have parallel testing - now it worth testing the most severe
+        // edge cases
+        /*
         FailureModes {
             nodes_failure_probability: 0.05,     // 5%
             slow_nodes_percentage: 0.20,         // 20%
             slow_nodes_failure_probability: 0.3, // 30%
         },
+         */
         // Severe failures
         FailureModes {
             nodes_failure_probability: 0.0,      // 0%

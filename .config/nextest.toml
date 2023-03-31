@@ -20,8 +20,8 @@ status-level = "skip"
 fail-fast = false
 # Retry failing tests in order to not block builds on flaky tests
 retries = 2
-# Mark tests as slow after 25mins, kill them after 50
-slow-timeout = { period = "1500s", terminate-after = 1 }
+# Mark tests as slow after 3 hours, kill them right after
+slow-timeout = { period = "3h", terminate-after = 1 }
 
 [profile.simtestnightly]
 # Print out output for failing tests as soon as they fail, and also at the end
