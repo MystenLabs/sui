@@ -11,9 +11,7 @@ type PostHogProviderProps = {
     children: ReactNode;
 };
 
-export function PostHogAnalyticsProvider({
-    children,
-}: PostHogProviderProps) {
+export function PostHogAnalyticsProvider({ children }: PostHogProviderProps) {
     const { on: isEnabled } = useFeature(
         GROWTHBOOK_FEATURES.EXPLORER_POSTHOG_ANALYTICS
     );
@@ -33,6 +31,6 @@ export function PostHogAnalyticsProvider({
             {children}
         </PostHogProvider>
     ) : (
-       <>{children}</>
+        <>{children}</>
     );
 }
