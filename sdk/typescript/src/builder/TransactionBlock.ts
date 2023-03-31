@@ -633,7 +633,7 @@ export class TransactionBlock {
             overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
           }),
         });
-
+        console.log('dry run:', dryRunResult);
         if (dryRunResult.effects.status.status !== 'success') {
           throw new Error(
             'Dry run failed, could not automatically determine a budget',

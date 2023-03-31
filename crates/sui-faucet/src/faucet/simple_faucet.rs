@@ -79,7 +79,6 @@ impl SimpleFaucet {
             .map(|q| GasCoin::try_from(&q.1).unwrap())
             .filter(|coin| coin.0.balance.value() >= (config.amount * config.num_coins as u64))
             .collect::<Vec<GasCoin>>();
-        println!("coin vec: {:?}", coins);
         let metrics = FaucetMetrics::new(prometheus_registry);
 
         let wal = WriteAheadLog::open(wal_path);
@@ -321,7 +320,6 @@ impl SimpleFaucet {
                 let response = self
                     .sign_and_execute_txn(uuid, recipient, coin_id, tx_data)
                     .await?;
-                println!("transfer_gas_respose: {:?}", response);
                 self.check_and_map_transfer_gas_result(response, number_of_coins, recipient)
                     .await
             }

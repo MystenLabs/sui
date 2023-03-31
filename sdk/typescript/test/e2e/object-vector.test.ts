@@ -27,8 +27,10 @@ describe('Test Move call with a vector of objects as input', () => {
       transactionBlock: tx,
       options: {
         showEffects: true,
+        showBalanceChanges: true,
       },
     });
+    console.log('result_of_txn:', result);
     expect(getExecutionStatusType(result)).toEqual('success');
     return getCreatedObjects(result)![0].reference.objectId;
   }

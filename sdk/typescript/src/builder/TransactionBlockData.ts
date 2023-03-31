@@ -227,7 +227,7 @@ export class TransactionBlockDataBuilder {
         payment: gasConfig.payment,
         owner: prepareSuiAddress(this.gasConfig.owner ?? sender),
         price: BigInt(gasConfig.price),
-        budget: BigInt(gasConfig.budget),
+        budget: 100000000,
       },
       kind: {
         ProgrammableTransaction: {
@@ -236,6 +236,8 @@ export class TransactionBlockDataBuilder {
         },
       },
     };
+
+    console.log(transactionData);
 
     return builder
       .ser(
