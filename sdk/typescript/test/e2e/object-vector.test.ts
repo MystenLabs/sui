@@ -27,7 +27,6 @@ describe('Test Move call with a vector of objects as input', () => {
       transactionBlock: tx,
       options: {
         showEffects: true,
-        showBalanceChanges: true,
       },
     });
     expect(getExecutionStatusType(result)).toEqual('success');
