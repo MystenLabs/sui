@@ -54,7 +54,7 @@ export function validatorsTableData(
                         logo: validator.imageUrl,
                     },
                     stake: totalStake,
-                    // show the rolling average apy even if its zero, otherwise show null
+                    // show the rolling average apy even if its zero, otherwise show -- for no data
                     apy:
                         rollingAverageApys?.[validator.suiAddress] ||
                         rollingAverageApys?.[validator.suiAddress] === 0
