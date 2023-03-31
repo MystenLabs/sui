@@ -759,9 +759,9 @@ pub fn convert_move_call_args(
                     mutable: *mutable,
                 }))
                 .unwrap(),
-            BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => pt_builder
-                .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(*obj_ref)))
-                .unwrap(),
+            BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {
+                pt_builder.input((*obj_ref).into()).unwrap()
+            }
             BenchMoveCallArg::ImmOrOwnedObjectVec(obj_refs) => pt_builder
                 .make_obj_vec(obj_refs.iter().map(|q| ObjectArg::ImmOrOwnedObject(*q)))
                 .unwrap(),
