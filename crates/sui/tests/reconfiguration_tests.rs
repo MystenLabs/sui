@@ -29,7 +29,7 @@ use sui_types::messages::{
     CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
     VerifiedTransaction,
 };
-use sui_types::object::{generate_test_gas_objects_with_owner, Object};
+use sui_types::object::{generate_test_gas_objects_with_owner, generate_test_gas_objects_with_owner_and_value, Object};
 use sui_types::sui_system_state::sui_system_state_inner_v1::VerifiedValidatorMetadataV1;
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
@@ -437,7 +437,7 @@ async fn test_validator_candidate_pool_read() {
     let new_validator_key = gen_keys(5).pop().unwrap();
     let new_validator_address: SuiAddress = new_validator_key.public().into();
 
-    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
+    let gas_objects = generate_test_gas_objects_with_owner_and_value(4, new_validator_address, 2_000_000_000);
 
     let init_configs = ConfigBuilder::new_with_temp_dir()
         .rng(StdRng::from_seed([0; 32]))
@@ -514,7 +514,7 @@ async fn test_inactive_validator_pool_read() {
     let leaving_validator_account_key = gen_keys(5).pop().unwrap();
     let address: SuiAddress = leaving_validator_account_key.public().into();
 
-    let gas_objects = generate_test_gas_objects_with_owner(1, address);
+    let gas_objects = generate_test_gas_objects_with_owner_and_value(1, address, 2_000_000_000);
     let stake = Object::new_gas_with_balance_and_owner_for_testing(25_000_000_000_000_000, address);
     let mut genesis_objects = vec![stake];
     genesis_objects.extend(gas_objects.clone());
@@ -568,7 +568,7 @@ async fn test_inactive_validator_pool_read() {
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        100000000,
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &leaving_validator_account_key);
@@ -615,7 +615,7 @@ async fn test_reconfig_with_committee_change_basic() {
     // TODO: In order to better "test" this flow we probably want to set the validators to ignore
     // all p2p peer connections so that we can verify that new nodes joining can really "talk" with the
     // other validators in the set.
-    let gas_objects = generate_test_gas_objects_with_owner(4, new_validator_address);
+    let gas_objects = generate_test_gas_objects_with_owner_and_value(4, new_validator_address, 2_000_000_000);
     let stake = Object::new_gas_with_balance_and_owner_for_testing(
         30_000_000_000_000_000,
         new_validator_address,
@@ -757,7 +757,7 @@ async fn test_reconfig_with_committee_change_stress() {
         .iter()
         .map(|key| {
             let sender: SuiAddress = key.public().into();
-            let gas_objects = generate_test_gas_objects_with_owner(4, sender);
+            let gas_objects = generate_test_gas_objects_with_owner_and_value(4, sender, 2_000_000_000);
             let stake =
                 Object::new_gas_with_balance_and_owner_for_testing(30_000_000_000_000_000, sender);
             (sender, (gas_objects, stake))
@@ -1045,7 +1045,7 @@ async fn execute_add_validator_candidate_tx(
             CallArg::Pure(bcs::to_bytes(&1u64).unwrap()), // gas_price
             CallArg::Pure(bcs::to_bytes(&0u64).unwrap()), // commission_rate
         ],
-        10000,
+        1_000_000_000,
     )
     .unwrap();
     let transaction =
@@ -1053,6 +1053,7 @@ async fn execute_add_validator_candidate_tx(
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
+    println!("effects: {:#?}", effects);
     assert!(effects.status().is_ok());
     effects
 }
@@ -1091,7 +1092,7 @@ async fn execute_join_committee_txes(
             CallArg::Object(ObjectArg::ImmOrOwnedObject(stake)),
             CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
         ],
-        10000,
+        1_000_000_000,
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(stake_tx_data, node_config.account_key_pair());
@@ -1115,7 +1116,7 @@ async fn execute_join_committee_txes(
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        1000000,
     )
     .unwrap();
     let transaction =
@@ -1146,7 +1147,7 @@ async fn execute_leave_committee_tx(
             initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
             mutable: true,
         })],
-        10000,
+        100000000,
     )
     .unwrap();
 
@@ -1154,6 +1155,7 @@ async fn execute_leave_committee_tx(
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
+    println!("effects: {:#?}", effects);
     assert!(effects.status().is_ok());
     effects
 }
