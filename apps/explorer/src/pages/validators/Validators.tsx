@@ -54,7 +54,13 @@ export function validatorsTableData(
                         logo: validator.imageUrl,
                     },
                     stake: totalStake,
-                    apy: rollingAverageApys?.[validator.suiAddress] || null,
+                    // show the rolling average apy even if its zero, otherwise show null
+                    apy:
+                        rollingAverageApys?.[validator.suiAddress] &&
+                        typeof rollingAverageApys?.[validator.suiAddress] ===
+                            'number'
+                            ? rollingAverageApys?.[validator.suiAddress]
+                            : null,
                     nextEpochGasPrice: validator.nextEpochGasPrice,
                     commission: +validator.commissionRate / 100,
                     img: img,

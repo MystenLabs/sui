@@ -30,7 +30,11 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
         system?.activeValidators?.length || null
     );
 
-    const apy = rollingAverageApys?.[validatorAddress] || null;
+    const apy =
+        rollingAverageApys?.[validatorAddress] &&
+        typeof rollingAverageApys?.[validatorAddress] === 'number'
+            ? rollingAverageApys?.[validatorAddress]
+            : null;
 
     // Reward will be available after 2 epochs
     // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING

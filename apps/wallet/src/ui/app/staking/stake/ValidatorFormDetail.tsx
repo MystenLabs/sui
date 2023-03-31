@@ -82,7 +82,11 @@ export function ValidatorFormDetail({
         );
     }, [stakeData, system, totalValidatorsStake, validatorAddress]);
 
-    const apy = rollingAverageApys?.[validatorAddress] || null;
+    const apy =
+        rollingAverageApys?.[validatorAddress] &&
+        typeof rollingAverageApys?.[validatorAddress] === 'number'
+            ? rollingAverageApys?.[validatorAddress]
+            : null;
 
     if (isLoading || loadingValidators) {
         return (
