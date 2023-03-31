@@ -46,34 +46,6 @@ pub struct Transaction {
     pub confirmed_local_execution: Option<bool>,
 }
 
-/*pub fn commit_transactions(
-    pg_pool_conn: &mut PgPoolConnection<'_>,
-    tx_resps: Vec<TemporaryTransactionBlockResponseStore>,
-) -> Result<usize, IndexerError> {
-    let new_txs: Vec<Transaction> = tx_resps
-        .into_iter()
-        .map(|tx| tx.try_into())
-        .collect::<Result<Vec<_>, _>>()?;
-
-    let tx_commit_result: Result<usize, Error> = pg_pool_conn
-        .build_transaction()
-        .read_write()
-        .run::<_, Error, _>(|conn| {
-            diesel::insert_into(transactions::table)
-                .values(&new_txs)
-                .on_conflict(transaction_digest)
-                .do_nothing()
-                .execute(conn)
-        });
-
-    tx_commit_result.map_err(|e| {
-        IndexerError::PostgresWriteError(format!(
-            "Failed writing transactions to PostgresDB with transactions {:?} and error: {:?}",
-            new_txs, e
-        ))
-    })
-}*/
-
 impl TryFrom<TemporaryTransactionBlockResponseStore> for Transaction {
     type Error = IndexerError;
 
