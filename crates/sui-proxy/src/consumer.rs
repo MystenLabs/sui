@@ -10,7 +10,7 @@ use axum::http::StatusCode;
 use bytes::buf::Reader;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use multiaddr::Multiaddr;
-use prometheus::proto::{self, MetricFamily};
+use prometheus::proto;
 use prost::Message;
 use protobuf::CodedInputStream;
 use std::io::Read;
@@ -19,11 +19,9 @@ use tracing::{debug, error};
 /// NodeMetric holds metadata and a metric payload from the calling node
 #[derive(Debug)]
 pub struct NodeMetric {
-    pub host: String,                 // the sui node name from the blockchain
-    pub network: String,              // the sui blockchain name, mainnet
-    pub peer_addr: Multiaddr,         // the sockaddr source address from the incoming request
+    pub peer_addr: Multiaddr, // the sockaddr source address from the incoming request
     pub public_key: Ed25519PublicKey, // the public key from the sui blockchain
-    pub data: Vec<MetricFamily>,      // decoded protobuf of prometheus data
+    pub data: Vec<proto::MetricFamily>, // decoded protobuf of prometheus data
 }
 
 /// The ProtobufDecoder will decode message delimited protobuf messages from prom_model.proto types
@@ -54,20 +52,24 @@ impl ProtobufDecoder {
 }
 
 // populate labels in place for our given metric family data
-fn populate_labels(node_metric: NodeMetric) -> Vec<MetricFamily> {
+pub fn populate_labels(
+    host: String,
+    network: String,
+    data: Vec<proto::MetricFamily>,
+) -> Vec<proto::MetricFamily> {
     // proto::LabelPair doesn't have pub fields so we can't use
     // struct literals to construct
     let mut network_label = proto::LabelPair::default();
     network_label.set_name("network".into());
-    network_label.set_value(node_metric.network);
+    network_label.set_value(network);
 
     let mut host_label = proto::LabelPair::default();
     host_label.set_name("host".into());
-    host_label.set_value(node_metric.host);
+    host_label.set_value(host);
 
     let labels = vec![network_label, host_label];
 
-    let mut data = node_metric.data;
+    let mut data = data;
     // add our extra labels to our incoming metric data
     for mf in data.iter_mut() {
         for m in mf.mut_metric() {
@@ -80,7 +82,7 @@ fn populate_labels(node_metric: NodeMetric) -> Vec<MetricFamily> {
 fn encode_compress(request: &WriteRequest) -> Result<Vec<u8>, (StatusCode, &'static str)> {
     let mut buf = Vec::new();
     buf.reserve(request.encoded_len());
-    let Ok(()) = request.encode(&mut buf) else {
+    if request.encode(&mut buf).is_err() {
         error!("unable to encode prompb to mimirpb");
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -118,6 +120,8 @@ async fn check_response(
                 .await
                 .unwrap_or_else(|_| "response body cannot be decoded".into());
 
+            // see mimir docs on this error condition. it's not actionable from the proxy
+            // so we drop it.
             if body.contains("err-mimir-sample-out-of-order") {
                 error!("({}) ERROR: {:?}", reqwest::StatusCode::BAD_REQUEST, body);
                 return Err((
@@ -150,8 +154,7 @@ pub async fn convert_to_remote_write(
     rc: ReqwestClient,
     node_metric: NodeMetric,
 ) -> (StatusCode, &'static str) {
-    let data = populate_labels(node_metric);
-    for request in Mimir::from(data) {
+    for request in Mimir::from(node_metric.data) {
         let compressed = match encode_compress(&request) {
             Ok(compressed) => compressed,
             Err(error) => return error,

@@ -79,7 +79,7 @@ impl SuiNodeProvider {
         let client = reqwest::Client::builder().build().unwrap();
         let request = serde_json::json!({
             "jsonrpc": "2.0",
-            "method":"sui_getLatestSuiSystemState",
+            "method":"suix_getLatestSuiSystemState",
             "id":1,
         });
         let response = client
