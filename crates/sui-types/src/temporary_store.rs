@@ -925,17 +925,19 @@ impl<S: ObjectStore> TemporaryStore<S> {
 
         // println!("GAS - charge gas with result error: {}", execution_result.is_err());
 
-        // bucketize computation cost
-        if let Err(err) = gas_status.bucketize_computation() {
-            // println!("GAS - bucketize failed");
-            if execution_result.is_ok() {
-                *execution_result = Err(err);
+        if let Some(gas_object_id) = gas_object_id {
+            // bucketize computation cost
+            if let Err(err) = gas_status.bucketize_computation() {
+                // println!("GAS - bucketize failed");
+                if execution_result.is_ok() {
+                    *execution_result = Err(err);
+                }
             }
-        }
 
-        // On error we need to dump writes, deletes, etc before charging storage gas
-        if execution_result.is_err() {
-            self.reset(gas, gas_status);
+            // On error we need to dump writes, deletes, etc before charging storage gas
+            if execution_result.is_err() {
+                self.reset(gas, gas_status);
+            }
         }
 
         // collect and charge storage cost
