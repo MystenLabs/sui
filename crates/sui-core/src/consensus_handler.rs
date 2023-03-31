@@ -26,7 +26,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::messages::{
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, SenderSignedData,
     VerifiedExecutableTransaction, VerifiedTransaction,
 };
 
@@ -424,6 +424,19 @@ impl SequencedConsensusTransaction {
                 ..
             })
         )
+    }
+
+    pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
+        match &self.transaction {
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UserTransaction(certificate),
+                ..
+            }) if certificate.contains_shared_object() => Some(certificate.data()),
+            SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
+                Some(txn.data())
+            }
+            _ => None,
+        }
     }
 }
 

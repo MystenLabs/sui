@@ -3,6 +3,7 @@
 
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
+use itertools::izip;
 use narwhal_executor::ExecutionIndices;
 use narwhal_types::Round;
 use parking_lot::RwLock;
@@ -21,9 +22,9 @@ use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthorityCapabilities, CertifiedTransaction, ConsensusTransaction, ConsensusTransactionKey,
-    ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionData,
-    TransactionDataAPI, TransactionEffects, TransactionEffectsAPI, TrustedExecutableTransaction,
-    VerifiedCertificate, VerifiedExecutableTransaction, VerifiedSignedTransaction,
+    ConsensusTransactionKind, SenderSignedData, SharedInputObject, TransactionDataAPI,
+    TransactionEffects, TransactionEffectsAPI, TrustedExecutableTransaction, VerifiedCertificate,
+    VerifiedExecutableTransaction, VerifiedSignedTransaction,
 };
 use sui_types::signature::GenericSignature;
 use tracing::{debug, error, info, trace, warn};
@@ -726,10 +727,10 @@ impl AuthorityPerEpochStore {
     // successfully for each affected object id.
     async fn get_or_init_next_object_versions(
         &self,
-        tx_data: &TransactionData,
-        objects_to_init: impl Iterator<Item = ObjectID> + Clone,
+        objects_to_init: impl Iterator<Item = (ObjectID, SequenceNumber)> + Clone,
         parent_sync_store: impl ParentSync,
-    ) -> SuiResult<Vec<SequenceNumber>> {
+    ) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
+        let mut ret: HashMap<_, _>;
         // Since this can be called from consensus task, we must retry forever - the only other
         // option is to panic. It is extremely unlikely that more than 2 retries will be needed, as
         // the only two writers are the consensus task and checkpoint execution.
@@ -738,16 +739,16 @@ impl AuthorityPerEpochStore {
             // convince myself of that.
             let mut db_transaction = self.tables.next_shared_object_versions.transaction()?;
 
-            let next_versions = db_transaction.multi_get(
-                &self.tables.next_shared_object_versions,
-                objects_to_init.clone(),
-            )?;
+            let ids = objects_to_init.clone().map(|(id, _)| id);
 
-            let uninitialized_objects: Vec<ObjectID> = next_versions
+            let next_versions =
+                db_transaction.multi_get(&self.tables.next_shared_object_versions, ids.clone())?;
+
+            let uninitialized_objects: Vec<(ObjectID, SequenceNumber)> = next_versions
                 .iter()
                 .zip(objects_to_init.clone())
-                .filter_map(|(next_version, id)| match next_version {
-                    None => Some(id),
+                .filter_map(|(next_version, id_and_version)| match next_version {
+                    None => Some(id_and_version),
                     Some(_) => None,
                 })
                 .collect();
@@ -756,34 +757,39 @@ impl AuthorityPerEpochStore {
             // happen every time except the first time an object is used in an epoch.
             if uninitialized_objects.is_empty() {
                 // unwrap ok - we already verified that next_versions is not missing any keys.
-                return Ok(next_versions.into_iter().map(|v| v.unwrap()).collect());
+                return Ok(izip!(ids, next_versions.into_iter().map(|v| v.unwrap())).collect());
             }
 
             // if the object has never been used before (in any epoch) the initial version comes
-            // from the cert.
-            let initial_versions: HashMap<_, _> = tx_data
-                .shared_input_objects()
-                .into_iter()
-                .map(SharedInputObject::into_id_and_version)
+            // from objects_to_init.
+            //let initial_versions: HashMap<_, _> = tx_data
+            //   .shared_input_objects()
+            //  .into_iter()
+            // .map(SharedInputObject::into_id_and_version)
+            //.collect();
+
+            let versions_to_write: Vec<_> = uninitialized_objects
+                .iter()
+                .map(|(id, initial_version)| {
+                    // Note: we don't actually need to read from the transaction here, as no writer
+                    // can update parent_sync_store until after get_or_init_next_object_versions
+                    // completes.
+                    match parent_sync_store
+                        .get_latest_parent_entry_ref(*id)
+                        .expect("read cannot fail")
+                    {
+                        Some(objref) => (*id, objref.1),
+                        None => (*id, *initial_version),
+                    }
+                })
                 .collect();
 
-            let versions_to_write = uninitialized_objects.iter().map(|id| {
-                // Note: we don't actually need to read from the transaction here, as no writer
-                // can update parent_sync_store until after get_or_init_next_object_versions
-                // completes.
-                match parent_sync_store
-                    .get_latest_parent_entry_ref(*id)
-                    .expect("read cannot fail")
-                {
-                    Some(objref) => (*id, objref.1),
-                    None => (
-                        *id,
-                        *initial_versions
-                            .get(id)
-                            .expect("object cannot be missing from shared_input_objects"),
-                    ),
-                }
-            });
+            ret = izip!(ids.clone(), next_versions.into_iter(),)
+                // take all the previously initialized versions
+                .filter_map(|(id, next_version)| next_version.map(|v| (id, v)))
+                // add all the versions we're going to write
+                .chain(versions_to_write.iter().cloned())
+                .collect();
 
             debug!(
                 ?versions_to_write,
@@ -794,18 +800,7 @@ impl AuthorityPerEpochStore {
             db_transaction.commit()
         })?;
 
-        // this case only occurs when there were uninitialized versions, which is rare, so its much
-        // simpler to just re-read all the ids here.
-        let next_versions = self
-            .tables
-            .next_shared_object_versions
-            .multi_get(objects_to_init)?
-            .into_iter()
-            // unwrap ok - we just finished initializing all versions.
-            .map(|v| v.unwrap())
-            .collect();
-
-        Ok(next_versions)
+        Ok(ret)
     }
 
     async fn set_assigned_shared_object_versions(
@@ -821,12 +816,18 @@ impl AuthorityPerEpochStore {
             ?assigned_versions,
             "set_assigned_shared_object_versions"
         );
-        self.get_or_init_next_object_versions(
-            certificate.data().transaction_data(),
-            assigned_versions.iter().map(|(id, _)| *id),
-            parent_sync_store,
-        )
-        .await?;
+
+        #[allow(clippy::needless_collect)]
+        let shared_input_objects: Vec<_> = certificate
+            .data()
+            .transaction_data()
+            .kind()
+            .shared_input_objects()
+            .map(SharedInputObject::into_id_and_version)
+            .collect();
+
+        self.get_or_init_next_object_versions(shared_input_objects.into_iter(), parent_sync_store)
+            .await?;
         self.tables
             .assigned_shared_object_versions
             .insert(tx_digest, assigned_versions)?;
@@ -1065,34 +1066,23 @@ impl AuthorityPerEpochStore {
     pub async fn record_shared_object_cert_from_consensus(
         &self,
         batch: &mut DBBatch,
+        shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
         transaction: &SequencedConsensusTransactionKind,
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
-        parent_sync_store: impl ParentSync,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
 
         // Make an iterator to update the locks of the transaction's shared objects.
         let shared_input_objects: Vec<_> = certificate.shared_input_objects().collect();
-        let ids: Vec<_> = shared_input_objects
-            .iter()
-            .map(SharedInputObject::id)
-            .collect();
-
-        let versions = self
-            .get_or_init_next_object_versions(
-                certificate.data().transaction_data(),
-                ids.iter().copied(),
-                &parent_sync_store,
-            )
-            .await?;
 
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
         let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
-        for (SharedInputObject { id, mutable, .. }, version) in
-            shared_input_objects.iter().zip(versions.into_iter())
+        for (SharedInputObject { id, mutable, .. }, version) in shared_input_objects
+            .iter()
+            .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))
         {
             assigned_versions.push((*id, version));
             input_object_keys.push(ObjectKey(*id, version));
@@ -1101,7 +1091,9 @@ impl AuthorityPerEpochStore {
 
         let next_version =
             SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
-        let next_versions: Vec<_> = assigned_versions
+
+        // Update the next version for the shared objects.
+        assigned_versions
             .iter()
             .zip(is_mutable_input.into_iter())
             .filter_map(|((id, _), mutable)| {
@@ -1111,7 +1103,9 @@ impl AuthorityPerEpochStore {
                     None
                 }
             })
-            .collect();
+            .for_each(|(id, version)| {
+                shared_input_next_versions.insert(id, version);
+            });
 
         trace!(tx_digest = ?transaction_digest,
                ?assigned_versions, ?next_version,
@@ -1123,7 +1117,6 @@ impl AuthorityPerEpochStore {
             certificate,
             consensus_index,
             assigned_versions,
-            next_versions,
         )
     }
 
@@ -1163,7 +1156,6 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         consensus_index: &ExecutionIndicesWithHash,
         assigned_versions: Vec<(ObjectID, SequenceNumber)>,
-        next_versions: Vec<(ObjectID, SequenceNumber)>,
     ) -> SuiResult {
         let tx_digest = *certificate.digest();
 
@@ -1176,8 +1168,6 @@ impl AuthorityPerEpochStore {
             &self.tables.assigned_shared_object_versions,
             iter::once((tx_digest, assigned_versions)),
         )?;
-
-        write_batch.insert_batch(&self.tables.next_shared_object_versions, next_versions)?;
 
         self.finish_consensus_certificate_process_with_batch(
             write_batch,
@@ -1497,14 +1487,40 @@ impl AuthorityPerEpochStore {
             .into_iter()
             .partition(|tx| tx.0.is_end_of_publish());
 
+        // get the current next versions for each shared object in the other_txns
+        let mut shared_input_next_versions = {
+            let unique_shared_input_objects = {
+                let mut shared_input_objects: Vec<_> = other_txns
+                    .iter()
+                    .filter_map(|tx| tx.0.as_shared_object_txn())
+                    .flat_map(|tx| {
+                        tx.transaction_data()
+                            .shared_input_objects()
+                            .into_iter()
+                            .map(|so| so.into_id_and_version())
+                    })
+                    .collect();
+
+                shared_input_objects.sort();
+                shared_input_objects.dedup();
+                shared_input_objects
+            };
+
+            self.get_or_init_next_object_versions(
+                unique_shared_input_objects.into_iter(),
+                &parent_sync_store,
+            )
+            .await?
+        };
+
         for tx in &other_txns {
             let mut batch = self.db_batch();
             if let Some(cert) = self
                 .process_consensus_transaction(
                     &mut batch,
+                    &mut shared_input_next_versions,
                     tx,
                     checkpoint_service,
-                    &parent_sync_store,
                 )
                 .await?
             {
@@ -1512,6 +1528,13 @@ impl AuthorityPerEpochStore {
             }
             batch.write()?;
         }
+
+        let mut batch = self.db_batch();
+
+        batch.insert_batch(
+            &self.tables.next_shared_object_versions,
+            shared_input_next_versions.into_iter(),
+        )?;
 
         let _lock = self.process_end_of_publish_transactions(&mut batch, &end_of_publish_txns)?;
 
@@ -1603,9 +1626,9 @@ impl AuthorityPerEpochStore {
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
+        shared_input_next_versions: &mut HashMap<ObjectID, SequenceNumber>,
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
-        parent_sync_store: impl ParentSync,
     ) -> SuiResult<Option<VerifiedExecutableTransaction>> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -1661,10 +1684,10 @@ impl AuthorityPerEpochStore {
                 if certificate.contains_shared_object() {
                     self.record_shared_object_cert_from_consensus(
                         batch,
+                        shared_input_next_versions,
                         transaction,
                         &certificate,
                         consensus_index,
-                        parent_sync_store,
                     )
                     .await?;
                 } else {
@@ -1733,10 +1756,10 @@ impl AuthorityPerEpochStore {
                 assert!(system_transaction.contains_shared_object());
                 self.record_shared_object_cert_from_consensus(
                     batch,
+                    shared_input_next_versions,
                     transaction,
                     system_transaction,
                     consensus_index,
-                    parent_sync_store,
                 )
                 .await?;
 
