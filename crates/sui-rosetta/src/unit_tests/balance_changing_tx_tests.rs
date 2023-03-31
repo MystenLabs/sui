@@ -58,7 +58,7 @@ async fn test_transfer_sui() {
         sender,
         pt,
         vec![],
-        1000000,
+        2_000_000,
         false,
     )
     .await;
@@ -113,7 +113,7 @@ async fn test_transfer_object() {
         sender,
         pt,
         vec![],
-        1000000,
+        2_000_000,
         false,
     )
     .await;
@@ -147,7 +147,7 @@ async fn test_publish_and_move_call() {
         sender,
         pt,
         vec![],
-        1000000,
+        100_000_000,
         false,
     )
     .await;
@@ -194,7 +194,7 @@ async fn test_publish_and_move_call() {
         sender,
         pt,
         vec![],
-        1000000,
+        5_000_000,
         false,
     )
     .await;
@@ -225,7 +225,7 @@ async fn test_split_coin() {
         sender,
         pt,
         vec![],
-        1000000,
+        5_000_000,
         false,
     )
     .await;
@@ -257,7 +257,7 @@ async fn test_merge_coin() {
         sender,
         pt,
         vec![],
-        1000000,
+        2_000_000,
         false,
     )
     .await;
@@ -287,7 +287,7 @@ async fn test_pay() {
         sender,
         pt,
         vec![],
-        1000000,
+        5_000_000,
         false,
     )
     .await;
@@ -323,7 +323,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         sender,
         pt,
         vec![],
-        1000000,
+        5_000_000,
         false,
     )
     .await;
@@ -357,7 +357,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         sender,
         pt,
         vec![coin1, coin2],
-        1000000,
+        5_000_000,
         false,
     )
     .await;
@@ -389,7 +389,7 @@ async fn test_pay_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        1000000,
+        5_000_000,
         false,
     )
     .await;
@@ -452,7 +452,7 @@ async fn test_stake_sui() {
             Some(1000000000),
             validator,
             None,
-            100000,
+            10_000_000,
         )
         .await
         .unwrap();
@@ -467,7 +467,7 @@ async fn test_stake_sui() {
         sender,
         pt,
         vec![],
-        1000000,
+        100_000_000,
         false,
     )
     .await;
@@ -498,7 +498,7 @@ async fn test_stake_sui_with_none_amount() {
             None,
             validator,
             None,
-            100000,
+            5_000_000,
         )
         .await
         .unwrap();
@@ -513,7 +513,7 @@ async fn test_stake_sui_with_none_amount() {
         sender,
         pt,
         vec![],
-        1000000,
+        100_000_000,
         false,
     )
     .await;
@@ -542,7 +542,7 @@ async fn test_pay_all_sui() {
         sender,
         pt,
         vec![coin1, coin2],
-        1000000,
+        2_000_000,
         false,
     )
     .await;
