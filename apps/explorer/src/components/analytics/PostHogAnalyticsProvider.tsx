@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useFeature } from '@growthbook/growthbook-react';
-import { type PostHogConfig } from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
 import { type ReactNode } from 'react';
 
@@ -10,12 +9,10 @@ import { GROWTHBOOK_FEATURES } from '~/utils/growthbook';
 
 type PostHogProviderProps = {
     children: ReactNode;
-    additionalOptions?: Partial<PostHogConfig>;
 };
 
 export function PostHogAnalyticsProvider({
     children,
-    additionalOptions,
 }: PostHogProviderProps) {
     const { on: isEnabled } = useFeature(
         GROWTHBOOK_FEATURES.EXPLORER_POSTHOG_ANALYTICS
@@ -31,7 +28,6 @@ export function PostHogAnalyticsProvider({
                 // We need to manually collect page view events since
                 // all of our applications use client-side routing
                 capture_pageview: false,
-                ...additionalOptions,
             }}
         >
             {children}

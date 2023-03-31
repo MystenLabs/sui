@@ -36,9 +36,6 @@ importers:
       decimal.js:
         specifier: ^10.4.3
         version: 10.4.3
-      posthog-js:
-        specifier: ^1.51.5
-        version: 1.51.5
       react:
         specifier: ^18.2.0
         version: 18.2.0
