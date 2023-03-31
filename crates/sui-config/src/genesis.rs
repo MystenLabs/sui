@@ -1020,11 +1020,12 @@ impl Builder {
                 let gas_object_id = gas_objects
                     .iter()
                     .find(|(_k, (o, g))| {
-                        let Owner::AddressOwner(owner) = &o.owner else {
-                        panic!("gas object owner must be address owner");
-                    };
-                        *owner == allocation.recipient_address
-                            && g.value() == allocation.amount_mist
+                        if let Owner::AddressOwner(owner) = &o.owner {
+                            *owner == allocation.recipient_address
+                                && g.value() == allocation.amount_mist
+                        } else {
+                            false
+                        }
                     })
                     .map(|(k, _)| *k)
                     .expect("all allocations should be present");
