@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use anyhow::Result;
 use fastcrypto::traits::KeyPair;
@@ -17,9 +14,8 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, NetworkKeyPair, SuiKeyPair,
 };
-use sui_types::object::Object;
 
-use crate::genesis::GenesisCeremonyParameters;
+use crate::genesis::{GenesisCeremonyParameters, TokenAllocation};
 use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
 use crate::{utils, DEFAULT_COMMISSION_RATE, DEFAULT_GAS_PRICE};
@@ -48,12 +44,11 @@ impl GenesisConfig {
     pub fn generate_accounts<R: rand::RngCore + rand::CryptoRng>(
         &self,
         mut rng: R,
-    ) -> Result<(Vec<AccountKeyPair>, Vec<Object>)> {
+    ) -> Result<(Vec<AccountKeyPair>, Vec<TokenAllocation>)> {
         let mut addresses = Vec::new();
-        let mut preload_objects = Vec::new();
-        let mut all_preload_objects_set = BTreeSet::new();
+        let mut allocations = Vec::new();
 
-        info!("Creating accounts and gas objects...");
+        info!("Creating accounts and token allocations...");
 
         let mut keys = Vec::new();
         for account in &self.accounts {
@@ -66,38 +61,18 @@ impl GenesisConfig {
             };
 
             addresses.push(address);
-            let mut preload_objects_map = BTreeMap::new();
 
             // Populate gas itemized objects
-            account.gas_objects.iter().for_each(|q| {
-                if !all_preload_objects_set.contains(&q.object_id) {
-                    preload_objects_map.insert(q.object_id, q.gas_value);
-                }
+            account.gas_amounts.iter().for_each(|a| {
+                allocations.push(TokenAllocation {
+                    recipient_address: address,
+                    amount_mist: *a,
+                    staked_with_validator: None,
+                });
             });
-
-            // Populate ranged gas objects
-            if let Some(ranges) = &account.gas_object_ranges {
-                for rg in ranges {
-                    let ids = ObjectID::in_range(rg.offset, rg.count)?;
-
-                    for obj_id in ids {
-                        if !preload_objects_map.contains_key(&obj_id)
-                            && !all_preload_objects_set.contains(&obj_id)
-                        {
-                            preload_objects_map.insert(obj_id, rg.gas_value);
-                            all_preload_objects_set.insert(obj_id);
-                        }
-                    }
-                }
-            }
-
-            for (object_id, value) in preload_objects_map {
-                let new_object = Object::with_id_owner_gas_for_testing(object_id, address, value);
-                preload_objects.push(new_object);
-            }
         }
 
-        Ok((keys, preload_objects))
+        Ok((keys, allocations))
     }
 }
 
@@ -210,36 +185,9 @@ impl ValidatorGenesisInfo {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AccountConfig {
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "SuiAddress::optional_address_as_hex",
-        deserialize_with = "SuiAddress::optional_address_from_hex"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<SuiAddress>,
-    pub gas_objects: Vec<ObjectConfig>,
-    pub gas_object_ranges: Option<Vec<ObjectConfigRange>>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ObjectConfigRange {
-    /// Starting object id
-    pub offset: ObjectID,
-    /// Number of object ids
-    pub count: u64,
-    /// Gas value per object id
-    pub gas_value: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ObjectConfig {
-    #[serde(default = "ObjectID::random")]
-    pub object_id: ObjectID,
-    #[serde(default = "default_gas_value")]
-    pub gas_value: u64,
-}
-
-fn default_gas_value() -> u64 {
-    DEFAULT_GAS_AMOUNT
+    pub gas_amounts: Vec<u64>,
 }
 
 pub const DEFAULT_GAS_AMOUNT: u64 = 30_000_000_000_000_000;
@@ -282,17 +230,9 @@ impl GenesisConfig {
 
         let mut accounts = Vec::new();
         for _ in 0..num_accounts {
-            let mut objects = Vec::new();
-            for _ in 0..num_objects_per_account {
-                objects.push(ObjectConfig {
-                    object_id: ObjectID::random(),
-                    gas_value: DEFAULT_GAS_AMOUNT,
-                })
-            }
             accounts.push(AccountConfig {
                 address: None,
-                gas_objects: objects,
-                gas_object_ranges: Some(Vec::new()),
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_objects_per_account],
             })
         }
 
@@ -314,17 +254,9 @@ impl GenesisConfig {
 
         let mut accounts = Vec::new();
         for address in addresses {
-            let mut objects = Vec::new();
-            for _ in 0..num_objects_per_account {
-                objects.push(ObjectConfig {
-                    object_id: ObjectID::random(),
-                    gas_value: DEFAULT_GAS_AMOUNT,
-                })
-            }
             accounts.push(AccountConfig {
                 address: Some(address),
-                gas_objects: objects,
-                gas_object_ranges: Some(Vec::new()),
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_objects_per_account],
             })
         }
 
@@ -360,17 +292,6 @@ impl GenesisConfig {
             })
             .collect();
 
-        // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
-        // enough gas objects for most types of benchmarks).
-        let genesis_gas_objects = Self::benchmark_gas_object_id_offsets(ips.len())
-            .into_iter()
-            .map(|id| ObjectConfigRange {
-                offset: id,
-                count: 5000,
-                gas_value: 18446744073709551615,
-            })
-            .collect();
-
         // Make a predictable address that will own all gas objects.
         let gas_key = Self::benchmark_gas_key();
         let gas_address = SuiAddress::from(&gas_key.public());
@@ -378,8 +299,9 @@ impl GenesisConfig {
         // Set the initial gas objects.
         let account_config = AccountConfig {
             address: Some(gas_address),
-            gas_objects: vec![],
-            gas_object_ranges: Some(genesis_gas_objects),
+            // Generate one genesis gas object per validator (this seems a good rule of thumb to produce
+            // enough gas objects for most types of benchmarks).
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; validator_config_info.len()],
         };
 
         // Benchmarks require a deterministic genesis. Every validator locally generates it own

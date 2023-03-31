@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::genesis::TokenDistributionScheduleBuilder;
 use crate::node::{
     default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
     KeyPairWithPath,
@@ -372,17 +373,30 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
         initial_accounts_config.parameters.protocol_version = self.protocol_version;
 
-        let (account_keys, objects) = initial_accounts_config.generate_accounts(&mut rng).unwrap();
+        let (account_keys, allocations) =
+            initial_accounts_config.generate_accounts(&mut rng).unwrap();
+
+        let token_distribution_schedule = {
+            let mut builder = TokenDistributionScheduleBuilder::new();
+            for allocation in allocations {
+                builder.add_allocation(allocation);
+            }
+            builder.default_allocation_for_validators(
+                validator_set.iter().map(|v| v.0.account_address),
+            );
+            builder.build()
+        };
 
         let genesis = {
             let mut builder = genesis::Builder::new()
                 .with_parameters(initial_accounts_config.parameters)
-                .add_objects(objects)
                 .add_objects(self.additional_objects);
 
             for (validator, proof_of_possession) in validator_set {
                 builder = builder.add_validator(validator, proof_of_possession);
             }
+
+            builder = builder.with_token_distribution_schedule(token_distribution_schedule);
 
             for validator in &validators {
                 builder = builder.add_validator_signature(&validator.genesis_info.key_pair);
