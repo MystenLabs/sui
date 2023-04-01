@@ -5,6 +5,7 @@ use crate::base_types::{ObjectDigest, SuiAddress};
 use crate::crypto::DefaultHash;
 use crate::error::{SuiError, SuiResult};
 use crate::id::UID;
+use crate::object::Object;
 use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
 use crate::sui_serde::SuiTypeTag;
@@ -247,6 +248,26 @@ where
     Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
 }
 
+pub fn get_dynamic_field_object_from_store<S, K>(
+    object_store: &S,
+    parent_id: ObjectID,
+    key: &K,
+) -> Result<Object, SuiError>
+where
+    S: ObjectStore,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+{
+    let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
+        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
+    let object = object_store.get_object(&id)?.ok_or_else(|| {
+        SuiError::DynamicFieldReadError(format!(
+            "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
+            key, id, parent_id
+        ))
+    })?;
+    Ok(object)
+}
+
 /// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field
 /// from the `object_store`. The key type `K` must implement `MoveTypeTagTrait` which has an associated
 /// function that returns the Move type tag. This is needed to properly derive the field object ID.
@@ -260,16 +281,12 @@ where
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
     V: Serialize + DeserializeOwned,
 {
-    let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
-        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
-    let object = object_store.get_object(&id)?.ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!(
-            "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
-            key, id, parent_id
-        ))
-    })?;
+    let object = get_dynamic_field_object_from_store(object_store, parent_id, key)?;
     let move_object = object.data.try_as_move().ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!("Dynamic field {:?} is not a Move object", id))
+        SuiError::DynamicFieldReadError(format!(
+            "Dynamic field {:?} is not a Move object",
+            object.id()
+        ))
     })?;
     Ok(bcs::from_bytes::<Field<K, V>>(move_object.contents())
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?
