@@ -1527,9 +1527,6 @@ impl AuthorityPerEpochStore {
                 verified_certificates.push(cert);
             }
         }
-        batch.write()?;
-
-        let mut batch = self.db_batch();
 
         batch.insert_batch(
             &self.tables.next_shared_object_versions,
