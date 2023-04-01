@@ -17,8 +17,8 @@ pub struct NetworkConnectionMetrics {
     pub network_peers: IntGauge,
 
     /// PathStats
-    /// The rtt for a peer connection.
-    pub network_peer_rtt: HistogramVec,
+    /// The rtt for a peer connection in ms.
+    pub network_peer_rtt: IntGaugeVec,
     /// The total number of lost packets for a peer connection.
     pub network_peer_lost_packets: IntGaugeVec,
     /// The total number of lost bytes for a peer connection.
@@ -28,7 +28,7 @@ pub struct NetworkConnectionMetrics {
     /// The total number of congestion events for a peer connection.
     pub network_peer_congestion_events: IntGaugeVec,
     /// The congestion window for a peer connection.
-    pub network_peer_congestion_window: HistogramVec,
+    pub network_peer_congestion_window: IntGaugeVec,
 
     /// FrameStats
     /// The number of max data frames for a peer connection.
@@ -65,11 +65,10 @@ impl NetworkConnectionMetrics {
             .unwrap(),
 
             // PathStats
-            network_peer_rtt: register_histogram_vec_with_registry!(
+            network_peer_rtt: register_int_gauge_vec_with_registry!(
                 format!("{node}_network_peer_rtt"),
-                "The rtt for a peer connection.",
+                "The rtt for a peer connection in ms.",
                 &["peer_id"],
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
@@ -101,11 +100,10 @@ impl NetworkConnectionMetrics {
                 registry
             )
             .unwrap(),
-            network_peer_congestion_window: register_histogram_vec_with_registry!(
+            network_peer_congestion_window: register_int_gauge_vec_with_registry!(
                 format!("{node}_network_peer_congestion_window"),
                 "The congestion window for a peer connection.",
                 &["peer_id"],
-                SIZE_BYTE_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

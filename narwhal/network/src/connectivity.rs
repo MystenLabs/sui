@@ -56,17 +56,16 @@ impl ConnectionMonitor {
     }
 
     async fn run(mut self) {
-        let mut connected_peers: HashSet<PeerId> = HashSet::new();
-        let mut subscriber = {
+        let (mut subscriber, connected_peers) = {
             if let Some(network) = self.network.upgrade() {
-                let Ok((subscriber, active_peers)) = network.subscribe() else {
+                let Ok((subscriber, known_peers)) = network.subscribe() else {
                     return;
                 };
 
-                active_peers.iter().for_each(|peer_id| {
-                    connected_peers.insert(*peer_id);
-                });
-                subscriber
+                (
+                    subscriber,
+                    known_peers.into_iter().collect::<HashSet<PeerId>>(),
+                )
             } else {
                 return;
             }
@@ -109,7 +108,7 @@ impl ConnectionMonitor {
                         for peer_id in connected_peers.iter() {
                             if let Some(connection) = network.peer(*peer_id) {
                                 let stats = connection.connection_stats();
-                                self.update_quinn_metrics_for_peer(peer_id, &stats);
+                                self.update_quinn_metrics_for_peer(&format!("{peer_id}"), &stats);
                             }
                         }
                     } else {
@@ -120,11 +119,9 @@ impl ConnectionMonitor {
                     match event {
                         PeerEvent::NewPeer(peer_id) => {
                             self.handle_peer_status_change(peer_id, ConnectionStatus::Connected).await;
-                            connected_peers.insert(peer_id);
                         }
                         PeerEvent::LostPeer(peer_id, _) => {
                             self.handle_peer_status_change(peer_id, ConnectionStatus::Disconnected).await;
-                            connected_peers.remove(&peer_id);
                         }
                     }
                 }
@@ -164,83 +161,83 @@ impl ConnectionMonitor {
     }
 
     // TODO: Replace this with ClosureMetric
-    fn update_quinn_metrics_for_peer(&self, peer_id: &PeerId, stats: &ConnectionStats) {
+    fn update_quinn_metrics_for_peer(&self, peer_id: &str, stats: &ConnectionStats) {
         // Update PathStats
         self.connection_metrics
             .network_peer_rtt
-            .with_label_values(&[&format!("{peer_id}")])
-            .observe(stats.path.rtt.as_millis() as f64);
+            .with_label_values(&[peer_id])
+            .set(stats.path.rtt.as_millis() as i64);
         self.connection_metrics
             .network_peer_lost_packets
-            .with_label_values(&[&format!("{peer_id}")])
+            .with_label_values(&[peer_id])
             .set(stats.path.lost_packets as i64);
         self.connection_metrics
             .network_peer_lost_bytes
-            .with_label_values(&[&format!("{peer_id}")])
+            .with_label_values(&[peer_id])
             .set(stats.path.lost_bytes as i64);
         self.connection_metrics
             .network_peer_sent_packets
-            .with_label_values(&[&format!("{peer_id}")])
+            .with_label_values(&[peer_id])
             .set(stats.path.sent_packets as i64);
         self.connection_metrics
             .network_peer_congestion_events
-            .with_label_values(&[&format!("{peer_id}")])
+            .with_label_values(&[peer_id])
             .set(stats.path.congestion_events as i64);
         self.connection_metrics
             .network_peer_congestion_window
-            .with_label_values(&[&format!("{peer_id}")])
-            .observe(stats.path.cwnd as f64);
+            .with_label_values(&[peer_id])
+            .set(stats.path.cwnd as i64);
 
         // Update FrameStats
         self.connection_metrics
             .network_peer_max_data
-            .with_label_values(&[&format!("{peer_id}"), "transmitted"])
+            .with_label_values(&[peer_id, "transmitted"])
             .set(stats.frame_tx.max_data as i64);
         self.connection_metrics
             .network_peer_max_data
-            .with_label_values(&[&format!("{peer_id}"), "received"])
+            .with_label_values(&[peer_id, "received"])
             .set(stats.frame_rx.max_data as i64);
         self.connection_metrics
             .network_peer_closed_connections
-            .with_label_values(&[&format!("{peer_id}"), "transmitted"])
+            .with_label_values(&[peer_id, "transmitted"])
             .set(stats.frame_tx.connection_close as i64);
         self.connection_metrics
             .network_peer_closed_connections
-            .with_label_values(&[&format!("{peer_id}"), "received"])
+            .with_label_values(&[peer_id, "received"])
             .set(stats.frame_rx.connection_close as i64);
         self.connection_metrics
             .network_peer_data_blocked
-            .with_label_values(&[&format!("{peer_id}"), "transmitted"])
+            .with_label_values(&[peer_id, "transmitted"])
             .set(stats.frame_tx.data_blocked as i64);
         self.connection_metrics
             .network_peer_data_blocked
-            .with_label_values(&[&format!("{peer_id}"), "received"])
+            .with_label_values(&[peer_id, "received"])
             .set(stats.frame_rx.data_blocked as i64);
 
         // Update UDPStats
         self.connection_metrics
             .network_peer_udp_datagrams
-            .with_label_values(&[&format!("{peer_id}"), "transmitted"])
+            .with_label_values(&[peer_id, "transmitted"])
             .set(stats.udp_tx.datagrams as i64);
         self.connection_metrics
             .network_peer_udp_datagrams
-            .with_label_values(&[&format!("{peer_id}"), "received"])
+            .with_label_values(&[peer_id, "received"])
             .set(stats.udp_rx.datagrams as i64);
         self.connection_metrics
             .network_peer_udp_bytes
-            .with_label_values(&[&format!("{peer_id}"), "transmitted"])
+            .with_label_values(&[peer_id, "transmitted"])
             .set(stats.udp_tx.bytes as i64);
         self.connection_metrics
             .network_peer_udp_bytes
-            .with_label_values(&[&format!("{peer_id}"), "received"])
+            .with_label_values(&[peer_id, "received"])
             .set(stats.udp_rx.bytes as i64);
         self.connection_metrics
             .network_peer_udp_transmits
-            .with_label_values(&[&format!("{peer_id}"), "transmitted"])
+            .with_label_values(&[peer_id, "transmitted"])
             .set(stats.udp_tx.transmits as i64);
         self.connection_metrics
             .network_peer_udp_transmits
-            .with_label_values(&[&format!("{peer_id}"), "received"])
+            .with_label_values(&[peer_id, "received"])
             .set(stats.udp_rx.transmits as i64);
     }
 }
