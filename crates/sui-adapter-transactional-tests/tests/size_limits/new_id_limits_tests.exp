@@ -11,7 +11,7 @@ task 3 'run'. lines 38-40:
 mutated: object(106)
 
 task 4 'run'. lines 41-43:
-written: object(107)
+mutated: object(107)
 gas summary: computation_cost: 50000, storage_cost: 13000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 5 'run'. lines 44-46:
