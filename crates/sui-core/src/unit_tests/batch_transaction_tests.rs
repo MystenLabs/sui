@@ -5,6 +5,7 @@ use super::*;
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use bcs;
 use sui_types::{
+    object::MAX_GAS_BUDGET_FOR_TESTING,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
@@ -64,7 +65,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .unwrap()
             .compute_object_reference()],
         builder.finish(),
-        1000000,
+        MAX_GAS_BUDGET_FOR_TESTING,
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);

@@ -449,7 +449,7 @@ async fn sync_end_of_epoch_checkpoint(
     authority_state
         .create_and_execute_advance_epoch_tx(
             &authority_state.epoch_store_for_testing().clone(),
-            &GasCostSummary::new(0, 0, 0),
+            &GasCostSummary::new(0, 0, 0, 0),
             *checkpoint.sequence_number(),
             0, // epoch_start_timestamp_ms
         )

@@ -14,7 +14,7 @@ mutated: object(107)
 task 3 'view-object'. lines 40-42:
 Owner: Account Address ( A )
 Version: 2
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 2998970u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 299999999969000u64}}
 
 task 4 'programmable'. lines 43-46:
 created: object(110)

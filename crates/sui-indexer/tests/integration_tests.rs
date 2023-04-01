@@ -112,7 +112,7 @@ pub mod pg_integration_test {
         gas: Option<ObjectID>,
     ) -> Result<SuiTransactionBlockResponse, anyhow::Error> {
         let transaction_bytes: TransactionBlockBytes = indexer_rpc_client
-            .transfer_object(*sender, object_id, gas, 2000, *recipient)
+            .transfer_object(*sender, object_id, gas, 2_000_000, *recipient)
             .await?;
         let tx_response = sign_and_execute_transaction_block(
             test_cluster,
@@ -720,7 +720,7 @@ pub mod pg_integration_test {
                 *primary_coin,                         // coin to merge into
                 post_transfer_full_obj_data.object_id, // coin to merge and delete
                 None,
-                2000,
+                2_000_000,
             )
             .await?;
         let tx_response = sign_and_execute_transaction_block(

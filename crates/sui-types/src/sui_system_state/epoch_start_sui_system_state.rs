@@ -92,7 +92,7 @@ impl EpochStartSystemStateV1 {
     pub fn new_for_testing_with_epoch(epoch: EpochId) -> Self {
         Self {
             epoch,
-            protocol_version: ProtocolVersion::MIN.as_u64(),
+            protocol_version: ProtocolVersion::MAX.as_u64(),
             reference_gas_price: 1,
             safe_mode: false,
             epoch_start_timestamp_ms: 0,

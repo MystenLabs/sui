@@ -121,10 +121,6 @@ struct FeatureFlags {
     commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
     advance_epoch_start_time_in_safe_mode: bool,
-    // If true, include various fixes to ensure sui conservation, including:
-    // - Conserving storage rebate of system transactions.
-    // - TBD.
-    gas_model_v2: bool,
 }
 
 /// Constants that change the behavior of the protocol.
@@ -561,10 +557,6 @@ impl ProtocolConfig {
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
         self.feature_flags.commit_root_state_digest
-    }
-
-    pub fn gas_model_v2(&self) -> bool {
-        self.feature_flags.gas_model_v2
     }
 
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
@@ -1494,7 +1486,14 @@ impl ProtocolConfig {
             }
             3 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
-                cfg.feature_flags.gas_model_v2 = true;
+                // changes for gas model
+                cfg.gas_model_version = Some(2);
+                // max gas budget is in MIST and an absolute value 50SUI
+                cfg.max_tx_gas = Some(50_000_000_000);
+                // min gas budget is in MIST and an absolute value 2000MIST or 0.000002SUI
+                cfg.base_tx_cost_fixed = Some(2_000);
+                // storage gas price multiplier
+                cfg.storage_gas_price = Some(76);
                 cfg
             }
             // Use this template when making changes:

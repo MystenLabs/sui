@@ -61,7 +61,7 @@ use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::error::UserInputError;
 use sui_types::event::{Event, EventID};
-use sui_types::gas::{GasCostSummary, GasPrice, SuiCostTable, SuiGasStatus};
+use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CheckpointCommitment, CheckpointContents, CheckpointContentsDigest, CheckpointDigest,
@@ -1130,12 +1130,18 @@ impl AuthorityState {
 
         transaction_kind.check_version_supported(epoch_store.protocol_config())?;
 
-        let gas_price = gas_price.unwrap_or_else(|| epoch_store.reference_gas_price());
-
+        let gas_price = match gas_price {
+            None => epoch_store.reference_gas_price(),
+            Some(gas) => {
+                if gas == 0 {
+                    epoch_store.reference_gas_price()
+                } else {
+                    gas
+                }
+            }
+        };
         let protocol_config = epoch_store.protocol_config();
-
         let max_tx_gas = protocol_config.max_tx_gas();
-        let storage_gas_price = protocol_config.storage_gas_price();
 
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution
@@ -1153,8 +1159,6 @@ impl AuthorityState {
         .await?;
         let shared_object_refs = input_objects.filter_shared_objects();
 
-        // TODO should we error instead for 0?
-        let gas_price = std::cmp::max(gas_price, 1);
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
             transaction_kind,
@@ -1172,12 +1176,7 @@ impl AuthorityState {
             transaction_digest,
             protocol_config,
         );
-        let gas_status = SuiGasStatus::new_with_budget(
-            max_tx_gas,
-            GasPrice::from(gas_price),
-            storage_gas_price.into(),
-            SuiCostTable::new(protocol_config),
-        );
+        let gas_status = SuiGasStatus::new_with_budget(max_tx_gas, gas_price, protocol_config);
         let move_vm = Arc::new(
             adapter::new_move_vm(
                 epoch_store.native_functions().clone(),

@@ -624,16 +624,19 @@ export class TransactionBlock {
           provider,
         );
       }
-
       if (!this.blockData.gasConfig.budget) {
         const dryRunResult = await expectProvider(
           provider,
         ).dryRunTransactionBlock({
           transactionBlock: this.#blockData.build({
-            overrides: { gasConfig: { budget: String(MAX_GAS), payment: [] } },
+            overrides: {
+              gasConfig: {
+                budget: String(MAX_GAS),
+                payment: [],
+              },
+            },
           }),
         });
-
         if (dryRunResult.effects.status.status !== 'success') {
           throw new Error(
             'Dry run failed, could not automatically determine a budget',

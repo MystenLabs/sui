@@ -41,7 +41,7 @@ use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 /// The maximum gas per transaction.
-pub const MAX_GAS: u64 = 2_000;
+pub const MAX_GAS: u64 = 2_000_000;
 
 // note: clippy is confused about this being dead - it appears to only be used in cfg(test), but
 // adding #[cfg(test)] causes other targets to fail
@@ -331,7 +331,7 @@ pub fn make_dummy_tx(
             random_object_ref(),
             sender,
             random_object_ref(),
-            10000,
+            5_000_000_000,
         ),
         Intent::default(),
         vec![sender_sec],

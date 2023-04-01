@@ -15,7 +15,8 @@ use move_core_types::{
 };
 
 use sui_types::{
-    error::ExecutionErrorKind, programmable_transaction_builder::ProgrammableTransactionBuilder,
+    error::ExecutionErrorKind, object::MAX_GAS_BUDGET_FOR_TESTING,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
 };
 
@@ -34,7 +35,7 @@ use sui_verifier::entry_points_verifier::{
     RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
 };
 
-const MAX_GAS: u64 = 10000;
+const MAX_GAS: u64 = MAX_GAS_BUDGET_FOR_TESTING;
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
