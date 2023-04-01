@@ -17,10 +17,11 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::{IdentStr, Identifier},
+    identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     value::MoveStruct,
 };
+use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
     framework::{CompiledState, MoveTestAdapter},
     tasks::{InitCommand, SyntaxChoice, TaskInput},
@@ -282,19 +283,23 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         (test_adapter, output)
     }
 
-    fn publish_module(
+    fn publish_modules(
         &mut self,
-        module: CompiledModule,
-        named_addr_opt: Option<Identifier>,
+        modules: Vec<(/* package name */ Option<Symbol>, CompiledModule)>,
         gas_budget: Option<u64>,
         extra: Self::ExtraPublishArgs,
-    ) -> anyhow::Result<(Option<String>, CompiledModule)> {
+    ) -> anyhow::Result<(Option<String>, Vec<(Option<Symbol>, CompiledModule)>)> {
         let SuiPublishArgs {
             sender,
             upgradeable,
             view_gas_used,
             dependencies,
         } = extra;
+
+        let [(named_addr_opt, module)] = &modules[..] else {
+            bail!("Multiple package publish not supported in sui adapter");
+        };
+
         let module_name = module.self_id().name().to_string();
         let module_bytes = {
             let mut buf = vec![];
@@ -374,7 +379,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             .unwrap()
             .clone();
         let published_module = CompiledModule::deserialize(&published_module_bytes).unwrap();
-        Ok((output, published_module))
+        Ok((output, vec![(*named_addr_opt, published_module)]))
     }
 
     fn call_function(

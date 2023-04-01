@@ -364,6 +364,7 @@ impl SuiNode {
                 p2p_network.downgrade(),
                 network_connection_metrics,
                 HashMap::new(),
+                None,
             );
 
         let connection_monitor_status = ConnectionMonitorStatus {

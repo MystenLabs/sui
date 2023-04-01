@@ -90,7 +90,7 @@ impl MoveUtilsServer for MoveUtils {
         function_name: String,
     ) -> RpcResult<SuiMoveNormalizedFunction> {
         let module = get_move_module(&self.state, package, module_name).await?;
-        let functions = module.exposed_functions;
+        let functions = module.functions;
         let identifier = Identifier::new(function_name.as_str()).map_err(|e| anyhow!("{e}"))?;
         Ok(match functions.get(&identifier) {
             Some(function) => Ok(function.clone().into()),
@@ -130,11 +130,9 @@ impl MoveUtilsServer for MoveUtils {
         }?;
 
         let identifier = Identifier::new(function.as_str()).map_err(|e| anyhow!("{e}"))?;
-        let parameters = normalized.get(&module).and_then(|m| {
-            m.exposed_functions
-                .get(&identifier)
-                .map(|f| f.parameters.clone())
-        });
+        let parameters = normalized
+            .get(&module)
+            .and_then(|m| m.functions.get(&identifier).map(|f| f.parameters.clone()));
 
         Ok(match parameters {
             Some(parameters) => Ok(parameters

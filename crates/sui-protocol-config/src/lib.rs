@@ -17,7 +17,8 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
-//            changes. Limits on `max_size_written_objects`, `max_size_written_objects_system_tx`
+//            changes, enable package upgrades, add limits on `max_size_written_objects`, 
+//            `max_size_written_objects_system_tx`
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -570,6 +571,10 @@ impl ProtocolConfig {
                 self.version
             )))
         }
+    }
+
+    pub fn package_upgrades_supported(&self) -> bool {
+        self.feature_flags.package_upgrades
     }
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
@@ -1533,6 +1538,7 @@ impl ProtocolConfig {
                 cfg.max_size_written_objects = Some(5 * 1000 * 1000);
                 // max size of written objects during a system TXn to allow for larger writes
                 cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
+                cfg.feature_flags.package_upgrades = true;
                 cfg
             }
 

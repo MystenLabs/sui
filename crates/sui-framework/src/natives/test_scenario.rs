@@ -124,7 +124,7 @@ pub fn end_transaction(
     // handle transfers, inserting transferred/written objects into their respective inventory
     let mut created = vec![];
     let mut written = vec![];
-    for (id, (kind, owner, ty, _tag, value)) in writes {
+    for (id, (kind, owner, ty, value)) in writes {
         new_object_values.insert(id, (ty.clone(), value.copy_value().unwrap()));
         transferred.push((id, owner));
         incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling

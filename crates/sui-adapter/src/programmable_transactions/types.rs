@@ -7,7 +7,7 @@ use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -15,19 +15,20 @@ use serde::Deserialize;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
-    error::{convert_vm_error, ExecutionError, ExecutionErrorKind, SuiError},
+    error::{ExecutionError, ExecutionErrorKind, SuiError},
     messages::CommandArgumentError,
     object::{Data, MoveObject, Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage},
     TypeTag,
 };
 
+use super::{context::load_type, linkage_view::LinkageView};
+
 sui_macros::checked_arithmetic! {
 
 pub trait StorageView:
     ResourceResolver<Error = SuiError>
     + ModuleResolver<Error = SuiError>
-    + LinkageResolver<Error = SuiError>
     + BackingPackageStore
     + Storage
     + ParentSync
@@ -38,7 +39,6 @@ pub trait StorageView:
 impl<
         T: ResourceResolver<Error = SuiError>
             + ModuleResolver<Error = SuiError>
-            + LinkageResolver<Error = SuiError>
             + BackingPackageStore
             + Storage
             + ParentSync
@@ -190,10 +190,9 @@ impl Value {
 }
 
 impl ObjectValue {
-    pub fn new<S: StorageView>(
-        vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+    pub fn new<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
         type_: MoveObjectType,
         has_public_transfer: bool,
         used_in_non_entry_move_call: bool,
@@ -208,9 +207,8 @@ impl ObjectValue {
             ObjectContents::Raw(contents.to_vec())
         };
         let tag: StructTag = type_.into();
-        let type_ = session
-            .load_type(&TypeTag::Struct(Box::new(tag)))
-            .map_err(|e| convert_vm_error(e, vm, state_view))?;
+        let type_ = load_type(session, &TypeTag::Struct(Box::new(tag)))
+            .map_err(|e| sui_types::error::convert_vm_error(e, vm, session.get_resolver()))?;
         Ok(Self {
             type_,
             has_public_transfer,
@@ -219,28 +217,25 @@ impl ObjectValue {
         })
     }
 
-    pub fn from_object<S: StorageView>(
-        vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+    pub fn from_object<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
         object: &Object,
     ) -> Result<Self, ExecutionError> {
         let Object { data, .. } = object;
         match data {
             Data::Package(_) => invariant_violation!("Expected a Move object"),
-            Data::Move(move_object) => Self::from_move_object(vm, state_view, session, move_object),
+            Data::Move(move_object) => Self::from_move_object(vm, session, move_object),
         }
     }
 
-    pub fn from_move_object<S: StorageView>(
-        vm: &MoveVM,
-        state_view: &S,
-        session: &Session<S>,
+    pub fn from_move_object<'vm, 'state, S: StorageView>(
+        vm: &'vm MoveVM,
+        session: &mut Session<'state, 'vm, LinkageView<'state, S>>,
         object: &MoveObject,
     ) -> Result<Self, ExecutionError> {
         Self::new(
             vm,
-            state_view,
             session,
             object.type_().clone(),
             object.has_public_transfer(),

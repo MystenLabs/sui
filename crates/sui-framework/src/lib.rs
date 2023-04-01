@@ -43,19 +43,19 @@ macro_rules! define_system_package {
                 bcs::from_bytes($Package::BCS_BYTES).unwrap()
             }
 
-            fn as_modules() -> Vec<CompiledModule> {
+            fn as_modules() -> &'static [CompiledModule] {
                 static MODULES: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
                     // deserialization here uses overall max version of supported Move bytecode
                     // rather than the max supported by the framework but it's OK
                     $Package::as_bytes().into_iter().map(|m| CompiledModule::deserialize(&m).unwrap()).collect()
                 });
-                Lazy::force(&MODULES).to_owned()
+                &Lazy::force(&MODULES)
             }
 
             fn as_package() -> MovePackage {
                 MovePackage::new_system(
                     OBJECT_START_VERSION,
-                    $Package::as_modules(),
+                    &$Package::as_modules(),
                     $Package::transitive_dependencies(),
                 )
             }
@@ -110,7 +110,7 @@ pub trait SystemPackage {
     const BCS_BYTES: &'static [u8];
     fn transitive_dependencies() -> Vec<ObjectID>;
     fn as_bytes() -> Vec<Vec<u8>>;
-    fn as_modules() -> Vec<CompiledModule>;
+    fn as_modules() -> &'static [CompiledModule];
     fn as_package() -> MovePackage;
     fn as_object() -> Object;
 }
@@ -121,9 +121,9 @@ pub fn system_package_ids() -> Vec<ObjectID> {
 
 pub fn make_system_modules() -> Vec<Vec<CompiledModule>> {
     vec![
-        MoveStdlib::as_modules(),
-        SuiFramework::as_modules(),
-        SuiSystem::as_modules(),
+        MoveStdlib::as_modules().to_owned(),
+        SuiFramework::as_modules().to_owned(),
+        SuiSystem::as_modules().to_owned(),
     ]
 }
 

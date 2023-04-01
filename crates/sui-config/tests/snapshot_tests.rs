@@ -20,10 +20,10 @@ use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_config::genesis::GenesisCeremonyParameters;
+use sui_config::genesis::{GenesisCeremonyParameters, TokenDistributionScheduleBuilder};
 use sui_config::ValidatorInfo;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
     NetworkKeyPair, SuiKeyPair,
@@ -37,14 +37,10 @@ fn genesis_config_snapshot_matches() {
         SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1);
     let fake_addr: SuiAddress = (&ed_kp1.public()).into();
 
-    let fake_obj_id = ObjectID::from(fake_addr);
     let mut genesis_config = GenesisConfig::for_local_testing();
     genesis_config.parameters.chain_start_timestamp_ms = 0;
     for account in &mut genesis_config.accounts {
         account.address = Some(fake_addr);
-        for gas_obj in &mut account.gas_objects {
-            gas_obj.object_id = fake_obj_id;
-        }
     }
     assert_yaml_snapshot!(genesis_config);
 }
@@ -53,7 +49,7 @@ fn genesis_config_snapshot_matches() {
 #[test]
 fn populated_genesis_snapshot_matches() {
     let genesis_config = GenesisConfig::for_local_testing();
-    let (_account_keys, objects) = genesis_config
+    let (_account_keys, allocations) = genesis_config
         .generate_accounts(&mut StdRng::from_seed([0; 32]))
         .unwrap();
     let mut rng = StdRng::from_seed([0; 32]);
@@ -79,8 +75,17 @@ fn populated_genesis_snapshot_matches() {
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());
 
+    let token_distribution_schedule = {
+        let mut builder = TokenDistributionScheduleBuilder::new();
+        for allocation in allocations {
+            builder.add_allocation(allocation);
+        }
+        builder.default_allocation_for_validators(Some(validator.account_address));
+        builder.build()
+    };
+
     let genesis = Builder::new()
-        .add_objects(objects)
+        .with_token_distribution_schedule(token_distribution_schedule)
         .add_validator(validator, pop)
         .with_parameters(GenesisCeremonyParameters {
             chain_start_timestamp_ms: 10,

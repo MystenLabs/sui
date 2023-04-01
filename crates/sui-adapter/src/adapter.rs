@@ -18,7 +18,6 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
     vm_status::StatusCode,
 };
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -26,7 +25,6 @@ use move_vm_runtime::{
     config::{VMConfig, VMRuntimeLimitsConfig},
     native_extensions::NativeContextExtensions,
     native_functions::NativeFunctionTable,
-    session::Session,
 };
 use tracing::instrument;
 
@@ -115,45 +113,25 @@ pub fn new_move_vm(
     .map_err(|_| SuiError::ExecutionInvariantViolation)
 }
 
-pub fn new_session<
-    'v,
-    'r,
-    E: Debug,
-    S: ResourceResolver<Error = E>
-        + ModuleResolver<Error = E>
-        + LinkageResolver<Error = E>
-        + ChildObjectResolver,
->(
-    vm: &'v MoveVM,
-    state_view: &'r S,
+pub fn new_native_extensions<'r>(
+    child_resolver: &'r impl ChildObjectResolver,
     input_objects: BTreeMap<ObjectID, Owner>,
     is_metered: bool,
     protocol_config: &ProtocolConfig,
-) -> Session<'r, 'v, S> {
+) -> NativeContextExtensions<'r> {
     let mut extensions = NativeContextExtensions::default();
     extensions.add(ObjectRuntime::new(
-        Box::new(state_view),
+        Box::new(child_resolver),
         input_objects,
         is_metered,
         protocol_config,
     ));
     extensions.add(NativesCostTable::from_protocol_config(protocol_config));
-    vm.new_session_with_extensions(state_view, extensions)
+    extensions
 }
 
-/// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
-/// Mutate each module's self ID (which must be 0) to the appropriate fresh ID and update its module handle tables
-/// to reflect the new ID's of its dependencies.
-/// Returns the newly created package ID.
-pub fn generate_package_id(
-    modules: &mut [CompiledModule],
-    ctx: &mut TxContext,
-) -> Result<ObjectID, ExecutionError> {
-    let package_id = ctx.fresh_id();
-    substitute_package_id(modules, package_id)?;
-    Ok(package_id)
-}
-
+/// Given a list of `modules` and an `object_id`, mutate each module's self ID (which must be
+/// 0x0) to be `object_id`.
 pub fn substitute_package_id(
     modules: &mut [CompiledModule],
     object_id: ObjectID,

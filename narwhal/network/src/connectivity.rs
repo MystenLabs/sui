@@ -2,12 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::NetworkConnectionMetrics;
+use anemo::types::PeerEvent;
 use anemo::PeerId;
 use dashmap::DashMap;
+use futures::future;
 use mysten_metrics::spawn_logged_monitored_task;
-use std::collections::HashMap;
+use quinn_proto::ConnectionStats;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::task::JoinHandle;
+use tokio::time;
+use types::ConditionalBroadcastReceiver;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum ConnectionStatus {
@@ -20,6 +26,7 @@ pub struct ConnectionMonitor {
     connection_metrics: NetworkConnectionMetrics,
     peer_id_types: HashMap<PeerId, String>,
     connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
+    rx_shutdown: Option<ConditionalBroadcastReceiver>,
 }
 
 impl ConnectionMonitor {
@@ -28,6 +35,7 @@ impl ConnectionMonitor {
         network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
         peer_id_types: HashMap<PeerId, String>,
+        rx_shutdown: Option<ConditionalBroadcastReceiver>,
     ) -> (JoinHandle<()>, Arc<DashMap<PeerId, ConnectionStatus>>) {
         let connection_statuses_outer = Arc::new(DashMap::new());
         let connection_statuses = connection_statuses_outer.clone();
@@ -38,6 +46,7 @@ impl ConnectionMonitor {
                     connection_metrics,
                     peer_id_types,
                     connection_statuses,
+                    rx_shutdown
                 }
                 .run(),
                 "ConnectionMonitor"
@@ -46,14 +55,17 @@ impl ConnectionMonitor {
         )
     }
 
-    async fn run(self) {
+    async fn run(mut self) {
         let (mut subscriber, connected_peers) = {
             if let Some(network) = self.network.upgrade() {
-                let Ok((subscriber, connected_peers)) = network.subscribe() else {
+                let Ok((subscriber, known_peers)) = network.subscribe() else {
                     return;
                 };
 
-                (subscriber, connected_peers)
+                (
+                    subscriber,
+                    known_peers.into_iter().collect::<HashSet<PeerId>>(),
+                )
             } else {
                 return;
             }
@@ -69,20 +81,53 @@ impl ConnectionMonitor {
         }
 
         // now report the connected peers
-        for peer_id in connected_peers {
-            self.handle_peer_status_change(peer_id, ConnectionStatus::Connected)
+        for peer_id in connected_peers.iter() {
+            self.handle_peer_status_change(*peer_id, ConnectionStatus::Connected)
                 .await;
         }
 
-        while let Ok(event) = subscriber.recv().await {
-            match event {
-                anemo::types::PeerEvent::NewPeer(peer_id) => {
-                    self.handle_peer_status_change(peer_id, ConnectionStatus::Connected)
-                        .await;
+        let mut connection_stat_collection_interval = time::interval(Duration::from_secs(60));
+
+        async fn wait_for_shutdown(
+            rx_shutdown: &mut Option<ConditionalBroadcastReceiver>,
+        ) -> Result<(), tokio::sync::broadcast::error::RecvError> {
+            if let Some(rx) = rx_shutdown.as_mut() {
+                rx.receiver.recv().await
+            } else {
+                // If no shutdown receiver is provided, wait forever.
+                let future = future::pending();
+                #[allow(clippy::let_unit_value)]
+                let () = future.await;
+                Ok(())
+            }
+        }
+
+        loop {
+            tokio::select! {
+                _ = connection_stat_collection_interval.tick() => {
+                    if let Some(network) = self.network.upgrade() {
+                        for peer_id in connected_peers.iter() {
+                            if let Some(connection) = network.peer(*peer_id) {
+                                let stats = connection.connection_stats();
+                                self.update_quinn_metrics_for_peer(&format!("{peer_id}"), &stats);
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
                 }
-                anemo::types::PeerEvent::LostPeer(peer_id, _) => {
-                    self.handle_peer_status_change(peer_id, ConnectionStatus::Disconnected)
-                        .await;
+                Ok(event) = subscriber.recv() => {
+                    match event {
+                        PeerEvent::NewPeer(peer_id) => {
+                            self.handle_peer_status_change(peer_id, ConnectionStatus::Connected).await;
+                        }
+                        PeerEvent::LostPeer(peer_id, _) => {
+                            self.handle_peer_status_change(peer_id, ConnectionStatus::Disconnected).await;
+                        }
+                    }
+                }
+                _ = wait_for_shutdown(&mut self.rx_shutdown) => {
+                    return;
                 }
             }
         }
@@ -115,6 +160,87 @@ impl ConnectionMonitor {
 
         self.connection_statuses.insert(peer_id, connection_status);
     }
+
+    // TODO: Replace this with ClosureMetric
+    fn update_quinn_metrics_for_peer(&self, peer_id: &str, stats: &ConnectionStats) {
+        // Update PathStats
+        self.connection_metrics
+            .network_peer_rtt
+            .with_label_values(&[peer_id])
+            .set(stats.path.rtt.as_millis() as i64);
+        self.connection_metrics
+            .network_peer_lost_packets
+            .with_label_values(&[peer_id])
+            .set(stats.path.lost_packets as i64);
+        self.connection_metrics
+            .network_peer_lost_bytes
+            .with_label_values(&[peer_id])
+            .set(stats.path.lost_bytes as i64);
+        self.connection_metrics
+            .network_peer_sent_packets
+            .with_label_values(&[peer_id])
+            .set(stats.path.sent_packets as i64);
+        self.connection_metrics
+            .network_peer_congestion_events
+            .with_label_values(&[peer_id])
+            .set(stats.path.congestion_events as i64);
+        self.connection_metrics
+            .network_peer_congestion_window
+            .with_label_values(&[peer_id])
+            .set(stats.path.cwnd as i64);
+
+        // Update FrameStats
+        self.connection_metrics
+            .network_peer_max_data
+            .with_label_values(&[peer_id, "transmitted"])
+            .set(stats.frame_tx.max_data as i64);
+        self.connection_metrics
+            .network_peer_max_data
+            .with_label_values(&[peer_id, "received"])
+            .set(stats.frame_rx.max_data as i64);
+        self.connection_metrics
+            .network_peer_closed_connections
+            .with_label_values(&[peer_id, "transmitted"])
+            .set(stats.frame_tx.connection_close as i64);
+        self.connection_metrics
+            .network_peer_closed_connections
+            .with_label_values(&[peer_id, "received"])
+            .set(stats.frame_rx.connection_close as i64);
+        self.connection_metrics
+            .network_peer_data_blocked
+            .with_label_values(&[peer_id, "transmitted"])
+            .set(stats.frame_tx.data_blocked as i64);
+        self.connection_metrics
+            .network_peer_data_blocked
+            .with_label_values(&[peer_id, "received"])
+            .set(stats.frame_rx.data_blocked as i64);
+
+        // Update UDPStats
+        self.connection_metrics
+            .network_peer_udp_datagrams
+            .with_label_values(&[peer_id, "transmitted"])
+            .set(stats.udp_tx.datagrams as i64);
+        self.connection_metrics
+            .network_peer_udp_datagrams
+            .with_label_values(&[peer_id, "received"])
+            .set(stats.udp_rx.datagrams as i64);
+        self.connection_metrics
+            .network_peer_udp_bytes
+            .with_label_values(&[peer_id, "transmitted"])
+            .set(stats.udp_tx.bytes as i64);
+        self.connection_metrics
+            .network_peer_udp_bytes
+            .with_label_values(&[peer_id, "received"])
+            .set(stats.udp_rx.bytes as i64);
+        self.connection_metrics
+            .network_peer_udp_transmits
+            .with_label_values(&[peer_id, "transmitted"])
+            .set(stats.udp_tx.transmits as i64);
+        self.connection_metrics
+            .network_peer_udp_transmits
+            .with_label_values(&[peer_id, "received"])
+            .set(stats.udp_rx.transmits as i64);
+    }
 }
 
 #[cfg(test)]
@@ -145,7 +271,7 @@ mod tests {
 
         // WHEN bring up the monitor
         let (_h, statuses) =
-            ConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), HashMap::new());
+            ConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), HashMap::new(), None);
 
         // THEN peer 2 should be already connected
         assert_network_peers(metrics.clone(), 1).await;
