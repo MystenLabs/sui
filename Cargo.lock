@@ -2502,9 +2502,9 @@ dependencies = [
 
 [[package]]
 name = "diesel-async"
-version = "0.2.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67d310b8050b1068b32fd03c55bd73f8d9ef5a789e2443c5b4e92f4587c63ed3"
+checksum = "5f9ff806825ea92f061cfca008f4885149a6c62b7f508d00d2c35c3d7522b946"
 dependencies = [
  "async-trait",
  "bb8",
@@ -10389,6 +10389,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-postgres"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29a12c1b3e0704ae7dfc25562629798b29c72e6b1d0a681b6f29ab4ae5e7f7bf"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes",
+ "fallible-iterator",
+ "futures-channel",
+ "futures-util",
+ "log",
+ "parking_lot 0.12.1",
+ "percent-encoding",
+ "phf",
+ "pin-project-lite",
+ "postgres-protocol",
+ "postgres-types",
+ "socket2",
+ "tokio",
+ "tokio-util 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "tokio-retry"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12037,8 +12061,7 @@ dependencies = [
  "slug",
  "smallvec",
  "snap",
- "socket2 0.4.9",
- "socket2 0.5.1",
+ "socket2",
  "soketto",
  "spin",
  "spki",
@@ -12096,6 +12119,7 @@ dependencies = [
  "tokio",
  "tokio-io-timeout",
  "tokio-macros 1.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-postgres",
  "tokio-retry",
  "tokio-rustls",
  "tokio-stream",
