@@ -11,7 +11,6 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::LinkageResolver,
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -216,7 +215,7 @@ impl<'vm, 'state, 'a, 'b, S: StorageView> ExecutionContext<'vm, 'state, 'a, 'b, 
         package_id: ObjectID,
     ) -> Result<AccountAddress, ExecutionError> {
         let resolver = self.session.get_resolver();
-        if resolver.link_context() == *package_id {
+        if resolver.has_linkage(package_id) {
             // Setting same context again, can skip.
             return Ok(resolver.original_package_id());
         }

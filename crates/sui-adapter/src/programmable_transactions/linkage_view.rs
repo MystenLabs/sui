@@ -79,6 +79,16 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
         }
     }
 
+    /// Indicates whether this `LinkageView` has had its context set to match the linkage in
+    /// `context`.
+    pub fn has_linkage(&self, context: ObjectID) -> bool {
+        match &self.linkage_info {
+            LinkageInfo::Unset => false,
+            LinkageInfo::Universal => true,
+            LinkageInfo::Set(linkage) => linkage.storage_id == *context,
+        }
+    }
+
     /// Reset the linkage, but save the context that existed before, if there was one.
     pub fn steal_linkage(&mut self) -> Option<SavedLinkage> {
         if let LinkageInfo::Universal = &self.linkage_info {
@@ -102,10 +112,10 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
             LinkageInfo::Unset => (),
             LinkageInfo::Universal => (),
             LinkageInfo::Set(existing) => {
-                return Err(ExecutionError::invariant_violation(format!(
+                invariant_violation!(format!(
                     "Attempt to overwrite linkage by restoring: {saved:#?} \
                      Existing linkage: {existing:#?}",
-                )))
+                ))
             }
         }
 
@@ -124,11 +134,11 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
             LinkageInfo::Universal => return Ok(*context.id()),
 
             LinkageInfo::Set(existing) => {
-                return Err(ExecutionError::invariant_violation(format!(
+                invariant_violation!(format!(
                     "Attempt to overwrite linkage info with context from {}. \
                      Existing linkage: {existing:#?}",
                     context.id(),
-                )))
+                ))
             }
         }
 
@@ -151,15 +161,15 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
         } in context.type_origin_table()
         {
             let Ok(module_name) = Identifier::from_str(module_name) else {
-                return Err(ExecutionError::invariant_violation(format!(
+                invariant_violation!(format!(
                     "Module name isn't an identifier: {module_name}"
-                )));
+                ));
             };
 
             let Ok(struct_name) = Identifier::from_str(struct_name) else {
-                return Err(ExecutionError::invariant_violation(format!(
+                invariant_violation!(format!(
                     "Struct name isn't an identifier: {struct_name}"
-                )));
+                ));
             };
 
             let runtime_id = ModuleId::new(runtime_id, module_name);
@@ -209,13 +219,13 @@ impl<'state, S: StorageView> LinkageView<'state, S> {
 
             Entry::Occupied(entry) => {
                 if entry.get() != &*defining_id {
-                    return Err(ExecutionError::invariant_violation(format!(
+                    invariant_violation!(format!(
                         "Conflicting defining ID for {}::{}: {} and {}",
                         runtime_id,
                         entry.key(),
                         defining_id,
                         entry.get(),
-                    )));
+                    ));
                 }
             }
         }
@@ -251,10 +261,9 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
             LinkageInfo::Universal => return Ok(module_id.clone()),
 
             LinkageInfo::Unset => {
-                return Err(ExecutionError::invariant_violation(format!(
+                invariant_violation!(format!(
                     "No linkage context set while relocating {module_id}."
                 ))
-                .into())
             }
         };
 
@@ -269,10 +278,10 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
 
         let runtime_id = ObjectID::from_address(*module_id.address());
         let Some(upgrade) = linkage.link_table.get(&runtime_id) else {
-            return Err(ExecutionError::invariant_violation(format!(
+            invariant_violation!(format!(
                 "Missing linkage for {runtime_id} in context {}",
                 linkage.storage_id,
-            )).into());
+            ));
         };
 
         Ok(ModuleId::new(
@@ -291,10 +300,9 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
             LinkageInfo::Universal => return Ok(runtime_id.clone()),
 
             LinkageInfo::Unset => {
-                return Err(ExecutionError::invariant_violation(format!(
+                invariant_violation!(format!(
                     "No linkage context set for defining module query on {runtime_id}::{struct_}."
                 ))
-                .into())
             }
         };
 
@@ -304,9 +312,9 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
 
         let storage_id = ObjectID::from(*self.relocate(runtime_id)?.address());
         let Some(package) = self.state_view.get_package(&storage_id)? else {
-            return Err(ExecutionError::invariant_violation(format!(
+            invariant_violation!(format!(
                 "Missing dependent package in store: {storage_id}",
-            )).into())
+            ))
         };
 
         for TypeOrigin {
@@ -321,11 +329,10 @@ impl<'state, S: StorageView> LinkageResolver for LinkageView<'state, S> {
             }
         }
 
-        Err(ExecutionError::invariant_violation(format!(
+        invariant_violation!(format!(
             "{runtime_id}::{struct_} not found in type origin table in {storage_id} (v{})",
             package.version(),
         ))
-        .into())
     }
 }
 
