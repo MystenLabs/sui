@@ -580,7 +580,6 @@ async fn test_inactive_validator_pool_read() {
     let effects = execute_transaction_block(&authorities, transaction)
         .await
         .unwrap();
-    println!("{:#?}", effects.status());
     assert!(effects.status().is_ok());
 
     trigger_reconfiguration(&authorities).await;
@@ -1061,7 +1060,6 @@ async fn execute_add_validator_candidate_tx(
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
-    println!("effects: {:#?}", effects);
     assert!(effects.status().is_ok());
     effects
 }
@@ -1163,7 +1161,6 @@ async fn execute_leave_committee_tx(
     let effects = execute_transaction_block(authorities, transaction)
         .await
         .unwrap();
-    println!("effects: {:#?}", effects);
     assert!(effects.status().is_ok());
     effects
 }

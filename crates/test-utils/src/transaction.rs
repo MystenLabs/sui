@@ -153,7 +153,6 @@ pub async fn publish_package_with_wallet(
         .unwrap();
 
     assert!(resp.confirmed_local_execution.unwrap());
-    println!("{:#?}", resp.effects);
     (
         resp.effects
             .unwrap()
