@@ -221,17 +221,19 @@ module sui_system::sui_system_tests {
         let scenario_val = test_scenario::begin(@0x0);
         let scenario = &mut scenario_val;
 
-        set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
+        set_up_sui_system_state(vector[@0x1, @0x2, @0x3, @0x4]);
         test_scenario::next_tx(scenario, @0x1);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         let pool_id_1 = sui_system::validator_staking_pool_id(&mut system_state, @0x1);
         let pool_id_2 = sui_system::validator_staking_pool_id(&mut system_state, @0x2);
         let pool_id_3 = sui_system::validator_staking_pool_id(&mut system_state, @0x3);
+        let pool_id_4 = sui_system::validator_staking_pool_id(&mut system_state, @0x4);
         let pool_mappings = sui_system::validator_staking_pool_mappings(&mut system_state);
-        assert_eq(table::length(pool_mappings), 3);
+        assert_eq(table::length(pool_mappings), 4);
         assert_eq(*table::borrow(pool_mappings, pool_id_1), @0x1);
         assert_eq(*table::borrow(pool_mappings, pool_id_2), @0x2);
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
+        assert_eq(*table::borrow(pool_mappings, pool_id_4), @0x4);
         test_scenario::return_shared(system_state);
 
         let new_validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
@@ -247,14 +249,15 @@ module sui_system::sui_system_tests {
 
         test_scenario::next_tx(scenario, @0x1);
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
-        let pool_id_4 = sui_system::validator_staking_pool_id(&mut system_state, new_validator_addr);
+        let pool_id_5 = sui_system::validator_staking_pool_id(&mut system_state, new_validator_addr);
         pool_mappings = sui_system::validator_staking_pool_mappings(&mut system_state);
         // Check that the previous mappings didn't change as well.
-        assert_eq(table::length(pool_mappings), 4);
+        assert_eq(table::length(pool_mappings), 5);
         assert_eq(*table::borrow(pool_mappings, pool_id_1), @0x1);
         assert_eq(*table::borrow(pool_mappings, pool_id_2), @0x2);
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
-        assert_eq(*table::borrow(pool_mappings, pool_id_4), new_validator_addr);
+        assert_eq(*table::borrow(pool_mappings, pool_id_4), @0x4);
+        assert_eq(*table::borrow(pool_mappings, pool_id_5), new_validator_addr);
         test_scenario::return_shared(system_state);
 
         // Remove one of the original validators.
@@ -265,11 +268,12 @@ module sui_system::sui_system_tests {
         let system_state = test_scenario::take_shared<SuiSystemState>(scenario);
         pool_mappings = sui_system::validator_staking_pool_mappings(&mut system_state);
         // Check that the previous mappings didn't change as well.
-        assert_eq(table::length(pool_mappings), 3);
+        assert_eq(table::length(pool_mappings), 4);
         assert_eq(table::contains(pool_mappings, pool_id_1), false);
         assert_eq(*table::borrow(pool_mappings, pool_id_2), @0x2);
         assert_eq(*table::borrow(pool_mappings, pool_id_3), @0x3);
-        assert_eq(*table::borrow(pool_mappings, pool_id_4), new_validator_addr);
+        assert_eq(*table::borrow(pool_mappings, pool_id_4), @0x4);
+        assert_eq(*table::borrow(pool_mappings, pool_id_5), new_validator_addr);
         test_scenario::return_shared(system_state);
 
         test_scenario::end(scenario_val);

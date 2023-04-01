@@ -5,11 +5,11 @@ A: object(103)
 
 task 1 'publish'. lines 8-41:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 43-43:
 created: object(107), object(108), object(109)
-written: object(106)
+mutated: object(106)
 
 task 3 'view-object'. lines 45-45:
 Owner: Account Address ( A )
@@ -21,7 +21,7 @@ Error: Object 0xa3520bbf03b9236b44e2b6a098cba4be28ffa57169ce6da445dd879ce497858e
 
 task 5 'run'. lines 50-50:
 created: object(112), object(113), object(114)
-written: object(111)
+mutated: object(111)
 
 task 6 'view-object'. lines 52-52:
 Owner: Object ID: ( fake(113) )
@@ -29,12 +29,12 @@ Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(114)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(112)}}
 
 task 7 'run'. lines 54-54:
-written: object(113), object(115)
+mutated: object(113), object(115)
 deleted: object(112), object(114)
 
 task 8 'run'. lines 57-57:
 created: object(117), object(118), object(119)
-written: object(116)
+mutated: object(116)
 
 task 9 'view-object'. lines 59-59:
 Owner: Object ID: ( fake(117) )
@@ -42,7 +42,7 @@ Version: 2
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(119)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(118)}}
 
 task 10 'run'. lines 61-61:
-written: object(117), object(118), object(120)
+mutated: object(117), object(118), object(120)
 deleted: object(119)
 
 task 11 'view-object'. lines 63-63:

@@ -5,11 +5,11 @@ A: object(103)
 
 task 1 'publish'. lines 8-23:
 created: object(105), object(106), object(107)
-written: object(104)
+mutated: object(104)
 
 task 2 'programmable'. lines 25-27:
 created: object(109)
-written: object(107), object(108)
+mutated: object(107), object(108)
 
 task 3 'view-object'. lines 29-29:
 Owner: Account Address ( A )
@@ -18,5 +18,5 @@ Contents: sui::coin::Coin<test::fake::FAKE> {id: sui::object::UID {id: sui::obje
 
 task 4 'programmable'. lines 31-37:
 created: object(111)
-written: object(107), object(110)
+mutated: object(107), object(110)
 deleted: object(109)

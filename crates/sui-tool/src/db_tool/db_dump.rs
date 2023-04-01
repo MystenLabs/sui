@@ -3,9 +3,11 @@
 
 use anyhow::anyhow;
 use clap::{Parser, ValueEnum};
+use comfy_table::{Cell, ContentArrangement, Row, Table};
 use rocksdb::MultiThreaded;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::str;
 use strum_macros::EnumString;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -72,6 +74,75 @@ pub fn table_summary(
         }
     }
     .map_err(|err| anyhow!(err.to_string()))
+}
+
+pub fn print_table_metadata(
+    store_name: StoreName,
+    epoch: Option<EpochId>,
+    db_path: PathBuf,
+    table_name: &str,
+) -> anyhow::Result<()> {
+    let db = match store_name {
+        StoreName::Validator => {
+            let epoch_tables = AuthorityEpochTables::describe_tables();
+            if epoch_tables.contains_key(table_name) {
+                let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
+                AuthorityEpochTables::open_readonly(epoch, &db_path)
+                    .next_shared_object_versions
+                    .rocksdb
+            } else {
+                AuthorityPerpetualTables::open_readonly(&db_path)
+                    .objects
+                    .rocksdb
+            }
+        }
+        StoreName::Index => {
+            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .event_by_move_module
+                .rocksdb
+        }
+        StoreName::Epoch => {
+            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
+                .committee_map
+                .rocksdb
+        }
+    };
+
+    let mut table = Table::new();
+    table
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_width(200)
+        .set_header(vec![
+            "name",
+            "level",
+            "num_entries",
+            "start_key",
+            "end_key",
+            "num_deletions",
+            "file_size",
+        ]);
+
+    for file in db.live_files()?.iter() {
+        if file.column_family_name != table_name {
+            continue;
+        }
+        let mut row = Row::new();
+        row.add_cell(Cell::new(&file.name));
+        row.add_cell(Cell::new(file.level));
+        row.add_cell(Cell::new(file.num_entries));
+        row.add_cell(Cell::new(hex::encode(
+            file.start_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
+        )));
+        row.add_cell(Cell::new(hex::encode(
+            file.end_key.as_ref().unwrap_or(&"".as_bytes().to_vec()),
+        )));
+        row.add_cell(Cell::new(file.num_deletions));
+        row.add_cell(Cell::new(file.size));
+        table.add_row(row);
+    }
+
+    eprintln!("{:?}", table);
+    Ok(())
 }
 
 pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {

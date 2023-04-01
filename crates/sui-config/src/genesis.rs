@@ -841,13 +841,14 @@ impl Builder {
         } = self.parameters.to_genesis_chain_parameters();
 
         // In non-testing code, genesis type must always be V1.
-        #[cfg(not(msim))]
-        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object();
-
-        #[cfg(msim)]
-        let SuiSystemState::V1(system_state) = unsigned_genesis.sui_system_object() else {
-            // Types other than V1 used in simtests do not need to be validated.
-            return;
+        let system_state = match unsigned_genesis.sui_system_object() {
+            SuiSystemState::V1(inner) => inner,
+            SuiSystemState::V2(_) => unreachable!(),
+            #[cfg(msim)]
+            _ => {
+                // Types other than V1 used in simtests do not need to be validated.
+                return;
+            }
         };
 
         assert_eq!(

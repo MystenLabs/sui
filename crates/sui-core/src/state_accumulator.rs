@@ -22,6 +22,7 @@ use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSet
 use typed_store::rocks::TypedStoreError;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::AuthorityStore;
 
 pub struct StateAccumulator {
@@ -30,6 +31,7 @@ pub struct StateAccumulator {
 
 /// Serializable representation of the ObjectRef of an
 /// object that has been wrapped
+/// TODO: This can be replaced with ObjectKey.
 #[derive(Serialize)]
 struct WrappedObject {
     id: ObjectID,
@@ -292,14 +294,17 @@ impl StateAccumulator {
     /// Returns the result of accumulatng the live object set, without side effects
     pub fn accumulate_live_object_set(&self) -> Accumulator {
         let mut acc = Accumulator::default();
-        for oref in self.authority_store.iter_live_object_set() {
-            if oref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED {
-                acc.insert(
-                    bcs::to_bytes(&WrappedObject::new(oref.0, oref.1))
-                        .expect("Failed to serialize WrappedObject"),
-                );
-            } else {
-                acc.insert(oref.2);
+        for live_object in self.authority_store.iter_live_object_set() {
+            match live_object {
+                LiveObject::Normal(object) => {
+                    acc.insert(object.compute_object_reference().2);
+                }
+                LiveObject::Wrapped(key) => {
+                    acc.insert(
+                        bcs::to_bytes(&WrappedObject::new(key.0, key.1))
+                            .expect("Failed to serialize WrappedObject"),
+                    );
+                }
             }
         }
         acc

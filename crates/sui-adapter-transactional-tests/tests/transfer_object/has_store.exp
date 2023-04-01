@@ -5,11 +5,11 @@ A: object(103), B: object(104)
 
 task 1 'publish'. lines 8-29:
 created: object(106)
-written: object(105)
+mutated: object(105)
 
 task 2 'run'. lines 31-31:
 created: object(108)
-written: object(107)
+mutated: object(107)
 
 task 3 'view-object'. lines 33-33:
 Owner: Account Address ( A )
@@ -17,7 +17,7 @@ Version: 2
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108)}}}
 
 task 4 'transfer-object'. lines 35-35:
-written: object(108), object(109)
+mutated: object(108), object(109)
 
 task 5 'view-object'. lines 37-40:
 Owner: Account Address ( B )
@@ -26,7 +26,7 @@ Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(108
 
 task 6 'run'. lines 42-42:
 created: object(111)
-written: object(110)
+mutated: object(110)
 
 task 7 'view-object'. lines 44-44:
 Owner: Account Address ( A )
@@ -34,7 +34,7 @@ Version: 2
 Contents: test::m::Cup<test::m::S> {id: sui::object::UID {id: sui::object::ID {bytes: fake(111)}}}
 
 task 8 'transfer-object'. lines 46-46:
-written: object(111), object(112)
+mutated: object(111), object(112)
 
 task 9 'view-object'. lines 48-48:
 Owner: Account Address ( B )

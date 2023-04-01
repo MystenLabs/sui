@@ -5,7 +5,7 @@ A: object(103)
 
 task 1 'publish'. lines 8-79:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'run'. lines 80-82:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
@@ -13,11 +13,11 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 3 'run'. lines 83-85:
 created: object(108)
-written: object(107)
+mutated: object(107)
 
 task 4 'run'. lines 86-88:
 created: object(110)
-written: object(109)
+mutated: object(109)
 
 task 5 'run'. lines 89-91:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000
@@ -25,12 +25,12 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 6 'run'. lines 92-92:
 created: object(113)
-written: object(112)
+mutated: object(112)
 
 task 7 'run'. lines 94-94:
 created: object(115)
-written: object(114)
-deleted: object(113)
+mutated: object(114)
+wrapped: object(113)
 
 task 8 'run'. lines 96-96:
 Error: Transaction Effects Status: Move object with size 256001 is larger than the maximum object size 256000

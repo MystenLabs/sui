@@ -21,6 +21,7 @@ use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
+use sui_types::quorum_driver_types::GroupedErrors;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
@@ -150,17 +151,13 @@ pub enum AggregatorProcessTransactionError {
         "Failed to execute transaction on a quorum of validators due to non-retryable errors. Validator errors: {:?}",
         errors,
     )]
-    FatalTransaction {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    FatalTransaction { errors: GroupedErrors },
 
     #[error(
         "Failed to execute transaction on a quorum of validators but state is still retryable. Validator errors: {:?}",
         errors
     )]
-    RetryableTransaction {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    RetryableTransaction { errors: GroupedErrors },
 
     #[error(
         "Failed to execute transaction on a quorum of validators due to conflicting transactions. Locked objects: {:?}. Validator errors: {:?}",
@@ -168,7 +165,7 @@ pub enum AggregatorProcessTransactionError {
         errors,
     )]
     FatalConflictingTransaction {
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
         conflicting_tx_digests:
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
@@ -180,7 +177,7 @@ pub enum AggregatorProcessTransactionError {
     )]
     RetryableConflictingTransaction {
         conflicting_tx_digest_to_retry: Option<TransactionDigest>,
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
         conflicting_tx_digests:
             BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
     },
@@ -192,7 +189,7 @@ pub enum AggregatorProcessTransactionError {
     )]
     SystemOverload {
         overloaded_stake: StakeUnit,
-        errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
+        errors: GroupedErrors,
     },
 }
 
@@ -202,17 +199,31 @@ pub enum AggregatorProcessCertificateError {
         "Failed to execute certificate on a quorum of validators. Non-retryable errors: {:?}",
         non_retryable_errors
     )]
-    FatalExecuteCertificate {
-        non_retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    FatalExecuteCertificate { non_retryable_errors: GroupedErrors },
 
     #[error(
         "Failed to execute certificate on a quorum of validators but state is still retryable. Retryable errors: {:?}",
         retryable_errors
     )]
-    RetryableExecuteCertificate {
-        retryable_errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>,
-    },
+    RetryableExecuteCertificate { retryable_errors: GroupedErrors },
+}
+
+pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> GroupedErrors {
+    let mut grouped_errors = HashMap::new();
+    for (error, names, stake) in errors {
+        let entry = grouped_errors.entry(error).or_insert((0, vec![]));
+        entry.0 += stake;
+        entry.1.extend(
+            names
+                .into_iter()
+                .map(|n| n.into_concise())
+                .collect::<Vec<_>>(),
+        );
+    }
+    grouped_errors
+        .into_iter()
+        .map(|(e, (s, n))| (e, s, n))
+        .collect()
 }
 
 struct ProcessTransactionState {
@@ -1071,13 +1082,13 @@ where
         if state.overloaded_stake >= quorum_threshold {
             return AggregatorProcessTransactionError::SystemOverload {
                 overloaded_stake: state.overloaded_stake,
-                errors: state.errors,
+                errors: group_errors(state.errors),
             };
         }
 
         if !state.retryable {
             return AggregatorProcessTransactionError::FatalTransaction {
-                errors: state.errors,
+                errors: group_errors(state.errors),
             };
         }
 
@@ -1089,7 +1100,7 @@ where
 
             if good_stake + retryable_stake >= quorum_threshold {
                 return AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    errors: state.errors,
+                    errors: group_errors(state.errors),
                     conflicting_tx_digest_to_retry: None,
                     conflicting_tx_digests: state.conflicting_tx_digests,
                 };
@@ -1097,7 +1108,7 @@ where
 
             if most_staked_conflicting_tx_stake + retryable_stake >= quorum_threshold {
                 return AggregatorProcessTransactionError::RetryableConflictingTransaction {
-                    errors: state.errors,
+                    errors: group_errors(state.errors),
                     conflicting_tx_digest_to_retry: Some(most_staked_conflicting_tx),
                     conflicting_tx_digests: state.conflicting_tx_digests,
                 };
@@ -1117,13 +1128,13 @@ where
                 .inc();
 
             AggregatorProcessTransactionError::FatalConflictingTransaction {
-                errors: state.errors,
+                errors: group_errors(state.errors),
                 conflicting_tx_digests: state.conflicting_tx_digests,
             }
         } else {
             // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
             AggregatorProcessTransactionError::RetryableTransaction {
-                errors: state.errors,
+                errors: group_errors(state.errors),
             }
         }
     }
@@ -1410,7 +1421,7 @@ where
                             if !categorized {
                                 // TODO: Should minimize possible uncategorized errors here
                                 // use ERROR for now to make them easier to spot.
-                                error!(?tx_digest, "uncategorized tx error: {err}");
+                                error!(?tx_digest, "[WATCHOUT] uncategorized tx error: {err}");
                             }
                             if !retryable {
                                 state.non_retryable_stake += weight;
@@ -1457,11 +1468,11 @@ where
             }
             if state.retryable {
                 AggregatorProcessCertificateError::RetryableExecuteCertificate {
-                    retryable_errors: state.retryable_errors,
+                    retryable_errors: group_errors(state.retryable_errors),
                 }
             } else {
                 AggregatorProcessCertificateError::FatalExecuteCertificate {
-                    non_retryable_errors: state.non_retryable_errors,
+                    non_retryable_errors: group_errors(state.non_retryable_errors),
                 }
             }
         })

@@ -455,7 +455,6 @@ pub struct StorageFundV1 {
 }
 
 /// Rust version of the Move sui_system::sui_system::SuiSystemStateInner type
-/// We want to keep it named as SuiSystemState in Rust since this is the primary interface type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemStateInnerV1 {
     pub epoch: u64,
