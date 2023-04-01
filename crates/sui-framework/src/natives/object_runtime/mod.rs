@@ -54,9 +54,9 @@ pub(crate) struct TestInventories {
 }
 
 pub struct RuntimeResults {
-    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, MoveObjectType, Value)>,
+    pub writes: LinkedHashMap<ObjectID, (WriteKind, Owner, Type, Value)>,
     pub deletions: LinkedHashMap<ObjectID, DeleteKind>,
-    pub user_events: Vec<(StructTag, Value)>,
+    pub user_events: Vec<(Type, StructTag, Value)>,
     // loaded child objects and their versions
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
 }
@@ -70,8 +70,8 @@ pub(crate) struct ObjectRuntimeState {
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    transfers: LinkedHashMap<ObjectID, (Owner, Type, MoveObjectType, Value)>,
-    events: Vec<(StructTag, Value)>,
+    transfers: LinkedHashMap<ObjectID, (Owner, Type, Value)>,
+    events: Vec<(Type, StructTag, Value)>,
 }
 
 #[derive(Clone)]
@@ -236,7 +236,6 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         owner: Owner,
         ty: Type,
-        tag: MoveObjectType,
         obj: Value,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
@@ -281,19 +280,19 @@ impl<'a> ObjectRuntime<'a> {
             }
         };
 
-        self.state.transfers.insert(id, (owner, ty, tag, obj));
+        self.state.transfers.insert(id, (owner, ty, obj));
         Ok(transfer_result)
     }
 
-    pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
+    pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
             return Err(max_event_error(self.constants.max_num_event_emit));
         }
-        self.state.events.push((tag, event));
+        self.state.events.push((ty, tag, event));
         Ok(())
     }
 
-    pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
+    pub fn take_user_events(&mut self) -> Vec<(Type, StructTag, Value)> {
         std::mem::take(&mut self.state.events)
     }
 
@@ -415,7 +414,6 @@ impl ObjectRuntimeState {
                 owner: parent,
                 loaded_version,
                 ty,
-                move_type,
                 effect,
             } = child_object_effect;
             if loaded_child_objects.contains_key(&child) {
@@ -431,13 +429,13 @@ impl ObjectRuntimeState {
                     debug_assert!(!self.new_ids.contains_key(&child));
                     debug_assert!(loaded_version.is_some());
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                 }
 
                 Op::New(v) => {
                     debug_assert!(!self.transfers.contains_key(&child));
                     self.transfers
-                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, move_type, v));
+                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
                 }
                 // was transferred so not actually deleted
                 Op::Delete if self.transfers.contains_key(&child) => {
@@ -477,12 +475,12 @@ impl ObjectRuntimeState {
         // TODO can we have cycles in the new system?
         update_owner_map(
             input_owner_map,
-            transfers.iter().map(|(id, (owner, _, _, _))| (*id, *owner)),
+            transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)),
         )?;
         // determine write kinds
         let writes: LinkedHashMap<_, _> = transfers
             .into_iter()
-            .map(|(id, (owner, type_, tag, value))| {
+            .map(|(id, (owner, type_, value))| {
                 let write_kind =
                     if input_objects.contains_key(&id) || loaded_child_objects.contains_key(&id) {
                         debug_assert!(!new_ids.contains_key(&id));
@@ -494,7 +492,7 @@ impl ObjectRuntimeState {
                     } else {
                         WriteKind::Unwrap
                     };
-                (id, (write_kind, owner, type_, tag, value))
+                (id, (write_kind, owner, type_, value))
             })
             .collect();
         // determine delete kinds

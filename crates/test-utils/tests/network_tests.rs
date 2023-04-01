@@ -6,7 +6,7 @@ use sui_framework::{MoveStdlib, SuiFramework, SuiSystem, SystemPackage};
 use sui_json_rpc::api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, object::Object, SUI_FRAMEWORK_ADDRESS,
+    base_types::ObjectID, digests::TransactionDigest, object::Object, SUI_SYSTEM_ADDRESS,
 };
 use test_utils::network::TestClusterBuilder;
 
@@ -43,19 +43,19 @@ async fn test_package_override() {
     };
 
     let modified_ref = {
-        let mut framework_modules = SuiSystem::as_modules();
+        let mut framework_modules = SuiSystem::as_modules().to_owned();
 
         // Create an empty module that is pretending to be part of the sui framework.
         let mut test_module = move_binary_format::file_format::empty_module();
         let address_idx = test_module.self_handle().address.0 as usize;
-        test_module.address_identifiers[address_idx] = SUI_FRAMEWORK_ADDRESS;
+        test_module.address_identifiers[address_idx] = SUI_SYSTEM_ADDRESS;
 
         // Add the dummy module to the rest of the sui-frameworks.  We can't replace the framework
         // entirely because we will call into it for genesis.
         framework_modules.push(test_module);
 
         let package_override = Object::new_package_for_testing(
-            framework_modules,
+            &framework_modules,
             TransactionDigest::genesis(),
             &[MoveStdlib::as_package(), SuiFramework::as_package()],
         )

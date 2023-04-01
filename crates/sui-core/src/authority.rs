@@ -2927,7 +2927,7 @@ impl AuthorityState {
 
         let Some(sui_system) = self.compare_system_package(
             SuiSystem::ID,
-            sui_system_injection::get_modules(self.name),
+            &sui_system_injection::get_modules(self.name),
             SuiSystem::transitive_dependencies(),
             max_binary_format_version,
         ).await else {
@@ -2948,10 +2948,10 @@ impl AuthorityState {
     ///   framework (indicates support for a protocol upgrade without a framework upgrade).
     /// - Returns the digest of the new framework (and version) if it is compatible (indicates
     ///   support for a protocol upgrade with a framework upgrade).
-    async fn compare_system_package<'p>(
+    async fn compare_system_package(
         &self,
         id: ObjectID,
-        modules: Vec<CompiledModule>,
+        modules: &[CompiledModule],
         dependencies: Vec<ObjectID>,
         max_binary_format_version: u32,
     ) -> Option<ObjectRef> {
@@ -2988,14 +2988,12 @@ impl AuthorityState {
             return Some(cur_ref);
         }
 
-        let check_struct_and_pub_function_linking = true;
-        let check_struct_layout = true;
-        let check_friend_linking = false;
-        let compatibility = Compatibility::new(
-            check_struct_and_pub_function_linking,
-            check_struct_layout,
-            check_friend_linking,
-        );
+        let compatibility = Compatibility {
+            check_struct_and_pub_function_linking: true,
+            check_struct_layout: true,
+            check_friend_linking: false,
+            check_private_entry_linking: true,
+        };
 
         let new_pkg = new_object
             .data
@@ -3075,14 +3073,16 @@ impl AuthorityState {
                 _ => panic!("Unrecognised framework: {}", system_package.0),
             };
 
+            let modules: Vec<_> = bytes
+                .iter()
+                .map(|m| {
+                    CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
+                        .unwrap()
+                })
+                .collect();
+
             let new_object = Object::new_system_package(
-                bytes
-                    .iter()
-                    .map(|m| {
-                        CompiledModule::deserialize_with_max_version(m, move_binary_format_version)
-                            .unwrap()
-                    })
-                    .collect(),
+                &modules,
                 system_package.1,
                 dependencies.clone(),
                 cur_object.previous_transaction,
@@ -3563,10 +3563,10 @@ pub mod sui_system_injection {
 
     pub fn get_modules(name: AuthorityName) -> Vec<CompiledModule> {
         OVERRIDE.with(|cfg| match &*cfg.borrow() {
-            FrameworkOverrideConfig::Default => SuiSystem::as_modules(),
+            FrameworkOverrideConfig::Default => SuiSystem::as_modules().to_owned(),
             FrameworkOverrideConfig::Global(framework) => framework.clone(),
             FrameworkOverrideConfig::PerValidator(func) => {
-                func(name).unwrap_or_else(SuiSystem::as_modules)
+                func(name).unwrap_or_else(|| SuiSystem::as_modules().to_owned())
             }
         })
     }
@@ -3583,6 +3583,6 @@ pub mod sui_system_injection {
     }
 
     pub fn get_modules(_name: AuthorityName) -> Vec<CompiledModule> {
-        SuiSystem::as_modules()
+        SuiSystem::as_modules().to_owned()
     }
 }

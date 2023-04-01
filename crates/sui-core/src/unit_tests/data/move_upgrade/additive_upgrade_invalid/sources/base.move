@@ -27,4 +27,6 @@ module base_addr::base {
 
     // This is invalid since I just changed the code
     fun non_public_fun(y: bool): u64 { if (y) 0 else 2 }
+
+    entry fun entry_fun() { }
 }

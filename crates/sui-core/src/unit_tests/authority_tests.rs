@@ -539,6 +539,7 @@ async fn test_dev_inspect_dynamic_field() {
                 )
                 .await
                 .unwrap();
+                assert!(effects.status().is_ok(), "{:#?}", effects.status());
                 let created_object_id = effects.created()[0].0 .0;
                 let created_object = validator
                     .get_object(&created_object_id)
@@ -1290,39 +1291,6 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .await
         .unwrap()
         .is_none());
-}
-
-#[tokio::test]
-async fn test_upgrade_module_is_feature_gated() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let authority_state = init_state().await;
-    authority_state.insert_genesis_object(gas_object).await;
-
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        // Data doesn't matter here. We hit the feature flag before checking it.
-        let arg = builder.pure(1).unwrap();
-        let stdlib_pkg_id = ObjectID::from_hex_literal("0x1").unwrap();
-        builder.upgrade(stdlib_pkg_id, arg, vec![], vec![vec![]]);
-        builder.finish()
-    };
-
-    let TransactionEffects::V1(effects) = execute_programmable_transaction(
-        &authority_state,
-        &gas_object_id,
-        &sender,
-        &sender_key,
-        pt,
-    )
-    .await
-    .unwrap();
-    let (failure_status, _) = effects.status.unwrap_err();
-    assert_eq!(
-        failure_status,
-        ExecutionFailureStatus::FeatureNotYetSupported
-    );
 }
 
 /* FIXME: This tests the submission of out of transaction certs, but modifies object sequence numbers manually
@@ -4265,11 +4233,10 @@ async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityStat
         .build(path)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest, &make_system_packages()).unwrap();
+    let pkg = Object::new_package_for_testing(&modules, digest, &make_system_packages()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     state.insert_genesis_object(pkg).await;
     (state, pkg_ref)
@@ -4297,11 +4264,10 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
         .build(path)
         .unwrap()
         .get_modules()
-        .into_iter()
         .cloned()
         .collect();
     let digest = TransactionDigest::genesis();
-    let pkg = Object::new_package_for_testing(modules, digest, &make_system_packages()).unwrap();
+    let pkg = Object::new_package_for_testing(&modules, digest, &make_system_packages()).unwrap();
     let pkg_ref = pkg.compute_object_reference();
     validator.insert_genesis_object(pkg.clone()).await;
     fullnode.insert_genesis_object(pkg).await;

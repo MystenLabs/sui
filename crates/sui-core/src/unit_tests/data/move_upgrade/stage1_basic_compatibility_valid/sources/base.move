@@ -25,4 +25,7 @@ module base_addr::base {
 
     // Change this private function
     fun non_public_fun(y: bool, g: u64): u64 { if (y) 0 else g }
+
+    // Note that this is fine since the entry function is private
+    entry fun entry_fun(x: u64): u64 { x }
 }

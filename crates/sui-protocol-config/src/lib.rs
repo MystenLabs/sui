@@ -17,7 +17,7 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
-//            changes.
+//            changes, enable package upgrades.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -565,6 +565,10 @@ impl ProtocolConfig {
                 self.version
             )))
         }
+    }
+
+    pub fn package_upgrades_supported(&self) -> bool {
+        self.feature_flags.package_upgrades
     }
 
     pub fn check_commit_root_state_digest_supported(&self) -> bool {
@@ -1511,6 +1515,7 @@ impl ProtocolConfig {
                 // storage gas price multiplier
                 cfg.storage_gas_price = Some(76);
                 cfg.feature_flags.loaded_child_objects_fixed = true;
+                cfg.feature_flags.package_upgrades = true;
                 cfg
             }
             // Use this template when making changes:
