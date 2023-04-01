@@ -4,6 +4,7 @@ expression: "ProtocolConfig::get_for_version(cur)"
 ---
 version: 3
 feature_flags:
+  package_upgrades: true
   advance_epoch_start_time_in_safe_mode: true
   loaded_child_objects_fixed: true
 max_tx_size_bytes: 131072
