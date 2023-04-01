@@ -42,7 +42,7 @@ impl TestCaseImpl for NativeTransferTest {
             signer,
             obj_to_transfer,
             Some(*gas_obj.id()),
-            300_000_000 * gas_price,
+            10_000 * gas_price,
             recipient_addr
         ];
         let data = ctx
