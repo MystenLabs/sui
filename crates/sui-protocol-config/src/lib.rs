@@ -115,15 +115,23 @@ pub struct Error(pub String);
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
+    #[serde(skip_serializing_if = "is_false")]
     package_upgrades: bool,
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
+    #[serde(skip_serializing_if = "is_false")]
     commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
+    #[serde(skip_serializing_if = "is_false")]
     advance_epoch_start_time_in_safe_mode: bool,
     // If true, apply the fix to correctly capturing loaded child object versions in execution's
     // object runtime.
+    #[serde(skip_serializing_if = "is_false")]
     loaded_child_objects_fixed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Constants that change the behavior of the protocol.
