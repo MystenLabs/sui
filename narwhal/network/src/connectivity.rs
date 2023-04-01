@@ -96,6 +96,7 @@ impl ConnectionMonitor {
             } else {
                 // If no shutdown receiver is provided, wait forever.
                 let future = future::pending();
+                #[allow(clippy::let_unit_value)]
                 let () = future.await;
                 Ok(())
             }
