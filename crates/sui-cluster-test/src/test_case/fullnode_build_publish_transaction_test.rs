@@ -26,13 +26,13 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             compiled_package.get_package_base64(/* with_unpublished_deps */ false);
         let dependencies = compiled_package.get_dependency_original_package_ids();
 
-        let gas_price = ctx.get_reference_gas_price().await;
         let params = rpc_params![
             ctx.get_wallet_address(),
             all_module_bytes,
             dependencies,
             None::<ObjectID>,
-            50_000_000 * gas_price
+            // Doesn't need to be scaled by RGP since most of the cost is storage
+            50_000_000
         ];
 
         let data = ctx
