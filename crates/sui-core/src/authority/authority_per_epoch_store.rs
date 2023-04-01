@@ -855,16 +855,8 @@ impl AuthorityPerEpochStore {
         .await
     }
 
-    pub fn insert_checkpoint_boundary(
-        &self,
-        batch: &mut DBBatch,
-        index: u64,
-        height: u64,
-    ) -> SuiResult {
-        batch.insert_batch(
-            &self.tables.checkpoint_boundary,
-            std::iter::once((index, &height)),
-        )?;
+    pub fn insert_checkpoint_boundary(&self, index: u64, height: u64) -> SuiResult {
+        self.tables.checkpoint_boundary.insert(&index, &height)?;
         Ok(())
     }
 
@@ -1291,7 +1283,7 @@ impl AuthorityPerEpochStore {
 
         Ok(Some((index, roots)))
     }
-    pub fn record_checkpoint_boundary(&self, batch: &mut DBBatch, commit_round: u64) -> SuiResult {
+    pub fn record_checkpoint_boundary(&self, commit_round: u64) -> SuiResult {
         let (index, height) = self.get_last_checkpoint_boundary();
 
         if let Some(height) = height {
@@ -1307,7 +1299,7 @@ impl AuthorityPerEpochStore {
             "Recording checkpoint boundary {} at {}",
             index, commit_round
         );
-        self.insert_checkpoint_boundary(batch, index, commit_round)?;
+        self.insert_checkpoint_boundary(index, commit_round)?;
         Ok(())
     }
 
@@ -1456,31 +1448,10 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
-        let keys: Vec<_> = transactions
-            .iter()
-            .map(|tx| tx.0.transaction.key())
-            .collect();
-
-        let mut batch = self.db_batch();
-        // must hold _lock until the batch is committed
-        let (executable_txns, _lock) = self
-            .process_consensus_transactions(
-                &mut batch,
-                transactions,
-                checkpoint_service,
-                parent_sync_store,
-            )
+        let executable_txns = self
+            .process_consensus_transactions(transactions, checkpoint_service, parent_sync_store)
             .await?;
-
-        let checkpoint = self.handle_commit_boundary(&mut batch, round, timestamp)?;
-
-        batch.write()?;
-
-        for key in keys {
-            self.consensus_notify_read.notify(&key, &());
-        }
-
-        if let Some(checkpoint) = checkpoint {
+        if let Some(checkpoint) = self.handle_commit_boundary(round, timestamp)? {
             let final_checkpoint = checkpoint.details.last_of_epoch;
             checkpoint_service.notify_checkpoint(self, checkpoint)?;
             if final_checkpoint {
@@ -1488,55 +1459,19 @@ impl AuthorityPerEpochStore {
                 self.record_end_of_message_quorum_time_metric();
             }
         }
-
         Ok(executable_txns)
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn process_consensus_transactions_for_tests<C: CheckpointServiceNotify>(
-        &self,
-        transactions: Vec<VerifiedSequencedConsensusTransaction>,
-        checkpoint_service: &Arc<C>,
-        parent_sync_store: impl ParentSync,
-    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
-        let keys: Vec<_> = transactions
-            .iter()
-            .map(|tx| tx.0.transaction.key())
-            .collect();
-
-        let mut batch = self.db_batch();
-        let ret = self
-            .process_consensus_transactions(
-                &mut batch,
-                transactions,
-                checkpoint_service,
-                parent_sync_store,
-            )
-            .await
-            .map(|(txns, _)| txns);
-        batch.write()?;
-
-        for key in keys {
-            self.consensus_notify_read.notify(&key, &());
-        }
-
-        ret
     }
 
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
     /// - Verify and initialize the state to execute the certificates.
     ///   Return VerifiedCertificates for each executable certificate
     /// - Or update the state for checkpoint or epoch change protocol.
-    async fn process_consensus_transactions<C: CheckpointServiceNotify>(
+    pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
-        batch: &mut DBBatch,
         mut transactions: Vec<VerifiedSequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
-    ) -> SuiResult<(
-        Vec<VerifiedExecutableTransaction>,
-        Option<parking_lot::RwLockWriteGuard<ReconfigState>>,
-    )> {
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut verified_certificates = Vec::new();
 
         // sort all end of publish messages to the end of the list
@@ -1578,10 +1513,11 @@ impl AuthorityPerEpochStore {
             .await?
         };
 
+        let mut batch = self.db_batch();
         for tx in &other_txns {
             if let Some(cert) = self
                 .process_consensus_transaction(
-                    batch,
+                    &mut batch,
                     &mut shared_input_next_versions,
                     tx,
                     checkpoint_service,
@@ -1591,15 +1527,25 @@ impl AuthorityPerEpochStore {
                 verified_certificates.push(cert);
             }
         }
+        batch.write()?;
+
+        let mut batch = self.db_batch();
 
         batch.insert_batch(
             &self.tables.next_shared_object_versions,
             shared_input_next_versions.into_iter(),
         )?;
 
-        let lock = self.process_end_of_publish_transactions(batch, &end_of_publish_txns)?;
+        let _lock = self.process_end_of_publish_transactions(&mut batch, &end_of_publish_txns)?;
 
-        Ok((verified_certificates, lock))
+        batch.write()?;
+
+        for tx in other_txns.iter().chain(end_of_publish_txns.iter()) {
+            let key = tx.0.transaction.key();
+            self.consensus_notify_read.notify(&key, &());
+        }
+
+        Ok(verified_certificates)
     }
 
     fn process_end_of_publish_transactions(
@@ -1824,7 +1770,6 @@ impl AuthorityPerEpochStore {
 
     pub fn handle_commit_boundary(
         &self,
-        batch: &mut DBBatch,
         round: Round,
         timestamp_ms: CheckpointTimestamp,
     ) -> SuiResult<Option<PendingCheckpoint>> {
@@ -1859,7 +1804,7 @@ impl AuthorityPerEpochStore {
                 },
             });
         }
-        self.record_checkpoint_boundary(batch, round)?;
+        self.record_checkpoint_boundary(round)?;
         Ok(checkpoint)
     }
 
