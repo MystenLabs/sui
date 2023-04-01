@@ -26,9 +26,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -427,7 +427,7 @@ quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quinn = { version = "0.9", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
-quinn-proto = { version = "0.9", default-features = false, features = ["tls-rustls"] }
+quinn-proto = { version = "0.9" }
 quinn-udp = { version = "0.3", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
@@ -637,10 +637,10 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4ebf4a86952827ff0fcce6a2d8a80f42f34efed9", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -1115,7 +1115,7 @@ quanta = { version = "0.9" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quinn = { version = "0.9", default-features = false, features = ["futures-io", "runtime-tokio", "tls-rustls"] }
-quinn-proto = { version = "0.9", default-features = false, features = ["tls-rustls"] }
+quinn-proto = { version = "0.9" }
 quinn-udp = { version = "0.3", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6" }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }

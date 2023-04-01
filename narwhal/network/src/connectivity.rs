@@ -5,6 +5,7 @@ use crate::metrics::NetworkConnectionMetrics;
 use anemo::types::PeerEvent;
 use anemo::PeerId;
 use dashmap::DashMap;
+use futures::future;
 use mysten_metrics::spawn_logged_monitored_task;
 use quinn_proto::ConnectionStats;
 use std::collections::{HashMap, HashSet};
@@ -12,6 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time;
+use types::ConditionalBroadcastReceiver;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum ConnectionStatus {
@@ -24,6 +26,7 @@ pub struct ConnectionMonitor {
     connection_metrics: NetworkConnectionMetrics,
     peer_id_types: HashMap<PeerId, String>,
     connection_statuses: Arc<DashMap<PeerId, ConnectionStatus>>,
+    rx_shutdown: Option<ConditionalBroadcastReceiver>,
 }
 
 impl ConnectionMonitor {
@@ -32,6 +35,7 @@ impl ConnectionMonitor {
         network: anemo::NetworkRef,
         connection_metrics: NetworkConnectionMetrics,
         peer_id_types: HashMap<PeerId, String>,
+        rx_shutdown: Option<ConditionalBroadcastReceiver>,
     ) -> (JoinHandle<()>, Arc<DashMap<PeerId, ConnectionStatus>>) {
         let connection_statuses_outer = Arc::new(DashMap::new());
         let connection_statuses = connection_statuses_outer.clone();
@@ -42,6 +46,7 @@ impl ConnectionMonitor {
                     connection_metrics,
                     peer_id_types,
                     connection_statuses,
+                    rx_shutdown
                 }
                 .run(),
                 "ConnectionMonitor"
@@ -50,7 +55,7 @@ impl ConnectionMonitor {
         )
     }
 
-    async fn run(self) {
+    async fn run(mut self) {
         let mut connected_peers: HashSet<PeerId> = HashSet::new();
         let mut subscriber = {
             if let Some(network) = self.network.upgrade() {
@@ -84,6 +89,19 @@ impl ConnectionMonitor {
 
         let mut connection_stat_collection_interval = time::interval(Duration::from_secs(60));
 
+        async fn wait_for_shutdown(
+            rx_shutdown: &mut Option<ConditionalBroadcastReceiver>,
+        ) -> Result<(), tokio::sync::broadcast::error::RecvError> {
+            if let Some(rx) = rx_shutdown.as_mut() {
+                rx.receiver.recv().await
+            } else {
+                // If no shutdown receiver is provided, wait forever.
+                let future = future::pending();
+                let () = future.await;
+                Ok(())
+            }
+        }
+
         loop {
             tokio::select! {
                 _ = connection_stat_collection_interval.tick() => {
@@ -109,6 +127,9 @@ impl ConnectionMonitor {
                             connected_peers.remove(&peer_id);
                         }
                     }
+                }
+                _ = wait_for_shutdown(&mut self.rx_shutdown) => {
+                    return;
                 }
             }
         }
@@ -252,7 +273,7 @@ mod tests {
 
         // WHEN bring up the monitor
         let (_h, statuses) =
-            ConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), HashMap::new());
+            ConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), HashMap::new(), None);
 
         // THEN peer 2 should be already connected
         assert_network_peers(metrics.clone(), 1).await;

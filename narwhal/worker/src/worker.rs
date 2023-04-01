@@ -332,6 +332,7 @@ impl Worker {
             network.downgrade(),
             network_connection_metrics,
             peer_types,
+            Some(shutdown_receivers.pop().unwrap()),
         );
 
         let network_admin_server_base_port = parameters
