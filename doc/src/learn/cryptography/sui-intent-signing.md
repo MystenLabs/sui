@@ -56,7 +56,7 @@ let intent_msg = IntentMessage::new(intent, data);
 let signature = Signature::new_secure(&intent_msg, signer);
 ```
 
-Here is an example in Typescript:
+Here is an example in TypeScript:
 
 ```typescript
 const intentMessage = messageWithIntent(
