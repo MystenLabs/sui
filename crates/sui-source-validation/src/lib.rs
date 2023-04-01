@@ -259,18 +259,19 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let mut map = OnChainModules::new();
         let mut err = vec![];
 
-        for (address, pkg) in addresses.zip(resp) {
+        for (storage_id, pkg) in addresses.zip(resp) {
             let SuiRawMovePackage { module_map, .. } = pkg?;
             for (name, bytes) in module_map {
                 let Ok(module) = CompiledModule::deserialize(&bytes) else {
                     err.push(SourceVerificationError::OnChainDependencyDeserializationError {
-                        address,
+                        address: storage_id,
                         module: name.into(),
                     });
                     continue;
                 };
 
-                map.insert((address, Symbol::from(name)), module);
+                let runtime_id = *module.self_id().address();
+                map.insert((runtime_id, Symbol::from(name)), module);
             }
         }
 
