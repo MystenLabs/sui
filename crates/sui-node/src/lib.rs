@@ -19,6 +19,7 @@ use anyhow::Result;
 use arc_swap::ArcSwap;
 use futures::TryFutureExt;
 use prometheus::Registry;
+use sui_core::authority::authority_store_tables::LiveObject;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_types::sui_system_state::SuiSystemState;
 use tap::tap::TapFallible;
@@ -163,7 +164,6 @@ impl SuiNode {
             config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
         }
 
-        // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
         let prometheus_registry = registry_service.default_registry();
@@ -1015,6 +1015,8 @@ impl SuiNode {
                     None
                 }
             } else {
+                self.check_system_consistency();
+
                 let new_epoch_store = self
                     .reconfigure_state(
                         &cur_epoch_store,
@@ -1042,14 +1044,6 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    // was a fullnode, still a fullnode
-                    let is_inconsistent = self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        false,
-                    );
-                    checkpoint_executor.set_inconsistent_state(is_inconsistent);
-
                     None
                 }
             };
@@ -1058,6 +1052,7 @@ impl SuiNode {
         }
     }
 
+    #[allow(dead_code)]
     fn check_is_consistent_state(
         &self,
         accumulator: Arc<StateAccumulator>,
@@ -1114,6 +1109,43 @@ impl SuiNode {
         info!(next_epoch, "Validator State has been reconfigured");
         assert_eq!(next_epoch, new_epoch_store.epoch());
         new_epoch_store
+    }
+
+    fn check_system_consistency(&self) {
+        if !self.config.enable_expensive_safety_checks && cfg!(not(debug_assertions)) {
+            // We only do these checks if either the expensive safety checks are enabled or we are
+            // running in debug mode.
+            return;
+        }
+        let total_storage_rebate: u64 = self
+            .state
+            .db()
+            .iter_live_object_set()
+            .map(|o| match o {
+                LiveObject::Normal(object) => object.storage_rebate,
+                LiveObject::Wrapped(_) => 0,
+            })
+            .sum();
+        let system_state = self
+            .state
+            .get_sui_system_state_object_during_reconfig()
+            .expect("Reading sui system state object cannot fail")
+            .into_sui_system_state_summary();
+
+        let storage_fund_balance = system_state.storage_fund_total_object_storage_rebates;
+        if total_storage_rebate != storage_fund_balance {
+            let err = format!(
+                "Inconsistent state detected at epoch {}: total storage rebate: {}, storage fund balance: {}",
+                system_state.epoch, total_storage_rebate, storage_fund_balance
+            );
+            if cfg!(debug_assertions) {
+                panic!("{}", err);
+            } else {
+                // We cannot panic in production yet because it is known that there are some
+                // inconsistencies in testnet. We will enable this once we make it balanced again in testnet.
+                warn!(err);
+            }
+        }
     }
 }
 

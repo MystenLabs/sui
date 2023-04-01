@@ -24,13 +24,17 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
     const { data: system } = useSystemState();
     const validatorAddress = event.parsedJson?.validator_address;
     const stakedAmount = event.parsedJson?.amount;
-    const stakedEpoch = event.parsedJson?.epoch || 0;
+    const stakedEpoch = Number(event.parsedJson?.epoch || 0);
 
     const { data: rollingAverageApys } = useGetRollingAverageApys(
         system?.activeValidators?.length || null
     );
 
-    const apy = rollingAverageApys?.[validatorAddress] || 0;
+    const apy =
+        rollingAverageApys?.[validatorAddress] ||
+        rollingAverageApys?.[validatorAddress] === 0
+            ? rollingAverageApys?.[validatorAddress]
+            : null;
 
     // Reward will be available after 2 epochs
     // TODO: Get epochStartTimestampMs/StartDate for staking epoch + NUM_OF_EPOCH_BEFORE_EARNING
@@ -72,7 +76,7 @@ export function StakeTxnCard({ event }: StakeTxnCardProps) {
                         <IconTooltip tip="This is the Annualized Percentage Yield of the a specific validator’s past operations. Note there is no guarantee this APY will be true in the future." />
                     </div>
                     <Text variant="body" weight="medium" color="steel-darker">
-                        {apy && apy > 0 ? apy + ' %' : '--'}
+                        {apy === null ? '--' : apy + ' %'}
                     </Text>
                 </div>
                 <div className="flex justify-between w-full py-3.5">

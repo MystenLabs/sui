@@ -2060,9 +2060,8 @@ Set the voting power of this validator, called only from validator_set.
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_is_duplicate">is_duplicate</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>, other: &<a href="validator.md#0x3_validator_Validator">Validator</a>): bool {
      self.metadata.sui_address == other.metadata.sui_address
         || self.metadata.name == other.metadata.name
-        // MUSTFIX: tests <b>break</b> when this is uncommented
-        // || self.metadata.net_address == other.metadata.net_address
-        // || self.metadata.p2p_address == other.metadata.p2p_address
+        || self.metadata.net_address == other.metadata.net_address
+        || self.metadata.p2p_address == other.metadata.p2p_address
         || self.metadata.protocol_pubkey_bytes == other.metadata.protocol_pubkey_bytes
         || self.metadata.network_pubkey_bytes == other.metadata.network_pubkey_bytes
         || self.metadata.network_pubkey_bytes == other.metadata.worker_pubkey_bytes

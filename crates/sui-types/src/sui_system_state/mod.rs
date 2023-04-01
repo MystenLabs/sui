@@ -7,6 +7,7 @@ use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::storage::ObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use crate::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use crate::versioned::Versioned;
 use crate::{id::UID, MoveTypeTagTrait, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 use anyhow::Result;
@@ -21,6 +22,7 @@ use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary}
 
 pub mod epoch_start_sui_system_state;
 pub mod sui_system_state_inner_v1;
+pub mod sui_system_state_inner_v2;
 pub mod sui_system_state_summary;
 
 #[cfg(msim)]
@@ -91,6 +93,7 @@ pub trait SuiSystemStateTrait {
 #[enum_dispatch(SuiSystemStateTrait)]
 pub enum SuiSystemState {
     V1(SuiSystemStateInnerV1),
+    V2(SuiSystemStateInnerV2),
     #[cfg(msim)]
     SimTestV1(SimTestSuiSystemStateInnerV1),
     #[cfg(msim)]
@@ -111,7 +114,6 @@ impl SuiSystemState {
     pub fn into_genesis_version_for_tooling(self) -> SuiSystemStateInnerGenesis {
         match self {
             SuiSystemState::V1(inner) => inner,
-            #[cfg(msim)]
             _ => unreachable!(),
         }
     }
@@ -159,6 +161,18 @@ where
                     },
                 )?;
             Ok(SuiSystemState::V1(result))
+        }
+        2 => {
+            let result: SuiSystemStateInnerV2 =
+                get_dynamic_field_from_store(object_store, id, &wrapper.version).map_err(
+                    |err| {
+                        SuiError::DynamicFieldReadError(format!(
+                            "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
+                            id, wrapper.version, err
+                        ))
+                    },
+                )?;
+            Ok(SuiSystemState::V2(result))
         }
         #[cfg(msim)]
         SUI_SYSTEM_STATE_SIM_TEST_V1 => {

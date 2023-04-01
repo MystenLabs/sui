@@ -50,6 +50,7 @@ use tap::Pipe;
 use thiserror::Error;
 use tracing::trace;
 
+// TODO: use RGP instead.
 pub const DUMMY_GAS_PRICE: u64 = 1;
 
 const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
@@ -3181,6 +3182,10 @@ impl InputObjects {
             .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version));
 
         SequenceNumber::lamport_increment(input_versions)
+    }
+
+    pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
+        self.objects
     }
 
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {

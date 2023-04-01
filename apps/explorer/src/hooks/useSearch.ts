@@ -27,7 +27,6 @@ const getResultsForTransaction = async (
     query: string
 ) => {
     if (!isValidTransactionDigest(query)) return null;
-
     const txdata = await rpc.getTransactionBlock({ digest: query });
     return {
         label: 'transaction',
@@ -46,38 +45,37 @@ const getResultsForObject = async (rpc: JsonRpcProvider, query: string) => {
     if (!isValidSuiObjectId(normalized)) return null;
 
     const { data, error } = await rpc.getObject({ id: normalized });
-    if (is(data, SuiObjectData) && !error) {
-        return {
-            label: 'object',
-            results: [
-                {
-                    id: data.objectId,
-                    label: data.objectId,
-                    type: 'object',
-                },
-            ],
-        };
-    }
+    if (!is(data, SuiObjectData) || error) return null;
 
-    return null;
+    return {
+        label: 'object',
+        results: [
+            {
+                id: data.objectId,
+                label: data.objectId,
+                type: 'object',
+            },
+        ],
+    };
 };
 
 const getResultsForCheckpoint = async (rpc: JsonRpcProvider, query: string) => {
-    const { digest } = await rpc.getCheckpoint({ id: query });
-    if (digest) {
-        return {
-            label: 'checkpoint',
-            results: [
-                {
-                    id: digest,
-                    label: digest,
-                    type: 'checkpoint',
-                },
-            ],
-        };
-    }
+    // Checkpoint digests have the same format as transaction digests:
+    if (!isValidTransactionDigest(query)) return null;
 
-    return null;
+    const { digest } = await rpc.getCheckpoint({ id: query });
+    if (!digest) return null;
+
+    return {
+        label: 'checkpoint',
+        results: [
+            {
+                id: digest,
+                label: digest,
+                type: 'checkpoint',
+            },
+        ],
+    };
 };
 
 const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
@@ -96,20 +94,18 @@ const getResultsForAddress = async (rpc: JsonRpcProvider, query: string) => {
         }),
     ]);
 
-    if (from.data?.length || to.data?.length) {
-        return {
-            label: 'address',
-            results: [
-                {
-                    id: normalized,
-                    label: normalized,
-                    type: 'address',
-                },
-            ],
-        };
-    }
+    if (!from.data?.length && !to.data?.length) return null;
 
-    return null;
+    return {
+        label: 'address',
+        results: [
+            {
+                id: normalized,
+                label: normalized,
+                type: 'address',
+            },
+        ],
+    };
 };
 
 export function useSearch(query: string) {

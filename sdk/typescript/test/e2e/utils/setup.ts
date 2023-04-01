@@ -36,7 +36,7 @@ export const DEFAULT_RECIPIENT =
   '0x0c567ffdf8162cb6d51af74be0199443b92e823d4ba6ced24de5c6c463797d46';
 export const DEFAULT_RECIPIENT_2 =
   '0xbb967ddbebfee8c40d8fdd2c24cb02452834cd3a7061d18564448f900eb9e66d';
-export const DEFAULT_GAS_BUDGET = 10000;
+export const DEFAULT_GAS_BUDGET = 10000000;
 export const DEFAULT_SEND_AMOUNT = 1000;
 
 export class TestToolbox {
@@ -121,9 +121,6 @@ export async function publishPackage(
     ),
   );
   const tx = new TransactionBlock();
-  // TODO: Publish dry runs fail currently, so we need to set a gas budget:
-  tx.setGasBudget(10000);
-
   const cap = tx.publish(
     compiledModulesAndDeps.modules.map((m: any) => Array.from(fromB64(m))),
     compiledModulesAndDeps.dependencies.map((addr: string) =>

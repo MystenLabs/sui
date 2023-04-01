@@ -49,7 +49,7 @@ module sui_system::sui_system {
     use sui::tx_context::{Self, TxContext};
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInner};
+    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2};
     use sui_system::stake_subsidy::StakeSubsidy;
     use std::option;
     use sui::dynamic_field;
@@ -567,25 +567,23 @@ module sui_system::sui_system {
         )
     }
 
-    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInner {
+    fun load_system_state(self: &mut SuiSystemState): &SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {
+    fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
         load_inner_maybe_upgrade(self)
     }
 
-    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInner {
-        // TODO: This is where we check the version and perform upgrade if necessary.
-        // if (self.version == 1) {
-        //   let v1 = dynamic_field::remove(&mut self.id, self.version);
-        //   let v2 = sui_system_state_inner::v1_to_v2(v1);
-        //   assert!(v2.system_state_version = 2, EWrongInnerVersion);
-        //   self.version = 2;
-        //   dynamic_field::add(&mut self.id, self.version, v2);
-        // }
+    fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInnerV2 {
+        if (self.version == 1) {
+          let v1 = dynamic_field::remove(&mut self.id, self.version);
+          let v2 = sui_system_state_inner::v1_to_v2(v1);
+          self.version = 2;
+          dynamic_field::add(&mut self.id, self.version, v2);
+        };
 
-        let inner: &mut SuiSystemStateInner = dynamic_field::borrow_mut(&mut self.id, self.version);
+        let inner = dynamic_field::borrow_mut(&mut self.id, self.version);
         assert!(sui_system_state_inner::system_state_version(inner) == self.version, EWrongInnerVersion);
         inner
     }

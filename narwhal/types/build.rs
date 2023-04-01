@@ -114,6 +114,15 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .method(
             anemo_build::manual::Method::builder()
+                .name("fetch_batches")
+                .route_name("FetchBatches")
+                .request_type("crate::FetchBatchesRequest")
+                .response_type("crate::FetchBatchesResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
                 .name("delete_batches")
                 .route_name("DeleteBatches")
                 .request_type("crate::WorkerDeleteBatchesMessage")

@@ -106,6 +106,7 @@ impl BenchmarkBank {
         gas_price: Option<u64>,
         keypair: &AccountKeyPair,
     ) -> Result<VerifiedTransaction> {
+        let gas_price = gas_price.unwrap_or(DUMMY_GAS_PRICE);
         let split_coin = TransactionData::new_move_call(
             self.primary_gas.1,
             SUI_FRAMEWORK_OBJECT_ID,
@@ -117,8 +118,8 @@ impl BenchmarkBank {
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(self.pay_coin.0)),
                 CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
             ],
-            1000000,
-            gas_price.unwrap_or(DUMMY_GAS_PRICE),
+            500_000_000 * gas_price,
+            gas_price,
         )?;
         let verified_tx = to_sender_signed_transaction(split_coin, keypair);
         Ok(verified_tx)

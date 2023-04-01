@@ -2,7 +2,7 @@ processed 3 tasks
 
 task 1 'publish'. lines 6-10:
 created: object(104), object(105)
-written: object(103)
+mutated: object(103)
 
 task 2 'view-object'. lines 12-12:
 Owner: Account Address ( _ )

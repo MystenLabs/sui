@@ -80,3 +80,39 @@ pub enum ObjectChange {
         digest: ObjectDigest,
     },
 }
+
+impl ObjectChange {
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            ObjectChange::Published { package_id, .. } => *package_id,
+            ObjectChange::Transferred { object_id, .. }
+            | ObjectChange::Mutated { object_id, .. }
+            | ObjectChange::Deleted { object_id, .. }
+            | ObjectChange::Wrapped { object_id, .. }
+            | ObjectChange::Created { object_id, .. } => *object_id,
+        }
+    }
+
+    pub fn mask_for_test(&mut self, new_version: SequenceNumber, new_digest: ObjectDigest) {
+        match self {
+            ObjectChange::Published {
+                version, digest, ..
+            }
+            | ObjectChange::Transferred {
+                version, digest, ..
+            }
+            | ObjectChange::Mutated {
+                version, digest, ..
+            }
+            | ObjectChange::Created {
+                version, digest, ..
+            } => {
+                *version = new_version;
+                *digest = new_digest
+            }
+            ObjectChange::Deleted { version, .. } | ObjectChange::Wrapped { version, .. } => {
+                *version = new_version
+            }
+        }
+    }
+}

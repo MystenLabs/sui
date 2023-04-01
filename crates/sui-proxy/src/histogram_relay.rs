@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{bail, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
+use once_cell::sync::Lazy;
 use prometheus::proto::{Metric, MetricFamily};
+use prometheus::{register_counter_vec, register_histogram_vec};
+use prometheus::{CounterVec, HistogramVec};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::VecDeque,
@@ -14,7 +17,26 @@ use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 use tracing::{info, Level};
 
+use crate::var;
+
 const METRICS_ROUTE: &str = "/metrics";
+
+static HISTOGRAM_RELAY_PRESSURE: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "histogram_relay_pressure",
+        "Number of metric families submitted, exported, overflowed to/from the queue.",
+        &["histogram_relay"]
+    )
+    .unwrap()
+});
+static HISTOGRAM_RELAY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
+    register_histogram_vec!(
+        "histogram_submit_duration_seconds",
+        "The submit fn latencies in seconds.",
+        &["histogram_relay"]
+    )
+    .unwrap()
+});
 
 // Creates a new http server that has as a sole purpose to expose
 // and endpoint that prometheus agent can use to poll for the metrics.
@@ -71,20 +93,45 @@ impl HistogramRelay {
     /// in doing so, it will also wrap each entry in a timestamp which will be use
     /// for pruning old entires on each submission call. this may not be ideal long term.
     pub fn submit(&self, data: Vec<MetricFamily>) {
+        HISTOGRAM_RELAY_PRESSURE
+            .with_label_values(&["submit"])
+            .inc();
+        let timer = HISTOGRAM_RELAY_DURATION
+            .with_label_values(&["submit"])
+            .start_timer();
         //  represents a collection timestamp
-        let timestamp_ms = SystemTime::now()
+        let timestamp_secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-
+        let pressure = data.len();
         let mut queue = self
             .0
             .lock()
             .expect("couldn't get mut lock on HistogramRelay");
-        queue.retain(|v| (timestamp_ms - v.0) < 300000); // drain anything 5 mins or older
-        queue.push_back(Wrapper(timestamp_ms, data));
+        queue.retain(|v| {
+            // 5 mins is the max time in the queue allowed
+            if (timestamp_secs - v.0) < var!("MAX_QUEUE_TIME_SECS", 300) {
+                return true;
+            }
+            HISTOGRAM_RELAY_PRESSURE
+                .with_label_values(&["overflow"])
+                .inc();
+            false
+        }); // drain anything 5 mins or older
+        queue.push_back(Wrapper(timestamp_secs, data));
+        HISTOGRAM_RELAY_PRESSURE
+            .with_label_values(&["submitted"])
+            .inc_by(pressure as f64);
+        timer.observe_duration();
     }
     pub fn export(&self) -> Result<String> {
+        HISTOGRAM_RELAY_PRESSURE
+            .with_label_values(&["export"])
+            .inc();
+        let timer = HISTOGRAM_RELAY_DURATION
+            .with_label_values(&["export"])
+            .start_timer();
         // totally drain all metrics whenever we get a scrape request from the metrics handler
         let mut queue = self
             .0
@@ -109,6 +156,10 @@ impl HistogramRelay {
             Ok(s) => s,
             Err(error) => bail!("{error}"),
         };
+        HISTOGRAM_RELAY_PRESSURE
+            .with_label_values(&["exported"])
+            .inc_by(histograms.len() as f64);
+        timer.observe_duration();
         Ok(string)
     }
 }

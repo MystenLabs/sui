@@ -85,6 +85,21 @@ module sui_system::validator_set {
         tallying_rule_global_score: u64,
     }
 
+    /// V2 of ValidatorEpochInfoEvent containing more information about the validator.
+    struct ValidatorEpochInfoEventV2 has copy, drop {
+        epoch: u64,
+        validator_address: address,
+        reference_gas_survey_quote: u64,
+        stake: u64,
+        voting_power: u64,
+        commission_rate: u64,
+        pool_staking_reward: u64,
+        storage_fund_staking_reward: u64,
+        pool_token_exchange_rate: PoolTokenExchangeRate,
+        tallying_rule_reporters: vector<address>,
+        tallying_rule_global_score: u64,
+    }
+
     /// Event emitted every time a new validator joins the committee.
     /// The epoch value corresponds to the first epoch this change takes place.
     struct ValidatorJoinEvent has copy, drop {
@@ -236,7 +251,7 @@ module sui_system::validator_set {
         table_vec::push_back(&mut self.pending_active_validators, validator);
     }
 
-    public(friend) fun assert_no_pending_or_actice_duplicates(self: &ValidatorSet, validator: &Validator) {
+    public(friend) fun assert_no_pending_or_active_duplicates(self: &ValidatorSet, validator: &Validator) {
         // Validator here must be active or pending, and thus must be identified as duplicate exactly once.
         assert!(
             count_duplicates_vec(&self.active_validators, validator) +
@@ -1176,11 +1191,12 @@ module sui_system::validator_set {
                 if (vector::contains(slashed_validators, &validator_address)) 0
                 else 1;
             event::emit(
-                ValidatorEpochInfoEvent {
+                ValidatorEpochInfoEventV2 {
                     epoch: new_epoch,
                     validator_address,
                     reference_gas_survey_quote: validator::gas_price(v),
                     stake: validator::total_stake_amount(v),
+                    voting_power: validator::voting_power(v),
                     commission_rate: validator::commission_rate(v),
                     pool_staking_reward: *vector::borrow(pool_staking_reward_amounts, i),
                     storage_fund_staking_reward: *vector::borrow(storage_fund_staking_reward_amounts, i),

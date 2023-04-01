@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
-use sui_protocol_config_macros::ProtocolConfigGetters;
 use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
@@ -17,8 +16,8 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 //
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
-// Version 3: gas model v2, including all sui conservation fixes,
-//             limits on `max_size_written_objects`, `max_size_written_objects_system_tx`
+// Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
+//            changes. Limits on `max_size_written_objects`, `max_size_written_objects_system_tx`
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -117,16 +116,23 @@ pub struct Error(pub String);
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
+    #[serde(skip_serializing_if = "is_false")]
     package_upgrades: bool,
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
+    #[serde(skip_serializing_if = "is_false")]
     commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
+    #[serde(skip_serializing_if = "is_false")]
     advance_epoch_start_time_in_safe_mode: bool,
-    // If true, include various fixes to ensure sui conservation, including:
-    // - Conserving storage rebate of system transactions.
-    // - TBD.
-    gas_model_v2: bool,
+    // If true, apply the fix to correctly capturing loaded child object versions in execution's
+    // object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    loaded_child_objects_fixed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Constants that change the behavior of the protocol.
@@ -142,17 +148,12 @@ struct FeatureFlags {
 /// - Initialize the field to `None` in prior protocol versions.
 /// - Initialize the field to `Some(val)` for your new protocol version.
 /// - Add a public getter that simply unwraps the field.
+///
 /// This way, if the constant is accessed in a protocol version in which it is not defined, the
 /// validator will crash. (Crashing is necessary because this type of error would almost always
 /// result in forking if not prevented here).
-/// - Alternatively, by deriving `ProtocolConfigGetters`, every field of name `config_field`
-///     with type `Option<config_type>` will automatically have two getters derived
-///     `get_for_current_version_config_field(&self) -> Option<config_type>` and
-///     `get_for_version_config_field(version: ProtocolVersion) -> `Option<config_type>`.
-///     This is used to get a field value at a specified version if it exists, or `None` otherwise.
-///     We can use this to access fields only if they exist, without crashing.
 #[skip_serializing_none]
-#[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
+#[derive(Clone, Serialize, Debug)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 
@@ -575,12 +576,12 @@ impl ProtocolConfig {
         self.feature_flags.commit_root_state_digest
     }
 
-    pub fn gas_model_v2(&self) -> bool {
-        self.feature_flags.gas_model_v2
-    }
-
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
         self.feature_flags.advance_epoch_start_time_in_safe_mode
+    }
+
+    pub fn loaded_child_objects_fixed(&self) -> bool {
+        self.feature_flags.loaded_child_objects_fixed
     }
 }
 
@@ -1167,12 +1168,13 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
-    pub fn max_size_written_objects(&self) -> u64 {
-        self.max_size_written_objects.expect(CONSTANT_ERR_MSG)
+    /// We dont unwrap here because we want to be able to selectively fetch this valuue
+    pub fn max_size_written_objects(&self) -> Option<u64> {
+        self.max_size_written_objects
     }
-    pub fn max_size_written_objects_system_tx(&self) -> u64 {
+    /// We dont unwrap here because we want to be able to selectively fetch this valuue
+    pub fn max_size_written_objects_system_tx(&self) -> Option<u64> {
         self.max_size_written_objects_system_tx
-            .expect(CONSTANT_ERR_MSG)
     }
 
     // When adding a new constant, create a new getter for it as follows, so that the validator
@@ -1518,8 +1520,18 @@ impl ProtocolConfig {
             }
             3 => {
                 let mut cfg = Self::get_for_version_impl(version - 1);
-                cfg.feature_flags.gas_model_v2 = true;
+                // changes for gas model
+                cfg.gas_model_version = Some(2);
+                // max gas budget is in MIST and an absolute value 50SUI
+                cfg.max_tx_gas = Some(50_000_000_000);
+                // min gas budget is in MIST and an absolute value 2000MIST or 0.000002SUI
+                cfg.base_tx_cost_fixed = Some(2_000);
+                // storage gas price multiplier
+                cfg.storage_gas_price = Some(76);
+                cfg.feature_flags.loaded_child_objects_fixed = true;
+                // max size of written objects during a TXn
                 cfg.max_size_written_objects = Some(5 * 1000 * 1000);
+                // max size of written objects during a system TXn to allow for larger writes
                 cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                 cfg
             }
@@ -1654,46 +1666,6 @@ macro_rules! check_limit_by_meter {
 mod test {
     use super::*;
     use insta::assert_yaml_snapshot;
-
-    #[test]
-    fn version_gating_test() {
-        // This config is present in v1
-        let mut config = ProtocolConfig::get_for_version(ProtocolVersion::new(1));
-        assert_eq!(
-            config.get_for_current_version_max_function_definitions(),
-            Some(1000)
-        );
-
-        // This config is not present in v1 or v2
-        assert_eq!(
-            config.get_for_current_version_max_size_written_objects(),
-            None
-        );
-        assert_eq!(
-            config.get_for_current_version_max_size_written_objects_system_tx(),
-            None
-        );
-        config = ProtocolConfig::get_for_version(ProtocolVersion::new(2));
-        assert_eq!(
-            config.get_for_current_version_max_size_written_objects(),
-            None
-        );
-        assert_eq!(
-            config.get_for_current_version_max_size_written_objects_system_tx(),
-            None
-        );
-
-        // This config is not present in v3
-        config = ProtocolConfig::get_for_version(ProtocolVersion::new(3));
-        assert_eq!(
-            config.get_for_current_version_max_size_written_objects(),
-            Some(5 * 1000 * 1000)
-        );
-        assert_eq!(
-            config.get_for_current_version_max_size_written_objects_system_tx(),
-            Some(50 * 1000 * 1000)
-        );
-    }
 
     #[test]
     fn snaphost_tests() {

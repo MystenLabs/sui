@@ -15,14 +15,15 @@ use store::{rocks::DBMap, Map};
 use tokio::time::sleep;
 use tracing::{debug, info, trace, warn};
 use types::{
-    Batch, BatchDigest, PrimaryToWorker, RequestBatchRequest, RequestBatchResponse,
-    RequestBatchesRequest, RequestBatchesResponse, WorkerBatchMessage, WorkerDeleteBatchesMessage,
-    WorkerOthersBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
+    Batch, BatchDigest, FetchBatchesRequest, FetchBatchesResponse, PrimaryToWorker,
+    RequestBatchRequest, RequestBatchResponse, RequestBatchesRequest, RequestBatchesResponse,
+    WorkerBatchMessage, WorkerDeleteBatchesMessage, WorkerOthersBatchMessage,
+    WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerClient,
 };
 
 use mysten_metrics::monitored_future;
 
-use crate::TransactionValidator;
+use crate::{batch_fetcher::BatchFetcher, TransactionValidator};
 
 #[cfg(test)]
 #[path = "tests/handlers_tests.rs"]
@@ -134,6 +135,8 @@ pub struct PrimaryReceiverHandler<V> {
     pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batch_retry_nodes: usize,
+    // Component to help primary fetch batches from other workers.
+    pub batch_fetcher: Option<BatchFetcher>,
     // Validate incoming batches
     pub validator: V,
 }
@@ -305,6 +308,26 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
             // Add a delay before retrying.
             sleep(Duration::from_secs(1)).await;
         }
+    }
+
+    async fn fetch_batches(
+        &self,
+        request: anemo::Request<FetchBatchesRequest>,
+    ) -> Result<anemo::Response<FetchBatchesResponse>, anemo::rpc::Status> {
+        if self.batch_fetcher.is_none() {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "BatchFetcher not configured, please call fetch_batches() via local worker handler",
+            ));
+        }
+        let request = request.into_body();
+        let batches = self
+            .batch_fetcher
+            .as_ref()
+            .unwrap()
+            .fetch(request.digests, request.known_workers)
+            .await;
+        Ok(anemo::Response::new(FetchBatchesResponse { batches }))
     }
 
     async fn delete_batches(

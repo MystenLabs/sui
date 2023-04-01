@@ -5,11 +5,11 @@ A: object(103)
 
 task 1 'publish'. lines 8-18:
 created: object(105)
-written: object(104)
+mutated: object(104)
 
 task 2 'programmable'. lines 20-22:
 created: object(107)
-written: object(106)
+mutated: object(106)
 
 task 3 'programmable'. lines 24-26:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions

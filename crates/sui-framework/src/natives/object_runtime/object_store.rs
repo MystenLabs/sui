@@ -23,6 +23,7 @@ pub(super) struct ChildObject {
     pub(super) value: GlobalValue,
 }
 
+#[derive(Debug)]
 pub(crate) struct ChildObjectEffect {
     pub(super) owner: ObjectID,
     // none if it was an input object
@@ -356,8 +357,19 @@ impl<'a> ObjectStore<'a> {
     }
 
     // retrieve the `Op` effects for the child objects
-    pub(super) fn take_effects(&mut self) -> BTreeMap<ObjectID, ChildObjectEffect> {
-        std::mem::take(&mut self.store)
+    pub(super) fn take_effects(
+        &mut self,
+    ) -> (
+        BTreeMap<ObjectID, SequenceNumber>,
+        BTreeMap<ObjectID, ChildObjectEffect>,
+    ) {
+        let loaded_versions: BTreeMap<ObjectID, SequenceNumber> = self
+            .inner
+            .cached_objects
+            .iter()
+            .filter_map(|(id, obj_opt)| Some((*id, obj_opt.as_ref()?.version())))
+            .collect();
+        let child_object_effects = std::mem::take(&mut self.store)
             .into_iter()
             .filter_map(|(id, child_object)| {
                 let ChildObject {
@@ -366,11 +378,7 @@ impl<'a> ObjectStore<'a> {
                     move_type,
                     value,
                 } = child_object;
-                let loaded_version = self
-                    .inner
-                    .cached_objects
-                    .get(&id)
-                    .and_then(|obj_opt| Some(obj_opt.as_ref()?.version()));
+                let loaded_version = loaded_versions.get(&id).copied();
                 let effect = value.into_effect()?;
                 let child_effect = ChildObjectEffect {
                     owner,
@@ -381,7 +389,8 @@ impl<'a> ObjectStore<'a> {
                 };
                 Some((id, child_effect))
             })
-            .collect()
+            .collect();
+        (loaded_versions, child_object_effects)
     }
 
     pub(super) fn all_active_objects(&self) -> impl Iterator<Item = (&ObjectID, &Type, Value)> {

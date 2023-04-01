@@ -5,11 +5,11 @@ A: object(103), B: object(104)
 
 task 1 'publish'. lines 8-22:
 created: object(106)
-written: object(105)
+mutated: object(105)
 
 task 2 'run'. lines 24-24:
 created: object(108)
-written: object(107)
+mutated: object(107)
 
 task 3 'view-object'. lines 26-26:
 Owner: Immutable

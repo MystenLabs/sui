@@ -7,6 +7,7 @@
 
 -  [Struct `ValidatorSet`](#0x3_validator_set_ValidatorSet)
 -  [Struct `ValidatorEpochInfoEvent`](#0x3_validator_set_ValidatorEpochInfoEvent)
+-  [Struct `ValidatorEpochInfoEventV2`](#0x3_validator_set_ValidatorEpochInfoEventV2)
 -  [Struct `ValidatorJoinEvent`](#0x3_validator_set_ValidatorJoinEvent)
 -  [Struct `ValidatorLeaveEvent`](#0x3_validator_set_ValidatorLeaveEvent)
 -  [Constants](#@Constants_0)
@@ -14,7 +15,7 @@
 -  [Function `request_add_validator_candidate`](#0x3_validator_set_request_add_validator_candidate)
 -  [Function `request_remove_validator_candidate`](#0x3_validator_set_request_remove_validator_candidate)
 -  [Function `request_add_validator`](#0x3_validator_set_request_add_validator)
--  [Function `assert_no_pending_or_actice_duplicates`](#0x3_validator_set_assert_no_pending_or_actice_duplicates)
+-  [Function `assert_no_pending_or_active_duplicates`](#0x3_validator_set_assert_no_pending_or_active_duplicates)
 -  [Function `request_remove_validator`](#0x3_validator_set_request_remove_validator)
 -  [Function `request_add_stake`](#0x3_validator_set_request_add_stake)
 -  [Function `request_withdraw_stake`](#0x3_validator_set_request_withdraw_stake)
@@ -213,6 +214,94 @@ each validator, emitted during epoch advancement.
 </dd>
 <dt>
 <code>stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>commission_rate: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pool_staking_reward: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>storage_fund_staking_reward: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>pool_token_exchange_rate: <a href="staking_pool.md#0x3_staking_pool_PoolTokenExchangeRate">staking_pool::PoolTokenExchangeRate</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tallying_rule_reporters: <a href="">vector</a>&lt;<b>address</b>&gt;</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>tallying_rule_global_score: u64</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x3_validator_set_ValidatorEpochInfoEventV2"></a>
+
+## Struct `ValidatorEpochInfoEventV2`
+
+V2 of ValidatorEpochInfoEvent containing more information about the validator.
+
+
+<pre><code><b>struct</b> <a href="validator_set.md#0x3_validator_set_ValidatorEpochInfoEventV2">ValidatorEpochInfoEventV2</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>epoch: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>validator_address: <b>address</b></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>reference_gas_survey_quote: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>stake: u64</code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code><a href="voting_power.md#0x3_voting_power">voting_power</a>: u64</code>
 </dt>
 <dd>
 
@@ -713,13 +802,13 @@ processed at the end of epoch.
 
 </details>
 
-<a name="0x3_validator_set_assert_no_pending_or_actice_duplicates"></a>
+<a name="0x3_validator_set_assert_no_pending_or_active_duplicates"></a>
 
-## Function `assert_no_pending_or_actice_duplicates`
+## Function `assert_no_pending_or_active_duplicates`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">assert_no_pending_or_actice_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>)
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">validator_set::ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &<a href="validator.md#0x3_validator_Validator">validator::Validator</a>)
 </code></pre>
 
 
@@ -728,7 +817,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_actice_duplicates">assert_no_pending_or_actice_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &Validator) {
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_set.md#0x3_validator_set_assert_no_pending_or_active_duplicates">assert_no_pending_or_active_duplicates</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, <a href="validator.md#0x3_validator">validator</a>: &Validator) {
     // Validator here must be active or pending, and thus must be identified <b>as</b> duplicate exactly once.
     <b>assert</b>!(
         <a href="validator_set.md#0x3_validator_set_count_duplicates_vec">count_duplicates_vec</a>(&self.active_validators, <a href="validator.md#0x3_validator">validator</a>) +
@@ -2606,11 +2695,12 @@ including stakes, rewards, performance, etc.
             <b>if</b> (<a href="_contains">vector::contains</a>(slashed_validators, &validator_address)) 0
             <b>else</b> 1;
         <a href="_emit">event::emit</a>(
-            <a href="validator_set.md#0x3_validator_set_ValidatorEpochInfoEvent">ValidatorEpochInfoEvent</a> {
+            <a href="validator_set.md#0x3_validator_set_ValidatorEpochInfoEventV2">ValidatorEpochInfoEventV2</a> {
                 epoch: new_epoch,
                 validator_address,
                 reference_gas_survey_quote: <a href="validator.md#0x3_validator_gas_price">validator::gas_price</a>(v),
                 stake: <a href="validator.md#0x3_validator_total_stake_amount">validator::total_stake_amount</a>(v),
+                <a href="voting_power.md#0x3_voting_power">voting_power</a>: <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(v),
                 commission_rate: <a href="validator.md#0x3_validator_commission_rate">validator::commission_rate</a>(v),
                 pool_staking_reward: *<a href="_borrow">vector::borrow</a>(pool_staking_reward_amounts, i),
                 storage_fund_staking_reward: *<a href="_borrow">vector::borrow</a>(storage_fund_staking_reward_amounts, i),

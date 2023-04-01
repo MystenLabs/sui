@@ -33,16 +33,16 @@ module Test::M1 {
 }
 
 // transfer below transfer count limit should succeed
-//# run Test::M1::transfer_n_ids --args 1 --gas-budget 1000000
+//# run Test::M1::transfer_n_ids --args 1 --gas-budget 100000000000000
 
 // transfer below transfer count limit should succeed
-//# run Test::M1::transfer_n_ids --args 256 --gas-budget 1000000
+//# run Test::M1::transfer_n_ids --args 256 --gas-budget 100000000000000
 
 // run at run count limit should succeed
-//# run Test::M1::transfer_n_ids --args 2048 --gas-budget 1000000
+//# run Test::M1::transfer_n_ids --args 2048 --gas-budget 100000000000000
 
 // run above run count limit should fail
-//# run Test::M1::transfer_n_ids --args 2049 --gas-budget 1000000
+//# run Test::M1::transfer_n_ids --args 2049 --gas-budget 100000000000000
 
 // run above run count limit should fail
-//# run Test::M1::transfer_n_ids --args 4096 --gas-budget 1000000
+//# run Test::M1::transfer_n_ids --args 4096 --gas-budget 100000000000000

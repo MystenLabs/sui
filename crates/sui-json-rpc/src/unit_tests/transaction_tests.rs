@@ -43,7 +43,7 @@ async fn test_get_transaction_block() -> Result<(), anyhow::Error> {
     for obj in &objects[..objects.len() - 1] {
         let oref = obj.object().unwrap();
         let transaction_bytes: TransactionBlockBytes = http_client
-            .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+            .transfer_object(*address, oref.object_id, Some(gas_id), 100_000, *address)
             .await?;
         let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -118,7 +118,7 @@ async fn test_get_raw_transaction() -> Result<(), anyhow::Error> {
 
     // Make a transfer transactions
     let transaction_bytes: TransactionBlockBytes = http_client
-        .transfer_object(*address, object_to_transfer, None, 1000, *address)
+        .transfer_object(*address, object_to_transfer, None, 10_000, *address)
         .await?;
     let keystore_path = cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -180,7 +180,7 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
             let oref = obj.object().unwrap();
             let data = client
                 .transaction_builder()
-                .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
+                .transfer_object(*address, oref.object_id, Some(gas_id), 100_000, *address)
                 .await?;
             let tx = to_sender_signed_transaction(data, keystore.get_key(address).unwrap());
 

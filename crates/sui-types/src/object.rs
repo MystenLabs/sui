@@ -31,7 +31,8 @@ use crate::{
 };
 use sui_protocol_config::ProtocolConfig;
 
-pub const GAS_VALUE_FOR_TESTING: u64 = 2_000_000_u64;
+pub const MAX_GAS_BUDGET_FOR_TESTING: u64 = 5_000_000_000;
+pub const GAS_VALUE_FOR_TESTING: u64 = 300_000_000_000_000;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
@@ -880,6 +881,20 @@ pub fn generate_test_gas_objects_with_owner(count: usize, owner: SuiAddress) -> 
         .map(|_i| {
             let gas_object_id = ObjectID::random();
             Object::with_id_owner_gas_for_testing(gas_object_id, owner, GAS_VALUE_FOR_TESTING)
+        })
+        .collect()
+}
+
+/// Make a few test gas objects (all with the same owner).
+pub fn generate_test_gas_objects_with_owner_and_value(
+    count: usize,
+    owner: SuiAddress,
+    value: u64,
+) -> Vec<Object> {
+    (0..count)
+        .map(|_i| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, value)
         })
         .collect()
 }

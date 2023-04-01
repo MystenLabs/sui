@@ -1344,6 +1344,12 @@ impl WalletContext {
         ))
     }
 
+    pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        let client = self.get_client().await?;
+        let gas_price = client.governance_api().get_reference_gas_price().await?;
+        Ok(gas_price)
+    }
+
     pub async fn execute_transaction_block(
         &self,
         tx: VerifiedTransaction,

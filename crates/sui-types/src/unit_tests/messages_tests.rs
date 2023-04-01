@@ -24,6 +24,7 @@ use crate::crypto::{
     AuthoritySignInfoTrait, SuiAuthoritySignature,
 };
 use crate::object::Owner;
+use crate::object::MAX_GAS_BUDGET_FOR_TESTING;
 
 #[test]
 fn test_signed_values() {
@@ -51,7 +52,7 @@ fn test_signed_values() {
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            10000,
+            MAX_GAS_BUDGET_FOR_TESTING,
         ),
         Intent::default(),
         vec![&sender_sec],
@@ -65,7 +66,7 @@ fn test_signed_values() {
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            10000,
+            MAX_GAS_BUDGET_FOR_TESTING,
         ),
         Intent::default(),
         vec![&sender_sec2],
@@ -128,7 +129,7 @@ fn test_certificates() {
             random_object_ref(),
             a_sender,
             random_object_ref(),
-            10000,
+            MAX_GAS_BUDGET_FOR_TESTING,
         ),
         Intent::default(),
         vec![&sender_sec],
@@ -461,7 +462,7 @@ fn test_digest_caching() {
             random_object_ref(),
             sa2,
             random_object_ref(),
-            10000,
+            MAX_GAS_BUDGET_FOR_TESTING,
         ),
         Intent::default(),
         vec![&ssec2],
@@ -537,7 +538,7 @@ fn test_user_signature_committed_in_transactions() {
         random_object_ref(),
         a_sender,
         random_object_ref(),
-        10000,
+        MAX_GAS_BUDGET_FOR_TESTING,
     );
 
     let mut tx_data_2 = tx_data.clone();
@@ -586,7 +587,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         random_object_ref(),
         a_sender,
         random_object_ref(),
-        10000,
+        MAX_GAS_BUDGET_FOR_TESTING,
     );
     let transaction_a =
         Transaction::from_data_and_signer(tx_data.clone(), Intent::default(), vec![&sender_sec])
@@ -897,7 +898,7 @@ fn verify_sender_signature_correctly_with_flag() {
         random_object_ref(),
         (&sender_kp.public()).into(),
         random_object_ref(),
-        10000,
+        MAX_GAS_BUDGET_FOR_TESTING,
     );
 
     // create a sender keypair with Ed25519
@@ -1241,7 +1242,7 @@ fn test_certificate_digest() {
                 random_object_ref(),
                 sender,
                 random_object_ref(),
-                10000,
+                MAX_GAS_BUDGET_FOR_TESTING,
             ),
             Intent::default(),
             vec![&sender_sec],
