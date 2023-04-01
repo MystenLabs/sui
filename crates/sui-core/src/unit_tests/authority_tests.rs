@@ -4386,7 +4386,7 @@ pub(crate) async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCe
     {
         let certs = authority
             .epoch_store_for_testing()
-            .process_consensus_transactions(
+            .process_consensus_transactions_for_tests(
                 vec![transaction],
                 &Arc::new(CheckpointServiceNoop {}),
                 authority.db(),
@@ -4420,7 +4420,7 @@ pub(crate) async fn send_consensus_no_execution(
         // This allows testing cert execution independently.
         authority
             .epoch_store_for_testing()
-            .process_consensus_transactions(
+            .process_consensus_transactions_for_tests(
                 vec![transaction],
                 &Arc::new(CheckpointServiceNoop {}),
                 &authority.db(),

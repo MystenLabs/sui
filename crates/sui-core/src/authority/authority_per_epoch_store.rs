@@ -1448,9 +1448,17 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
-        let executable_txns = self
-            .process_consensus_transactions(transactions, checkpoint_service, parent_sync_store)
+        let mut batch = self.db_batch();
+        let (executable_txns, lock) = self
+            .process_consensus_transactions(
+                &mut batch,
+                transactions,
+                checkpoint_service,
+                parent_sync_store,
+            )
             .await?;
+        batch.write()?;
+        drop(lock);
         if let Some(checkpoint) = self.handle_commit_boundary(round, timestamp)? {
             let final_checkpoint = checkpoint.details.last_of_epoch;
             checkpoint_service.notify_checkpoint(self, checkpoint)?;
@@ -1462,16 +1470,40 @@ impl AuthorityPerEpochStore {
         Ok(executable_txns)
     }
 
+    #[cfg(test)]
+    pub(crate) async fn process_consensus_transactions_for_tests<C: CheckpointServiceNotify>(
+        &self,
+        transactions: Vec<VerifiedSequencedConsensusTransaction>,
+        checkpoint_service: &Arc<C>,
+        parent_sync_store: impl ParentSync,
+    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+        let mut batch = self.db_batch();
+        let (certs, _lock) = self
+            .process_consensus_transactions(
+                &mut batch,
+                transactions,
+                checkpoint_service,
+                parent_sync_store,
+            )
+            .await?;
+        batch.write()?;
+        Ok(certs)
+    }
+
     /// Depending on the type of the VerifiedSequencedConsensusTransaction wrappers,
     /// - Verify and initialize the state to execute the certificates.
     ///   Return VerifiedCertificates for each executable certificate
     /// - Or update the state for checkpoint or epoch change protocol.
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
+        batch: &mut DBBatch,
         mut transactions: Vec<VerifiedSequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         parent_sync_store: impl ParentSync,
-    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+    ) -> SuiResult<(
+        Vec<VerifiedExecutableTransaction>,
+        Option<parking_lot::RwLockWriteGuard<ReconfigState>>,
+    )> {
         let mut verified_certificates = Vec::new();
 
         // sort all end of publish messages to the end of the list
@@ -1513,11 +1545,10 @@ impl AuthorityPerEpochStore {
             .await?
         };
 
-        let mut batch = self.db_batch();
         for tx in &other_txns {
             if let Some(cert) = self
                 .process_consensus_transaction(
-                    &mut batch,
+                    batch,
                     &mut shared_input_next_versions,
                     tx,
                     checkpoint_service,
@@ -1533,16 +1564,14 @@ impl AuthorityPerEpochStore {
             shared_input_next_versions.into_iter(),
         )?;
 
-        let _lock = self.process_end_of_publish_transactions(&mut batch, &end_of_publish_txns)?;
+        let lock = self.process_end_of_publish_transactions(batch, &end_of_publish_txns)?;
 
         for tx in other_txns.iter().chain(end_of_publish_txns.iter()) {
             let key = tx.0.transaction.key();
             self.consensus_notify_read.notify(&key, &());
         }
 
-        batch.write()?;
-
-        Ok(verified_certificates)
+        Ok((verified_certificates, lock))
     }
 
     fn process_end_of_publish_transactions(
