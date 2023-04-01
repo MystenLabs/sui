@@ -231,6 +231,10 @@ impl MoveObject {
         Ok(())
     }
 
+    pub fn update_contents_at_safe_mode(&mut self, new_contents: Vec<u8>) {
+        self.contents = new_contents;
+    }
+
     /// Update a coin object without requiring the current ProtocolConfig.
     /// Asserts that the gas object is not unexpectedly large.
     pub fn update_coin_contents(&mut self, new_contents: Vec<u8>) {

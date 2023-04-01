@@ -12,7 +12,7 @@ use crate::sui_system_state::epoch_start_sui_system_state::{
 use crate::sui_system_state::sui_system_state_summary::{
     SuiSystemStateSummary, SuiValidatorSummary,
 };
-use crate::sui_system_state::SuiSystemStateTrait;
+use crate::sui_system_state::{AdvanceEpochParams, SuiSystemStateTrait};
 use fastcrypto::traits::ToFromBytes;
 use mysten_network::Multiaddr;
 use once_cell::sync::OnceCell;
@@ -154,6 +154,13 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerV1 {
         self.safe_mode
     }
 
+    fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {
+        self.epoch = params.epoch;
+        self.safe_mode = true;
+        self.epoch_start_timestamp_ms = params.epoch_start_timestamp_ms;
+        self.protocol_version = params.next_protocol_version.as_u64();
+    }
+
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {
         let mut voting_rights = BTreeMap::new();
         let mut network_metadata = BTreeMap::new();
@@ -252,6 +259,13 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerShallowV2 {
 
     fn safe_mode(&self) -> bool {
         self.safe_mode
+    }
+
+    fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {
+        self.epoch = params.epoch;
+        self.safe_mode = true;
+        self.epoch_start_timestamp_ms = params.epoch_start_timestamp_ms;
+        self.protocol_version = params.next_protocol_version.as_u64();
     }
 
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {
@@ -381,6 +395,13 @@ impl SuiSystemStateTrait for SimTestSuiSystemStateInnerDeepV2 {
 
     fn safe_mode(&self) -> bool {
         self.safe_mode
+    }
+
+    fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams) {
+        self.epoch = params.epoch;
+        self.safe_mode = true;
+        self.epoch_start_timestamp_ms = params.epoch_start_timestamp_ms;
+        self.protocol_version = params.next_protocol_version.as_u64();
     }
 
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata {

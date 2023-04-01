@@ -130,6 +130,9 @@ struct FeatureFlags {
     // object runtime.
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_objects_fixed: bool,
+    // If true, advance epoch in safe mode in Rust, instead of in Move.
+    #[serde(skip_serializing_if = "is_false")]
+    advance_epoch_safe_mode_in_rust: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -587,6 +590,10 @@ impl ProtocolConfig {
 
     pub fn loaded_child_objects_fixed(&self) -> bool {
         self.feature_flags.loaded_child_objects_fixed
+    }
+
+    pub fn advance_epoch_safe_mode_in_rust(&self) -> bool {
+        self.feature_flags.advance_epoch_safe_mode_in_rust
     }
 }
 
@@ -1541,10 +1548,13 @@ impl ProtocolConfig {
                 cfg.feature_flags.package_upgrades = true;
                 cfg
             }
-
+            4 => {
+                let mut cfg = Self::get_for_version_impl(version - 1);
+                cfg.feature_flags.advance_epoch_safe_mode_in_rust = true;
+                cfg
+            }
             // Use this template when making changes:
             //
-            // NEW_VERSION => Self {
             //     // modify an existing constant.
             //     move_binary_format_version: Some(7),
             //
