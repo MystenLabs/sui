@@ -32,7 +32,7 @@ impl TestCaseImpl for FullNodeBuildPublishTransactionTest {
             all_module_bytes,
             dependencies,
             None::<ObjectID>,
-            10_000 * gas_price
+            50_000_000 * gas_price
         ];
 
         let data = ctx
