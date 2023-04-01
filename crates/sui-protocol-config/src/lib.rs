@@ -16,7 +16,8 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 //
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
-// Version 3: gas model v2, including all sui conservation fixes.
+// Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
+//            changes.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
