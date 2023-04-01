@@ -1104,7 +1104,7 @@ impl SuiClientCommands {
 
                 let client = context.get_client().await?;
 
-                BytecodeSourceVerifier::new(client.read_api(), false)
+                BytecodeSourceVerifier::new(client.read_api())
                     .verify_package(
                         &compiled_package.package,
                         verify_deps,
@@ -1183,7 +1183,7 @@ async fn compile_package(
     }
     let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
     if !skip_dependency_verification {
-        BytecodeSourceVerifier::new(client.read_api(), false)
+        BytecodeSourceVerifier::new(client.read_api())
             .verify_package_deps(&compiled_package.package)
             .await?;
         eprintln!(

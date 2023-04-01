@@ -99,7 +99,6 @@ pub enum SourceMode {
 }
 
 pub struct BytecodeSourceVerifier<'a> {
-    pub verbose: bool,
     rpc_client: &'a ReadApi,
 }
 
@@ -110,11 +109,8 @@ type LocalBytes = HashMap<(AccountAddress, Symbol), (Symbol, Vec<u8>)>;
 type OnChainBytes = HashMap<(AccountAddress, Symbol), Vec<u8>>;
 
 impl<'a> BytecodeSourceVerifier<'a> {
-    pub fn new(rpc_client: &'a ReadApi, verbose: bool) -> Self {
-        BytecodeSourceVerifier {
-            verbose,
-            rpc_client,
-        }
+    pub fn new(rpc_client: &'a ReadApi) -> Self {
+        BytecodeSourceVerifier { rpc_client }
     }
 
     /// Helper wrapper to verify that all local Move package dependencies' and root bytecode matches
@@ -200,15 +196,6 @@ impl<'a> BytecodeSourceVerifier<'a> {
                     package,
                     module,
                 });
-            }
-
-            if self.verbose {
-                println!(
-                    "{}::{} - {} bytes, code matches",
-                    package.as_ref(),
-                    module.as_ref(),
-                    on_chain_bytes.len()
-                );
             }
         }
 

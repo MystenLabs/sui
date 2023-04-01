@@ -46,7 +46,7 @@ async fn successful_verification() -> anyhow::Result<()> {
         )
     };
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
     let a_addr: SuiAddress = a_ref.0.into();
 
     // Skip deps and root
@@ -103,7 +103,7 @@ async fn successful_verification_unpublished_deps() -> anyhow::Result<()> {
     let a_ref = publish_package_and_deps(context, sender, a_src).await;
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     // Verify the root package which now includes dependency modules
     verifier
@@ -141,7 +141,7 @@ async fn successful_verification_module_ordering() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let verify_deps = false;
     verifier
@@ -175,7 +175,7 @@ async fn fail_verification_bad_address() -> anyhow::Result<()> {
         )
     };
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let expected = expect!["On-chain address cannot be zero"];
     expected.assert_eq(
@@ -201,7 +201,7 @@ async fn fail_to_verify_unpublished_root() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     // Trying to verify the root package, which hasn't been published -- this is going to fail
     // because there is no on-chain package to verify against.
@@ -246,7 +246,7 @@ async fn rpc_call_failed_during_verify() -> anyhow::Result<()> {
     let _a_addr: SuiAddress = a_ref.0.into();
 
     let client = context.get_client().await?;
-    let _verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let _verifier = BytecodeSourceVerifier::new(client.read_api());
 
     /*
     // TODO: Dropping cluster no longer stops the network. Need to look into this and see
@@ -294,7 +294,7 @@ async fn package_not_found() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -348,7 +348,7 @@ async fn dependency_is_an_object() -> anyhow::Result<()> {
         compile_package(a_src)
     };
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let expected = expect!["Dependency ID contains a Sui object, not a Move package: 0x0000000000000000000000000000000000000000000000000000000000000005"];
     expected.assert_eq(
@@ -383,7 +383,7 @@ async fn module_not_found_on_chain() -> anyhow::Result<()> {
         compile_package(a_src)
     };
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -419,7 +419,7 @@ async fn module_not_found_locally() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -473,7 +473,7 @@ async fn module_bytecode_mismatch() -> anyhow::Result<()> {
     stable_addrs.insert(a_addr, "<a_addr>");
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let Err(err) = verifier.verify_package_deps(&a_pkg.package).await else {
         panic!("Expected verification to fail");
@@ -531,7 +531,7 @@ async fn multiple_failures() -> anyhow::Result<()> {
     };
 
     let client = context.get_client().await?;
-    let verifier = BytecodeSourceVerifier::new(client.read_api(), false);
+    let verifier = BytecodeSourceVerifier::new(client.read_api());
 
     let Err(err) = verifier.verify_package_deps(&d_pkg.package).await else {
         panic!("Expected verification to fail");
