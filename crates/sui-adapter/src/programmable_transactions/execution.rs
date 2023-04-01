@@ -350,40 +350,53 @@ fn execute_move_call<S: StorageView, Mode: ExecutionMode>(
         by_mut_ref.len() == mutable_reference_outputs.len(),
         "lost mutable input"
     );
+
+    context.take_user_events(module_id, index, last_instr)?;
+
     // save the link context because calls to `make_value` below can set new ones, and we don't want
     // it to be clobbered.
     let saved_linkage = context.steal_linkage();
     // write back mutable inputs. We also update if they were used in non entry Move calls
     // though we do not care for immutable usages of objects or other values
-    let res: Result<Vec<()>, _> = mutable_reference_outputs
-        .into_iter()
-        .zip(by_mut_ref)
-        .map(|((i1, bytes, _layout), (i2, value_info))| {
-            assert_invariant!(i1 == i2, "lost mutable input");
-            let arg_idx = i1 as usize;
-            let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-            let value = make_value(context, value_info, bytes, used_in_non_entry_move_call)?;
-            context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
-            Ok(())
-        })
-        .collect();
+    let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
+    let res = write_back_results::<_, Mode>(
+        context,
+        argument_updates,
+        &arguments,
+        used_in_non_entry_move_call,
+        mutable_reference_outputs.into_iter().map(|(i, bytes, _layout)| (i, bytes)),
+        by_mut_ref,
+        return_values.into_iter().map(|(bytes, _layout)| bytes),
+        return_value_kinds,
+    );
 
     context.restore_linkage(saved_linkage)?;
-    res?;
+    res
+}
 
-    context.take_user_events(module_id, index, last_instr)?;
-    assert_invariant!(
-        return_value_kinds.len() == return_values.len(),
-        "lost return value"
-    );
-    return_value_kinds
+fn write_back_results<S: StorageView, Mode: ExecutionMode>(
+    context: &mut ExecutionContext<S>,
+    argument_updates: &mut Mode::ArgumentUpdates,
+    arguments: &[Argument],
+    non_entry_move_call: bool,
+    mut_ref_values: impl IntoIterator<Item = (u8, Vec<u8>)>,
+    mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
+    return_values: impl IntoIterator<Item = Vec<u8>>,
+    return_value_kinds: impl IntoIterator<Item = ValueKind>,
+) -> Result<Vec<Value>, ExecutionError> {
+    for ((i, bytes), (j, kind)) in mut_ref_values.into_iter().zip(mut_ref_kinds) {
+        assert_invariant!(i == j, "lost mutable input");
+        let arg_idx = i as usize;
+        let value = make_value(context, kind, bytes, non_entry_move_call)?;
+        context.restore_arg::<Mode>(argument_updates, arguments[arg_idx], value)?;
+    }
+
+    return_values
         .into_iter()
-        .zip(return_values)
-        .map(|(value_info, (bytes, _layout))| {
+        .zip(return_value_kinds)
+        .map(|(bytes, kind)| {
             // only non entry functions have return values
-            make_value(
-                context, value_info, bytes, /* used_in_non_entry_move_call */ true,
-            )
+            make_value(context, kind, bytes, /* used_in_non_entry_move_call */ true)
         })
         .collect()
 }
