@@ -881,6 +881,7 @@ impl SuiClientCommands {
                         None,
                     )
                     .await?;
+                // TODO: paginate here
                 SuiClientCommandResult::Objects(address_object.data)
             }
 
@@ -1442,25 +1443,29 @@ impl Display for SuiClientCommandResult {
                 )?;
                 writeln!(writer, "{}", ["-"; 165].join(""))?;
                 for oref in object_refs {
-                    let obj = oref.clone().into_object().unwrap();
+                    let obj = oref.clone().into_object();
+                    match obj {
+                        Ok(obj) => {
+                            let owner_type = match obj.owner {
+                                Some(Owner::AddressOwner(_)) => "AddressOwner",
+                                Some(Owner::ObjectOwner(_)) => "object_owner",
+                                Some(Owner::Shared { .. }) => "Shared",
+                                Some(Owner::Immutable) => "Immutable",
+                                None => "None",
+                            };
 
-                    let owner_type = match obj.owner {
-                        Some(Owner::AddressOwner(_)) => "AddressOwner",
-                        Some(Owner::ObjectOwner(_)) => "object_owner",
-                        Some(Owner::Shared { .. }) => "Shared",
-                        Some(Owner::Immutable) => "Immutable",
-                        None => "None",
-                    };
-
-                    writeln!(
-                        writer,
-                        " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
-                        obj.object_id,
-                        obj.version.value(),
-                        Base64::encode(obj.digest),
-                        owner_type,
-                        format!("{:?}", obj.type_)
-                    )?
+                            writeln!(
+                                writer,
+                                " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
+                                obj.object_id,
+                                obj.version.value(),
+                                Base64::encode(obj.digest),
+                                owner_type,
+                                format!("{:?}", obj.type_)
+                            )?
+                        }
+                        Err(e) => writeln!(writer, "Error: {e:?}")?,
+                    }
                 }
                 writeln!(writer, "Showing {} results.", object_refs.len())?;
             }
