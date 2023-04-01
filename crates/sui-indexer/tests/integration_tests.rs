@@ -497,12 +497,26 @@ pub mod pg_integration_test {
 
         let filter_on_event_type = EventFilter::MoveEventType(target_struct_tag.clone());
         let query_response = indexer_rpc_client
-            .query_events(filter_on_event_type, None, None, None)
+            .query_events(filter_on_event_type.clone(), None, None, None)
             .await?;
         assert_eq!(query_response.data.len(), 2);
         assert_eq!(digest_one, query_response.data[0].id.tx_digest);
         assert_eq!(digest_two, query_response.data[1].id.tx_digest);
 
+        // check parsed event data with FN
+        let fn_query_response = test_cluster
+            .rpc_client()
+            .query_events(filter_on_event_type, None, None, None)
+            .await?;
+
+        assert_eq!(fn_query_response.data.len(), 2);
+        assert_eq!(digest_one, fn_query_response.data[0].id.tx_digest);
+        assert_eq!(digest_two, fn_query_response.data[1].id.tx_digest);
+
+        assert_eq!(
+            query_response.data[0].parsed_json,
+            fn_query_response.data[0].parsed_json
+        );
         Ok(())
     }
 
