@@ -54,8 +54,7 @@ use sui_types::{
     SUI_SYSTEM_OBJ_CALL_ARG,
 };
 
-// TODO adjust this to a reasonable number after the gas fix is in
-const DEFAULT_GAS_BUDGET: u64 = 15_000_000;
+const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
