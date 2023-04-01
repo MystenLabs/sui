@@ -124,7 +124,7 @@ impl CoinMergeSplitTest {
             primary_coin,
             coin_to_merge,
             Some(gas_obj_id),
-            300_000_000 * gas_price
+            2_000_000 * gas_price
         ];
 
         let data = ctx
@@ -148,7 +148,7 @@ impl CoinMergeSplitTest {
             primary_coin,
             amounts,
             Some(gas_obj_id),
-            300_000_000 * gas_price
+            2_000_000 * gas_price
         ];
 
         let data = ctx
