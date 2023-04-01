@@ -26,9 +26,9 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -57,7 +57,7 @@ async_once = { version = "0.2", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
-axum = { version = "0.6", features = ["headers"] }
+axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", features = ["tls-rustls"] }
@@ -573,9 +573,8 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
-tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-serde = { version = "0.1", default-features = false }
-tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
+tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 twox-hash = { version = "1", default-features = false }
@@ -637,10 +636,10 @@ aho-corasick = { version = "0.7" }
 aliasable = { version = "0.1" }
 alloc-no-stdlib = { version = "2", default-features = false }
 alloc-stdlib = { version = "0.2", default-features = false }
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e", default-features = false }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313", default-features = false }
 anes = { version = "0.1" }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace"] }
@@ -678,7 +677,7 @@ atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }
-axum = { version = "0.6", features = ["headers"] }
+axum = { version = "0.6", default-features = false, features = ["form", "headers", "http1", "http2", "json", "matched-path", "original-uri", "query", "tokio"] }
 axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.4", features = ["tls-rustls"] }
@@ -1289,9 +1288,8 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-futures = { version = "0.2" }
-tracing-log = { version = "0.1", default-features = false, features = ["log-tracer", "std"] }
 tracing-serde = { version = "0.1", default-features = false }
-tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", features = ["env-filter", "json", "time"] }
+tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 twox-hash = { version = "1", default-features = false }

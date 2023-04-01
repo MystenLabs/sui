@@ -114,6 +114,7 @@ opt-level = 1
 [workspace.dependencies]
 
 tokio = "1.24.1"
+axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
 
 # Move dependencies
 move-binary-format = { git = "https://github.com/move-language/move", rev = "60cec12b1ed9382836aa4c141e445656d39375e1" }
@@ -141,10 +142,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b18
 fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c2f79b1807bff7d09517b631191b61f2614c641c", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "82875616a86f94652b1c8d374b839917791d805e" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313"}
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "fafd8a33615a1d5f0ea99ae3d0cc993b833fa313"}
 
 # Use the same workspace-hack across crates.
 workspace-hack = { path = "crates/workspace-hack" }

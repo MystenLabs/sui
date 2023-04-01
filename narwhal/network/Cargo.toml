@@ -28,7 +28,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow = "1.0.65"
-axum = "0.6.2"
+axum.workspace = true
 axum-server = "0.4.2"
 tower = "0.4.13"
 fail = "0.5.1"
