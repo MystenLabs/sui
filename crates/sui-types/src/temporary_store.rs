@@ -569,6 +569,12 @@ impl<S> TemporaryStore<S> {
         )
     }
 
+    pub fn written_objects_size(&self) -> usize {
+        self.written
+            .iter()
+            .fold(0, |sum, obj| sum + obj.1 .0.object_size_for_gas_metering())
+    }
+
     /// If there are unmetered storage rebate (due to system transaction), we put them into
     /// the storage rebate of 0x5 object.
     pub fn conserve_unmetered_storage_rebate(&mut self, unmetered_storage_rebate: u64) {

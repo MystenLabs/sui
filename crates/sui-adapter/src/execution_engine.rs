@@ -229,6 +229,44 @@ fn execute_transaction<
                 ))
             }
         };
+        if execution_result.is_ok() {
+
+            // This limit is only present in Version 3 and up, so use this to gate it
+            if let (Some(normal_lim), Some(system_lim)) =
+                (protocol_config.max_size_written_objects(), protocol_config
+            .max_size_written_objects_system_tx()) {
+                let written_objects_size = temporary_store.written_objects_size();
+
+                match check_limit_by_meter!(
+                    !gas_status.is_unmetered(),
+                    written_objects_size,
+                    normal_lim,
+                    system_lim
+                ) {
+                    LimitThresholdCrossed::None => (),
+                    LimitThresholdCrossed::Soft(_, limit) => {
+                        /* TODO: add more alerting */
+                        warn!(
+                            written_objects_size = written_objects_size,
+                            soft_limit = limit,
+                            "Written objects size crossed soft limit",
+                        )
+                    }
+                    LimitThresholdCrossed::Hard(_, lim) => {
+                        execution_result = Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::WrittenObjectsTooLarge {
+                                current_size: written_objects_size as u64,
+                                max_size: lim as u64,
+                            },
+                            "Written objects size crossed hard limit",
+                        ))
+                    }
+                };
+
+            }
+
+        }
+
         execution_result
     });
 

@@ -9,6 +9,8 @@ feature_flags:
   loaded_child_objects_fixed: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
+max_size_written_objects: 5000000
+max_size_written_objects_system_tx: 50000000
 max_serialized_tx_effects_size_bytes: 524288
 max_serialized_tx_effects_size_bytes_system_tx: 8388608
 max_gas_payment_objects: 256

@@ -17,7 +17,8 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
-//            changes, enable package upgrades.
+//            changes, enable package upgrades, add limits on `max_size_written_objects`,
+//            `max_size_written_objects_system_tx`
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -167,6 +168,11 @@ pub struct ProtocolConfig {
 
     /// Maximum number of input objects to a transaction. Enforced by the transaction input checker
     max_input_objects: Option<u64>,
+
+    /// Max size of objects a transaction can write to disk after completion. Enforce by the Sui adapter.
+    max_size_written_objects: Option<u64>,
+    /// Max size of objects a system transaction can write to disk after completion. Enforce by the Sui adapter.
+    max_size_written_objects_system_tx: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
     max_serialized_tx_effects_size_bytes: Option<u64>,
@@ -1167,6 +1173,15 @@ impl ProtocolConfig {
             .expect(CONSTANT_ERR_MSG)
     }
 
+    /// We dont unwrap here because we want to be able to selectively fetch this valuue
+    pub fn max_size_written_objects(&self) -> Option<u64> {
+        self.max_size_written_objects
+    }
+    /// We dont unwrap here because we want to be able to selectively fetch this valuue
+    pub fn max_size_written_objects_system_tx(&self) -> Option<u64> {
+        self.max_size_written_objects_system_tx
+    }
+
     // When adding a new constant, create a new getter for it as follows, so that the validator
     // will crash if the constant is accessed before the protocol in which it is defined.
     //
@@ -1496,6 +1511,10 @@ impl ProtocolConfig {
                 hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
                 hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
+
+                max_size_written_objects: None,
+                max_size_written_objects_system_tx: None,
+
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1515,9 +1534,14 @@ impl ProtocolConfig {
                 // storage gas price multiplier
                 cfg.storage_gas_price = Some(76);
                 cfg.feature_flags.loaded_child_objects_fixed = true;
+                // max size of written objects during a TXn
+                cfg.max_size_written_objects = Some(5 * 1000 * 1000);
+                // max size of written objects during a system TXn to allow for larger writes
+                cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                 cfg.feature_flags.package_upgrades = true;
                 cfg
             }
+
             // Use this template when making changes:
             //
             // NEW_VERSION => Self {
