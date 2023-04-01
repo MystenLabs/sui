@@ -74,7 +74,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             .collect(),
         events: vec![],
         objects_changes: vec![TransactionObjectChanges {
-            mutated_objects: (1..1000).map(|_| create_object(sequence_number)).collect(),
+            changed_objects: (1..1000).map(|_| create_object(sequence_number)).collect(),
             deleted_objects: vec![],
         }],
         addresses: vec![],
