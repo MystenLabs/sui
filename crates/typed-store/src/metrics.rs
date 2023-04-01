@@ -19,6 +19,10 @@ thread_local! {
     static PER_THREAD_ROCKS_PERF_CONTEXT: std::cell::RefCell<rocksdb::PerfContext>  = RefCell::new(PerfContext::default());
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
 #[derive(Debug, Clone)]
 // A struct for sampling based on number of operations or duration.
 // Sampling happens if the duration expires and after number of operations
@@ -34,7 +38,7 @@ pub struct SamplingInterval {
 impl Default for SamplingInterval {
     fn default() -> Self {
         // Enabled with 10 second interval
-        SamplingInterval::new(Duration::from_secs(60), u64::MAX - 1)
+        SamplingInterval::new(Duration::ZERO, 100)
     }
 }
 
@@ -248,7 +252,7 @@ impl OperationMetrics {
                 "rocksdb_iter_latency_seconds",
                 "Rocksdb iter latency in seconds",
                 &["cf_name"],
-                exponential_buckets(1e-6, 2.0, 24).unwrap(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -263,7 +267,7 @@ impl OperationMetrics {
                 "rocksdb_get_latency_seconds",
                 "Rocksdb get latency in seconds",
                 &["cf_name"],
-                exponential_buckets(1e-6, 2.0, 24).unwrap(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -278,7 +282,7 @@ impl OperationMetrics {
                 "rocksdb_multiget_latency_seconds",
                 "Rocksdb multiget latency in seconds",
                 &["cf_name"],
-                exponential_buckets(1e-6, 2.0, 24).unwrap(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -293,7 +297,7 @@ impl OperationMetrics {
                 "rocksdb_put_latency_seconds",
                 "Rocksdb put latency in seconds",
                 &["cf_name"],
-                exponential_buckets(1e-6, 2.0, 24).unwrap(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -308,7 +312,7 @@ impl OperationMetrics {
                 "rocksdb_delete_latency_seconds",
                 "Rocksdb delete latency in seconds",
                 &["cf_name"],
-                exponential_buckets(1e-6, 2.0, 24).unwrap(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -323,7 +327,7 @@ impl OperationMetrics {
                 "rocksdb_write_batch_commit_latency_seconds",
                 "Rocksdb schema batch commit latency in seconds",
                 &["db_name"],
-                exponential_buckets(1e-6, 2.0, 24).unwrap(),
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
