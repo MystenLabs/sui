@@ -171,7 +171,11 @@ pub trait IndexerStore {
     fn get_network_metrics(&self) -> Result<NetworkMetrics, IndexerError>;
     fn get_move_call_metrics(&self) -> Result<MoveCallMetrics, IndexerError>;
 
-    fn persist_fast_path(&self, tx: Transaction) -> Result<usize, IndexerError>;
+    fn persist_fast_path(
+        &self,
+        tx: Transaction,
+        tx_object_changes: TransactionObjectChanges,
+    ) -> Result<usize, IndexerError>;
     fn persist_checkpoint(&self, data: &TemporaryCheckpointStore) -> Result<usize, IndexerError>;
     fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
 
@@ -226,7 +230,7 @@ pub struct TemporaryCheckpointStore {
 
 #[derive(Debug)]
 pub struct TransactionObjectChanges {
-    pub mutated_objects: Vec<Object>,
+    pub changed_objects: Vec<Object>,
     pub deleted_objects: Vec<DeletedObject>,
 }
 

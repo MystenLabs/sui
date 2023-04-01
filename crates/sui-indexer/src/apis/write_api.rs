@@ -6,18 +6,22 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::RpcModule;
+
 use sui_json_rpc::api::{WriteApiClient, WriteApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockResponse,
-    SuiTransactionBlockResponseOptions,
+    BigInt, DevInspectResults, DryRunTransactionBlockResponse, SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{EpochId, SuiAddress};
 use sui_types::messages::ExecuteTransactionRequestType;
 
+use crate::handlers::checkpoint_handler::{
+    fetch_changed_objects, get_deleted_db_objects, get_object_changes, to_changed_db_objects,
+};
 use crate::models::transactions::Transaction;
-use crate::store::IndexerStore;
+use crate::store::{IndexerStore, TransactionObjectChanges};
 use crate::types::{
     FastPathTransactionBlockResponse, SuiTransactionBlockResponseWithOptions,
     TemporaryTransactionBlockResponseStore,
@@ -54,12 +58,25 @@ where
             .fullnode
             .execute_transaction_block(tx_bytes, signatures, Some(fast_path_options), request_type)
             .await?;
-
         let fast_path_resp: FastPathTransactionBlockResponse =
             sui_transaction_response.clone().try_into()?;
+        let effects = &fast_path_resp.effects;
+        let epoch = <u64>::from(effects.executed_epoch());
+
+        let object_changes = get_object_changes(effects);
+        let changed_objects = fetch_changed_objects(self.fullnode.clone(), object_changes).await?;
+        let changed_db_objects =
+            to_changed_db_objects(changed_objects, epoch, /* checkpoint */ None);
+        let deleted_db_objects = get_deleted_db_objects(effects, epoch, /* checkpoint */ None);
+        let tx_object_changes = TransactionObjectChanges {
+            changed_objects: changed_db_objects,
+            deleted_objects: deleted_db_objects,
+        };
+
         let transaction_store: TemporaryTransactionBlockResponseStore = fast_path_resp.into();
         let transaction: Transaction = transaction_store.try_into()?;
-        self.state.persist_fast_path(transaction)?;
+        self.state
+            .persist_fast_path(transaction, tx_object_changes)?;
 
         Ok(SuiTransactionBlockResponseWithOptions {
             response: sui_transaction_response,

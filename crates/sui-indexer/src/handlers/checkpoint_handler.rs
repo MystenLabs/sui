@@ -7,8 +7,10 @@ use std::sync::Arc;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::join_all;
 use futures::FutureExt;
+use jsonrpsee::http_client::HttpClient;
 use move_core_types::ident_str;
 use prometheus::Registry;
+use sui_json_rpc::api::ReadApiClient;
 use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 
@@ -16,11 +18,13 @@ use models::transactions::Transaction;
 use mysten_metrics::spawn_monitored_task;
 use sui_core::event_handler::EventHandler;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiRawData,
-    SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
+    OwnedObjectRef, SuiCheckpointSequenceNumber, SuiGetPastObjectRequest, SuiObjectData,
+    SuiObjectDataOptions, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
 };
 use sui_sdk::error::Error;
-use sui_sdk::SuiClient;
+use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::committee::EpochId;
 use sui_types::messages_checkpoint::{CheckpointCommitment, CheckpointSequenceNumber};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
@@ -45,7 +49,7 @@ const MULTI_GET_CHUNK_SIZE: usize = 500;
 
 pub struct CheckpointHandler<S> {
     state: S,
-    rpc_client: SuiClient,
+    http_client: HttpClient,
     event_handler: Arc<EventHandler>,
     metrics: IndexerCheckpointHandlerMetrics,
 }
@@ -56,13 +60,13 @@ where
 {
     pub fn new(
         state: S,
-        rpc_client: SuiClient,
+        http_client: HttpClient,
         event_handler: Arc<EventHandler>,
         prometheus_registry: &Registry,
     ) -> Self {
         Self {
             state,
-            rpc_client,
+            http_client,
             event_handler,
             metrics: IndexerCheckpointHandlerMetrics::new(prometheus_registry),
         }
@@ -159,8 +163,7 @@ where
         seq: CheckpointSequenceNumber,
     ) -> Result<CheckpointData, IndexerError> {
         let mut checkpoint = self
-            .rpc_client
-            .read_api()
+            .http_client
             .get_checkpoint(seq.into())
             .await
             .map_err(|e| {
@@ -181,8 +184,7 @@ where
                 .fullnode_checkpoint_download_latency
                 .start_timer();
             checkpoint = self
-                .rpc_client
-                .read_api()
+                .http_client
                 .get_checkpoint(seq.into())
                 .await
                 .map_err(|e| {
@@ -201,7 +203,7 @@ where
             .fullnode_transaction_download_latency
             .start_timer();
         let transactions = join_all(checkpoint.transactions.chunks(MULTI_GET_CHUNK_SIZE).map(
-            |digests| multi_get_full_transactions(self.rpc_client.read_api(), digests.to_vec()),
+            |digests| multi_get_full_transactions(self.http_client.clone(), digests.to_vec()),
         ))
         .await
         .into_iter()
@@ -211,72 +213,13 @@ where
         })?;
         fn_transaction_guard.stop_and_record();
 
+        let fn_object_guard = self.metrics.fullnode_object_download_latency.start_timer();
         let object_changes = transactions
             .iter()
-            .flat_map(|tx| {
-                let effects = &tx.effects;
-                let created = effects
-                    .created()
-                    .iter()
-                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Created));
-                let mutated = effects
-                    .mutated()
-                    .iter()
-                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Mutated));
-                let unwrapped = effects
-                    .unwrapped()
-                    .iter()
-                    .map(|o: &OwnedObjectRef| (o, ObjectStatus::Unwrapped));
-                created.chain(mutated).chain(unwrapped)
-            })
-            .fold(
-                vec![],
-                |mut acc, (o, status): (&OwnedObjectRef, ObjectStatus)| {
-                    acc.push((o.reference.object_id, o.reference.version, status));
-                    acc
-                },
-            );
-
-        let fn_object_guard = self.metrics.fullnode_object_download_latency.start_timer();
-        let rpc = self.rpc_client.clone();
+            .flat_map(|tx| get_object_changes(&tx.effects))
+            .collect::<Vec<_>>();
         let changed_objects =
-            join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
-                let wanted_past_object_statuses: Vec<ObjectStatus> =
-                    objects.iter().map(|(_, _, status)| *status).collect();
-
-                let wanted_past_object_request = objects
-                    .iter()
-                    .map(|(id, seq_num, _)| SuiGetPastObjectRequest {
-                        object_id: *id,
-                        version: *seq_num,
-                    })
-                    .collect();
-
-                rpc.read_api()
-                    .try_multi_get_parsed_past_object(
-                        wanted_past_object_request,
-                        SuiObjectDataOptions::bcs_lossless(),
-                    )
-                    .map(move |resp| (resp, wanted_past_object_statuses))
-            }))
-            .await
-            .into_iter()
-            .try_fold(vec![], |mut acc, chunk| {
-                let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
-                    let object_data = resp.into_object()?;
-                    acc.push(object_data);
-                    Ok::<Vec<SuiObjectData>, Error>(acc)
-                })?;
-                let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
-                acc.extend(mutated_object_chunk);
-                Ok::<_, Error>(acc)
-            })
-            .map_err(|e| {
-                IndexerError::SerdeError(format!(
-                    "Failed to generate changed objects of checkpoint sequence {} with err {:?}",
-                    seq, e
-                ))
-            })?;
+            fetch_changed_objects(self.http_client.clone(), object_changes).await?;
         fn_object_guard.stop_and_record();
 
         Ok(CheckpointData {
@@ -324,42 +267,28 @@ where
         let objects_changes = transactions
             .iter()
             .map(|tx| {
-                let changed_objects = tx_objects
+                let changed_db_objects = tx_objects
                     .get(&tx.digest)
                     .unwrap_or(&vec![])
                     .iter()
                     .map(|(status, o)| {
                         Object::from(
-                            &checkpoint.epoch,
-                            &checkpoint.sequence_number.into(),
+                            checkpoint.epoch,
+                            Some(<u64>::from(checkpoint.sequence_number)),
                             status,
                             o,
                         )
                     })
                     .collect::<Vec<_>>();
-                let deleted = tx.effects.deleted().iter();
-                let deleted = deleted.map(|o| (ObjectStatus::Deleted, o));
-                let wrapped = tx.effects.wrapped().iter();
-                let wrapped = wrapped.map(|o| (ObjectStatus::Wrapped, o));
-                let unwrapped_then_deleted = tx.effects.unwrapped_then_deleted().iter();
-                let unwrapped_then_deleted =
-                    unwrapped_then_deleted.map(|o| (ObjectStatus::UnwrappedThenDeleted, o));
-                let all_deleted_objects = deleted
-                    .chain(wrapped)
-                    .chain(unwrapped_then_deleted)
-                    .map(|(status, oref)| {
-                        DeletedObject::from(
-                            &checkpoint.epoch,
-                            &checkpoint.sequence_number.into(),
-                            oref,
-                            &tx.digest,
-                            status,
-                        )
-                    })
-                    .collect();
+                let deleted_objects = get_deleted_db_objects(
+                    &tx.effects,
+                    checkpoint.epoch,
+                    Some(checkpoint.sequence_number),
+                );
+
                 TransactionObjectChanges {
-                    mutated_objects: changed_objects,
-                    deleted_objects: all_deleted_objects,
+                    changed_objects: changed_db_objects,
+                    deleted_objects,
                 }
             })
             .collect();
@@ -548,4 +477,112 @@ where
             .flatten()
             .collect()
     }
+}
+
+// TODO(gegaowp): re-orgnize object util functions below
+pub fn get_object_changes(
+    effects: &SuiTransactionBlockEffects,
+) -> Vec<(ObjectID, SequenceNumber, ObjectStatus)> {
+    let created = effects.created().iter().map(|o: &OwnedObjectRef| {
+        (
+            o.reference.object_id,
+            o.reference.version,
+            ObjectStatus::Created,
+        )
+    });
+    let mutated = effects.mutated().iter().map(|o: &OwnedObjectRef| {
+        (
+            o.reference.object_id,
+            o.reference.version,
+            ObjectStatus::Mutated,
+        )
+    });
+    let unwrapped = effects.unwrapped().iter().map(|o: &OwnedObjectRef| {
+        (
+            o.reference.object_id,
+            o.reference.version,
+            ObjectStatus::Unwrapped,
+        )
+    });
+    created.chain(mutated).chain(unwrapped).collect()
+}
+
+pub async fn fetch_changed_objects(
+    http_client: HttpClient,
+    object_changes: Vec<(ObjectID, SequenceNumber, ObjectStatus)>,
+) -> Result<Vec<(ObjectStatus, SuiObjectData)>, IndexerError> {
+    join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
+        let wanted_past_object_statuses: Vec<ObjectStatus> =
+            objects.iter().map(|(_, _, status)| *status).collect();
+
+        let wanted_past_object_request = objects
+            .iter()
+            .map(|(id, seq_num, _)| SuiGetPastObjectRequest {
+                object_id: *id,
+                version: *seq_num,
+            })
+            .collect();
+        http_client
+            .try_multi_get_past_objects(
+                wanted_past_object_request,
+                Some(SuiObjectDataOptions::bcs_lossless()),
+            )
+            .map(move |resp| (resp, wanted_past_object_statuses))
+    }))
+    .await
+    .into_iter()
+    .try_fold(vec![], |mut acc, chunk| {
+        let object_datas = chunk.0?.into_iter().try_fold(vec![], |mut acc, resp| {
+            let object_data = resp.into_object()?;
+            acc.push(object_data);
+            Ok::<Vec<SuiObjectData>, Error>(acc)
+        })?;
+        let mutated_object_chunk = chunk.1.into_iter().zip(object_datas);
+        acc.extend(mutated_object_chunk);
+        Ok::<_, Error>(acc)
+    })
+    .map_err(|e| {
+        IndexerError::SerdeError(format!(
+            "Failed to generate changed objects of checkpoint with err {:?}",
+            e
+        ))
+    })
+}
+
+pub fn to_changed_db_objects(
+    changed_objects: Vec<(ObjectStatus, SuiObjectData)>,
+    epoch: u64,
+    checkpoint: Option<SuiCheckpointSequenceNumber>,
+) -> Vec<Object> {
+    changed_objects
+        .into_iter()
+        .map(|(status, o)| Object::from(epoch, checkpoint.map(<u64>::from), &status, &o))
+        .collect::<Vec<_>>()
+}
+
+pub fn get_deleted_db_objects(
+    effects: &SuiTransactionBlockEffects,
+    epoch: EpochId,
+    checkpoint: Option<SuiCheckpointSequenceNumber>,
+) -> Vec<DeletedObject> {
+    let deleted = effects.deleted().iter();
+    let deleted = deleted.map(|o| (ObjectStatus::Deleted, o));
+    let wrapped = effects.wrapped().iter();
+    let wrapped = wrapped.map(|o| (ObjectStatus::Wrapped, o));
+    let unwrapped_then_deleted = effects.unwrapped_then_deleted().iter();
+    let unwrapped_then_deleted =
+        unwrapped_then_deleted.map(|o| (ObjectStatus::UnwrappedThenDeleted, o));
+    deleted
+        .chain(wrapped)
+        .chain(unwrapped_then_deleted)
+        .map(|(status, oref)| {
+            DeletedObject::from(
+                epoch,
+                checkpoint.map(<u64>::from),
+                oref,
+                effects.transaction_digest(),
+                &status,
+            )
+        })
+        .collect::<Vec<_>>()
 }

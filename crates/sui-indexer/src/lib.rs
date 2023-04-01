@@ -13,7 +13,7 @@ use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
-use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use prometheus::Registry;
 use tracing::{info, warn};
 use url::Url;
@@ -143,15 +143,9 @@ impl Indexer {
 
         backoff::future::retry(ExponentialBackoff::default(), || async {
             let event_handler_clone = event_handler.clone();
-            let rpc_client = new_rpc_client(config.rpc_client_url.as_str()).await?;
-            // NOTE: Each handler is responsible for one type of data from nodes,like transactions and events;
-            // Handler orchestrator runs these handlers in parallel and manage them upon errors etc.
-            let cp = CheckpointHandler::new(
-                store.clone(),
-                rpc_client.clone(),
-                event_handler_clone,
-                registry,
-            );
+            let http_client = get_http_client(config.rpc_client_url.as_str())?;
+            let cp =
+                CheckpointHandler::new(store.clone(), http_client, event_handler_clone, registry);
             cp.spawn()
                 .await
                 .expect("Indexer main should not run into errors.");
@@ -161,6 +155,8 @@ impl Indexer {
     }
 }
 
+// TODO(gegaowp): this is only used in validation now, will remove in a separate PR
+// together with the validation codes.
 pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
     info!("Getting new RPC client...");
     SuiClientBuilder::default()
@@ -168,7 +164,25 @@ pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
         .await
         .map_err(|e| {
             warn!("Failed to get new RPC client with error: {:?}", e);
-            IndexerError::RpcClientInitError(format!(
+            IndexerError::HttpClientInitError(format!(
+                "Failed to initialize fullnode RPC client with error: {:?}",
+                e
+            ))
+        })
+}
+
+fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
+    let mut headers = HeaderMap::new();
+    headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
+
+    HttpClientBuilder::default()
+        .max_request_body_size(2 << 30)
+        .max_concurrent_requests(usize::MAX)
+        .set_headers(headers.clone())
+        .build(rpc_client_url)
+        .map_err(|e| {
+            warn!("Failed to get new Http client with error: {:?}", e);
+            IndexerError::HttpClientInitError(format!(
                 "Failed to initialize fullnode RPC client with error: {:?}",
                 e
             ))
@@ -210,16 +224,7 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     config: &IndexerConfig,
 ) -> Result<ServerHandle, IndexerError> {
     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
-
-    let mut headers = HeaderMap::new();
-    headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
-
-    let http_client = HttpClientBuilder::default()
-        .max_request_body_size(2 << 30)
-        .max_concurrent_requests(usize::MAX)
-        .set_headers(headers.clone())
-        .build(config.rpc_client_url.as_str())
-        .map_err(|e| IndexerError::RpcClientInitError(e.to_string()))?;
+    let http_client = get_http_client(config.rpc_client_url.as_str())?;
 
     builder.register_module(ReadApi::new(
         state.clone(),

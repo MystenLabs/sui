@@ -16,9 +16,8 @@ use serde_json;
 
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
-use sui_types::base_types::{EpochId, ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
 
@@ -37,7 +36,9 @@ const OBJECT: &str = "object";
 pub struct Object {
     // epoch id in which this object got update.
     pub epoch: i64,
-    // checkpoint seq number in which this object got update.
+    // checkpoint seq number in which this object got updated,
+    // it can be temp -1 for object updates from fast path,
+    // it will be updated to the real checkpoint seq number in the following checkpoint.
     pub checkpoint: i64,
     pub object_id: String,
     pub version: i64,
@@ -74,7 +75,7 @@ pub struct DeletedObject {
     // epoch id in which this object got deleted.
     pub epoch: i64,
     // checkpoint seq number in which this object got deleted.
-    pub checkpoint: i64,
+    pub checkpoint: Option<i64>,
     pub object_id: String,
     pub version: i64,
     pub object_digest: String,
@@ -89,7 +90,8 @@ impl From<DeletedObject> for Object {
     fn from(o: DeletedObject) -> Self {
         Object {
             epoch: o.epoch,
-            checkpoint: o.checkpoint,
+            // NOTE: -1 as temp checkpoint for object updates from fast path,
+            checkpoint: o.checkpoint.unwrap_or(-1),
             object_id: o.object_id,
             version: o.version,
             object_digest: o.object_digest,
@@ -120,8 +122,8 @@ pub enum ObjectStatus {
 
 impl Object {
     pub fn from(
-        epoch: &EpochId,
-        checkpoint: &CheckpointSequenceNumber,
+        epoch: u64,
+        checkpoint: Option<u64>,
         status: &ObjectStatus,
         o: &SuiObjectData,
     ) -> Self {
@@ -144,8 +146,9 @@ impl Object {
             };
 
         Object {
-            epoch: *epoch as i64,
-            checkpoint: *checkpoint as i64,
+            epoch: epoch as i64,
+            // NOTE: -1 as temp checkpoint for object updates from fast path,
+            checkpoint: checkpoint.map(|v| v as i64).unwrap_or(-1),
             object_id: o.object_id.to_string(),
             version: o.version.value() as i64,
             object_digest: o.digest.base58_encode(),
@@ -280,15 +283,15 @@ impl TryFrom<Object> for sui_types::object::Object {
 
 impl DeletedObject {
     pub fn from(
-        epoch: &EpochId,
-        checkpoint: &CheckpointSequenceNumber,
+        epoch: u64,
+        checkpoint: Option<u64>,
         oref: &SuiObjectRef,
         previous_tx: &TransactionDigest,
-        status: ObjectStatus,
+        status: &ObjectStatus,
     ) -> Self {
         Self {
-            epoch: *epoch as i64,
-            checkpoint: *checkpoint as i64,
+            epoch: epoch as i64,
+            checkpoint: checkpoint.map(|c| c as i64),
             object_id: oref.object_id.to_string(),
             version: oref.version.value() as i64,
             // DeleteObject is use for upsert only, this value will not be inserted into the DB
@@ -297,7 +300,7 @@ impl DeletedObject {
             owner_type: OwnerType::AddressOwner,
             previous_transaction: previous_tx.base58_encode(),
             object_type: "DELETED".to_string(),
-            object_status: status,
+            object_status: *status,
             has_public_transfer: false,
         }
     }

@@ -47,8 +47,8 @@ pub enum IndexerError {
     #[error(transparent)]
     PostgresError(#[from] diesel::result::Error),
 
-    #[error("Indexer failed to initialize fullnode RPC client with error: `{0}`")]
-    RpcClientInitError(String),
+    #[error("Indexer failed to initialize fullnode Http client with error: `{0}`")]
+    HttpClientInitError(String),
 
     #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
     SerdeError(String),
