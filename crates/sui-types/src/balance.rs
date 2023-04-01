@@ -57,6 +57,10 @@ impl Balance {
         Ok(())
     }
 
+    pub fn deposit_for_safe_mode(&mut self, amount: u64) {
+        self.value += amount;
+    }
+
     pub fn value(&self) -> u64 {
         self.value
     }

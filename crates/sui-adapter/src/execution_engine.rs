@@ -18,9 +18,7 @@ use tracing::{info, instrument, trace, warn};
 
 use crate::programmable_transactions;
 use sui_macros::checked_arithmetic;
-use sui_protocol_config::{
-    check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig, ProtocolVersion,
-};
+use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
 use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
@@ -30,7 +28,7 @@ use sui_types::messages::{
     TransactionKind,
 };
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ParentSync, WriteKind};
-use sui_types::sui_system_state::ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME;
+use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
 use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -49,19 +47,6 @@ use sui_types::{
 use sui_types::temporary_store::TemporaryStore;
 
 checked_arithmetic! {
-
-#[derive(Debug)]
-pub struct AdvanceEpochParams {
-    pub epoch: u64,
-    pub next_protocol_version: ProtocolVersion,
-    pub storage_charge: u64,
-    pub computation_charge: u64,
-    pub storage_rebate: u64,
-    pub non_refundable_storage_fee: u64,
-    pub storage_fund_reinvest_rate: u64,
-    pub reward_slashing_rate: u64,
-    pub epoch_start_timestamp_ms: u64,
-}
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<
@@ -548,7 +533,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
     Ok(builder.finish())
 }
 
-fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
+fn advance_epoch<S: ObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver>(
     change_epoch: ChangeEpoch,
     temporary_store: &mut TemporaryStore<S>,
     tx_ctx: &mut TxContext,
@@ -588,18 +573,23 @@ fn advance_epoch<S: BackingPackageStore + ParentSync + ChildObjectResolver>(
         temporary_store.drop_writes();
         // Must reset the storage rebate since we are re-executing.
         gas_status.reset_storage_cost_and_rebate();
-        let advance_epoch_safe_mode_pt =
-            construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
-        programmable_transactions::execution::execute::<_, execution_mode::System>(
-            protocol_config,
-            move_vm,
-            temporary_store,
-            tx_ctx,
-            gas_status,
-            None,
-            advance_epoch_safe_mode_pt,
-        )
-        .expect("Advance epoch with safe mode must succeed");
+
+        if protocol_config.advance_epoch_safe_mode_in_rust() {
+            temporary_store.advance_epoch_safe_mode(&params);
+        } else {
+            let advance_epoch_safe_mode_pt =
+                construct_advance_epoch_safe_mode_pt(&params, protocol_config)?;
+            programmable_transactions::execution::execute::<_, execution_mode::System>(
+                protocol_config,
+                move_vm,
+                temporary_store,
+                tx_ctx,
+                gas_status,
+                None,
+                advance_epoch_safe_mode_pt,
+            )
+            .expect("Advance epoch with safe mode must succeed");
+        }
     }
 
     for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
