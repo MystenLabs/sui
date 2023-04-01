@@ -4,8 +4,6 @@ expression: "ProtocolConfig::get_for_version(cur)"
 ---
 version: 2
 feature_flags:
-  package_upgrades: false
-  commit_root_state_digest: false
   advance_epoch_start_time_in_safe_mode: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048

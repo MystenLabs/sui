@@ -16,7 +16,8 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 //
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
-// Version 3: gas model v2, including all sui conservation fixes.
+// Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
+//            changes.
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,
@@ -115,12 +116,23 @@ pub struct Error(pub String);
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
+    #[serde(skip_serializing_if = "is_false")]
     package_upgrades: bool,
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
+    #[serde(skip_serializing_if = "is_false")]
     commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
+    #[serde(skip_serializing_if = "is_false")]
     advance_epoch_start_time_in_safe_mode: bool,
+    // If true, apply the fix to correctly capturing loaded child object versions in execution's
+    // object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    loaded_child_objects_fixed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Constants that change the behavior of the protocol.
@@ -561,6 +573,10 @@ impl ProtocolConfig {
 
     pub fn get_advance_epoch_start_time_in_safe_mode(&self) -> bool {
         self.feature_flags.advance_epoch_start_time_in_safe_mode
+    }
+
+    pub fn loaded_child_objects_fixed(&self) -> bool {
+        self.feature_flags.loaded_child_objects_fixed
     }
 }
 
@@ -1494,6 +1510,7 @@ impl ProtocolConfig {
                 cfg.base_tx_cost_fixed = Some(2_000);
                 // storage gas price multiplier
                 cfg.storage_gas_price = Some(76);
+                cfg.feature_flags.loaded_child_objects_fixed = true;
                 cfg
             }
             // Use this template when making changes:
