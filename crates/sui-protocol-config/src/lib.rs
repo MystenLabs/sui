@@ -17,7 +17,7 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 // Version 1: Original version.
 // Version 2: Framework changes, including advancing epoch_start_time in safemode.
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
-//            changes, enable package upgrades, add limits on `max_size_written_objects`, 
+//            changes, enable package upgrades, add limits on `max_size_written_objects`,
 //            `max_size_written_objects_system_tx`
 
 #[derive(
