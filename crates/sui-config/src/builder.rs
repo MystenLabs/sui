@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis::TokenDistributionScheduleBuilder;
+use crate::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use crate::node::{
     default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath, DBCheckpointConfig,
     KeyPairWithPath,
@@ -381,9 +381,17 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             for allocation in allocations {
                 builder.add_allocation(allocation);
             }
-            builder.default_allocation_for_validators(
-                validator_set.iter().map(|v| v.0.account_address),
-            );
+            // Add allocations for each validator
+            for validator in &validators {
+                let account_key: PublicKey = validator.genesis_info.account_key_pair.public();
+                let address = SuiAddress::from(&account_key);
+                let stake = TokenAllocation {
+                    recipient_address: address,
+                    amount_mist: validator.genesis_info.stake,
+                    staked_with_validator: Some(address),
+                };
+                builder.add_allocation(stake);
+            }
             builder.build()
         };
 

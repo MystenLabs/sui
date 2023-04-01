@@ -93,6 +93,8 @@ pub struct ValidatorGenesisInfo {
     pub commission_rate: u64,
     pub narwhal_primary_address: Multiaddr,
     pub narwhal_worker_address: Multiaddr,
+    #[serde(default = "default_stake")]
+    pub stake: u64,
 }
 
 fn default_socket_address() -> SocketAddr {
@@ -104,6 +106,10 @@ fn default_multiaddr_address() -> Multiaddr {
     format!("/ip4/{:?}/tcp/{}/http", addr.ip(), addr.port())
         .parse()
         .unwrap()
+}
+
+fn default_stake() -> u64 {
+    sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST
 }
 
 impl ValidatorGenesisInfo {
@@ -135,6 +141,7 @@ impl ValidatorGenesisInfo {
             commission_rate: DEFAULT_COMMISSION_RATE,
             narwhal_primary_address: utils::new_udp_network_address(),
             narwhal_worker_address: utils::new_udp_network_address(),
+            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
         }
     }
 
@@ -179,6 +186,7 @@ impl ValidatorGenesisInfo {
                 Self::DEFAULT_NARWHAL_PRIMARY_PORT + port_offset,
             ),
             narwhal_worker_address: make_udp_addr(Self::DEFAULT_NARWHAL_WORKER_PORT + port_offset),
+            stake: sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST,
         }
     }
 }
