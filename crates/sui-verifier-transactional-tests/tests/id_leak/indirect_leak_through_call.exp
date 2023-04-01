@@ -6,4 +6,4 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 1 'publish'. lines 28-50:
 created: object(105)
-written: object(104)
+mutated: object(104)
