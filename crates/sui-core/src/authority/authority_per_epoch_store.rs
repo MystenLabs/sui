@@ -1535,12 +1535,12 @@ impl AuthorityPerEpochStore {
 
         let _lock = self.process_end_of_publish_transactions(&mut batch, &end_of_publish_txns)?;
 
-        batch.write()?;
-
         for tx in other_txns.iter().chain(end_of_publish_txns.iter()) {
             let key = tx.0.transaction.key();
             self.consensus_notify_read.notify(&key, &());
         }
+
+        batch.write()?;
 
         Ok(verified_certificates)
     }
