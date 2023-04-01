@@ -120,8 +120,6 @@ impl Primary {
         tx_shutdown: &mut PreSubscribedBroadcastSender,
         tx_committed_certificates: Sender<(Round, Vec<Certificate>)>,
         registry: &Registry,
-        // See comments in Subscriber::spawn
-        tx_executor_network: Option<oneshot::Sender<anemo::Network>>,
     ) -> Vec<JoinHandle<()>> {
         // Write the parameters to the logs.
         parameters.tracing();
@@ -455,12 +453,6 @@ impl Primary {
             network.clone(),
             tx_shutdown.subscribe(),
         );
-
-        if let Some(tx_executor_network) = tx_executor_network {
-            if tx_executor_network.send(network.clone()).is_err() {
-                panic!("Executor shut down before primary has a chance to start");
-            }
-        }
 
         let core_handle = Certifier::spawn(
             authority.id(),

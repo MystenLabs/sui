@@ -425,7 +425,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     // Wait for tasks to start
@@ -550,7 +549,6 @@ async fn get_network_peers_from_admin_server() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        None,
     );
 
     // Wait for tasks to start

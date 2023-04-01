@@ -137,7 +137,6 @@ async fn test_rounds_errors() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     // AND Wait for tasks to start
@@ -232,7 +231,6 @@ async fn test_rounds_return_successful_response() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     // AND Wait for tasks to start
@@ -397,7 +395,6 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -446,7 +443,6 @@ async fn test_node_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        None,
     );
 
     // Wait for tasks to start

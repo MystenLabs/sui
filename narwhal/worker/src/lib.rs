@@ -8,6 +8,7 @@
     rust_2021_compatibility
 )]
 
+mod batch_fetcher;
 mod batch_maker;
 mod client;
 mod handlers;

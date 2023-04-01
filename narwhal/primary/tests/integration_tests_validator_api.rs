@@ -134,7 +134,6 @@ async fn test_get_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     let registry = Registry::new();
@@ -334,7 +333,6 @@ async fn test_remove_collections() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     // Wait for tasks to start
@@ -588,7 +586,6 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -638,7 +635,6 @@ async fn test_read_causal_signed_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        None,
     );
 
     // Wait for tasks to start
@@ -818,7 +814,6 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown,
         tx_feedback,
         &Registry::new(),
-        None,
     );
 
     let (tx_new_certificates_2, rx_new_certificates_2) =
@@ -862,7 +857,6 @@ async fn test_read_causal_unsigned_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        None,
     );
 
     // Wait for tasks to start
@@ -1043,7 +1037,6 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown,
         tx_feedback_1,
         &Registry::new(),
-        None,
     );
 
     let registry_1 = Registry::new();
@@ -1108,7 +1101,6 @@ async fn test_get_collections_with_missing_certificates() {
         &mut tx_shutdown_2,
         tx_feedback_2,
         &Registry::new(),
-        None,
     );
 
     let registry_2 = Registry::new();

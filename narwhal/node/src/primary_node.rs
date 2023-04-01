@@ -19,7 +19,7 @@ use prometheus::{IntGauge, Registry};
 use std::sync::Arc;
 use std::time::Instant;
 use storage::NodeStorage;
-use tokio::sync::{oneshot, watch, RwLock};
+use tokio::sync::{watch, RwLock};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, instrument};
 use types::{
@@ -240,7 +240,6 @@ impl PrimaryNodeInner {
             .unwrap_or_else(|| panic!("Our node with key {:?} should be in committee", name));
 
         let mut handles = Vec::new();
-        let (tx_executor_network, rx_executor_network) = oneshot::channel();
         let (tx_consensus_round_updates, rx_consensus_round_updates) =
             watch::channel(ConsensusRound::new(0, 0));
         let (dag, network_model) = if !internal_consensus {
@@ -259,9 +258,9 @@ impl PrimaryNodeInner {
         } else {
             let consensus_handles = Self::spawn_consensus(
                 authority.id(),
-                rx_executor_network,
                 worker_cache.clone(),
                 committee.clone(),
+                client.clone(),
                 store,
                 parameters.clone(),
                 execution_state,
@@ -277,6 +276,9 @@ impl PrimaryNodeInner {
 
             (None, NetworkModel::PartiallySynchronous)
         };
+
+        // TODO: the same set of variables are sent to primary, consensus and downstream
+        // components. Consider using a holder struct to pass them around.
 
         // Spawn the primary.
         let primary_handles = Primary::spawn(
@@ -300,7 +302,6 @@ impl PrimaryNodeInner {
             tx_shutdown,
             tx_committed_certificates,
             registry,
-            Some(tx_executor_network),
         );
         handles.extend(primary_handles);
 
@@ -310,9 +311,9 @@ impl PrimaryNodeInner {
     /// Spawn the consensus core and the client executing transactions.
     async fn spawn_consensus<State>(
         authority_id: AuthorityIdentifier,
-        rx_executor_network: oneshot::Receiver<anemo::Network>,
         worker_cache: WorkerCache,
         committee: Committee,
+        client: NetworkClient,
         store: &NodeStorage,
         parameters: Parameters,
         execution_state: State,
@@ -375,9 +376,9 @@ impl PrimaryNodeInner {
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
             authority_id,
-            rx_executor_network,
             worker_cache,
             committee.clone(),
+            client,
             execution_state,
             shutdown_receivers,
             rx_sequence,

@@ -10,7 +10,8 @@ use bytes::Bytes;
 use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache, WorkerId, WorkerInfo};
 use crypto::{
     to_intent_message, AggregateSignature, AggregateSignatureBytes,
-    NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, PublicKey, Signature,
+    NarwhalAuthorityAggregateSignature, NarwhalAuthoritySignature, NetworkPublicKey, PublicKey,
+    Signature,
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
@@ -27,10 +28,13 @@ use proptest_derive::Arbitrary;
 use roaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::time::{Duration, SystemTime};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
+};
+use std::{
+    collections::{HashMap, HashSet},
+    time::{Duration, SystemTime},
 };
 use tracing::warn;
 
@@ -1284,6 +1288,20 @@ pub struct WorkerSynchronizeMessage {
     // the batch it receives because it is part of a certificate. Only digest
     // verification is required.
     pub is_certified: bool,
+}
+
+/// Used by the primary to request that the worker fetch the missing batches and reply
+/// with all of the content.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FetchBatchesRequest {
+    pub digests: HashSet<BatchDigest>,
+    pub known_workers: HashSet<NetworkPublicKey>,
+}
+
+/// All batches requested by the primary.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FetchBatchesResponse {
+    pub batches: HashMap<BatchDigest, Batch>,
 }
 
 /// Used by the primary to request that the worker delete the specified batches.

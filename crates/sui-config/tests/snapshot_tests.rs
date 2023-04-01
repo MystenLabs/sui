@@ -51,7 +51,6 @@ fn genesis_config_snapshot_matches() {
 
 #[ignore]
 #[test]
-#[cfg_attr(msim, ignore)]
 fn populated_genesis_snapshot_matches() {
     let genesis_config = GenesisConfig::for_local_testing();
     let (_account_keys, objects) = genesis_config
