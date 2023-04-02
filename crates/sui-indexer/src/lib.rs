@@ -240,9 +240,9 @@ pub async fn get_async_pg_pool_connection(
     debug!("Getting async pool connection...");
     retry(ExponentialBackoff::default(), || async {
         debug!("Retrying async pool connection...");
-        pool.get().await.map_err(|e| {
-            error!("Failed to get pool connection from PG connection pool with error: {e:?}");
-            backoff::Error::Permanent(e)
+        pool.get().await.map_err(|err| {
+            error!("Failed to get pool connection from PG connection pool with error: {err:?}");
+            backoff::Error::Transient{err, retry_after: None}
         })
     })
     .await
