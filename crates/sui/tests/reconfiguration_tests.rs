@@ -23,11 +23,12 @@ use sui_types::crypto::{
     generate_proof_of_possession, get_account_key_pair, get_key_pair_from_rng, AccountKeyPair,
     KeypairTraits, ToFromBytes,
 };
+use sui_types::error::SuiError;
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages::{
-    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionEffectsAPI,
-    VerifiedTransaction,
+    CallArg, CertifiedTransactionEffects, ObjectArg, TransactionData, TransactionDataAPI,
+    TransactionEffectsAPI, TransactionExpiration, VerifiedTransaction,
 };
 use sui_types::object::{
     generate_test_gas_objects_with_owner, generate_test_gas_objects_with_owner_and_value, Object,
@@ -96,6 +97,49 @@ async fn basic_reconfig_end_to_end_test() {
     sleep(Duration::from_secs(1)).await;
     let authorities = spawn_test_authorities(&test_authority_configs()).await;
     trigger_reconfiguration(&authorities).await;
+}
+
+#[sim_test]
+async fn test_transaction_expiration() {
+    let (sender, keypair) = get_account_key_pair();
+    let gas = Object::with_owner_for_testing(sender);
+    let (configs, objects) = test_authority_configs_with_objects([gas]);
+    let authorities = spawn_test_authorities(&configs).await;
+    trigger_reconfiguration(&authorities).await;
+
+    let mut data = TransactionData::new_transfer_sui_with_dummy_gas_price(
+        sender,
+        sender,
+        Some(1),
+        objects[0].compute_object_reference(),
+        GAS_BUDGET,
+    );
+    // Expired transaction returns an error
+    let mut expired_data = data.clone();
+    *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
+    let expired_transaction = to_sender_signed_transaction(expired_data, &keypair);
+    let result = authorities[0]
+        .with_async(|node| async {
+            let epoch_store = node.state().epoch_store_for_testing();
+            node.state()
+                .handle_transaction(&epoch_store, expired_transaction)
+                .await
+        })
+        .await;
+    assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
+
+    // Non expired transaction signed without issue
+    *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
+    let transaction = to_sender_signed_transaction(data, &keypair);
+    authorities[0]
+        .with_async(|node| async {
+            let epoch_store = node.state().epoch_store_for_testing();
+            node.state()
+                .handle_transaction(&epoch_store, transaction)
+                .await
+        })
+        .await
+        .unwrap();
 }
 
 #[sim_test]
