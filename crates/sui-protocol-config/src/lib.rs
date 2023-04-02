@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 3;
+const MAX_PROTOCOL_VERSION: u64 = 4;
 
 // Record history of protocol version allocations here:
 //
@@ -19,6 +19,9 @@ const MAX_PROTOCOL_VERSION: u64 = 3;
 // Version 3: gas model v2, including all sui conservation fixes. Fix for loaded child object
 //            changes, enable package upgrades, add limits on `max_size_written_objects`,
 //            `max_size_written_objects_system_tx`
+//            changes.
+// Version 4: Executing safe mode epoch change in Rust instead of Move in the execution engine.
+//
 
 #[derive(
     Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, JsonSchema,

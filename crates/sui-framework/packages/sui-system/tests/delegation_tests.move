@@ -16,7 +16,6 @@ module sui_system::stake_tests {
         add_validator,
         add_validator_candidate,
         advance_epoch,
-        advance_epoch_safe_mode,
         advance_epoch_with_reward_amounts,
         create_validator_for_testing,
         create_sui_system_state_for_testing,
@@ -484,39 +483,6 @@ module sui_system::stake_tests {
         // Unstake now and the staker should get no rewards.
         unstake(STAKER_ADDR_1, 0, scenario);
         assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 100 * MIST_PER_SUI);
-
-        test_scenario::end(scenario_val);
-    }
-
-    #[test]
-    fun test_stake_during_safe_mode() {
-        // test that stake and unstake can work during safe mode too.
-        set_up_sui_system_state();
-        let scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
-        let scenario = &mut scenario_val;
-        // Stake with exchange rate of 1.0
-        stake_with(STAKER_ADDR_1, VALIDATOR_ADDR_1, 100, scenario);
-        advance_epoch(scenario);
-        advance_epoch_with_reward_amounts(0, 40, scenario);
-        advance_epoch_safe_mode(scenario);
-
-        stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_1, 50, scenario);
-
-        advance_epoch_safe_mode(scenario);
-        advance_epoch(scenario);
-        // The first stake gets 10-ish SUI and the second one gets 4-ish SUI here.
-        // 4 because staker 2 accounts for slightly less than 1/5 of validator 1's stake
-        // so she gets slightly less than 1/5 * 25 = 5 in rewards.
-        advance_epoch_with_reward_amounts(0, 50, scenario);
-        advance_epoch_safe_mode(scenario);
-
-        unstake(STAKER_ADDR_1, 0, scenario);
-        // 100 principal + ~20 rewards in SUI
-        assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 120185185185);
-
-        unstake(STAKER_ADDR_2, 0, scenario);
-        // 50 principal + ~4 rewards in SUI
-        assert_eq(total_sui_balance(STAKER_ADDR_2, scenario), 54629629629);
 
         test_scenario::end(scenario_val);
     }

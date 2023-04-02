@@ -966,37 +966,6 @@ module sui_system::sui_system_state_inner {
         refunded_storage_rebate
     }
 
-    /// An extremely simple version of advance_epoch.
-    /// This is called in two situations:
-    ///   - When the call to advance_epoch failed due to a bug, and we want to be able to keep the
-    ///     system running and continue making epoch changes.
-    ///   - When advancing to a new protocol version, we want to be able to change the protocol
-    ///     version
-    public(friend) fun advance_epoch_safe_mode(
-        self: &mut SuiSystemStateInnerV2,
-        new_epoch: u64,
-        next_protocol_version: u64,
-        storage_reward: Balance<SUI>,
-        computation_reward: Balance<SUI>,
-        storage_rebate: u64,
-        non_refundable_storage_fee: u64,
-        epoch_start_timestamp_ms: u64,
-        ctx: &mut TxContext,
-    ) {
-        // Validator will make a special system call with sender set as 0x0.
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
-
-        self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
-        self.epoch = new_epoch;
-        self.protocol_version = next_protocol_version;
-
-        self.safe_mode = true;
-        balance::join(&mut self.safe_mode_storage_rewards, storage_reward);
-        balance::join(&mut self.safe_mode_computation_rewards, computation_reward);
-        self.safe_mode_storage_rebates = self.safe_mode_storage_rebates + storage_rebate;
-        self.safe_mode_non_refundable_storage_fee = self.safe_mode_non_refundable_storage_fee + non_refundable_storage_fee;
-    }
-
     /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
     /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
     public(friend) fun epoch(self: &SuiSystemStateInnerV2): u64 {
