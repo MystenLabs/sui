@@ -829,7 +829,7 @@ impl TransactionKind {
         match self {
             Self::ChangeEpoch(e) => Some((
                 e.computation_charge + e.storage_charge,
-                e.storage_rebate - e.non_refundable_storage_fee,
+                e.storage_rebate,
             )),
             _ => None,
         }
