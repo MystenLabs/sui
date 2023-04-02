@@ -212,13 +212,6 @@ impl<'a> SuiGasStatus<'a> {
         config: &ProtocolConfig,
     ) -> SuiGasStatus<'a> {
         let storage_gas_price = config.storage_gas_price();
-        // println!(
-        //     "GAS - SuiGasStatus: budget {}, gas_price {}, computation_gas_price {}, storage_unit_gas_price {}",
-        //     gas_budget,
-        //     gas_price,
-        //     gas_price,
-        //     storage_gas_price,
-        // );
         let max_computation_budget = MAX_BUCKET_COST;
         let computation_budget = if gas_budget > max_computation_budget {
             max_computation_budget
@@ -287,10 +280,6 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         let bucket_cost = get_bucket_cost(&COMPUTATION_BUCKETS, gas_used);
         // charge extra on top of `computation_cost` to make the total computation
         // cost a bucket value
-        // println!(
-        //     "GAS - Bucketize: gas_used {}, bucket cost {}",
-        //     gas_used, bucket_cost
-        // );
         let gas_used = bucket_cost * self.gas_price;
         if self.gas_budget <= gas_used {
             self.computation_cost = self.gas_budget;
@@ -309,16 +298,12 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         let sender_rebate = sender_rebate(self.storage_rebate, self.rebate_rate);
         assert!(sender_rebate <= self.storage_rebate);
         let non_refundable_storage_fee = self.storage_rebate - sender_rebate;
-        // let summary = GasCostSummary {
         GasCostSummary {
             computation_cost: self.computation_cost,
             storage_cost: self.storage_cost,
             storage_rebate: sender_rebate,
             non_refundable_storage_fee,
         }
-        // };
-        // println!("GAS - gas_summary: {}", summary);
-        // summary
     }
 
     fn gas_budget(&self) -> u64 {
@@ -347,7 +332,6 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
     }
 
     fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
-        // println!("GAS - charge_storage_read: size {}", size);
         self.gas_status
             .charge_bytes(size, self.cost_table.object_read_per_byte_cost)
             .map_err(|e| {
@@ -358,21 +342,15 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
 
     fn charge_storage_mutation(
         &mut self,
-        new_size: usize,
-        storage_rebate: u64,
+        _new_size: usize,
+        _storage_rebate: u64,
     ) -> Result<u64, ExecutionError> {
-        // TODO: this is exclusively called from testing as it breaks too much
-        // if we fork tests between old and new, revisit
-        let size = self.track_storage_mutation(new_size, storage_rebate);
-        self.charge_storage_and_rebate()?;
-        Ok(size)
-        // Err(ExecutionError::invariant_violation(
-        //     "charge_storage_mutation should not be called in v2 gas model",
-        // ))
+        Err(ExecutionError::invariant_violation(
+            "charge_storage_mutation should not be called in v2 gas model",
+        ))
     }
 
     fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-        // println!("GAS - charge_publish_package: {}", size);
         self.gas_status
             .charge_bytes(size, self.cost_table.package_publish_per_byte_cost)
             .map_err(|e| {
@@ -395,10 +373,6 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
         let new_size = new_size as u64;
         let storage_cost =
             new_size * self.cost_table.storage_per_byte_cost * self.storage_gas_price;
-        // println!(
-        //     "GAS - charge_storage_mutation: bytes {} cost {}, rebate {}",
-        //     new_size, storage_cost, storage_rebate,
-        // );
         // track rebate
         self.storage_cost += storage_cost;
         // return the new object rebate (object storage cost)
