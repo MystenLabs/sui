@@ -167,7 +167,6 @@ fn execute_transaction<
     GasCostSummary,
     Result<Mode::ExecutionResults, ExecutionError>,
 ) {
-    println!("GAS - gas coins {}", gas.len());
     // First smash gas into the first coin if more than 1 was provided
     let gas_object_ref = match temporary_store.smash_gas(gas) {
         Ok(obj_ref) => obj_ref,

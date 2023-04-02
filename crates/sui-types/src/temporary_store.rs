@@ -959,12 +959,9 @@ impl<S: ObjectStore> TemporaryStore<S> {
         assert!(gas_status.storage_rebate() == 0);
         assert!(gas_status.storage_gas_units() == 0);
 
-        // println!("GAS - charge gas with result error: {}", execution_result.is_err());
-
         if gas_object_id.is_some() {
             // bucketize computation cost
             if let Err(err) = gas_status.bucketize_computation() {
-                println!("GAS - bucketize OOG");
                 if execution_result.is_ok() {
                     *execution_result = Err(err);
                 }
@@ -980,7 +977,6 @@ impl<S: ObjectStore> TemporaryStore<S> {
         self.collect_storage_and_rebate(gas_status);
         if let Some(gas_object_id) = gas_object_id {
             if let Err(err) = gas_status.charge_storage_and_rebate() {
-                println!("GAS - charge_storage_and_rebate OOG");
                 self.reset(gas, gas_status);
                 gas_status.adjust_computation_on_out_of_gas();
                 self.ensure_gas_and_input_mutated(Some(gas_object_id));
@@ -998,7 +994,6 @@ impl<S: ObjectStore> TemporaryStore<S> {
 
             self.write_object(gas_object, WriteKind::Mutate);
             self.gas_charged = Some((gas_object_id, cost_summary.clone()));
-            // println!("GAS - gas charged - error: {}", execution_result.is_err());
             cost_summary
         } else {
             GasCostSummary::default()
@@ -1161,20 +1156,12 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     let output = output_obj.get_total_sui(&self)?;
                     total_output_sui += output;
                     output_rebate_amount += output_obj.storage_rebate;
-                    println!(
-                        "GAS - mutated input: {}, output: {}, rebate: {}, object: {:?}",
-                        input, output, output_obj.storage_rebate, output_obj.data,
-                    );
                 }
                 WriteKind::Create => {
                     // created objects did not exist at input, and thus contribute 0 to input SUI
                     let output = output_obj.get_total_sui(&self)?;
                     total_output_sui += output;
                     output_rebate_amount += output_obj.storage_rebate;
-                    println!(
-                        "GAS - created output: {}, rebate: {}, object: {:?}",
-                        output, output_obj.storage_rebate, output_obj.data,
-                    );
                 }
                 WriteKind::Unwrap => {
                     // an unwrapped object was either:
@@ -1184,10 +1171,6 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     let output = output_obj.get_total_sui(&self)?;
                     total_output_sui += output;
                     output_rebate_amount += output_obj.storage_rebate;
-                    println!(
-                        "GAS - wrapped output: {}, rebate: {}, object: {:?}",
-                        output, output_obj.storage_rebate, output_obj.data,
-                    );
                 }
             }
         }
@@ -1196,10 +1179,6 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                 DeleteKind::Normal => {
                     let input = self.get_input_sui(id, *input_version)?;
                     total_input_sui += input;
-                    println!(
-                        "GAS - deleted normal input: {}, object id: {}",
-                        input, id,
-                    );
                 }
                 DeleteKind::Wrap => {
                     // wrapped object was a tx input or dynamic field--need to account for it in input SUI
@@ -1209,15 +1188,10 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     // else, the wrapped object was either:
                     // 1. freshly created, which means it has 0 contribution to input SUI
                     // 2. unwrapped from another object A, which means its contribution to input SUI will be captured by looking at A
-                    println!(
-                        "GAS - deleted wrapped input: {}, object id: {}",
-                        input, id,
-                    );
                 }
                 DeleteKind::UnwrapThenDelete => {
                     // an unwrapped option was wrapped in input object or dynamic field A, which means its contribution to input SUI will
                     // be captured by looking at A
-                    println!("GAS - deleted unwrapped object id: {}", id);
                 }
             }
         }
@@ -1228,7 +1202,6 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
             .as_ref()
             .map(|(_, summary)| summary.clone())
             .unwrap_or_default();
-        println!("GAS - summary: {}", gas_summary);
 
         // storage gas cost should be equal to total rebates of mutated objects + storage fund rebate inflow (see below).
         // note: each mutated object O of size N bytes is assessed a storage cost of N * storage_price bytes, but also
@@ -1236,7 +1209,6 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         // If we run out of gas we do not perform any storage charges and the assert will fail
         // `gas_summary.storage_cost` is a good proxy for OOG
         if gas_summary.storage_cost > 0 {
-            println!("GAS - storage > 0 assert ok?");
             assert_eq!(gas_summary.storage_cost, output_rebate_amount);
         }
 
