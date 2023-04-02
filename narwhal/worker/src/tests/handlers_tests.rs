@@ -21,19 +21,7 @@ async fn synchronize() {
     // Create a new test store.
     let store = test_utils::create_batch_store();
 
-    let handler = PrimaryReceiverHandler {
-        authority_id,
-        id,
-        committee,
-        worker_cache,
-        store: store.clone(),
-        request_batch_timeout: Duration::from_secs(999),
-        request_batch_retry_nodes: 3, // Not used in this test.
-        batch_fetcher: None,
-        validator: TrivialTransactionValidator,
-    };
-
-    // Set up mock behavior for child RequestBatches RPC.
+    // Create network with mock behavior to respond to RequestBatch request.
     let target_primary = fixture.authorities().nth(1).unwrap();
     let batch = test_utils::batch();
     let digest = batch.digest();
@@ -56,12 +44,6 @@ async fn synchronize() {
     let routes = anemo::Router::new().add_rpc_service(WorkerToWorkerServer::new(mock_server));
     let target_worker = target_primary.worker(id);
     let _recv_network = target_worker.new_network(routes);
-
-    // Check not in store
-    assert!(store.get(&digest).unwrap().is_none());
-
-    // Send a sync request.
-    let mut request = anemo::Request::new(message);
     let send_network = test_utils::random_network();
     send_network
         .connect_with_peer_id(
@@ -74,13 +56,28 @@ async fn synchronize() {
         )
         .await
         .unwrap();
-    assert!(request
-        .extensions_mut()
-        .insert(send_network.downgrade())
-        .is_none());
+
+    let handler = PrimaryReceiverHandler {
+        authority_id,
+        id,
+        committee,
+        worker_cache,
+        store: store.clone(),
+        request_batch_timeout: Duration::from_secs(999),
+        request_batch_retry_nodes: 3, // Not used in this test.
+        network: Some(send_network),
+        batch_fetcher: None,
+        validator: TrivialTransactionValidator,
+    };
+
+    // Verify the batch is not in store
+    assert!(store.get(&digest).unwrap().is_none());
+
+    // Send a sync request.
+    let request = anemo::Request::new(message);
     handler.synchronize(request).await.unwrap();
 
-    // Check its now stored
+    // Verify it is now stored
     assert!(store.get(&digest).unwrap().is_some())
 }
 
@@ -97,6 +94,9 @@ async fn synchronize_when_batch_exists() {
     // Create a new test store.
     let store = test_utils::create_batch_store();
 
+    // Create network without mock behavior since it will not be needed.
+    let send_network = test_utils::random_network();
+
     let handler = PrimaryReceiverHandler {
         authority_id,
         id,
@@ -105,6 +105,7 @@ async fn synchronize_when_batch_exists() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
+        network: Some(send_network),
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
     };
@@ -115,16 +116,14 @@ async fn synchronize_when_batch_exists() {
     let missing = vec![batch_id];
     store.insert(&batch_id, &batch).unwrap();
 
-    // Set up mock behavior for child RequestBatches RPC.
+    // Send a sync request.
     let target_primary = fixture.authorities().nth(1).unwrap();
     let message = WorkerSynchronizeMessage {
         digests: missing.clone(),
         target: target_primary.id(),
         is_certified: false,
     };
-
-    // Send a sync request.
-    // Don't bother to inject a fake network because handler shouldn't need it.
+    // The sync request should succeed.
     handler
         .synchronize(anemo::Request::new(message))
         .await
@@ -156,6 +155,7 @@ async fn delete_batches() {
         store: store.clone(),
         request_batch_timeout: Duration::from_secs(999),
         request_batch_retry_nodes: 3, // Not used in this test.
+        network: None,
         batch_fetcher: None,
         validator: TrivialTransactionValidator,
     };

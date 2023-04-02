@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anemo::types::response::StatusCode;
+use anemo::{types::response::StatusCode, Network};
 use anyhow::Result;
 use async_trait::async_trait;
 use config::{AuthorityIdentifier, Committee, WorkerCache, WorkerId};
@@ -135,7 +135,9 @@ pub struct PrimaryReceiverHandler<V> {
     pub request_batch_timeout: Duration,
     // Number of random nodes to query when retrying batch requests.
     pub request_batch_retry_nodes: usize,
-    // Component to help primary fetch batches from other workers.
+    // Synchronize header payloads from other workers.
+    pub network: Option<Network>,
+    // Fetch certificate payloads from other workers.
     pub batch_fetcher: Option<BatchFetcher>,
     // Validate incoming batches
     pub validator: V,
@@ -147,8 +149,13 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         &self,
         request: anemo::Request<WorkerSynchronizeMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let Some(network) = self.network.as_ref() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                "synchronize() is unsupported via RPC interface, please call via local worker handler instead",
+            ));
+        };
         let message = request.body();
-
         let mut missing = HashSet::new();
         for digest in message.digests.iter() {
             // Check if we already have the batch.
@@ -170,24 +177,23 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
 
         // Keep attempting to retrieve missing batches until we get them all or the client
         // abandons the RPC.
+        // TODO: synchronize() should only be used for header payloads, so remove the broadcast
+        // logic after first attempt.
+        // TODO: synchronize() should not be cancelled when the higher level RequestVote gets
+        // cancelled, if payload requests are already inflight. This avoids wasting work and
+        // potentially stuck when there are many batches to fetch.
         let mut first_attempt = true;
         loop {
             if missing.is_empty() {
                 return Ok(anemo::Response::new(()));
             }
 
+            // TODO: migrate to RequestBatches RPC, or use BatchFetcher.
             let batch_requests: Vec<_> = missing
                 .iter()
                 .cloned()
                 .map(|batch| RequestBatchRequest { batch })
                 .collect();
-            let network = request
-                .extensions()
-                .get::<anemo::NetworkRef>()
-                .and_then(anemo::NetworkRef::upgrade)
-                .ok_or_else(|| {
-                    anemo::rpc::Status::internal("Unable to access network to send child RPCs")
-                })?;
 
             let mut handles = FuturesUnordered::new();
             let request_batch_fn =
@@ -314,17 +320,14 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
         &self,
         request: anemo::Request<FetchBatchesRequest>,
     ) -> Result<anemo::Response<FetchBatchesResponse>, anemo::rpc::Status> {
-        if self.batch_fetcher.is_none() {
+        let Some(batch_fetcher) = self.batch_fetcher.as_ref() else {
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
-                "BatchFetcher not configured, please call fetch_batches() via local worker handler",
+                "fetch_batches() is unsupported via RPC interface, please call via local worker handler instead",
             ));
-        }
+        };
         let request = request.into_body();
-        let batches = self
-            .batch_fetcher
-            .as_ref()
-            .unwrap()
+        let batches = batch_fetcher
             .fetch(request.digests, request.known_workers)
             .await;
         Ok(anemo::Response::new(FetchBatchesResponse { batches }))

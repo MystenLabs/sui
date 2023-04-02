@@ -128,6 +128,7 @@ impl Worker {
             ));
         }
 
+        // Legacy RPC interface, only used by delete_batches() for external consensus.
         let primary_service = PrimaryToWorkerServer::new(PrimaryReceiverHandler {
             authority_id: worker.authority.id(),
             id: worker.id,
@@ -136,6 +137,7 @@ impl Worker {
             store: worker.store.clone(),
             request_batch_timeout: worker.parameters.sync_retry_delay,
             request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+            network: None,
             batch_fetcher: None,
             validator: validator.clone(),
         });
@@ -282,6 +284,7 @@ impl Worker {
                 store: worker.store.clone(),
                 request_batch_timeout: worker.parameters.sync_retry_delay,
                 request_batch_retry_nodes: worker.parameters.sync_retry_nodes,
+                network: Some(network.clone()),
                 batch_fetcher: Some(batch_fetcher),
                 validator: validator.clone(),
             }),
