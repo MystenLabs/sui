@@ -8,12 +8,14 @@ use dashmap::DashMap;
 use futures::future;
 use mysten_metrics::spawn_logged_monitored_task;
 use quinn_proto::ConnectionStats;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time;
 use types::ConditionalBroadcastReceiver;
+
+const CONNECTION_STAT_COLLECTION_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum ConnectionStatus {
@@ -58,14 +60,10 @@ impl ConnectionMonitor {
     async fn run(mut self) {
         let (mut subscriber, connected_peers) = {
             if let Some(network) = self.network.upgrade() {
-                let Ok((subscriber, known_peers)) = network.subscribe() else {
+                let Ok((subscriber, active_peers)) = network.subscribe() else {
                     return;
                 };
-
-                (
-                    subscriber,
-                    known_peers.into_iter().collect::<HashSet<PeerId>>(),
-                )
+                (subscriber, active_peers)
             } else {
                 return;
             }
@@ -73,7 +71,9 @@ impl ConnectionMonitor {
 
         // we report first all the known peers as disconnected - so we can see
         // their labels in the metrics reporting tool
+        let mut known_peers = Vec::new();
         for (peer_id, ty) in &self.peer_id_types {
+            known_peers.push(*peer_id);
             self.connection_metrics
                 .network_peer_connected
                 .with_label_values(&[&format!("{peer_id}"), ty])
@@ -86,7 +86,8 @@ impl ConnectionMonitor {
                 .await;
         }
 
-        let mut connection_stat_collection_interval = time::interval(Duration::from_secs(60));
+        let mut connection_stat_collection_interval =
+            time::interval(CONNECTION_STAT_COLLECTION_INTERVAL);
 
         async fn wait_for_shutdown(
             rx_shutdown: &mut Option<ConditionalBroadcastReceiver>,
@@ -106,7 +107,7 @@ impl ConnectionMonitor {
             tokio::select! {
                 _ = connection_stat_collection_interval.tick() => {
                     if let Some(network) = self.network.upgrade() {
-                        for peer_id in connected_peers.iter() {
+                        for peer_id in known_peers.iter() {
                             if let Some(connection) = network.peer(*peer_id) {
                                 let stats = connection.connection_stats();
                                 self.update_quinn_metrics_for_peer(&format!("{peer_id}"), &stats);
@@ -269,12 +270,29 @@ mod tests {
         // AND we connect to peer 2
         let peer_2 = network_1.connect(network_2.local_addr()).await.unwrap();
 
+        let mut peer_types = HashMap::new();
+        peer_types.insert(network_2.peer_id(), "other_network".to_string());
+        peer_types.insert(network_3.peer_id(), "other_network".to_string());
+
         // WHEN bring up the monitor
         let (_h, statuses) =
-            ConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), HashMap::new(), None);
+            ConnectionMonitor::spawn(network_1.downgrade(), metrics.clone(), peer_types, None);
 
         // THEN peer 2 should be already connected
         assert_network_peers(metrics.clone(), 1).await;
+
+        // AND we should have collected connection stats
+        let mut labels = HashMap::new();
+        let peer_2_str = format!("{peer_2}");
+        labels.insert("peer_id", peer_2_str.as_str());
+        assert_ne!(
+            metrics
+                .network_peer_rtt
+                .get_metric_with(&labels)
+                .unwrap()
+                .get(),
+            0
+        );
         assert_eq!(
             *statuses.get(&peer_2).unwrap().value(),
             ConnectionStatus::Connected
