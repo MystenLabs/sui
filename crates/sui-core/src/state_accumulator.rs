@@ -215,24 +215,14 @@ impl StateAccumulator {
     }
 
     /// Unions all checkpoint accumulators at the end of the epoch to generate the
-    /// root state hash and persists it to db. This function is idempotent. Can be called on
-    /// non-consecutive epochs, e.g. to accumulate epoch 3 after having last
-    /// accumulated epoch 1.
+    /// root state hash and persists it to db. Can be called on non-consecutive
+    /// epochs, e.g. to accumulate epoch 3 after having last accumulated epoch 1.
     pub async fn accumulate_epoch(
         &self,
         epoch: &EpochId,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> Result<Accumulator, TypedStoreError> {
-        if let Some((_checkpoint, acc)) = self
-            .authority_store
-            .perpetual_tables
-            .root_state_hash_by_epoch
-            .get(epoch)?
-        {
-            return Ok(acc);
-        }
-
         // Get the next checkpoint to accumulate (first checkpoint of the epoch)
         // by adding 1 to the highest checkpoint of the previous epoch
         let (_, (next_to_accumulate, mut root_state_hash)) = self
@@ -285,6 +275,23 @@ impl StateAccumulator {
 
         for acc in accumulators {
             root_state_hash.union(&acc);
+        }
+
+        if let Some((_checkpoint, old_root_state_hash)) = self
+            .authority_store
+            .perpetual_tables
+            .root_state_hash_by_epoch
+            .get(epoch)?
+        {
+            if old_root_state_hash != root_state_hash {
+                // This should not happen on a non-byzantine Node, as it indicates that the epoch
+                // contents are inconsistent. Since checkpoint builder is a callsite here, it could
+                // indicate a checkpoint proposal that differs from what was finalized in consensus.
+                error!(
+                    "Epoch {} re-accumulation does not match previously existing accumulation. (Overwriting)",
+                    epoch,
+                );
+            }
         }
 
         self.authority_store
