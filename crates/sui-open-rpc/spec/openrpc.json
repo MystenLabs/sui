@@ -1551,7 +1551,7 @@
           "name": "Extended API"
         }
       ],
-      "description": "Return the list of objects owned by an address.",
+      "description": "Return the list of objects owned by an address. Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT_OBJECTS` objects, the pagination is not accurate, because previous page may have been updated when the next page is fetched. Please use suix_queryObjects if this is a concern.",
       "params": [
         {
           "name": "address",
@@ -1572,7 +1572,7 @@
           "name": "cursor",
           "description": "An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.",
           "schema": {
-            "$ref": "#/components/schemas/CheckpointedObjectID"
+            "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
@@ -1589,7 +1589,7 @@
         "name": "ObjectsPage",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
+          "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_ObjectID"
         }
       }
     },
@@ -1779,7 +1779,7 @@
         }
       ],
       "result": {
-        "name": "ObjectsPage",
+        "name": "QueryObjectsPage",
         "required": true,
         "schema": {
           "$ref": "#/components/schemas/Page_for_SuiObjectResponse_and_CheckpointedObjectID"
@@ -5266,6 +5266,35 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CheckpointedObjectID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Page_for_SuiObjectResponse_and_ObjectID": {
+        "description": "`next_cursor` points to the last item in the page; Reading with `next_cursor` will start from the next item after `next_cursor` if `next_cursor` is `Some`, otherwise it will start from the first item.",
+        "type": "object",
+        "required": [
+          "data",
+          "hasNextPage"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiObjectResponse"
+            }
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectID"
               },
               {
                 "type": "null"

@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
@@ -11,14 +12,16 @@ use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 
 use sui_core::event_handler::EventHandler;
-use sui_json_rpc::api::IndexerApiServer;
-use sui_json_rpc::api::{validate_limit, IndexerApiClient, QUERY_MAX_RESULT_LIMIT};
+use sui_json_rpc::api::{
+    validate_limit, IndexerApiClient, IndexerApiServer, QUERY_MAX_RESULT_LIMIT,
+    QUERY_MAX_RESULT_LIMIT_OBJECTS,
+};
 use sui_json_rpc::indexer_api::spawn_subscription;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page,
-    SuiObjectDataFilter, SuiObjectResponse, SuiObjectResponseQuery,
-    SuiTransactionBlockResponseQuery, TransactionBlocksPage,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataFilter,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery,
+    TransactionBlocksPage,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -215,56 +218,46 @@ impl<S: IndexerStore> IndexerApi<S> {
         })
     }
 
-    async fn get_owned_objects_interal(
+    async fn get_owned_objects_internal(
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<CheckpointedObjectID>,
+        cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         let address = SuiObjectDataFilter::AddressOwner(address);
+        // MUSTFIX(gegaowp): implement other filters beside address owner filter.
         let (filter, options) = match query {
             Some(SuiObjectResponseQuery {
                 filter: Some(filter),
                 options,
-            }) => (address.and(filter), options),
-            Some(SuiObjectResponseQuery { filter: _, options }) => (address, options),
-            None => (address, None),
-        };
-
-        let at_checkpoint = if let Some(CheckpointedObjectID {
-            at_checkpoint: Some(at_checkpoint),
-            ..
-        }) = cursor
-        {
-            at_checkpoint
-        } else {
-            self.state.get_latest_checkpoint_sequence_number()? as u64
-        };
-        let object_cursor = cursor.as_ref().map(|c| c.object_id);
-
-        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT)?;
+            }) => match filter {
+                SuiObjectDataFilter::AddressOwner(_) => Ok((address, options)),
+                _ => Err(anyhow!(
+                    "Only address filter is supported on indexer for now."
+                )),
+            },
+            Some(SuiObjectResponseQuery { filter: _, options }) => Ok((address, options)),
+            None => Ok((address, None)),
+        }?;
         let options = options.unwrap_or_default();
-        let mut objects =
-            self.state
-                .query_objects(filter, at_checkpoint, object_cursor, limit + 1)?;
+        let limit = validate_limit(limit, QUERY_MAX_RESULT_LIMIT_OBJECTS)?;
 
+        // NOTE: fetch one more object to check if there is next page
+        let mut objects = self.state.query_latest_objects(filter, cursor, limit + 1)?;
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
-        let next_cursor = objects.last().and_then(|o| {
-            o.object().ok().map(|o| CheckpointedObjectID {
-                object_id: o.id(),
-                at_checkpoint: Some(at_checkpoint),
-            })
-        });
+        let next_cursor = objects
+            .last()
+            .map_or(cursor, |o_read| Some(o_read.object_id()));
 
-        let objects = objects
+        let data: Vec<SuiObjectResponse> = objects
             .into_iter()
             .map(|o| (o, options.clone()).try_into())
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Page {
-            data: objects,
+            data,
             next_cursor,
             has_next_page,
         })
@@ -280,7 +273,7 @@ where
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<CheckpointedObjectID>,
+        cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
         if !self
@@ -293,7 +286,7 @@ where
                 .await;
         }
         Ok(self
-            .get_owned_objects_interal(address, query, cursor, limit)
+            .get_owned_objects_internal(address, query, cursor, limit)
             .await?)
     }
 
