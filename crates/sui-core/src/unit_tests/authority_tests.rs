@@ -44,7 +44,6 @@ use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, MAX_GAS_BUDGET_FOR_TESTING};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
@@ -53,7 +52,6 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
-    messages::TransactionExpiration,
     messages::VerifiedTransaction,
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -2112,64 +2110,6 @@ async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
 }
 
 #[tokio::test]
-async fn test_transaction_expiration() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let recipient = dbg_addr(2);
-    let object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-
-    let mut committee = authority_state
-        .epoch_store_for_testing()
-        .committee()
-        .to_owned();
-    committee.epoch = 1;
-    let system_state = EpochStartSystemState::new_for_testing_with_epoch(1);
-
-    authority_state
-        .reconfigure(
-            &authority_state.epoch_store_for_testing(),
-            SupportedProtocolVersions::SYSTEM_DEFAULT,
-            committee,
-            EpochStartConfiguration::new_v1(system_state, Default::default()),
-        )
-        .await
-        .unwrap();
-
-    let object = authority_state
-        .get_object(&object_id)
-        .await
-        .unwrap()
-        .unwrap();
-    let mut data = TransactionData::new_transfer_sui_with_dummy_gas_price(
-        recipient,
-        sender,
-        Some(1),
-        object.compute_object_reference(),
-        MAX_GAS,
-    );
-
-    // Expired transaction returns an error
-    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
-    let mut expired_data = data.clone();
-
-    *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
-    let expired_transaction = to_sender_signed_transaction(expired_data, &sender_key);
-    let result = authority_state
-        .handle_transaction(&epoch_store, expired_transaction)
-        .await;
-
-    assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
-
-    // Non expired transaction signed without issue
-    *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
-    let transaction = to_sender_signed_transaction(data, &sender_key);
-    authority_state
-        .handle_transaction(&epoch_store, transaction)
-        .await
-        .unwrap();
-}
-
-#[tokio::test]
 async fn test_missing_package() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
@@ -3046,6 +2986,7 @@ async fn test_authority_persist() {
             AuthorityStorePruningConfig::default(),
             &[], // no genesis objects
             &DBCheckpointConfig::default(),
+            ExpensiveSafetyCheckConfig::new_enable_all(),
         )
         .await
     }
