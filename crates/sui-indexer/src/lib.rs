@@ -19,7 +19,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClientBuilder};
 use prometheus::Registry;
-use tracing::{info, warn};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use apis::{
@@ -221,6 +221,7 @@ pub async fn new_pg_connection_pool(
 }
 
 pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
+    debug!("Getting pool connection...");
     backoff::retry(ExponentialBackoff::default(), || {
         let pool_conn = pool.get()?;
         Ok(pool_conn)
@@ -236,13 +237,18 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
 pub async fn get_async_pg_pool_connection(
     pool: &AsyncPgConnectionPool,
 ) -> Result<AsyncPgPoolConnection, IndexerError> {
+    debug!("Getting async pool connection...");
     retry(ExponentialBackoff::default(), || async {
-        pool.get().await.map_err(backoff::Error::Permanent)
+        debug!("Retrying async pool connection...");
+        pool.get().await.map_err(|e| {
+            error!("Failed to get pool connection from PG connection pool with error: {e:?}");
+            backoff::Error::Permanent(e)
+        })
     })
     .await
     .map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
-            "Failed to get pool connection from PG connection pool with error: {:?}",
+            "All retrial has failed to get pool connection with from PG connection pool with error: {:?}",
             e
         ))
     })
