@@ -376,8 +376,10 @@ impl ConsensusAdapter {
                 let (position, mapped_to_low_scoring) =
                     self.submission_position(committee, tx_digest);
                 const DEFAULT_LATENCY: Duration = Duration::from_secs(5);
+                const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
                 let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
                 let latency = std::cmp::max(latency, DEFAULT_LATENCY);
+                let latency = std::cmp::min(latency, MAX_LATENCY);
                 self.metrics
                     .sequencing_estimated_latency
                     .set(latency.as_millis() as i64);
