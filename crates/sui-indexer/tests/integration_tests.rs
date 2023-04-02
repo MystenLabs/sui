@@ -139,7 +139,10 @@ pub mod pg_integration_test {
     > {
         let sender = test_cluster.accounts.first().unwrap();
         let recipient = test_cluster.accounts.last().unwrap();
-        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+        // TODO(gegaowp): today indexer's get_owned_objects only supports filter
+        // by owner address, will revert this when the feature is complete.
+        let gas_objects: Vec<ObjectID> = test_cluster
+            .rpc_client()
             .get_owned_objects(
                 *sender,
                 Some(SuiObjectResponseQuery::new_with_filter(

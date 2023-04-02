@@ -1018,7 +1018,8 @@ pub struct SuiMovePackage {
     pub disassembled: BTreeMap<String, Value>,
 }
 
-pub type ObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
+pub type QueryObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
+pub type ObjectsPage = Page<SuiObjectResponse, ObjectID>;
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]

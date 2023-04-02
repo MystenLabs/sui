@@ -53,8 +53,8 @@ pub enum IndexerError {
     #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
     SerdeError(String),
 
-    #[error("Indexer does not support the feature yet with error: `{0}`")]
-    NotImplementedError(String),
+    #[error("Indexer does not support the feature with error: `{0}`")]
+    NotSupportedError(String),
 
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),

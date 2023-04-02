@@ -5,9 +5,8 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 
 use sui_json_rpc_types::{
-    CheckpointedObjectID, DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiEvent,
-    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponseQuery,
-    TransactionBlocksPage,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, SuiEvent, SuiObjectResponse,
+    SuiObjectResponseQuery, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -19,6 +18,10 @@ use sui_types::event::EventID;
 #[rpc(server, client, namespace = "suix")]
 pub trait IndexerApi {
     /// Return the list of objects owned by an address.
+    /// Note that if the address owns more than `QUERY_MAX_RESULT_LIMIT_OBJECTS` objects,
+    /// the pagination is not accurate, because previous page may have been updated when
+    /// the next page is fetched.
+    /// Please use suix_queryObjects if this is a concern.
     #[method(name = "getOwnedObjects")]
     async fn get_owned_objects(
         &self,
@@ -27,7 +30,7 @@ pub trait IndexerApi {
         /// the objects query criteria.
         query: Option<SuiObjectResponseQuery>,
         /// An optional paging cursor. If provided, the query will start from the next item after the specified cursor. Default to start from the first item if not specified.
-        cursor: Option<CheckpointedObjectID>,
+        cursor: Option<ObjectID>,
         /// Max number of items returned per page, default to [QUERY_MAX_RESULT_LIMIT_OBJECTS] if not specified.
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage>;

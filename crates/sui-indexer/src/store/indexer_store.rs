@@ -54,10 +54,17 @@ pub trait IndexerStore {
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError>;
 
-    fn query_objects(
+    fn query_objects_history(
         &self,
         filter: SuiObjectDataFilter,
         at_checkpoint: CheckpointSequenceNumber,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError>;
+
+    fn query_latest_objects(
+        &self,
+        filter: SuiObjectDataFilter,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError>;
