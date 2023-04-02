@@ -10277,17 +10277,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d266c00fde287f55d3f1c3e96c500c362a2b8c695076ec180f27918820bc6df8"
-dependencies = [
- "proc-macro2 1.0.54",
- "quote 1.0.26",
- "syn 1.0.107",
-]
-
-[[package]]
-name = "tokio-macros"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61a573bdc87985e9d6ddeed1b3d864e8a302c847e40d647746df2f1de209d1ce"
@@ -12029,7 +12018,7 @@ dependencies = [
  "tinyvec_macros",
  "tokio",
  "tokio-io-timeout",
- "tokio-macros 1.8.2",
+ "tokio-macros 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-retry",
  "tokio-rustls",
  "tokio-stream",
@@ -12109,6 +12098,8 @@ dependencies = [
  "winapi",
  "winapi-util",
  "windows-sys 0.42.0",
+ "windows-sys 0.45.0",
+ "windows-targets",
  "windows_x86_64_msvc",
  "winreg",
  "wyz",
