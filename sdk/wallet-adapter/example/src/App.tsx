@@ -9,7 +9,7 @@ import {
 } from "@mysten/wallet-kit";
 import { TransactionBlock } from "@mysten/sui.js";
 import { useEffect } from "react";
-import { CustodialConnectButton } from "./CustodialConnectButton";
+import { QredoConnectButton } from "./QredoConnectButton";
 
 function App() {
   const {
@@ -75,8 +75,8 @@ function App() {
       <div>
         <h3>Custodial Connect</h3>
         {/* features here will filter out any other installed wallets that don't support custodial connect */}
-        <WalletKitProvider features={["suiWallet:custodialConnect"]}>
-          <CustodialConnectButton />
+        <WalletKitProvider features={["qredo:connect"]}>
+          <QredoConnectButton />
         </WalletKitProvider>
       </div>
     </div>

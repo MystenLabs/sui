@@ -65,11 +65,11 @@ type SuiWalletStakeFeature = {
         stake: (input: StakeInput) => Promise<void>;
     };
 };
-type CustodialConnectInput = { service: string; apiUrl: string; token: string };
-type SuiWalletCustodialConnectFeature = {
-    'suiWallet:custodialConnect': {
+type QredoConnectInput = { service: string; apiUrl: string; token: string };
+type QredoConnectFeature = {
+    'qredo:connect': {
         version: '0.0.1';
-        custodialConnect: (input: CustodialConnectInput) => Promise<void>;
+        qredoConnect: (input: QredoConnectInput) => Promise<void>;
     };
 };
 type ChainType = Wallet['chains'][number];
@@ -111,7 +111,7 @@ export class SuiWallet implements Wallet {
         StandardEventsFeature &
         SuiFeatures &
         SuiWalletStakeFeature &
-        SuiWalletCustodialConnectFeature {
+        QredoConnectFeature {
         return {
             'standard:connect': {
                 version: '1.0.0',
@@ -138,9 +138,9 @@ export class SuiWallet implements Wallet {
                 version: '1.0.0',
                 signMessage: this.#signMessage,
             },
-            'suiWallet:custodialConnect': {
+            'qredo:connect': {
                 version: '0.0.1',
-                custodialConnect: this.#custodialConnect,
+                qredoConnect: this.#qredoConnect,
             },
         };
     }
@@ -350,8 +350,7 @@ export class SuiWallet implements Wallet {
             env === API_ENV.customRPC ? 'sui:unknown' : API_ENV_TO_CHAIN[env];
     }
 
-    #custodialConnect(input: CustodialConnectInput): Promise<void> {
-        console.log('custodialConnect');
+    #qredoConnect(input: QredoConnectInput): Promise<void> {
         throw new Error('not implemented yet');
     }
 

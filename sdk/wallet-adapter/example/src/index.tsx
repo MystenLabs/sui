@@ -12,9 +12,7 @@ export const root = ReactDOM.createRoot(
 );
 root.render(
   <React.StrictMode>
-    <WalletKitProvider
-      features={["sui:signTransactionBlock", "suiWallet:custodialConnect"]}
-    >
+    <WalletKitProvider features={["sui:signTransactionBlock"]}>
       <App />
     </WalletKitProvider>
   </React.StrictMode>

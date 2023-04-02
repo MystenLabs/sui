@@ -1,17 +1,15 @@
 import { useWalletKit, type WalletWithFeatures } from "@mysten/wallet-kit";
 
-type CustodialConnectInput = {};
-type SuiWalletCustodialConnectFeature = {
-  "suiWallet:custodialConnect": {
+type QredoConnectInput = {};
+type QredoConnectFeature = {
+  "qredo:connect": {
     version: "0.0.1";
-    custodialConnect: (input: CustodialConnectInput) => Promise<void>;
+    qredoConnect: (input: QredoConnectInput) => Promise<void>;
   };
 };
-type CustodialConnectWallet = WalletWithFeatures<
-  Partial<SuiWalletCustodialConnectFeature>
->;
+type QredoConnectWallet = WalletWithFeatures<Partial<QredoConnectFeature>>;
 
-export function CustodialConnectButton() {
+export function QredoConnectButton() {
   const { wallets } = useWalletKit();
   // just select the first one, it will probably be SUI until any other wallets implement this feature.
   // Then a select wallet modal might be useful.
@@ -26,15 +24,12 @@ export function CustodialConnectButton() {
       </a>
     );
   }
-  const custodialConnectWallet =
-    selectedWallet.wallet as CustodialConnectWallet;
+  const qredoConnectWallet = selectedWallet.wallet as QredoConnectWallet;
   return (
     <button
       onClick={async () => {
         try {
-          custodialConnectWallet.features[
-            "suiWallet:custodialConnect"
-          ]?.custodialConnect({});
+          qredoConnectWallet.features["qredo:connect"]?.qredoConnect({});
         } catch (e) {
           console.log(e);
         }
