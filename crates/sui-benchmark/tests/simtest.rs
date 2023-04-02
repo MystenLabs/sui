@@ -25,7 +25,7 @@ mod test {
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_utils::messages::get_sui_gas_object_with_wallet_context;
     use test_utils::network::{TestCluster, TestClusterBuilder};
-    use tracing::info;
+    use tracing::{error, info};
     use typed_store::traits::Map;
 
     struct DeadValidator {
@@ -120,6 +120,7 @@ mod test {
         // otherwise, possibly fail the current node
         let mut rng = thread_rng();
         if rng.gen_range(0.0..1.0) < probability {
+            error!("Matched probability threshold for failpoint. Failing...");
             let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
 
             *dead_validator = Some(DeadValidator {
