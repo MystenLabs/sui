@@ -112,7 +112,7 @@ async fn test_async_verifier() {
     let key_pairs = Arc::new(key_pairs);
 
     let registry = Registry::new();
-    let metrics = VerifiedDigestCacheMetrics::new(&registry);
+    let metrics = SignatureVerifierMetrics::new(&registry);
     let verifier = Arc::new(SignatureVerifier::new(committee.clone(), metrics));
 
     let tasks: Vec<_> = (0..32)

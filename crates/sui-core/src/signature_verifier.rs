@@ -90,14 +90,14 @@ pub struct SignatureVerifier {
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
     queue: Mutex<CertBuffer>,
-    pub metrics: Arc<VerifiedDigestCacheMetrics>,
+    pub metrics: Arc<SignatureVerifierMetrics>,
 }
 
 impl SignatureVerifier {
     pub fn new_with_batch_size(
         committee: Arc<Committee>,
         batch_size: usize,
-        metrics: Arc<VerifiedDigestCacheMetrics>,
+        metrics: Arc<SignatureVerifierMetrics>,
     ) -> Self {
         Self {
             committee,
@@ -114,7 +114,7 @@ impl SignatureVerifier {
         }
     }
 
-    pub fn new(committee: Arc<Committee>, metrics: Arc<VerifiedDigestCacheMetrics>) -> Self {
+    pub fn new(committee: Arc<Committee>, metrics: Arc<SignatureVerifierMetrics>) -> Self {
         Self::new_with_batch_size(committee, MAX_BATCH_SIZE, metrics)
     }
 
@@ -238,7 +238,7 @@ impl SignatureVerifier {
 
     fn process_queue_sync(
         committee: Arc<Committee>,
-        metrics: Arc<VerifiedDigestCacheMetrics>,
+        metrics: Arc<SignatureVerifierMetrics>,
         buffer: CertBuffer,
     ) {
         let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
@@ -270,7 +270,7 @@ impl SignatureVerifier {
     }
 }
 
-pub struct VerifiedDigestCacheMetrics {
+pub struct SignatureVerifierMetrics {
     pub certificate_signatures_cache_hits: IntCounter,
     pub certificate_signatures_cache_evictions: IntCounter,
     pub signed_data_cache_hits: IntCounter,
@@ -282,7 +282,7 @@ pub struct VerifiedDigestCacheMetrics {
     total_failed_certs: IntCounter,
 }
 
-impl VerifiedDigestCacheMetrics {
+impl SignatureVerifierMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             certificate_signatures_cache_hits: register_int_counter_with_registry!(
@@ -349,6 +349,8 @@ pub fn batch_verify_all_certificates_and_checkpoints(
     certs: &[CertifiedTransaction],
     checkpoints: &[SignedCheckpointSummary],
 ) -> SuiResult {
+    // certs.data() is assumed to be verified already by the caller.
+
     for ckpt in checkpoints {
         ckpt.data().verify(Some(committee.epoch()))?;
     }
@@ -361,6 +363,8 @@ pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
+    // certs.data() is assumed to be verified already by the caller.
+
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 
