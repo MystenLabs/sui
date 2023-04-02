@@ -1,0 +1,10 @@
+processed 1 task
+
+task 0 'publish'. lines 1-21:
+Error: Unable to publish module '00000000000000000000000000000042::Tester'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x42::Tester,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 8)],
+}

@@ -1,0 +1,18 @@
+//# publish
+module 0x1.M {
+    struct T {v : u64}
+
+    public new(v: u64): Self.T {
+    label b0:
+        return T{v: move(v)};
+    }
+
+    public compare(t1: &mut Self.T, t2: &mut Self.T) : bool {
+        let b: bool;
+        let x_ref: &mut u64;
+    label b0:
+        x_ref = &mut copy(t1).T::v;
+        b = move(t1) == move(t2); // cannot read from t1 as it is borrowed by x_ref
+        return move(b);
+    }
+}

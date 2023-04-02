@@ -1,0 +1,8 @@
+[package]
+name = "NestedDeps"
+version = "0.0.0"
+
+[dependencies.Nested]
+git = "../../.."
+rev = "ed613ee8e"
+subdir = "language/tools/move-package/tests/test_sources/nested_deps_bad_parent/deps_only/nested"

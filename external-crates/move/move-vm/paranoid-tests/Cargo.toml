@@ -1,0 +1,16 @@
+[package]
+name = "move-vm-paranoid-tests"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+publish = false
+edition = "2021"
+license = "Apache-2.0"
+
+[dev-dependencies]
+fail = { version = "0.4.0", features = ['failpoints'] }
+datatest-stable = "0.1.1"
+move-transactional-test-runner = { path = "../../testing-infra/transactional-test-runner", features = ['failpoints'] }
+
+[[test]]
+name = "tests"
+harness = false

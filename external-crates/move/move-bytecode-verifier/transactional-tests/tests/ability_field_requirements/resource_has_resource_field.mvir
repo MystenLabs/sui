@@ -1,0 +1,5 @@
+//# publish
+module 0x42.Test {
+    struct All has key, store, copy, drop { b: bool }
+    struct T { f: Self.All } // can drop abilities
+}

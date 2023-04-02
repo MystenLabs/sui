@@ -1,0 +1,25 @@
+//# run
+main() {
+    let x: u64;
+    let y: u64;
+    let z: u64;
+label b0:
+    x = 0;
+    z = 0;
+label outer_while:
+    jump_if_false (copy(x) < 3) outer_while_cont;
+label outer_while_b0:
+    x = move(x) + 1;
+    y = 0;
+label inner_while:
+    jump_if_false (copy(y) < 7) inner_while_cont;
+label inner_while_b0:
+    y = move(y) + 1;
+    z = move(z) + 1;
+    jump inner_while;
+label inner_while_cont:
+    jump outer_while;
+label outer_while_cont:
+    assert(move(z) == 21, 42);
+    return;
+}

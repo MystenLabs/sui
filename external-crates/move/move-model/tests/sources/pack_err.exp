@@ -1,0 +1,8 @@
+error: unexpected token
+  ┌─ tests/sources/pack_err.move:9:20
+  │
+9 │     invariant pack sum = sum + x;
+  │                    ^^^
+  │                    │
+  │                    Unexpected 'sum'
+  │                    Expected ';'

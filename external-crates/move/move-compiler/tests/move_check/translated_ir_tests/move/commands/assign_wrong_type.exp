@@ -1,0 +1,10 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/translated_ir_tests/move/commands/assign_wrong_type.move:6:5
+  │
+5 │     let x: u64;
+  │            --- Expected: 'u64'
+6 │     x = false
+  │     ^   ----- Given: 'bool'
+  │     │    
+  │     Invalid assignment to local 'x'
+

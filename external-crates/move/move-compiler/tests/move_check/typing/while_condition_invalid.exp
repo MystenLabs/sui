@@ -1,0 +1,81 @@
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_condition_invalid.move:3:16
+  │
+3 │         while (()) ();
+  │                ^^
+  │                │
+  │                Invalid while condition
+  │                Expected: 'bool'
+  │                Given: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_condition_invalid.move:4:16
+  │
+4 │         while ((())) ();
+  │                ^^^^
+  │                │
+  │                Invalid while condition
+  │                Expected: 'bool'
+  │                Given: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_condition_invalid.move:5:16
+  │
+5 │         while ({}) ()
+  │                ^^
+  │                │
+  │                Invalid while condition
+  │                Expected: 'bool'
+  │                Given: '()'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/while_condition_invalid.move:9:16
+  │
+8 │     fun t1<T: drop>(x: T) {
+  │                        - Given: 'T'
+9 │         while (x) ();
+  │                ^
+  │                │
+  │                Invalid while condition
+  │                Expected: 'bool'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/while_condition_invalid.move:10:16
+   │
+10 │         while (0) ();
+   │                ^
+   │                │
+   │                Invalid while condition
+   │                Expected: 'bool'
+   │                Given: integer
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/while_condition_invalid.move:11:16
+   │
+11 │         while (@0x0) ()
+   │                ^^^^
+   │                │
+   │                Invalid while condition
+   │                Expected: 'bool'
+   │                Given: 'address'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/while_condition_invalid.move:15:16
+   │
+15 │         while ((false, true)) ();
+   │                ^^^^^^^^^^^^^
+   │                │
+   │                Invalid while condition
+   │                Expected: 'bool'
+   │                Given: '(bool, bool)'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/typing/while_condition_invalid.move:16:16
+   │
+16 │         while ((0, false)) ()
+   │                ^^^^^^^^^^
+   │                │
+   │                Invalid while condition
+   │                Expected: 'bool'
+   │                Given: '({integer}, bool)'
+

@@ -1,0 +1,51 @@
+//# publish
+module 0x2.A {
+  struct C { x: u64 }
+  struct D { x: u64 }
+
+  public make_c(): Self.C {
+  label b0:
+    return C { x: 0};
+  }
+
+  public make_d(): Self.D {
+  label b0:
+    return D { x: 0};
+  }
+
+  public take_c(c: Self.C) {
+    let x: u64;
+  label b0:
+    C { x } = move(c);
+  }
+}
+
+//# publish
+module 0x2.B {
+    import 0x2.A;
+
+    struct C { x: A.C }
+
+    public store(s: &signer) {
+        let v: A.D;
+        let c: Self.C;
+        let x: A.C;
+
+    label b0:
+        v = A.make_d();
+        c = C { x: move(v) };
+
+        C { x } = move(c);
+        A.take_c(move(x));
+
+        return;
+    }
+}
+
+//# run --signers 0x1 --check-runtime-types
+import 0x2.B;
+main(account: signer) {
+label b0:
+    B.store(&account);
+    return;
+}

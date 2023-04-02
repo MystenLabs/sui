@@ -1,0 +1,30 @@
+error[E06001]: unused value without 'drop'
+  ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutate_with_borrowed_loc_struct_invalid.move:7:9
+  │
+2 │     struct X has key { b: bool }
+  │            - To satisfy the constraint, the 'drop' ability would need to be added here
+  ·
+5 │         let x = X { b: true };
+  │             -   ------------- The type '0x8675309::M::X' does not have the ability 'drop'
+  │             │    
+  │             The variable contains a value due to this assignment. The value does not have the 'drop' ability and must be used before you assign to this variable again
+6 │         let y = &x;
+7 │         x = X { b: true };
+  │         ^ Invalid assignment to variable 'x'
+
+error[E07003]: invalid operation, could create dangling a reference
+  ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutate_with_borrowed_loc_struct_invalid.move:7:9
+  │
+6 │         let y = &x;
+  │                 -- It is still being borrowed by this reference
+7 │         x = X { b: true };
+  │         ^ Invalid assignment of variable 'x'
+
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_check/translated_ir_tests/move/borrow_tests/mutate_with_borrowed_loc_struct_invalid.move:16:9
+   │
+15 │         let z = &y.z;
+   │                 ---- It is still being borrowed by this reference
+16 │         s = S { z: 7 };
+   │         ^ Invalid assignment of variable 's'
+

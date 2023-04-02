@@ -1,0 +1,18 @@
+//# publish
+module 0x42.Test {
+    struct T{fr: bool}
+
+    public new(): Self.T {
+    label b0:
+        return T{fr: false};
+    }
+
+    public no(this: &mut Self.T) {
+        let x: &mut bool;
+    label b0:
+        x = &mut move(this).T::fr;
+        // type mismatch on assignment/mutation
+        *move(x) = 0;
+        return;
+    }
+}

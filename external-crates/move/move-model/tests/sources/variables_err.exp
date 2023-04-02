@@ -1,0 +1,8 @@
+error: unexpected token
+   ┌─ tests/sources/variables_err.move:20:20
+   │
+20 │     invariant pack x == 0;
+   │                    ^
+   │                    │
+   │                    Unexpected 'x'
+   │                    Expected ';'

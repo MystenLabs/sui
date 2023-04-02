@@ -1,0 +1,4 @@
+//# run
+main() {
+label b0: // empty functions not allowed
+}

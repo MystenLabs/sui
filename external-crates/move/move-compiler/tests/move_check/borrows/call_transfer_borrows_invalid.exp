@@ -1,0 +1,25 @@
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_check/borrows/call_transfer_borrows_invalid.move:16:9
+   │
+15 │         let r = take_imm_mut_give_mut(move x_ref, move y_ref);
+   │                 --------------------------------------------- It is still being mutably borrowed by this reference
+16 │         move y;
+   │         ^^^^^^ Invalid move of variable 'y'
+
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_check/borrows/call_transfer_borrows_invalid.move:26:9
+   │
+25 │         let r = take_imm_mut_give_imm(move x_ref, move y_ref);
+   │                 --------------------------------------------- It is still being borrowed by this reference
+26 │         move x;
+   │         ^^^^^^ Invalid move of variable 'x'
+
+error[E07003]: invalid operation, could create dangling a reference
+   ┌─ tests/move_check/borrows/call_transfer_borrows_invalid.move:27:9
+   │
+25 │         let r = take_imm_mut_give_imm(move x_ref, move y_ref);
+   │                 --------------------------------------------- It is still being borrowed by this reference
+26 │         move x;
+27 │         move y;
+   │         ^^^^^^ Invalid move of variable 'y'
+

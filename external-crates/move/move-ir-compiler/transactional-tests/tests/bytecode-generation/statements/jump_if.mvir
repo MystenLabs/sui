@@ -1,0 +1,74 @@
+//# print-bytecode
+// This is roughly equivalent to the following Move program:
+// ```
+// if (42 > 0) { x = 1; } else { x = 2; }
+// return;
+// ```
+// This program uses `jump` statements between blocks, which is valid. Each
+// `jump` statement is translated to a bytecode instruction.
+main() {
+    let x: u64;
+label b0:
+    jump_if (42 > 0) b1;
+    jump b2;
+label b1:
+    x = 1;
+    jump b3;
+label b2:
+    x = 2;
+    jump b3;
+label b3:
+    return;
+}
+
+//# print-bytecode
+// This is roughly equivalent to the following Move program:
+// ```
+// if (42 > 0) { x = 1; } else { x = 2; }
+// return;
+// ```
+// This program uses fallthrough instead of `jump` statements.
+main() {
+    let x: u64;
+label b0:
+    jump_if (42 > 0) b1;
+    x = 2;
+    jump b2;
+label b1:
+    x = 1;
+label b2:
+    return;
+}
+
+//# print-bytecode
+// `jump_if` statements can be sequenced, akin to "nested" `if` statements in Move.
+main() {
+    let x: u64;
+label begin:
+    jump_if (0 < 1) then_0;
+    x = 0;
+    jump end;
+label then_0:
+    jump_if (2 > 1) then_1;
+    x = 1;
+    jump end;
+label then_1:
+    x = 2;
+label end:
+    return;
+}
+
+//# print-bytecode
+// `return` statements can appear anywhere, including within a jump destination's block.
+main() {
+    let x: u64;
+label b0:
+    jump_if (0 != 1) b1;
+    x = 1;
+    jump b2;
+label b1:
+    x = 2;
+    return;
+label b2:
+    return;
+}

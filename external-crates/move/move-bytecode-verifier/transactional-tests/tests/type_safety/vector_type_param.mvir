@@ -1,0 +1,32 @@
+//# publish
+module 0x42.M1 {
+    struct S<T: copy> { t: T }
+
+    // should get flagged w/ constraint not satisfied--T does not have copy
+    public bad_sig<T>(v: vector<Self.S<T>>): vector<Self.S<T>> {
+    label b0:
+        return move(v);
+    }
+}
+
+//# publish
+module 0x42.M2 {
+    struct S<T: copy> { t: T }
+
+    // should get flagged w/ constraint not satisfied--T does not have copy
+    public bad_sig<T>(v: &vector<Self.S<T>>) {
+    label b0:
+        return;
+    }
+}
+
+//# publish
+module 0x42.M3 {
+    struct S<T: copy> { t: T }
+
+    // should get flagged w/ constraint not satisfied--T does not have copy
+    public bad_sig<T>(v: &mut vector<Self.S<T>>) {
+    label b0:
+        return;
+    }
+}

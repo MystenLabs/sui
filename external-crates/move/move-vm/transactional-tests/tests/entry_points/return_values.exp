@@ -1,0 +1,5 @@
+processed 2 tasks
+
+task 1 'run'. lines 20-20:
+mutable inputs after call: local#4: { 4 }
+return values: 0, { 00000000000000000000000000000001 }, { 2 }, { 3 }, 3, 4

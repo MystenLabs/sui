@@ -1,0 +1,13 @@
+//# print-bytecode --input=module
+module 0xE.Expressions {
+    binary_add() {
+        let x: u64;
+        let y: u64;
+        let z: u64;
+    label b0:
+        x = 3;
+        y = 5;
+        z = move(x) + move(y);
+        return;
+    }
+}

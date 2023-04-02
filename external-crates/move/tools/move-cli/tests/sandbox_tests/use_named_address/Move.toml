@@ -1,0 +1,6 @@
+[package]
+name = "use_named_address"
+version = "0.0.0"
+
+[addresses]
+A = "0x42"

@@ -1,0 +1,10 @@
+//# publish
+module 0x42.N {
+    struct R<T> has key { f: T }
+    t0(s: &signer) {
+    label b0:
+        move_to<R<u64>>(copy(s), 0);
+        return;
+    }
+}
+// check: MOVETO_TYPE_MISMATCH_ERROR

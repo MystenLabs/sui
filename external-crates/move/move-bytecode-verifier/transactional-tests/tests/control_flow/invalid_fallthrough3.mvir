@@ -1,0 +1,13 @@
+//# run
+main() {
+    let x: u64;
+label b0:
+    jump_if_false(true) b2;
+label b1:
+    return;
+label b2:
+    return;
+label b3:
+    x = 7;
+    // invalid fall through
+}

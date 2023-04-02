@@ -1,0 +1,38 @@
+//# publish
+module 0x1.Token {
+    struct T has key { b: bool }
+
+    public new(): Self.T {
+    label b0:
+        return T{ b: true };
+    }
+
+    public has(addr: address): bool {
+        let yes: bool;
+    label b0:
+        yes = exists<T>(move(addr));
+        return move(yes);
+    }
+
+    public test() acquires T {
+        let addr1: address;
+        let struct1: &mut Self.T;
+    label b0:
+        addr1 = 0x01111111111111110;
+        // shoudl fail with missing data
+        struct1 = borrow_global_mut<T>(move(addr1));
+        _ = move(struct1);
+
+        return;
+    }
+
+}
+
+//# run
+import 0x1.Token;
+
+main() {
+label b0:
+    Token.test();
+    return;
+}

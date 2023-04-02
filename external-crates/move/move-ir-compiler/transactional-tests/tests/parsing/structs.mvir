@@ -1,0 +1,13 @@
+//# print-bytecode --input=module
+// A struct declaration cannot contain function declarations (like the syntax for declaring
+// "methods" in other languages).
+module 0x3d8.M {
+    struct T {
+        x: u64,
+
+        f() {
+        label b0:
+            return;
+        }
+    }
+}

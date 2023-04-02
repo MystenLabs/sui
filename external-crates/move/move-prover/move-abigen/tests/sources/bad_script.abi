@@ -1,0 +1,10 @@
+Move prover abigen returns: exiting with model building errors
+error: incompatible types
+  ┌─ tests/sources/bad_script.move:3:9
+  │
+3 │         abort true  // type error, abort code must be a u64
+  │         ^^^^^^^^^^
+  │         │     │
+  │         │     Given: 'bool'
+  │         Invalid abort
+  │         Expected: 'u64'

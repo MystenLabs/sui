@@ -1,0 +1,11 @@
+[package]
+name = "Root"
+version = "0.0.0"
+
+[addresses]
+A = "_"
+B = "_"
+
+[dev-addresses]
+A = "0x1"
+B = "0x1"
