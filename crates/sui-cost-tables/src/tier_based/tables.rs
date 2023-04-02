@@ -325,9 +325,7 @@ impl<'a> GasStatus<'a> {
     pub fn gas_used_pre_gas_price(&self) -> u64 {
         let gas: Gas = match self.initial_budget.checked_sub(self.gas_left) {
             Some(val) => InternalGas::to_unit_round_down(val),
-            None => {
-                InternalGas::to_unit_round_down(self.initial_budget)
-            }
+            None => InternalGas::to_unit_round_down(self.initial_budget),
         };
         u64::from(gas)
     }
