@@ -1435,6 +1435,39 @@ impl AuthorityStore {
 
         Ok(())
     }
+
+    pub fn expensive_check_is_consistent_state(
+        &self,
+        checkpoint_executor: &CheckpointExecutor,
+        accumulator: Arc<StateAccumulator>,
+        epoch: EpochId,
+        panic: bool,
+    ) {
+        let live_object_set_hash = accumulator.digest_live_object_set();
+
+        let root_state_hash = self
+            .get_root_state_hash(epoch)
+            .expect("Retrieving root state hash cannot fail");
+
+        let is_inconsistent = root_state_hash != live_object_set_hash;
+        if is_inconsistent {
+            if panic {
+                panic!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            } else {
+                error!(
+                    "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
+                    root_state_hash, live_object_set_hash
+                );
+            }
+        }
+
+        if !panic {
+            checkpoint_executor.set_inconsistent_state(is_inconsistent);
+        }
+    }
 }
 
 impl BackingPackageStore for AuthorityStore {

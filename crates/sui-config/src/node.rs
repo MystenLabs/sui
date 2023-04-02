@@ -279,6 +279,15 @@ pub struct ExpensiveSafetyCheckConfig {
     /// Disable epoch SUI conservation check even when we are running in debug mode.
     #[serde(default)]
     force_disable_epoch_sui_conservation_check: bool,
+
+    /// If enabled, at epoch boundary, we will check that the accumulated
+    /// live object state matches the end of epoch root state digest.
+    #[serde(default)]
+    enable_state_consistency_check: bool,
+
+    /// Disable state consistency check even when we are running in debug mode.
+    #[serde(default)]
+    force_disable_state_consistency_check: bool,
     // TODO: Add more expensive checks here
 }
 
@@ -287,6 +296,8 @@ impl ExpensiveSafetyCheckConfig {
         Self {
             enable_epoch_sui_conservation_check: true,
             force_disable_epoch_sui_conservation_check: false,
+            enable_state_consistency_check: true,
+            force_disable_state_consistency_check: false,
         }
     }
 
@@ -297,6 +308,15 @@ impl ExpensiveSafetyCheckConfig {
     pub fn enable_epoch_sui_conservation_check(&self) -> bool {
         (self.enable_epoch_sui_conservation_check || cfg!(debug_assertions))
             && !self.force_disable_epoch_sui_conservation_check
+    }
+
+    pub fn force_disable_state_consistency_check(&mut self) {
+        self.force_disable_state_consistency_check = true;
+    }
+
+    pub fn enable_state_consistency_check(&self) -> bool {
+        (self.enable_state_consistency_check || cfg!(debug_assertions))
+            && !self.force_disable_state_consistency_check
     }
 }
 

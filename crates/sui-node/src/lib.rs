@@ -978,17 +978,9 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
+                        &checkpoint_executor,
                     )
                     .await;
-
-                #[cfg(msim)]
-                {
-                    self.check_is_consistent_state(
-                        self.accumulator.clone(),
-                        cur_epoch_store.epoch(),
-                        true,
-                    );
-                }
 
                 narwhal_epoch_data_remover
                     .remove_old_data(next_epoch - 1)
@@ -1024,6 +1016,7 @@ impl SuiNode {
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
+                        &checkpoint_executor,
                     )
                     .await;
 
@@ -1054,37 +1047,12 @@ impl SuiNode {
         }
     }
 
-    #[allow(dead_code)]
-    fn check_is_consistent_state(
-        &self,
-        accumulator: Arc<StateAccumulator>,
-        epoch: EpochId,
-        panic: bool,
-    ) -> bool {
-        let live_object_set_hash = accumulator.digest_live_object_set();
-
-        let root_state_hash = self
-            .state
-            .database
-            .get_root_state_hash(epoch)
-            .expect("Retrieving root state hash cannot fail");
-
-        let is_inconsistent = root_state_hash != live_object_set_hash;
-        if is_inconsistent && panic {
-            panic!(
-                "Inconsistent state detected: root state hash: {:?}, live object set hash: {:?}",
-                root_state_hash, live_object_set_hash
-            );
-        }
-
-        is_inconsistent
-    }
-
     async fn reconfigure_state(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
+        checkpoint_executor: &CheckpointExecutor,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 
@@ -1105,6 +1073,11 @@ impl SuiNode {
                 self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
                 epoch_start_configuration,
+                checkpoint_executor,
+                self.accumulator.clone(),
+                self.config
+                    .expensive_safety_check_config
+                    .enable_state_consistency_check(),
             )
             .await
             .expect("Reconfigure authority state cannot fail");

@@ -114,7 +114,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let tempdir = tempdir().unwrap();
     let checkpoint_store = CheckpointStore::new(tempdir.path());
 
-    let (authority_state, mut executor, _accumulator, checkpoint_sender, first_committee): (
+    let (authority_state, mut executor, accumulator, checkpoint_sender, first_committee): (
         Arc<AuthorityState>,
         CheckpointExecutor,
         Arc<StateAccumulator>,
@@ -231,6 +231,9 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
             EpochStartConfiguration::new_v1(system_state, Default::default()),
+            &executor,
+            accumulator,
+            true,
         )
         .await
         .unwrap();
