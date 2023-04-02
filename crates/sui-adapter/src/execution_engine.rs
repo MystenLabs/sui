@@ -50,6 +50,7 @@ use sui_types::temporary_store::TemporaryStore;
 
 checked_arithmetic! {
 
+#[derive(Debug)]
 pub struct AdvanceEpochParams {
     pub epoch: u64,
     pub next_protocol_version: ProtocolVersion,
@@ -454,7 +455,7 @@ pub fn construct_advance_epoch_pt(
 
     info!(
         "Call arguments to advance_epoch transaction: {:?}",
-        arguments
+        params
     );
 
     let storage_rebates = builder.programmable_move_call(
@@ -520,7 +521,7 @@ pub fn construct_advance_epoch_safe_mode_pt(
 
     info!(
         "Call arguments to advance_epoch transaction: {:?}",
-        arguments
+        params
     );
 
     builder.programmable_move_call(
