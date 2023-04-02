@@ -964,7 +964,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
         if gas_object_id.is_some() {
             // bucketize computation cost
             if let Err(err) = gas_status.bucketize_computation() {
-                // println!("GAS - bucketize failed");
+                println!("GAS - bucketize OOG");
                 if execution_result.is_ok() {
                     *execution_result = Err(err);
                 }
@@ -976,20 +976,19 @@ impl<S: ObjectStore> TemporaryStore<S> {
             }
         }
 
-        self.collect_storage_and_rebate(gas_status, gas_object_id);
+        self.ensure_gas_and_input_mutated(gas_object_id);
+        self.collect_storage_and_rebate(gas_status);
         if let Some(gas_object_id) = gas_object_id {
             if let Err(err) = gas_status.charge_storage_and_rebate() {
-                // println!("GAS - Out Of Gas charging storage");
-                // out of gas
+                println!("GAS - charge_storage_and_rebate OOG");
                 self.reset(gas, gas_status);
-                self.cleanup_store_on_out_of_gas(gas_status, gas_object_id);
+                gas_status.adjust_computation_on_out_of_gas();
+                self.ensure_gas_and_input_mutated(Some(gas_object_id));
+                self.collect_rebate(gas_status);
                 if execution_result.is_ok() {
                     *execution_result = Err(err);
                 }
             }
-
-            // Important to fetch the gas object here instead of earlier, as it may have been reset
-            // previously in the case of error.
             let cost_summary = gas_status.summary();
             let gas_used = cost_summary.net_gas_usage();
 
@@ -1028,46 +1027,7 @@ impl<S: ObjectStore> TemporaryStore<S> {
         }
     }
 
-    fn cleanup_store_on_out_of_gas(
-        &mut self,
-        gas_status: &mut SuiGasStatus<'_>,
-        gas_object_id: ObjectID,
-    ) {
-        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
-        let gas_object = self
-            .read_object(&gas_object_id)
-            .expect("We constructed the object map so it should always have the gas object id")
-            .clone();
-        self.written
-            .entry(gas_object_id)
-            .or_insert_with(|| (gas_object, WriteKind::Mutate));
-        self.ensure_active_inputs_mutated();
-
-        let mut objects_to_update = vec![];
-        for (object, write_kind) in self.written.values() {
-            if !object.is_immutable() {
-                objects_to_update.push((object.clone(), *write_kind));
-            }
-        }
-        for (object, write_kind) in objects_to_update {
-            self.write_object(object, write_kind);
-        }
-        // we do not charge for storage at this point because we are out of gas
-        gas_status.adjust_computation_on_out_of_gas();
-    }
-
-    /// Track storage gas for each mutable input object (including the gas coin)
-    /// and each created object. Compute storage refunds for each deleted object.
-    /// Will *not* charge anything, gas status keeps track of storage cost and rebate.
-    /// All objects will be updated with their new (current) storage rebate/cost.
-    /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
-    /// overall storage rebate and cost.
-    fn collect_storage_and_rebate(
-        &mut self,
-        gas_status: &mut SuiGasStatus<'_>,
-        gas_object_id: Option<ObjectID>,
-    ) {
-        // If the gas coin was not yet written, charge gas for mutating the gas object in advance.
+    fn ensure_gas_and_input_mutated(&mut self, gas_object_id: Option<ObjectID>) {
         if let Some(gas_object_id) = gas_object_id {
             let gas_object = self
                 .read_object(&gas_object_id)
@@ -1078,7 +1038,15 @@ impl<S: ObjectStore> TemporaryStore<S> {
                 .or_insert_with(|| (gas_object, WriteKind::Mutate));
         }
         self.ensure_active_inputs_mutated();
+    }
 
+    /// Track storage gas for each mutable input object (including the gas coin)
+    /// and each created object. Compute storage refunds for each deleted object.
+    /// Will *not* charge anything, gas status keeps track of storage cost and rebate.
+    /// All objects will be updated with their new (current) storage rebate/cost.
+    /// `SuiGasStatus` `storage_rebate` and `storage_gas_units` track the transaction
+    /// overall storage rebate and cost.
+    fn collect_storage_and_rebate(&mut self, gas_status: &mut SuiGasStatus<'_>) {
         let mut objects_to_update = vec![];
         for (object_id, (object, write_kind)) in &mut self.written {
             // get the object storage_rebate in input for mutated objects
@@ -1117,6 +1085,16 @@ impl<S: ObjectStore> TemporaryStore<S> {
             }
         }
 
+        self.collect_rebate(gas_status);
+
+        // Write all objects at the end only if all previous gas charges succeeded.
+        // This avoids polluting the temporary store state if this function failed.
+        for (object, write_kind) in objects_to_update {
+            self.write_object(object, write_kind);
+        }
+    }
+
+    fn collect_rebate(&self, gas_status: &mut SuiGasStatus<'_>) {
         for (object_id, (version, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Wrap | DeleteKind::Normal => {
@@ -1128,12 +1106,6 @@ impl<S: ObjectStore> TemporaryStore<S> {
                     // an unwrapped object does not have a storage rebate, we will charge for storage changes via its wrapper object
                 }
             }
-        }
-
-        // Write all objects at the end only if all previous gas charges succeeded.
-        // This avoids polluting the temporary store state if this function failed.
-        for (object, write_kind) in objects_to_update {
-            self.write_object(object, write_kind);
         }
     }
 }
@@ -1184,41 +1156,68 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
                     // note: output_obj.version has not yet been increased by the tx, so output_obj.version
                     // is the object version at tx input
                     let input_version = output_obj.version();
-                    total_input_sui += self.get_input_sui(id, input_version)?;
-                    total_output_sui += output_obj.get_total_sui(&self)?;
+                    let input = self.get_input_sui(id, input_version)?;
+                    total_input_sui += input;
+                    let output = output_obj.get_total_sui(&self)?;
+                    total_output_sui += output;
                     output_rebate_amount += output_obj.storage_rebate;
+                    println!(
+                        "GAS - mutated input: {}, output: {}, rebate: {}, object: {:?}",
+                        input, output, output_obj.storage_rebate, output_obj.data,
+                    );
                 }
                 WriteKind::Create => {
                     // created objects did not exist at input, and thus contribute 0 to input SUI
-                    total_output_sui += output_obj.get_total_sui(&self)?;
+                    let output = output_obj.get_total_sui(&self)?;
+                    total_output_sui += output;
                     output_rebate_amount += output_obj.storage_rebate;
+                    println!(
+                        "GAS - created output: {}, rebate: {}, object: {:?}",
+                        output, output_obj.storage_rebate, output_obj.data,
+                    );
                 }
                 WriteKind::Unwrap => {
                     // an unwrapped object was either:
                     // 1. wrapped in an input object A,
                     // 2. wrapped in a dynamic field A, or itself a dynamic field
                     // in both cases, its contribution to input SUI will be captured by looking at A
-                    total_output_sui += output_obj.get_total_sui(&self)?;
+                    let output = output_obj.get_total_sui(&self)?;
+                    total_output_sui += output;
                     output_rebate_amount += output_obj.storage_rebate;
+                    println!(
+                        "GAS - wrapped output: {}, rebate: {}, object: {:?}",
+                        output, output_obj.storage_rebate, output_obj.data,
+                    );
                 }
             }
         }
         for (id, (input_version, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Normal => {
-                    total_input_sui += self.get_input_sui(id, *input_version)?;
+                    let input = self.get_input_sui(id, *input_version)?;
+                    total_input_sui += input;
+                    println!(
+                        "GAS - deleted normal input: {}, object id: {}",
+                        input, id,
+                    );
                 }
                 DeleteKind::Wrap => {
                     // wrapped object was a tx input or dynamic field--need to account for it in input SUI
                     // note: if an object is created by the tx, then wrapped, it will not appear here
-                    total_input_sui += self.get_input_sui(id, *input_version)?;
+                    let input = self.get_input_sui(id, *input_version)?;
+                    total_input_sui += input;
                     // else, the wrapped object was either:
                     // 1. freshly created, which means it has 0 contribution to input SUI
                     // 2. unwrapped from another object A, which means its contribution to input SUI will be captured by looking at A
+                    println!(
+                        "GAS - deleted wrapped input: {}, object id: {}",
+                        input, id,
+                    );
                 }
                 DeleteKind::UnwrapThenDelete => {
                     // an unwrapped option was wrapped in input object or dynamic field A, which means its contribution to input SUI will
                     // be captured by looking at A
+                    println!("GAS - deleted unwrapped object id: {}", id);
                 }
             }
         }
@@ -1229,6 +1228,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
             .as_ref()
             .map(|(_, summary)| summary.clone())
             .unwrap_or_default();
+        println!("GAS - summary: {}", gas_summary);
 
         // storage gas cost should be equal to total rebates of mutated objects + storage fund rebate inflow (see below).
         // note: each mutated object O of size N bytes is assessed a storage cost of N * storage_price bytes, but also
@@ -1236,6 +1236,7 @@ impl<S: GetModule + ObjectStore + BackingPackageStore> TemporaryStore<S> {
         // If we run out of gas we do not perform any storage charges and the assert will fail
         // `gas_summary.storage_cost` is a good proxy for OOG
         if gas_summary.storage_cost > 0 {
+            println!("GAS - storage > 0 assert ok?");
             assert_eq!(gas_summary.storage_cost, output_rebate_amount);
         }
 

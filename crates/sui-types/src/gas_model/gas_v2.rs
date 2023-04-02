@@ -358,17 +358,12 @@ impl<'a> SuiGasStatusAPI<'a> for SuiGasStatus<'a> {
 
     fn charge_storage_mutation(
         &mut self,
-        new_size: usize,
-        storage_rebate: u64,
+        _new_size: usize,
+        _storage_rebate: u64,
     ) -> Result<u64, ExecutionError> {
-        // TODO: this is exclusively called from testing as it breaks too much
-        // if we fork tests between old and new, revisit
-        let size = self.track_storage_mutation(new_size, storage_rebate);
-        self.charge_storage_and_rebate()?;
-        Ok(size)
-        // Err(ExecutionError::invariant_violation(
-        //     "charge_storage_mutation should not be called in v2 gas model",
-        // ))
+        Err(ExecutionError::invariant_violation(
+            "charge_storage_mutation should not be called in v2 gas model",
+        ))
     }
 
     fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
