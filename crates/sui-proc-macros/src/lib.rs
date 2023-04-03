@@ -427,7 +427,7 @@ impl Fold for CheckArithmetic {
                 macro_rules! wrap_op_assign {
                     ($left: expr, $right: expr, $method: ident, $span: expr) => {
                         quote_spanned!($span => {
-                            let ref mut _checked_arith_left = #left;
+                            let _checked_arith_left = &mut #left;
                             let _checked_arith_right = #right;
                             *_checked_arith_left = (*_checked_arith_left).$method(_checked_arith_right)
                                 .unwrap_or_else(||
