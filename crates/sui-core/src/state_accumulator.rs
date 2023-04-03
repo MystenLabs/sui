@@ -61,6 +61,9 @@ impl StateAccumulator {
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Accumulator> {
+        // TODO(william)
+        debug!("About to accumulate checkpoint {}", checkpoint_seq_num);
+
         let _scope = monitored_scope("AccumulateCheckpoint");
 
         let acc = self.accumulate_effects(effects);
