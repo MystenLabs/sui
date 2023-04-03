@@ -92,16 +92,34 @@ impl ReadApi {
     fn get_checkpoint_internal(&self, id: CheckpointId) -> Result<Checkpoint, Error> {
         Ok(match id {
             CheckpointId::SequenceNumber(seq) => {
-                let summary = self
+                let verified_summary = self
                     .state
-                    .get_checkpoint_summary_by_sequence_number(seq.into())?;
-                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
-                (summary, content).into()
+                    .get_verified_checkpoint_by_sequence_number(seq.into())?;
+                let content = self
+                    .state
+                    .get_checkpoint_contents(verified_summary.content_digest)?;
+                let signature = verified_summary.auth_sig().signature.clone();
+                (
+                    verified_summary.into_inner().into_data(),
+                    content,
+                    signature,
+                )
+                    .into()
             }
             CheckpointId::Digest(digest) => {
-                let summary = self.state.get_checkpoint_summary_by_digest(digest)?;
-                let content = self.state.get_checkpoint_contents(summary.content_digest)?;
-                (summary, content).into()
+                let verified_summary = self
+                    .state
+                    .get_verified_checkpoint_summary_by_digest(digest)?;
+                let content = self
+                    .state
+                    .get_checkpoint_contents(verified_summary.content_digest)?;
+                let signature = verified_summary.auth_sig().signature.clone();
+                (
+                    verified_summary.into_inner().into_data(),
+                    content,
+                    signature,
+                )
+                    .into()
             }
         })
     }

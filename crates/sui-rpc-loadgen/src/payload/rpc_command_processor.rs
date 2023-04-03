@@ -18,7 +18,7 @@ use sui_json_rpc_types::{
 use sui_types::digests::TransactionDigest;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::load_test::LoadTestConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -26,6 +26,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair};
 use sui_types::messages::{ExecuteTransactionRequestType, Transaction, TransactionData};
 
+use crate::payload::checkpoint_utils::get_latest_checkpoint_stats;
 use crate::payload::{
     Command, CommandData, DryRun, GetCheckpoints, Payload, ProcessPayload, Processor, SignerInfo,
 };
@@ -171,7 +172,7 @@ impl Processor for RpcCommandProcessor {
         for command in commands.iter() {
             let repeat_interval = command.repeat_interval;
             let repeat_n_times = command.repeat_n_times;
-            for _ in 0..=repeat_n_times {
+            for i in 0..=repeat_n_times {
                 let start_time = Instant::now();
 
                 self.process_command_data(&command.data, &payload.signer_info)
@@ -182,6 +183,9 @@ impl Processor for RpcCommandProcessor {
                     let sleep_duration = repeat_interval - elapsed_time;
                     sleep(sleep_duration).await;
                 }
+                let clients = self.get_clients().await?;
+                let checkpoint_stats = get_latest_checkpoint_stats(&clients, None).await;
+                info!("Repeat {i}: Checkpoint stats {checkpoint_stats}, elapse {:.4} since last repeat", elapsed_time.as_secs_f64());
             }
         }
         Ok(())

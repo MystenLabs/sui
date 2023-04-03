@@ -81,10 +81,6 @@ impl<'a> GasStatus<'a> {
         assert!(gas_price > 0, "gas price cannot be 0");
         let budget_in_unit = budget / gas_price;
         let gas_left = Self::to_internal_units(budget_in_unit);
-        // println!(
-        //     "GAS - GasStatus: budget {}, gas price: {}, gas_left {}",
-        //     budget, gas_price, gas_left,
-        // );
         let (stack_height_current_tier_mult, stack_height_next_tier_start) =
             cost_table.stack_height_tier(0);
         let (stack_size_current_tier_mult, stack_size_next_tier_start) =
@@ -112,7 +108,6 @@ impl<'a> GasStatus<'a> {
     }
 
     pub fn new(cost_table: &'a CostTable, gas_left: Gas) -> Self {
-        // println!("GAS - GasStatus: gas_left {}", gas_left);
         let (stack_height_current_tier_mult, stack_height_next_tier_start) =
             cost_table.stack_height_tier(0);
         let (stack_size_current_tier_mult, stack_size_next_tier_start) =
@@ -319,7 +314,6 @@ impl<'a> GasStatus<'a> {
 
     // Deduct the amount provided with no conversion, as if it was InternalGasUnit
     fn deduct_units(&mut self, amount: u64) -> PartialVMResult<()> {
-        // println!("GAS - deduct_units: {}", amount);
         self.deduct_gas(InternalGas::new(amount))
     }
 
@@ -331,10 +325,7 @@ impl<'a> GasStatus<'a> {
     pub fn gas_used_pre_gas_price(&self) -> u64 {
         let gas: Gas = match self.initial_budget.checked_sub(self.gas_left) {
             Some(val) => InternalGas::to_unit_round_down(val),
-            None => {
-                // println!("GAS - ERROR: gas use underflow");
-                InternalGas::to_unit_round_down(self.initial_budget)
-            }
+            None => InternalGas::to_unit_round_down(self.initial_budget),
         };
         u64::from(gas)
     }
@@ -342,10 +333,6 @@ impl<'a> GasStatus<'a> {
     // Charge the number of bytes with the cost per byte value
     pub fn charge_bytes(&mut self, size: usize, cost_per_byte: u64) -> PartialVMResult<()> {
         let computation_cost = size as u64 * cost_per_byte;
-        // println!(
-        //     "GAS - charge_bytes: {} from {} - {}",
-        //     computation_cost, size, cost_per_byte
-        // );
         self.deduct_units(computation_cost)
     }
 }

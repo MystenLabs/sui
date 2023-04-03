@@ -1,21 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::{Error, SuiRpcResult};
-use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
-use fastcrypto::encoding::Base64;
-use futures::stream;
-use futures_core::Stream;
-use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use fastcrypto::encoding::Base64;
+use futures::stream;
+use futures::StreamExt;
+use futures_core::Stream;
+use jsonrpsee::core::client::Subscription;
+
 use sui_json_rpc::api::GovernanceReadApiClient;
-use sui_json_rpc::api::IndexerApiClient;
-use sui_json_rpc::api::MoveUtilsClient;
+use sui_json_rpc::api::{
+    CoinReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient, WriteApiClient,
+};
 use sui_json_rpc_types::{
-    Balance, Checkpoint, CheckpointId, CheckpointedObjectID, Coin, CoinPage, DelegatedStake,
+    Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
     SuiCoinMetadata, SuiCommittee, SuiEvent, SuiGetPastObjectRequest, SuiMoveNormalizedModule,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiPastObjectResponse,
@@ -29,10 +31,10 @@ use sui_types::error::TRANSACTION_NOT_FOUND_MSG_PREFIX;
 use sui_types::event::EventID;
 use sui_types::messages::{ExecuteTransactionRequestType, TransactionData, VerifiedTransaction};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-
-use futures::StreamExt;
-use sui_json_rpc::api::{CoinReadApiClient, ReadApiClient, WriteApiClient};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+
+use crate::error::{Error, SuiRpcResult};
+use crate::{RpcClient, WAIT_FOR_TX_TIMEOUT_SEC};
 
 #[derive(Debug)]
 pub struct ReadApi {
@@ -48,7 +50,7 @@ impl ReadApi {
         &self,
         address: SuiAddress,
         query: Option<SuiObjectResponseQuery>,
-        cursor: Option<CheckpointedObjectID>,
+        cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> SuiRpcResult<ObjectsPage> {
         Ok(self

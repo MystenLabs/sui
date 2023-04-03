@@ -38,6 +38,9 @@ export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
 export const CheckpointCommitment = any();
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
 
+export const ValidatorSignature = string();
+export type ValidatorSignature = Infer<typeof ValidatorSignature>;
+
 export const EndOfEpochData = object({
   nextEpochCommittee: array(tuple([string(), number()])),
   nextEpochProtocolVersion: number(),
@@ -59,6 +62,8 @@ export const Checkpoint = object({
   epochRollingGasCostSummary: GasCostSummary,
   timestampMs: number(),
   endOfEpochData: optional(EndOfEpochData),
+  // TODO(jian): remove optional after 0.30.0 is released
+  validatorSignature: optional(ValidatorSignature),
   transactions: array(TransactionDigest),
   checkpointCommitments: array(CheckpointCommitment),
 });

@@ -3,6 +3,7 @@
 pub mod errors;
 pub(crate) mod iter;
 pub(crate) mod keys;
+pub(crate) mod safe_iter;
 pub mod util;
 pub(crate) mod values;
 
@@ -33,6 +34,7 @@ use tokio::sync::oneshot;
 use tracing::{debug, error, info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
+use crate::rocks::safe_iter::SafeIter;
 pub use errors::TypedStoreError;
 use sui_macros::{fail_point, nondeterministic};
 
@@ -1363,6 +1365,9 @@ impl<'a> RocksDBRawIter<'a> {
     pub fn seek_for_prev<K: AsRef<[u8]>>(&mut self, key: K) {
         delegate_iter_call!(self.seek_for_prev(key))
     }
+    pub fn status(&self) -> Result<(), rocksdb::Error> {
+        delegate_iter_call!(self.status())
+    }
 }
 
 pub enum RocksDBIter<'a> {
@@ -1389,6 +1394,7 @@ where
 {
     type Error = TypedStoreError;
     type Iterator = Iter<'a, K, V>;
+    type SafeIterator = SafeIter<'a, K, V>;
     type Keys = Keys<'a, K>;
     type Values = Values<'a, V>;
 
@@ -1541,7 +1547,7 @@ where
     }
 
     fn is_empty(&self) -> bool {
-        self.iter().next().is_none()
+        self.safe_iter().next().is_none()
     }
 
     fn iter(&'a self) -> Self::Iterator {
@@ -1567,6 +1573,36 @@ where
                 .report_metrics(&self.cf);
         }
         Iter::new(
+            db_iter,
+            self.cf.clone(),
+            &self.db_metrics,
+            &self.iter_bytes_sample_interval,
+        )
+    }
+
+    fn safe_iter(&'a self) -> Self::SafeIterator {
+        let report_metrics = if self.iter_latency_sample_interval.sample() {
+            let timer = self
+                .db_metrics
+                .op_metrics
+                .rocksdb_iter_latency_seconds
+                .with_label_values(&[&self.cf])
+                .start_timer();
+            Some((timer, RocksDBPerfContext::default()))
+        } else {
+            None
+        };
+        let mut db_iter = self
+            .rocksdb
+            .raw_iterator_cf(&self.cf(), self.opts.readopts());
+        db_iter.seek_to_first();
+        if let Some((timer, _perf_ctx)) = report_metrics {
+            timer.stop_and_record();
+            self.db_metrics
+                .read_perf_ctx_metrics
+                .report_metrics(&self.cf);
+        }
+        SafeIter::new(
             db_iter,
             self.cf.clone(),
             &self.db_metrics,

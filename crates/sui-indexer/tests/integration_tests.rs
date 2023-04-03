@@ -139,7 +139,10 @@ pub mod pg_integration_test {
     > {
         let sender = test_cluster.accounts.first().unwrap();
         let recipient = test_cluster.accounts.last().unwrap();
-        let gas_objects: Vec<ObjectID> = indexer_rpc_client
+        // TODO(gegaowp): today indexer's get_owned_objects only supports filter
+        // by owner address, will revert this when the feature is complete.
+        let gas_objects: Vec<ObjectID> = test_cluster
+            .rpc_client()
             .get_owned_objects(
                 *sender,
                 Some(SuiObjectResponseQuery::new_with_filter(
@@ -1199,6 +1202,18 @@ pub mod pg_integration_test {
         assert_eq!(first_checkpoint.network_total_transactions, 1);
         assert_eq!(first_checkpoint.previous_digest, None);
         assert_eq!(first_checkpoint.transactions.len(), 1);
+
+        // Check if checkpoint validator sig matches
+        let fullnode_checkpoint = test_cluster
+            .rpc_client()
+            .get_checkpoint(cp.into())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            first_checkpoint.validator_signature,
+            fullnode_checkpoint.validator_signature
+        );
 
         let (tx_response, _, _, _) =
             execute_simple_transfer(&mut test_cluster, &indexer_rpc_client)

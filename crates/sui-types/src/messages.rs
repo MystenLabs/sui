@@ -827,10 +827,9 @@ impl TransactionKind {
     /// directly.
     pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
         match self {
-            Self::ChangeEpoch(e) => Some((
-                e.computation_charge + e.storage_charge,
-                e.storage_rebate - e.non_refundable_storage_fee,
-            )),
+            Self::ChangeEpoch(e) => {
+                Some((e.computation_charge + e.storage_charge, e.storage_rebate))
+            }
             _ => None,
         }
     }
