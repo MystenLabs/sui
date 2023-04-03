@@ -171,7 +171,7 @@ fn make_key_files(
                 key
             }
             None => {
-                let (_, kp, _, _) = generate_new_key(SignatureScheme::ED25519, None)?;
+                let (_, kp, _, _) = generate_new_key(SignatureScheme::ED25519, None, None)?;
                 println!("Generated new key file: {:?}.", file_name);
                 kp
             }

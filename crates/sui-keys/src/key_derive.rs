@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use bip32::{ChildNumber, DerivationPath, Mnemonic, XPrv};
+use bip32::{ChildNumber, DerivationPath, XPrv};
 
+use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::secp256r1::{Secp256r1KeyPair, Secp256r1PrivateKey};
 use fastcrypto::{
@@ -11,7 +12,6 @@ use fastcrypto::{
     secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey},
     traits::{KeyPair, ToFromBytes},
 };
-use signature::rand_core::OsRng;
 use slip10_ed25519::derive_ed25519_private_key;
 use sui_types::{
     base_types::SuiAddress,
@@ -169,11 +169,26 @@ pub fn validate_path(
 pub fn generate_new_key(
     key_scheme: SignatureScheme,
     derivation_path: Option<DerivationPath>,
+    word_length: Option<String>,
 ) -> Result<(SuiAddress, SuiKeyPair, SignatureScheme, String), anyhow::Error> {
-    let mnemonic = Mnemonic::random(OsRng, Default::default());
-    let seed = mnemonic.to_seed("");
+    let mnemonic = Mnemonic::new(parse_word_length(word_length)?, Language::English);
+    let seed = Seed::new(&mnemonic, "");
     match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
         Ok((address, kp)) => Ok((address, kp, key_scheme, mnemonic.phrase().to_string())),
         Err(e) => Err(anyhow!("Failed to generate keypair: {:?}", e)),
+    }
+}
+
+fn parse_word_length(s: Option<String>) -> Result<MnemonicType, anyhow::Error> {
+    match s {
+        None => Ok(MnemonicType::Words12),
+        Some(s) => match s.as_str() {
+            "word12" => Ok(MnemonicType::Words12),
+            "word15" => Ok(MnemonicType::Words15),
+            "word18" => Ok(MnemonicType::Words18),
+            "word21" => Ok(MnemonicType::Words21),
+            "word24" => Ok(MnemonicType::Words24),
+            _ => anyhow::bail!("Invalid word length"),
+        },
     }
 }

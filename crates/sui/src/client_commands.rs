@@ -359,10 +359,13 @@ pub enum SuiClientCommands {
     Addresses,
 
     /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
-    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be
+    /// { word12 | word15 | word18 | word21 | word24} default to word12 if not specified.
     #[clap(name = "new-address")]
     NewAddress {
         key_scheme: SignatureScheme,
+        word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
     },
 
@@ -898,11 +901,13 @@ impl SuiClientCommands {
             SuiClientCommands::NewAddress {
                 key_scheme,
                 derivation_path,
+                word_length,
             } => {
-                let (address, phrase, scheme) = context
-                    .config
-                    .keystore
-                    .generate_and_add_new_key(key_scheme, derivation_path)?;
+                let (address, phrase, scheme) = context.config.keystore.generate_and_add_new_key(
+                    key_scheme,
+                    derivation_path,
+                    word_length,
+                )?;
                 SuiClientCommandResult::NewAddress((address, phrase, scheme))
             }
             SuiClientCommands::Gas { address } => {

@@ -32,13 +32,16 @@ mod keytool_tests;
 pub enum KeyToolCommand {
     /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
-    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1.
+    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word
+    /// length can be { word12 | word15 | word18 | word21 | word24} default to word12
+    /// if not specified.
     ///
     /// The keypair file is output to the current directory. The content of the file is
     /// a Base64 encoded string of 33-byte `flag || privkey`. Note: To generate and add keypair
     /// to sui.keystore, use `sui client new-address`), see more at [enum SuiClientCommands].
     Generate {
         key_scheme: SignatureScheme,
+        word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
     },
     /// This reads the content at the provided file path. The accepted format can be
@@ -68,7 +71,7 @@ pub enum KeyToolCommand {
     },
     /// Add a new key to sui.key based on the input mnemonic phrase, the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0 for secp256k1
-    /// or m/74'/784'/0'/0/0 for secp256r1.
+    /// or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15, 18`, 21, 24.
     Import {
         mnemonic_phrase: String,
         key_scheme: SignatureScheme,
@@ -112,6 +115,7 @@ impl KeyToolCommand {
             KeyToolCommand::Generate {
                 key_scheme,
                 derivation_path,
+                word_length,
             } => {
                 if "bls12381" == key_scheme.to_string() {
                     // Generate BLS12381 key for authority without key derivation.
@@ -120,7 +124,8 @@ impl KeyToolCommand {
                     let file_name = format!("bls-{address}.key");
                     write_authority_keypair_to_file(&keypair, file_name)?;
                 } else {
-                    let (address, kp, scheme, _) = generate_new_key(key_scheme, derivation_path)?;
+                    let (address, kp, scheme, _) =
+                        generate_new_key(key_scheme, derivation_path, word_length)?;
                     let file = format!("{address}.key");
                     write_keypair_to_file(&kp, &file)?;
                     println!(

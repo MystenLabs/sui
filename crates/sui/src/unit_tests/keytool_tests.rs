@@ -335,6 +335,7 @@ fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
     KeyToolCommand::Generate {
         key_scheme: SignatureScheme::BLS12381,
         derivation_path: None,
+        word_length: None,
     }
     .execute(&mut keystore)?;
     Ok(())
