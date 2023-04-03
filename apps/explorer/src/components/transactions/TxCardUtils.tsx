@@ -31,20 +31,14 @@ export function SuiAmount({
         const SuiSuffix = <abbr className={styles.suisuffix}>{coinType}</abbr>;
 
         return (
-            <section>
-                <span className={styles.suiamount}>
-                    {formattedAmount}
-                    {SuiSuffix}
-                </span>
-            </section>
+            <span className={styles.suiamount}>
+                {formattedAmount}
+                {SuiSuffix}
+            </span>
         );
     }
 
     return <span className={styles.suiamount}>--</span>;
-}
-
-function TxTableHeader({ label }: { label: string }) {
-    return <div className="pl-3">{label}</div>;
 }
 
 export function TxTableCol({
@@ -59,8 +53,8 @@ export function TxTableCol({
     return (
         <div
             className={clsx(
-                'flex h-full items-center rounded',
-                !isFirstCol && 'px-3',
+                'flex h-full min-w-[50px] items-center rounded',
+                !isFirstCol && 'pr-3',
                 isHighlightedOnHover && 'hover:bg-sui-light'
             )}
         >
@@ -78,7 +72,7 @@ export const genTableDataFromTxData = (
         const sender = getTransactionSender(transaction);
 
         return {
-            date: (
+            time: (
                 <TxTableCol>
                     <TxTimeType timestamp={transaction.timestampMs} />
                 </TxTableCol>
@@ -124,20 +118,20 @@ export const genTableDataFromTxData = (
             accessorKey: 'digest',
         },
         {
-            header: () => <TxTableHeader label="Sender" />,
+            header: 'Sender',
             accessorKey: 'sender',
         },
         {
-            header: () => <TxTableHeader label="Txns" />,
+            header: 'Txns',
             accessorKey: 'txns',
         },
         {
-            header: () => <TxTableHeader label="Gas" />,
+            header: 'Gas',
             accessorKey: 'gas',
         },
         {
-            header: () => <TxTableHeader label="Time" />,
-            accessorKey: 'date',
+            header: 'Time',
+            accessorKey: 'time',
         },
     ],
 });
