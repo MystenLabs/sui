@@ -58,6 +58,9 @@ members = [
     "crates/workspace-hack",
     "crates/x",
 
+    "external-crates/move/evm/exec-utils",
+    "external-crates/move/evm/move-ethereum-abi",
+    "external-crates/move/evm/move-to-yul",
     "external-crates/move/extensions/move-table-extension",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
