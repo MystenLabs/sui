@@ -4,7 +4,7 @@
 use crate::ValidatorInfo;
 use anyhow::{bail, Context, Result};
 use camino::Utf8Path;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
@@ -637,14 +637,6 @@ impl Builder {
         self
     }
 
-    pub fn with_token_distribution_schedule(
-        mut self,
-        token_distribution_schedule: TokenDistributionSchedule,
-    ) -> Self {
-        self.token_distribution_schedule = Some(token_distribution_schedule);
-        self
-    }
-
     pub fn with_protocol_version(mut self, v: ProtocolVersion) -> Self {
         self.parameters.protocol_version = v;
         self
@@ -1019,12 +1011,11 @@ impl Builder {
                 let gas_object_id = gas_objects
                     .iter()
                     .find(|(_k, (o, g))| {
-                        if let Owner::AddressOwner(owner) = &o.owner {
-                            *owner == allocation.recipient_address
-                                && g.value() == allocation.amount_mist
-                        } else {
-                            false
-                        }
+                        let Owner::AddressOwner(owner) = &o.owner else {
+                        panic!("gas object owner must be address owner");
+                    };
+                        *owner == allocation.recipient_address
+                            && g.value() == allocation.amount_mist
                     })
                     .map(|(k, _)| *k)
                     .expect("all allocations should be present");
@@ -1085,6 +1076,20 @@ impl Builder {
             None
         };
 
+        // Load Objects
+        let mut objects = BTreeMap::new();
+        for entry in path.join(GENESIS_BUILDER_OBJECT_DIR).read_dir_utf8()? {
+            let entry = entry?;
+            if entry.file_name().starts_with('.') {
+                continue;
+            }
+
+            let path = entry.path();
+            let object_bytes = fs::read(path)?;
+            let object: Object = serde_yaml::from_slice(&object_bytes)?;
+            objects.insert(object.id(), object);
+        }
+
         // Load validator infos
         let mut committee = BTreeMap::new();
         for entry in path.join(GENESIS_BUILDER_COMMITTEE_DIR).read_dir_utf8()? {
@@ -1119,7 +1124,7 @@ impl Builder {
         let mut builder = Self {
             parameters,
             token_distribution_schedule,
-            objects: Default::default(),
+            objects,
             validators: committee,
             signatures,
             built_genesis: None, // Leave this as none, will build and compare below
@@ -1166,6 +1171,16 @@ impl Builder {
             token_distribution_schedule.to_csv(fs::File::create(
                 path.join(GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE),
             )?)?;
+        }
+
+        // Write Objects
+        let object_dir = path.join(GENESIS_BUILDER_OBJECT_DIR);
+        fs::create_dir_all(&object_dir)?;
+
+        for (_id, object) in self.objects {
+            let object_bytes = serde_yaml::to_vec(&object)?;
+            let hex_digest = Hex::encode(object.id());
+            fs::write(object_dir.join(hex_digest), object_bytes)?;
         }
 
         // Write Signatures
@@ -1638,6 +1653,7 @@ pub fn generate_genesis_system_object(
     Ok(())
 }
 
+const GENESIS_BUILDER_OBJECT_DIR: &str = "objects";
 const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 const GENESIS_BUILDER_PARAMETERS_FILE: &str = "parameters";
 const GENESIS_BUILDER_TOKEN_DISTRIBUTION_SCHEDULE_FILE: &str = "token-distribution-schedule";
@@ -1784,52 +1800,6 @@ pub struct TokenAllocation {
 
     /// Indicates if this allocation should be staked at genesis and with which validator
     pub staked_with_validator: Option<SuiAddress>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TokenDistributionScheduleBuilder {
-    pool: u64,
-    allocations: Vec<TokenAllocation>,
-}
-
-impl TokenDistributionScheduleBuilder {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self {
-            pool: TOTAL_SUPPLY_MIST,
-            allocations: vec![],
-        }
-    }
-
-    pub fn default_allocation_for_validators<I: IntoIterator<Item = SuiAddress>>(
-        &mut self,
-        validators: I,
-    ) {
-        let default_allocation = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
-
-        for validator in validators {
-            self.add_allocation(TokenAllocation {
-                recipient_address: validator,
-                amount_mist: default_allocation,
-                staked_with_validator: Some(validator),
-            });
-        }
-    }
-
-    pub fn add_allocation(&mut self, allocation: TokenAllocation) {
-        self.pool = self.pool.checked_sub(allocation.amount_mist).unwrap();
-        self.allocations.push(allocation);
-    }
-
-    pub fn build(&self) -> TokenDistributionSchedule {
-        let schedule = TokenDistributionSchedule {
-            stake_subsidy_fund_mist: self.pool,
-            allocations: self.allocations.clone(),
-        };
-
-        schedule.validate();
-        schedule
-    }
 }
 
 #[cfg(test)]
