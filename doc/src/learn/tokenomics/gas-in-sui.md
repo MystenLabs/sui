@@ -19,7 +19,7 @@ The [Reference Gas Price](https://docs.sui.io/learn/tokenomics/gas-pricing#compu
 
 ### Gas Units
 
-**Storage Units**
+**Computation Units**
 
 Different Sui transactions require varying amounts of computational time in order to be processed and executed. Sui translates these varying operational loads into transaction fees by measuring each transaction in terms of Computation Units. All else equals, more complex transactions will require more Computation Units.
 
