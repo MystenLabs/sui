@@ -83,7 +83,7 @@ export function HomeMetrics() {
                         tooltip="Current gas price"
                         postfix="MIST"
                     >
-                        {String(gasData) ?? null}
+                        {gasData ? String(gasData) : null}
                     </StatsWrapper>
                     <StatsWrapper label="Epoch" tooltip="The current epoch">
                         {networkMetrics?.currentEpoch}
