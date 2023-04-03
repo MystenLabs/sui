@@ -870,19 +870,29 @@ impl SuiClientCommands {
             SuiClientCommands::Objects { address } => {
                 let address = address.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
-                let address_object = client
-                    .read_api()
-                    .get_owned_objects(
-                        address,
-                        Some(SuiObjectResponseQuery::new_with_options(
-                            SuiObjectDataOptions::full_content(),
-                        )),
-                        None,
-                        None,
-                    )
-                    .await?;
-                // TODO: paginate here
-                SuiClientCommandResult::Objects(address_object.data)
+                let mut objects: Vec<SuiObjectResponse> = Vec::new();
+                let mut cursor = None;
+                loop {
+                    let response = client
+                        .read_api()
+                        .get_owned_objects(
+                            address,
+                            Some(SuiObjectResponseQuery::new_with_options(
+                                SuiObjectDataOptions::full_content(),
+                            )),
+                            cursor,
+                            None,
+                        )
+                        .await?;
+                    objects.extend(response.data);
+
+                    if response.has_next_page {
+                        cursor = response.next_cursor;
+                    } else {
+                        break;
+                    }
+                }
+                SuiClientCommandResult::Objects(objects)
             }
 
             SuiClientCommands::NewAddress {
