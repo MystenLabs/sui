@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -89,13 +90,14 @@ impl CoinReadApi {
     ) -> Result<CoinPage, Error> {
         // TODO: Add index to improve performance?
         let limit = cap_page_limit(limit);
-        let mut coins = self
+        let mut coins: Vec<_> = self
             .get_owner_coin_iterator(owner, &coin_type)?
+            .into_iter()
             .skip_while(|o| matches!(&cursor, Some(cursor) if cursor != o))
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
             .take(limit + 1)
-            .collect::<Vec<_>>();
+            .collect();
 
         let has_next_page = coins.len() > limit;
         coins.truncate(limit);
@@ -116,12 +118,14 @@ impl CoinReadApi {
         &'a self,
         owner: SuiAddress,
         coin_type: &'a Option<StructTag>,
-    ) -> Result<impl Iterator<Item = ObjectID> + '_, Error> {
+    ) -> Result<Vec<ObjectID>, Error> {
         Ok(self
             .state
             .get_owner_objects_iterator(owner, None, None)?
-            .filter(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
-            .map(|info|info.object_id))
+            .filter_ok(move |o| matches!(&o.type_, ObjectType::Struct(type_) if is_coin_type(type_, coin_type)))
+            .map_ok(|info|info.object_id)
+            .map(|info| info.map_err(|err| SuiError::from(err)))
+            .collect::<Result<_, _>>()?)
     }
 
     async fn find_package_object(

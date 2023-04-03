@@ -83,7 +83,9 @@ impl WritePathPendingTransactionLog {
         write_batch.write().map_err(SuiError::from)
     }
 
-    pub fn load_all_pending_transactions(&self) -> Result<Vec<VerifiedTransaction>, TypedStoreError> {
+    pub fn load_all_pending_transactions(
+        &self,
+    ) -> Result<Vec<VerifiedTransaction>, TypedStoreError> {
         self.pending_transactions
             .logs
             .safe_iter()

@@ -5,6 +5,7 @@
 use crate::{Batch, Certificate, CertificateAPI, CertificateDigest, HeaderAPI, Round};
 use config::{AuthorityIdentifier, Committee};
 use fastcrypto::hash::Hash;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -182,30 +183,34 @@ impl ConsensusStore {
     }
 
     /// Load the last committed round of each validator.
-    pub fn read_last_committed(&self) -> HashMap<AuthorityIdentifier, Round> {
-        self.last_committed.iter().collect()
+    pub fn read_last_committed(
+        &self,
+    ) -> Result<HashMap<AuthorityIdentifier, Round>, TypedStoreError> {
+        self.last_committed.safe_iter().collect()
     }
 
     /// Gets the latest sub dag index from the store
-    pub fn get_latest_sub_dag_index(&self) -> SequenceNumber {
-        let s = self
+    pub fn get_latest_sub_dag_index(&self) -> Result<SequenceNumber, TypedStoreError> {
+        Ok(self
             .committed_sub_dags_by_index
-            .iter()
+            .safe_iter()
             .skip_to_last()
             .next()
+            .transpose()?
             .map(|(seq, _)| seq)
-            .unwrap_or_default();
-        s
+            .unwrap_or_default())
     }
 
     /// Returns thet latest subdag committed. If none is committed yet, then
     /// None is returned instead.
-    pub fn get_latest_sub_dag(&self) -> Option<CommittedSubDagShell> {
-        self.committed_sub_dags_by_index
-            .iter()
+    pub fn get_latest_sub_dag(&self) -> Result<Option<CommittedSubDagShell>, TypedStoreError> {
+        Ok(self
+            .committed_sub_dags_by_index
+            .safe_iter()
             .skip_to_last()
             .next()
-            .map(|(_, subdag)| subdag)
+            .transpose()?
+            .map(|(_, subdag)| subdag))
     }
 
     /// Load all the sub dags committed with sequence number of at least `from`.
@@ -215,9 +220,9 @@ impl ConsensusStore {
     ) -> StoreResult<Vec<CommittedSubDagShell>> {
         Ok(self
             .committed_sub_dags_by_index
-            .iter()
+            .safe_iter()
             .skip_to(from)?
-            .map(|(_, sub_dag)| sub_dag)
-            .collect())
+            .map_ok(|(_, sub_dag)| sub_dag)
+            .collect::<Result<_, _>>()?)
     }
 }

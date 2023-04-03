@@ -87,7 +87,7 @@ use sui_types::{
     object::{Object, ObjectFormatOptions, ObjectRead},
     SUI_SYSTEM_ADDRESS,
 };
-use typed_store::Map;
+use typed_store::{Map, TypedStoreError};
 
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
@@ -2040,12 +2040,14 @@ impl AuthorityState {
         V: DeserializeOwned,
     {
         let key_bcs = bcs::to_bytes(key).ok()?;
-        let df = self
-            .get_dynamic_fields_iterator(table, None)
-            .ok()?
-            .find(|df| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.object_id).await.ok()?;
-        Some(field.value)
+        for item in self.get_dynamic_fields_iterator(table, None).ok()? {
+            let df = item.ok()?;
+            if key_bcs == df.bcs_name {
+                let field: Field<K, V> = self.get_move_object(&df.object_id).await.ok()?;
+                return Some(field.value);
+            }
+        }
+        None
     }
 
     /// This function aims to serve rpc reads on past objects and
@@ -2156,7 +2158,7 @@ impl AuthorityState {
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         filter: Option<SuiObjectDataFilter>,
-    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<ObjectInfo, TypedStoreError>> + '_> {
         let cursor_u = cursor.unwrap_or(ObjectID::ZERO);
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects_iterator(owner, cursor_u, filter)
@@ -2175,14 +2177,14 @@ impl AuthorityState {
     {
         let object_ids = self
             .get_owner_objects_iterator(owner, None, None)?
-            .filter(|o| match &o.type_ {
+            .filter_ok(|o| match &o.type_ {
                 ObjectType::Struct(s) => &type_ == s,
                 ObjectType::Package => false,
             })
-            .map(|info| info.object_id);
+            .map_ok(|info| info.object_id);
         let mut move_objects = vec![];
         for id in object_ids {
-            move_objects.push(self.get_move_object(&id).await?)
+            move_objects.push(self.get_move_object(&id?).await?)
         }
         Ok(move_objects)
     }
@@ -2197,7 +2199,7 @@ impl AuthorityState {
         Ok(self
             .get_dynamic_fields_iterator(owner, cursor)?
             .take(limit)
-            .collect())
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn get_dynamic_fields_iterator(
@@ -2205,7 +2207,7 @@ impl AuthorityState {
         owner: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = DynamicFieldInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<DynamicFieldInfo, TypedStoreError>> + '_> {
         if let Some(indexes) = &self.indexes {
             indexes.get_dynamic_fields_iterator(owner, cursor)
         } else {

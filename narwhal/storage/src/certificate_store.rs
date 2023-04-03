@@ -14,7 +14,7 @@ use config::AuthorityIdentifier;
 use mysten_common::sync::notify_read::NotifyRead;
 use store::{
     rocks::{DBMap, TypedStoreError::RocksDBError},
-    Map,
+    Map, TypedStoreError,
 };
 use types::{Certificate, CertificateDigest, Round, StoreResult};
 
@@ -513,13 +513,14 @@ impl<T: Cache> CertificateStore<T> {
     pub fn after_round(&self, round: Round) -> StoreResult<Vec<Certificate>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
-        let mut iter = self.certificate_id_by_round.iter();
+        let mut iter = self.certificate_id_by_round.safe_iter();
         if round > 0 {
             iter = iter.skip_to(&(round - 1, AuthorityIdentifier::default()))?;
         }
 
         let mut digests = Vec::new();
-        for ((r, _), d) in iter {
+        for item in iter {
+            let ((r, _), d) = item?;
             match r.cmp(&round) {
                 Ordering::Equal | Ordering::Greater => {
                     digests.push(d);
@@ -552,13 +553,14 @@ impl<T: Cache> CertificateStore<T> {
     ) -> StoreResult<BTreeMap<Round, Vec<AuthorityIdentifier>>> {
         // Skip to a row at or before the requested round.
         // TODO: Add a more efficient seek method to typed store.
-        let mut iter = self.certificate_id_by_round.iter();
+        let mut iter = self.certificate_id_by_round.safe_iter();
         if round > 0 {
             iter = iter.skip_to(&(round - 1, AuthorityIdentifier::default()))?;
         }
 
         let mut result = BTreeMap::<Round, Vec<AuthorityIdentifier>>::new();
-        for ((r, origin), _) in iter {
+        for item in iter {
+            let ((r, origin), _) = item?;
             if r < round {
                 continue;
             }
@@ -571,12 +573,17 @@ impl<T: Cache> CertificateStore<T> {
     pub fn last_two_rounds_certs(&self) -> StoreResult<Vec<Certificate>> {
         // starting from the last element - hence the last round - move backwards until
         // we find certificates of different round.
-        let certificates_reverse = self.certificate_id_by_round.iter().skip_to_last().reverse();
+        let certificates_reverse = self
+            .certificate_id_by_round
+            .safe_iter()
+            .skip_to_last()
+            .reverse();
 
         let mut round = 0;
         let mut certificates = Vec::new();
 
-        for (key, digest) in certificates_reverse {
+        for item in certificates_reverse {
+            let (key, digest) = item?;
             let (certificate_round, _certificate_origin) = key;
 
             // We treat zero as special value (round unset) in order to
@@ -608,9 +615,10 @@ impl<T: Cache> CertificateStore<T> {
         let key = (origin, Round::MAX);
         if let Some(((name, _round), digest)) = self
             .certificate_id_by_origin
-            .iter()
+            .safe_iter()
             .skip_prior_to(&key)?
             .next()
+            .transpose()?
         {
             if name == origin {
                 return self.read(digest);
@@ -621,17 +629,18 @@ impl<T: Cache> CertificateStore<T> {
 
     /// Retrieves the highest round number in the store.
     /// Returns 0 if there is no certificate in the store.
-    pub fn highest_round_number(&self) -> Round {
+    pub fn highest_round_number(&self) -> Result<Round, TypedStoreError> {
         if let Some(((round, _), _)) = self
             .certificate_id_by_round
-            .iter()
+            .safe_iter()
             .skip_to_last()
             .reverse()
             .next()
+            .transpose()?
         {
-            round
+            Ok(round)
         } else {
-            0
+            Ok(0)
         }
     }
 
@@ -641,9 +650,10 @@ impl<T: Cache> CertificateStore<T> {
         let key = (origin, Round::MAX);
         if let Some(((name, round), _)) = self
             .certificate_id_by_origin
-            .iter()
+            .safe_iter()
             .skip_prior_to(&key)?
             .next()
+            .transpose()?
         {
             if name == origin {
                 return Ok(Some(round));
@@ -660,7 +670,12 @@ impl<T: Cache> CertificateStore<T> {
         round: Round,
     ) -> StoreResult<Option<Round>> {
         let key = (origin, round + 1);
-        if let Some(((name, round), _)) = self.certificate_id_by_origin.iter().skip_to(&key)?.next()
+        if let Some(((name, round), _)) = self
+            .certificate_id_by_origin
+            .safe_iter()
+            .skip_to(&key)?
+            .next()
+            .transpose()?
         {
             if name == origin {
                 return Ok(Some(round));

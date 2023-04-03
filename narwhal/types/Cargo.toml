@@ -15,6 +15,7 @@ derive_builder = "0.12.0"
 enum_dispatch = "^0.3"
 futures = "0.3.24"
 indexmap = { version = "1.9.2", features = ["serde"] }
+itertools = "0.10.4"
 mockall = "0.11.2"
 prometheus = "0.13.3"
 proptest = "1.0.0"
