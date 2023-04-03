@@ -6,6 +6,7 @@ mod payload;
 
 use anyhow::Result;
 use clap::Parser;
+use payload::AddressQueryType;
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -15,7 +16,7 @@ use sui_types::crypto::{EncodeDecodeBase64, SuiKeyPair};
 use tracing::info;
 
 use crate::load_test::{LoadTest, LoadTestConfig};
-use crate::payload::{Command, RpcCommandProcessor, SignerInfo};
+use crate::payload::{load_addresses_from_file, Command, RpcCommandProcessor, SignerInfo};
 
 #[derive(Parser)]
 #[clap(
@@ -90,13 +91,10 @@ pub enum ClapCommand {
         #[clap(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "query-transactions")]
-    QueryTransactions {
-        #[clap(short, long)]
-        from_address: Option<String>,
-
-        #[clap(short, long)]
-        to_address: Option<String>,
+    #[clap(name = "query-transaction-blocks")]
+    QueryTransactionBlocks {
+        #[clap(long, parse(try_from_str), case_insensitive = true)]
+        address_type: AddressQueryType,
 
         #[clap(flatten)]
         common: CommonOptions,
@@ -171,15 +169,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             common,
             false,
         ),
-        ClapCommand::QueryTransactions {
+        ClapCommand::QueryTransactionBlocks {
             common,
-            from_address,
-            to_address,
-        } => (
-            Command::new_query_transaction_blocks(from_address, to_address),
-            common,
-            false,
-        ),
+            address_type,
+        } => {
+            let addresses = load_addresses_from_file(expand_path(&opts.data_directory));
+            (
+                Command::new_query_transaction_blocks(address_type, addresses),
+                common,
+                false,
+            )
+        }
     };
 
     let signer_info = need_keystore.then_some(get_keypair()?);
