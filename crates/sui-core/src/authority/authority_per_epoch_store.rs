@@ -35,8 +35,8 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::checkpoints::{
-    CheckpointCommitHeight, CheckpointServiceNotify, EpochStats, PendingCheckpoint,
-    PendingCheckpointInfo,
+    BuilderCheckpointSummary, CheckpointCommitHeight, CheckpointServiceNotify, EpochStats,
+    PendingCheckpoint, PendingCheckpointInfo,
 };
 use crate::consensus_handler::{
     SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -274,7 +274,7 @@ pub struct AuthorityEpochTables {
     user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
 
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
-    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
+    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
     // Maps checkpoint sequence number to an accumulator with accumulated state
     // only for the checkpoint that the key references. Append-only, i.e.,
@@ -1703,8 +1703,17 @@ impl AuthorityPerEpochStore {
         self.record_checkpoint_boundary(round)
     }
 
-    pub fn get_pending_checkpoints(&self) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
-        self.tables.pending_checkpoints.iter().collect()
+    pub fn get_pending_checkpoints(
+        &self,
+        last: Option<CheckpointCommitHeight>,
+    ) -> Vec<(CheckpointCommitHeight, PendingCheckpoint)> {
+        let mut iter = self.tables.pending_checkpoints.iter();
+        if let Some(last_processed_height) = last {
+            iter = iter
+                .skip_to(&(last_processed_height + 1))
+                .expect("Unexpected storage error");
+        }
+        iter.collect()
     }
 
     pub fn get_pending_checkpoint(
@@ -1725,20 +1734,28 @@ impl AuthorityPerEpochStore {
     pub fn process_pending_checkpoint(
         &self,
         commit_height: CheckpointCommitHeight,
-        content_info: &[(CheckpointSummary, CheckpointContents)],
+        content_info: Vec<(CheckpointSummary, CheckpointContents)>,
     ) -> Result<(), TypedStoreError> {
+        // All created checkpoints are inserted in builder_checkpoint_summary in a single batch.
+        // This means that upon restart we can use BuilderCheckpointSummary::commit_height
+        // from the last built summary to resume building checkpoints.
         let mut batch = self.tables.pending_checkpoints.batch();
-        batch.delete_batch(&self.tables.pending_checkpoints, [commit_height])?;
-        for (summary, transactions) in content_info {
+        for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
+            let sequence_number = summary.sequence_number;
+            let summary = BuilderCheckpointSummary {
+                summary,
+                commit_height: Some(commit_height),
+                position_in_commit,
+            };
             batch.insert_batch(
                 &self.tables.builder_checkpoint_summary,
-                [(&summary.sequence_number, summary)],
+                [(&sequence_number, summary)],
             )?;
             batch.insert_batch(
                 &self.tables.builder_digest_to_checkpoint,
                 transactions
                     .iter()
-                    .map(|tx| (tx.transaction, summary.sequence_number)),
+                    .map(|tx| (tx.transaction, sequence_number)),
             )?;
         }
 
@@ -1762,15 +1779,20 @@ impl AuthorityPerEpochStore {
                 .builder_digest_to_checkpoint
                 .insert(&digest, &sequence)?;
         }
+        let builder_summary = BuilderCheckpointSummary {
+            summary: summary.clone(),
+            commit_height: None,
+            position_in_commit: 0,
+        };
         self.tables
             .builder_checkpoint_summary
-            .insert(summary.sequence_number(), summary)?;
+            .insert(summary.sequence_number(), &builder_summary)?;
         Ok(())
     }
 
     pub fn last_built_checkpoint_summary(
         &self,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, CheckpointSummary)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, BuilderCheckpointSummary)>> {
         Ok(self
             .tables
             .builder_checkpoint_summary
@@ -1782,7 +1804,7 @@ impl AuthorityPerEpochStore {
     pub fn get_built_checkpoint_summary(
         &self,
         sequence: CheckpointSequenceNumber,
-    ) -> SuiResult<Option<CheckpointSummary>> {
+    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
         Ok(self.tables.builder_checkpoint_summary.get(&sequence)?)
     }
 
