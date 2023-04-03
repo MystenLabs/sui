@@ -19,6 +19,8 @@ The [Reference Gas Price](https://docs.sui.io/learn/tokenomics/gas-pricing#compu
 
 ### Gas Units
 
+**Storage Units**
+
 Different Sui transactions require varying amounts of computational time in order to be processed and executed. Sui translates these varying operational loads into transaction fees by measuring each transaction in terms of Computation Units. All else equals, more complex transactions will require more Computation Units.
 
 The minimum Gas Budget is 2000 MIST. This ensures validators can be compensated with at least 2000 MIST even if the Gas Budget is  incorrectly specified and the transaction aborts. Additionally, this protects the Sui Network from being spammed with a large number of transactions with minimal gas budgets. The maximum Gas Budget is 50 billion MIST or 50 SUI. This protects the network against overflow of internal multiplications and gas limits for denial of service attack
