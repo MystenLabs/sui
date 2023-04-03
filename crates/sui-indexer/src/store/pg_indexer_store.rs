@@ -131,6 +131,8 @@ impl PgIndexerStore {
                 ))
                 .filter(objects_history::object_id.eq(object_id.to_string()))
                 .filter(objects_history::version.eq(version.value() as i64))
+                // pick data from checkpoint if available
+                .order(objects_history::checkpoint.desc())
                 .first::<Object>(conn)
         })
         .context("Failed reading Object from PostgresDB");
@@ -169,6 +171,8 @@ impl PgIndexerStore {
                 .filter(objects_history::object_id.eq(id.to_string()))
                 .filter(objects_history::version.le(version.value() as i64))
                 .order_by(objects_history::version.desc())
+                // pick data from checkpoint if available
+                .order_by(objects_history::checkpoint.desc())
                 .first::<Object>(conn)
                 .optional()
         })
@@ -331,7 +335,7 @@ impl IndexerStore for PgIndexerStore {
             }
             // TODO: Implement EventFilter to SQL
             _ => {
-                return Err(IndexerError::NotImplementedError(format!(
+                return Err(IndexerError::NotSupportedError(format!(
                     "Filter type [{query:?}] not supported by the Indexer."
                 )))
             }
@@ -577,7 +581,7 @@ impl IndexerStore for PgIndexerStore {
         }
     }
 
-    fn query_objects(
+    fn query_objects_history(
         &self,
         filter: SuiObjectDataFilter,
         at_checkpoint: CheckpointSequenceNumber,
@@ -601,11 +605,44 @@ impl IndexerStore for PgIndexerStore {
                 "storage_rebate",
                 "bcs",
             ];
-            diesel::sql_query(filter.to_sql(cursor, limit, columns))
+            diesel::sql_query(filter.to_objects_history_sql(cursor, limit, columns))
                 .bind::<BigInt, _>(at_checkpoint as i64)
                 .get_results::<Object>(conn)
         })?;
 
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(&self.module_cache))
+            .collect()
+    }
+
+    // NOTE(gegaowp): now only supports query by address owner
+    fn query_latest_objects(
+        &self,
+        filter: SuiObjectDataFilter,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let objects = read_only!(&self.cp, |conn| {
+            let columns = vec![
+                "epoch",
+                "checkpoint",
+                "object_id",
+                "version",
+                "object_digest",
+                "owner_type",
+                "owner_address",
+                "initial_shared_version",
+                "previous_transaction",
+                "object_type",
+                "object_status",
+                "has_public_transfer",
+                "storage_rebate",
+                "bcs",
+            ];
+            diesel::sql_query(filter.to_latest_objects_sql(cursor, limit, columns))
+                .get_results::<Object>(conn)
+        })?;
         objects
             .into_iter()
             .map(|object| object.try_into_object_read(&self.module_cache))

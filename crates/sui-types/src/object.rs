@@ -955,6 +955,14 @@ impl ObjectRead {
             Self::Exists(_, o, _) => Ok(o),
         }
     }
+
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            Self::Deleted(oref) => oref.0,
+            Self::NotExists(id) => *id,
+            Self::Exists(oref, _, _) => oref.0,
+        }
+    }
 }
 
 impl Default for ObjectFormatOptions {
