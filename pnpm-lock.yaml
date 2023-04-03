@@ -122,10 +122,10 @@ importers:
         specifier: workspace:*
         version: link:../../sdk/wallet-adapter/wallet-kit
       '@sentry/react':
-        specifier: ^7.43.0
+        specifier: ^7.46.0
         version: 7.46.0(react@18.2.0)
       '@sentry/tracing':
-        specifier: ^7.43.0
+        specifier: ^7.46.0
         version: 7.46.0
       '@tanstack/react-query':
         specifier: ^4.26.1
@@ -155,7 +155,7 @@ importers:
         specifier: ^1.2.1
         version: 1.2.1
       framer-motion:
-        specifier: ^10.5.0
+        specifier: ^10.10.0
         version: 10.10.0(react-dom@18.2.0)(react@18.2.0)
       plausible-tracker:
         specifier: ^0.3.8
@@ -182,7 +182,7 @@ importers:
         specifier: ^3.1.4
         version: 3.1.4(react@18.2.0)
       react-hook-form:
-        specifier: ^7.43.5
+        specifier: ^7.43.9
         version: 7.43.9(react@18.2.0)
       react-hot-toast:
         specifier: ^2.4.0
@@ -204,7 +204,7 @@ importers:
         specifier: ^7.21.3
         version: 7.21.3
       '@playwright/test':
-        specifier: ^1.31.2
+        specifier: ^1.32.1
         version: 1.32.1
       '@storybook/addon-a11y':
         specifier: 7.0.0-rc.3
@@ -252,7 +252,7 @@ importers:
         specifier: ^3.1.0
         version: 3.1.0(vite@4.2.1)
       '@vitest/ui':
-        specifier: ^0.29.3
+        specifier: ^0.29.8
         version: 0.29.8
       autoprefixer:
         specifier: ^10.4.14
@@ -276,17 +276,17 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
       playwright:
-        specifier: ^1.31.2
+        specifier: ^1.32.1
         version: 1.32.1
       postcss:
         specifier: ^8.4.19
         version: 8.4.21
       prettier:
-        specifier: 2.8.4
-        version: 2.8.4
+        specifier: 2.8.7
+        version: 2.8.7
       prettier-plugin-tailwindcss:
-        specifier: ^0.2.4
-        version: 0.2.6(prettier@2.8.4)
+        specifier: ^0.2.6
+        version: 0.2.6(prettier@2.8.7)
       start-server-and-test:
         specifier: ^2.0.0
         version: 2.0.0
@@ -294,22 +294,22 @@ importers:
         specifier: 7.0.0-rc.3
         version: 7.0.0-rc.3
       tailwindcss:
-        specifier: ^3.2.7
+        specifier: ^3.3.1
         version: 3.3.1(postcss@8.4.21)(ts-node@10.9.1)
       tsconfig-paths:
-        specifier: ^4.1.1
+        specifier: ^4.2.0
         version: 4.2.0
       typescript:
         specifier: ^4.9.4
         version: 4.9.5
       vite:
-        specifier: ^4.2.0
+        specifier: ^4.2.1
         version: 4.2.1(@types/node@18.15.3)(sass@1.59.3)
       vite-plugin-svgr:
         specifier: ^2.4.0
         version: 2.4.0(vite@4.2.1)
       vitest:
-        specifier: ^0.29.3
+        specifier: ^0.29.8
         version: 0.29.8(@vitest/ui@0.29.8)(happy-dom@8.9.0)(playwright@1.32.1)
 
   apps/icons:
@@ -16119,7 +16119,7 @@ packages:
       fast-diff: 1.2.0
     dev: true
 
-  /prettier-plugin-tailwindcss@0.2.6(prettier@2.8.4):
+  /prettier-plugin-tailwindcss@0.2.6(prettier@2.8.7):
     resolution: {integrity: sha512-F+7XCl9RLF/LPrGdUMHWpsT6TM31JraonAUyE6eBmpqymFvDwyl0ETHsKFHP1NG+sEfv8bmKqnTxEbWQbHPlBA==}
     engines: {node: '>=12.17.0'}
     peerDependencies:
@@ -16171,13 +16171,7 @@ packages:
       prettier-plugin-twig-melody:
         optional: true
     dependencies:
-      prettier: 2.8.4
-    dev: true
-
-  /prettier@2.8.4:
-    resolution: {integrity: sha512-vIS4Rlc2FNh0BySk3Wkd6xmwxB0FpOndW5fisM5H8hsZSxU2VWVB5CWIkIjWvrHjIhxk2g3bfMKM87zNTrZddw==}
-    engines: {node: '>=10.13.0'}
-    hasBin: true
+      prettier: 2.8.7
     dev: true
 
   /prettier@2.8.7:
