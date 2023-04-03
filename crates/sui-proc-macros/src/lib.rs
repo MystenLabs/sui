@@ -393,53 +393,65 @@ impl Fold for CheckArithmetic {
             Expr::Binary(expr_binary) => {
                 let ExprBinary {
                     attrs,
-                    left,
+                    mut left,
                     op,
                     mut right,
                 } = expr_binary;
 
-                // Remove parens from rhs since it will be passed as a function argument
-                // otherwise we get lint errors
-                if let Expr::Paren(paren) = right.as_ref() {
-                    // i don't even think rust allows this, but just in case
-                    assert!(paren.attrs.is_empty(), "TODO: attrs on parenthesized");
-                    right = paren.expr.clone();
+                fn remove_parens(expr: &mut Expr) {
+                    if let Expr::Paren(paren) = expr {
+                        // i don't even think rust allows this, but just in case
+                        assert!(paren.attrs.is_empty(), "TODO: attrs on parenthesized");
+                        *expr = *paren.expr.clone();
+                    }
                 }
 
                 macro_rules! wrap_op {
-                    ($left: expr, $right: expr, $method: ident, $span: expr) => {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {{
+                        // Remove parens from exprs since both sides get assigned to tmp variables.
+                        // otherwise we get lint errors
+                        remove_parens(&mut $left);
+                        remove_parens(&mut $right);
+
                         quote_spanned!($span => {
-                            let _checked_arith_left = #left;
-                            let _checked_arith_right = #right;
-                            _checked_arith_left.$method(_checked_arith_right)
+                            // assign in one stmt in case either #left or #right contains
+                            // references to `left` or `right` symbols.
+                            let (left, right) = (#left, #right);
+                            left.$method(right)
                                 .unwrap_or_else(||
                                     panic!(
                                         "Overflow or underflow in {} {} + {}",
                                         stringify!($method),
-                                        _checked_arith_left,
-                                        _checked_arith_right
+                                        left,
+                                        right,
                                     )
                                 )
                         })
-                    };
+                    }};
                 }
 
                 macro_rules! wrap_op_assign {
-                    ($left: expr, $right: expr, $method: ident, $span: expr) => {
+                    ($left: expr, $right: expr, $method: ident, $span: expr) => {{
+                        // Remove parens from exprs since both sides get assigned to tmp variables.
+                        // otherwise we get lint errors
+                        remove_parens(&mut $left);
+                        remove_parens(&mut $right);
+
                         quote_spanned!($span => {
-                            let _checked_arith_left = &mut #left;
-                            let _checked_arith_right = #right;
-                            *_checked_arith_left = (*_checked_arith_left).$method(_checked_arith_right)
+                            // assign in one stmt in case either #left or #right contains
+                            // references to `left` or `right` symbols.
+                            let (left, right) = (&mut #left, #right);
+                            *left = (*left).$method(right)
                                 .unwrap_or_else(||
                                     panic!(
                                         "Overflow or underflow in {} {} + {}",
                                         stringify!($method),
-                                        *_checked_arith_left,
-                                        _checked_arith_right
+                                        *left,
+                                        right
                                     )
                                 )
                         })
-                    };
+                    }};
                 }
 
                 match op {
