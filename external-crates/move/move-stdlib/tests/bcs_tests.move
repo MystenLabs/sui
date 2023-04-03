@@ -12,8 +12,8 @@ module std::bcs_tests {
 
     #[test]
     fun bcs_address() {
-        let addr = @0x89b9f9d1fadc027cf9532d6f99041522;
-        let expected_output = x"89b9f9d1fadc027cf9532d6f99041522";
+        let addr = @0x89b9f9d1fadc027cf9532d6f9904152289b9f9d1fadc027cf9532d6f99041522;
+        let expected_output = x"89b9f9d1fadc027cf9532d6f9904152289b9f9d1fadc027cf9532d6f99041522";
         assert!(bcs::to_bytes(&addr) == expected_output, 0);
     }
 

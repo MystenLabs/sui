@@ -33,10 +33,10 @@ move-docgen = { path = "../../move-prover/move-docgen" }
 move-command-line-common = { path = "../../move-command-line-common" }
 move-bytecode-utils = { path = "../move-bytecode-utils" }
 move-coverage = { path = "../move-coverage" }
-move-core-types = { path = "../../move-core/types" }
+move-core-types = { path = "../../move-core/types", features = ["address32"]}
 move-ir-types = { path = "../../move-ir/types" }
 move-compiler = { path = "../../move-compiler" }
-move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
+move-stdlib = { path = "../../move-stdlib", features = ["testing", "address32"] }
 move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
 move-symbol-pool = { path = "../../move-symbol-pool" }
 move-vm-types = { path = "../../move-vm/types" }

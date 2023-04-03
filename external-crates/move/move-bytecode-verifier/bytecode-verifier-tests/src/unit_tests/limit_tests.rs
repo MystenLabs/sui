@@ -591,6 +591,14 @@ fn max_mixed_config_test() {
 
 #[test]
 fn max_vec_len() {
+    let valid_addr_vec = if cfg!(feature = "address20") {
+        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    } else {
+        vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]
+    };
     let config = VerifierConfig {
         max_constant_vector_len: Some(0xFFFF - 1),
         ..Default::default()
@@ -702,7 +710,7 @@ fn max_vec_len() {
         },
         Constant {
             type_: tvec(SignatureToken::Address),
-            data: large_vec(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            data: large_vec(valid_addr_vec.clone()),
         },
         // double large
         Constant {
@@ -740,9 +748,7 @@ fn max_vec_len() {
         },
         Constant {
             type_: tvec(tvec(SignatureToken::Address)),
-            data: double_vec(large_vec(vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ])),
+            data: double_vec(large_vec(valid_addr_vec)),
         },
     ];
     let res = LimitsVerifier::verify_module(&config, &module);

@@ -6,7 +6,7 @@ Command `sandbox exp-test -p dummy`:
 2 / 2 test(s) passed.
 Command `sandbox exp-test -p cov/plain --track-cov`:
 1 / 1 test(s) passed.
-Module 00000000000000000000000000000042::M
+Module 0000000000000000000000000000000000000000000000000000000000000042::M
 	fun test
 		total: 1
 		covered: 1
@@ -14,7 +14,7 @@ Module 00000000000000000000000000000042::M
 >>> % Module coverage: 100.00
 Command `sandbox exp-test -p cov/two-runs-same-module --track-cov`:
 1 / 1 test(s) passed.
-Module 00000000000000000000000000000042::M
+Module 0000000000000000000000000000000000000000000000000000000000000042::M
 	fun test
 		total: 6
 		covered: 6
@@ -22,13 +22,13 @@ Module 00000000000000000000000000000042::M
 >>> % Module coverage: 100.00
 Command `sandbox exp-test -p cov/two-runs-diff-module --track-cov`:
 1 / 1 test(s) passed.
-Module 00000000000000000000000000000042::M1
+Module 0000000000000000000000000000000000000000000000000000000000000042::M1
 	fun test
 		total: 1
 		covered: 1
 		% coverage: 100.00
 >>> % Module coverage: 100.00
-Module 00000000000000000000000000000042::M2
+Module 0000000000000000000000000000000000000000000000000000000000000042::M2
 	fun test
 		total: 1
 		covered: 1

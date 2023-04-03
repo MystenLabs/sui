@@ -51,7 +51,14 @@ fn valid_primitives() {
         },
         Constant {
             type_: SignatureToken::Address,
-            data: vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            data: if cfg!(feature = "address20") {
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            } else {
+                vec![
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0,
+                ]
+            },
         },
     ];
     assert!(constants::verify_module(&module).is_ok());
@@ -66,16 +73,38 @@ fn invalid_primitives() {
     malformed(SignatureToken::U64, vec![0]);
     malformed(SignatureToken::U128, vec![0]);
     malformed(SignatureToken::U256, vec![0, 0]);
-    let data = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
-    ];
+    let data = if cfg!(feature = "address20") {
+        vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]
+    } else if cfg!(feature = "address32") {
+        vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
+        ]
+    } else {
+        vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
+        ]
+    };
+
     malformed(SignatureToken::Address, data);
 }
 
 #[test]
 #[cfg(not(feature = "address32"))]
 fn valid_vectors() {
+    let valid_addr_vec = if cfg!(feature = "address20") {
+        vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    } else {
+        vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]
+    };
+
     let double_vec = |item: Vec<u8>| -> Vec<u8> {
         let mut items = vec![2];
         items.extend(item.clone());
@@ -149,7 +178,7 @@ fn valid_vectors() {
         },
         Constant {
             type_: tvec(SignatureToken::Address),
-            data: large_vec(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            data: large_vec(valid_addr_vec.clone()),
         },
         // double large
         Constant {
@@ -187,9 +216,7 @@ fn valid_vectors() {
         },
         Constant {
             type_: tvec(tvec(SignatureToken::Address)),
-            data: double_vec(large_vec(vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ])),
+            data: double_vec(large_vec(valid_addr_vec)),
         },
     ];
     assert!(constants::verify_module(&module).is_ok());
@@ -215,10 +242,22 @@ fn invalid_vectors() {
     malformed(tvec(SignatureToken::U64), vec![1, 0]);
     malformed(
         tvec(SignatureToken::Address),
-        vec![
-            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ],
+        if cfg!(feature = "address20") {
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ]
+        } else if cfg!(feature = "address32") {
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ]
+        } else {
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0,
+            ]
+        },
     );
     // wrong lens
     malformed(tvec(SignatureToken::U8), vec![0, 0]);
@@ -248,6 +287,7 @@ fn tvec(s: SignatureToken) -> SignatureToken {
     SignatureToken::Vector(Box::new(s))
 }
 
+#[allow(unused)]
 fn malformed(type_: SignatureToken, data: Vec<u8>) {
     error(type_, data, StatusCode::MALFORMED_CONSTANT_DATA)
 }

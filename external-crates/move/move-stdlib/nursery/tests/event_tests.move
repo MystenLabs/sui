@@ -88,14 +88,14 @@ module std::event_tests {
         let count_bytes = bcs::to_bytes(&0u64);
         vector::append(&mut count_bytes, sender_bytes);
         let old_guid = count_bytes;
-        // should be 16 bytes of address + 8 byte integer
-        assert!(vector::length(&old_guid) == 24, 0);
+        // should be 32 bytes of address + 8 byte integer
+        assert!(vector::length(&old_guid) == 40, 0);
         let old_guid_bytes = bcs::to_bytes(&old_guid);
-        // old_guid_bytes should be length prefix (24), followed by content of vector
-        // the length prefix is a ULEB encoded 32-bit value, so for length prefix 24,
+        // old_guid_bytes should be length prefix (40), followed by content of vector
+        // the length prefix is a ULEB encoded 32-bit value, so for length prefix 40,
         // this should only occupy 1 byte: https://github.com/diem/bcs#uleb128-encoded-integers
-        // hence, 24 byte contents + 1 byte length prefix = 25 bytes
-        assert!(vector::length(&old_guid_bytes) == 25, 1);
+        // hence, 40 byte contents + 1 byte length prefix = 41 bytes
+        assert!(vector::length(&old_guid_bytes) == 41, 1);
 
         // now, build a new GUID and check byte-for-byte compatibility
         let guid_wrapper = event::create_guid_wrapper_for_test<u64>(&s);

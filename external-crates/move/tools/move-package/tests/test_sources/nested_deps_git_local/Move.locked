@@ -17,4 +17,4 @@ dependencies = [
 
 [[move.package]]
 name = "MoveStdlib"
-source = { git = "https://github.com/move-language/move", rev = "781c844", subdir = "language/move-stdlib" }
+source = { git = "https://github.com/move-language/move", rev = "781c844", subdir = "language/move-stdlib", features = ["address32"] }
