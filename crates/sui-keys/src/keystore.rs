@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
@@ -13,17 +15,11 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-
-use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use sui_types::base_types::SuiAddress;
+use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{
     enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
 };
-
-#[cfg(test)]
-use rand::{rngs::StdRng, SeedableRng};
-#[cfg(test)]
-use sui_types::crypto::get_key_pair_from_rng;
 
 #[derive(Serialize, Deserialize)]
 #[enum_dispatch(AccountKeystore)]
@@ -275,8 +271,7 @@ impl AccountKeystore for InMemKeystore {
 }
 
 impl InMemKeystore {
-    #[cfg(test)]
-    pub fn new_insecure(initial_key_number: usize) -> Self {
+    pub fn new_insecure_for_tests(initial_key_number: usize) -> Self {
         let mut rng = StdRng::from_seed([0; 32]);
         let keys = (0..initial_key_number)
             .map(|_| get_key_pair_from_rng(&mut rng))
