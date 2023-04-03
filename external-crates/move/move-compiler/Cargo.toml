@@ -32,6 +32,7 @@ move-ir-to-bytecode = { path = "../move-ir-compiler/move-ir-to-bytecode" }
 move-borrow-graph = { path = "../move-borrow-graph" }
 move-bytecode-source-map = { path = "../move-ir-compiler/move-bytecode-source-map" }
 move-command-line-common = { path = "../move-command-line-common" }
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
 
 [dev-dependencies]
 move-stdlib = { path = "../move-stdlib" }

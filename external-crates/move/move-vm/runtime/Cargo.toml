@@ -24,6 +24,7 @@ move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-core-types = { path = "../../move-core/types" }
 move-vm-types = { path = "../types" }
 move-binary-format = { path = "../../move-binary-format" }
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [dev-dependencies]
 anyhow = "1.0.52"

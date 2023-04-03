@@ -27,6 +27,7 @@ sha2 = "0.9.3"
 sha3 = "0.9.1"
 anyhow = "1.0.52"
 hex = "0.4.3"
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
 
 [dev-dependencies]
 move-unit-test = { path = "../tools/move-unit-test" }

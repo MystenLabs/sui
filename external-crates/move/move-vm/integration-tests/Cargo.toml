@@ -26,6 +26,7 @@ move-vm-types = { path = "../types" }
 move-vm-test-utils = { path = "../test-utils" }
 move-stdlib = { path = "../../move-stdlib" }
 move-table-extension = { path = "../../extensions/move-table-extension", optional = true }
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [features]
 default = []

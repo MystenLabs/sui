@@ -26,6 +26,7 @@ ethnum = "1.0.4"
 arbitrary = { version = "1.1.7", features = [ "derive_arbitrary"], optional = true }
 
 bcs.workspace = true
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [dev-dependencies]
 proptest = "1.0.0"

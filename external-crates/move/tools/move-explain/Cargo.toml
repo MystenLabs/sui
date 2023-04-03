@@ -15,6 +15,7 @@ move-command-line-common = { path = "../../move-command-line-common" }
 move-core-types = { path = "../../move-core/types" }
 
 bcs.workspace = true
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [features]
 default = []

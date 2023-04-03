@@ -14,3 +14,6 @@ move-transactional-test-runner = { path = "../../testing-infra/transactional-tes
 [[test]]
 name = "tests"
 harness = false
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

@@ -20,3 +20,4 @@ bcs.workspace = true
 anyhow = "1.0.52"
 once_cell = "1.7.2"
 hex = "0.4.3"
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }

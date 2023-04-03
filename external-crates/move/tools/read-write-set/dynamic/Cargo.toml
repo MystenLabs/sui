@@ -15,3 +15,4 @@ move-binary-format = { path = "../../../move-binary-format" }
 move-bytecode-utils = { path = "../../move-bytecode-utils" }
 move-core-types = { path = "../../../move-core/types" }
 move-read-write-set-types = { path = "../types" }
+workspace-hack = { version = "0.1", path = "../../../../../crates/workspace-hack" }

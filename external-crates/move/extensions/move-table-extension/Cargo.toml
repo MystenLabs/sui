@@ -20,6 +20,7 @@ move-vm-runtime = { path = "../../move-vm/runtime", features = ["debugging"] }
 move-binary-format = { path = "../../move-binary-format" }
 
 bcs.workspace = true
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [dev-dependencies]
 move-stdlib = { path = "../../move-stdlib", features = ["testing"] }

@@ -93,7 +93,7 @@ jobs:
           DOTNET_ROOT="$HOME/.dotnet"
           BIN_DIR="$HOME/bin"
           export DOTNET_ROOT="${DOTNET_ROOT}"
-          export PATH="${DOTNET_ROOT}/tools:\$PATH"
+          export PATH="${DOTNET_ROOT}/tools:$PATH"
           export Z3_EXE="${BIN_DIR}/z3"
           export CVC5_EXE="${BIN_DIR}/cvc5"
           export BOOGIE_EXE="${DOTNET_ROOT}/tools/boogie"
@@ -287,6 +287,7 @@ jobs:
       - name: Prover Run
         working-directory: crates/sui-framework/packages
         run: |
+          set -o pipefail
           DOTNET_ROOT="$HOME/.dotnet"
           BIN_DIR="$HOME/bin"
           export DOTNET_ROOT="${DOTNET_ROOT}"

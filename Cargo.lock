@@ -1528,6 +1528,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-unit-test",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1539,6 +1540,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1553,6 +1555,7 @@ dependencies = [
  "move-core-types",
  "petgraph 0.5.1",
  "proptest",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1561,6 +1564,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "move-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3330,6 +3334,7 @@ dependencies = [
  "primitive-types 0.10.1",
  "sha3 0.9.1",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4552,6 +4557,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "proptest",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5222,6 +5228,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "rand 0.8.5",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5249,6 +5256,7 @@ dependencies = [
  "move-prover-test-utils",
  "serde 1.0.159",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5265,11 +5273,15 @@ dependencies = [
  "serde 1.0.159",
  "serde_json",
  "variant_count",
+ "workspace-hack",
 ]
 
 [[package]]
 name = "move-borrow-graph"
 version = "0.0.1"
+dependencies = [
+ "workspace-hack",
+]
 
 [[package]]
 name = "move-bytecode-source-map"
@@ -5283,6 +5295,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5294,6 +5307,7 @@ dependencies = [
  "move-core-types",
  "petgraph 0.5.1",
  "serde-reflection",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5308,6 +5322,7 @@ dependencies = [
  "move-borrow-graph",
  "move-core-types",
  "petgraph 0.5.1",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5324,6 +5339,7 @@ dependencies = [
  "move-ir-types",
  "regex",
  "tui",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5387,6 +5403,7 @@ dependencies = [
  "serde 1.0.159",
  "sha2 0.9.9",
  "walkdir",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5417,6 +5434,7 @@ dependencies = [
  "sha3 0.9.1",
  "tempfile",
  "walkdir",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5425,6 +5443,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "move-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5448,6 +5467,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "uint",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5467,6 +5487,7 @@ dependencies = [
  "once_cell",
  "petgraph 0.5.1",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5484,6 +5505,7 @@ dependencies = [
  "move-core-types",
  "move-coverage",
  "move-ir-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5505,6 +5527,7 @@ dependencies = [
  "regex",
  "serde 1.0.159",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5521,6 +5544,7 @@ dependencies = [
  "move-model",
  "move-prover",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5533,6 +5557,7 @@ dependencies = [
  "regex",
  "serde 1.0.159",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5543,6 +5568,7 @@ dependencies = [
  "clap 3.2.23",
  "move-command-line-common",
  "move-core-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5561,6 +5587,7 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5569,6 +5596,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "move-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5587,6 +5615,7 @@ dependencies = [
  "move-symbol-pool",
  "ouroboros 0.9.5",
  "thiserror",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5599,6 +5628,7 @@ dependencies = [
  "move-core-types",
  "move-ir-types",
  "move-symbol-pool",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5612,6 +5642,7 @@ dependencies = [
  "move-symbol-pool",
  "once_cell",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5639,6 +5670,7 @@ dependencies = [
  "once_cell",
  "regex",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5679,6 +5711,7 @@ dependencies = [
  "toml",
  "walkdir",
  "whoami",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5720,6 +5753,7 @@ dependencies = [
  "tokio",
  "toml",
  "walkdir",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5747,6 +5781,7 @@ dependencies = [
  "serde_json",
  "tera",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5757,6 +5792,7 @@ dependencies = [
  "move-command-line-common",
  "prettydiff",
  "regex",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5767,6 +5803,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5781,6 +5818,7 @@ dependencies = [
  "move-core-types",
  "once_cell",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5811,6 +5849,7 @@ dependencies = [
  "paste",
  "petgraph 0.5.1",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5830,6 +5869,7 @@ dependencies = [
  "move-stackless-bytecode",
  "num",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5858,6 +5898,7 @@ dependencies = [
  "smallvec",
  "tempfile",
  "walkdir",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5867,6 +5908,7 @@ dependencies = [
  "once_cell",
  "serde 1.0.159",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5888,6 +5930,7 @@ dependencies = [
  "sha3 0.9.1",
  "smallvec",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5931,6 +5974,7 @@ dependencies = [
  "tempfile",
  "toml",
  "walkdir",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6019,6 +6063,7 @@ dependencies = [
  "move-vm-test-utils",
  "move-vm-types",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6028,6 +6073,7 @@ dependencies = [
  "datatest-stable",
  "fail 0.4.0",
  "move-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6050,6 +6096,7 @@ dependencies = [
  "sha3 0.9.1",
  "smallvec",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6063,6 +6110,7 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "serde 1.0.159",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6071,6 +6119,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "move-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6084,6 +6133,7 @@ dependencies = [
  "proptest",
  "serde 1.0.159",
  "smallvec",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8271,6 +8321,7 @@ dependencies = [
  "move-read-write-set-types",
  "move-stackless-bytecode",
  "read-write-set-dynamic",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8282,6 +8333,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-read-write-set-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9167,6 +9219,7 @@ dependencies = [
  "move-binary-format",
  "proptest",
  "proptest-derive",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11181,6 +11234,7 @@ dependencies = [
  "rand 0.8.5",
  "tracing",
  "tracing-subscriber 0.3.16",
+ "workspace-hack",
 ]
 
 [[package]]

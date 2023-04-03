@@ -5,3 +5,6 @@ authors = ["Diem Association <opensource@diem.com>"]
 publish = false
 edition = "2021"
 license = "Apache-2.0"
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }

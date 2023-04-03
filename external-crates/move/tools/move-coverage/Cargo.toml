@@ -25,6 +25,7 @@ move-core-types = { path = "../../move-core/types" }
 move-ir-types = { path = "../../move-ir/types" }
 move-binary-format = { path = "../../move-binary-format" }
 move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }
+workspace-hack = { version = "0.1", path = "../../../../crates/workspace-hack" }
 
 [features]
 default = []
