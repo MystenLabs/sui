@@ -131,8 +131,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp
-        let timestamp = *consensus_output.sub_dag.leader.header().created_at();
+        let timestamp = consensus_output.sub_dag.commit_timestamp;
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
         transactions.push((

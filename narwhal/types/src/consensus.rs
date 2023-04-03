@@ -50,6 +50,7 @@ impl CommittedSubDag {
         reputation_score: ReputationScores,
         previous_sub_dag: Option<&CommittedSubDag>,
     ) -> Self {
+        // Narwhal enforces some invariants on the header.created_at, so we can use it as a timestamp.
         let previous_sub_dag_ts = previous_sub_dag
             .map(|s| s.commit_timestamp)
             .unwrap_or_default();
