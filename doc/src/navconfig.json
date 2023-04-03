@@ -90,8 +90,8 @@
 						"fileName": "learn/tokenomics/gas-pricing"
 					},
 					{
-						"label": "Sui Gas Budgets",
-						"fileName": "learn/tokenomics/gas-budgets"
+						"label": "Gas in Sui",
+						"fileName": "learn/tokenomics/gas-in-sui"
 					},
 					{
 						"label": "Sui Storage Fund",
