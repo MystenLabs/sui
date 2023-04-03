@@ -17,6 +17,7 @@ import {
   is,
   nullable,
 } from 'superstruct';
+
 import {
   ObjectId,
   ObjectOwner,
@@ -423,9 +424,11 @@ export const CheckpointedObjectId = object({
 });
 export type CheckpointedObjectId = Infer<typeof CheckpointedObjectId>;
 
+const PaginatedNextCursor = union([object({ objectId: ObjectId }), ObjectId]);
+
 export const PaginatedObjectsResponse = object({
   data: array(SuiObjectResponse),
-  nextCursor: nullable(ObjectId),
+  nextCursor: nullable(PaginatedNextCursor),
   hasNextPage: boolean(),
 });
 export type PaginatedObjectsResponse = Infer<typeof PaginatedObjectsResponse>;
