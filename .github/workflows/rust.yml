@@ -287,7 +287,6 @@ jobs:
       - name: Prover Run
         working-directory: crates/sui-framework/packages
         run: |
-          set -o pipefail
           DOTNET_ROOT="$HOME/.dotnet"
           BIN_DIR="$HOME/bin"
           export DOTNET_ROOT="${DOTNET_ROOT}"
