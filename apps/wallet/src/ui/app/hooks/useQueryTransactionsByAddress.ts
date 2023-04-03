@@ -41,7 +41,8 @@ export function useQueryTransactionsByAddress(address: SuiAddress | null) {
 
             return resp.sort(
                 // timestamp could be null, so we need to handle
-                (a, b) => +(b.timestampMs || 0) - +(a.timestampMs || 0)
+                (a, b) =>
+                    Number(b.timestampMs || 0) - Number(a.timestampMs || 0)
             );
         },
         { enabled: !!address, staleTime: 10 * 1000 }

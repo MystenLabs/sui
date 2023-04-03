@@ -29,9 +29,9 @@ export function ValidatorStats({
     //  const votedLastRound =  0;
     //  const lastNarwhalRound = 0;
 
-    const totalStake = +validatorData.stakingPoolSuiBalance;
-    const commission = +validatorData.commissionRate / 100;
-    const rewardsPoolBalance = +validatorData.rewardsPool;
+    const totalStake = Number(validatorData.stakingPoolSuiBalance);
+    const commission = Number(validatorData.commissionRate) / 100;
+    const rewardsPoolBalance = Number(validatorData.rewardsPool);
 
     return (
         <div className="flex flex-col items-stretch gap-5 md:flex-row">
@@ -98,7 +98,7 @@ export function ValidatorStats({
                             <Stats
                                 label="Last Epoch SUI Rewards"
                                 tooltip="The stake rewards collected during the last epoch."
-                                unavailable={+epochRewards <= 0}
+                                unavailable={Number(epochRewards) <= 0}
                             >
                                 <DelegationAmount
                                     amount={epochRewards}
@@ -109,7 +109,7 @@ export function ValidatorStats({
                             <Stats
                                 label="Reward Pool"
                                 tooltip="Amount currently in this validator’s reward pool"
-                                unavailable={+rewardsPoolBalance <= 0}
+                                unavailable={Number(rewardsPoolBalance) <= 0}
                             >
                                 <DelegationAmount
                                     amount={rewardsPoolBalance}

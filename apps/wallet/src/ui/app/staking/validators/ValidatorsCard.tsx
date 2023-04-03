@@ -131,7 +131,7 @@ export function ValidatorsCard() {
                                 delegations?.map((delegation) => (
                                     <StakeCard
                                         delegationObject={delegation}
-                                        currentEpoch={+system.epoch}
+                                        currentEpoch={Number(system.epoch)}
                                         key={delegation.stakedSuiId}
                                     />
                                 ))}

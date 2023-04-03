@@ -101,12 +101,10 @@ export function EpochsTable({
                           time: (
                               <TxTableCol>
                                   <TxTimeType
-                                      timestamp={
-                                          +(
-                                              epoch.endOfEpochInfo
-                                                  ?.epochEndTimestamp ?? 0
-                                          )
-                                      }
+                                      timestamp={Number(
+                                          epoch.endOfEpochInfo
+                                              ?.epochEndTimestamp ?? 0
+                                      )}
                                   />
                               </TxTableCol>
                           ),
@@ -180,7 +178,7 @@ export function EpochsTable({
                     href="/recent?tab=epochs"
                     label="Epochs"
                     data={epochsData}
-                    count={+(countQuery.data ?? 0)}
+                    count={Number(countQuery.data ?? 0)}
                     limit={limit}
                     onLimitChange={setLimit}
                     pagination={pagination}

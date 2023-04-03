@@ -215,14 +215,14 @@ export function TransactionView({
                                         <StatAmount
                                             amount={formattedAmount}
                                             symbol={symbol}
-                                            date={+(timestamp ?? 0)}
+                                            date={Number(timestamp ?? 0)}
                                         />
                                     </section>
                                 ) : (
                                     timestamp && (
                                         <div className="mb-3">
                                             <DateCard
-                                                date={+(timestamp ?? 0)}
+                                                date={Number(timestamp ?? 0)}
                                             />
                                         </div>
                                     )

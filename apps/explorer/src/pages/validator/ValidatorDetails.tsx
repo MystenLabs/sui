@@ -26,7 +26,7 @@ const getAtRiskRemainingEpochs = (
     const atRisk = data.atRiskValidators.find(
         ([address]) => address === validatorId
     );
-    return atRisk ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - +atRisk[1] : null;
+    return atRisk ? VALIDATOR_LOW_STAKE_GRACE_PERIOD - Number(atRisk[1]) : null;
 };
 
 function ValidatorDetails() {
@@ -56,7 +56,7 @@ function ValidatorDetails() {
             validatorEvents,
             id
         )?.pool_staking_reward;
-        return +rewards || 0;
+        return Number(rewards) || 0;
     }, [id, validatorEvents]);
 
     if (isLoading || validatorsEventsLoading || validatorsApysLoading) {

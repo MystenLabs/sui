@@ -63,7 +63,7 @@ export default function CheckpointDetail() {
                                     >
                                         {data.timestampMs
                                             ? convertNumberToDate(
-                                                  +(data.timestampMs ?? 0)
+                                                  Number(data.timestampMs ?? 0)
                                               )
                                             : '--'}
                                     </Text>
